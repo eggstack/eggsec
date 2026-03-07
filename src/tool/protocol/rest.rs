@@ -1,0 +1,170 @@
+use axum::{
+    routing::{get, post},
+    Router, extract::{Path, State, Json},
+    response::IntoResponse,
+    http::StatusCode,
+};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+use crate::error::SlapperError;
+use crate::tool::{ToolRegistry, ToolDispatcher, ToolRequest, ToolResponse};
+
+#[derive(Clone)]
+pub struct RestState {
+    pub registry: ToolRegistry,
+    pub dispatcher: ToolDispatcher,
+}
+
+impl RestState {
+    pub fn new(registry: ToolRegistry) -> Self {
+        let dispatcher = ToolDispatcher::new(registry.clone());
+        Self { registry, dispatcher }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct RestErrorResponse {
+    pub error: String,
+    pub code: String,
+}
+
+impl IntoResponse for SlapperError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, error_response) = match &self {
+            SlapperError::Config(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            SlapperError::InvalidTarget(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            SlapperError::Network(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg.clone()),
+            SlapperError::Timeout { .. } => (StatusCode::REQUEST_TIMEOUT, self.to_string()),
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+        };
+
+        let body = Json(RestErrorResponse {
+            error: error_response,
+            code: "TOOL_ERROR".to_string(),
+        });
+
+        (status, body).into_response()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExecuteRequest {
+    pub target: String,
+    pub target_type: Option<String>,
+    pub params: Option<serde_json::Value>,
+    pub options: Option<crate::tool::RequestOptions>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolListResponse {
+    pub tools: Vec<ToolListItem>,
+    pub categories: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolListItem {
+    pub id: String,
+    pub name: String,
+    pub category: String,
+    pub description: String,
+    pub protocols: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ToolDetailResponse {
+    pub id: String,
+    pub name: String,
+    pub category: String,
+    pub description: String,
+    pub capabilities: Vec<serde_json::Value>,
+    pub protocols: Vec<String>,
+}
+
+pub fn create_router(registry: ToolRegistry) -> Router {
+    let state = Arc::new(RestState::new(registry));
+
+    Router::new()
+        .route("/health", get(health_check))
+        .route("/api/v1/tools", get(list_tools))
+        .route("/api/v1/tools/:tool_id", get(get_tool))
+        .route("/api/v1/tools/:tool_id/execute", post(execute_tool))
+        .with_state(state)
+}
+
+async fn health_check() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "status": "healthy",
+        "service": "slapper-tool-api"
+    }))
+}
+
+async fn list_tools(State(state): State<Arc<RestState>>) -> impl IntoResponse {
+    let tools = state.registry.list();
+    
+    let items: Vec<ToolListItem> = tools.iter().map(|t| ToolListItem {
+        id: t.id.to_string(),
+        name: t.name.to_string(),
+        category: t.category.to_string(),
+        description: t.description.to_string(),
+        protocols: t.protocols.clone(),
+    }).collect();
+
+    let categories: Vec<String> = state.registry.categories()
+        .iter()
+        .map(|c| c.to_string())
+        .collect();
+
+    Json(ToolListResponse { tools: items, categories })
+}
+
+async fn get_tool(
+    State(state): State<Arc<RestState>>,
+    Path(tool_id): Path<String>,
+) -> Result<Json<ToolDetailResponse>, SlapperError> {
+    let _tool = state.registry.get(&tool_id)
+        .ok_or_else(|| SlapperError::Config(format!("Tool '{}' not found", tool_id)))?;
+
+    let info = state.registry.list()
+        .into_iter()
+        .find(|t| t.id == tool_id)
+        .ok_or_else(|| SlapperError::Config(format!("Tool '{}' not found", tool_id)))?;
+
+    Ok(Json(ToolDetailResponse {
+        id: info.id.to_string(),
+        name: info.name.to_string(),
+        category: info.category.to_string(),
+        description: info.description.to_string(),
+        capabilities: info.capabilities.iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect(),
+        protocols: info.protocols,
+    }))
+}
+
+async fn execute_tool(
+    State(state): State<Arc<RestState>>,
+    Path(tool_id): Path<String>,
+    Json(payload): Json<ExecuteRequest>,
+) -> Result<Json<ToolResponse>, SlapperError> {
+    let target_type = payload.target_type.as_deref()
+        .or(Some("url"))
+        .unwrap();
+
+    let target = match target_type {
+        "domain" => crate::tool::Target::domain(&payload.target),
+        "ip" => crate::tool::Target::ip(&payload.target),
+        "cidr" => crate::tool::Target::cidr(&payload.target),
+        _ => crate::tool::Target::url(&payload.target),
+    };
+
+    let request = ToolRequest {
+        id: uuid::Uuid::new_v4().to_string(),
+        tool: tool_id,
+        target,
+        params: payload.params.unwrap_or_default(),
+        options: payload.options.unwrap_or_default(),
+    };
+
+    let response = state.dispatcher.dispatch(request).await?;
+
+    Ok(Json(response))
+}

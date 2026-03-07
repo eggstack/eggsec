@@ -1,0 +1,186 @@
+[package]
+name = "slapper"
+version = "0.1.0"
+edition = "2021"
+description = "Load testing and penetration testing toolkit"
+authors = ["Slapper Team"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/slapper-tool/slapper"
+readme = "README.md"
+keywords = ["security", "pentesting", "load-testing", "waf", "fuzzer"]
+categories = ["command-line-utilities", "development-tools::testing"]
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "fs", "process", "io-util", "signal"] }
+tokio-native-tls = "0.3"
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "socks", "http2", "blocking"], default-features = false }
+ratatui = "0.28"
+crossterm = "0.28"
+clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
+pyo3 = { version = "0.22", features = ["auto-initialize"], optional = true }
+magnus = { version = "0.7", features = ["embed"], optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+toml = "0.8"
+anyhow = "1"
+atty = "0.2"
+thiserror = "1"
+hdrhistogram = "7"
+indicatif = "0.17"
+futures = "0.3"
+async-channel = "2"
+parking_lot = "0.12"
+chrono = { version = "0.4", features = ["serde"] }
+aho-corasick = "1"
+flate2 = "1"
+rand = { version = "0.8", features = ["small_rng"] }
+url = "2"
+regex = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+base64 = "0.22"
+urlencoding = "2.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+directories = "5"
+quick-xml = { version = "0.31", features = ["serialize"] }
+ipnetwork = "0.20"
+trust-dns-resolver = "0.23"
+hostname = "0.4"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+subtle = "2"
+crossbeam = "0.8"
+dashmap = "6"
+scraper = "0.21"
+native-tls = "0.2"
+once_cell = "1"
+maxminddb = "0.27"
+shellexpand = "3"
+rcgen = { version = "0.14", features = ["pem"] }
+async-trait = "0.1"
+
+[dependencies.libc]
+version = "0.2"
+optional = true
+
+[dependencies.pnet]
+version = "0.35"
+optional = true
+
+[dependencies.pnet_packet]
+version = "0.35"
+optional = true
+
+[dependencies.socket2]
+version = "0.5"
+features = ["all"]
+optional = true
+
+[dependencies.nix]
+version = "0.29"
+features = ["net", "socket"]
+optional = true
+
+[dependencies.surge-ping]
+version = "0.8"
+optional = true
+
+[dependencies.axum]
+version = "0.7"
+optional = true
+
+[dependencies.tower]
+version = "0.4"
+optional = true
+
+[dependencies.tonic]
+version = "0.12"
+optional = true
+
+[dependencies.prost]
+version = "0.13"
+optional = true
+
+[build-dependencies.prost-build]
+version = "0.12"
+optional = true
+
+[dependencies.mlua]
+version = "0.11"
+optional = true
+features = ["async"]
+
+[dependencies.mlua-luau-scheduler]
+version = "0.2"
+optional = true
+
+[dependencies.openssl]
+version = "0.10"
+optional = true
+features = ["vendored"]
+
+[features]
+default = []
+
+# Tool abstraction layer (always enabled - no extra deps)
+tool-api = []
+
+# REST API server for external tool integration
+# Requires: axum, tower
+rest-api = ["tool-api", "axum", "tower"]
+
+# gRPC API server for external tool integration  
+# Requires: tonic, prost
+grpc-api = ["tool-api", "tonic", "prost", "prost-build"]
+
+# MCP (Model Context Protocol) server for AI agent integration
+mcp-server = ["tool-api"]
+
+# Python plugin support - write security scanning plugins in Python
+# Requires: Python 3.8+
+python-plugins = ["pyo3"]
+
+# Ruby plugin support with Metasploit RPC integration
+# Enables Slapper::Metasploit, Slapper::Encoder, Slapper::Session modules
+# Requires: Ruby 3.0+ and Metasploit Framework (for RPC functionality)
+ruby-plugins = ["magnus"]
+
+# Low-level network stress testing ( SYN floods, ICMP, raw sockets)
+stress-testing = ["pnet", "pnet_packet", "socket2", "nix", "libc", "surge-ping"]
+
+# Packet inspection (live capture, hexdump, header parsing, traceroute)
+# Requires: Root privileges for live capture, pnet/pnet_packet for raw sockets
+packet-inspection = ["pnet", "pnet_packet", "libc"]
+
+# All plugin languages
+all-plugins = ["python-plugins", "ruby-plugins"]
+
+# NSE (Nmap Scripting Engine) support - run Lua NSE scripts
+# Requires: mlua, mlua-luau-scheduler, openssl (already included via other deps)
+nse = ["tool-api", "mlua", "mlua-luau-scheduler", "openssl"]
+
+# Full build with all features
+full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse"]
+
+[[bin]]
+name = "slapper"
+path = "src/main.rs"
+
+[dev-dependencies]
+wiremock = "0.6"
+tempfile = "3"
+criterion = "0.5"
+proptest = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+panic = "abort"
+strip = true
+
+[profile.test]
+opt-level = 1

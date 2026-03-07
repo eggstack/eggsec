@@ -1,0 +1,263 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # Core: Slapper security testing toolkit
+  # ============================================
+  slapper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: slapper:latest
+    container_name: slapper
+    
+    security_opt:
+      - no-new-privileges:true
+    
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    volumes:
+      - ./scan-results:/app/results
+      - slapper-sessions:/home/slapper/.local/share/slapper
+    
+    environment:
+      - SLAPPER_LOG_LEVEL=info
+      - SLAPPER_CONFIG=/home/slapper/.config/slapper/slapper.toml
+      - RUST_BACKTRACE=1
+      - SLAPPER_RATE_LIMIT=50
+      - REDIS_URL=redis://:slapper123@redis:6379
+    
+    healthcheck:
+      test: ["CMD", "slapper", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    networks:
+      - scan-network
+    
+    profiles:
+      - scanner
+      - testing
+      - full
+      - distributed
+
+  # ============================================
+  # Target: Vulnerable test application
+  # ============================================
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: dvwa-target
+    hostname: dvwa.target.local
+    ports:
+      - "8080:80"
+    environment:
+      - PHP_UPLOAD_LIMIT=10485760
+      - PHP_MAX_EXECUTION_TIME=300
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/setup.php"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+    networks:
+      - scan-network
+    profiles:
+      - testing
+      - full
+
+  # ============================================
+  # Target: OWASP Juice Shop (alternative)
+  # ============================================
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: juice-shop-target
+    hostname: juice-shop.target.local
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=secseed
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 30s
+    networks:
+      - scan-network
+    profiles:
+      - testing
+      - full
+
+  # ============================================
+  # Storage: Elasticsearch for scan results
+  # ============================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: slapper-elastic
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ELASTIC_PASSWORD=slapper123"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elastic-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - scan-network
+    profiles:
+      - storage
+      - full
+
+  # ============================================
+  # Storage: Kibana for visualization
+  # ============================================
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: slapper-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - scan-network
+    profiles:
+      - storage
+      - full
+
+  # ============================================
+  # Testing: Webhook receiver for notifications
+  # ============================================
+  webhook-receiver:
+    image: mendhak/http-https-echo:latest
+    container_name: webhook-receiver
+    hostname: webhook.target.local
+    ports:
+      - "8081:8080"
+    environment:
+      - HTTP_PORT=8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - scan-network
+    profiles:
+      - testing
+      - full
+
+  # ============================================
+  # Anonymization: Tor proxy for anonymized scanning
+  # ============================================
+  tor-proxy:
+    image: dockage/tor-proxy:latest
+    container_name: tor-proxy
+    hostname: tor-proxy.target.local
+    ports:
+      - "9050:9050"
+      - "9051:9051"
+    environment:
+      - TOR_CONTROL_PORT=9051
+      - TOR_PASSWORD=slapper123
+    healthcheck:
+      test: ["CMD", "torify", "curl", "-f", "http://localhost:9050"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - scan-network
+    profiles:
+      - testing
+      - full
+    cap_add:
+      - NET_ADMIN
+
+  # ============================================
+  # Storage: Redis for distributed coordinator
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: slapper-redis
+    command: redis-server --requirepass slapper123
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "slapper123", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - scan-network
+    profiles:
+      - distributed
+      - full
+
+  # ============================================
+  # Target: Metasploitable2 (additional vulnerable target)
+  # ============================================
+  metasploitable:
+    image: tleemcjr/metasploitable2:latest
+    container_name: metasploitable-target
+    hostname: metasploitable.target.local
+    ports:
+      - "2222:22"
+      - "3000:3000"
+      - "3306:3306"
+      - "5432:5432"
+      - "5900:5900"
+      - "6667:6667"
+      - "8009:8009"
+      - "8180:8180"
+      - "10000:10000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - scan-network
+    profiles:
+      - testing
+      - full
+
+networks:
+  scan-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  slapper-sessions:
+  elastic-data:
+  redis-data:

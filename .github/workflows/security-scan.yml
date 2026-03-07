@@ -1,0 +1,162 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target URL to scan'
+        required: true
+        type: string
+      scan_type:
+        description: 'Scan type'
+        required: true
+        type: choice
+        options:
+          - quick
+          - full
+          - fuzz
+          - recon
+
+env:
+  SLAPPER_VERSION: 'latest'
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Slapper
+        run: |
+          curl -sL "https://github.com/slapper-tool/slapper/releases/download/${SLAPPER_VERSION}/slapper-linux-amd64" -o slapper
+          chmod +x slapper
+
+      - name: Run Quick Scan
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'quick')
+        run: |
+          ./slapper scan ${{ github.event.inputs.target || 'example.com' }} --profile quick \
+            --json scan-results.json \
+            --sarif scan-results.sarif
+
+      - name: Run Full Scan
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'full'
+        run: |
+          ./slapper scan ${{ github.event.inputs.target }} --profile full \
+            --json scan-results.json \
+            --sarif scan-results.sarif \
+            --html report.html
+
+      - name: Run Fuzzing
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'fuzz'
+        run: |
+          ./slapper fuzz ${{ github.event.inputs.target }} -t all \
+            --json fuzz-results.json \
+            --sarif fuzz-results.sarif
+
+      - name: Run Reconnaissance
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'recon'
+        run: |
+          ./slapper recon ${{ github.event.inputs.target }} \
+            --json recon-results.json
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: scan-results.sarif
+          category: slapper-scan
+
+      - name: Upload Fuzz SARIF
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.scan_type == 'fuzz'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: fuzz-results.sarif
+          category: slapper-fuzz
+
+      - name: Upload Security Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: |
+            *.json
+            *.html
+            *.sarif
+          retention-days: 30
+
+      - name: Check for Critical Findings
+        if: always()
+        run: |
+          if [ -f scan-results.json ]; then
+            CRITICAL=$(jq '[.findings[] | select(.severity == "CRITICAL")] | length' scan-results.json 2>/dev/null || echo "0")
+            HIGH=$(jq '[.findings[] | select(.severity == "HIGH")] | length' scan-results.json 2>/dev/null || echo "0")
+            echo "Critical: $CRITICAL, High: $HIGH"
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "::warning::Critical vulnerabilities found!"
+            fi
+          fi
+
+  scheduled-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Slapper
+        run: |
+          curl -sL "https://github.com/slapper-tool/slapper/releases/download/${SLAPPER_VERSION}/slapper-linux-amd64" -o slapper
+          chmod +x slapper
+
+      - name: Load targets from file
+        run: |
+          if [ -f targets.txt ]; then
+            echo "Targets file found"
+            cat targets.txt
+          else
+            echo "No targets.txt found, using default"
+            echo "example.com" > targets.txt
+          fi
+
+      - name: Run scans on all targets
+        run: |
+          while read target; do
+            echo "Scanning: $target"
+            ./slapper scan "$target" --profile quick --json "scan-$target.json" || true
+          done < targets.txt
+
+      - name: Aggregate results
+        run: |
+          echo "# Security Scan Summary" > summary.md
+          echo "" >> summary.md
+          echo "Scan date: $(date)" >> summary.md
+          echo "" >> summary.md
+          for f in scan-*.json; do
+            if [ -f "$f" ]; then
+              target=$(echo "$f" | sed 's/scan-\(.*\)\.json/\1/')
+              echo "## $target" >> summary.md
+              jq -r '.findings[] | "- [\(.severity)] \(.type): \(.description)"' "$f" 2>/dev/null >> summary.md || echo "No findings or error" >> summary.md
+              echo "" >> summary.md
+            fi
+          done
+          cat summary.md
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-scan-results
+          path: |
+            scan-*.json
+            summary.md
+          retention-days: 90

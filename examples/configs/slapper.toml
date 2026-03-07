@@ -1,0 +1,145 @@
+# Slapper Example Configuration
+# Copy to ~/.config/slapper/slapper.toml or ./slapper.toml
+
+[http]
+# Request timeout in seconds
+timeout_secs = 30
+
+# Maximum retry attempts for failed requests
+max_retries = 3
+
+# Delay between retries in milliseconds
+retry_delay_ms = 1000
+
+# Verify TLS certificates (set to false for self-signed certs)
+verify_tls = true
+
+# Follow HTTP redirects
+follow_redirects = true
+
+# Maximum redirects to follow
+max_redirects = 10
+
+# Default headers for all requests
+[http.default_headers]
+"Accept" = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+"Accept-Language" = "en-US,en;q=0.9"
+"Accept-Encoding" = "gzip, deflate"
+
+# Custom User-Agent (leave empty for browser-like rotation)
+# default_user_agent = "Slapper/0.1.0"
+
+# Proxy settings
+# proxy = "http://127.0.0.1:8080"
+# proxy_auth = "user:password"
+
+[scan]
+# Default concurrency for all scan types
+default_concurrency = 20
+
+# Rate limit: requests per second (null for unlimited)
+rate_limit_per_second = 100
+
+# Jitter: random delay between requests (min_ms, max_ms)
+# jitter_ms = [100, 500]
+
+# Stealth mode: randomizes timing and rotates headers
+stealth_mode = false
+
+# Ports to always exclude from scanning
+exclude_ports = []
+
+# Hosts to never scan
+exclude_hosts = []
+
+# Port scan timeout in seconds
+port_timeout_secs = 2
+
+# Save scan sessions for resumption
+save_session = true
+
+# Directory for session files (default: ~/.local/share/slapper/sessions)
+# session_dir = "/path/to/sessions"
+
+[output]
+# Output format: pretty, json, compact, sarif, junit, html, csv
+format = "pretty"
+
+# Verbosity: quiet, normal, verbose, debug
+verbosity = "normal"
+
+# Enable colored output
+color = true
+
+# Show progress bars
+progress_bars = true
+
+# Automatically save results
+save_results = false
+
+# Directory for saved results
+# results_dir = "./scan-results"
+
+# Include timestamps in output
+include_timestamp = true
+
+[notifications]
+# Send notification when scan completes
+notify_on_complete = true
+
+# Send notification when findings are discovered
+notify_on_findings = true
+
+# Minimum severity to trigger notification: info, low, medium, high, critical
+min_severity_for_notify = "high"
+
+# Slack webhook URL
+# slack_webhook = "https://hooks.slack.com/services/TXXXXX/BXXXXX/XXXXX"
+
+# Discord webhook URL
+# discord_webhook = "https://discord.com/api/webhooks/XXXXX/XXXXX"
+
+# Custom webhooks
+[[notifications.webhooks]]
+name = "security-monitoring"
+url = "https://webhook.site/your-webhook-id"
+secret = "your-signing-secret"  # Optional: adds X-Slapper-Signature header
+events = ["scan_complete", "finding"]
+
+# Headers to include in webhook requests
+[notifications.webhooks.headers]
+"X-Custom-Header" = "value"
+
+# Scan Profiles
+[profiles.quick]
+name = "Quick Scan"
+stages = ["port", "fingerprint"]
+concurrency = 50
+
+[profiles.deep]
+name = "Deep Scan"
+stages = ["port", "fingerprint", "endpoint", "fuzz"]
+concurrency = 30
+payload_types = ["sqli", "xss", "traversal", "ssrf"]
+
+[profiles.waf-focus]
+name = "WAF Assessment"
+stages = ["endpoint", "fuzz"]
+concurrency = 20
+payload_types = ["sqli", "xss", "headers"]
+
+[profiles.full]
+name = "Full Assessment"
+stages = ["port", "fingerprint", "endpoint", "fuzz", "load"]
+concurrency = 20
+
+[profiles.api]
+name = "API Security"
+stages = ["endpoint", "fuzz"]
+concurrency = 30
+payload_types = ["sqli", "ssrf", "redos"]
+
+# Custom directories
+# custom_payloads_dir = "~/.config/slapper/payloads"
+# plugins_dir = "~/.config/slapper/plugins"
+# wordlists_dir = "~/.config/slapper/wordlists"
