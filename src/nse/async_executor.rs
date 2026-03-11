@@ -32,33 +32,10 @@ pub struct AsyncNseExecutor {
 impl AsyncNseExecutor {
     /// Create a new async executor with tokio runtime
     pub fn new() -> LuaResult<Self> {
-        let (runtime, owns_runtime) = if USE_EXISTING_RUNTIME.load(Ordering::SeqCst) {
-            // Try to get the current runtime, create new one if not available
-            match tokio::runtime::Handle::try_current() {
-                Ok(_handle) => {
-                    // Note: We can't use try_current() to create a Runtime,
-                    // so we'll create a new multi-threaded runtime
-                    let rt = Runtime::new().map_err(|e| {
-                        mlua::Error::RuntimeError(format!("Failed to create tokio runtime: {}", e))
-                    })?;
-                    (Some(rt), true)
-                }
-                Err(_) => {
-                    // No current runtime, create a new one
-                    let rt = Runtime::new().map_err(|e| {
-                        mlua::Error::RuntimeError(format!("Failed to create tokio runtime: {}", e))
-                    })?;
-                    (Some(rt), true)
-                }
-            }
-        } else {
-            let rt = Runtime::new().map_err(|e| {
-                mlua::Error::RuntimeError(format!("Failed to create tokio runtime: {}", e))
-            })?;
-            (Some(rt), true)
-        };
+        let runtime = Runtime::new().map_err(|e| {
+            mlua::Error::RuntimeError(format!("Failed to create tokio runtime: {}", e))
+        })?;
 
-        // Create async Lua instance with tokio integration
         let lua = Lua::new();
 
         let scripts_path = Arc::new(Mutex::new(vec![]));
@@ -67,8 +44,8 @@ impl AsyncNseExecutor {
 
         let executor = Self {
             lua,
-            runtime,
-            owns_runtime,
+            runtime: Some(runtime),
+            owns_runtime: true,
             target: String::new(),
             scripts_path: scripts_path.clone(),
             output,
@@ -517,6 +494,16 @@ impl AsyncNseExecutor {
     /// Get access to the tokio runtime for async operations
     pub fn runtime(&self) -> Option<&Runtime> {
         self.runtime.as_ref()
+    }
+}
+
+impl Drop for AsyncNseExecutor {
+    fn drop(&mut self) {
+        if self.owns_runtime {
+            if let Some(runtime) = self.runtime.take() {
+                runtime.shutdown_timeout(std::time::Duration::from_secs(5));
+            }
+        }
     }
 }
 
