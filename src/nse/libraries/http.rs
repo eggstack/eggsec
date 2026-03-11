@@ -7,55 +7,84 @@ use once_cell::sync::Lazy;
 use reqwest::blocking::Client;
 use reqwest::Client as AsyncClient;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
-    Client::builder()
+static ACCEPT_INVALID_CERTS: AtomicBool = AtomicBool::new(true);
+static ACCEPT_INVALID_HOSTNAMES: AtomicBool = AtomicBool::new(true);
+
+pub fn set_accept_invalid_certs(accept: bool) {
+    ACCEPT_INVALID_CERTS.store(accept, Ordering::SeqCst);
+}
+
+pub fn set_accept_invalid_hostnames(accept: bool) {
+    ACCEPT_INVALID_HOSTNAMES.store(accept, Ordering::SeqCst);
+}
+
+fn build_client(accept_invalid_certs: bool, accept_invalid_hostnames: bool) -> Client {
+    let mut builder = Client::builder()
         .timeout(Duration::from_secs(30))
-        .danger_accept_invalid_certs(true)
-        .danger_accept_invalid_hostnames(true)
         .connect_timeout(Duration::from_secs(10))
         .pool_max_idle_per_host(10)
-        .pool_idle_timeout(Duration::from_secs(30))
-        .build()
-        .expect("Failed to create HTTP client")
+        .pool_idle_timeout(Duration::from_secs(30));
+    
+    if accept_invalid_certs {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    if accept_invalid_hostnames {
+        builder = builder.danger_accept_invalid_hostnames(true);
+    }
+    
+    builder.build().unwrap_or_else(|_| Client::new())
+}
+
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
+    build_client(ACCEPT_INVALID_CERTS.load(Ordering::SeqCst), ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst))
 });
 
 static HTTPS_CLIENT: Lazy<Client> = Lazy::new(|| {
-    Client::builder()
-        .timeout(Duration::from_secs(30))
-        .danger_accept_invalid_certs(true)
-        .danger_accept_invalid_hostnames(true)
-        .connect_timeout(Duration::from_secs(10))
-        .pool_max_idle_per_host(10)
-        .pool_idle_timeout(Duration::from_secs(30))
-        .build()
-        .expect("Failed to create HTTPS client")
+    build_client(ACCEPT_INVALID_CERTS.load(Ordering::SeqCst), ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst))
 });
 
 // Async HTTP client for async functions
 static ASYNC_HTTP_CLIENT: Lazy<AsyncClient> = Lazy::new(|| {
-    AsyncClient::builder()
+    let accept_invalid_certs = ACCEPT_INVALID_CERTS.load(Ordering::SeqCst);
+    let accept_invalid_hostnames = ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst);
+    
+    let mut builder = AsyncClient::builder()
         .timeout(Duration::from_secs(30))
-        .danger_accept_invalid_certs(true)
-        .danger_accept_invalid_hostnames(true)
         .connect_timeout(Duration::from_secs(10))
         .pool_max_idle_per_host(10)
-        .pool_idle_timeout(Duration::from_secs(30))
-        .build()
-        .expect("Failed to create async HTTP client")
+        .pool_idle_timeout(Duration::from_secs(30));
+    
+    if accept_invalid_certs {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    if accept_invalid_hostnames {
+        builder = builder.danger_accept_invalid_hostnames(true);
+    }
+    
+    builder.build().expect("Failed to create async HTTP client")
 });
 
 static ASYNC_HTTPS_CLIENT: Lazy<AsyncClient> = Lazy::new(|| {
-    AsyncClient::builder()
+    let accept_invalid_certs = ACCEPT_INVALID_CERTS.load(Ordering::SeqCst);
+    let accept_invalid_hostnames = ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst);
+    
+    let mut builder = AsyncClient::builder()
         .timeout(Duration::from_secs(30))
-        .danger_accept_invalid_certs(true)
-        .danger_accept_invalid_hostnames(true)
         .connect_timeout(Duration::from_secs(10))
         .pool_max_idle_per_host(10)
-        .pool_idle_timeout(Duration::from_secs(30))
-        .build()
-        .expect("Failed to create async HTTPS client")
+        .pool_idle_timeout(Duration::from_secs(30));
+    
+    if accept_invalid_certs {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    if accept_invalid_hostnames {
+        builder = builder.danger_accept_invalid_hostnames(true);
+    }
+    
+    builder.build().expect("Failed to create async HTTPS client")
 });
 
 fn get_client(url: &str) -> &'static Client {
@@ -75,13 +104,21 @@ fn get_async_client(url: &str) -> &'static AsyncClient {
 }
 
 fn make_client(timeout_secs: u64) -> Client {
-    Client::builder()
+    let accept_invalid_certs = ACCEPT_INVALID_CERTS.load(Ordering::SeqCst);
+    let accept_invalid_hostnames = ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst);
+    
+    let mut builder = Client::builder()
         .timeout(Duration::from_secs(timeout_secs.max(1)))
-        .danger_accept_invalid_certs(true)
-        .danger_accept_invalid_hostnames(true)
-        .connect_timeout(Duration::from_secs(10))
-        .build()
-        .unwrap_or_else(|_| Client::new())
+        .connect_timeout(Duration::from_secs(10));
+    
+    if accept_invalid_certs {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    if accept_invalid_hostnames {
+        builder = builder.danger_accept_invalid_hostnames(true);
+    }
+    
+    builder.build().unwrap_or_else(|_| Client::new())
 }
 
 fn parse_options(opts: Option<&Table>) -> (HashMap<String, String>, Duration) {

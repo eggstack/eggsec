@@ -2,6 +2,7 @@
 //!
 //! These modules provide NSE-compatible APIs by wrapping existing Slapper functionality.
 
+pub mod shared;
 pub mod base64;
 pub mod base32;
 pub mod bin;

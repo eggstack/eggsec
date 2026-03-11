@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use crate::nse::libraries::shared;
+
 pub struct NseExecutor {
     lua: Lua,
     target: String,
@@ -347,25 +349,7 @@ impl NseExecutor {
     }
     
     fn sync_require_modules(&self) -> LuaResult<()> {
-        let globals = self.lua.globals();
-        let modules = globals.get::<Table>("_REQUIRE_MODULES")?;
-        
-        let module_names = [
-            "stdnse", "nmap", "http", "comm", "sslcert", "tls", "shortport",
-            "socket", "ssh2", "ftp", "smtp", "mysql", "postgres", "pgsql", "mssql",
-            "sybase", "redis", "mongodb", "ldap", "snmp", "smb", "rdp", "vnc", 
-            "ntp", "memcached", "imap", "pop3", "netbios", "oracle", "winrm",
-            "radius", "dhcp", "finger", "whois", "sftp", "dns", "datafiles", 
-            "url", "json", "base64", "datetime", "rand", "string", "table",
-        ];
-        
-        for name in module_names {
-            if let Ok(table) = globals.get::<Table>(name) {
-                let _ = modules.set(name, table);
-            }
-        }
-        
-        Ok(())
+        shared::sync_require_modules(&self.lua)
     }
     
     fn setup_require(&self, _scripts_path: Arc<Mutex<Vec<PathBuf>>>) -> LuaResult<()> {

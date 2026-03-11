@@ -6,13 +6,23 @@
 use mlua::{Lua, Result as LuaResult, Table, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
+
+use crate::nse::libraries::shared;
+
+static USE_EXISTING_RUNTIME: AtomicBool = AtomicBool::new(true);
+
+pub fn set_use_existing_runtime(use_existing: bool) {
+    USE_EXISTING_RUNTIME.store(use_existing, Ordering::SeqCst);
+}
 
 /// Async NSE Executor with tokio runtime support
 pub struct AsyncNseExecutor {
     lua: Lua,
-    runtime: Runtime,
+    runtime: Option<Runtime>,
+    owns_runtime: bool,
     target: String,
     scripts_path: Arc<Mutex<Vec<PathBuf>>>,
     output: Mutex<Vec<String>>,
@@ -22,9 +32,31 @@ pub struct AsyncNseExecutor {
 impl AsyncNseExecutor {
     /// Create a new async executor with tokio runtime
     pub fn new() -> LuaResult<Self> {
-        let runtime = Runtime::new().map_err(|e| {
-            mlua::Error::RuntimeError(format!("Failed to create tokio runtime: {}", e))
-        })?;
+        let (runtime, owns_runtime) = if USE_EXISTING_RUNTIME.load(Ordering::SeqCst) {
+            // Try to get the current runtime, create new one if not available
+            match tokio::runtime::Handle::try_current() {
+                Ok(_handle) => {
+                    // Note: We can't use try_current() to create a Runtime,
+                    // so we'll create a new multi-threaded runtime
+                    let rt = Runtime::new().map_err(|e| {
+                        mlua::Error::RuntimeError(format!("Failed to create tokio runtime: {}", e))
+                    })?;
+                    (Some(rt), true)
+                }
+                Err(_) => {
+                    // No current runtime, create a new one
+                    let rt = Runtime::new().map_err(|e| {
+                        mlua::Error::RuntimeError(format!("Failed to create tokio runtime: {}", e))
+                    })?;
+                    (Some(rt), true)
+                }
+            }
+        } else {
+            let rt = Runtime::new().map_err(|e| {
+                mlua::Error::RuntimeError(format!("Failed to create tokio runtime: {}", e))
+            })?;
+            (Some(rt), true)
+        };
 
         // Create async Lua instance with tokio integration
         let lua = Lua::new();
@@ -36,6 +68,7 @@ impl AsyncNseExecutor {
         let executor = Self {
             lua,
             runtime,
+            owns_runtime,
             target: String::new(),
             scripts_path: scripts_path.clone(),
             output,
@@ -53,6 +86,31 @@ impl AsyncNseExecutor {
     pub fn with_target(target: &str) -> LuaResult<Self> {
         let mut executor = Self::new()?;
         executor.target = target.to_string();
+        Ok(executor)
+    }
+
+    /// Create async executor with an existing runtime
+    pub fn with_runtime(runtime: Runtime) -> LuaResult<Self> {
+        let lua = Lua::new();
+
+        let scripts_path = Arc::new(Mutex::new(vec![]));
+        let output = Mutex::new(vec![]);
+        let registry = Mutex::new(HashMap::new());
+
+        let executor = Self {
+            lua,
+            runtime: Some(runtime),
+            owns_runtime: false,
+            target: String::new(),
+            scripts_path: scripts_path.clone(),
+            output,
+            registry,
+        };
+
+        executor.setup_globals()?;
+        executor.register_libraries()?;
+        executor.setup_require(scripts_path)?;
+
         Ok(executor)
     }
 
@@ -319,63 +377,7 @@ impl AsyncNseExecutor {
     }
 
     fn sync_require_modules(&self) -> LuaResult<()> {
-        let globals = self.lua.globals();
-        let modules = globals.get::<Table>("_REQUIRE_MODULES")?;
-
-        let module_names = [
-            "stdnse",
-            "nmap",
-            "http",
-            "comm",
-            "sslcert",
-            "tls",
-            "shortport",
-            "socket",
-            "ssh2",
-            "ftp",
-            "smtp",
-            "mysql",
-            "postgres",
-            "pgsql",
-            "mssql",
-            "sybase",
-            "redis",
-            "mongodb",
-            "ldap",
-            "snmp",
-            "smb",
-            "rdp",
-            "vnc",
-            "ntp",
-            "memcached",
-            "imap",
-            "pop3",
-            "netbios",
-            "oracle",
-            "winrm",
-            "radius",
-            "dhcp",
-            "finger",
-            "whois",
-            "sftp",
-            "dns",
-            "datafiles",
-            "url",
-            "json",
-            "base64",
-            "datetime",
-            "rand",
-            "string",
-            "table",
-        ];
-
-        for name in module_names {
-            if let Ok(table) = globals.get::<Table>(name) {
-                let _ = modules.set(name, table);
-            }
-        }
-
-        Ok(())
+        shared::sync_require_modules(&self.lua)
     }
 
     fn setup_require(&self, _scripts_path: Arc<Mutex<Vec<PathBuf>>>) -> LuaResult<()> {
@@ -513,8 +515,8 @@ impl AsyncNseExecutor {
     }
 
     /// Get access to the tokio runtime for async operations
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
+    pub fn runtime(&self) -> Option<&Runtime> {
+        self.runtime.as_ref()
     }
 }
 

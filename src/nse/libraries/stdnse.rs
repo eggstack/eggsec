@@ -1000,29 +1000,6 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         })?;
     stdnse.set("get_script_interfaces", get_script_interfaces_fn)?;
 
-    let make_buffer_fn = lua.create_function(
-        |lua,
-         (socket, sep, buffer_size, preloaded): (
-            Value,
-            Option<String>,
-            Option<usize>,
-            Option<String>,
-        )| {
-            let buffer = lua.create_table()?;
-            let sep = sep.unwrap_or_else(|| "\n".to_string());
-            let size = buffer_size.unwrap_or(4096);
-
-            buffer.set("socket", socket)?;
-            buffer.set("separator", sep)?;
-            buffer.set("buffer", preloaded.unwrap_or_else(|| "".to_string()))?;
-            buffer.set("buffer_size", size)?;
-            buffer.set("offset", 0)?;
-
-            Ok(buffer)
-        },
-    )?;
-    stdnse.set("make_buffer", make_buffer_fn)?;
-
     // Additional utility functions
     let time_fn = lua.create_function(|_lua, _: ()| Ok(chrono::Utc::now().timestamp() as f64))?;
     stdnse.set("time", time_fn)?;
@@ -1215,22 +1192,6 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|_lua, (text, pattern): (String, String)| Ok(text.contains(&pattern)))?;
     stdnse.set("contains", contains_fn)?;
 
-    // Add new_thread for coroutine support
-    let new_thread_fn =
-        lua.create_function(|lua, (func, args): (mlua::Function, Option<Table>)| {
-            let thread = lua.create_thread(func)?;
-            let result = lua.create_table()?;
-            result.set("thread", thread)?;
-            result.set("status", "pending")?;
-
-            if let Some(a) = args {
-                result.set("args", a)?;
-            }
-
-            Ok(result)
-        })?;
-    stdnse.set("new_thread", new_thread_fn)?;
-
     // Add base to get the base coroutine
     let base_fn = lua.create_function(|lua, ()| {
         let globals = lua.globals();
@@ -1242,13 +1203,6 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         Ok(base_coroutine)
     })?;
     stdnse.set("base", base_fn)?;
-
-    // Add sleep function
-    let sleep_fn = lua.create_function(|_lua, seconds: f64| {
-        std::thread::sleep(std::time::Duration::from_secs_f64(seconds));
-        Ok(())
-    })?;
-    stdnse.set("sleep", sleep_fn)?;
 
     // Add clock_ms function
     let clock_ms_fn = lua.create_function(|_lua, ()| {
@@ -1269,69 +1223,6 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
         Ok(now)
     })?;
     stdnse.set("clock_us", clock_us_fn)?;
-
-    // Add get_script_interfaces
-    let get_script_interfaces_fn =
-        lua.create_function(|_lua, filter_func: Option<mlua::Function>| {
-            let interfaces = _lua.create_table()?;
-
-            #[cfg(unix)]
-            {
-                use std::process::Command;
-                if let Ok(output) = Command::new("ip").arg("addr").output() {
-                    let output_str = String::from_utf8_lossy(&output.stdout);
-                    let mut idx = 1;
-                    for line in output_str.lines() {
-                        if line.starts_with(|c: char| c.is_ascii_digit())
-                            || line.starts_with("inet ")
-                        {
-                            let iface = _lua.create_table()?;
-                            let name = line.split(':').next().unwrap_or("unknown").trim();
-                            iface.set("device", name)?;
-
-                            let addrs = _lua.create_table()?;
-                            let mut addr_idx = 1;
-                            for inet_line in output_str.lines() {
-                                if inet_line.trim().starts_with("inet ") && inet_line.contains(name)
-                                {
-                                    let parts: Vec<&str> =
-                                        inet_line.trim().split_whitespace().collect();
-                                    if parts.len() >= 2 {
-                                        addrs.set(addr_idx, parts[1].to_string())?;
-                                        addr_idx += 1;
-                                    }
-                                }
-                            }
-                            iface.set("addresses", addrs)?;
-
-                            let should_include = if let Some(ref filter) = filter_func {
-                                let r: bool = filter.call(iface.clone()).unwrap_or(true);
-                                r
-                            } else {
-                                true
-                            };
-
-                            if should_include {
-                                interfaces.set(idx, iface)?;
-                                idx += 1;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if interfaces.len().unwrap_or(0) == 0 {
-                let iface = _lua.create_table()?;
-                iface.set("device", "lo")?;
-                let addrs = _lua.create_table()?;
-                addrs.set(1, "127.0.0.1")?;
-                iface.set("addresses", addrs)?;
-                interfaces.set(1, iface)?;
-            }
-
-            Ok(interfaces)
-        })?;
-    stdnse.set("get_script_interfaces", get_script_interfaces_fn)?;
 
     // Add get_timeout function
     let get_timeout_fn = lua.create_function(
