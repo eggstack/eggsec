@@ -1,1 +1,40 @@
+# Build artifacts
 /target
+debug/
+release/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# Cargo
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS artifacts
+.DS_Store
+._*
+Thumbs.db
+
+# Backup files
+*.bak
+*.tmp
+*.orig
+
+# Documentation generated
+docs/generated/
+
+# Environment
+.env
+.env.local
+
+# Test coverage
+*.profraw
+coverage/

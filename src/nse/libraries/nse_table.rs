@@ -71,7 +71,7 @@ pub fn register_table_library(lua: &Lua) {
 
     table_lib.set(
         "deserialize",
-        lua.create_function(|_lua, s: String| Ok(_lua.create_table().ok()))
+        lua.create_function(|_lua, _s: String| Ok(_lua.create_table().ok()))
             .ok(),
     );
 

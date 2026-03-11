@@ -339,6 +339,9 @@ pub enum Commands {
     #[cfg(feature = "rest-api")]
     #[command(about = "Start REST API server for external tool integration")]
     Serve(ServeArgs),
+    #[cfg(feature = "mcp-server")]
+    #[command(about = "Start MCP server for AI assistant integration")]
+    McpServe(McpServeArgs),
 }
 
 #[derive(clap::Args, Clone)]
@@ -1679,6 +1682,21 @@ pub struct ServeArgs {
     pub port: u16,
     #[arg(long, default_value = "127.0.0.1", help = "Address to bind to")]
     pub bind: String,
+    #[arg(long, help = "API key for authentication")]
+    pub api_key: Option<String>,
+}
+
+#[cfg(feature = "mcp-server")]
+#[derive(clap::Args)]
+pub struct McpServeArgs {
+    #[arg(long, default_value = "8081", help = "Port to listen on")]
+    pub port: u16,
+    #[arg(long, default_value = "127.0.0.1", help = "Address to bind to")]
+    pub bind: String,
+    #[arg(long, help = "API key for authentication")]
+    pub api_key: Option<String>,
+    #[arg(long, help = "Enable stdio mode for AI assistant integration")]
+    pub stdio: bool,
 }
 
 #[derive(clap::Args)]

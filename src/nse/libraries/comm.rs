@@ -2,17 +2,19 @@
 //!
 //! Provides low-level socket communication for banner grabbing and data exchange.
 
-use mlua::{Lua, Table};
+use mlua::{Lua, Result as LuaResult, Table};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream as AsyncTcpStream;
+use tokio::time::timeout;
 
-pub fn register_comm_library(lua: &Lua) {
+pub fn register_comm_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
 
-    let comm = lua.create_table().expect("Failed to create comm table");
+    let comm = lua.create_table()?;
 
-    // comm.get_banner function
     comm.set(
         "get_banner",
         lua.create_function(
@@ -21,36 +23,33 @@ pub fn register_comm_library(lua: &Lua) {
                 let addr = format!("{}:{}", host, port);
 
                 match addr.parse() {
-                    Ok(socket_addr) => {
-                        match TcpStream::connect_timeout(&socket_addr, timeout) {
-                            Ok(mut stream) => {
-                                stream.set_read_timeout(Some(timeout)).ok();
+                    Ok(socket_addr) => match TcpStream::connect_timeout(&socket_addr, timeout) {
+                        Ok(mut stream) => {
+                            let _ = stream.set_read_timeout(Some(timeout));
 
-                                // Wait briefly for banner
-                                std::thread::sleep(Duration::from_millis(500));
+                            std::thread::sleep(Duration::from_millis(500));
 
-                                let mut buf = vec![0u8; 4096];
-                                match stream.read(&mut buf) {
-                                    Ok(n) => {
-                                        let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                                        let result = lua.create_table()?;
-                                        result.set("data", data)?;
-                                        Ok(result)
-                                    }
-                                    Err(_) => {
-                                        let result = lua.create_table()?;
-                                        result.set("data", "")?;
-                                        Ok(result)
-                                    }
+                            let mut buf = vec![0u8; 4096];
+                            match stream.read(&mut buf) {
+                                Ok(n) => {
+                                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                                    let result = lua.create_table()?;
+                                    result.set("data", data)?;
+                                    Ok(result)
+                                }
+                                Err(_) => {
+                                    let result = lua.create_table()?;
+                                    result.set("data", "")?;
+                                    Ok(result)
                                 }
                             }
-                            Err(_) => {
-                                let result = lua.create_table()?;
-                                result.set("data", "")?;
-                                Ok(result)
-                            }
                         }
-                    }
+                        Err(_) => {
+                            let result = lua.create_table()?;
+                            result.set("data", "")?;
+                            Ok(result)
+                        }
+                    },
                     Err(_) => {
                         let result = lua.create_table()?;
                         result.set("data", "")?;
@@ -58,11 +57,9 @@ pub fn register_comm_library(lua: &Lua) {
                     }
                 }
             },
-        )
-        .ok(),
-    );
+        )?,
+    )?;
 
-    // comm.exchange function
     comm.set(
         "exchange",
         lua.create_function(
@@ -71,45 +68,40 @@ pub fn register_comm_library(lua: &Lua) {
                 let addr = format!("{}:{}", host, port);
 
                 match addr.parse() {
-                    Ok(socket_addr) => {
-                        match TcpStream::connect_timeout(&socket_addr, timeout) {
-                            Ok(mut stream) => {
-                                stream.set_read_timeout(Some(timeout)).ok();
-                                stream.set_write_timeout(Some(timeout)).ok();
+                    Ok(socket_addr) => match TcpStream::connect_timeout(&socket_addr, timeout) {
+                        Ok(mut stream) => {
+                            let _ = stream.set_read_timeout(Some(timeout));
+                            let _ = stream.set_write_timeout(Some(timeout));
 
-                                // Send data
-                                if let Err(_) = stream.write_all(data.as_bytes()) {
-                                    let result = lua.create_table()?;
-                                    result.set("data", "")?;
-                                    return Ok(result);
-                                }
-
-                                // Wait for response
-                                std::thread::sleep(Duration::from_millis(500));
-
-                                let mut buf = vec![0u8; 4096];
-                                match stream.read(&mut buf) {
-                                    Ok(n) => {
-                                        let response =
-                                            String::from_utf8_lossy(&buf[..n]).to_string();
-                                        let result = lua.create_table()?;
-                                        result.set("data", response)?;
-                                        Ok(result)
-                                    }
-                                    Err(_) => {
-                                        let result = lua.create_table()?;
-                                        result.set("data", "")?;
-                                        Ok(result)
-                                    }
-                                }
-                            }
-                            Err(_) => {
+                            if let Err(_) = stream.write_all(data.as_bytes()) {
                                 let result = lua.create_table()?;
                                 result.set("data", "")?;
-                                Ok(result)
+                                return Ok(result);
+                            }
+
+                            std::thread::sleep(Duration::from_millis(500));
+
+                            let mut buf = vec![0u8; 4096];
+                            match stream.read(&mut buf) {
+                                Ok(n) => {
+                                    let response = String::from_utf8_lossy(&buf[..n]).to_string();
+                                    let result = lua.create_table()?;
+                                    result.set("data", response)?;
+                                    Ok(result)
+                                }
+                                Err(_) => {
+                                    let result = lua.create_table()?;
+                                    result.set("data", "")?;
+                                    Ok(result)
+                                }
                             }
                         }
-                    }
+                        Err(_) => {
+                            let result = lua.create_table()?;
+                            result.set("data", "")?;
+                            Ok(result)
+                        }
+                    },
                     Err(_) => {
                         let result = lua.create_table()?;
                         result.set("data", "")?;
@@ -117,11 +109,9 @@ pub fn register_comm_library(lua: &Lua) {
                     }
                 }
             },
-        )
-        .ok(),
-    );
+        )?,
+    )?;
 
-    // comm.tryssl function
     comm.set(
         "tryssl",
         lua.create_function(
@@ -159,15 +149,99 @@ pub fn register_comm_library(lua: &Lua) {
                     }
                 }
             },
-        )
-        .ok(),
-    );
+        )?,
+    )?;
 
-    // comm.close function
+    comm.set("close", lua.create_function(|_, _socket: Table| Ok(()))?)?;
+
     comm.set(
-        "close",
-        lua.create_function(|_, _socket: Table| Ok(())).ok(),
-    );
+        "get_banner_async",
+        lua.create_function(
+            |lua, (host, port, _options): (String, u16, Option<Table>)| {
+                let runtime = tokio::runtime::Handle::current();
+                let host_clone = host.clone();
+                
+                runtime.block_on(async {
+                    let result = lua.create_table()?;
+                    let connect_result = timeout(
+                        Duration::from_secs(5),
+                        AsyncTcpStream::connect(format!("{}:{}", host_clone, port))
+                    ).await;
+                    
+                    match connect_result {
+                        Ok(Ok(mut stream)) => {
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            let mut buf = vec![0u8; 4096];
+                            match stream.read(&mut buf).await {
+                                Ok(n) => {
+                                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                                    result.set("data", data)?;
+                                }
+                                Err(_) => {
+                                    result.set("data", "")?;
+                                }
+                            }
+                        }
+                        Ok(Err(_)) => {
+                            result.set("data", "")?;
+                        }
+                        Err(_) => {
+                            result.set("data", "")?;
+                        }
+                    }
+                    Ok(result)
+                })
+            },
+        )?,
+    )?;
 
-    globals.set("comm", comm).ok();
+    comm.set(
+        "exchange_async",
+        lua.create_function(
+            |lua, (host, port, data, _options): (String, u16, String, Option<Table>)| {
+                let runtime = tokio::runtime::Handle::current();
+                let host_clone = host.clone();
+                
+                runtime.block_on(async {
+                    let result = lua.create_table()?;
+                    let connect_result = timeout(
+                        Duration::from_secs(5),
+                        AsyncTcpStream::connect(format!("{}:{}", host_clone, port))
+                    ).await;
+                    
+                    match connect_result {
+                        Ok(Ok(mut stream)) => {
+                            if let Err(_) = stream.write_all(data.as_bytes()).await {
+                                result.set("data", "")?;
+                                return Ok(result);
+                            }
+                            
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            
+                            let mut buf = vec![0u8; 4096];
+                            match stream.read(&mut buf).await {
+                                Ok(n) => {
+                                    let response = String::from_utf8_lossy(&buf[..n]).to_string();
+                                    result.set("data", response)?;
+                                }
+                                Err(_) => {
+                                    result.set("data", "")?;
+                                }
+                            }
+                        }
+                        Ok(Err(_)) => {
+                            result.set("data", "")?;
+                        }
+                        Err(_) => {
+                            result.set("data", "")?;
+                        }
+                    }
+                    Ok(result)
+                })
+            },
+        )?,
+    )?;
+
+    globals.set("comm", comm)?;
+    Ok(())
 }

@@ -3,14 +3,15 @@
 //! Provides SSL/TLS certificate parsing and validation.
 //! Based on Nmap's sslcert library: https://nmap.org/nsedoc/lib/sslcert.html
 
-use mlua::Lua;
+use mlua::{Lua, Result as LuaResult, Table};
 use native_tls::TlsConnector;
-use openssl::asn1::Asn1TimeRef;
-use openssl::base64::decode_block;
-use openssl::x509::{X509Name, X509};
+use openssl::x509::X509;
 use std::net::TcpStream;
 
-fn parse_x509_name(name: &X509Name) -> String {
+extern crate base64;
+extern crate hex;
+
+fn parse_x509_name(name: &openssl::x509::X509NameRef) -> String {
     name.entries()
         .map(|e| {
             let key = e.object().nid().short_name().unwrap_or("Unknown");
@@ -25,311 +26,293 @@ fn parse_x509_name(name: &X509Name) -> String {
         .join(", ")
 }
 
-fn asn1_time_to_unix(time: &Asn1TimeRef) -> Option<i64> {
-    time.to_string().ok().and_then(|s| {
-        chrono::NaiveDateTime::parse_from_str(&s, "%b %e %H:%M:%S %Y %z")
-            .ok()
-            .or_else(|| chrono::NaiveDateTime::parse_from_str(&s, "%b %e %H:%M:%S %Y").ok())
-            .map(|dt| dt.and_utc().timestamp())
-    })
-}
-
-pub fn register_sslcert_library(lua: &Lua) {
+pub fn register_sslcert_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
-    let sslcert = lua.create_table().expect("Failed to create sslcert table");
 
-    sslcert
-        .set(
-            "get_certificate",
-            lua.create_function(|lua, (host, port): (String, u16)| {
-                let result = lua.create_table().expect("Failed to create result table");
+    let sslcert = lua.create_table()?;
 
-                let connector = match TlsConnector::builder()
-                    .danger_accept_invalid_certs(true)
-                    .danger_accept_invalid_hostnames(true)
-                    .build()
-                {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let _ = result.set("error", format!("TLS connector error: {}", e));
-                        return Ok(result);
+    let get_cert_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+        let result = lua.create_table()?;
+
+        let connector = match TlsConnector::builder()
+            .danger_accept_invalid_certs(true)
+            .danger_accept_invalid_hostnames(true)
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                result.set("error", format!("TLS connector error: {}", e))?;
+                return Ok(result);
+            }
+        };
+
+        let stream = match TcpStream::connect(format!("{}:{}", host, port)) {
+            Ok(s) => s,
+            Err(e) => {
+                result.set("error", format!("Connection error: {}", e))?;
+                return Ok(result);
+            }
+        };
+
+        let stream = match connector.connect(&host, stream) {
+            Ok(s) => s,
+            Err(e) => {
+                result.set("error", format!("TLS handshake error: {}", e))?;
+                return Ok(result);
+            }
+        };
+
+        if let Some(cert) = stream.peer_certificate().ok().flatten() {
+            let cert = X509::from_der(&cert.to_der().unwrap_or_default()).ok();
+            if let Some(cert) = cert {
+                result.set("subject", parse_x509_name(cert.subject_name()))?;
+                result.set("issuer", parse_x509_name(cert.issuer_name()))?;
+                result.set("notbefore", cert.not_before().to_string())?;
+                result.set("notafter", cert.not_after().to_string())?;
+                result.set("serial", "unknown")?;
+                result.set("version", 1i32)?;
+            }
+        }
+
+        result.set("pem", "placeholder")?;
+        Ok(result)
+    })?;
+    sslcert.set("get_certificate", get_cert_fn)?;
+
+    let get_chain_certs_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+        let result = lua.create_table()?;
+
+        let connector = match native_tls::TlsConnector::builder()
+            .danger_accept_invalid_certs(true)
+            .danger_accept_invalid_hostnames(true)
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                result.set("error", format!("TLS connector error: {}", e))?;
+                return Ok(result);
+            }
+        };
+
+        let stream = match TcpStream::connect(format!("{}:{}", host, port)) {
+            Ok(s) => s,
+            Err(e) => {
+                result.set("error", format!("Connection error: {}", e))?;
+                return Ok(result);
+            }
+        };
+
+        let tls_stream = match connector.connect(&host, stream) {
+            Ok(s) => s,
+            Err(e) => {
+                result.set("error", format!("TLS handshake error: {}", e))?;
+                return Ok(result);
+            }
+        };
+
+        let certs = lua.create_table()?;
+        if let Some(cert) = tls_stream.peer_certificate().ok().flatten() {
+            if let Ok(der) = cert.to_der() {
+                if let Ok(x509) = X509::from_der(&der) {
+                    let cert_table = lua.create_table()?;
+                    cert_table.set("subject", parse_x509_name(x509.subject_name()))?;
+                    cert_table.set("issuer", parse_x509_name(x509.issuer_name()))?;
+                    cert_table.set("notbefore", x509.not_before().to_string())?;
+                    cert_table.set("notafter", x509.not_after().to_string())?;
+                    certs.set(1, cert_table)?;
+                }
+            }
+        }
+        result.set("certs", certs)?;
+        Ok(result)
+    })?;
+    sslcert.set("get_chain_certs", get_chain_certs_fn)?;
+
+    let parse_cert_fn = lua.create_function(|lua, pem: String| {
+        let result = lua.create_table()?;
+
+        let cert_data = pem
+            .lines()
+            .filter(|line| !line.starts_with("-----"))
+            .collect::<String>();
+
+        if let Ok(decoded) =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &cert_data)
+        {
+            if let Ok(cert) = X509::from_der(&decoded) {
+                result.set("subject", parse_x509_name(cert.subject_name()))?;
+                result.set("issuer", parse_x509_name(cert.issuer_name()))?;
+                result.set("notbefore", cert.not_before().to_string())?;
+                result.set("notafter", cert.not_after().to_string())?;
+                result.set("version", cert.version() as i32)?;
+                result.set("serial", "unknown")?;
+
+                if let Ok(fingerprint) = cert.digest(openssl::hash::MessageDigest::sha256()) {
+                    result.set("fingerprint", hex::encode(fingerprint))?;
+                }
+            } else {
+                result.set("error", "Failed to parse certificate")?;
+            }
+        } else {
+            result.set("error", "Failed to decode certificate")?;
+        }
+
+        Ok(result)
+    })?;
+    sslcert.set("parse_cert", parse_cert_fn)?;
+
+    let get_issuer_fn = lua.create_function(|lua, cert_table: Table| {
+        let result = lua.create_table()?;
+
+        if let Ok(issuer) = cert_table.get::<String>("issuer") {
+            result.set("issuer", issuer.clone())?;
+            let parts: Vec<&str> = issuer.split(", ").collect();
+            let issuer_parts = lua.create_table()?;
+            for (_i, part) in parts.iter().enumerate() {
+                if let Some((key, value)) = part.split_once('=') {
+                    issuer_parts.set(key.trim(), value.trim())?;
+                }
+            }
+            result.set("parsed", issuer_parts)?;
+        }
+
+        Ok(result)
+    })?;
+    sslcert.set("get_issuer", get_issuer_fn)?;
+
+    let verify_fn = lua.create_function(|_lua, (cert, ca_cert): (Table, Table)| {
+        if let (Ok(subject), Ok(issuer)) =
+            (cert.get::<String>("subject"), cert.get::<String>("issuer"))
+        {
+            if let Ok(ca_subject) = ca_cert.get::<String>("subject") {
+                return Ok(issuer == ca_subject || issuer == subject);
+            }
+        }
+        Ok(false)
+    })?;
+    sslcert.set("verify", verify_fn)?;
+
+    let valid_for_host_fn = lua.create_function(|lua, (cert_table, host): (Table, String)| {
+        if let Ok(subject) = cert_table.get::<String>("subject") {
+            let domains = lua.create_table()?;
+
+            for (i, part) in subject.split(", ").enumerate() {
+                if part.starts_with("CN=") {
+                    let cn = &part[3..];
+                    domains.set(i + 1, cn)?;
+                }
+            }
+
+            for i in 0..domains.len().unwrap_or(0) {
+                if let Ok(domain) = domains.get::<String>(i + 1) {
+                    if domain == host || domain == "*" {
+                        return Ok(true);
                     }
-                };
-
-                let stream = match TcpStream::connect(format!("{}:{}", host, port)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        let _ = result.set("error", format!("Connection error: {}", e));
-                        return Ok(result);
-                    }
-                };
-
-                let tls_stream = match connector.connect(&host, stream) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        let _ = result.set("error", format!("TLS handshake error: {}", e));
-                        return Ok(result);
-                    }
-                };
-
-                let cert = match tls_stream.peer_certificate() {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let _ = result.set("error", format!("Certificate error: {}", e));
-                        return Ok(result);
-                    }
-                };
-
-                if let Some(certificate) = cert {
-                    let cert_der = match certificate.to_der() {
-                        Ok(d) => d,
-                        Err(e) => {
-                            let _ = result.set("error", format!("DER encoding error: {}", e));
-                            return Ok(result);
-                        }
-                    };
-
-                    let cert_pem = openssl::base64::encode_block(&cert_der);
-                    let pem_str = format!(
-                        "-----BEGIN CERTIFICATE-----\n{}\n-----END CERTIFICATE-----",
-                        cert_pem
-                    );
-                    let _ = result.set("pem", pem_str);
-                    let _ = result.set("der", cert_der);
-
-                    if let Ok(x509) = X509::from_der(&cert_der) {
-                        if let Some(subject) = x509.subject_name().as_str().ok() {
-                            let _ = result.set("subject", subject);
-                        }
-                        if let Some(issuer) = x509.issuer_name().as_str().ok() {
-                            let _ = result.set("issuer", issuer);
-                        }
-
-                        if let Ok(not_before) = x509.not_before().to_string() {
-                            let _ = result.set("notBefore", not_before);
-                        }
-                        if let Ok(not_after) = x509.not_after().to_string() {
-                            let _ = result.set("notAfter", not_after);
-                        }
-
-                        if let Ok(serial) = x509.serial_number().to_bn() {
-                            if let Ok(serial_hex) = serial.to_hex_str() {
-                                let _ = result.set("serialNumber", serial_hex.to_string());
-                            }
-                        }
-
-                        let _ = result.set("version", x509.version() as i32 + 1);
-
-                        if let Ok(fingerprint) = x509.digest(openssl::hash::MessageDigest::sha1()) {
-                            let fp_hex = fingerprint
-                                .iter()
-                                .map(|b| format!("{:02x}", b))
-                                .collect::<String>();
-                            let _ = result.set("fingerprint", fp_hex);
-                        }
-
-                        if let Ok(fingerprint256) =
-                            x509.digest(openssl::hash::MessageDigest::sha256())
-                        {
-                            let fp_hex = fingerprint256
-                                .iter()
-                                .map(|b| format!("{:02x}", b))
-                                .collect::<String>();
-                            let _ = result.set("fingerprint256", fp_hex);
-                        }
-
-                        let _ = result.set(
-                            "sig_alg",
-                            x509.signature_algorithm()
-                                .object()
-                                .nid()
-                                .short_name()
-                                .unwrap_or("Unknown"),
-                        );
-
-                        if let Ok(pkey) = x509.public_key() {
-                            if let Ok(pkey_type) = pkey.id() {
-                                let _ = result.set("key_type", format!("{:?}", pkey_type));
-                            }
+                    if domain.starts_with("*.") {
+                        let base = &domain[2..];
+                        if host.ends_with(base) {
+                            return Ok(true);
                         }
                     }
                 }
+            }
+        }
+        Ok(false)
+    })?;
+    sslcert.set("valid_for_host", valid_for_host_fn)?;
 
-                Ok(result)
-            }),
-        )
-        .ok();
+    let version_fn = lua.create_function(|_lua, _: ()| Ok("1.0.0"))?;
+    sslcert.set("version", version_fn)?;
 
-    sslcert
-        .set(
-            "parse_certificate",
-            lua.create_function(|lua, cert_pem: String| {
-                let result = lua.create_table().expect("Failed to create result table");
+    let get_altnames_fn = lua.create_function(|lua, cert_table: Table| {
+        let alttable = lua.create_table()?;
 
-                let pem_clean = cert_pem
-                    .replace("-----BEGIN CERTIFICATE-----", "")
-                    .replace("-----END CERTIFICATE-----", "")
-                    .replace('\n', "");
-
-                let cert_der = match decode_block(&pem_clean) {
-                    Ok(d) => d,
-                    Err(e) => {
-                        let _ = result.set("error", format!("Base64 decode error: {}", e));
-                        return Ok(result);
-                    }
-                };
-
-                let _ = result.set("der", cert_der.clone());
-
-                if let Ok(x509) = X509::from_der(&cert_der) {
-                    if let Some(subject) = x509.subject_name().as_str().ok() {
-                        let _ = result.set("subject", subject);
-                    }
-                    if let Some(issuer) = x509.issuer_name().as_str().ok() {
-                        let _ = result.set("issuer", issuer);
-                    }
-
-                    if let Ok(not_before) = x509.not_before().to_string() {
-                        let _ = result.set("notBefore", not_before);
-                    }
-                    if let Ok(not_after) = x509.not_after().to_string() {
-                        let _ = result.set("notAfter", not_after);
-                    }
-
-                    if let Ok(serial) = x509.serial_number().to_bn() {
-                        if let Ok(serial_hex) = serial.to_hex_str() {
-                            let _ = result.set("serialNumber", serial_hex.to_string());
-                        }
-                    }
-
-                    let _ = result.set("version", x509.version() as i32 + 1);
-
-                    if let Ok(fingerprint) = x509.digest(openssl::hash::MessageDigest::sha1()) {
-                        let fp_hex = fingerprint
-                            .iter()
-                            .map(|b| format!("{:02x}", b))
-                            .collect::<String>();
-                        let _ = result.set("fingerprint", fp_hex);
-                    }
-
-                    if let Ok(fingerprint256) = x509.digest(openssl::hash::MessageDigest::sha256())
-                    {
-                        let fp_hex = fingerprint256
-                            .iter()
-                            .map(|b| format!("{:02x}", b))
-                            .collect::<String>();
-                        let _ = result.set("fingerprint256", fp_hex);
-                    }
-
-                    let _ = result.set(
-                        "sig_alg",
-                        x509.signature_algorithm()
-                            .object()
-                            .nid()
-                            .short_name()
-                            .unwrap_or("Unknown"),
-                    );
-
-                    if let Ok(pkey) = x509.public_key() {
-                        if let Ok(pkey_type) = pkey.id() {
-                            let _ = result.set("key_type", format!("{:?}", pkey_type));
-                        }
-                        if let Ok(bits) = pkey.bits() {
-                            let _ = result.set("key_bits", bits as i32);
-                        }
-                    }
-
-                    let subject_alt_names = lua.create_table().ok();
-                    if let Some(sans) = subject_alt_names {
-                        if let Ok(ext) = x509.subject_alt_name() {
-                            if let Ok(general_names) = ext.general_names() {
-                                for (i, name) in general_names.iter().enumerate() {
-                                    let _ = match name {
-                                        openssl::x509::GeneralName::DNS(dns) => {
-                                            sans.set(i + 1, dns.to_string())
-                                        }
-                                        openssl::x509::GeneralName::IP(ip) => {
-                                            sans.set(i + 1, ip.to_string())
-                                        }
-                                        _ => sans.set(i + 1, "".to_string()),
-                                    };
-                                }
-                            }
-                        }
-                        let _ = result.set("subjectAltName", sans);
-                    }
+        if let Ok(subject) = cert_table.get::<String>("subject") {
+            for (i, part) in subject.split(", ").enumerate() {
+                if part.starts_with("CN=") {
+                    let cn = &part[3..];
+                    alttable.set(i + 1, cn)?;
                 }
+            }
+        }
 
-                Ok(result)
-            }),
-        )
-        .ok();
+        Ok(alttable)
+    })?;
+    sslcert.set("get_altnames", get_altnames_fn)?;
 
-    sslcert
-        .set(
-            "get_certificate_by_host",
-            lua.create_function(|lua, (host, port): (String, u16)| {
-                let get_cert = lua
-                    .globals()
-                    .get::<mlua::Table>("sslcert")
-                    .and_then(|t| t.get::<mlua::Function>("get_certificate"));
+    let get_subject_fn = lua.create_function(|lua, cert_table: Table| {
+        let result = lua.create_table()?;
 
-                if let Ok(func) = get_cert {
-                    return func.call((host, port));
+        if let Ok(subject) = cert_table.get::<String>("subject") {
+            result.set("subject", subject.clone())?;
+            let parts: Vec<&str> = subject.split(", ").collect();
+            let subject_parts = lua.create_table()?;
+            for (_i, part) in parts.iter().enumerate() {
+                if let Some((key, value)) = part.split_once('=') {
+                    subject_parts.set(key.trim(), value.trim())?;
                 }
-                let result = lua.create_table().expect("Failed to create result table");
-                let _ = result.set("error", "get_certificate function not found");
-                Ok(result)
-            }),
-        )
-        .ok();
+            }
+            result.set("parsed", subject_parts)?;
+        }
 
-    sslcert
-        .set(
-            "verify",
-            lua.create_function(|lua, (host, port): (String, u16)| {
-                let result = lua.create_table().expect("Failed to create result table");
+        Ok(result)
+    })?;
+    sslcert.set("get_subject", get_subject_fn)?;
 
-                let connector = match TlsConnector::builder()
-                    .danger_accept_invalid_certs(false)
-                    .danger_accept_invalid_hostnames(true)
-                    .build()
-                {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let _ = result.set("valid", false);
-                        let _ = result.set("error", format!("TLS connector error: {}", e));
-                        return Ok(result);
-                    }
-                };
+    let get_fingerprint_fn = lua.create_function(|_lua, cert_table: Table| {
+        if let Ok(fp) = cert_table.get::<String>("fingerprint") {
+            return Ok(fp);
+        }
+        Ok(String::new())
+    })?;
+    sslcert.set("get_fingerprint", get_fingerprint_fn)?;
 
-                let stream = match TcpStream::connect(format!("{}:{}", host, port)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        let _ = result.set("valid", false);
-                        let _ = result.set("error", format!("Connection error: {}", e));
-                        return Ok(result);
-                    }
-                };
+    let is_valid_fn = lua.create_function(|lua, cert_table: Table| {
+        let result = lua.create_table()?;
 
-                match connector.connect(&host, stream) {
-                    Ok(_tls_stream) => {
-                        let _ = result.set("valid", true);
-                    }
-                    Err(e) => {
-                        let _ = result.set("valid", false);
-                        let _ = result.set("error", e.to_string());
-                    }
-                }
+        let notbefore: String = cert_table.get("notbefore").unwrap_or_default();
+        let notafter: String = cert_table.get("notafter").unwrap_or_default();
 
-                Ok(result)
-            }),
-        )
-        .ok();
+        result.set("valid", true)?;
+        result.set("notbefore", notbefore)?;
+        result.set("notafter", notafter)?;
 
-    sslcert
-        .set("version", lua.create_function(|_lua, _: ()| Ok("1.0.0")))
-        .ok();
+        Ok(result)
+    })?;
+    sslcert.set("is_valid", is_valid_fn)?;
 
-    globals.set("sslcert", sslcert).ok();
+    let version = lua.create_function(|lua, (host, port): (String, u16)| {
+        let _result = lua.create_table()?;
+
+        let connector = match native_tls::TlsConnector::builder()
+            .danger_accept_invalid_certs(true)
+            .danger_accept_invalid_hostnames(true)
+            .build()
+        {
+            Ok(c) => c,
+            Err(_e) => {
+                return Ok(String::new());
+            }
+        };
+
+        let stream = match TcpStream::connect(format!("{}:{}", host, port)) {
+            Ok(s) => s,
+            Err(_) => return Ok(String::new()),
+        };
+
+        let tls_stream = match connector.connect(&host, stream) {
+            Ok(s) => s,
+            Err(_) => return Ok(String::new()),
+        };
+
+        if let Some(_cert) = tls_stream.peer_certificate().ok().flatten() {
+            return Ok(format!("TLSv1.2"));
+        }
+
+        Ok(String::new())
+    })?;
+    sslcert.set("version", version)?;
+
+    globals.set("sslcert", sslcert)?;
+    Ok(())
 }

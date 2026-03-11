@@ -16,6 +16,9 @@ pub mod email;
 pub mod cve;
 pub mod threatintel;
 
+pub use cloud::CloudDiscovery;
+pub use threatintel::ThreatIntel;
+
 use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
 use serde::{Deserialize, Serialize};

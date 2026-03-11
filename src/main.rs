@@ -1382,18 +1382,50 @@ async fn main() -> Result<()> {
             use tokio::net::TcpListener;
 
             let registry = create_default_registry();
-            let app = create_router(registry);
+            let app = create_router(registry, args.api_key.clone());
             
             let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
                 .parse()
                 .map_err(|e| anyhow::anyhow!("Invalid address: {}", e))?;
             
+            let listener = TcpListener::bind(addr).await?;
+            
             println!("Starting REST API server on http://{}", addr);
             println!("API available at http://{}/api/v1/tools", addr);
             println!("Health check at http://{}/health", addr);
+            if args.api_key.is_some() {
+                println!("API key authentication enabled");
+            }
             
-            let listener = TcpListener::bind(addr).await?;
             serve(listener, app).await?;
+        }
+        #[cfg(feature = "mcp-server")]
+        Some(Commands::McpServe(args)) => {
+            use crate::tool::{create_default_registry, protocol::mcp::create_mcp_router, protocol::mcp::run_stdio};
+            use std::net::SocketAddr;
+            use tokio::net::TcpListener;
+
+            if args.stdio {
+                let registry = create_default_registry();
+                run_stdio(registry, args.api_key.clone()).await;
+            } else {
+                let registry = create_default_registry();
+                let app = create_mcp_router(registry, args.api_key.clone()).await;
+                
+                let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
+                    .parse()
+                    .map_err(|e| anyhow::anyhow!("Invalid address: {}", e))?;
+                
+                let listener = TcpListener::bind(addr).await?;
+                
+                println!("Starting MCP server on http://{}", addr);
+                println!("MCP endpoint at http://{}/mcp", addr);
+                if args.api_key.is_some() {
+                    println!("API key authentication enabled");
+                }
+                
+                axum::serve(listener, app).await?;
+            }
         }
     }
 

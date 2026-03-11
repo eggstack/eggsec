@@ -1,0 +1,311 @@
+//! NSE io library wrapper
+//!
+//! Provides file I/O operations compatible with NSE.
+
+use mlua::{Lua, Result as LuaResult, Table};
+use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::path::PathBuf;
+use std::sync::Mutex;
+
+static FILE_HANDLES: once_cell::sync::Lazy<Mutex<HashMap<i32, File>>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
+
+static NEXT_FD: once_cell::sync::Lazy<Mutex<i32>> = once_cell::sync::Lazy::new(|| Mutex::new(100));
+
+pub fn register_io_library(lua: &Lua) -> LuaResult<()> {
+    let globals = lua.globals();
+    let io = lua.create_table()?;
+
+    io.set(
+        "open",
+        lua.create_function(|lua, (filename, mode): (String, Option<String>)| {
+            let mode_str = mode.unwrap_or_else(|| "r".to_string());
+
+            let file = match mode_str.as_str() {
+                "r" => File::open(&filename),
+                "w" => {
+                    let path = PathBuf::from(&filename);
+                    if let Some(parent) = path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    File::create(&filename)
+                }
+                "a" => OpenOptions::new().append(true).open(&filename),
+                "r+" => OpenOptions::new().read(true).write(true).open(&filename),
+                "w+" => {
+                    let path = PathBuf::from(&filename);
+                    if let Some(parent) = path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(&filename)
+                }
+                "a+" => OpenOptions::new()
+                    .read(true)
+                    .append(true)
+                    .create(true)
+                    .open(&filename),
+                _ => File::open(&filename),
+            };
+
+            match file {
+                Ok(f) => {
+                    let fd = {
+                        let mut next = NEXT_FD.lock().map_err(|_| {
+                            std::io::Error::new(std::io::ErrorKind::Other, "lock error")
+                        })?;
+                        let fd = *next;
+                        *next += 1;
+                        fd
+                    };
+
+                    let mut handles = FILE_HANDLES.lock().map_err(|_| {
+                        std::io::Error::new(std::io::ErrorKind::Other, "lock error")
+                    })?;
+                    handles.insert(fd, f);
+
+                    let result = lua.create_table()?;
+                    result.set("fd", fd)?;
+                    result.set("filename", filename)?;
+                    result.set("mode", mode_str)?;
+                    Ok(result)
+                }
+                Err(e) => {
+                    let result = lua.create_table()?;
+                    result.set("error", e.to_string())?;
+                    Ok(result)
+                }
+            }
+        })?,
+    )?;
+
+    io.set(
+        "close",
+        lua.create_function(|_lua, file: Table| {
+            if let Ok(fd) = file.get::<i32>("fd") {
+                if let Ok(mut handles) = FILE_HANDLES.lock() {
+                    handles.remove(&fd);
+                }
+            }
+            Ok(())
+        })?,
+    )?;
+
+    io.set(
+        "read",
+        lua.create_function(|_lua, (file, size): (Table, Option<usize>)| {
+            let fd: i32 = file.get("fd").unwrap_or(-1);
+            let size = size.unwrap_or(4096);
+
+            if let Ok(mut handles) = FILE_HANDLES.lock() {
+                if let Some(f) = handles.get_mut(&fd) {
+                    let mut buffer = vec![0u8; size];
+                    match f.read(&mut buffer) {
+                        Ok(n) => {
+                            buffer.truncate(n);
+                            let content = String::from_utf8_lossy(&buffer).to_string();
+                            return Ok(content);
+                        }
+                        Err(e) => return Ok(format!("Error: {}", e)),
+                    }
+                }
+            }
+            Ok(String::new())
+        })?,
+    )?;
+
+    io.set(
+        "write",
+        lua.create_function(|_lua, (file, content): (Table, String)| {
+            let fd: i32 = file.get("fd").unwrap_or(-1);
+
+            if let Ok(mut handles) = FILE_HANDLES.lock() {
+                if let Some(f) = handles.get_mut(&fd) {
+                    match f.write_all(content.as_bytes()) {
+                        Ok(()) => return Ok(content.len()),
+                        Err(_) => return Ok(0),
+                    }
+                }
+            }
+            Ok(0)
+        })?,
+    )?;
+
+    io.set(
+        "flush",
+        lua.create_function(|_lua, file: Table| {
+            let fd: i32 = file.get("fd").unwrap_or(-1);
+
+            if let Ok(mut handles) = FILE_HANDLES.lock() {
+                if let Some(f) = handles.get_mut(&fd) {
+                    let _ = f.flush();
+                }
+            }
+            Ok(true)
+        })?,
+    )?;
+
+    io.set(
+        "seek",
+        lua.create_function(|_lua, (file, offset): (Table, i64)| {
+            let fd: i32 = file.get("fd").unwrap_or(-1);
+
+            if let Ok(mut handles) = FILE_HANDLES.lock() {
+                if let Some(f) = handles.get_mut(&fd) {
+                    use std::io::Seek;
+                    if let Ok(pos) = f.seek(std::io::SeekFrom::Start(offset as u64)) {
+                        return Ok(pos as i64);
+                    }
+                }
+            }
+            Ok(0i64)
+        })?,
+    )?;
+
+    io.set(
+        "type",
+        lua.create_function(|_lua, file: Table| {
+            let fd: i32 = file.get("fd").unwrap_or(-1);
+            if let Ok(handles) = FILE_HANDLES.lock() {
+                if handles.contains_key(&fd) {
+                    return Ok("file".to_string());
+                }
+            }
+            Ok("nil".to_string())
+        })?,
+    )?;
+
+    io.set(
+        "lines",
+        lua.create_function(|lua, filename: String| {
+            let lines = lua.create_table()?;
+
+            if let Ok(content) = std::fs::read_to_string(&filename) {
+                for (i, line) in content.lines().enumerate() {
+                    lines.set(i + 1, line.to_string())?;
+                }
+            }
+
+            Ok(lines)
+        })?,
+    )?;
+
+    io.set(
+        "popen",
+        lua.create_function(|lua, (cmd, mode): (String, Option<String>)| {
+            let mode_str = mode.unwrap_or_else(|| "r".to_string());
+
+            #[cfg(unix)]
+            {
+                use std::process::{Command, Stdio};
+
+                let read_stdout = mode_str.contains('r');
+                let write_stdin = mode_str.contains('w');
+
+                let mut command = Command::new("sh");
+                command.arg("-c");
+                command.arg(&cmd);
+
+                if read_stdout {
+                    command.stdout(Stdio::piped());
+                    command.stderr(Stdio::piped());
+                } else if write_stdin {
+                    command.stdin(Stdio::piped());
+                }
+
+                match command.spawn() {
+                    Ok(child) => {
+                        let result = lua.create_table()?;
+                        result.set("pid", child.id())?;
+                        result.set("command", cmd)?;
+                        result.set("mode", mode_str)?;
+                        result.set("running", true)?;
+                        result.set("type", "process")?;
+                        Ok(result)
+                    }
+                    Err(e) => {
+                        let result = lua.create_table()?;
+                        result.set("error", format!("Failed to execute command: {}", e))?;
+                        Ok(result)
+                    }
+                }
+            }
+
+            #[cfg(windows)]
+            {
+                use std::process::{Command, Stdio};
+
+                let read_stdout = mode_str.contains('r');
+
+                let mut command = Command::new("cmd");
+                command.arg("/C");
+                command.arg(&cmd);
+
+                if read_stdout {
+                    command.stdout(Stdio::piped());
+                    command.stderr(Stdio::piped());
+                } else {
+                    command.stdin(Stdio::piped());
+                }
+
+                match command.spawn() {
+                    Ok(child) => {
+                        let result = lua.create_table()?;
+                        result.set("pid", child.id())?;
+                        result.set("command", cmd)?;
+                        result.set("mode", mode_str)?;
+                        result.set("running", true)?;
+                        result.set("type", "process")?;
+                        Ok(result)
+                    }
+                    Err(e) => {
+                        let result = lua.create_table()?;
+                        result.set("error", format!("Failed to execute command: {}", e))?;
+                        Ok(result)
+                    }
+                }
+            }
+
+            #[cfg(not(unix))]
+            #[cfg(not(windows))]
+            {
+                let result = lua.create_table()?;
+                result.set("error", "popen not supported on this platform")?;
+                Ok(result)
+            }
+        })?,
+    )?;
+
+    io.set(
+        "tmpfile",
+        lua.create_function(|lua, _: ()| {
+            use std::fs;
+            let temp_dir = std::env::temp_dir();
+            let filename = format!("slapper_tmp_{}.tmp", std::process::id());
+            let path = temp_dir.join(&filename);
+
+            match fs::File::create(&path) {
+                Ok(_file) => {
+                    let result = lua.create_table()?;
+                    result.set("filename", path.to_string_lossy().to_string())?;
+                    result.set("type", "file")?;
+                    Ok(result)
+                }
+                Err(e) => {
+                    let result = lua.create_table()?;
+                    result.set("error", format!("Failed to create temp file: {}", e))?;
+                    Ok(result)
+                }
+            }
+        })?,
+    )?;
+
+    globals.set("io", io)?;
+    Ok(())
+}

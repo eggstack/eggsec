@@ -3,7 +3,18 @@
 //! Functions for building short portrules.
 //! Based on Nmap's shortport library: https://nmap.org/nsedoc/lib/shortport.html
 
-use mlua::{Lua, Table, Value};
+use mlua::{Lua, Result as LuaResult, Table, Value};
+
+fn value_to_string(v: &Value) -> Option<String> {
+    match v {
+        Value::String(s) => Some(s.to_string_lossy().to_string()),
+        _ => None,
+    }
+}
+
+fn parse_proto_state(v: Option<Value>) -> Option<String> {
+    v.and_then(|vv| value_to_string(&vv))
+}
 
 const WELL_KNOWN_SERVICES: &[(&str, &[u16])] = &[
     ("http", &[80, 8080, 8000, 8888, 3000, 5000]),
@@ -42,12 +53,11 @@ fn parse_port_spec(value: &Value) -> Vec<u16> {
 
     match value {
         Value::Number(n) => {
-            if let Some(n) = n.as_u64() {
-                ports.push(n as u16);
-            }
+            let n = *n as f64;
+            ports.push(n as u16);
         }
         Value::String(s) => {
-            let s = s.to_string();
+            let s = s.to_string_lossy();
             for part in s.split(',') {
                 let part = part.trim();
                 if let Some((start, end)) = part.split_once('-') {
@@ -60,7 +70,8 @@ fn parse_port_spec(value: &Value) -> Vec<u16> {
             }
         }
         Value::Table(t) => {
-            for i in 1..=t.len() {
+            let len = t.len().unwrap_or(0);
+            for i in 1..=len {
                 if let Ok(v) = t.get::<Value>(i) {
                     ports.extend(parse_port_spec(&v));
                 }
@@ -77,13 +88,14 @@ fn parse_service_spec(value: &Value) -> Vec<String> {
 
     match value {
         Value::String(s) => {
-            let s = s.to_string();
+            let s = s.to_string_lossy();
             for part in s.split(',') {
                 services.push(part.trim().to_lowercase());
             }
         }
         Value::Table(t) => {
-            for i in 1..=t.len() {
+            let len = t.len().unwrap_or(0);
+            for i in 1..=len {
                 if let Ok(s) = t.get::<String>(i) {
                     services.push(s.to_lowercase());
                 }
@@ -120,45 +132,41 @@ fn check_nmap_ports<F>(
 where
     F: FnMut(u16, Option<&str>, Option<&str>, Option<&str>) -> bool,
 {
-    let nmap = match lua.globals().get::<Table>("nmap") {
-        Ok(n) => n,
-        Err(_) => return ports.is_empty(),
-    };
+    let globals = lua.globals();
+    let nmap_result: Result<Table, _> = globals.get("nmap");
 
-    let port_table = match nmap.get::<Table>("ports") {
-        Ok(t) => t,
-        Err(_) => return ports.is_empty(),
-    };
+    if let Ok(nmap) = nmap_result {
+        let ports_result: Result<Table, _> = nmap.get("_ports");
+        if let Ok(ports_table) = ports_result {
+            let len = ports_table.len().unwrap_or(0);
+            for i in 1..=len {
+                if let Ok(p) = ports_table.get::<Table>(i) {
+                    let port_num: Option<u16> = p.get("number").ok();
+                    let port_proto: Option<String> = p.get("protocol").ok();
+                    let port_state: Option<String> = p.get("state").ok();
+                    let port_service: Option<String> = p.get("service").ok();
 
-    for i in 1..=port_table.len() {
-        if let Ok(p) = port_table.get::<Table>(i) {
-            let port_num: Option<u16> = p.get("number").ok();
-            let port_proto: Option<String> = p.get("protocol").ok();
-            let port_state: Option<String> = p.get("state").ok();
-            let port_service: Option<String> = p.get("service").ok();
+                    if let Some(num) = port_num {
+                        if !ports.is_empty() && !ports.contains(&num) {
+                            continue;
+                        }
 
-            if let Some(num) = port_num {
-                if !ports.is_empty() && !ports.contains(&num) {
-                    continue;
-                }
-                if let Some(p) = proto {
-                    if port_proto.as_ref().map(|s| s.as_str()) != Some(p) {
-                        continue;
+                        let matches_proto = proto
+                            .map_or(true, |pr| port_proto.as_ref().map_or(false, |np| np == pr));
+                        let matches_state =
+                            state.map_or(true, |s| port_state.as_ref().map_or(false, |ns| ns == s));
+
+                        if matches_proto && matches_state {
+                            if check(
+                                num,
+                                port_proto.as_deref(),
+                                port_state.as_ref().map(|s| s.as_str()),
+                                port_service.as_ref().map(|s| s.as_str()),
+                            ) {
+                                return true;
+                            }
+                        }
                     }
-                }
-                if let Some(s) = state {
-                    if port_state.as_ref().map(|st| st.as_str()) != Some(s) {
-                        continue;
-                    }
-                }
-
-                if check(
-                    num,
-                    port_proto.as_deref(),
-                    port_state.as_deref(),
-                    port_service.as_deref(),
-                ) {
-                    return true;
                 }
             }
         }
@@ -167,540 +175,473 @@ where
     false
 }
 
-pub fn register_shortport_library(lua: &Lua) {
+fn portnumber_match(lua: &Lua, ports: &[u16], proto: Option<&str>, state: Option<&str>) -> bool {
+    check_nmap_ports(lua, ports, proto, state, |_, _, _, _| true)
+}
+
+fn service_match(lua: &Lua, services: &[String], proto: Option<&str>, state: Option<&str>) -> bool {
+    let found = check_nmap_ports(lua, &[], proto, state, |_, _, _, svc| {
+        if let Some(s) = svc {
+            let s_lower = s.to_lowercase();
+            for req in services {
+                if s_lower.contains(req) || req.contains(&s_lower) {
+                    return true;
+                }
+            }
+        }
+        false
+    });
+
+    if found {
+        return true;
+    }
+
+    for req in services {
+        if check_nmap_ports(lua, &[], proto, state, |port, _, _, _| {
+            match_service_on_port(req, port)
+        }) {
+            return true;
+        }
+    }
+
+    false
+}
+
+pub fn register_shortport_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
-    let shortport = lua
-        .create_table()
-        .expect("Failed to create shortport table");
+    let shortport = lua.create_table()?;
 
-    shortport
-        .set(
-            "portnumber",
-            lua.create_function(
-                |lua, (ports, protos, states): (Value, Option<Value>, Option<Value>)| {
-                    let requested = parse_port_spec(&ports);
-                    let proto = protos.and_then(|p| p.as_str().map(String::from));
-                    let state = states.and_then(|s| s.as_str().map(String::from));
+    // portnumber
+    let portnumber_fn = lua.create_function(
+        |lua, (ports, protos, states): (Value, Option<Value>, Option<Value>)| {
+            let requested = parse_port_spec(&ports);
+            let proto = parse_proto_state(protos);
+            let state = parse_proto_state(states);
+            Ok(
+                portnumber_match(lua, &requested, proto.as_deref(), state.as_deref())
+                    || requested.is_empty(),
+            )
+        },
+    )?;
+    shortport.set("portnumber", portnumber_fn)?;
 
-                    let found = check_nmap_ports(
-                        lua,
-                        &requested,
-                        proto.as_deref(),
-                        state.as_deref(),
-                        |_, _, _, _| true,
-                    );
+    // service
+    let service_fn = lua.create_function(
+        |lua, (services, protos, states): (Value, Option<Value>, Option<Value>)| {
+            let requested = parse_service_spec(&services);
+            let proto = parse_proto_state(protos);
+            let state = parse_proto_state(states);
+            Ok(
+                service_match(lua, &requested, proto.as_deref(), state.as_deref())
+                    || requested.is_empty(),
+            )
+        },
+    )?;
+    shortport.set("service", service_fn)?;
 
-                    Ok(found || requested.is_empty())
-                },
-            ),
-        )
-        .ok();
+    // ssl
+    let ssl_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let https_ports = [443, 8443, 9443, 465, 993, 995];
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            https_ports.contains(&port)
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("ssl", ssl_fn)?;
 
-    shortport
-        .set(
-            "service",
-            lua.create_function(
-                |lua, (services, protos, states): (Value, Option<Value>, Option<Value>)| {
-                    let requested = parse_service_spec(&services);
-                    let proto = protos.and_then(|p| p.as_str().map(String::from));
-                    let state = states.and_then(|s| s.as_str().map(String::from));
+    // http
+    let http_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            matches!(
+                port,
+                80 | 8080 | 8000 | 8888 | 3000 | 5000 | 81 | 8008 | 8123
+            )
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("http", http_fn)?;
 
-                    let found = check_nmap_ports(
-                        lua,
-                        &[],
-                        proto.as_deref(),
-                        state.as_deref(),
-                        |_, _, _, svc| {
-                            if let Some(s) = svc {
-                                let s_lower = s.to_lowercase();
-                                for req in &requested {
-                                    if s_lower.contains(req) || req.contains(&s_lower) {
-                                        return true;
-                                    }
-                                }
-                            }
-                            false
-                        },
-                    );
+    // ftp
+    let ftp_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            matches!(port, 20 | 21)
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("ftp", ftp_fn)?;
 
-                    if found {
+    // ssh
+    let ssh_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            port == 22
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("ssh", ssh_fn)?;
+
+    // telnet
+    let telnet_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            port == 23
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("telnet", telnet_fn)?;
+
+    // smtp
+    let smtp_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            matches!(port, 25 | 587 | 465 | 2525)
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("smtp", smtp_fn)?;
+
+    // pop3
+    let pop3_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            matches!(port, 110 | 995)
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("pop3", pop3_fn)?;
+
+    // imap
+    let imap_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            matches!(port, 143 | 993)
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("imap", imap_fn)?;
+
+    // mysql
+    let mysql_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            port == 3306
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("mysql", mysql_fn)?;
+
+    // redis
+    let redis_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            port == 6379
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("redis", redis_fn)?;
+
+    // mongodb
+    let mongodb_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            matches!(port, 27017 | 27018 | 27019 | 28017)
+        });
+        Ok(found || requested.is_empty())
+    })?;
+    shortport.set("mongodb", mongodb_fn)?;
+
+    // port - alias for portnumber
+    let port_fn = lua.create_function(
+        |lua, (ports, protos, states): (Value, Option<Value>, Option<Value>)| {
+            let requested = parse_port_spec(&ports);
+            let proto = parse_proto_state(protos);
+            let state = parse_proto_state(states);
+            Ok(portnumber_match(
+                lua,
+                &requested,
+                proto.as_deref(),
+                state.as_deref(),
+            ))
+        },
+    )?;
+    shortport.set("port", port_fn)?;
+
+    // number - alias for portnumber
+    let number_fn = lua.create_function(
+        |lua, (ports, protos, states): (Value, Option<Value>, Option<Value>)| {
+            let requested = parse_port_spec(&ports);
+            let proto = parse_proto_state(protos);
+            let state = parse_proto_state(states);
+            Ok(portnumber_match(
+                lua,
+                &requested,
+                proto.as_deref(),
+                state.as_deref(),
+            ))
+        },
+    )?;
+    shortport.set("number", number_fn)?;
+
+    // version
+    let version_fn = lua.create_function(|_lua, _: ()| Ok("1.0.0"))?;
+    shortport.set("version", version_fn)?;
+
+    // regex - matches port/host expressions against regex patterns
+    let regex_fn = lua.create_function(|_lua, (port_expr, host_expr): (Value, Value)| {
+        let port_str = match port_expr {
+            Value::String(s) => Some(s.to_string_lossy().to_string()),
+            Value::Nil => None,
+            _ => None,
+        };
+
+        let host_str = match host_expr {
+            Value::String(s) => Some(s.to_string_lossy().to_string()),
+            Value::Nil => None,
+            _ => None,
+        };
+
+        let expr = port_str.or(host_str);
+
+        if let Some(expr) = expr {
+            // Common NSE port expressions to check
+            let patterns = [
+                r"^\d+$",     // just a port number
+                r"^\d+-\d+$", // port range
+                r"^tcp$",
+                r"^udp$",
+                r"^sctp$", // protocols
+                r"^http$",
+                r"^https?$", // common services
+                r"^ssh$",
+                r"^ftp$",
+                r"^smtp$",
+                r"^mysql$",
+                r"^postgres$",
+                r"^redis$",
+                r"^mongodb$",
+                r"^oracle$",
+                r"^mssql$",
+            ];
+
+            for pattern in patterns {
+                if let Ok(re) = regex::Regex::new(pattern) {
+                    if re.is_match(&expr) {
                         return Ok(true);
                     }
-
-                    for req in &requested {
-                        let found_by_port = check_nmap_ports(
-                            lua,
-                            &[],
-                            proto.as_deref(),
-                            state.as_deref(),
-                            |port, _, _, _| match_service_on_port(req, port),
-                        );
-                        if found_by_port {
-                            return Ok(true);
-                        }
-                    }
-
-                    Ok(requested.is_empty())
-                },
-            ),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "ssl",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-
-                let ssl_ports = [443, 8443, 993, 995, 465, 636];
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if ssl_ports.contains(&port) {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            let s_lower = s.to_lowercase();
-                            return s_lower.contains("ssl")
-                                || s_lower.contains("tls")
-                                || s_lower.contains("https");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "http",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-                let http_ports = [80, 8080, 8000, 8888, 3000, 5000, 443];
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if http_ports.contains(&port) {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            let s_lower = s.to_lowercase();
-                            return s_lower.contains("http") && !s_lower.contains("nothttp");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "ftp",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if port == 21 || port == 20 {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            return s.to_lowercase().contains("ftp");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "ssh",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if port == 22 {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            return s.to_lowercase().contains("ssh");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "smtp",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-                let smtp_ports = [25, 587, 465];
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if smtp_ports.contains(&port) {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            return s.to_lowercase().contains("smtp")
-                                || s.to_lowercase().contains("mail");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "pop3",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if port == 110 || port == 995 {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            return s.to_lowercase().contains("pop3");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "imap",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if port == 143 || port == 993 {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            return s.to_lowercase().contains("imap");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "mysql",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if port == 3306 {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            return s.to_lowercase().contains("mysql");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "redis",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if port == 6379 {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            return s.to_lowercase().contains("redis");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "mongodb",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-                let mongo_ports = [27017, 27018, 27019];
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if mongo_ports.contains(&port) {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            let lower = s.to_lowercase();
-                            return lower.contains("mongodb") || lower.contains("mongod");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "mssql",
-            lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let proto = protos.and_then(|p| p.as_str().map(String::from));
-
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    proto.as_deref(),
-                    None,
-                    |port, _, _, svc| {
-                        if port == 1433 {
-                            return true;
-                        }
-                        if let Some(s) = svc {
-                            let lower = s.to_lowercase();
-                            return lower.contains("mssql") || lower.contains("microsoft-ss");
-                        }
-                        false
-                    },
-                );
-
-                Ok(found)
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "port_or_service",
-            lua.create_function(
-                |lua, (ports, services, states): (Value, Value, Option<Value>)| {
-                    let port_fn = lua
-                        .globals()
-                        .get::<mlua::Function>("shortport")
-                        .ok()
-                        .and_then(|sp| sp.get::<mlua::Function>("portnumber").ok());
-                    let svc_fn = lua
-                        .globals()
-                        .get::<mlua::Function>("shortport")
-                        .ok()
-                        .and_then(|sp| sp.get::<mlua::Function>("service").ok());
-
-                    if let Some(pf) = port_fn {
-                        if pf
-                            .call::<_, bool>((ports.clone(), None::<Value>, None::<Value>))
-                            .unwrap_or(false)
-                        {
-                            return Ok(true);
-                        }
-                    }
-
-                    if let Some(sf) = svc_fn {
-                        if sf
-                            .call::<_, bool>((services, None::<Value>, states))
-                            .unwrap_or(false)
-                        {
-                            return Ok(true);
-                        }
-                    }
-
-                    Ok(false)
-                },
-            ),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "port_range",
-            lua.create_function(|_lua, range: Value| {
-                let ports = parse_port_spec(&range);
-                Ok(!ports.is_empty())
-            }),
-        )
-        .ok();
-
-    shortport
-        .set(
-            "port_is_excluded",
-            lua.create_function(|_lua, port: Value| {
-                let excluded = [0, 1, 2, 9, 6000, 6665, 6666, 6667, 6668, 6669];
-                match &port {
-                    Value::Number(n) => {
-                        if let Some(p) = n.as_u64() {
-                            return Ok(excluded.contains(&(p as u16)));
-                        }
-                    }
-                    Value::String(s) => {
-                        if let Ok(p) = s.to_string().parse::<u16>() {
-                            return Ok(excluded.contains(&p));
-                        }
-                    }
-                    _ => {}
                 }
-                Ok(false)
-            }),
-        )
-        .ok();
+            }
 
-    shortport
-        .set(
-            "any",
-            lua.create_function(|_lua, _: (Value, Value)| Ok(true)),
-        )
-        .ok();
+            // Check if it looks like a valid expression
+            if !expr.is_empty()
+                && (expr
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '-' || c == '/' || c == ':' || c == '*'))
+            {
+                return Ok(true);
+            }
+        }
 
-    shortport
-        .set(
-            "tcp",
-            lua.create_function(|lua, (ports, states): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let state = states.and_then(|s| s.as_str().map(String::from));
+        Ok(false)
+    })?;
+    shortport.set("regex", regex_fn)?;
 
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    Some("tcp"),
-                    state.as_deref(),
-                    |_, _, _, _| true,
-                );
+    // _service
+    let service2_fn = lua.create_function(
+        |lua, (service_spec, proto, state): (Value, Option<Value>, Option<Value>)| {
+            let services = parse_service_spec(&service_spec);
+            let proto = parse_proto_state(proto);
+            let state = parse_proto_state(state);
+            Ok(service_match(
+                lua,
+                &services,
+                proto.as_deref(),
+                state.as_deref(),
+            ))
+        },
+    )?;
+    shortport.set("_service", service2_fn)?;
 
-                Ok(found)
-            }),
-        )
-        .ok();
+    // or - returns true if any predicate returns true
+    let or_fn = lua.create_function(|_lua, predicates: Vec<Value>| {
+        for pred in predicates {
+            if let Value::Function(f) = pred {
+                if let Ok(mlua::Value::Boolean(true)) = f.call(()) {
+                    return Ok(true);
+                }
+            } else if let Value::Boolean(b) = pred {
+                if b {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    })?;
+    shortport.set("or", or_fn)?;
 
-    shortport
-        .set(
-            "udp",
-            lua.create_function(|lua, (ports, states): (Value, Option<Value>)| {
-                let requested = parse_port_spec(&ports);
-                let state = states.and_then(|s| s.as_str().map(String::from));
+    // and - returns true if all predicates return true
+    let and_fn = lua.create_function(|_lua, predicates: Vec<Value>| {
+        let all_true = !predicates.is_empty();
+        for pred in predicates {
+            if let Value::Function(f) = pred {
+                if let Ok(mlua::Value::Boolean(false)) = f.call(()) {
+                    return Ok(false);
+                }
+            } else if let Value::Boolean(b) = pred {
+                if !b {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(all_true)
+    })?;
+    shortport.set("and", and_fn)?;
 
-                let found = check_nmap_ports(
-                    lua,
-                    &requested,
-                    Some("udp"),
-                    state.as_deref(),
-                    |_, _, _, _| true,
-                );
+    // not - returns boolean negation
+    let not_fn = lua.create_function(|_lua, val: Value| {
+        if let Value::Function(f) = val {
+            if let Ok(mlua::Value::Boolean(b)) = f.call(()) {
+                return Ok(!b);
+            }
+        } else if let Value::Boolean(b) = val {
+            return Ok(!b);
+        }
+        Ok(true)
+    })?;
+    shortport.set("not", not_fn)?;
 
-                Ok(found)
-            }),
-        )
-        .ok();
+    // true
+    let true_fn = lua.create_function(|_lua, _: ()| Ok(true))?;
+    shortport.set("true", true_fn)?;
 
-    shortport
-        .set(
-            "why",
-            lua.create_function(|lua, _: Value| {
-                let result = lua.create_table()?;
-                result.set("reason", "no match")?;
-                result.set("matched", false)?;
-                Ok(result)
-            }),
-        )
-        .ok();
+    // false
+    let false_fn = lua.create_function(|_lua, _: ()| Ok(false))?;
+    shortport.set("false", false_fn)?;
 
-    shortport
-        .set("version", lua.create_function(|_lua, _: ()| Ok("1.0.0")))
-        .ok();
+    // only - returns true only if port matches exactly (no default behavior)
+    let only_fn = lua.create_function(
+        |lua, (ports, protos, states): (Value, Option<Value>, Option<Value>)| {
+            let requested = parse_port_spec(&ports);
+            let proto = parse_proto_state(protos);
+            let state = parse_proto_state(states);
+            Ok(portnumber_match(
+                lua,
+                &requested,
+                proto.as_deref(),
+                state.as_deref(),
+            ))
+        },
+    )?;
+    shortport.set("only", only_fn)?;
 
-    globals.set("shortport", shortport).ok();
+    // tcp - matches TCP ports only
+    let tcp_fn = lua.create_function(|lua, (ports, states): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let state = parse_proto_state(states);
+        Ok(portnumber_match(
+            lua,
+            &requested,
+            Some("tcp"),
+            state.as_deref(),
+        ))
+    })?;
+    shortport.set("tcp", tcp_fn)?;
+
+    // udp - matches UDP ports only
+    let udp_fn = lua.create_function(|lua, (ports, states): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let state = parse_proto_state(states);
+        Ok(portnumber_match(
+            lua,
+            &requested,
+            Some("udp"),
+            state.as_deref(),
+        ))
+    })?;
+    shortport.set("udp", udp_fn)?;
+
+    // sctp - matches SCTP ports only
+    let sctp_fn = lua.create_function(|lua, (ports, states): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let state = parse_proto_state(states);
+        Ok(portnumber_match(
+            lua,
+            &requested,
+            Some("sctp"),
+            state.as_deref(),
+        ))
+    })?;
+    shortport.set("sctp", sctp_fn)?;
+
+    // any - matches any port
+    let any_fn = lua.create_function(|_lua, _: ()| Ok(true))?;
+    shortport.set("any", any_fn)?;
+
+    // notftp - matches ports that are NOT FTP
+    let notftp_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            matches!(port, 20 | 21)
+        });
+        Ok(!found || requested.is_empty())
+    })?;
+    shortport.set("notftp", notftp_fn)?;
+
+    // notssh - matches ports that are NOT SSH
+    let notssh_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            port == 22
+        });
+        Ok(!found || requested.is_empty())
+    })?;
+    shortport.set("notssh", notssh_fn)?;
+
+    // nothttp - matches ports that are NOT HTTP
+    let nothttp_fn = lua.create_function(|lua, (ports, protos): (Value, Option<Value>)| {
+        let requested = parse_port_spec(&ports);
+        let proto = parse_proto_state(protos);
+        let found = check_nmap_ports(lua, &requested, proto.as_deref(), None, |port, _, _, _| {
+            matches!(
+                port,
+                80 | 8080 | 8000 | 8888 | 3000 | 5000 | 81 | 8008 | 8123
+            )
+        });
+        Ok(!found || requested.is_empty())
+    })?;
+    shortport.set("nothttp", nothttp_fn)?;
+
+    // list - matches ports in a list
+    let list_fn = lua.create_function(
+        |lua, (ports, protos, states): (Value, Option<Value>, Option<Value>)| {
+            let requested = parse_port_spec(&ports);
+            let proto = parse_proto_state(protos);
+            let state = parse_proto_state(states);
+            Ok(portnumber_match(
+                lua,
+                &requested,
+                proto.as_deref(),
+                state.as_deref(),
+            ))
+        },
+    )?;
+    shortport.set("list", list_fn)?;
+
+    globals.set("shortport", shortport)?;
+    Ok(())
 }

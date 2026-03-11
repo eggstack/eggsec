@@ -12,7 +12,6 @@ use crate::tool::{ToolRequest, ToolResponse, ToolResult};
 
 #[derive(Clone)]
 pub struct NseTool {
-    #[allow(dead_code)]
     scripts_path: Option<std::path::PathBuf>,
 }
 
@@ -74,15 +73,28 @@ impl SecurityTool for NseTool {
             .unwrap_or("")
             .to_string();
 
+        let script_path = self.scripts_path.clone();
+
         let result = tokio::task::spawn_blocking(move || {
             let mut executor = match NseExecutor::with_target(&target_for_executor) {
                 Ok(e) => e,
                 Err(e) => return Err(SlapperError::Config(e.to_string())),
             };
 
+            if let Some(ref path) = script_path {
+                executor.add_scripts_path(path.clone());
+            } else {
+                executor.add_default_scripts_path();
+            }
+
             executor.set_script_args(&script_args);
 
-            let script_content = get_builtin_script(&script_for_executor);
+            let script_content = if let Ok(content) = executor.load_script(&script_for_executor) {
+                content
+            } else {
+                get_builtin_script(&script_for_executor)
+            };
+
             match executor.run_script(&script_content) {
                 Ok(r) => Ok(r),
                 Err(e) => Err(SlapperError::Config(e.to_string())),

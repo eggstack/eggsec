@@ -8,44 +8,58 @@ use crate::cli::NseArgs;
 use crate::config::SlapperConfig;
 
 pub mod executor;
+pub mod async_executor;
 pub mod libraries;
 pub mod tool;
 
 pub use executor::NseExecutor;
+#[allow(unused_imports)]
+pub use async_executor::AsyncNseExecutor;
+#[allow(unused_imports)]
 pub use tool::NseTool;
 
 pub async fn run_cli(args: NseArgs, _config: &SlapperConfig) -> anyhow::Result<()> {
-    let target = &args.target;
-    let script = &args.script;
-    let script_args = args.script_args.unwrap_or_default();
+    let target = args.target.clone();
+    let script = args.script.clone();
+    let script_args = args.script_args.clone().unwrap_or_default();
+    let script_args_display = script_args.clone();
+    let script_file = args.script_file.clone();
+    let json = args.json;
     
     println!("Running NSE script '{}' against '{}'", script, target);
     
-    let mut executor = NseExecutor::with_target(target)
-        .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
-    executor.set_script_args(&script_args);
+    // Run the blocking executor in a separate thread to avoid runtime conflicts
+    let result = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
+        let mut executor = NseExecutor::with_target(&target)
+            .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
+        executor.set_script_args(&script_args);
+        
+        let script_content = if let Some(ref script_file) = script_file {
+            std::fs::read_to_string(script_file)?
+        } else {
+            get_builtin_script(&script)
+        };
+        
+        let result = executor.run_script(&script_content)
+            .map_err(|e| anyhow::anyhow!("Script execution failed: {}", e))?;
+        
+        Ok(result)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))??;
     
-    let script_content = if let Some(ref script_file) = args.script_file {
-        std::fs::read_to_string(script_file)?
-    } else {
-        get_builtin_script(script)
-    };
-    
-    let result = executor.run_script(&script_content)
-        .map_err(|e| anyhow::anyhow!("Script execution failed: {}", e))?;
-    
-    if args.json {
+    if json {
         let output = serde_json::json!({
-            "target": target,
-            "script": script,
-            "script_args": script_args,
+            "target": args.target,
+            "script": args.script,
+            "script_args": script_args_display,
             "output": result,
             "success": true
         });
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        println!("Target: {}", target);
-        println!("Script: {}", script);
+        println!("Target: {}", args.target);
+        println!("Script: {}", args.script);
         println!("Result: {}", result);
     }
     
@@ -59,37 +73,114 @@ fn get_builtin_script(name: &str) -> String {
 -- Default NSE discovery script
 local stdnse = require "stdnse"
 
-stdnse.verbose = 1
+stdnse.verbose1("Starting NSE discovery scan...")
 
 local host = nmap.target
 if host and host ~= "" then
     stdnse.format_output({status = "open", service = "discovered"}, {separator = ", "})
 end
 
-return "NSE scan complete"
+local output = stdnse.output_table()
+output.host = host or "unknown"
+output.status = "discovered"
+output.scan_time = os.date("*t")
+
+return output
 "#.to_string()
         }
         "banner" => {
             r#"
 -- Banner grabbing script
-local comm = require "comm"
 local stdnse = require "stdnse"
+local comm = require "comm"
+local socket = require "socket"
 
 local host = nmap.target
 local port = 80
 
-return "Banner grab ready - use external script for full functionality"
+if not host or host == "" then
+    return stdnse.output_table()
+end
+
+local s = socket.connect(host, port)
+if s then
+    s:send("HEAD / HTTP/1.0\r\n\r\n")
+    local status, response = s:receive(1024)
+    s:close()
+    
+    local output = stdnse.output_table()
+    output.banner = response or ""
+    output.host = host
+    output.port = port
+    return output
+end
+
+return nil
 "#.to_string()
         }
         "http-headers" => {
             r#"
 -- HTTP headers discovery script
-local http = require "http"
 local stdnse = require "stdnse"
+local http = require "http"
 
 local host = nmap.target
 
-return "HTTP headers scan ready - use external script for full functionality"
+if not host or host == "" then
+    return stdnse.output_table()
+end
+
+local response = http.get(host, 80, "/")
+
+local output = stdnse.output_table()
+output.host = host
+output.port = 80
+output.title = response.title or ""
+output.status = response.status or 0
+
+return output
+"#.to_string()
+        }
+        "dns-check" => {
+            r#"
+-- DNS resolution check script
+local stdnse = require "stdnse"
+local dns = require "dns"
+
+local host = nmap.target
+
+if not host or host == "" then
+    return stdnse.output_table()
+end
+
+local success = dns.query(host)
+
+local output = stdnse.output_table()
+output.host = host
+output.resolved = success
+
+return output
+"#.to_string()
+        }
+        "ssl-cert" => {
+            r#"
+-- SSL certificate information script
+local stdnse = require "stdnse"
+local sslcert = require "sslcert"
+local tls = require "tls"
+
+local host = nmap.target
+
+if not host or host == "" then
+    return stdnse.output_table()
+end
+
+local output = stdnse.output_table()
+output.host = host
+output.port = 443
+output.tls = "available"
+
+return output
 "#.to_string()
         }
         _ => {
@@ -98,11 +189,21 @@ return "HTTP headers scan ready - use external script for full functionality"
 -- Custom NSE script: {}
 local stdnse = require "stdnse"
 
-stdnse.verbose = 1
+stdnse.verbose1("Executing custom NSE script: {}")
 
-return "Custom script '{}' executed - full NSE library support coming soon"
+local output = stdnse.output_table()
+output.script = "{}"
+output.status = "executed"
+output.libraries = {{
+    stdnse = true,
+    nmap = true,
+    socket = true,
+    http = true,
+}}
+
+return output
 "#,
-                name, name
+                name, name, name
             )
         }
     }

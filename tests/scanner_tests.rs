@@ -1,6 +1,7 @@
 use std::time::Duration;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 use wiremock::matchers::{method, path as path_matcher};
+use slapper::scanner::spoof::SpoofConfig;
 
 async fn create_test_server() -> MockServer {
     MockServer::start().await
@@ -26,6 +27,7 @@ async fn test_endpoint_scan_basic() {
     mock_not_found("/admin").mount(&server).await;
     
     let endpoints = vec!["/api".to_string(), "/health".to_string(), "/admin".to_string()];
+    let spoof_config = SpoofConfig::default();
     
     let results = slapper::scanner::scan_endpoints(
         &server.uri(),
@@ -33,6 +35,8 @@ async fn test_endpoint_scan_basic() {
         5,
         Duration::from_secs(5),
         false,
+        false,
+        spoof_config,
     ).await.unwrap();
     
     assert_eq!(results.endpoints_found, 2);
@@ -46,6 +50,7 @@ async fn test_endpoint_scan_include_404() {
     mock_not_found("/admin").mount(&server).await;
     
     let endpoints = vec!["/api".to_string(), "/admin".to_string()];
+    let spoof_config = SpoofConfig::default();
     
     let results = slapper::scanner::scan_endpoints(
         &server.uri(),
@@ -53,6 +58,8 @@ async fn test_endpoint_scan_include_404() {
         5,
         Duration::from_secs(5),
         true,
+        false,
+        spoof_config,
     ).await.unwrap();
     
     assert_eq!(results.endpoints_found, 2);
@@ -65,6 +72,7 @@ async fn test_endpoint_scan_interesting() {
     mock_ok("/api").mount(&server).await;
     
     let endpoints = vec!["/.env".to_string(), "/api".to_string()];
+    let spoof_config = SpoofConfig::default();
     
     let results = slapper::scanner::scan_endpoints(
         &server.uri(),
@@ -72,6 +80,8 @@ async fn test_endpoint_scan_interesting() {
         5,
         Duration::from_secs(5),
         false,
+        false,
+        spoof_config,
     ).await.unwrap();
     
     let interesting = results.results.iter().filter(|e| e.interesting).count();

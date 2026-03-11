@@ -2,18 +2,86 @@
 //!
 //! Provides HTTP client functionality compatible with NSE scripts.
 
-use mlua::{Lua, Table};
+use mlua::{Lua, Result as LuaResult, Table};
+use once_cell::sync::Lazy;
+use reqwest::blocking::Client;
+use reqwest::Client as AsyncClient;
 use std::collections::HashMap;
 use std::time::Duration;
 
-fn make_client(timeout_secs: u64) -> reqwest::blocking::Client {
-    reqwest::blocking::Client::builder()
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
+    Client::builder()
+        .timeout(Duration::from_secs(30))
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true)
+        .connect_timeout(Duration::from_secs(10))
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTP client")
+});
+
+static HTTPS_CLIENT: Lazy<Client> = Lazy::new(|| {
+    Client::builder()
+        .timeout(Duration::from_secs(30))
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true)
+        .connect_timeout(Duration::from_secs(10))
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTPS client")
+});
+
+// Async HTTP client for async functions
+static ASYNC_HTTP_CLIENT: Lazy<AsyncClient> = Lazy::new(|| {
+    AsyncClient::builder()
+        .timeout(Duration::from_secs(30))
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true)
+        .connect_timeout(Duration::from_secs(10))
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create async HTTP client")
+});
+
+static ASYNC_HTTPS_CLIENT: Lazy<AsyncClient> = Lazy::new(|| {
+    AsyncClient::builder()
+        .timeout(Duration::from_secs(30))
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true)
+        .connect_timeout(Duration::from_secs(10))
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create async HTTPS client")
+});
+
+fn get_client(url: &str) -> &'static Client {
+    if url.starts_with("https") {
+        &HTTPS_CLIENT
+    } else {
+        &HTTP_CLIENT
+    }
+}
+
+fn get_async_client(url: &str) -> &'static AsyncClient {
+    if url.starts_with("https") {
+        &ASYNC_HTTPS_CLIENT
+    } else {
+        &ASYNC_HTTP_CLIENT
+    }
+}
+
+fn make_client(timeout_secs: u64) -> Client {
+    Client::builder()
         .timeout(Duration::from_secs(timeout_secs.max(1)))
         .danger_accept_invalid_certs(true)
         .danger_accept_invalid_hostnames(true)
         .connect_timeout(Duration::from_secs(10))
         .build()
-        .unwrap_or_else(|_| reqwest::blocking::Client::new())
+        .unwrap_or_else(|_| Client::new())
 }
 
 fn parse_options(opts: Option<&Table>) -> (HashMap<String, String>, Duration) {
@@ -36,7 +104,20 @@ fn parse_options(opts: Option<&Table>) -> (HashMap<String, String>, Duration) {
     (headers, timeout)
 }
 
-fn build_response(lua: &Lua, resp: reqwest::blocking::Response) -> mlua::Result<Table> {
+fn build_url(host: &str, port: u16, path: &str) -> String {
+    if host.starts_with("http") {
+        format!("{}{}", host.trim_end_matches('/'), path)
+    } else {
+        let scheme = if port == 443 || port == 8443 || port == 9443 {
+            "https"
+        } else {
+            "http"
+        };
+        format!("{}://{}:{}{}", scheme, host, port, path)
+    }
+}
+
+fn build_response(lua: &Lua, resp: reqwest::blocking::Response) -> LuaResult<Table> {
     let result = lua.create_table()?;
 
     let status = resp.status().as_u16();
@@ -49,7 +130,7 @@ fn build_response(lua: &Lua, resp: reqwest::blocking::Response) -> mlua::Result<
         .collect();
 
     let headers_table = lua.create_table()?;
-    let mut headers_map = lua.create_table()?;
+    let headers_map = lua.create_table()?;
     for (i, (k, v)) in headers.iter().enumerate() {
         headers_table.set(i + 1, format!("{}: {}", k, v))?;
         headers_map.set(k.clone(), v.clone())?;
@@ -68,16 +149,62 @@ fn build_response(lua: &Lua, resp: reqwest::blocking::Response) -> mlua::Result<
         }
     }
 
+    let https = resp.url().scheme() == "https";
     if let Ok(body) = resp.text() {
         result.set("body", body)?;
     }
 
-    result.set("https", resp.url().scheme() == "https")?;
+    result.set("https", https)?;
 
     Ok(result)
 }
 
-fn error_response(lua: &Lua, err: reqwest::Error) -> mlua::Result<Table> {
+fn build_response_async(lua: &Lua, resp: reqwest::Response) -> LuaResult<Table> {
+    let result = lua.create_table()?;
+
+    let status = resp.status().as_u16();
+    result.set("status", status as i32)?;
+
+    let headers: Vec<(String, String)> = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+        .collect();
+
+    let headers_table = lua.create_table()?;
+    let headers_map = lua.create_table()?;
+    for (i, (k, v)) in headers.iter().enumerate() {
+        headers_table.set(i + 1, format!("{}: {}", k, v))?;
+        headers_map.set(k.clone(), v.clone())?;
+    }
+    result.set("headers", headers_table)?;
+    result.set("header", headers_map)?;
+
+    let version = resp.version();
+    result.set("version", format!("{:?}", version))?;
+
+    if status >= 300 && status < 400 {
+        if let Some(location) = resp.headers().get("location") {
+            if let Ok(loc) = location.to_str() {
+                result.set("location", loc.to_string())?;
+            }
+        }
+    }
+
+    let https = resp.url().scheme() == "https";
+    
+    // For async response, we need to use block_on to get body
+    let body = tokio::runtime::Handle::current()
+        .block_on(resp.text())
+        .unwrap_or_default();
+    result.set("body", body)?;
+
+    result.set("https", https)?;
+
+    Ok(result)
+}
+
+fn error_response(lua: &Lua, err: reqwest::Error) -> LuaResult<Table> {
     let result = lua.create_table()?;
     result.set("status", 0i32)?;
     result.set("error", err.to_string())?;
@@ -91,116 +218,117 @@ fn error_response(lua: &Lua, err: reqwest::Error) -> mlua::Result<Table> {
     Ok(result)
 }
 
-pub fn register_http_library(lua: &Lua) {
+pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
-    let http = lua.create_table().expect("Failed to create http table");
+    let http = lua.create_table()?;
 
     http.set(
         "get",
         lua.create_function(
             |lua, (host, port, path, options): (String, u16, String, Option<Table>)| {
-                let (_headers, _timeout) = parse_options(options.as_ref());
-                let url = if host.starts_with("http") {
-                    format!("{}{}", host.trim_end_matches('/'), path)
-                } else {
-                    format!("http://{}:{}{}", host, port, path)
-                };
+                let url = build_url(&host, port, &path);
 
-                let client = make_client(30);
+                // Use pooled client by default, create new one only if custom timeout
+                let client = if let Some(opts) = options.as_ref() {
+                    if opts.get::<u64>("timeout").is_ok() {
+                        make_client(30)
+                    } else {
+                        get_client(&url).clone()
+                    }
+                } else {
+                    get_client(&url).clone()
+                };
 
                 match client.get(&url).send() {
                     Ok(resp) => build_response(lua, resp),
                     Err(e) => error_response(lua, e),
                 }
             },
-        ),
-    )
-    .ok();
+        )?,
+    )?;
 
-    http
-        .set(
-            "post",
-            lua.create_function(
-                |lua,
-                 (host, port, path, data, options): (
-                    String,
-                    u16,
-                    String,
-                    String,
-                    Option<Table>,
-                )| {
-                    let url = if host.starts_with("http") {
-                        format!("{}{}", host.trim_end_matches('/'), path)
+    http.set(
+        "post",
+        lua.create_function(
+            |lua,
+             (host, port, path, data, options): (
+                String,
+                u16,
+                String,
+                String,
+                Option<Table>,
+            )| {
+                let url = build_url(&host, port, &path);
+                
+                let client = if let Some(opts) = options.as_ref() {
+                    if opts.get::<u64>("timeout").is_ok() {
+                        make_client(30)
                     } else {
-                        format!("http://{}:{}{}", host, port, path)
-                    };
-
-                    let client = make_client(30);
-
-                    match client.post(&url).body(data).send() {
-                        Ok(resp) => build_response(lua, resp),
-                        Err(e) => error_response(lua, e),
+                        get_client(&url).clone()
                     }
-                },
-            ),
-        )
-        .ok();
+                } else {
+                    get_client(&url).clone()
+                };
 
-    http
-        .set(
-            "put",
-            lua.create_function(
-                |lua,
-                 (host, port, path, data, options): (
-                    String,
-                    u16,
-                    String,
-                    String,
-                    Option<Table>,
-                )| {
-                    let url = if host.starts_with("http") {
-                        format!("{}{}", host.trim_end_matches('/'), path)
+                match client.post(&url).body(data).send() {
+                    Ok(resp) => build_response(lua, resp),
+                    Err(e) => error_response(lua, e),
+                }
+            },
+        )?,
+    )?;
+
+    http.set(
+        "put",
+        lua.create_function(
+            |lua,
+             (host, port, path, data, options): (
+                String,
+                u16,
+                String,
+                String,
+                Option<Table>,
+            )| {
+                let url = build_url(&host, port, &path);
+                
+                let client = if let Some(opts) = options.as_ref() {
+                    if opts.get::<u64>("timeout").is_ok() {
+                        make_client(30)
                     } else {
-                        format!("http://{}:{}{}", host, port, path)
-                    };
-
-                    let client = make_client(30);
-
-                    match client.put(&url).body(data).send() {
-                        Ok(resp) => build_response(lua, resp),
-                        Err(e) => error_response(lua, e),
+                        get_client(&url).clone()
                     }
-                },
-            ),
-        )
-        .ok();
+                } else {
+                    get_client(&url).clone()
+                };
+
+                match client.put(&url).body(data).send() {
+                    Ok(resp) => build_response(lua, resp),
+                    Err(e) => error_response(lua, e),
+                }
+            },
+        )?,
+    )?;
 
     http.set(
         "delete",
         lua.create_function(
-            |lua, (host, port, path, options): (String, u16, String, Option<Table>)| {
-                let url = if host.starts_with("http") {
-                    format!("{}{}", host.trim_end_matches('/'), path)
-                } else {
-                    format!("http://{}:{}{}", host, port, path)
-                };
-
-                let client = make_client(30);
+            |lua, (host, port, path, _options): (String, u16, String, Option<Table>)| {
+                let url = build_url(&host, port, &path);
+                let client = get_client(&url).clone();
 
                 match client.delete(&url).send() {
                     Ok(resp) => build_response(lua, resp),
                     Err(e) => error_response(lua, e),
                 }
             },
-        ),
-    )
-    .ok();
+        )?,
+    )?;
 
     http.set(
         "head",
         lua.create_function(|lua, (host, port, path): (String, u16, String)| {
-            let url = format!("http://{}:{}{}", host, port, path);
-            let client = make_client(30);
+            let url = build_url(&host, port, &path);
+            let client = get_client(&url).clone();
 
             match client.head(&url).send() {
                 Ok(resp) => {
@@ -223,119 +351,307 @@ pub fn register_http_library(lua: &Lua) {
                 }
                 Err(e) => error_response(lua, e),
             }
-        }),
-    )
-    .ok();
+        })?,
+    )?;
 
     http.set(
         "options",
         lua.create_function(|lua, (host, port, path): (String, u16, String)| {
-            let url = format!("http://{}:{}{}", host, port, path);
-            let client = make_client(30);
+            let url = build_url(&host, port, &path);
+            let client = get_client(&url).clone();
 
             match client.request(reqwest::Method::OPTIONS, &url).send() {
                 Ok(resp) => build_response(lua, resp),
                 Err(e) => error_response(lua, e),
             }
-        }),
-    )
-    .ok();
-
-    http
-        .set(
-            "request",
-            lua.create_function(
-                |lua,
-                 (method, host, port, path, options): (
-                    String,
-                    String,
-                    u16,
-                    String,
-                    Option<Table>,
-                )| {
-                    let url = if host.starts_with("http") {
-                        format!("{}{}", host.trim_end_matches('/'), path)
-                    } else {
-                        format!("http://{}:{}{}", host, port, path)
-                    };
-
-                    let client = make_client(30);
-
-                    let mut req =
-                        client.request(method.parse().unwrap_or(reqwest::Method::GET), &url);
-
-                    if let Some(opts) = options {
-                        if let Ok(body) = opts.get::<String>("body") {
-                            req = req.body(body);
-                        }
-                        if let Ok(headers) = opts.get::<Table>("headers") {
-                            for pair in headers.pairs::<String, String>() {
-                                if let Ok((k, v)) = pair {
-                                    req = req.header(&k, &v);
-                                }
-                            }
-                        }
-                        if let Ok(auth) = opts.get::<String>("authorization") {
-                            req = req.header("Authorization", &auth);
-                        }
-                        if let Ok(ua) = opts.get::<String>("useragent") {
-                            req = req.header("User-Agent", &ua);
-                        }
-                    }
-
-                    match req.send() {
-                        Ok(resp) => build_response(lua, resp),
-                        Err(e) => error_response(lua, e),
-                    }
-                },
-            ),
-        )
-        .ok();
+        })?,
+    )?;
 
     http.set(
-        "pipeline",
-        lua.create_function(|lua, (requests, options): (Vec<Table>, Option<Table>)| {
-            let results = lua.create_table()?;
-            let client = make_client(60);
+        "request",
+        lua.create_function(
+            |lua,
+             (method, host, port, path, options): (
+                String,
+                String,
+                u16,
+                String,
+                Option<Table>,
+            )| {
+                let url = build_url(&host, port, &path);
 
-            for (i, req) in requests.iter().enumerate() {
-                let method: String = req.get("method").unwrap_or_else(|_| "GET".to_string());
-                let host: String = req.get("host").unwrap_or_else(|_| "".to_string());
-                let port: u16 = req.get::<u16>("port").unwrap_or(80);
-                let path: String = req.get("path").unwrap_or_else(|_| "/".to_string());
-                let body: String = req.get("body").unwrap_or_else(|_| "".to_string());
+                let client = get_client(&url).clone();
 
-                let url = if host.starts_with("http") {
-                    format!("{}{}", host.trim_end_matches('/'), path)
-                } else {
-                    format!("http://{}:{}{}", host, port, path)
-                };
+                let mut req =
+                    client.request(method.parse().unwrap_or(reqwest::Method::GET), &url);
 
-                let result = match method.to_uppercase().as_str() {
-                    "GET" => client.get(&url).send(),
-                    "POST" => client.post(&url).body(body).send(),
-                    "PUT" => client.put(&url).body(body).send(),
-                    "DELETE" => client.delete(&url).send(),
-                    "HEAD" => client.head(&url).send(),
-                    "OPTIONS" => client.request(reqwest::Method::OPTIONS, &url).send(),
-                    _ => client.get(&url).send(),
-                };
+                if let Some(opts) = options {
+                    if let Ok(body) = opts.get::<String>("body") {
+                        req = req.body(body);
+                    }
+                    if let Ok(headers) = opts.get::<Table>("headers") {
+                        for pair in headers.pairs::<String, String>() {
+                            if let Ok((k, v)) = pair {
+                                req = req.header(&k, &v);
+                            }
+                        }
+                    }
+                    if let Ok(auth) = opts.get::<String>("authorization") {
+                        req = req.header("Authorization", &auth);
+                    }
+                    if let Ok(ua) = opts.get::<String>("useragent") {
+                        req = req.header("User-Agent", &ua);
+                    }
+                }
 
-                let result_table = match result {
+                match req.send() {
                     Ok(resp) => build_response(lua, resp),
                     Err(e) => error_response(lua, e),
-                }?;
+                }
+            },
+        )?,
+    )?;
 
-                results.set(i + 1, result_table)?;
+    http.set(
+        "ourl",
+        lua.create_function(
+            |_lua, (scheme, host, port, path): (String, String, u16, String)| {
+                let port_str =
+                    if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) {
+                        String::new()
+                    } else {
+                        format!(":{}", port)
+                    };
+
+                let path = if path.is_empty() { "/" } else { &path };
+                Ok(format!("{}://{}{}{}", scheme, host, port_str, path))
+            },
+        )?,
+    )?;
+
+    http.set(
+        "useragent",
+        lua.create_function(|_lua, ua: Option<String>| {
+            if let Some(ua) = ua {
+                Ok(ua)
+            } else {
+                Ok("Mozilla/5.0 (compatible; Nmap/1.0)".to_string())
+            }
+        })?,
+    )?;
+
+    http.set(
+        "add_auth",
+        lua.create_function(|_lua, (request, user, password): (Table, String, String)| {
+            use base64::Engine;
+            let credentials = format!("{}:{}", user, password);
+            let encoded = base64::engine::general_purpose::STANDARD.encode(&credentials);
+            let header = format!("Basic {}", encoded);
+            request.set("authorization", header)?;
+            Ok(request)
+        })?,
+    )?;
+
+    http.set(
+        "auth_required",
+        lua.create_function(|lua, response: Table| {
+            let status: i32 = response.get("status").unwrap_or(0);
+            let _headers: Table = response.get("headers").unwrap_or_else(|_| {
+                lua.create_table().unwrap_or_else(|_| {
+                    let t = lua.create_table().unwrap();
+                    t
+                })
+            });
+
+            Ok(status == 401)
+        })?,
+    )?;
+
+    http.set(
+        "redirect_location",
+        lua.create_function(|_lua, response: Table| {
+            let location: Option<String> = response.get("location").ok();
+            Ok(location.unwrap_or_default())
+        })?,
+    )?;
+
+    http.set(
+        "get_cookie",
+        lua.create_function(|lua, (response, name): (Table, String)| {
+            let header: Table = response.get("header").unwrap_or_else(|_| {
+                lua.create_table()
+                    .unwrap_or_else(|_| lua.create_table().unwrap())
+            });
+            let cookies: Option<String> = header
+                .get("set-cookie")
+                .or_else(|_| header.get("Set-Cookie"))
+                .ok();
+
+            if let Some(cookie_str) = cookies {
+                for part in cookie_str.split(';') {
+                    let pair: Vec<&str> = part.splitn(2, '=').collect();
+                    if pair.len() == 2 && pair[0].trim() == name {
+                        return Ok(pair[1].trim().to_string());
+                    }
+                }
             }
 
-            Ok(results)
-        }),
-    )
-    .ok();
+            Ok(String::new())
+        })?,
+    )?;
 
-    http.set("version", lua.create_function(|_lua, _: ()| Ok("1.0.0")))
-        .ok();
+    http.set(
+        "set_cookie",
+        lua.create_function(|lua, (request, name, value): (Table, String, String)| {
+            let cookie = format!("{}={}", name, value);
+            let header: Table = request.get("headers").unwrap_or_else(|_| {
+                let t = lua
+                    .create_table()
+                    .unwrap_or_else(|_| lua.create_table().unwrap());
+                t
+            });
+            header.set("Cookie", cookie)?;
+            Ok(request)
+        })?,
+    )?;
+
+    http.set(
+        "capture_error",
+        lua.create_function(|_lua, response: Table| {
+            let error: Option<String> = response.get("error").ok();
+            let reason: Option<String> = response.get("reason").ok();
+
+            if let Some(e) = error {
+                return Ok(e);
+            }
+            if let Some(r) = reason {
+                return Ok(r);
+            }
+
+            Ok(String::new())
+        })?,
+    )?;
+
+    http.set(
+        "is_https",
+        lua.create_function(|_lua, response: Table| {
+            let https: bool = response.get("https").unwrap_or(false);
+            let _status: i32 = response.get("status").unwrap_or(0);
+            let url: Option<String> = response.get("url").ok();
+
+            Ok(https || url.map(|u| u.starts_with("https")).unwrap_or(false))
+        })?,
+    )?;
+
+    http.set(
+        "post_host",
+        lua.create_function(
+            |lua, (host, port, path, data, options): (String, u16, String, String, Option<Table>)| {
+                let url = build_url(&host, port, &path);
+                let client = make_client(30);
+
+                let mut req = client.post(&url).body(data);
+                
+                if let Some(opts) = options {
+                    if let Ok(headers) = opts.get::<Table>("headers") {
+                        for pair in headers.pairs::<String, String>() {
+                            if let Ok((k, v)) = pair {
+                                req = req.header(&k, &v);
+                            }
+                        }
+                    }
+                }
+
+                match req.send() {
+                    Ok(resp) => build_response(lua, resp),
+                    Err(e) => error_response(lua, e),
+                }
+            },
+        )?,
+    )?;
+
+    http.set(
+        "put_data",
+        lua.create_function(
+            |lua, (host, port, path, data, options): (String, u16, String, String, Option<Table>)| {
+                let url = build_url(&host, port, &path);
+                let client = make_client(30);
+
+                let mut req = client.put(&url).body(data);
+                
+                if let Some(opts) = options {
+                    if let Ok(headers) = opts.get::<Table>("headers") {
+                        for pair in headers.pairs::<String, String>() {
+                            if let Ok((k, v)) = pair {
+                                req = req.header(&k, &v);
+                            }
+                        }
+                    }
+                }
+
+                match req.send() {
+                    Ok(resp) => build_response(lua, resp),
+                    Err(e) => error_response(lua, e),
+                }
+            },
+        )?,
+    )?;
+
+    http.set(
+        "new_request",
+        lua.create_function(|lua, options: Option<Table>| {
+            let request = lua.create_table()?;
+
+            request.set("method", "GET")?;
+            request.set("host", "")?;
+            request.set("port", 80)?;
+            request.set("path", "/")?;
+            request.set("headers", lua.create_table()?)?;
+
+            if let Some(opts) = options {
+                if let Ok(method) = opts.get::<String>("method") {
+                    request.set("method", method)?;
+                }
+                if let Ok(host) = opts.get::<String>("host") {
+                    request.set("host", host)?;
+                }
+                if let Ok(port) = opts.get::<u16>("port") {
+                    request.set("port", port)?;
+                }
+                if let Ok(path) = opts.get::<String>("path") {
+                    request.set("path", path)?;
+                }
+            }
+
+            Ok(request)
+        })?,
+    )?;
+
+    http.set(
+        "clone_request",
+        lua.create_function(|lua, request: Table| {
+            let cloned = lua.create_table()?;
+
+            let method: String = request.get("method").unwrap_or_else(|_| "GET".to_string());
+            let host: String = request.get("host").unwrap_or_default();
+            let port: u16 = request.get("port").unwrap_or(80);
+            let path: String = request.get("path").unwrap_or_else(|_| "/".to_string());
+            let headers: Table = request.get("headers").unwrap_or_else(|_| {
+                let t = lua
+                    .create_table()
+                    .unwrap_or_else(|_| lua.create_table().unwrap());
+                t
+            });
+
+            cloned.set("method", method)?;
+            cloned.set("host", host)?;
+            cloned.set("port", port)?;
+            cloned.set("path", path)?;
+            cloned.set("headers", headers)?;
+
+            Ok(cloned)
+        })?,
+    )?;
 
     http.set(
         "validate",
@@ -354,9 +670,72 @@ pub fn register_http_library(lua: &Lua) {
             }
 
             Ok(result)
-        }),
-    )
-    .ok();
+        })?,
+    )?;
 
-    globals.set("http", http).ok();
+    // Async HTTP functions (for use with async executor)
+    // These use reqwest's async client internally
+    http.set(
+        "async_get",
+        lua.create_function(|lua, (host, port, path): (String, u16, String)| {
+            let url = build_url(&host, port, &path);
+            let client = get_async_client(&url).clone();
+            
+            // Run blocking HTTP call in a tokio spawn
+            let result = tokio::runtime::Handle::current()
+                .block_on(async {
+                    match client.get(&url).send().await {
+                        Ok(resp) => build_response_async(lua, resp),
+                        Err(e) => error_response(lua, e),
+                    }
+                });
+            
+            result
+        })?,
+    )?;
+
+    http.set(
+        "async_post",
+        lua.create_function(|lua, (host, port, path, data): (String, u16, String, String)| {
+            let url = build_url(&host, port, &path);
+            let client = get_async_client(&url).clone();
+            
+            let result = tokio::runtime::Handle::current()
+                .block_on(async {
+                    match client.post(&url).body(data).send().await {
+                        Ok(resp) => build_response_async(lua, resp),
+                        Err(e) => error_response(lua, e),
+                    }
+                });
+            
+            result
+        })?,
+    )?;
+
+    http.set(
+        "async_request",
+        lua.create_function(
+            |lua, (method, host, port, path): (String, String, u16, String)| {
+                let url = build_url(&host, port, &path);
+                let client = get_async_client(&url).clone();
+                
+                let result = tokio::runtime::Handle::current()
+                    .block_on(async {
+                        let req = client.request(
+                            method.parse().unwrap_or(reqwest::Method::GET),
+                            &url,
+                        );
+                        match req.send().await {
+                            Ok(resp) => build_response_async(lua, resp),
+                            Err(e) => error_response(lua, e),
+                        }
+                    });
+                
+                result
+            }
+        )?,
+    )?;
+
+    globals.set("http", http)?;
+    Ok(())
 }
