@@ -104,17 +104,28 @@ fn get_async_client(url: &str) -> &'static AsyncClient {
 }
 
 fn make_client(timeout_secs: u64) -> Client {
-    let accept_invalid_certs = ACCEPT_INVALID_CERTS.load(Ordering::SeqCst);
-    let accept_invalid_hostnames = ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst);
+    make_client_with_tls(timeout_secs, None, None)
+}
+
+fn make_client_with_tls(
+    timeout_secs: u64, 
+    accept_invalid_certs: Option<bool>, 
+    accept_invalid_hostnames: Option<bool>
+) -> Client {
+    let global_accept_certs = ACCEPT_INVALID_CERTS.load(Ordering::SeqCst);
+    let global_accept_hostnames = ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst);
+    
+    let use_invalid_certs = accept_invalid_certs.unwrap_or(global_accept_certs);
+    let use_invalid_hostnames = accept_invalid_hostnames.unwrap_or(global_accept_hostnames);
     
     let mut builder = Client::builder()
         .timeout(Duration::from_secs(timeout_secs.max(1)))
         .connect_timeout(Duration::from_secs(10));
     
-    if accept_invalid_certs {
+    if use_invalid_certs {
         builder = builder.danger_accept_invalid_certs(true);
     }
-    if accept_invalid_hostnames {
+    if use_invalid_hostnames {
         builder = builder.danger_accept_invalid_hostnames(true);
     }
     
@@ -265,10 +276,9 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
             |lua, (host, port, path, options): (String, u16, String, Option<Table>)| {
                 let url = build_url(&host, port, &path);
 
-                // Use pooled client by default, create new one only if custom timeout
                 let client = if let Some(opts) = options.as_ref() {
-                    if opts.get::<u64>("timeout").is_ok() {
-                        make_client(30)
+                    if let Ok(timeout) = opts.get::<u64>("timeout") {
+                        make_client_with_tls(timeout, None, None)
                     } else {
                         get_client(&url).clone()
                     }
@@ -298,8 +308,8 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
                 let url = build_url(&host, port, &path);
                 
                 let client = if let Some(opts) = options.as_ref() {
-                    if opts.get::<u64>("timeout").is_ok() {
-                        make_client(30)
+                    if let Ok(timeout) = opts.get::<u64>("timeout") {
+                        make_client_with_tls(timeout, None, None)
                     } else {
                         get_client(&url).clone()
                     }
@@ -329,8 +339,8 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
                 let url = build_url(&host, port, &path);
                 
                 let client = if let Some(opts) = options.as_ref() {
-                    if opts.get::<u64>("timeout").is_ok() {
-                        make_client(30)
+                    if let Ok(timeout) = opts.get::<u64>("timeout") {
+                        make_client_with_tls(timeout, None, None)
                     } else {
                         get_client(&url).clone()
                     }
@@ -585,7 +595,13 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(
             |lua, (host, port, path, data, options): (String, u16, String, String, Option<Table>)| {
                 let url = build_url(&host, port, &path);
-                let client = make_client(30);
+                
+                let timeout = options
+                    .as_ref()
+                    .and_then(|o| o.get::<u64>("timeout").ok())
+                    .unwrap_or(30);
+                
+                let client = make_client_with_tls(timeout, None, None);
 
                 let mut req = client.post(&url).body(data);
                 
@@ -612,7 +628,13 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(
             |lua, (host, port, path, data, options): (String, u16, String, String, Option<Table>)| {
                 let url = build_url(&host, port, &path);
-                let client = make_client(30);
+                
+                let timeout = options
+                    .as_ref()
+                    .and_then(|o| o.get::<u64>("timeout").ok())
+                    .unwrap_or(30);
+                
+                let client = make_client_with_tls(timeout, None, None);
 
                 let mut req = client.put(&url).body(data);
                 
