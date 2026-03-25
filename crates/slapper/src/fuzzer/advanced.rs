@@ -1,0 +1,495 @@
+#![allow(async_fn_in_trait)]
+
+use crate::fuzzer::engine::FuzzResult;
+pub use crate::fuzzer::payloads::graphql::{
+    GraphQLFuzzer, GraphQLTestResult, GraphQLVulnerability,
+};
+pub use crate::fuzzer::payloads::grpc::{GrpcFuzzer, GrpcTestResult, GrpcVulnerability};
+pub use crate::fuzzer::payloads::idor::{IdorFuzzer, IdorTestResult};
+pub use crate::fuzzer::payloads::jwt::{JwtFuzzer, JwtTestResult};
+pub use crate::fuzzer::payloads::oauth::{OAuthFuzzer, OAuthTestResult};
+pub use crate::fuzzer::payloads::ssti::{SstiFuzzer, SstiTestResult, TemplateEngine};
+pub use crate::fuzzer::payloads::websocket::{
+    WebSocketFuzzer, WebSocketTestResult, WebSocketVulnerability,
+};
+use crate::fuzzer::payloads::{Payload, PayloadType};
+use reqwest::Client;
+
+pub trait AdvancedFuzzer {
+    async fn fuzz(&mut self, client: &Client) -> Vec<FuzzResult>;
+    fn name(&self) -> &str;
+}
+
+pub trait FuzzerResultConverter<T> {
+    fn into_fuzz_result(self) -> FuzzResult;
+}
+
+impl AdvancedFuzzer for GraphQLFuzzer {
+    async fn fuzz(&mut self, client: &reqwest::Client) -> Vec<FuzzResult> {
+        let mut results = Vec::new();
+
+        if self.enable_introspection {
+            if let Ok(true) = self.run_introspection(client).await {
+                let introspection_results = self.test_introspection_enabled();
+                for r in introspection_results {
+                    results.push(r.into_fuzz_result());
+                }
+            }
+        }
+
+        let injection_results =
+            self.generate_injection_queries(self.enable_depth_bypass, self.enable_alias_overload);
+        for r in injection_results {
+            results.push(r.into_fuzz_result());
+        }
+
+        let batch_results = self.generate_batch_queries(self.enable_alias_overload);
+        for r in batch_results {
+            results.push(r.into_fuzz_result());
+        }
+
+        results
+    }
+
+    fn name(&self) -> &str {
+        "graphql"
+    }
+}
+
+impl FuzzerResultConverter<GraphQLTestResult> for GraphQLTestResult {
+    fn into_fuzz_result(self) -> FuzzResult {
+        let description = self.description.clone();
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::GraphQL,
+                payload: self.query,
+                description,
+                severity: self.severity,
+                tags: vec![format!("{:?}", self.vulnerability)],
+            },
+            status_code: if self.success { 200 } else { 500 },
+            response_time_ms: 0,
+            response_length: Some(self.response_snippet.len() as u64),
+            is_waf_blocked: false,
+            is_anomaly: self.success,
+            is_redos_suspected: false,
+            leaks_found: if self.success {
+                vec![self.description]
+            } else {
+                vec![]
+            },
+            error: None,
+            owasp_category: Some(crate::waf::types::OwaspCategory::A03_2021_Injection.to_string()),
+            detected_severity: self.severity,
+        }
+    }
+}
+
+impl AdvancedFuzzer for JwtFuzzer {
+    async fn fuzz(&mut self, client: &reqwest::Client) -> Vec<FuzzResult> {
+        let mut results = Vec::new();
+
+        let target_url = self.target_url.clone().unwrap_or_default();
+
+        if !target_url.is_empty() {
+            let mut fuzzer_with_client = JwtFuzzer::new()
+                .with_target_url(target_url.clone())
+                .with_client(client.clone());
+
+            if let Some(ref token) = self.original_token {
+                fuzzer_with_client = fuzzer_with_client.with_original_token(token.clone());
+            }
+
+            let none_results = fuzzer_with_client.test_none_algorithm_attack().await;
+            for r in none_results {
+                results.push(r.into_fuzz_result());
+            }
+
+            if let Some(ref token) = self.original_token {
+                let server_results = JwtFuzzer::new()
+                    .with_target_url(target_url)
+                    .with_client(client.clone())
+                    .test_token_against_server(token)
+                    .await;
+                for r in server_results {
+                    results.push(r.into_fuzz_result());
+                }
+            }
+        }
+
+        let none_results = self.test_none_algorithm();
+        for r in none_results {
+            results.push(r.into_fuzz_result());
+        }
+
+        let key_results = self.test_key_injection("");
+        for r in key_results {
+            results.push(r.into_fuzz_result());
+        }
+
+        results
+    }
+
+    fn name(&self) -> &str {
+        "jwt"
+    }
+}
+
+impl FuzzerResultConverter<JwtTestResult> for JwtTestResult {
+    fn into_fuzz_result(self) -> FuzzResult {
+        let description = self.description.clone();
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::Jwt,
+                payload: self.token,
+                description,
+                severity: self.severity,
+                tags: vec![format!("{:?}", self.vulnerability)],
+            },
+            status_code: if self.success { 200 } else { 401 },
+            response_time_ms: 0,
+            response_length: None,
+            is_waf_blocked: false,
+            is_anomaly: self.success,
+            is_redos_suspected: false,
+            leaks_found: if self.success {
+                vec![self.description]
+            } else {
+                vec![]
+            },
+            error: None,
+            owasp_category: Some(
+                crate::waf::types::OwaspCategory::A02_2023_BrokenAuthentication.to_string(),
+            ),
+            detected_severity: self.severity,
+        }
+    }
+}
+
+impl AdvancedFuzzer for OAuthFuzzer {
+    async fn fuzz(&mut self, client: &reqwest::Client) -> Vec<FuzzResult> {
+        let mut results = Vec::new();
+
+        let mut fuzzer_with_client =
+            OAuthFuzzer::new(self.client_id.clone(), self.redirect_uri.clone())
+                .with_client(client.clone());
+
+        if let Some(ref issuer) = self.issuer_url {
+            fuzzer_with_client = fuzzer_with_client.with_issuer(issuer.clone());
+
+            if self.enable_redirect || self.enable_scope || self.enable_state || self.enable_grant {
+                let issuer_results = fuzzer_with_client.test_issuer().await;
+                for r in issuer_results {
+                    results.push(r.into_fuzz_result());
+                }
+            }
+        }
+
+        if self.enable_redirect {
+            let issuer = self
+                .issuer_url
+                .clone()
+                .unwrap_or_else(|| "https://example.com".to_string());
+            let endpoints = self.discover_endpoints(&issuer);
+
+            for endpoint in endpoints {
+                let redirect_results = self.test_redirect_uri(&endpoint.url);
+                for r in redirect_results {
+                    results.push(r.into_fuzz_result());
+                }
+            }
+        }
+
+        if self.enable_scope {
+            let issuer = self
+                .issuer_url
+                .clone()
+                .unwrap_or_else(|| "https://example.com".to_string());
+            let scope_results = self.test_scope_escalation(&format!("{}/authorize", issuer));
+            for r in scope_results {
+                results.push(r.into_fuzz_result());
+            }
+        }
+
+        if self.enable_state {
+            let issuer = self
+                .issuer_url
+                .clone()
+                .unwrap_or_else(|| "https://example.com".to_string());
+            let state_results = self.test_state_parameter(&format!("{}/authorize", issuer));
+            for r in state_results {
+                results.push(r.into_fuzz_result());
+            }
+        }
+
+        if self.enable_grant {
+            let issuer = self
+                .issuer_url
+                .clone()
+                .unwrap_or_else(|| "https://example.com".to_string());
+            let grant_results = self.test_grant_type_mixing(&format!("{}/token", issuer));
+            for r in grant_results {
+                results.push(r.into_fuzz_result());
+            }
+        }
+
+        results
+    }
+
+    fn name(&self) -> &str {
+        "oauth"
+    }
+}
+
+impl FuzzerResultConverter<OAuthTestResult> for OAuthTestResult {
+    fn into_fuzz_result(self) -> FuzzResult {
+        let description = self.description.clone();
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::OAuth,
+                payload: self.endpoint,
+                description,
+                severity: self.severity,
+                tags: vec![format!("{:?}", self.vulnerability)],
+            },
+            status_code: if self.success { 200 } else { 400 },
+            response_time_ms: 0,
+            response_length: None,
+            is_waf_blocked: false,
+            is_anomaly: self.success,
+            is_redos_suspected: false,
+            leaks_found: if self.success {
+                vec![self.description]
+            } else {
+                vec![]
+            },
+            error: None,
+            owasp_category: Some(
+                crate::waf::types::OwaspCategory::A02_2023_BrokenAuthentication.to_string(),
+            ),
+            detected_severity: self.severity,
+        }
+    }
+}
+
+impl AdvancedFuzzer for IdorFuzzer {
+    async fn fuzz(&mut self, client: &reqwest::Client) -> Vec<FuzzResult> {
+        let mut results = Vec::new();
+
+        let mut fuzzer_with_client =
+            IdorFuzzer::new(self.base_url.clone()).with_client(client.clone());
+
+        if let Some(ref base_id) = self.base_user_id {
+            fuzzer_with_client = fuzzer_with_client.with_base_user_id(base_id.clone());
+        }
+
+        if !self.user_ids.is_empty() {
+            fuzzer_with_client = fuzzer_with_client.with_user_ids(self.user_ids.clone());
+        }
+
+        if let Some(ref cookies) = self.authenticated_cookies {
+            fuzzer_with_client = fuzzer_with_client.with_authentication(cookies.clone());
+        }
+
+        let horizontal_results = fuzzer_with_client.test_horizontal_escalation().await;
+        for r in horizontal_results {
+            results.push(r.into_fuzz_result());
+        }
+
+        let vertical_results = fuzzer_with_client.test_vertical_escalation().await;
+        for r in vertical_results {
+            results.push(r.into_fuzz_result());
+        }
+
+        results
+    }
+
+    fn name(&self) -> &str {
+        "idor"
+    }
+}
+
+impl FuzzerResultConverter<IdorTestResult> for IdorTestResult {
+    fn into_fuzz_result(self) -> FuzzResult {
+        let description = self.description.clone();
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::Idor,
+                payload: self.endpoint,
+                description,
+                severity: self.severity,
+                tags: vec![format!("{:?}", self.vulnerability)],
+            },
+            status_code: if self.success { 200 } else { 403 },
+            response_time_ms: 0,
+            response_length: None,
+            is_waf_blocked: false,
+            is_anomaly: self.success,
+            is_redos_suspected: false,
+            leaks_found: if self.success {
+                vec![self.description]
+            } else {
+                vec![]
+            },
+            error: None,
+            owasp_category: Some(
+                crate::waf::types::OwaspCategory::A01_2023_BrokenObjectLevelAuthorization
+                    .to_string(),
+            ),
+            detected_severity: self.severity,
+        }
+    }
+}
+
+impl AdvancedFuzzer for SstiFuzzer {
+    async fn fuzz(&mut self, client: &reqwest::Client) -> Vec<FuzzResult> {
+        let mut results = Vec::new();
+
+        let mut fuzzer_with_client = SstiFuzzer::new().with_client(client.clone());
+
+        if let Some(ref url) = self.target_url {
+            fuzzer_with_client = fuzzer_with_client.with_target_url(url.clone());
+        }
+
+        if let Some(ref param) = self.param_name {
+            fuzzer_with_client = fuzzer_with_client.with_param_name(param.clone());
+        }
+
+        let server_results = fuzzer_with_client.test_ssti_on_server().await;
+        for r in server_results {
+            results.push(r.into_fuzz_result());
+        }
+
+        let payloads = self.generate_payloads();
+        for r in payloads {
+            results.push(r.into_fuzz_result());
+        }
+
+        results
+    }
+
+    fn name(&self) -> &str {
+        "ssti"
+    }
+}
+
+impl FuzzerResultConverter<SstiTestResult> for SstiTestResult {
+    fn into_fuzz_result(self) -> FuzzResult {
+        let description = self.description.clone();
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::Ssti,
+                payload: self.payload,
+                description,
+                severity: self.severity,
+                tags: vec![format!("{:?}", self.engine)],
+            },
+            status_code: if self.success { 500 } else { 200 },
+            response_time_ms: 0,
+            response_length: None,
+            is_waf_blocked: false,
+            is_anomaly: self.success,
+            is_redos_suspected: false,
+            leaks_found: if self.success {
+                vec![self.description]
+            } else {
+                vec![]
+            },
+            error: None,
+            owasp_category: Some(crate::waf::types::OwaspCategory::A03_2021_Injection.to_string()),
+            detected_severity: self.severity,
+        }
+    }
+}
+
+impl AdvancedFuzzer for WebSocketFuzzer {
+    async fn fuzz(&mut self, _client: &reqwest::Client) -> Vec<FuzzResult> {
+        let mut results = Vec::new();
+
+        let injection_tests = self.generate_injection_tests();
+        for r in injection_tests {
+            results.push(r.into_fuzz_result());
+        }
+
+        results
+    }
+
+    fn name(&self) -> &str {
+        "websocket"
+    }
+}
+
+impl FuzzerResultConverter<WebSocketTestResult> for WebSocketTestResult {
+    fn into_fuzz_result(self) -> FuzzResult {
+        let description = self.description.clone();
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::Grpc,
+                payload: self.message,
+                description,
+                severity: self.severity,
+                tags: vec![format!("{:?}", self.vulnerability)],
+            },
+            status_code: if self.success { 101 } else { 400 },
+            response_time_ms: 0,
+            response_length: None,
+            is_waf_blocked: false,
+            is_anomaly: self.success,
+            is_redos_suspected: false,
+            leaks_found: if self.success {
+                vec![self.description]
+            } else {
+                vec![]
+            },
+            error: None,
+            owasp_category: Some(crate::waf::types::OwaspCategory::A03_2021_Injection.to_string()),
+            detected_severity: self.severity,
+        }
+    }
+}
+
+impl AdvancedFuzzer for GrpcFuzzer {
+    async fn fuzz(&mut self, _client: &reqwest::Client) -> Vec<FuzzResult> {
+        let mut results = Vec::new();
+
+        let injection_tests = self.generate_injection_tests();
+        for r in injection_tests {
+            results.push(r.into_fuzz_result());
+        }
+
+        results
+    }
+
+    fn name(&self) -> &str {
+        "grpc"
+    }
+}
+
+impl FuzzerResultConverter<GrpcTestResult> for GrpcTestResult {
+    fn into_fuzz_result(self) -> FuzzResult {
+        let description = self.description.clone();
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::Grpc,
+                payload: self.method,
+                description,
+                severity: self.severity,
+                tags: vec![format!("{:?}", self.vulnerability)],
+            },
+            status_code: if self.success { 200 } else { 400 },
+            response_time_ms: 0,
+            response_length: None,
+            is_waf_blocked: false,
+            is_anomaly: self.success,
+            is_redos_suspected: false,
+            leaks_found: if self.success {
+                vec![self.description]
+            } else {
+                vec![]
+            },
+            error: None,
+            owasp_category: Some(crate::waf::types::OwaspCategory::A03_2021_Injection.to_string()),
+            detected_severity: self.severity,
+        }
+    }
+}

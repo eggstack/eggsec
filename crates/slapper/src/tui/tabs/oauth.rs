@@ -1,0 +1,445 @@
+use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Paragraph},
+    Frame,
+};
+
+pub struct OAuthTab {
+    pub inputs: InputGroup,
+    pub redirect_test_checkbox: Checkbox,
+    pub scope_test_checkbox: Checkbox,
+    pub state_test_checkbox: Checkbox,
+    pub grant_test_checkbox: Checkbox,
+    pub progress: ProgressGauge,
+    pub state: AppState,
+    pub results_view: ScrollableText,
+    pub focus_area: OAuthFocusArea,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OAuthFocusArea {
+    Inputs,
+    Options,
+    Results,
+}
+
+impl OAuthTab {
+    pub fn new() -> Self {
+        let inputs = InputGroup::new()
+            .add(InputField::new("OAuth Authorization Endpoint URL"))
+            .add(InputField::new("Client ID (optional)"))
+            .add(InputField::new("Redirect URI (optional)"))
+            .add(InputField::new("Concurrency").with_value("10"))
+            .add(InputField::new("Timeout (s)").with_value("15"));
+
+        let redirect_test_checkbox = Checkbox::new("Redirect URI Validation").checked(true);
+        let scope_test_checkbox = Checkbox::new("Scope Escalation Tests").checked(true);
+        let state_test_checkbox = Checkbox::new("State Parameter Tests").checked(true);
+        let grant_test_checkbox = Checkbox::new("Grant Type Tests").checked(true);
+
+        Self {
+            inputs,
+            redirect_test_checkbox,
+            scope_test_checkbox,
+            state_test_checkbox,
+            grant_test_checkbox,
+            progress: ProgressGauge::new("Testing OAuth..."),
+            state: AppState::Idle,
+            results_view: ScrollableText::new("Results"),
+            focus_area: OAuthFocusArea::Inputs,
+        }
+    }
+
+    pub fn target(&self) -> &str {
+        self.inputs
+            .fields
+            .first()
+            .map(|f| f.value.as_str())
+            .unwrap_or("")
+    }
+
+    pub fn client_id(&self) -> Option<&str> {
+        self.inputs
+            .fields
+            .get(1)
+            .map(|f| f.value.as_str())
+            .filter(|v| !v.is_empty())
+    }
+
+    pub fn redirect_uri(&self) -> Option<&str> {
+        self.inputs
+            .fields
+            .get(2)
+            .map(|f| f.value.as_str())
+            .filter(|v| !v.is_empty())
+    }
+
+    pub fn concurrency(&self) -> usize {
+        self.inputs
+            .fields
+            .get(3)
+            .and_then(|f| f.value.parse().ok())
+            .unwrap_or(10)
+    }
+
+    pub fn timeout(&self) -> u64 {
+        self.inputs
+            .fields
+            .get(4)
+            .and_then(|f| f.value.parse().ok())
+            .unwrap_or(15)
+    }
+
+    pub fn set_results(&mut self, results: OAuthResults) {
+        self.state = AppState::Completed;
+        self.results_view.clear();
+
+        self.results_view.add_line(Line::from(Span::styled(
+            format!("OAuth/OIDC Security Test Complete: {}", results.target),
+            Style::default().fg(Color::Green),
+        )));
+        self.results_view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from(Span::styled(
+            "Findings:",
+            Style::default().fg(Color::Yellow),
+        )));
+
+        if !results.redirect_vulnerabilities.is_empty() {
+            self.results_view.add_line(Line::from(Span::styled(
+                format!(
+                    "  [!] Redirect URI Issues: {}",
+                    results.redirect_vulnerabilities.len()
+                ),
+                Style::default().fg(Color::Red),
+            )));
+            for vuln in &results.redirect_vulnerabilities {
+                self.results_view
+                    .add_line(Line::from(format!("    - {}", vuln)));
+            }
+        } else {
+            self.results_view.add_line(Line::from(Span::raw(
+                "  [+] Redirect URI validation appears secure",
+            )));
+        }
+
+        if !results.scope_vulnerabilities.is_empty() {
+            self.results_view.add_line(Line::from(Span::styled(
+                format!(
+                    "  [!] Scope Escalation Issues: {}",
+                    results.scope_vulnerabilities.len()
+                ),
+                Style::default().fg(Color::Red),
+            )));
+        }
+
+        if !results.state_vulnerabilities.is_empty() {
+            self.results_view.add_line(Line::from(Span::styled(
+                format!(
+                    "  [!] State Parameter Issues: {}",
+                    results.state_vulnerabilities.len()
+                ),
+                Style::default().fg(Color::Red),
+            )));
+        }
+
+        if !results.grant_vulnerabilities.is_empty() {
+            self.results_view.add_line(Line::from(Span::styled(
+                format!(
+                    "  [!] Grant Type Issues: {}",
+                    results.grant_vulnerabilities.len()
+                ),
+                Style::default().fg(Color::Red),
+            )));
+        }
+
+        self.results_view.add_line(Line::from(""));
+        self.results_view.add_line(Line::from(format!(
+            "Requests: {} | Errors: {} | Duration: {}ms",
+            results.total_requests, results.errors, results.duration_ms
+        )));
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct OAuthResults {
+    pub target: String,
+    pub redirect_vulnerabilities: Vec<String>,
+    pub scope_vulnerabilities: Vec<String>,
+    pub state_vulnerabilities: Vec<String>,
+    pub grant_vulnerabilities: Vec<String>,
+    pub total_requests: usize,
+    pub errors: usize,
+    pub duration_ms: u64,
+}
+
+impl TabState for OAuthTab {
+    fn state(&self) -> AppState {
+        self.state.clone()
+    }
+
+    fn progress(&self) -> f64 {
+        self.progress.percent() as f64
+    }
+
+    fn reset(&mut self) {
+        self.state = AppState::Idle;
+        self.results_view.clear();
+        self.progress.current = 0;
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.results_view.add_line(Line::from(Span::styled(
+            format!("Error: {}", msg),
+            Style::default().fg(Color::Red),
+        )));
+    }
+}
+
+impl OAuthTab {
+    pub fn stop(&mut self) {
+        if self.state == AppState::Running {
+            self.state = AppState::Idle;
+        }
+    }
+
+    pub fn handle_word_forward(&mut self) {
+        for _ in 0..5 {
+            self.handle_right();
+        }
+    }
+
+    pub fn handle_word_backward(&mut self) {
+        for _ in 0..5 {
+            self.handle_left();
+        }
+    }
+
+    pub fn handle_home(&mut self) {
+        for _ in 0..100 {
+            self.handle_left();
+        }
+    }
+
+    pub fn handle_end(&mut self) {
+        for _ in 0..100 {
+            self.handle_right();
+        }
+    }
+
+    pub fn handle_top(&mut self) {
+        for _ in 0..100 {
+            self.results_view.scroll_up(1);
+        }
+    }
+
+    pub fn handle_bottom(&mut self) {
+        for _ in 0..100 {
+            self.results_view.scroll_down(1);
+        }
+    }
+}
+
+impl TabRender for OAuthTab {
+    fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(16),
+                Constraint::Length(6),
+                Constraint::Min(5),
+            ])
+            .split(area);
+
+        // Input fields
+        let input_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+            ])
+            .split(chunks[0]);
+
+        let input_block = Block::default()
+            .title(" OAuth/OIDC Configuration ")
+            .borders(Borders::ALL)
+            .border_style(
+                Style::default().fg(if self.focus_area == OAuthFocusArea::Inputs {
+                    Color::Yellow
+                } else {
+                    Color::Gray
+                }),
+            );
+        f.render_widget(input_block, chunks[0]);
+
+        for (i, field) in self.inputs.fields.iter().enumerate() {
+            if i < input_chunks.len() {
+                field.render(f, input_chunks[i], insert_mode);
+            }
+        }
+
+        // Options
+        let options_block = Block::default()
+            .title(" Test Options ")
+            .borders(Borders::ALL)
+            .border_style(
+                Style::default().fg(if self.focus_area == OAuthFocusArea::Options {
+                    Color::Yellow
+                } else {
+                    Color::Gray
+                }),
+            );
+
+        let options_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+            ])
+            .split(options_block.inner(chunks[1]));
+
+        f.render_widget(options_block, chunks[1]);
+        self.redirect_test_checkbox.render(f, options_chunks[0]);
+        self.scope_test_checkbox.render(f, options_chunks[1]);
+        self.state_test_checkbox.render(f, options_chunks[2]);
+        self.grant_test_checkbox.render(f, options_chunks[3]);
+
+        // Results
+        self.results_view.render(f, chunks[2]);
+
+        // Progress bar if running
+        if self.state == AppState::Running {
+            let progress_area = Rect {
+                x: area.x,
+                y: area.y + area.height - 1,
+                width: area.width,
+                height: 1,
+            };
+            self.progress.render(f, progress_area);
+        }
+    }
+}
+
+impl TabInput for OAuthTab {
+    fn handle_focus_next(&mut self) {
+        self.focus_area = match self.focus_area {
+            OAuthFocusArea::Inputs => {
+                self.inputs.blur();
+                OAuthFocusArea::Options
+            }
+            OAuthFocusArea::Options => OAuthFocusArea::Results,
+            OAuthFocusArea::Results => {
+                self.inputs.focus(0);
+                OAuthFocusArea::Inputs
+            }
+        };
+    }
+
+    fn handle_focus_prev(&mut self) {
+        self.focus_area = match self.focus_area {
+            OAuthFocusArea::Inputs => {
+                self.inputs.blur();
+                OAuthFocusArea::Results
+            }
+            OAuthFocusArea::Options => {
+                self.inputs.focus(0);
+                OAuthFocusArea::Inputs
+            }
+            OAuthFocusArea::Results => OAuthFocusArea::Options,
+        };
+    }
+
+    fn handle_char(&mut self, c: char) {
+        if self.focus_area == OAuthFocusArea::Inputs {
+            self.inputs.insert(c);
+        }
+    }
+
+    fn handle_backspace(&mut self) {
+        if self.focus_area == OAuthFocusArea::Inputs {
+            self.inputs.backspace();
+        }
+    }
+
+    fn handle_enter(&mut self) {
+        match self.focus_area {
+            OAuthFocusArea::Inputs => {
+                self.inputs.blur();
+            }
+            OAuthFocusArea::Options => {
+                // Toggle focused checkbox
+            }
+            OAuthFocusArea::Results => {}
+        }
+    }
+
+    fn handle_escape(&mut self) {
+        self.inputs.blur();
+    }
+
+    fn handle_up(&mut self) {
+        match self.focus_area {
+            OAuthFocusArea::Inputs => {
+                self.inputs.focus_prev();
+            }
+            OAuthFocusArea::Results => {
+                self.results_view.scroll_up(1);
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_down(&mut self) {
+        match self.focus_area {
+            OAuthFocusArea::Inputs => {
+                self.inputs.focus_next();
+            }
+            OAuthFocusArea::Results => {
+                self.results_view.scroll_down(1);
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_left(&mut self) -> bool {
+        match self.focus_area {
+            OAuthFocusArea::Inputs => self.inputs.move_left(),
+            _ => false,
+        }
+    }
+
+    fn handle_right(&mut self) -> bool {
+        match self.focus_area {
+            OAuthFocusArea::Inputs => self.inputs.move_right(),
+            _ => false,
+        }
+    }
+
+    fn is_input_focused(&self) -> bool {
+        self.focus_area == OAuthFocusArea::Inputs && self.inputs.is_focused()
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        match self.focus_area {
+            OAuthFocusArea::Inputs => !self.inputs.can_move_left(),
+            _ => true,
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        match self.focus_area {
+            OAuthFocusArea::Inputs => !self.inputs.can_move_right(),
+            _ => true,
+        }
+    }
+}

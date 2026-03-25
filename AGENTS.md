@@ -36,7 +36,11 @@ crates/slapper/
 │   ├── cli/           # Command-line argument parsing
 │   ├── commands/      # Command handlers
 │   ├── config/        # Configuration (SlapperConfig, PathsConfig, Scope)
+│   ├── constants.rs   # Centralized constants (WAF, HTTP, scan, etc.)
+│   ├── types.rs       # Shared types (Severity, SensitiveString)
 │   ├── fuzzer/        # Fuzzing engine (22+ payload types)
+│   │   └── payloads/
+│   │       └── macros.rs  # payload_vec! macro
 │   ├── scanner/       # Port scanning, endpoint discovery
 │   │   └── ports/     # Port scanning (mod.rs + spoofed.rs)
 │   ├── waf/           # WAF detection and bypass
@@ -52,13 +56,60 @@ crates/slapper/
 - `SlapperConfig` - Main configuration (use `config::load_config()`)
 - `PathsConfig` - Directory paths (flattened into SlapperConfig)
 - `SpoofConfig` - IP spoofing settings
-- `FuzzEngine` - Main fuzzing engine
+- `FuzzEngine` - Main fuzzing engine (returns `Result`)
 - `PayloadType` - Enum of 22+ payload categories
+- `Severity` - Canonical severity rating (in `types.rs`, re-exported everywhere)
+- `SensitiveString` - Zeroized credential wrapper (in `types.rs`)
 
 ### Feature Flags
 
 - `stress-testing` - Enables ICMP probing, IP spoofing, raw sockets
 - `packet-inspection` - Packet capture features
+- `python-plugins` / `ruby-plugins` - Plugin language support
+- `rest-api` / `grpc-api` - API server integration
+- `nse` - Nmap NSE script support
+- `full` - All features combined
+
+## Codebase Health
+
+### Severity Enum (Unified)
+
+Single canonical definition in `types.rs`. All other modules re-export from it:
+
+| Re-export path | Source |
+|---------------|--------|
+| `fuzzer::payloads::Severity` | `pub use crate::types::Severity` |
+| `waf::types::Severity` | `pub use crate::types::Severity` |
+| `config::Severity` | `pub use crate::types::Severity` |
+| `recon::secrets::Severity` | `pub use crate::types::Severity` |
+| `output::agent::Severity` | `pub use crate::types::Severity` |
+| `output::trend::Severity` | `pub use crate::types::Severity` |
+
+The `tool/response.rs` module uses a separate `ResponseSeverity` enum with an extra `None` variant for API compatibility.
+
+**When adding new code:** re-export from `crate::types::Severity`. Do not create a new definition.
+
+### Tool Abstraction Layer (Already Exists)
+
+`tool/traits.rs:117` has `SecurityTool` trait, `tool/registry.rs:9` has `ToolRegistry`. These are feature-gated behind `tool-api` (enabled by `rest-api`, `grpc-api`, `nse`). Do not re-implement.
+
+### SensitiveString
+
+Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` from `types.rs`:
+- Zeroizes on drop
+- `expose_secret()` borrows the inner string
+- `into_secret()` consumes and returns the inner string
+- `Debug` and `Display` show `[REDACTED]`
+- Constant-time equality (via `subtle::ConstantTimeEq`)
+- Serializes transparently for config file compatibility
+
+### Macros
+
+`fuzzer/payloads/macros.rs` defines `payload_vec!` for building payload vectors from inline data. Reduces repetitive `for` loops in payload modules (e.g., sqli.rs went from 8 loops to 1 macro call).
+
+### WAF Constants
+
+`constants::waf` module has scoring and detection constants. Use these instead of magic numbers in WAF-related code.
 
 ## Lessons Learned
 
@@ -85,6 +136,20 @@ crates/slapper/
 2. **Option types**: `decoy_count` is `Option<usize>`, not `usize`
 3. **Unused imports**: Move feature-gated imports inside `#[cfg(...)]` blocks
 
+### Severity Enum
+
+- `Severity` derives `Ord` by declaration order (Critical < High), NOT semantic order
+- Use `as_int()` for severity comparisons, not `>` or `<`
+- `Display` outputs UPPERCASE ("CRITICAL"), `as_str()` outputs lowercase ("critical")
+- `serde` serialization uses lowercase (due to `#[serde(rename_all = "lowercase")]`)
+
+### SensitiveString
+
+- Field is private; use `expose_secret()` (borrow) or `into_secret()` (consume)
+- `into_secret()` uses `std::mem::take` internally to work with `ZeroizeOnDrop`
+- `PartialEq` uses constant-time comparison; safe for credential checking
+- Config deserialization works transparently — existing TOML files with plain strings still load
+
 ## Style Guidelines
 
 - Use `anyhow::Result` for error handling
@@ -94,7 +159,11 @@ crates/slapper/
 
 ## Recent Changes
 
-- Added `PathsConfig` struct for directory configuration
-- Split `scanner/ports.rs` into `scanner/ports/` module
-- Added comprehensive negative test cases
-- Added scanner/spoof integration tests
+- Unified 6 `Severity` enum definitions into 1 canonical type in `types.rs`
+- Created `SensitiveString` type with zeroization and constant-time equality
+- Applied `SensitiveString` to 9 config credential fields
+- Added `payload_vec!` macro for payload generation (applied to sqli.rs)
+- Centralized WAF magic numbers in `constants::waf` module
+- Changed `FuzzEngine::new()` to return `Result<Self>` (removed `.expect()`)
+- Added early exit in WAF detector at high confidence (score >= 90)
+- Fixed `.gitignore` pattern blocking `crates/slapper/` directory

@@ -1,0 +1,298 @@
+use anyhow::Result;
+use reqwest::{Client, Method};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
+
+use crate::utils::urlencoding;
+use crate::waf::types::Severity;
+
+use super::super::detection::{PatternMatcher, TimingAnalyzer};
+use super::super::mutator::generate_mutations;
+use super::super::payloads::Payload;
+
+use super::types::{BaselineResponse, FuzzResult, FuzzSession, OwaspSummary};
+
+use super::core::FuzzEngine;
+
+impl FuzzEngine {
+    pub(crate) fn mutate_payloads(&self, payloads: Vec<Payload>) -> Vec<Payload> {
+        let mut mutated = Vec::new();
+
+        for payload in payloads {
+            mutated.push(payload.clone());
+
+            let mutations = generate_mutations(&payload.payload, self.args.mutation_count);
+            for mutated_payload in mutations {
+                if mutated_payload != payload.payload {
+                    mutated.push(Payload {
+                        payload_type: payload.payload_type,
+                        payload: mutated_payload,
+                        description: format!("{} (mutated)", payload.description),
+                        severity: payload.severity,
+                        tags: payload
+                            .tags
+                            .iter()
+                            .cloned()
+                            .chain(std::iter::once("mutated".to_string()))
+                            .collect(),
+                    });
+                }
+            }
+        }
+
+        mutated
+    }
+
+    pub(crate) fn build_session(
+        &self,
+        results: Vec<FuzzResult>,
+        duration: Duration,
+        baseline: Option<BaselineResponse>,
+    ) -> FuzzSession {
+        let successful = results.iter().filter(|r| r.error.is_none()).count();
+        let failed = results.len() - successful;
+        let waf_bypasses = results.iter().filter(|r| r.is_waf_blocked).count();
+        let leaks = results.iter().filter(|r| !r.leaks_found.is_empty()).count();
+        let anomalies = results.iter().filter(|r| r.is_anomaly).count();
+        let redos = results.iter().filter(|r| r.is_redos_suspected).count();
+        let findings = results.iter().filter(|r| r.is_vulnerable()).count();
+        let owasp_summary = OwaspSummary::from_results(&results);
+
+        FuzzSession {
+            target_url: self.args.url.clone(),
+            mode: format!("{:?}", self.args.mode),
+            payload_type: self.args.payload_type.clone(),
+            total_payloads: results.len(),
+            successful_requests: successful,
+            failed_requests: failed,
+            waf_bypasses,
+            potential_leaks: leaks,
+            time_anomalies: anomalies,
+            redos_suspected: redos,
+            duration_ms: duration.as_millis() as u64,
+            total_requests: results.len(),
+            findings,
+            results,
+            owasp_summary,
+            baseline,
+        }
+    }
+
+    pub(crate) async fn capture_baseline_for_diffing(&mut self) -> Result<()> {
+        if let Some(ref mut differ) = self.differ {
+            let start = Instant::now();
+            let response = self
+                .client
+                .get(&self.args.url)
+                .header("User-Agent", &self.user_agent)
+                .send()
+                .await?;
+
+            let status_code = response.status().as_u16();
+            let body = response.bytes().await.unwrap_or_default();
+            let headers = reqwest::header::HeaderMap::new();
+            let timing_ms = start.elapsed().as_millis() as u64;
+
+            differ.capture_baseline(status_code, &headers, &body, timing_ms);
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn apply_diffing(&mut self, results: Vec<FuzzResult>) -> Result<Vec<FuzzResult>> {
+        if let Some(ref mut differ) = self.differ {
+            let mut diffed_results = Vec::new();
+
+            for result in results {
+                let mut updated_result = result.clone();
+
+                let start = Instant::now();
+                if let Ok(resp) = self
+                    .client
+                    .get(&self.args.url)
+                    .header("User-Agent", &self.user_agent)
+                    .send()
+                    .await
+                {
+                    let status_code = resp.status().as_u16();
+                    let body = resp.bytes().await.unwrap_or_default();
+                    let headers = reqwest::header::HeaderMap::new();
+                    let timing_ms = start.elapsed().as_millis() as u64;
+
+                    let diff = differ.diff(status_code, &headers, &body, timing_ms);
+
+                    if diff.diff.status_changed {
+                        updated_result.is_anomaly = true;
+                        updated_result
+                            .leaks_found
+                            .push(format!("Status changed: {}", diff.diff.status_changed));
+                    }
+                    if diff.diff.body_length_diff.abs() > 100 {
+                        updated_result.is_anomaly = true;
+                        updated_result
+                            .leaks_found
+                            .push(format!("Body length diff: {}", diff.diff.body_length_diff));
+                    }
+                }
+
+                diffed_results.push(updated_result);
+            }
+
+            Ok(diffed_results)
+        } else {
+            Ok(results)
+        }
+    }
+
+    pub(crate) fn build_fuzz_url(&self, payload: &str) -> String {
+        let url = &self.args.url;
+        if let Some(param) = &self.args.param {
+            if url.contains('?') {
+                format!("{}&{}={}", url, param, urlencoding::encode(payload))
+            } else {
+                format!("{}?{}={}", url, param, urlencoding::encode(payload))
+            }
+        } else {
+            url.clone()
+        }
+    }
+
+    pub(crate) async fn update_session_from_results(&mut self, results: &[FuzzResult]) {
+        if let Some(ref mut _session) = self.http_session {
+            for result in results {
+                if result.status_code == 200 || result.status_code == 302 {}
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn send_payload_async(
+    client: Client,
+    base_url: &str,
+    method: &str,
+    param: Option<&str>,
+    payload: &Payload,
+    timing_analyzer: Arc<Mutex<TimingAnalyzer>>,
+    pattern_matcher: PatternMatcher,
+    user_agent: &str,
+) -> Result<FuzzResult> {
+    let url = build_url(base_url, param, &payload.payload)?;
+    let http_method = parse_method(method);
+
+    let start = Instant::now();
+
+    let response = client
+        .request(http_method, url.clone())
+        .header("User-Agent", user_agent)
+        .send()
+        .await;
+
+    let response_time = start.elapsed();
+    let mut timing: tokio::sync::MutexGuard<'_, TimingAnalyzer> = timing_analyzer.lock().await;
+    let timing_result = timing.record(response_time);
+
+    match response {
+        Ok(resp) => {
+            let status = resp.status().as_u16();
+            let content_length = resp.content_length();
+
+            let body = resp.text().await.unwrap_or_default();
+            let leaks = pattern_matcher.scan(&body);
+
+            let is_waf_blocked = status == 403 || status == 406 || status == 429;
+
+            let owasp_str = payload.payload_type.to_string();
+            let detected_severity = compute_severity(
+                &payload.severity,
+                is_waf_blocked,
+                timing_result.is_redos_suspected,
+                !leaks.is_empty(),
+            );
+
+            Ok(FuzzResult {
+                payload: payload.clone(),
+                status_code: status,
+                response_time_ms: timing_result.response_time_ms,
+                response_length: content_length,
+                is_waf_blocked,
+                is_anomaly: timing_result.is_anomaly,
+                is_redos_suspected: timing_result.is_redos_suspected,
+                leaks_found: leaks
+                    .iter()
+                    .map(|l| format!("{}: {}", l.category, l.pattern))
+                    .collect(),
+                error: None,
+                owasp_category: Some(owasp_str),
+                detected_severity,
+            })
+        }
+        Err(e) => {
+            let owasp_str = payload.payload_type.to_string();
+            Ok(FuzzResult {
+                payload: payload.clone(),
+                status_code: 0,
+                response_time_ms: timing_result.response_time_ms,
+                response_length: None,
+                is_waf_blocked: false,
+                is_anomaly: timing_result.is_anomaly,
+                is_redos_suspected: timing_result.is_redos_suspected,
+                leaks_found: Vec::new(),
+                error: Some(e.to_string()),
+                owasp_category: Some(owasp_str),
+                detected_severity: Severity::Info,
+            })
+        }
+    }
+}
+
+fn build_url(base_url: &str, param: Option<&str>, payload: &str) -> Result<url::Url> {
+    let mut url = url::Url::parse(base_url)?;
+
+    if let Some(p) = param {
+        {
+            let mut query_pairs = url.query_pairs_mut();
+            query_pairs.append_pair(p, payload);
+        }
+    } else {
+        let path = url.path();
+        let new_path = if path.ends_with('/') {
+            format!("{}{}", path, urlencoding::encode(payload))
+        } else {
+            format!("{}/{}", path, urlencoding::encode(payload))
+        };
+        url.set_path(&new_path);
+    }
+
+    Ok(url)
+}
+
+fn parse_method(method: &str) -> Method {
+    match method.to_uppercase().as_str() {
+        "GET" => Method::GET,
+        "POST" => Method::POST,
+        "PUT" => Method::PUT,
+        "DELETE" => Method::DELETE,
+        "PATCH" => Method::PATCH,
+        "HEAD" => Method::HEAD,
+        "OPTIONS" => Method::OPTIONS,
+        _ => Method::GET,
+    }
+}
+
+fn compute_severity(
+    base_severity: &Severity,
+    is_waf_blocked: bool,
+    is_redos: bool,
+    has_leak: bool,
+) -> Severity {
+    if is_redos || (is_waf_blocked && has_leak) {
+        Severity::Critical
+    } else if has_leak {
+        Severity::High
+    } else if is_waf_blocked {
+        Severity::Medium
+    } else {
+        *base_severity
+    }
+}
