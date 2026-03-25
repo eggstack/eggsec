@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed broken import paths in test files (`recon_tests.rs`)
+- Added missing feature flag guards for NSE integration tests
+- Removed unused imports in stress module exports
+- Fixed invalid `SynFlooder` import reference in TUI workers
+- Added LICENSE files (MIT and Apache-2.0)
+- Added `#![allow(dead_code)]` to stress metrics module
+
 ### Added
 
 #### Configuration System

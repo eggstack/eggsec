@@ -2,6 +2,10 @@
 /target
 debug/
 release/
+
+# Pre-built binaries
+slapper
+slapper.exe
 *.o
 *.a
 *.so

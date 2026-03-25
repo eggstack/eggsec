@@ -1,0 +1,22 @@
+[package]
+name = "slapper-ruby"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ruby/Metasploit integration for Slapper"
+
+[dependencies]
+magnus = { version = "0.7", features = ["embed"], optional = true }
+reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2"], default-features = false }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time"] }
+base64 = "0.22"
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+directories = "5"
+
+[features]
+default = []
+ruby-plugins = ["dep:magnus"]

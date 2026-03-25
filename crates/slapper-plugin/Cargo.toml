@@ -1,0 +1,19 @@
+[package]
+name = "slapper-plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Python plugin support for Slapper security testing toolkit"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+dirs = { version = "5", optional = true }
+pyo3 = { version = "0.24", features = ["auto-initialize"], optional = true }
+magnus = { version = "0.7", features = ["embed"], optional = true }
+
+[features]
+default = []
+python-plugins = ["dep:pyo3", "dep:dirs"]
+ruby-plugins = ["dep:magnus"]

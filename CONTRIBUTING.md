@@ -92,6 +92,71 @@ cargo install cargo-audit
 cargo audit
 ```
 
+### Feature Flags
+
+Slapper uses Cargo feature flags to enable optional capabilities. This allows building with only the features you need.
+
+#### Available Features
+
+| Feature | Description | Dependencies |
+|---------|-------------|--------------|
+| `tool-api` | Base abstraction layer | None |
+| `rest-api` | REST API server with MCP | axum, tower, async-stream |
+| `grpc-api` | gRPC API server | tonic, prost |
+| `python-plugins` | Python plugin support | pyo3 via slapper-plugin |
+| `ruby-plugins` | Ruby/Metasploit integration | magnus via slapper-ruby |
+| `stress-testing` | Network stress testing | pnet, socket2, nix, surge-ping |
+| `packet-inspection` | Live packet capture | pnet, libc |
+| `nse` | Nmap Scripting Engine | mlua, openssl, ssh2 |
+| `full` | All features combined | All of the above |
+
+#### Feature Propagation
+
+Features are propagated between workspace crates:
+
+```
+slapper (parent)
+├── python-plugins → slapper-plugin/python-plugins
+├── ruby-plugins → slapper-ruby/ruby-plugins
+├── nse → slapper-nse/nse
+└── stress-testing → slapper-nse?/stress-testing (if nse enabled)
+```
+
+The `?` syntax means "if the dependency is enabled, also enable this feature on it".
+
+#### Testing Feature Combinations
+
+```bash
+# Test default build
+cargo build -p slapper
+
+# Test specific feature
+cargo build -p slapper --features stress-testing
+
+# Test all features
+cargo build -p slapper --features full
+
+# CI tests all feature combinations via matrix strategy
+```
+
+#### Adding a New Feature
+
+1. Add the feature to `crates/slapper/Cargo.toml`:
+   ```toml
+   [features]
+   my-feature = ["dep:my-dependency"]
+   ```
+
+2. Gate code with `#[cfg(feature = "my-feature")]`:
+   ```rust
+   #[cfg(feature = "my-feature")]
+   mod my_module;
+   ```
+
+3. Add to CI matrix in `.github/workflows/test.yml`
+
+4. Update the `full` feature if it should be included
+
 ## Making Changes
 
 ### Branch Naming

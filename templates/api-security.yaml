@@ -1,0 +1,82 @@
+# Slapper API Security Testing Template
+# Specialized template for REST API security testing
+# Usage: slapper fuzz --template templates/api-security.yaml
+
+name: "API Security Assessment"
+description: "Test REST APIs for common security issues"
+
+target:
+  type: "rest_api"
+  url: ""
+  method: "GET"
+  
+options:
+  concurrency: 50
+  timeout: 10000
+  follow_redirects: false
+  
+  # Auth methods to test
+  auth:
+    # Bearer token
+    bearer: null
+    # Basic auth
+    basic: null
+    # API key (header or query param)
+    api_key: null
+    # JWT tokens
+    jwt: null
+    
+  # Headers to include
+  headers:
+    "Content-Type": "application/json"
+    "Accept": "application/json"
+
+testing:
+  # Test for SQL injection in parameters
+  sql_injection:
+    enabled: true
+    locations: ["query", "body", "header"]
+    
+  # Test for XSS in JSON parameters  
+  xss:
+    enabled: true
+    locations: ["body"]
+    
+  # Test for IDOR (Insecure Direct Object Reference)
+  idor:
+    enabled: true
+    base_ids: [1, 2, 3, 100, 1000]
+    
+  # Test for JWT vulnerabilities
+  jwt:
+    enabled: true
+    test_algorithms: ["none", "HS256"]
+    test_weak_secret: true
+    
+  # Test for missing rate limiting
+  rate_limiting:
+    enabled: true
+    requests: 100
+    
+  # Test for broken authentication
+  auth_bypass:
+    enabled: true
+    
+  # Test for GraphQL-specific issues
+  graphql:
+    enabled: true
+    introspection: true
+    alias_overload: true
+    batch_queries: true
+    
+  # Test for SSRF in URL parameters
+  ssrf:
+    enabled: true
+    
+  # Test for command injection
+  command_injection:
+    enabled: false
+    
+reporting:
+  format: "json"
+  output: "./api-security-results.json"

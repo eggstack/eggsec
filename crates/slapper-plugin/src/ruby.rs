@@ -1,0 +1,203 @@
+#[cfg(feature = "ruby-plugins")]
+use magnus::{
+    class::Class, define_module, eval, module::Module, prelude::*, value::ReprValue, Error, Ruby,
+};
+
+use crate::{PluginFinding, PluginInfo, PluginLanguage, PluginResult};
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+#[cfg(feature = "ruby-plugins")]
+pub struct RubyPluginManager {
+    loaded_modules: HashMap<String, RubyPlugin>,
+}
+
+#[cfg(feature = "ruby-plugins")]
+struct RubyPlugin {
+    name: String,
+    path: PathBuf,
+}
+
+#[cfg(feature = "ruby-plugins")]
+impl RubyPluginManager {
+    pub fn new() -> Self {
+        Self {
+            loaded_modules: HashMap::new(),
+        }
+    }
+
+    pub fn load_plugins(&mut self, dir: &PathBuf) -> Result<(), String> {
+        if !dir.exists() {
+            return Err(format!("Plugin directory does not exist: {:?}", dir));
+        }
+
+        let entries =
+            std::fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {}", e))?;
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "rb").unwrap_or(false) {
+                if let Err(e) = self.load_plugin(&path) {
+                    tracing::warn!("Failed to load Ruby plugin {:?}: {}", path, e);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn load_plugin(&mut self, path: &PathBuf) -> Result<(), String> {
+        let ruby = Ruby::get().unwrap();
+
+        let content =
+            std::fs::read_to_string(path).map_err(|e| format!("Failed to read plugin: {}", e))?;
+
+        let plugin_name = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .ok_or_else(|| "Invalid plugin filename".to_string())?;
+
+        ruby.eval::<()>(&content)
+            .map_err(|e| format!("Failed to execute plugin: {}", e))?;
+
+        self.loaded_modules.insert(
+            plugin_name.clone(),
+            RubyPlugin {
+                name: plugin_name,
+                path: path.clone(),
+            },
+        );
+
+        Ok(())
+    }
+
+    pub fn get_checks(&self) -> Vec<String> {
+        let ruby = Ruby::get().unwrap();
+        let mut checks = Vec::new();
+
+        if let Ok(register_fn) = ruby
+            .eval::<magnus::Value>("respond_to?(:register_checks) && register_checks rescue nil")
+        {
+            if !register_fn.is_nil() {
+                if let Ok(result) = ruby.eval::<Vec<String>>("register_checks") {
+                    checks = result;
+                }
+            }
+        }
+
+        checks
+    }
+
+    pub fn run_check(&self, check_name: &str, target: &str) -> Result<Vec<PluginFinding>, String> {
+        let ruby = Ruby::get().unwrap();
+
+        let code = format!(
+            "if respond_to?(:run_check)\n  run_check('{}', '{}')\nelse\n  nil\nend",
+            check_name, target
+        );
+
+        let result: Result<magnus::Value, Error> = ruby.eval(&code);
+
+        match result {
+            Ok(value) => {
+                if value.is_nil() {
+                    return Ok(vec![]);
+                }
+
+                let mut findings = Vec::new();
+
+                if let Ok(array) = value.funcall("to_a", ()) {
+                    for item in array.into_iter() {
+                        if let Ok(hash) = item.funcall("to_h", ()) {
+                            let title = hash
+                                .funcall("get", ("title",))
+                                .and_then(|v| v.to_s().ok())
+                                .unwrap_or_default()
+                                .to_string();
+
+                            let description = hash
+                                .funcall("get", ("description",))
+                                .and_then(|v| v.to_s().ok())
+                                .unwrap_or_default()
+                                .to_string();
+
+                            let severity = hash
+                                .funcall("get", ("severity",))
+                                .and_then(|v| v.to_s().ok())
+                                .unwrap_or_default()
+                                .to_string();
+
+                            let location = hash
+                                .funcall("get", ("location",))
+                                .and_then(|v| v.to_s().ok())
+                                .unwrap_or_default()
+                                .to_string();
+
+                            findings.push(PluginFinding {
+                                title,
+                                description,
+                                severity,
+                                location,
+                                evidence: None,
+                                cve_ids: vec![],
+                            });
+                        }
+                    }
+                }
+
+                Ok(findings)
+            }
+            Err(e) => Err(format!("Failed to run check: {}", e)),
+        }
+    }
+
+    pub fn list_loaded(&self) -> Vec<&str> {
+        self.loaded_modules.keys().map(|s| s.as_str()).collect()
+    }
+
+    pub fn is_loaded(&self, name: &str) -> bool {
+        self.loaded_modules.contains_key(name)
+    }
+}
+
+#[cfg(feature = "ruby-plugins")]
+impl Default for RubyPluginManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub fn create_ruby_plugin_info(path: &PathBuf) -> Option<PluginInfo> {
+    let content = std::fs::read_to_string(path).ok()?;
+
+    let mut name = None;
+    let mut version = None;
+    let mut description = None;
+    let mut author = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            if let Some(value) = trimmed.strip_prefix("# ") {
+                if value.starts_with("Name:") {
+                    name = Some(value.trim_start_matches("Name:").trim().to_string());
+                } else if value.starts_with("Version:") {
+                    version = Some(value.trim_start_matches("Version:").trim().to_string());
+                } else if value.starts_with("Description:") {
+                    description = Some(value.trim_start_matches("Description:").trim().to_string());
+                } else if value.starts_with("Author:") {
+                    author = Some(value.trim_start_matches("Author:").trim().to_string());
+                }
+            }
+        }
+    }
+
+    Some(PluginInfo {
+        name: name.or_else(|| path.file_stem().map(|s| s.to_string_lossy().to_string()))?,
+        version: version.unwrap_or_else(|| "1.0.0".to_string()),
+        description: description.unwrap_or_default(),
+        author: author.unwrap_or_default(),
+        tags: vec![],
+        language: PluginLanguage::Ruby,
+    })
+}

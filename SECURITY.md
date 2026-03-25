@@ -123,6 +123,23 @@ chmod 600 scan-results.json
 ./slapper scan target.com --log-level warn
 ```
 
+## Known Dependency Vulnerabilities
+
+All known vulnerabilities have been fixed in the latest release.
+
+### Fixed Vulnerabilities
+- **idna (RUSTSEC-2024-0421)** - Fixed by migrating to hickory-resolver
+- **quinn-proto (RUSTSEC-2026-0037)** - Fixed by upgrading to reqwest 0.13 and quinn-proto 0.11.14
+- **native-tls (yanked)** - Fixed by upgrading to 0.2.18
+- **pyo3 (RUSTSEC-2025-0020)** - Fixed by upgrading to 0.24
+
+### Unmaintained Dependencies (Warnings)
+The following dependencies are unmaintained but still functional:
+- `fxhash` - Hash algorithm (consider: rustc-hash)
+- `number_prefix` - Number formatting (consider: humansize)
+- `paste` - String concatenation (consider: concat-string)
+- `lru` - LRU cache (will be fixed in ratatui update)
+
 ## Known Security Considerations
 
 ### Inherent Risks

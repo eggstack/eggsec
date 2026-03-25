@@ -1,0 +1,33 @@
+# Slapper WAF Testing Template
+# Tests for WAF detection and bypass techniques
+# Usage: slapper waf --template templates/waf-test.yaml
+
+name: "WAF Assessment"
+description: "Detect and bypass Web Application Firewalls"
+
+options:
+  concurrency: 20
+  timeout: 30000
+  verify_tls: false
+
+stages:
+  - type: waf_detect
+    options:
+      detect_only: false
+      
+  - type: waf_bypass
+    options:
+      # Payload categories to test
+      payloads:
+        - sqli
+        - xss
+        - traversal
+        - injection
+      # Number of bypass attempts per payload
+      max_attempts: 10
+      # Rotate techniques
+      techniques:
+        - encoding
+        - padding
+        - case_variation
+        - null_byte

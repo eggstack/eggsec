@@ -17,20 +17,32 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests
+# Copy workspace manifests
 COPY Cargo.toml Cargo.lock ./
+COPY crates/slapper/Cargo.toml crates/slapper/
+COPY crates/slapper-plugin/Cargo.toml crates/slapper-plugin/
+COPY crates/slapper-nse/Cargo.toml crates/slapper-nse/
+COPY crates/slapper-ruby/Cargo.toml crates/slapper-ruby/
 
-# Create dummy main to cache dependencies
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release --features full && \
-    rm -rf src
+# Create dummy sources to cache dependencies
+RUN mkdir -p crates/slapper/src crates/slapper-plugin/src crates/slapper-nse/src crates/slapper-ruby/src && \
+    echo "fn main() {}" > crates/slapper/src/main.rs && \
+    echo "" > crates/slapper/src/lib.rs && \
+    echo "" > crates/slapper-plugin/src/lib.rs && \
+    echo "" > crates/slapper-nse/src/lib.rs && \
+    echo "" > crates/slapper-ruby/src/lib.rs && \
+    cargo build -p slapper --release --features full && \
+    rm -rf crates/*/src
 
 # Copy source code
-COPY src ./src
+COPY crates/slapper/src crates/slapper/src
+COPY crates/slapper-plugin/src crates/slapper-plugin/src
+COPY crates/slapper-nse/src crates/slapper-nse/src
+COPY crates/slapper-ruby/src crates/slapper-ruby/src
+COPY crates/slapper/build.rs crates/slapper/
 
 # Build the application with all features
-RUN cargo build --release --features full
+RUN cargo build -p slapper --release --features full
 
 # Runtime stage
 FROM debian:bookworm-slim
