@@ -2,6 +2,7 @@ use anyhow::Result;
 use reqwest::Client;
 
 use super::{BypassResult, BypassTechnique, TestType, WafProfile};
+use crate::constants::waf::BLOCKED_STATUS_CODES;
 use crate::waf::detector::WafDetectionResult;
 use crate::waf::payloads::encoding::{
     get_command_injection_payloads, get_sqli_payloads, get_ssrf_payloads, get_traversal_payloads,
@@ -262,8 +263,7 @@ impl EvasionBypass {
     }
 
     fn is_bypass_successful(&self, status: u16, _detection: &WafDetectionResult) -> bool {
-        let blocked_codes = [403, 406, 429, 503];
-        !blocked_codes.contains(&status) && status < 400
+        !BLOCKED_STATUS_CODES.contains(&status) && status >= 200 && status < 300
     }
 }
 

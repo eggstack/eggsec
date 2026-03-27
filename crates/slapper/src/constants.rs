@@ -18,17 +18,9 @@ pub const DEFAULT_WORDLIST: &str = "wordlists/directories.txt";
 
 pub const SUPPORTED_WAF_COUNT: usize = 30;
 
-pub mod severity {
-    pub const CRITICAL: &str = "critical";
-    pub const HIGH: &str = "high";
-    pub const MEDIUM: &str = "medium";
-    pub const LOW: &str = "low";
-    pub const INFO: &str = "info";
-}
-
 pub mod http {
     pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
-    pub const DEFAULT_MAX_REDIRECTS: u32 = 5;
+    pub const DEFAULT_MAX_REDIRECTS: u32 = 10;
     pub const DEFAULT_CONCURRENCY: usize = 10;
 }
 

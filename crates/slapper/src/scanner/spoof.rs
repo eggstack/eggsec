@@ -320,8 +320,8 @@ pub fn build_tcp_packet(
     scan_type: ScanType,
     ttl: Option<u8>,
 ) -> Result<Vec<u8>> {
-    use pnet_packet::ipv4::MutableIpv4Packet;
-    use pnet_packet::tcp::MutableTcpPacket;
+    use pnet_packet::ipv4::{checksum as ipv4_checksum, MutableIpv4Packet};
+    use pnet_packet::tcp::{ipv4_checksum as tcp_ipv4_checksum, MutableTcpPacket};
 
     let mut buffer = vec![0u8; 20 + 20];
 
@@ -337,6 +337,9 @@ pub fn build_tcp_packet(
     ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Tcp);
     ipv4_packet.set_source(src_ip);
     ipv4_packet.set_destination(dst_ip);
+    // Compute IPv4 header checksum
+    let ipv4_checksum = ipv4_checksum(&ipv4_packet.to_immutable());
+    ipv4_packet.set_checksum(ipv4_checksum);
 
     let mut tcp_packet = MutableTcpPacket::new(&mut buffer[20..])
         .ok_or_else(|| anyhow!("Failed to create TCP packet"))?;
@@ -355,7 +358,9 @@ pub fn build_tcp_packet(
     };
     tcp_packet.set_flags(flags);
     tcp_packet.set_window(65535);
-    tcp_packet.set_checksum(0);
+    // Compute TCP checksum using IPv4 pseudo-header
+    let tcp_checksum = tcp_ipv4_checksum(&tcp_packet.to_immutable(), &src_ip, &dst_ip);
+    tcp_packet.set_checksum(tcp_checksum);
 
     Ok(buffer)
 }
@@ -382,9 +387,10 @@ pub fn build_fragmented_packets(
     scan_type: ScanType,
     ttl: Option<u8>,
 ) -> Result<Vec<Vec<u8>>> {
-    use pnet_packet::ipv4::MutableIpv4Packet;
-    use pnet_packet::tcp::MutableTcpPacket;
+    use pnet_packet::ipv4::{checksum as ipv4_checksum, MutableIpv4Packet};
+    use pnet_packet::tcp::{ipv4_checksum as tcp_ipv4_checksum, MutableTcpPacket};
 
+    // Build TCP header with checksum zero, then compute checksum over whole header
     let tcp_data = {
         let mut buffer = vec![0u8; 20];
         let mut tcp_packet = MutableTcpPacket::new(&mut buffer[..])
@@ -404,14 +410,18 @@ pub fn build_fragmented_packets(
         };
         tcp_packet.set_flags(flags);
         tcp_packet.set_window(65535);
-        tcp_packet.set_checksum(0);
-
+        // Compute TCP checksum using IPv4 pseudo-header
+        let tcp_checksum = tcp_ipv4_checksum(&tcp_packet.to_immutable(), &src_ip, &dst_ip);
+        tcp_packet.set_checksum(tcp_checksum);
+        // Now buffer contains the TCP header with correct checksum
         buffer
     };
 
     let mut packets = Vec::new();
     let fragment_size = 8;
     let ttl_val = ttl.unwrap_or(64);
+    // Calculate total number of fragments
+    let total_chunks = tcp_data.chunks(fragment_size).count();
 
     for (i, chunk) in tcp_data.chunks(fragment_size).enumerate() {
         let mut buffer = vec![0u8; 20 + fragment_size];
@@ -425,16 +435,20 @@ pub fn build_fragmented_packets(
         ipv4_packet.set_ttl(ttl_val);
         ipv4_packet.set_identification(rand::thread_rng().r#gen());
 
-        if i == 0 {
+        // Set MoreFragments flag for all but the last fragment
+        if i < total_chunks - 1 {
             ipv4_packet.set_flags(pnet::packet::ipv4::Ipv4Flags::MoreFragments);
         } else {
-            ipv4_packet.set_flags(pnet::packet::ipv4::Ipv4Flags::MoreFragments);
+            ipv4_packet.set_flags(0);
         }
 
         ipv4_packet.set_fragment_offset(i as u16);
         ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Tcp);
         ipv4_packet.set_source(src_ip);
         ipv4_packet.set_destination(dst_ip);
+        // Compute IPv4 header checksum
+        let ipv4_checksum = ipv4_checksum(&ipv4_packet.to_immutable());
+        ipv4_packet.set_checksum(ipv4_checksum);
 
         buffer[20..20 + chunk.len()].copy_from_slice(chunk);
         packets.push(buffer);

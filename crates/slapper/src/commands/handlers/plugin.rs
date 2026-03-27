@@ -4,9 +4,12 @@ use anyhow::Result;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 use crate::commands::handlers::CommandContext;
 
+
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub async fn handle_plugin(ctx: &CommandContext, args: crate::cli::PluginArgs) -> Result<()> {
     use crate::cli::PluginCommand;
+
+    let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(None);
 
     match &args.command {
         PluginCommand::List(list_args) => {
@@ -32,7 +35,7 @@ pub async fn handle_plugin(ctx: &CommandContext, args: crate::cli::PluginArgs) -
 
             #[cfg(feature = "ruby-plugins")]
             {
-                if let Ok(mut loader) = crate::ruby::PluginLoader::new() {
+                if let Ok(mut loader) = crate::ruby::PluginLoader::new(plugin_dirs.clone()) {
                     if let Ok(discovered) = loader.discover_plugins() {
                         for plugin in &discovered {
                             found_any = true;
@@ -63,34 +66,26 @@ pub async fn handle_plugin(ctx: &CommandContext, args: crate::cli::PluginArgs) -
             // Try Python plugins first
             #[cfg(feature = "python-plugins")]
             {
-                let mut manager = crate::plugin::PluginManager::new();
-                manager.discover_plugins();
-                let python_plugins = manager.list_plugins();
-                if python_plugins.iter().any(|p| p.name == run_args.name) {
-                    println!("Running Python plugin '{}' against target '{}'", run_args.name, run_args.target);
-
-                    let mut python_mgr = crate::plugin::PythonPluginManager::new();
-                    for dir in manager.plugin_dirs() {
-                        if dir.exists() {
-                            if let Err(e) = python_mgr.load_plugins(dir) {
-                                tracing::warn!("Failed to load plugins from {:?}: {}", dir, e);
-                            }
+                let mut python_mgr = crate::plugin::PythonPluginManager::new();
+                let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(None);
+                for dir in &plugin_dirs {
+                    if dir.exists() {
+                        if let Err(e) = python_mgr.load_plugins(dir) {
+                            tracing::warn!("Failed to load plugins from {:?}: {}", dir, e);
                         }
                     }
+                }
 
-                    let results = python_mgr.run_check(&run_args.name, &run_args.target)?;
-
-                    if results.is_empty() {
-                        println!("No findings from plugin.");
-                    } else {
-                        println!("\nPlugin Results:");
-                        for finding in &results {
-                            println!("  - {:?}", finding);
-                        }
-                        if let Some(output_file) = &run_args.output {
-                            tokio::fs::write(output_file, serde_json::to_string_pretty(&results)?).await?;
-                            println!("\nResults written to: {}", output_file);
-                        }
+                let results = python_mgr.run_check(&run_args.name, &run_args.target)?;
+                if !results.is_empty() {
+                    println!("Running Python plugin '{}' against target '{}'", run_args.name, run_args.target);
+                    println!("\nPlugin Results:");
+                    for finding in &results {
+                        println!("  - {:?}", finding);
+                    }
+                    if let Some(output_file) = &run_args.output {
+                        tokio::fs::write(output_file, serde_json::to_string_pretty(&results)?).await?;
+                        println!("\nResults written to: {}", output_file);
                     }
                     return Ok(());
                 }
@@ -99,7 +94,7 @@ pub async fn handle_plugin(ctx: &CommandContext, args: crate::cli::PluginArgs) -
             // Try Ruby plugins
             #[cfg(feature = "ruby-plugins")]
             {
-                if let Ok(mut loader) = crate::ruby::PluginLoader::new() {
+                if let Ok(mut loader) = crate::ruby::PluginLoader::new(plugin_dirs) {
                     let _ = loader.discover_plugins();
                     if loader.list_plugins().iter().any(|p| p.name == run_args.name) {
                         println!("Running Ruby plugin '{}' against target '{}'", run_args.name, run_args.target);

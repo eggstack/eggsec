@@ -17,9 +17,16 @@ pub struct WafDetectionResult {
     pub status_code: u16,
 }
 
+struct WafSignatureLower {
+    headers: Vec<String>,
+    cookies: Vec<String>,
+    body_patterns: Vec<String>,
+}
+
 pub struct WafDetector {
     client: reqwest::Client,
     signatures: std::collections::HashMap<String, crate::waf::waf_patterns::WafSignature>,
+    signatures_lower: std::collections::HashMap<String, WafSignatureLower>,
 }
 
 impl WafDetector {
@@ -31,9 +38,25 @@ impl WafDetector {
                 .user_agent(ua)
         })?;
 
+        let signatures = get_waf_signatures();
+        let signatures_lower = signatures
+            .iter()
+            .map(|(key, sig)| {
+                (
+                    key.clone(),
+                    WafSignatureLower {
+                        headers: sig.headers.iter().map(|h| h.to_lowercase()).collect(),
+                        cookies: sig.cookies.iter().map(|c| c.to_lowercase()).collect(),
+                        body_patterns: sig.body_patterns.iter().map(|p| p.to_lowercase()).collect(),
+                    },
+                )
+            })
+            .collect();
+
         Ok(Self {
             client,
-            signatures: get_waf_signatures(),
+            signatures,
+            signatures_lower,
         })
     }
 
@@ -70,20 +93,20 @@ impl WafDetector {
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 
-        for signature in self.signatures.values() {
+        for (sig_key, signature) in self.signatures.iter() {
+            let sig_lower = &self.signatures_lower[sig_key];
             let mut score = 0u8;
             let mut sig_matched_headers = Vec::new();
             let mut sig_matched_cookies = Vec::new();
             let mut sig_matched_patterns = Vec::new();
 
-            for header_pattern in &signature.headers {
-                let header_pattern_lower = header_pattern.to_lowercase();
+            for header_pattern_lower in &sig_lower.headers {
                 for (header_name, header_value) in headers.iter() {
                     let name_lower = header_name.as_str().to_lowercase();
                     let value_lower = header_value.to_str().unwrap_or("").to_lowercase();
 
-                    if name_lower.contains(&header_pattern_lower)
-                        || value_lower.contains(&header_pattern_lower)
+                    if name_lower.contains(header_pattern_lower.as_str())
+                        || value_lower.contains(header_pattern_lower.as_str())
                     {
                         score += waf::HEADER_MATCH_SCORE;
                         sig_matched_headers.push(format!(
@@ -95,23 +118,22 @@ impl WafDetector {
                 }
             }
 
-            for cookie_pattern in &signature.cookies {
+            for cookie_pattern_lower in &sig_lower.cookies {
                 if let Some(cookie_header) = headers.get("set-cookie") {
                     if let Ok(cookie_str) = cookie_header.to_str() {
                         let cookie_lower = cookie_str.to_lowercase();
-                        if cookie_lower.contains(&cookie_pattern.to_lowercase()) {
+                        if cookie_lower.contains(cookie_pattern_lower.as_str()) {
                             score += waf::COOKIE_MATCH_SCORE;
-                            sig_matched_cookies.push(cookie_pattern.clone());
+                            sig_matched_cookies.push(signature.cookies[sig_lower.cookies.iter().position(|c| c == cookie_pattern_lower).unwrap_or(0)].clone());
                         }
                     }
                 }
             }
 
-            for body_pattern in &signature.body_patterns {
-                let pattern_lower = body_pattern.to_lowercase();
-                if body_lower.contains(&pattern_lower) {
+            for (i, body_pattern_lower) in sig_lower.body_patterns.iter().enumerate() {
+                if body_lower.contains(body_pattern_lower.as_str()) {
                     score += waf::BODY_MATCH_SCORE;
-                    sig_matched_patterns.push(body_pattern.clone());
+                    sig_matched_patterns.push(signature.body_patterns[i].clone());
                 }
             }
 
@@ -178,7 +200,13 @@ impl WafDetector {
     pub async fn check_waf_block(&self, url: &str, test_payload: &str) -> Result<bool> {
         let test_url = format!("{}?test={}", url, urlencoding::encode(test_payload));
 
-        let response = self.client.get(&test_url).send().await?;
+        let response = match self.client.get(&test_url).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!("WAF block check request failed for {}: {}", url, e);
+                return Ok(false);
+            }
+        };
 
         let status = response.status().as_u16();
         let body = response.text().await.unwrap_or_default().to_lowercase();
@@ -304,12 +332,17 @@ impl ResponseDiff {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_normalize_url_with_https() {
-        let detector = WafDetector {
+    fn test_detector() -> WafDetector {
+        WafDetector {
             client: reqwest::Client::new(),
             signatures: std::collections::HashMap::new(),
-        };
+            signatures_lower: std::collections::HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn test_normalize_url_with_https() {
+        let detector = test_detector();
         assert_eq!(
             detector.normalize_url("https://example.com"),
             "https://example.com"
@@ -318,10 +351,7 @@ mod tests {
 
     #[test]
     fn test_normalize_url_with_http() {
-        let detector = WafDetector {
-            client: reqwest::Client::new(),
-            signatures: std::collections::HashMap::new(),
-        };
+        let detector = test_detector();
         assert_eq!(
             detector.normalize_url("http://example.com"),
             "http://example.com"
@@ -330,10 +360,7 @@ mod tests {
 
     #[test]
     fn test_normalize_url_without_scheme() {
-        let detector = WafDetector {
-            client: reqwest::Client::new(),
-            signatures: std::collections::HashMap::new(),
-        };
+        let detector = test_detector();
         assert_eq!(
             detector.normalize_url("example.com"),
             "https://example.com"
@@ -342,10 +369,7 @@ mod tests {
 
     #[test]
     fn test_normalize_url_trims_whitespace() {
-        let detector = WafDetector {
-            client: reqwest::Client::new(),
-            signatures: std::collections::HashMap::new(),
-        };
+        let detector = test_detector();
         assert_eq!(
             detector.normalize_url("  example.com  "),
             "https://example.com"

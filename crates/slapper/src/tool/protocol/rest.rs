@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+use subtle::ConstantTimeEq;
 
 use crate::error::SlapperError;
 use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse};
@@ -178,7 +179,7 @@ fn require_auth(state: &Arc<RestState>, headers: &HeaderMap) -> Result<(), Slapp
             .and_then(|v| v.to_str().ok());
 
         match auth {
-            Some(v) if v == key => Ok(()),
+            Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
             _ => Err(SlapperError::Config(
                 "Invalid or missing API key".to_string(),
             )),

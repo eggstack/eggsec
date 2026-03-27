@@ -34,17 +34,16 @@ pub struct ProxyManager {
 }
 
 impl ProxyManager {
-    pub fn new(config: ProxyConfig) -> Self {
+    pub fn new(config: ProxyConfig) -> Result<Self> {
         let pool = ProxyPool::new(config.clone());
         let rotator = ProxyRotator::new(config.rotation_strategy);
-        let health_checker = HealthChecker::new(HealthCheckConfig::from(&config))
-            .expect("Failed to create health checker HTTP client");
+        let health_checker = HealthChecker::new(HealthCheckConfig::from(&config))?;
 
-        Self {
+        Ok(Self {
             pool: Arc::new(RwLock::new(pool)),
             rotator,
             health_checker,
-        }
+        })
     }
 
     pub async fn add_proxy(&self, proxy: ProxyEntry) -> Result<()> {

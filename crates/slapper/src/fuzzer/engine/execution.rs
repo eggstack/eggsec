@@ -159,64 +159,13 @@ impl FuzzEngine {
     }
 
     pub(crate) async fn run_burst_with_session(&mut self, payloads: Vec<Payload>) -> Result<Vec<FuzzResult>> {
-        let mut futures_vec = Vec::new();
-        for _p in payloads {
-            let client = self.client.clone();
-            let url = self.args.url.clone();
-            let user_agent = self.user_agent.clone();
-            futures_vec.push(async move {
-                let start = Instant::now();
-                let response = client
-                    .get(&url)
-                    .header("User-Agent", &user_agent)
-                    .send()
-                    .await;
-                (start.elapsed(), response)
-            });
+        let mut futures = Vec::new();
+        for payload in &payloads {
+            futures.push(self.send_fuzz_request(payload, Method::GET));
         }
 
-        let responses = join_all(futures_vec).await;
-
-        let results: Vec<FuzzResult> = responses
-            .into_iter()
-            .map(|(elapsed, response)| {
-                let dummy_payload = Payload {
-                    payload_type: super::super::payloads::PayloadType::Xss,
-                    payload: "burst".to_string(),
-                    description: "Burst mode request".to_string(),
-                    severity: Severity::Info,
-                    tags: vec![],
-                };
-                match response {
-                    Ok(resp) => FuzzResult {
-                        payload: dummy_payload,
-                        status_code: resp.status().as_u16(),
-                        response_time_ms: elapsed.as_millis() as u64,
-                        response_length: resp.content_length(),
-                        is_waf_blocked: false,
-                        is_anomaly: false,
-                        is_redos_suspected: false,
-                        leaks_found: vec![],
-                        error: None,
-                        owasp_category: None,
-                        detected_severity: Severity::Info,
-                    },
-                    Err(_) => FuzzResult {
-                        payload: dummy_payload,
-                        status_code: 0,
-                        response_time_ms: elapsed.as_millis() as u64,
-                        response_length: None,
-                        is_waf_blocked: false,
-                        is_anomaly: false,
-                        is_redos_suspected: false,
-                        leaks_found: vec![],
-                        error: Some("Request failed".to_string()),
-                        owasp_category: None,
-                        detected_severity: Severity::Info,
-                    },
-                }
-            })
-            .collect();
+        let results: Vec<Result<FuzzResult>> = join_all(futures).await;
+        let results: Vec<FuzzResult> = results.into_iter().collect::<Result<Vec<_>>>()?;
 
         if self.args.session {
             self.update_session_from_results(&results).await;

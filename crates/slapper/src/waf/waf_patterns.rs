@@ -1,3 +1,4 @@
+use crate::constants::waf::BLOCKED_STATUS_CODES;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -515,7 +516,7 @@ pub fn get_waf_signatures() -> HashMap<String, WafSignature> {
 }
 
 pub fn get_blocked_status_codes() -> Vec<u16> {
-    vec![403, 406, 429, 503]
+    BLOCKED_STATUS_CODES.to_vec()
 }
 
 pub fn get_common_waf_response_patterns() -> Vec<&'static str> {

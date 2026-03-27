@@ -5,6 +5,7 @@ use anyhow::Result;
 use reqwest::Client;
 
 use super::{BypassResult, BypassTechnique, WafProfile};
+use crate::constants::waf::BLOCKED_STATUS_CODES;
 use crate::waf::detector::WafDetectionResult;
 
 pub struct SmugglingBypass {
@@ -282,8 +283,7 @@ impl SmugglingBypass {
     }
 
     fn is_bypass_successful(&self, status: u16, _detection: &WafDetectionResult) -> bool {
-        let blocked_codes = [403, 406, 429, 503];
-        !blocked_codes.contains(&status) && status < 500
+        !BLOCKED_STATUS_CODES.contains(&status) && status < 500
     }
 }
 

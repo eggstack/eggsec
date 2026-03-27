@@ -213,6 +213,52 @@ pub struct WafStressArgs {
     pub common: CommonHttpArgs,
 }
 
+impl From<WafStressArgs> for FuzzArgs {
+    fn from(args: WafStressArgs) -> Self {
+        FuzzArgs {
+            url: args.url,
+            payload_type: "all".to_string(),
+            mode: FuzzMode::Sequential,
+            mutate: false,
+            mutation_count: 0,
+            grammar_fuzz: false,
+            grammar_type: None,
+            adaptive_rate: false,
+            session: false,
+            diffing: false,
+            capture_baseline: false,
+            enhanced_redos: false,
+            waf_fingerprint: false,
+            chaining: false,
+            chain_file: None,
+            method: "GET".to_string(),
+            param: None,
+            concurrency: args.concurrency,
+            timeout: args.timeout,
+            json: args.json,
+            output: None,
+            verbose: false,
+            format: None,
+            target: None,
+            jwt_token: None,
+            oauth_issuer: None,
+            oauth_client_id: None,
+            oauth_client_secret: None,
+            idor_base_id: None,
+            idor_user_ids: None,
+            ssti_param: None,
+            graphql_introspection: true,
+            graphql_depth_bypass: true,
+            graphql_alias_overload: true,
+            oauth_redirect: true,
+            oauth_scope: true,
+            oauth_state: true,
+            oauth_grant: true,
+            common: args.common,
+        }
+    }
+}
+
 #[derive(clap::Args, Clone)]
 pub struct WafArgs {
     #[arg(help = "Target URL")]

@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 
 use super::super::diff::ResponseDiffer;
 use super::super::grammar::{Grammar, GrammarFuzzer};
-use super::super::payloads::{get_all_payloads, get_payloads, PayloadType};
+use super::super::payloads::{get_all_payloads, get_payloads, Payload, PayloadType};
 use super::super::state::HttpSession;
 use super::super::targets::get_target_payloads;
 
@@ -14,7 +14,7 @@ use crate::cli::{FuzzArgs, FuzzMode, WafStressArgs};
 use crate::waf::types::Severity;
 
 use super::super::detection::{PatternMatcher, TimingAnalyzer};
-use super::types::FuzzSession;
+use super::types::{FuzzResult, FuzzSession};
 
 pub struct FuzzEngine {
     pub(crate) args: FuzzArgs,
@@ -110,48 +110,7 @@ impl FuzzEngine {
     }
 
     pub fn new_from_waf_args(args: WafStressArgs) -> Result<Self> {
-        let fuzz_args = FuzzArgs {
-            url: args.url.clone(),
-            payload_type: "all".to_string(),
-            mode: FuzzMode::Sequential,
-            mutate: false,
-            mutation_count: 0,
-            grammar_fuzz: false,
-            grammar_type: None,
-            adaptive_rate: false,
-            session: false,
-            diffing: false,
-            capture_baseline: false,
-            enhanced_redos: false,
-            waf_fingerprint: false,
-            chaining: false,
-            chain_file: None,
-            method: "GET".to_string(),
-            param: None,
-            concurrency: args.concurrency,
-            timeout: args.timeout,
-            json: args.json,
-            output: None,
-            verbose: false,
-            format: None,
-            target: None,
-            jwt_token: None,
-            oauth_issuer: None,
-            oauth_client_id: None,
-            oauth_client_secret: None,
-            idor_base_id: None,
-            idor_user_ids: None,
-            ssti_param: None,
-            graphql_introspection: true,
-            graphql_depth_bypass: true,
-            graphql_alias_overload: true,
-            oauth_redirect: true,
-            oauth_scope: true,
-            oauth_state: true,
-            oauth_grant: true,
-            common: args.common,
-        };
-        Self::new(fuzz_args)
+        Self::new(FuzzArgs::from(args))
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -186,6 +145,44 @@ impl FuzzEngine {
         Ok(())
     }
 
+    fn prepare_payloads(&mut self, pt: PayloadType) -> Result<Vec<Payload>> {
+        let mut payloads = if self.args.mutate {
+            self.mutate_payloads(get_payloads(pt))
+        } else {
+            get_payloads(pt)
+        };
+
+        if self.args.grammar_fuzz {
+            if let Some(ref mut grammar_fuzzer) = self.grammar_fuzzer {
+                let grammar_payloads =
+                    grammar_fuzzer.generate_batch(self.args.mutation_count.max(10));
+                payloads.extend(grammar_payloads.into_iter().map(|p| super::super::payloads::Payload {
+                    payload_type: PayloadType::Xss,
+                    payload: p,
+                    description: "Grammar-generated payload".to_string(),
+                    severity: Severity::Medium,
+                    tags: vec!["grammar".to_string()],
+                }));
+            }
+        }
+
+        Ok(payloads)
+    }
+
+    async fn run_payload_batch(&mut self, payloads: Vec<Payload>) -> Result<Vec<FuzzResult>> {
+        let results = match self.args.mode {
+            FuzzMode::Sequential => self.run_sequential_with_session(payloads).await?,
+            FuzzMode::Burst => self.run_burst_with_session(payloads).await?,
+            FuzzMode::Adaptive => self.run_adaptive_with_session(payloads).await?,
+        };
+
+        if self.args.diffing && self.differ.is_some() {
+            self.apply_diffing(results).await
+        } else {
+            Ok(results)
+        }
+    }
+
     pub async fn run_return_session(&mut self) -> Result<FuzzSession> {
         if self.args.capture_baseline && self.differ.is_some() {
             self.capture_baseline_for_diffing().await?;
@@ -210,41 +207,10 @@ impl FuzzEngine {
             let pt_str = format!("{:?}", pt).to_lowercase();
 
             if advanced_types.contains(&pt_str.as_str()) {
-                let advanced_results = self.run_advanced_fuzzer(&pt_str).await?;
-                all_results.extend(advanced_results);
+                all_results.extend(self.run_advanced_fuzzer(&pt_str).await?);
             } else {
-                let mut payloads = if self.args.mutate {
-                    self.mutate_payloads(get_payloads(pt))
-                } else {
-                    get_payloads(pt)
-                };
-
-                if self.args.grammar_fuzz {
-                    if let Some(ref mut grammar_fuzzer) = self.grammar_fuzzer {
-                        let grammar_payloads =
-                            grammar_fuzzer.generate_batch(self.args.mutation_count.max(10));
-                        payloads.extend(grammar_payloads.into_iter().map(|p| super::super::payloads::Payload {
-                            payload_type: PayloadType::Xss,
-                            payload: p,
-                            description: "Grammar-generated payload".to_string(),
-                            severity: Severity::Medium,
-                            tags: vec!["grammar".to_string()],
-                        }));
-                    }
-                }
-
-                let results = match self.args.mode {
-                    FuzzMode::Sequential => self.run_sequential_with_session(payloads).await?,
-                    FuzzMode::Burst => self.run_burst_with_session(payloads).await?,
-                    FuzzMode::Adaptive => self.run_adaptive_with_session(payloads).await?,
-                };
-
-                if self.args.diffing && self.differ.is_some() {
-                    let diffed_results = self.apply_diffing(results).await?;
-                    all_results.extend(diffed_results);
-                } else {
-                    all_results.extend(results);
-                }
+                let payloads = self.prepare_payloads(pt)?;
+                all_results.extend(self.run_payload_batch(payloads).await?);
             }
         }
 

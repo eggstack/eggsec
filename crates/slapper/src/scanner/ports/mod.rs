@@ -226,9 +226,11 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
         s.push_str(&format!("  <host>{}</host>\n", results.host));
         s.push_str("  <ports>\n");
         for port in &results.open_ports {
-            s.push_str(&format!("    <port>{}</port>\n", port.port));
-            s.push_str("      <state>open</state>\n");
-            s.push_str(&format!("      <service>{}</service>\n", port.service));
+            s.push_str(&format!(
+                r#"    <port protocol="tcp" portid="{}"><state state="open"/><service name="{}"/></port>"#,
+                port.port, port.service
+            ));
+            s.push('\n');
         }
         s.push_str("  </ports>\n");
         s.push_str("</nmaprun>\n");

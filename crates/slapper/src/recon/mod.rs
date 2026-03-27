@@ -302,15 +302,26 @@ pub async fn run_full_recon(
         async {
             if !args.no_dns {
                 if let Some(ref ip) = ip_for_rdns {
-                    reverse_dns::reverse_dns_lookup(ip).await.ok()
+                    match reverse_dns::reverse_dns_lookup(ip).await {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            tracing::warn!("reverse DNS lookup failed: {}", e);
+                            None
+                        }
+                    }
                 } else { None }
             } else { None }
         },
         async {
             if !args.no_geo {
                 if let Some(ref ip) = ip_for_geo {
-                    geolocation::geolocation_lookup_with_config(ip, ipapi_key, maxmind_settings)
-                        .await.ok()
+                    match geolocation::geolocation_lookup_with_config(ip, ipapi_key, maxmind_settings).await {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            tracing::warn!("geolocation lookup failed: {}", e);
+                            None
+                        }
+                    }
                 } else { None }
             } else { None }
         },
@@ -318,8 +329,13 @@ pub async fn run_full_recon(
             if !args.no_threat {
                 if let Some(ref ip) = ip_for_threat {
                     let is_ip = ip.parse::<std::net::IpAddr>().is_ok();
-                    threatintel::check_threat_intel(ip, is_ip, virustotal_key, alienvault_key, shodan_key)
-                        .await.ok()
+                    match threatintel::check_threat_intel(ip, is_ip, virustotal_key, alienvault_key, shodan_key).await {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            tracing::warn!("threat intel lookup failed: {}", e);
+                            None
+                        }
+                    }
                 } else { None }
             } else { None }
         },
@@ -327,68 +343,134 @@ pub async fn run_full_recon(
             if !args.no_ssl {
                 if let Some(ref host) = ip_for_ssl {
                     let port = if url.contains("https://") { 443 } else { 80 };
-                    ssl::analyze_ssl(host, port).await.ok()
+                    match ssl::analyze_ssl(host, port).await {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            tracing::warn!("SSL analysis failed: {}", e);
+                            None
+                        }
+                    }
                 } else { None }
             } else { None }
         },
         async {
             if !args.no_whois {
                 if let Some(ref d) = domain_for_whois {
-                    whois::whois_lookup(d).await.ok()
+                    match whois::whois_lookup(d).await {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            tracing::warn!("whois lookup failed: {}", e);
+                            None
+                        }
+                    }
                 } else { None }
             } else { None }
         },
         async {
             if !args.no_subdomains {
                 if let Some(ref d) = domain_for_sub {
-                    subdomain::enumerate_subdomains(d, concurrency).await.ok()
+                    match subdomain::enumerate_subdomains(d, concurrency).await {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            tracing::warn!("subdomain enumeration failed: {}", e);
+                            None
+                        }
+                    }
                 } else { None }
             } else { None }
         },
         async {
             if !args.no_dns_records {
                 if let Some(ref d) = domain_for_dns {
-                    dns_records::enumerate_dns_records(d).await.ok()
+                    match dns_records::enumerate_dns_records(d).await {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            tracing::warn!("DNS records enumeration failed: {}", e);
+                            None
+                        }
+                    }
                 } else { None }
             } else { None }
         },
         async {
             if !args.no_tech {
-                techdetect::detect_tech_stack(&url).await.ok()
+                match techdetect::detect_tech_stack(&url).await {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        tracing::warn!("tech detection failed: {}", e);
+                        None
+                    }
+                }
             } else { None }
         },
         async {
             if !args.no_js {
-                js::analyze_js(&url).await.ok()
+                match js::analyze_js(&url).await {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        tracing::warn!("JS analysis failed: {}", e);
+                        None
+                    }
+                }
             } else { None }
         },
         async {
             if !args.no_wayback {
                 if let Some(ref d) = domain_for_wayback {
-                    wayback::get_wayback_snapshots(d, wayback_key, 100).await.ok()
+                    match wayback::get_wayback_snapshots(d, wayback_key, 100).await {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            tracing::warn!("wayback lookup failed: {}", e);
+                            None
+                        }
+                    }
                 } else { None }
             } else { None }
         },
         async {
             if !args.no_cloud {
                 if let Some(ref d) = domain_for_cloud {
-                    cloud::scan_cloud(d, concurrency).await.ok()
+                    match cloud::scan_cloud(d, concurrency).await {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            tracing::warn!("cloud scan failed: {}", e);
+                            None
+                        }
+                    }
                 } else { None }
             } else { None }
         },
         async {
             if !args.no_content {
-                content::scan_content(&url, concurrency).await.ok()
+                match content::scan_content(&url, concurrency).await {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        tracing::warn!("content scan failed: {}", e);
+                        None
+                    }
+                }
             } else { None }
         },
         async {
             if !args.no_cors {
-                cors::analyze_cors(&url).await.ok()
+                match cors::analyze_cors(&url).await {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        tracing::warn!("CORS analysis failed: {}", e);
+                        None
+                    }
+                }
             } else { None }
         },
         async {
             if !args.no_email {
-                email::discover_contacts(&url).await.ok()
+                match email::discover_contacts(&url).await {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        tracing::warn!("email discovery failed: {}", e);
+                        None
+                    }
+                }
             } else { None }
         },
     );

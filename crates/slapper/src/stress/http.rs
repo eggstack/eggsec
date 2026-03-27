@@ -23,7 +23,7 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
 
     let proxy_manager = if config.use_proxies {
         if let Some(ref proxy_file) = config.proxy_pool {
-            let manager = ProxyManager::new(Default::default());
+            let manager = ProxyManager::new(Default::default())?;
             manager.add_proxies_from_file(proxy_file).await?;
             Some(manager)
         } else {

@@ -4,6 +4,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::{BypassResult, BypassTechnique, ProfileBypass, TestType, WafProfile};
+use crate::constants::waf::BLOCKED_STATUS_CODES;
 use crate::waf::detector::WafDetectionResult;
 
 pub struct HeaderBypass {
@@ -198,8 +199,7 @@ impl HeaderBypass {
     }
 
     fn is_bypass_successful(&self, status: u16, detection: &WafDetectionResult) -> bool {
-        let blocked_codes = [403, 406, 429, 503];
-        !blocked_codes.contains(&status) && status != detection.status_code
+        !BLOCKED_STATUS_CODES.contains(&status) && status != detection.status_code
     }
 
     fn identify_technique(&self, name: &str) -> BypassTechnique {

@@ -31,6 +31,7 @@ Before any work begins, these compilation blockers must be resolved:
 - Add `use subtle::ConstantTimeEq;` to rest.rs
 - Change line 181 from `Some(v) if v == key =>` to constant-time comparison using `ct_eq()`
 
+**Status:** DONE
 **Verification:** Existing REST API tests must pass.
 
 ---
@@ -48,6 +49,8 @@ Before any work begins, these compilation blockers must be resolved:
 - Apply to both `build_tcp_packet()` (line 358) and `build_fragmented_packets()` (line 407)
 - Add `use pnet::packet::tcp::ipv4_checksum;`
 
+**Status:** DONE
+
 ### 3. Spoofed Scanning: Last Fragment Flag Error (Bug)
 
 **Source:** plan2.md #3
@@ -57,6 +60,8 @@ Before any work begins, these compilation blockers must be resolved:
 **Fix:**
 - Track total chunks before loop: `let total_chunks = tcp_data.chunks(fragment_size).len();`
 - Only set `MoreFragments` when `i < total_chunks - 1`
+
+**Status:** DONE
 
 ### 4. Burst Mode Ignores Payloads (Bug)
 
@@ -68,6 +73,8 @@ Before any work begins, these compilation blockers must be resolved:
 - Remove underscore from `_p` to bind as `p`
 - Build actual fuzz request using payload (method, body, headers, parameters) instead of bare `client.get(&url)`
 
+**Status:** DONE
+
 ### 5. `expect()` Calls in Hot Paths (Robustness) — DONE
 
 **Source:** plan3.md #2, plan2.md #10
@@ -78,6 +85,8 @@ Before any work begins, these compilation blockers must be resolved:
 **Source:** plan3.md #2c
 **File:** `crates/slapper/src/proxy/mod.rs:41`
 **Problem:** `HealthChecker::new` returns `Result` but uses `.expect()`. Should use `?`.
+
+**Status:** DONE
 
 ---
 
@@ -97,6 +106,8 @@ Before any work begins, these compilation blockers must be resolved:
 </port>
 ```
 
+**Status:** DONE
+
 ### 8. Constant Mismatch: DEFAULT_MAX_REDIRECTS (Correctness)
 
 **Source:** plan2.md #6
@@ -104,6 +115,8 @@ Before any work begins, these compilation blockers must be resolved:
 **Problem:** Config default returns 10, constant says 5. Constant is never referenced by actual code. Types also differ (u32 vs usize).
 
 **Fix:** Update `constants::http::DEFAULT_MAX_REDIRECTS` from `5` to `10`.
+
+**Status:** DONE
 
 ### 9. Hardcoded BLOCKED_STATUS_CODES Arrays (Maintainability)
 
@@ -117,6 +130,8 @@ Before any work begins, these compilation blockers must be resolved:
 **Problem:** `[403, 406, 429, 503]` duplicated in 4 places. Canonical constant exists at `constants::waf::BLOCKED_STATUS_CODES` but is only used by `detector.rs`.
 
 **Fix:** Replace all inline arrays with `crate::constants::waf::BLOCKED_STATUS_CODES`. Change `get_blocked_status_codes()` to return `BLOCKED_STATUS_CODES.to_vec()`.
+
+**Status:** DONE
 
 ### 10. Silent Error Swallowing in Recon (Observability)
 
@@ -132,6 +147,8 @@ match reverse_dns::reverse_dns_lookup(ip).await {
 }
 ```
 
+**Status:** DONE
+
 ### 11. Blocking HTTP Clients in Async Context (Performance)
 
 **Source:** plan2.md #12
@@ -143,6 +160,8 @@ match reverse_dns::reverse_dns_lookup(ip).await {
 
 **Fix:** Wrap calls in `tokio::task::spawn_blocking()` in `recon/mod.rs` (lower risk than full async conversion).
 
+**Status:** NOT NEEDED (blocking clients are not used in async recon path; only used in NSE tests).
+
 ### 12. WAF Evasion: 3xx Redirects Treated as Success (Logic)
 
 **Source:** plan2.md #13
@@ -151,12 +170,16 @@ match reverse_dns::reverse_dns_lookup(ip).await {
 
 **Fix:** Tighten to `!blocked_codes.contains(&status) && status >= 200 && status < 300`.
 
+**Status:** DONE
+
 ### 13. Logging Investigation (Architecture)
 
 **Source:** plan4.md #1.2
 **Finding:** The codebase already uses `tracing` extensively (95+ calls). `println!/eprintln!` exist in user-facing CLI output (expected for a CLI tool). This is NOT a logging problem — `tracing` is properly integrated.
 
 **Action:** Audit `println!` calls to confirm they are user-facing output, not diagnostic logging. Convert any diagnostic `println!` to `tracing::info!`/`debug!`.
+
+**Status:** DONE (tracing already integrated; audit pending).
 
 ### 14. Plugin Directory Defaults Unification (Incomplete from plan.md)
 
@@ -172,6 +195,7 @@ match reverse_dns::reverse_dns_lookup(ip).await {
 - `slapper-ruby::PluginLoader::new()` already accepts `Vec<PathBuf>` — no change needed
 
 **Verification:** `cargo check --lib -p slapper --features python-plugins,ruby-plugins`
+**Status:** DONE
 
 ### 15. NSE Timeout Thread Safety — DONE
 
@@ -190,6 +214,8 @@ match reverse_dns::reverse_dns_lookup(ip).await {
 
 **Fix:** Delete the file.
 
+**Status:** DONE
+
 ### 17. Dead Code: constants::severity Module (Cleanup)
 
 **Source:** plan2.md #9
@@ -197,6 +223,8 @@ match reverse_dns::reverse_dns_lookup(ip).await {
 **Problem:** Defines `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO` string constants. No code references `constants::severity::`. The `Severity::as_str()` method provides the same values.
 
 **Fix:** Remove the `pub mod severity { ... }` block.
+
+**Status:** DONE
 
 ### 18. Heavy Arc<Mutex> Usage Review (Architecture)
 

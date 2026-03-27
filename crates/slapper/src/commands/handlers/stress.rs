@@ -11,6 +11,7 @@ use crate::constants::DEFAULT_CONFIG_FILE;
 #[cfg(feature = "stress-testing")]
 pub async fn handle_stress(ctx: &CommandContext, args: crate::cli::StressArgs) -> Result<()> {
     use crate::stress::{StressConfig, StressType, StressTest};
+    use crate::types::SensitiveString;
 
     ctx.ensure_scope(&args.target)?;
 
@@ -75,7 +76,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                     address: p.address.clone(),
                     port: p.port,
                     username: p.username.clone(),
-                    password: p.password.clone(),
+                    password: p.password.clone().map(crate::types::SensitiveString::from),
                     weight: p.weight,
                     priority: p.priority,
                     enabled: p.enabled,
@@ -142,7 +143,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                 };
                 let mut entry = ProxyEntry::new(pt, p.address.clone(), p.port);
                 entry.username = p.username.clone();
-                entry.password = p.password.clone();
+                entry.password = p.password.clone().map(|s| s.into_secret());
                 entry.weight = p.weight;
                 entry.priority = p.priority;
                 entry.enabled = p.enabled;

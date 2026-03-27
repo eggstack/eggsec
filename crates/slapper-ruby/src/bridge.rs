@@ -115,114 +115,12 @@ impl RubyBridge {
             .lookup("findings")
             .ok()
             .flatten()
-            .and_then(|v| {
-                v.to_r_array().map(|arr| {
-                    arr.each()
-                        .filter_map(|item| {
-                            let item_hash = item.to_r_hash().ok()?;
-                            let severity: String = item_hash
-                                .lookup("severity")
-                                .ok()
-                                .flatten()
-                                .and_then(|v| v.try_convert().ok())
-                                .unwrap_or_default();
-                            let finding_type: String = item_hash
-                                .lookup("type")
-                                .ok()
-                                .flatten()
-                                .and_then(|v| v.try_convert().ok())
-                                .or_else(|| {
-                                    item_hash
-                                        .lookup("finding_type")
-                                        .ok()
-                                        .flatten()
-                                        .and_then(|v| v.try_convert().ok())
-                                })
-                                .unwrap_or_default();
-                            let description: String = item_hash
-                                .lookup("description")
-                                .ok()
-                                .flatten()
-                                .and_then(|v| v.try_convert().ok())
-                                .unwrap_or_default();
-                            let location: String = item_hash
-                                .lookup("location")
-                                .ok()
-                                .flatten()
-                                .and_then(|v| v.try_convert().ok())
-                                .unwrap_or_default();
-                            let evidence: Option<String> = item_hash
-                                .lookup("evidence")
-                                .ok()
-                                .flatten()
-                                .and_then(|v| v.try_convert().ok());
-                            Some(super::RubyPluginFinding {
-                                severity,
-                                finding_type,
-                                description,
-                                location,
-                                evidence,
-                                references: vec![],
-                            })
-                        })
-                        .collect()
-                })
-            })
+            .and_then(|v| v.to_r_array().map(|arr| extract_findings_from_array(arr)))
             .or_else(|| {
-                // Try "results" key as fallback
-                hash.lookup("results").ok().flatten().and_then(|v| {
-                    v.to_r_array().map(|arr| {
-                        arr.each()
-                            .filter_map(|item| {
-                                let item_hash = item.to_r_hash().ok()?;
-                                let severity: String = item_hash
-                                    .lookup("severity")
-                                    .ok()
-                                    .flatten()
-                                    .and_then(|v| v.try_convert().ok())
-                                    .unwrap_or_default();
-                                let finding_type: String = item_hash
-                                    .lookup("type")
-                                    .ok()
-                                    .flatten()
-                                    .and_then(|v| v.try_convert().ok())
-                                    .or_else(|| {
-                                        item_hash
-                                            .lookup("finding_type")
-                                            .ok()
-                                            .flatten()
-                                            .and_then(|v| v.try_convert().ok())
-                                    })
-                                    .unwrap_or_default();
-                                let description: String = item_hash
-                                    .lookup("description")
-                                    .ok()
-                                    .flatten()
-                                    .and_then(|v| v.try_convert().ok())
-                                    .unwrap_or_default();
-                                let location: String = item_hash
-                                    .lookup("location")
-                                    .ok()
-                                    .flatten()
-                                    .and_then(|v| v.try_convert().ok())
-                                    .unwrap_or_default();
-                                let evidence: Option<String> = item_hash
-                                    .lookup("evidence")
-                                    .ok()
-                                    .flatten()
-                                    .and_then(|v| v.try_convert().ok());
-                                Some(super::RubyPluginFinding {
-                                    severity,
-                                    finding_type,
-                                    description,
-                                    location,
-                                    evidence,
-                                    references: vec![],
-                                })
-                            })
-                            .collect()
-                    })
-                })
+                hash.lookup("results")
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.to_r_array().map(|arr| extract_findings_from_array(arr)))
             })
             .unwrap_or_default();
 
@@ -254,4 +152,58 @@ impl Default for RubyBridge {
     fn default() -> Self {
         Self::new().expect("Failed to create Ruby bridge")
     }
+}
+
+#[cfg(feature = "ruby-plugins")]
+fn extract_findings_from_array(arr: magnus::RArray) -> Vec<super::RubyPluginFinding> {
+    use magnus::prelude::*;
+    arr.each()
+        .filter_map(|item| {
+            let item_hash = item.to_r_hash().ok()?;
+            let severity: String = item_hash
+                .lookup("severity")
+                .ok()
+                .flatten()
+                .and_then(|v| v.try_convert().ok())
+                .unwrap_or_default();
+            let finding_type: String = item_hash
+                .lookup("type")
+                .ok()
+                .flatten()
+                .and_then(|v| v.try_convert().ok())
+                .or_else(|| {
+                    item_hash
+                        .lookup("finding_type")
+                        .ok()
+                        .flatten()
+                        .and_then(|v| v.try_convert().ok())
+                })
+                .unwrap_or_default();
+            let description: String = item_hash
+                .lookup("description")
+                .ok()
+                .flatten()
+                .and_then(|v| v.try_convert().ok())
+                .unwrap_or_default();
+            let location: String = item_hash
+                .lookup("location")
+                .ok()
+                .flatten()
+                .and_then(|v| v.try_convert().ok())
+                .unwrap_or_default();
+            let evidence: Option<String> = item_hash
+                .lookup("evidence")
+                .ok()
+                .flatten()
+                .and_then(|v| v.try_convert().ok());
+            Some(super::RubyPluginFinding {
+                severity,
+                finding_type,
+                description,
+                location,
+                evidence,
+                references: vec![],
+            })
+        })
+        .collect()
 }
