@@ -1,16 +1,17 @@
 #[cfg(feature = "python-plugins")]
 pub mod python;
-#[cfg(feature = "ruby-plugins")]
-pub mod ruby;
 
 #[cfg(feature = "python-plugins")]
 pub use python::PythonPluginManager;
-#[cfg(feature = "ruby-plugins")]
-pub use ruby::RubyPluginManager;
 
+pub mod ruby;
+
+use anyhow::Result;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
@@ -63,6 +64,117 @@ pub struct PluginFinding {
     pub cve_ids: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PluginCheck {
+    pub name: String,
+    pub check_type: String,
+    pub target: Option<String>,
+    pub description: Option<String>,
+}
+
+/// Unified trait for all plugin backends (Python, Ruby, etc.)
+#[async_trait]
+pub trait Plugin: Send + Sync {
+    /// Returns metadata about this plugin.
+    fn info(&self) -> &PluginInfo;
+
+    /// Returns the language/runtime this plugin uses.
+    fn language(&self) -> PluginLanguage;
+
+    /// Lists all checks provided by this plugin.
+    fn list_checks(&self) -> Vec<PluginCheck>;
+
+    /// Runs a specific check by name against a target.
+    async fn run_check(&self, check_name: &str, target: &str) -> Result<PluginResult>;
+
+    /// Runs the plugin with full configuration.
+    async fn run(&self, target: &str, config: &PluginConfig) -> Result<PluginResult>;
+}
+
+/// Registry that holds all loaded plugin backends.
+pub struct PluginRegistry {
+    plugins: Vec<Arc<dyn Plugin>>,
+}
+
+impl PluginRegistry {
+    pub fn new() -> Self {
+        Self {
+            plugins: Vec::new(),
+        }
+    }
+
+    /// Register a plugin backend.
+    pub fn register(&mut self, plugin: Arc<dyn Plugin>) {
+        self.plugins.push(plugin);
+    }
+
+    /// List all registered plugins.
+    pub fn list(&self) -> Vec<&PluginInfo> {
+        self.plugins.iter().map(|p| p.info()).collect()
+    }
+
+    /// Get a plugin by name.
+    pub fn get(&self, name: &str) -> Option<&Arc<dyn Plugin>> {
+        self.plugins.iter().find(|p| p.info().name == name)
+    }
+
+    /// Run a check on all plugins that have it.
+    pub async fn run_check(&self, check_name: &str, target: &str) -> Result<Vec<PluginResult>> {
+        let mut results = Vec::new();
+        for plugin in &self.plugins {
+            let checks = plugin.list_checks();
+            if checks.iter().any(|c| c.name == check_name) {
+                match plugin.run_check(check_name, target).await {
+                    Ok(result) => results.push(result),
+                    Err(e) => {
+                        tracing::warn!(
+                            plugin = %plugin.info().name,
+                            check = %check_name,
+                            error = %e,
+                            "Plugin check failed"
+                        );
+                    }
+                }
+            }
+        }
+        Ok(results)
+    }
+
+    /// Run all plugins against a target.
+    pub async fn run_all(&self, target: &str, config: &PluginConfig) -> Result<Vec<PluginResult>> {
+        let mut results = Vec::new();
+        for plugin in &self.plugins {
+            match plugin.run(target, config).await {
+                Ok(result) => results.push(result),
+                Err(e) => {
+                    tracing::warn!(
+                        plugin = %plugin.info().name,
+                        error = %e,
+                        "Plugin execution failed"
+                    );
+                }
+            }
+        }
+        Ok(results)
+    }
+
+    /// Returns the number of registered plugins.
+    pub fn len(&self) -> usize {
+        self.plugins.len()
+    }
+
+    /// Returns true if no plugins are registered.
+    pub fn is_empty(&self) -> bool {
+        self.plugins.is_empty()
+    }
+}
+
+impl Default for PluginRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct PluginManager {
     plugin_dirs: Vec<PathBuf>,
     plugins: HashMap<String, PluginInfo>,
@@ -77,8 +189,12 @@ impl Default for PluginManager {
 
 impl PluginManager {
     pub fn new() -> Self {
+        Self::with_config_dir(None)
+    }
+
+    pub fn with_config_dir(config_dir: Option<PathBuf>) -> Self {
         Self {
-            plugin_dirs: Self::default_plugin_dirs(),
+            plugin_dirs: Self::default_plugin_dirs(config_dir),
             plugins: HashMap::new(),
             configs: HashMap::new(),
         }
@@ -88,8 +204,12 @@ impl PluginManager {
         &self.plugin_dirs
     }
 
-    fn default_plugin_dirs() -> Vec<PathBuf> {
+    pub fn default_plugin_dirs(config_dir: Option<PathBuf>) -> Vec<PathBuf> {
         let mut dirs_vec = Vec::new();
+
+        if let Some(dir) = config_dir {
+            dirs_vec.push(dir);
+        }
 
         #[cfg(feature = "python-plugins")]
         if let Some(config_dir) = dirs::config_dir() {
@@ -132,11 +252,6 @@ impl PluginManager {
                             self.plugins.insert(info.name.clone(), info.clone());
                             discovered.push(info);
                         }
-                    } else if path.extension().map(|e| e == "rb").unwrap_or(false) {
-                        if let Some(info) = self.load_ruby_plugin(&path) {
-                            self.plugins.insert(info.name.clone(), info.clone());
-                            discovered.push(info);
-                        }
                     }
                 }
             }
@@ -154,27 +269,20 @@ impl PluginManager {
         let mut author = None;
 
         for line in content.lines() {
-            let line = line.trim();
-            if line.starts_with("NAME") || line.starts_with("name") {
-                name = line
-                    .split('=')
-                    .nth(1)
-                    .map(|s| s.trim().trim_matches('"').to_string());
-            } else if line.starts_with("VERSION") || line.starts_with("version") {
-                version = line
-                    .split('=')
-                    .nth(1)
-                    .map(|s| s.trim().trim_matches('"').to_string());
-            } else if line.starts_with("DESCRIPTION") || line.starts_with("description") {
-                description = line
-                    .split('=')
-                    .nth(1)
-                    .map(|s| s.trim().trim_matches('"').to_string());
-            } else if line.starts_with("AUTHOR") || line.starts_with("author") {
-                author = line
-                    .split('=')
-                    .nth(1)
-                    .map(|s| s.trim().trim_matches('"').to_string());
+            let trimmed = line.trim();
+            if trimmed.starts_with('#') {
+                if let Some(value) = trimmed.strip_prefix("# ") {
+                    if value.starts_with("Name:") {
+                        name = Some(value.trim_start_matches("Name:").trim().to_string());
+                    } else if value.starts_with("Version:") {
+                        version = Some(value.trim_start_matches("Version:").trim().to_string());
+                    } else if value.starts_with("Description:") {
+                        description =
+                            Some(value.trim_start_matches("Description:").trim().to_string());
+                    } else if value.starts_with("Author:") {
+                        author = Some(value.trim_start_matches("Author:").trim().to_string());
+                    }
+                }
             }
         }
 
@@ -185,39 +293,6 @@ impl PluginManager {
             author: author.unwrap_or_default(),
             tags: vec![],
             language: PluginLanguage::Python,
-        })
-    }
-
-    fn load_ruby_plugin(&self, path: &PathBuf) -> Option<PluginInfo> {
-        let content = std::fs::read_to_string(path).ok()?;
-
-        let mut name = None;
-        let mut version = None;
-
-        for line in content.lines() {
-            if line.contains("NAME") {
-                if let Some(start) = line.find('"') {
-                    if let Some(end) = line[start + 1..].find('"') {
-                        name = Some(line[start + 1..start + 1 + end].to_string());
-                    }
-                }
-            }
-            if line.contains("VERSION") {
-                if let Some(start) = line.find('"') {
-                    if let Some(end) = line[start + 1..].find('"') {
-                        version = Some(line[start + 1..start + 1 + end].to_string());
-                    }
-                }
-            }
-        }
-
-        Some(PluginInfo {
-            name: name.or_else(|| path.file_stem().map(|s| s.to_string_lossy().to_string()))?,
-            version: version.unwrap_or_else(|| "1.0.0".to_string()),
-            description: String::new(),
-            author: String::new(),
-            tags: vec![],
-            language: PluginLanguage::Ruby,
         })
     }
 

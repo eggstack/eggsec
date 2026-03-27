@@ -92,6 +92,33 @@ class MyPlugin:
 PLUGINS = [MyPlugin]
 ```
 
+### Function-Based Interface
+
+Slapper also supports a simpler function-based interface:
+
+```python
+# Required functions:
+
+def register_checks() -> list[dict]:
+    """Return list of checks this plugin provides."""
+    return [
+        {"name": "my_check", "type": "vuln", "description": "Check for X"}
+    ]
+
+def run_check(check_name: str, target: str) -> list[str]:
+    """Run a specific check and return JSON-encoded findings."""
+    import json
+    finding = {
+        "title": "Example Finding",
+        "severity": "medium",
+        "description": "Details about the finding",
+        "location": target
+    }
+    return [json.dumps(finding)]
+```
+
+The class-based interface (`PLUGINS = [MyPlugin]`) is preferred for new plugins as it provides richer configuration support. Slapper will detect and use `PLUGINS` if present, falling back to function-based registration otherwise.
+
 ### Using Python HTTP Libraries
 
 Python plugins can use any Python HTTP library. Example using `requests`:

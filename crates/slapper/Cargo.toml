@@ -156,6 +156,9 @@ all-plugins = ["python-plugins", "ruby-plugins"]
 # NSE (Nmap Scripting Engine) support - run Lua NSE scripts
 nse = ["tool-api", "dep:slapper-nse", "slapper-nse/nse"]
 
+# NSE sandbox - restrict dangerous Lua operations
+nse-sandbox = ["nse", "slapper-nse/sandbox"]
+
 # Full build with all features
 full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse"]
 

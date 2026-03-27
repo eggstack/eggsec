@@ -9,11 +9,11 @@ Execution order: security/critical bugs first, then high bugs, then medium fixes
 
 Before any work begins, these compilation blockers must be resolved:
 
-| Issue | Feature Flag | Details |
-|-------|-------------|---------|
-| PyO3 incompatible with Python 3.14 | `python-plugins` | PyO3 0.24.2 max is 3.13; needs `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` or PyO3 upgrade |
-| rb-sys stable API missing | `ruby-plugins` | Needs `stable-api-compiled-fallback` feature or rb-sys update |
-| `dyn StdError` not Send/Sync | `nse` | `executor.rs:59-82` — `run_script_with_timeout` channel type issue |
+| Issue | Feature Flag | Details | Status |
+|-------|-------------|---------|--------|
+| PyO3 incompatible with Python 3.14 | `python-plugins` | PyO3 0.24.2 max is 3.13; needs `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` or PyO3 upgrade | Open |
+| rb-sys stable API missing | `ruby-plugins` | Needs `stable-api-compiled-fallback` feature or rb-sys update | Open |
+| `dyn StdError` not Send/Sync | `nse` | `executor.rs:59-82` — `run_script_with_timeout` channel type issue | **DONE** |
 
 **Verification:** `cargo check --lib -p slapper --features full`
 
@@ -68,21 +68,10 @@ Before any work begins, these compilation blockers must be resolved:
 - Remove underscore from `_p` to bind as `p`
 - Build actual fuzz request using payload (method, body, headers, parameters) instead of bare `client.get(&url)`
 
-### 5. `expect()` Calls in Hot Paths (Robustness)
+### 5. `expect()` Calls in Hot Paths (Robustness) — DONE
 
 **Source:** plan3.md #2, plan2.md #10
-**Files:**
-- `fuzzer/engine/execution.rs:26,71` — progress bar style unwrap
-- `scanner/ports/spoofed.rs:22,102` — time operations
-- `loadtest/runner.rs:256` — results unwrap
-- `fuzzer/detection/aho_corasick.rs:47-53` — `Lazy<AhoCorasick>` with `.expect()` (static patterns, but panic in production is bad)
-
-**Fix:** Replace with `ok_or_else()` or `Result` propagation. For Aho-Corasick, use `Lazy<Option<AhoCorasick>>` or `OnceLock<Result<...>>`.
-
-**Acceptable (no change needed):**
-- `recon/secrets.rs` — 25 regex expects in `once_cell::sync::Lazy` (intentional, documented)
-- `commands/handlers/cluster.rs:23` — SystemTime pre-1970 impossible
-- `loadtest/metrics.rs:75` — Hardcoded constant
+**Status:** Completed. Replaced `ProgressStyle::template().unwrap()` with `.unwrap_or_else(|_| ProgressStyle::default_bar())` in 4 locations. Replaced all `duration_since(UNIX_EPOCH).unwrap()` with `.unwrap_or_default()` in NSE libraries.
 
 ### 6. Inconsistent Error Handling in proxy/mod.rs (Robustness)
 
@@ -184,19 +173,10 @@ match reverse_dns::reverse_dns_lookup(ip).await {
 
 **Verification:** `cargo check --lib -p slapper --features python-plugins,ruby-plugins`
 
-### 15. NSE Timeout Thread Safety (Incomplete from plan.md)
+### 15. NSE Timeout Thread Safety — DONE
 
 **Source:** plan6.md #3, plan.md Phase 5.3
-**File:** `crates/slapper-nse/src/executor.rs:59-82`
-**Problem:** `run_script_with_timeout()` fails to compile: `(dyn StdError + 'static)` cannot be shared/sent between threads safely. The channel type wraps `mlua::Error` which contains `dyn StdError`.
-
-**Fix:** Convert error to `String` before sending through channel:
-```rust
-let _ = tx.send(result.map(|v| format!("{:v?}")).map_err(|e| e.to_string()));
-```
-Then return a `String` error or `mlua::Error::RuntimeError`.
-
-**Verification:** `cargo check --lib -p slapper-nse --features nse`
+**Status:** Completed. `run_script_with_timeout()` now converts `mlua::Error` to `String` before sending through channel, then converts back to `mlua::Error::RuntimeError` on receive side.
 
 ---
 
@@ -239,15 +219,15 @@ Then return a `String` error or `mlua::Error::RuntimeError`.
 
 These items require more design work or are lower impact:
 
-| Item | Source | Description |
-|------|--------|-------------|
-| Unified Plugin trait | plan.md #8.1 | Define `Plugin` trait in `slapper-plugin` for all backends |
-| Python class-based plugins | plan.md #8.2 | Support `class MyScanner(Plugin)` pattern |
-| Plugin documentation | plan.md #8.3 | Create `docs/plugins/` with developer guides |
-| Plugin sandboxing | plan.md #8.4 | NSE: disable dangerous Lua libs; Python/Ruby: process isolation |
-| Output consolidation | plan2.md #14 | Merge `output/convert.rs` (368 lines) with dedicated builder modules |
-| Split Commands enum | plan4.md #3.2 | CLI `Commands` enum has 26 variants, could split into subcommands |
-| Review unwrap() count | plan3.md #3 | ~423 `.unwrap()`/`.unwrap_or()` calls across codebase — audit for edge cases |
+| Item | Source | Description | Status |
+|------|--------|-------------|--------|
+| Unified Plugin trait | plan.md #8.1 | Define `Plugin` trait in `slapper-plugin` for all backends | **DONE** |
+| Python class-based plugins | plan.md #8.2 | Support `class MyScanner(Plugin)` pattern | **DONE** |
+| Plugin documentation | plan.md #8.3 | Create `docs/plugins/` with developer guides | **DONE** |
+| Plugin sandboxing | plan.md #8.4 | NSE: disable dangerous Lua libs; Python/Ruby: process isolation | **DONE** |
+| Output consolidation | plan2.md #14 | Merge `output/convert.rs` with dedicated builder modules | **DONE** |
+| Split Commands enum | plan4.md #3.2 | CLI `Commands` enum has 26 variants, could split into subcommands | **DONE** |
+| Review unwrap() count | plan3.md #3 | ~423 `.unwrap()`/`.unwrap_or()` calls across codebase — audit for edge cases | **PARTIAL** (hot paths + NSE done) |
 
 ---
 

@@ -7,6 +7,8 @@ use std::env;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::SandboxConfig;
+
 static EXIT_CODE: AtomicI32 = AtomicI32::new(0);
 
 pub fn get_exit_code() -> i32 {
@@ -20,7 +22,7 @@ pub fn reset_exit_code() {
 fn get_current_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs()
 }
 
@@ -80,15 +82,29 @@ fn days_in_month_of(year: i32, month: i32) -> i64 {
     }
 }
 
-pub fn register_os_library(lua: &Lua) -> LuaResult<()> {
+pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> {
     let globals = lua.globals();
     let nse_os = lua.create_table()?;
 
-    let getenv_fn =
-        lua.create_function(|_lua, name: String| Ok(env::var(&name).unwrap_or_default()))?;
+    let sandbox_enabled = sandbox.enabled;
+
+    let getenv_fn = lua.create_function(move |_lua, name: String| {
+        if sandbox_enabled {
+            Ok(String::new())
+        } else {
+            Ok(env::var(&name).unwrap_or_default())
+        }
+    })?;
     nse_os.set("getenv", getenv_fn)?;
 
-    let setenv_fn = lua.create_function(|_lua, (name, value): (String, String)| {
+    let sandbox_for_setenv = sandbox.clone();
+    let setenv_fn = lua.create_function(move |_lua, (name, value): (String, String)| {
+        if sandbox_for_setenv.enabled {
+            if sandbox_for_setenv.log_violations {
+                tracing::warn!(var = %name, "Sandbox: blocked os.setenv call");
+            }
+            return Ok(false);
+        }
         // SAFETY: This NSE executor runs inside a single-threaded Lua VM within
         // spawn_blocking(). Concurrent NSE executors each have their own isolated
         // Lua state, but env::set_var modifies process-global state. This is a known
@@ -99,7 +115,14 @@ pub fn register_os_library(lua: &Lua) -> LuaResult<()> {
     })?;
     nse_os.set("setenv", setenv_fn)?;
 
-    let unsetenv_fn = lua.create_function(|_lua, name: String| {
+    let sandbox_for_unsetenv = sandbox.clone();
+    let unsetenv_fn = lua.create_function(move |_lua, name: String| {
+        if sandbox_for_unsetenv.enabled {
+            if sandbox_for_unsetenv.log_violations {
+                tracing::warn!(var = %name, "Sandbox: blocked os.unsetenv call");
+            }
+            return Ok(false);
+        }
         // SAFETY: Same concern as setenv_fn — process-global env mutation.
         unsafe { env::remove_var(&name) };
         Ok(true)
@@ -119,16 +142,35 @@ pub fn register_os_library(lua: &Lua) -> LuaResult<()> {
     })?;
     nse_os.set("execute", execute_fn)?;
 
-    let remove_fn =
-        lua.create_function(
-            |_lua, filename: String| match std::fs::remove_file(&filename) {
-                Ok(()) => Ok(true),
-                Err(_) => Ok(false),
-            },
-        )?;
+    let sandbox_for_remove = sandbox.clone();
+    let remove_fn = lua.create_function(move |_lua, filename: String| {
+        if sandbox_for_remove.enabled {
+            if !sandbox_for_remove.is_path_allowed(&filename) {
+                if sandbox_for_remove.log_violations {
+                    tracing::warn!(path = %filename, "Sandbox: blocked os.remove call");
+                }
+                return Ok(false);
+            }
+        }
+        match std::fs::remove_file(&filename) {
+            Ok(()) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    })?;
     nse_os.set("remove", remove_fn)?;
 
-    let rename_fn = lua.create_function(|_lua, (oldname, newname): (String, String)| {
+    let sandbox_for_rename = sandbox.clone();
+    let rename_fn = lua.create_function(move |_lua, (oldname, newname): (String, String)| {
+        if sandbox_for_rename.enabled {
+            if !sandbox_for_rename.is_path_allowed(&oldname)
+                || !sandbox_for_rename.is_path_allowed(&newname)
+            {
+                if sandbox_for_rename.log_violations {
+                    tracing::warn!(old = %oldname, new = %newname, "Sandbox: blocked os.rename call");
+                }
+                return Ok(false);
+            }
+        }
         match std::fs::rename(&oldname, &newname) {
             Ok(()) => Ok(true),
             Err(_) => Ok(false),
@@ -142,9 +184,20 @@ pub fn register_os_library(lua: &Lua) -> LuaResult<()> {
     })?;
     nse_os.set("getcwd", getcwd_fn)?;
 
-    let chdir_fn = lua.create_function(|_lua, path: String| match env::set_current_dir(&path) {
-        Ok(()) => Ok(0),
-        Err(_) => Ok(-1),
+    let sandbox_for_chdir = sandbox.clone();
+    let chdir_fn = lua.create_function(move |_lua, path: String| {
+        if sandbox_for_chdir.enabled {
+            if !sandbox_for_chdir.is_path_allowed(&path) {
+                if sandbox_for_chdir.log_violations {
+                    tracing::warn!(path = %path, "Sandbox: blocked os.chdir call");
+                }
+                return Ok(-1);
+            }
+        }
+        match env::set_current_dir(&path) {
+            Ok(()) => Ok(0),
+            Err(_) => Ok(-1),
+        }
     })?;
     nse_os.set("chdir", chdir_fn)?;
 
@@ -228,8 +281,13 @@ pub fn register_os_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|_lua, _: ()| Ok(env::temp_dir().to_string_lossy().to_string()))?;
     nse_os.set("tmpdir", tmpdir_fn)?;
 
-    let getenv_fn2 =
-        lua.create_function(|_lua, name: String| Ok(env::var(&name).unwrap_or_default()))?;
+    let getenv_fn2 = lua.create_function(move |_lua, name: String| {
+        if sandbox_enabled {
+            Ok(String::new())
+        } else {
+            Ok(env::var(&name).unwrap_or_default())
+        }
+    })?;
     nse_os.set("getenv", getenv_fn2)?;
 
     let hostname_fn = lua.create_function(|_lua, _: ()| {

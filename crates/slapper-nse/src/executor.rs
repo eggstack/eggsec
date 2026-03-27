@@ -19,6 +19,12 @@ impl NseExecutor {
         })
     }
 
+    pub fn with_sandbox(sandbox: crate::SandboxConfig) -> LuaResult<Self> {
+        Ok(Self {
+            core: ExecutorCore::with_sandbox(sandbox)?,
+        })
+    }
+
     pub fn with_target(target: &str) -> LuaResult<Self> {
         let mut exec = Self::new()?;
         exec.set_target(target);
@@ -55,6 +61,35 @@ impl NseExecutor {
     }
     pub fn run_script(&self, script: &str) -> LuaResult<String> {
         self.core.run_script(script)
+    }
+    pub fn run_script_with_timeout(
+        &self,
+        script: &str,
+        timeout: std::time::Duration,
+    ) -> LuaResult<String> {
+        let script = script.to_string();
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        std::thread::spawn(move || {
+            let lua = Lua::new();
+            let result = lua.load(&script).eval::<Value>();
+            let _ = tx.send(
+                result
+                    .map(|v| format!("{:?}", v))
+                    .map_err(|e| e.to_string()),
+            );
+        });
+
+        match rx.recv_timeout(timeout) {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(e)) => Err(mlua::Error::RuntimeError(e)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(mlua::Error::RuntimeError(
+                "Script execution timed out".into(),
+            )),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(mlua::Error::RuntimeError(
+                "Script execution thread crashed".into(),
+            )),
+        }
     }
     pub fn load_script(&self, name: &str) -> LuaResult<String> {
         self.core.load_script(name)
@@ -201,14 +236,14 @@ impl NseExecutor {
                 return Ok(r.as_boolean().unwrap_or(false));
             }
         }
-        Ok(true)
+        Ok(false)
     }
 
     pub fn check_hostrule(&mut self, hostrule: Option<&str>) -> LuaResult<bool> {
         let globals = self.lua().globals();
         let host = match globals.get::<Table>("nmap") {
             Ok(t) => t,
-            Err(_) => return Ok(true),
+            Err(_) => return Ok(false),
         };
 
         if let Some(rule) = hostrule {
@@ -226,7 +261,7 @@ impl NseExecutor {
                 return Ok(r.as_boolean().unwrap_or(false));
             }
         }
-        Ok(true)
+        Ok(false)
     }
 
     pub fn get_prerule_result(&self) -> Option<String> {
@@ -265,56 +300,80 @@ impl NseExecutor {
     }
 
     pub fn check_script_category(&self, script_name: &str, category: &str) -> bool {
-        let categories = get_script_categories();
+        let categories = self.parse_all_script_categories();
         if let Some(cats) = categories.get(script_name) {
-            return cats.contains(&category);
+            return cats.contains(&category.to_string());
         }
         matches!(category, "default" | "safe")
     }
 
     pub fn get_script_categories(&self, script_name: &str) -> Vec<String> {
-        let categories = get_script_categories();
+        let categories = self.parse_all_script_categories();
         categories
             .get(script_name)
-            .map(|cats| cats.iter().map(|s| s.to_string()).collect())
+            .cloned()
             .unwrap_or_else(|| vec!["default".to_string()])
     }
 
     pub fn get_category_scripts(&self, category: &str) -> Vec<String> {
-        get_script_categories()
+        self.parse_all_script_categories()
             .into_iter()
-            .filter(|(_, cats)| cats.contains(&category))
-            .map(|(name, _)| name.to_string())
+            .filter(|(_, cats)| cats.contains(&category.to_string()))
+            .map(|(name, _)| name)
             .collect()
     }
-}
 
-fn get_script_categories() -> std::collections::HashMap<&'static str, Vec<&'static str>> {
-    let mut m = std::collections::HashMap::new();
-    m.insert("http-title", vec!["default", "discovery", "safe"]);
-    m.insert("http-headers", vec!["default", "discovery", "safe"]);
-    m.insert("http-methods", vec!["default", "discovery", "safe"]);
-    m.insert("http-robots.txt", vec!["discovery", "safe"]);
-    m.insert("ssh2-enum-algos", vec!["discovery", "safe"]);
-    m.insert("banner", vec!["default", "discovery"]);
-    m.insert("broadcast", vec!["broadcast"]);
-    m.insert("smb-brute", vec!["brute", "intrusive"]);
-    m.insert("http-brute", vec!["brute", "intrusive"]);
-    m.insert("ftp-brute", vec!["brute", "intrusive"]);
-    m.insert("ssh-brute", vec!["brute", "intrusive"]);
-    m.insert("mysql-enum", vec!["auth", "default"]);
-    m.insert("smb-enum-users", vec!["discovery", "safe"]);
-    m.insert("smb-enum-shares", vec!["discovery", "safe"]);
-    m.insert("vuln", vec!["vuln", "safe"]);
-    m.insert("exploit", vec!["exploit", "intrusive"]);
-    m.insert("dos", vec!["dos", "intrusive"]);
-    m
-}
+    fn parse_all_script_categories(&self) -> std::collections::HashMap<String, Vec<String>> {
+        let mut categories = std::collections::HashMap::new();
+        let paths = self.core.scripts_path.lock();
 
-impl Default for NseExecutor {
-    fn default() -> Self {
-        Self::new().expect("Failed to create NSE executor")
+        for dir in paths.iter() {
+            if !dir.exists() {
+                continue;
+            }
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "nse").unwrap_or(false) {
+                        if let Some(script_name) = path.file_stem().and_then(|s| s.to_str()) {
+                            let cats = parse_nse_categories(&path);
+                            if !cats.is_empty() {
+                                categories.insert(script_name.to_string(), cats);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        categories
     }
+}
+
+fn parse_nse_categories(path: &std::path::Path) -> Vec<String> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return vec![],
+    };
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("categories") && trimmed.contains('{') {
+            // Extract values between { and }
+            if let Some(start) = trimmed.find('{') {
+                if let Some(end) = trimmed.find('}') {
+                    let inner = &trimmed[start + 1..end];
+                    return inner
+                        .split(',')
+                        .map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                }
+            }
+        }
+    }
+
+    vec![]
 }
 
 #[cfg(test)]

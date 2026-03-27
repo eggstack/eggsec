@@ -215,19 +215,25 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
                 match chars.next() {
                     Some('s') => {
                         let arg_key = result.matches('%').count() + 1;
-                        match args.get::<String>(arg_key) { Ok(val) => {
-                            result.push_str(&val);
-                        } _ => {
-                            result.push_str("%s");
-                        }}
+                        match args.get::<String>(arg_key) {
+                            Ok(val) => {
+                                result.push_str(&val);
+                            }
+                            _ => {
+                                result.push_str("%s");
+                            }
+                        }
                     }
                     Some('d') => {
                         let arg_key = result.matches('%').count() + 1;
-                        match args.get::<i64>(arg_key) { Ok(val) => {
-                            result.push_str(&val.to_string());
-                        } _ => {
-                            result.push_str("%d");
-                        }}
+                        match args.get::<i64>(arg_key) {
+                            Ok(val) => {
+                                result.push_str(&val.to_string());
+                            }
+                            _ => {
+                                result.push_str("%d");
+                            }
+                        }
                     }
                     Some(c2) => {
                         result.push('%');
@@ -607,7 +613,7 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
     let clock_ms_fn = lua.create_function(|_lua, _: ()| {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_millis();
         Ok(now as f64)
     })?;
@@ -616,7 +622,7 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
     let clock_us_fn = lua.create_function(|_lua, _: ()| {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_micros();
         Ok(now as f64)
     })?;
@@ -1208,7 +1214,7 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
     let clock_ms_fn = lua.create_function(|_lua, ()| {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_millis() as f64;
         Ok(now)
     })?;
@@ -1218,7 +1224,7 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
     let clock_us_fn = lua.create_function(|_lua, ()| {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_micros() as f64;
         Ok(now)
     })?;

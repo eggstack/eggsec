@@ -5,7 +5,7 @@ pub mod msf;
 
 pub use api::SlapperApi;
 pub use bridge::RubyBridge;
-pub use loader::PluginLoader;
+pub use loader::{PluginLoader, RubyPluginAdapter};
 pub use msf::{MsfClient, MsfConfig, ModuleType};
 
 use anyhow::Result;

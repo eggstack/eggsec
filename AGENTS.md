@@ -68,6 +68,7 @@ crates/slapper/
 - `python-plugins` / `ruby-plugins` - Plugin language support
 - `rest-api` / `grpc-api` - API server integration
 - `nse` - Nmap NSE script support
+- `nse-sandbox` - NSE sandbox mode (restricts `io.popen`, `os.setenv`, filesystem access)
 - `full` - All features combined
 
 ## Codebase Health
@@ -167,3 +168,11 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 - Changed `FuzzEngine::new()` to return `Result<Self>` (removed `.expect()`)
 - Added early exit in WAF detector at high confidence (score >= 90)
 - Fixed `.gitignore` pattern blocking `crates/slapper/` directory
+- Added `Plugin` trait and `PluginRegistry` in `slapper-plugin` (unified plugin abstraction)
+- Implemented `Plugin` for `PythonPluginManager` and `RubyPluginAdapter`
+- Added Python class-based plugin support (`PLUGINS = [MyPlugin]` pattern)
+- Added NSE sandbox feature (`nse-sandbox`) with `SandboxConfig` — restricts `io.popen`, `os.getenv`, filesystem access
+- Fixed `duration_since(UNIX_EPOCH).unwrap()` across NSE libraries (nmap.rs, stdnse.rs, lfs.rs, os.rs, spoofed.rs)
+- Fixed `run_script_with_timeout` thread-safety issue in NSE executor
+- HTML report now uses `HtmlReport` builder (Chart.js, dark/light themes) via `From` impls
+- CLI commands organized into logical groups with backward-compatible aliases

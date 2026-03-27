@@ -38,4 +38,5 @@ ssh2 = { version = "0.9", optional = true }
 [features]
 default = []
 nse = ["mlua", "mlua-luau-scheduler", "openssl", "des", "ssh2"]
+sandbox = []
 stress-testing = []

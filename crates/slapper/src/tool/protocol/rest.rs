@@ -349,7 +349,7 @@ async fn execute_tool(
         ));
     }
 
-    let target_type = payload.target_type.as_deref().or(Some("url")).unwrap();
+    let target_type = payload.target_type.as_deref().unwrap_or("url");
 
     let target = match target_type {
         "domain" => crate::tool::Target::domain(&payload.target),

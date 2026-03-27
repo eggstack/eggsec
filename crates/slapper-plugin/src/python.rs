@@ -1,31 +1,72 @@
 #![cfg(feature = "python-plugins")]
 
 use anyhow::Result;
+use async_trait::async_trait;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::path::Path;
+use std::time::Instant;
+
+use super::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult};
 
 pub struct PythonPluginManager {
     plugins: Vec<LoadedPlugin>,
+    info: PluginInfo,
 }
 
 struct LoadedPlugin {
     name: String,
     module: Py<PyAny>,
+    /// Class-based plugins extracted from PLUGINS list
+    class_plugins: Vec<ClassPlugin>,
 }
 
-#[derive(Debug, Clone)]
-pub struct PluginCheck {
-    pub name: String,
-    pub check_type: String,
-    pub target: Option<String>,
-    pub description: Option<String>,
+struct ClassPlugin {
+    name: String,
+    class: Py<PyAny>,
+}
+
+/// Convert a Python value to a JSON value.
+fn py_value_to_json(_py: Python<'_>, val: &pyo3::Bound<'_, pyo3::PyAny>) -> serde_json::Value {
+    if let Ok(s) = val.extract::<String>() {
+        serde_json::Value::String(s)
+    } else if let Ok(b) = val.extract::<bool>() {
+        serde_json::Value::Bool(b)
+    } else if let Ok(i) = val.extract::<i64>() {
+        serde_json::Value::Number(serde_json::Number::from(i))
+    } else if let Ok(f) = val.extract::<f64>() {
+        serde_json::Number::from_f64(f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null)
+    } else if let Ok(list) = val.downcast::<PyList>() {
+        let items: Vec<serde_json::Value> =
+            list.iter().map(|item| py_value_to_json(_py, &item)).collect();
+        serde_json::Value::Array(items)
+    } else if let Ok(dict) = val.downcast::<PyDict>() {
+        let mut map = serde_json::Map::new();
+        for (k, v) in dict.iter() {
+            if let Ok(key) = k.extract::<String>() {
+                map.insert(key, py_value_to_json(_py, &v));
+            }
+        }
+        serde_json::Value::Object(map)
+    } else {
+        serde_json::Value::Null
+    }
 }
 
 impl PythonPluginManager {
     pub fn new() -> Self {
         Self {
             plugins: Vec::new(),
+            info: PluginInfo {
+                name: "python-plugin-manager".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                description: "Python plugin backend".to_string(),
+                author: "Slapper".to_string(),
+                tags: vec!["python".to_string()],
+                language: PluginLanguage::Python,
+            },
         }
     }
 
@@ -35,7 +76,6 @@ impl PythonPluginManager {
                 return Ok(());
             }
 
-            // Add plugin directory to sys.path so Python can import modules from it
             let sys = py.import_bound("sys")?;
             let path = sys.getattr("path")?;
             let dir_str = plugin_dir
@@ -52,12 +92,24 @@ impl PythonPluginManager {
                 if path.extension().map(|e| e == "py").unwrap_or(false) {
                     if let Some(stem) = path.file_stem() {
                         if let Some(module_name) = stem.to_str() {
-                            if let Ok(module) = PyModule::import_bound(py, module_name) {
-                                let module = module.into();
-                                self.plugins.push(LoadedPlugin {
-                                    name: module_name.to_string(),
-                                    module,
-                                });
+                            match PyModule::import_bound(py, module_name) {
+                                Ok(module) => {
+                                    let class_plugins =
+                                        Self::extract_class_plugins(py, &module, module_name);
+                                    self.plugins.push(LoadedPlugin {
+                                        name: module_name.to_string(),
+                                        module: module.into(),
+                                        class_plugins,
+                                    });
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        module = %module_name,
+                                        path = %path.display(),
+                                        error = %e,
+                                        "Failed to import Python plugin"
+                                    );
+                                }
                             }
                         }
                     }
@@ -68,11 +120,88 @@ impl PythonPluginManager {
         })
     }
 
+    /// Extract class-based plugins from a module's PLUGINS list.
+    fn extract_class_plugins(
+        py: Python<'_>,
+        module: &pyo3::Bound<'_, PyModule>,
+        module_name: &str,
+    ) -> Vec<ClassPlugin> {
+        let mut class_plugins = Vec::new();
+
+        if let Ok(plugins_attr) = module.getattr("PLUGINS") {
+            if let Ok(list) = plugins_attr.downcast::<PyList>() {
+                for item in list.iter() {
+                    if let Ok(inst) = item.call0() {
+                        let name = inst
+                            .getattr("name")
+                            .and_then(|n| n.extract::<String>())
+                            .or_else(|_| {
+                                inst.getattr("__class__")
+                                    .and_then(|c| c.getattr("__name__"))
+                                    .and_then(|n| n.extract::<String>())
+                            })
+                            .unwrap_or_else(|_| module_name.to_string());
+
+                        class_plugins.push(ClassPlugin {
+                            name,
+                            class: item.into(),
+                        });
+                    }
+                }
+            }
+        }
+
+        class_plugins
+    }
+
+    /// Run a class-based plugin and return results as JSON values.
+    fn run_class_plugin(
+        py: Python<'_>,
+        class_plugin: &ClassPlugin,
+        target: &str,
+    ) -> Result<Vec<serde_json::Value>> {
+        let instance = class_plugin
+            .class
+            .call0()
+            .map_err(|e| anyhow::anyhow!("Failed to instantiate plugin '{}': {}", class_plugin.name, e))?;
+
+        let config_dict = PyDict::new_bound(py);
+
+        let result = instance
+            .call_method1("run", (target, config_dict))
+            .map_err(|e| anyhow::anyhow!("Plugin '{}' run() failed: {}", class_plugin.name, e))?;
+
+        let mut json_results = Vec::new();
+
+        // Try to extract as a dict with "findings" key
+        if let Ok(dict) = result.downcast::<PyDict>() {
+            if let Ok(findings) = dict.get_item("findings") {
+                if let Ok(list) = findings.and_then(|f| f.downcast::<PyList>()) {
+                    for item in list.iter() {
+                        if let Ok(finding_dict) = item.downcast::<PyDict>() {
+                            let mut finding = serde_json::Map::new();
+                            for (key, val) in finding_dict.iter() {
+                                if let Ok(k) = key.extract::<String>() {
+                                    let json_val = py_value_to_json(py, &val);
+                                    finding.insert(k, json_val);
+                                }
+                            }
+                            json_results.push(serde_json::Value::Object(finding));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(json_results)
+    }
+
     pub fn get_checks(&self) -> Vec<PluginCheck> {
         Python::with_gil(|py| {
             let mut checks = Vec::new();
 
             for plugin in &self.plugins {
+                // Collect checks from function-based plugins
                 if let Ok(module) = plugin.module.as_ref(py).downcast::<PyModule>() {
                     if let Ok(register_func) = module.getattr("register_checks") {
                         if let Ok(result) = register_func.call0() {
@@ -102,36 +231,66 @@ impl PythonPluginManager {
                         }
                     }
                 }
+
+                // Collect checks from class-based plugins
+                for class_plugin in &plugin.class_plugins {
+                    checks.push(PluginCheck {
+                        name: class_plugin.name.clone(),
+                        check_type: "class".to_string(),
+                        target: None,
+                        description: Some(format!(
+                            "Class-based plugin from {}",
+                            plugin.name
+                        )),
+                    });
+                }
             }
 
             checks
         })
     }
 
-    pub fn run_check(&self, check_name: &str, target: &str) -> Result<Vec<serde_json::Value>> {
+    pub fn run_check_direct(&self, check_name: &str, target: &str) -> Result<Vec<serde_json::Value>> {
         Python::with_gil(|py| {
+            let mut all_results = Vec::new();
+
             for plugin in &self.plugins {
+                // Try function-based plugins
                 if let Ok(module) = plugin.module.as_ref(py).downcast::<PyModule>() {
                     if let Ok(run_func) = module.getattr("run_check") {
                         let args = (check_name, target);
                         if let Ok(result) = run_func.call1(args) {
                             if let Ok(list) = result.downcast::<PyList>() {
-                                let mut results = Vec::new();
                                 for item in list.iter() {
                                     if let Ok(json_str) = item.extract::<String>() {
                                         if let Ok(value) = serde_json::from_str(&json_str) {
-                                            results.push(value);
+                                            all_results.push(value);
                                         }
                                     }
                                 }
-                                return Ok(results);
+                            }
+                        }
+                    }
+                }
+
+                // Try class-based plugins
+                for class_plugin in &plugin.class_plugins {
+                    if class_plugin.name == check_name {
+                        match Self::run_class_plugin(py, class_plugin, target) {
+                            Ok(results) => all_results.extend(results),
+                            Err(e) => {
+                                tracing::warn!(
+                                    plugin = %class_plugin.name,
+                                    error = %e,
+                                    "Class-based plugin check failed"
+                                );
                             }
                         }
                     }
                 }
             }
 
-            Ok(Vec::new())
+            Ok(all_results)
         })
     }
 }
@@ -139,5 +298,135 @@ impl PythonPluginManager {
 impl Default for PythonPluginManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[async_trait]
+impl Plugin for PythonPluginManager {
+    fn info(&self) -> &PluginInfo {
+        &self.info
+    }
+
+    fn language(&self) -> PluginLanguage {
+        PluginLanguage::Python
+    }
+
+    fn list_checks(&self) -> Vec<PluginCheck> {
+        self.get_checks()
+    }
+
+    async fn run_check(&self, check_name: &str, target: &str) -> Result<PluginResult> {
+        let start = Instant::now();
+        let json_results = self.run_check_direct(check_name, target)?;
+        let execution_time_ms = start.elapsed().as_millis() as u64;
+
+        let findings = json_results
+            .into_iter()
+            .filter_map(|v| {
+                let title = v.get("title").and_then(|t| t.as_str())?.to_string();
+                let severity = v
+                    .get("severity")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("info")
+                    .to_string();
+                let description = v
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let location = v
+                    .get("location")
+                    .and_then(|l| l.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let evidence = v.get("evidence").and_then(|e| e.as_str()).map(String::from);
+                let cve_ids = v
+                    .get("cve_ids")
+                    .and_then(|c| c.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|id| id.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                Some(super::PluginFinding {
+                    title,
+                    severity,
+                    description,
+                    location,
+                    evidence,
+                    cve_ids,
+                })
+            })
+            .collect();
+
+        Ok(PluginResult {
+            plugin_name: self.info.name.clone(),
+            success: true,
+            findings,
+            errors: Vec::new(),
+            execution_time_ms,
+        })
+    }
+
+    async fn run(&self, target: &str, _config: &PluginConfig) -> Result<PluginResult> {
+        let start = Instant::now();
+        let checks = self.get_checks();
+        let mut findings = Vec::new();
+        let mut errors = Vec::new();
+
+        for check in &checks {
+            match self.run_check_direct(&check.name, target) {
+                Ok(json_results) => {
+                    for v in json_results {
+                        if let Some(title) = v.get("title").and_then(|t| t.as_str()) {
+                            findings.push(super::PluginFinding {
+                                title: title.to_string(),
+                                severity: v
+                                    .get("severity")
+                                    .and_then(|s| s.as_str())
+                                    .unwrap_or("info")
+                                    .to_string(),
+                                description: v
+                                    .get("description")
+                                    .and_then(|d| d.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                location: v
+                                    .get("location")
+                                    .and_then(|l| l.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                evidence: v
+                                    .get("evidence")
+                                    .and_then(|e| e.as_str())
+                                    .map(String::from),
+                                cve_ids: v
+                                    .get("cve_ids")
+                                    .and_then(|c| c.as_array())
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|id| id.as_str().map(String::from))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default(),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    errors.push(format!("Check '{}' failed: {}", check.name, e));
+                }
+            }
+        }
+
+        Ok(PluginResult {
+            plugin_name: self.info.name.clone(),
+            success: errors.is_empty(),
+            findings,
+            errors,
+            execution_time_ms: start.elapsed().as_millis() as u64,
+        })
     }
 }

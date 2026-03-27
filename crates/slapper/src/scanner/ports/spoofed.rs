@@ -19,7 +19,7 @@ fn log_packet_trace(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16, sc
             use std::io::Write;
             let timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_nanos();
             let _ = writeln!(
                 guard,
@@ -99,7 +99,7 @@ pub(crate) async fn scan_ports_spoofed(
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ports ({eta})")
-                .unwrap()
+                .unwrap_or_else(|_| ProgressStyle::default_bar())
                 .progress_chars("#>-"),
         );
         Some(pb)

@@ -23,10 +23,15 @@ pub struct ExecutorCore {
     pub(crate) scripts_path: Arc<Mutex<Vec<PathBuf>>>,
     pub(crate) output: Mutex<Vec<String>>,
     pub(crate) registry: Mutex<HashMap<String, Value>>,
+    pub(crate) sandbox: crate::SandboxConfig,
 }
 
 impl ExecutorCore {
     pub fn new() -> LuaResult<Self> {
+        Self::with_sandbox(crate::SandboxConfig::default())
+    }
+
+    pub fn with_sandbox(sandbox: crate::SandboxConfig) -> LuaResult<Self> {
         let lua = Lua::new();
         let scripts_path = Arc::new(Mutex::new(vec![]));
         let output = Mutex::new(vec![]);
@@ -38,6 +43,7 @@ impl ExecutorCore {
             scripts_path: scripts_path.clone(),
             output,
             registry,
+            sandbox,
         };
 
         core.setup_globals()?;
@@ -452,8 +458,8 @@ impl ExecutorCore {
         crate::libraries::creds::register_creds_library(&self.lua)?;
         crate::libraries::openssl::register_openssl_library(&self.lua)?;
         crate::libraries::pcre::register_pcre_library(&self.lua)?;
-        crate::libraries::io::register_io_library(&self.lua)?;
-        crate::libraries::os::register_os_library(&self.lua)?;
+        crate::libraries::io::register_io_library(&self.lua, &self.sandbox)?;
+        crate::libraries::os::register_os_library(&self.lua, &self.sandbox)?;
         crate::libraries::unittest::register_unittest_library(&self.lua)?;
         crate::libraries::target::register_target_library(&self.lua)?;
         crate::libraries::strbuf::register_strbuf_library(&self.lua)?;
@@ -624,12 +630,6 @@ impl ExecutorCore {
 
         self.lua.globals().set("require", require_fn)?;
         Ok(())
-    }
-}
-
-impl Default for ExecutorCore {
-    fn default() -> Self {
-        Self::new().expect("Failed to create ExecutorCore")
     }
 }
 

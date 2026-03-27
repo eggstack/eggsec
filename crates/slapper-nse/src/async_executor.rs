@@ -32,6 +32,18 @@ impl AsyncNseExecutor {
         })
     }
 
+    /// Create a new async executor with sandbox restrictions.
+    pub fn with_sandbox(sandbox: crate::SandboxConfig) -> LuaResult<Self> {
+        let runtime = Runtime::new().map_err(|e| {
+            mlua::Error::RuntimeError(format!("Failed to create tokio runtime: {}", e))
+        })?;
+        Ok(Self {
+            core: ExecutorCore::with_sandbox(sandbox)?,
+            runtime: Some(runtime),
+            owns_runtime: true,
+        })
+    }
+
     /// Create async executor with a specific target.
     pub fn with_target(target: &str) -> LuaResult<Self> {
         let mut exec = Self::new()?;

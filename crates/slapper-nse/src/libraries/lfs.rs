@@ -21,19 +21,31 @@ pub fn register_lfs_library(lua: &Lua) -> LuaResult<()> {
 
                 let modification = meta
                     .modified()
-                    .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as f64)
+                    .map(|t| {
+                        t.duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs() as f64
+                    })
                     .unwrap_or(0.0);
                 attrs.set("modification", modification)?;
 
                 let access = meta
                     .accessed()
-                    .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as f64)
+                    .map(|t| {
+                        t.duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs() as f64
+                    })
                     .unwrap_or(0.0);
                 attrs.set("access", access)?;
 
                 let creation = meta
                     .created()
-                    .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as f64)
+                    .map(|t| {
+                        t.duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs() as f64
+                    })
                     .unwrap_or(0.0);
                 attrs.set("creation", creation)?;
 

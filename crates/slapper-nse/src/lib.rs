@@ -4,6 +4,8 @@
 //! It leverages mlua (Lua 5.4) and wraps existing Slapper functionality
 //! to provide NSE-compatible libraries.
 
+use std::path::PathBuf;
+
 /// Configuration for running NSE scripts.
 pub struct NseConfig {
     pub target: String,
@@ -34,7 +36,83 @@ impl NseConfig {
     }
 }
 
-#[cfg(feature = "nse")]
+/// Sandbox configuration for restricting NSE Lua script capabilities.
+///
+/// When sandboxing is enabled, dangerous operations like `io.popen` (arbitrary
+/// command execution) and unrestricted filesystem access are blocked or limited.
+#[derive(Debug, Clone)]
+pub struct SandboxConfig {
+    /// Whether sandboxing is enabled.
+    pub enabled: bool,
+    /// If set, restrict file operations to this directory.
+    pub allowed_dir: Option<PathBuf>,
+    /// If non-empty, only these commands are allowed via `io.popen`.
+    /// If empty and sandbox is enabled, `io.popen` is fully blocked.
+    pub allowed_commands: Vec<String>,
+    /// Whether to log sandbox violations instead of blocking them.
+    pub log_violations: bool,
+}
+
+impl Default for SandboxConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            allowed_dir: None,
+            allowed_commands: Vec::new(),
+            log_violations: true,
+        }
+    }
+}
+
+impl SandboxConfig {
+    /// Create a sandbox config with sandboxing enabled and default settings.
+    pub fn enabled() -> Self {
+        Self {
+            enabled: true,
+            ..Default::default()
+        }
+    }
+
+    /// Check if a file path is allowed under the sandbox.
+    pub fn is_path_allowed(&self, path: &str) -> bool {
+        if !self.enabled {
+            return true;
+        }
+
+        let Some(ref allowed_dir) = self.allowed_dir else {
+            return true;
+        };
+
+        let path_buf = PathBuf::from(path);
+        let Ok(canonical) = path_buf.canonicalize() else {
+            // If canonicalize fails (file doesn't exist), check the parent
+            if let Some(parent) = path_buf.parent() {
+                if let Ok(canonical_parent) = parent.canonicalize() {
+                    return canonical_parent.starts_with(allowed_dir);
+                }
+            }
+            // Reject if we can't verify the path
+            return false;
+        };
+
+        canonical.starts_with(allowed_dir)
+    }
+
+    /// Check if a command is allowed via `io.popen`.
+    pub fn is_command_allowed(&self, cmd: &str) -> bool {
+        if !self.enabled {
+            return true;
+        }
+
+        if self.allowed_commands.is_empty() {
+            return false;
+        }
+
+        let cmd_name = cmd.split_whitespace().next().unwrap_or(cmd);
+        self.allowed_commands.iter().any(|allowed| cmd_name == allowed)
+    }
+}
+
 #[cfg(feature = "nse")]
 pub mod async_executor;
 pub mod context;

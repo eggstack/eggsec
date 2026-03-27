@@ -1,6 +1,10 @@
 use anyhow::{anyhow, Context, Result};
+use async_trait::async_trait;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
+
+use slapper_plugin::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult};
 
 use super::bridge::RubyBridge;
 use super::{RubyPlugin, RubyPluginResult};
@@ -12,20 +16,18 @@ pub struct PluginLoader {
 }
 
 impl PluginLoader {
-    pub fn new() -> Result<Self> {
+    pub fn new(plugin_dirs: Vec<PathBuf>) -> Result<Self> {
         let bridge = RubyBridge::new()?;
 
-        let mut plugin_dirs = Vec::new();
-
-        if let Some(proj_dirs) = directories::ProjectDirs::from("com", "slapper", "slapper") {
-            plugin_dirs.push(proj_dirs.config_dir().join("plugins"));
-        }
-
-        plugin_dirs.push(PathBuf::from("./plugins"));
+        let dirs = if plugin_dirs.is_empty() {
+            vec![PathBuf::from("./plugins")]
+        } else {
+            plugin_dirs
+        };
 
         Ok(Self {
             bridge,
-            plugin_dirs,
+            plugin_dirs: dirs,
             loaded_plugins: Vec::new(),
         })
     }
@@ -94,6 +96,93 @@ impl PluginLoader {
 
 impl Default for PluginLoader {
     fn default() -> Self {
-        Self::new().expect("Failed to create plugin loader")
+        Self::new(vec![]).expect("Failed to create plugin loader")
+    }
+}
+
+/// Adapter that wraps a Ruby plugin and implements the unified `Plugin` trait.
+pub struct RubyPluginAdapter {
+    plugin: RubyPlugin,
+    bridge: RubyBridge,
+    info: PluginInfo,
+}
+
+impl RubyPluginAdapter {
+    pub fn new(plugin: RubyPlugin, bridge: RubyBridge) -> Self {
+        let info = PluginInfo {
+            name: plugin.name.clone(),
+            version: plugin.version.clone(),
+            description: plugin.description.clone().unwrap_or_default(),
+            author: plugin.author.clone().unwrap_or_default(),
+            tags: vec!["ruby".to_string()],
+            language: PluginLanguage::Ruby,
+        };
+        Self {
+            plugin,
+            bridge,
+            info,
+        }
+    }
+}
+
+#[async_trait]
+impl Plugin for RubyPluginAdapter {
+    fn info(&self) -> &PluginInfo {
+        &self.info
+    }
+
+    fn language(&self) -> PluginLanguage {
+        PluginLanguage::Ruby
+    }
+
+    fn list_checks(&self) -> Vec<PluginCheck> {
+        vec![PluginCheck {
+            name: self.plugin.name.clone(),
+            check_type: "ruby".to_string(),
+            target: None,
+            description: self.plugin.description.clone(),
+        }]
+    }
+
+    async fn run_check(&self, check_name: &str, target: &str) -> Result<PluginResult> {
+        let start = Instant::now();
+
+        if check_name != self.plugin.name {
+            anyhow::bail!("Unknown check: {}", check_name);
+        }
+
+        let ruby_result = self.bridge.run_plugin(&self.plugin, target)?;
+        let execution_time_ms = start.elapsed().as_millis() as u64;
+
+        let findings = ruby_result
+            .findings
+            .into_iter()
+            .map(|f| slapper_plugin::PluginFinding {
+                title: f.description.clone(),
+                severity: f.severity,
+                description: f.description,
+                location: f.location,
+                evidence: f.evidence,
+                cve_ids: Vec::new(),
+            })
+            .collect();
+
+        let errors = if let Some(err) = ruby_result.error {
+            vec![err]
+        } else {
+            Vec::new()
+        };
+
+        Ok(PluginResult {
+            plugin_name: self.info.name.clone(),
+            success: ruby_result.success,
+            findings,
+            errors,
+            execution_time_ms,
+        })
+    }
+
+    async fn run(&self, target: &str, _config: &PluginConfig) -> Result<PluginResult> {
+        self.run_check(&self.plugin.name, target).await
     }
 }

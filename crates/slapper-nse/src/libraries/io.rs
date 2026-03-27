@@ -9,18 +9,41 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use crate::SandboxConfig;
+
 static FILE_HANDLES: once_cell::sync::Lazy<Mutex<HashMap<i32, File>>> =
     once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
 
 static NEXT_FD: once_cell::sync::Lazy<Mutex<i32>> = once_cell::sync::Lazy::new(|| Mutex::new(100));
 
-pub fn register_io_library(lua: &Lua) -> LuaResult<()> {
+pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> {
     let globals = lua.globals();
     let io = lua.create_table()?;
 
+    let sandbox_enabled = sandbox.enabled;
+    let allowed_dir = sandbox.allowed_dir.clone();
+
     io.set(
         "open",
-        lua.create_function(|lua, (filename, mode): (String, Option<String>)| {
+        lua.create_function(move |lua, (filename, mode): (String, Option<String>)| {
+            if sandbox_enabled {
+                let path_buf = PathBuf::from(&filename);
+                if let Some(ref dir) = allowed_dir {
+                    let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
+                    if !canonical.starts_with(dir) {
+                        let result = lua.create_table()?;
+                        result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
+                        return Ok(result);
+                    }
+                }
+                // Block paths containing ".." when sandboxed
+                if filename.contains("..") {
+                    let result = lua.create_table()?;
+                    result.set("error", "Path traversal blocked by sandbox")?;
+                    return Ok(result);
+                }
+            }
+
             let mode_str = mode.unwrap_or_else(|| "r".to_string());
 
             let file = match mode_str.as_str() {
@@ -196,9 +219,24 @@ pub fn register_io_library(lua: &Lua) -> LuaResult<()> {
         })?,
     )?;
 
+    let sandbox_for_popen = sandbox.clone();
     io.set(
         "popen",
-        lua.create_function(|lua, (cmd, mode): (String, Option<String>)| {
+        lua.create_function(move |lua, (cmd, mode): (String, Option<String>)| {
+            if sandbox_for_popen.enabled {
+                if !sandbox_for_popen.is_command_allowed(&cmd) {
+                    if sandbox_for_popen.log_violations {
+                        tracing::warn!(
+                            command = %cmd,
+                            "Sandbox: blocked io.popen call"
+                        );
+                    }
+                    let result = lua.create_table()?;
+                    result.set("error", "io.popen blocked by sandbox")?;
+                    return Ok(result);
+                }
+            }
+
             let mode_str = mode.unwrap_or_else(|| "r".to_string());
 
             #[cfg(unix)]

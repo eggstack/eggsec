@@ -366,3 +366,40 @@ fn escape_csv(s: &str) -> String {
         s.to_string()
     }
 }
+
+impl From<&ScanReportData> for super::markdown::ScanSummary {
+    fn from(report: &ScanReportData) -> Self {
+        let findings_by_severity =
+            |sev: &str| report.findings.iter().filter(|f| f.severity == sev).count() as u32;
+
+        super::markdown::ScanSummary {
+            target: report.target.clone(),
+            scan_type: report.scan_type.clone(),
+            timestamp: report.timestamp.clone(),
+            duration_seconds: report.duration_ms / 1000,
+            total_requests: 0,
+            findings_count: report.findings.len() as u32,
+            critical_count: findings_by_severity("critical"),
+            high_count: findings_by_severity("high"),
+            medium_count: findings_by_severity("medium"),
+            low_count: findings_by_severity("low"),
+            info_count: findings_by_severity("info"),
+        }
+    }
+}
+
+impl From<&FindingData> for super::markdown::Finding {
+    fn from(f: &FindingData) -> Self {
+        super::markdown::Finding {
+            title: f.title.clone(),
+            severity: f.severity.clone(),
+            category: f.category.clone(),
+            description: f.description.clone(),
+            location: f.location.clone(),
+            evidence: f.evidence.clone(),
+            remediation: f.remediation.clone(),
+            references: Vec::new(),
+            cve_ids: f.cve_ids.clone(),
+        }
+    }
+}

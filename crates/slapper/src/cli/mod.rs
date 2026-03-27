@@ -47,52 +47,65 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    #[command(about = "Run HTTP load test against target URL", long_about = LOAD_ABOUT)]
-    Load(LoadArgs),
-    #[command(about = "Scan ports on target host", long_about = SCAN_PORTS_ABOUT)]
+    // --- Scan operations ---
+    #[command(about = "Scan ports on target host", long_about = SCAN_PORTS_ABOUT, alias = "scan-ports")]
     ScanPorts(PortScanArgs),
-    #[command(about = "Discover sensitive HTTP endpoints", long_about = SCAN_ENDPOINTS_ABOUT)]
+    #[command(about = "Discover sensitive HTTP endpoints", long_about = SCAN_ENDPOINTS_ABOUT, alias = "scan-endpoints")]
     ScanEndpoints(EndpointScanArgs),
     #[command(about = "Fingerprint services (AMAP-style)", long_about = FINGERPRINT_ABOUT)]
     Fingerprint(FingerprintArgs),
-    #[cfg(feature = "nse")]
-    #[command(about = "Run Nmap NSE scripts for security scanning", long_about = NSE_ABOUT)]
-    Nse(NseArgs),
-    #[command(about = "Fuzz target with security payloads", long_about = FUZZ_ABOUT)]
-    Fuzz(FuzzArgs),
-    #[command(about = "Comprehensive WAF stress testing", long_about = WAF_STRESS_ABOUT)]
-    WafStress(WafStressArgs),
-    #[command(about = "Detect and bypass Web Application Firewalls", long_about = WAF_ABOUT)]
-    Waf(WafArgs),
     #[command(about = "Run chained security assessment pipeline", long_about = SCAN_ABOUT)]
     Scan(ScanArgs),
-    #[command(about = "Gather reconnaissance information", long_about = RECON_ABOUT)]
-    Recon(ReconArgs),
+    #[command(about = "Resume a previous scan from session file", long_about = RESUME_ABOUT)]
+    Resume(ResumeArgs),
+
+    // --- Attack operations ---
+    #[command(about = "Fuzz target with security payloads", long_about = FUZZ_ABOUT)]
+    Fuzz(FuzzArgs),
+    #[command(about = "Detect and bypass Web Application Firewalls", long_about = WAF_ABOUT)]
+    Waf(WafArgs),
+    #[command(about = "Comprehensive WAF stress testing", long_about = WAF_STRESS_ABOUT, alias = "waf-stress")]
+    WafStress(WafStressArgs),
     #[command(about = "Test GraphQL endpoints for security issues", long_about = GRAPHQL_ABOUT)]
     Graphql(GraphQlArgs),
     #[command(about = "Test OAuth/OIDC endpoints for vulnerabilities", long_about = OAUTH_ABOUT)]
     OAuth(OAuthArgs),
-    #[command(about = "Resume a previous scan from session file", long_about = RESUME_ABOUT)]
-    Resume(ResumeArgs),
+
+    // --- Recon operations ---
+    #[command(about = "Gather reconnaissance information", long_about = RECON_ABOUT)]
+    Recon(ReconArgs),
+
+    // --- Load testing ---
+    #[command(about = "Run HTTP load test against target URL", long_about = LOAD_ABOUT)]
+    Load(LoadArgs),
+
+    // --- Tool operations ---
     #[command(about = "Packet inspection and analysis tools", long_about = PACKET_ABOUT)]
     Packet(PacketArgs),
-    #[cfg(feature = "stress-testing")]
-    #[command(about = "Send ICMP echo probes to target host", long_about = ICMP_ABOUT)]
-    Icmp(IcmpArgs),
-    #[cfg(feature = "stress-testing")]
-    #[command(about = "Trace network path to target host", long_about = TRACEROUTE_ABOUT)]
-    Traceroute(TracerouteArgs),
+    #[cfg(feature = "nse")]
+    #[command(about = "Run Nmap NSE scripts for security scanning", long_about = NSE_ABOUT)]
+    Nse(NseArgs),
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     #[command(about = "Manage and run security scanning plugins")]
     Plugin(PluginArgs),
     #[command(about = "Convert and generate security scan reports")]
     Report(ReportArgs),
+
+    // --- Stress testing operations ---
     #[cfg(feature = "stress-testing")]
     #[command(about = "Run stress/load testing against target", long_about = STRESS_ABOUT)]
     Stress(StressArgs),
     #[cfg(feature = "stress-testing")]
     #[command(about = "Manage proxy pool and rotation", long_about = PROXY_ABOUT)]
     Proxy(ProxyArgs),
+    #[cfg(feature = "stress-testing")]
+    #[command(about = "Send ICMP echo probes to target host", long_about = ICMP_ABOUT)]
+    Icmp(IcmpArgs),
+    #[cfg(feature = "stress-testing")]
+    #[command(about = "Trace network path to target host", long_about = TRACEROUTE_ABOUT)]
+    Traceroute(TracerouteArgs),
+
+    // --- Infrastructure operations ---
     #[command(about = "Manage distributed scanning cluster", long_about = CLUSTER_ABOUT)]
     Cluster(ClusterArgs),
     #[command(about = "Test and manage notifications", long_about = NOTIFY_ABOUT)]
@@ -105,7 +118,10 @@ pub enum Commands {
     #[command(about = "Start REST API server for external tool integration")]
     Serve(ServeArgs),
     #[cfg(feature = "mcp-server")]
-    #[command(about = "Start MCP server for AI assistant integration")]
+    #[command(
+        about = "Start MCP server for AI assistant integration",
+        alias = "mcp-serve"
+    )]
     McpServe(McpServeArgs),
 }
 
