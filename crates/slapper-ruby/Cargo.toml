@@ -6,7 +6,7 @@ license.workspace = true
 description = "Ruby/Metasploit integration for Slapper"
 
 [dependencies]
-magnus = { version = "0.7", features = ["embed"], optional = true }
+magnus = { version = "0.8", features = ["embed"], optional = true }
 reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2"], default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "time"] }
 base64 = "0.22"

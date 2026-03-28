@@ -76,7 +76,7 @@ impl PythonPluginManager {
                 return Ok(());
             }
 
-            let sys = py.import_bound("sys")?;
+            let sys = py.import("sys")?;
             let path = sys.getattr("path")?;
             let dir_str = plugin_dir
                 .to_str()
@@ -92,7 +92,7 @@ impl PythonPluginManager {
                 if path.extension().map(|e| e == "py").unwrap_or(false) {
                     if let Some(stem) = path.file_stem() {
                         if let Some(module_name) = stem.to_str() {
-                            match PyModule::import_bound(py, module_name) {
+                            match PyModule::import(py, module_name) {
                                 Ok(module) => {
                                     let class_plugins =
                                         Self::extract_class_plugins(py, &module, module_name);
@@ -122,7 +122,7 @@ impl PythonPluginManager {
 
     /// Extract class-based plugins from a module's PLUGINS list.
     fn extract_class_plugins(
-        py: Python<'_>,
+        _py: Python<'_>,
         module: &pyo3::Bound<'_, PyModule>,
         module_name: &str,
     ) -> Vec<ClassPlugin> {
@@ -162,21 +162,21 @@ impl PythonPluginManager {
     ) -> Result<Vec<serde_json::Value>> {
         let instance = class_plugin
             .class
-            .call0()
+            .call0(py)
             .map_err(|e| anyhow::anyhow!("Failed to instantiate plugin '{}': {}", class_plugin.name, e))?;
 
-        let config_dict = PyDict::new_bound(py);
+        let config_dict = PyDict::new(py);
 
         let result = instance
-            .call_method1("run", (target, config_dict))
+            .call_method1(py, "run", (target, config_dict))
             .map_err(|e| anyhow::anyhow!("Plugin '{}' run() failed: {}", class_plugin.name, e))?;
 
         let mut json_results = Vec::new();
 
         // Try to extract as a dict with "findings" key
-        if let Ok(dict) = result.downcast::<PyDict>() {
-            if let Ok(findings) = dict.get_item("findings") {
-                if let Ok(list) = findings.and_then(|f| f.downcast::<PyList>()) {
+        if let Ok(dict) = result.downcast_bound::<PyDict>(py) {
+            if let Some(findings) = dict.get_item("findings").ok().flatten() {
+                if let Ok(list) = findings.downcast::<PyList>() {
                     for item in list.iter() {
                         if let Ok(finding_dict) = item.downcast::<PyDict>() {
                             let mut finding = serde_json::Map::new();
@@ -202,27 +202,39 @@ impl PythonPluginManager {
 
             for plugin in &self.plugins {
                 // Collect checks from function-based plugins
-                if let Ok(module) = plugin.module.as_ref(py).downcast::<PyModule>() {
+                if let Ok(module) = plugin.module.bind(py).downcast::<PyModule>() {
                     if let Ok(register_func) = module.getattr("register_checks") {
                         if let Ok(result) = register_func.call0() {
                             if let Ok(list) = result.downcast::<PyList>() {
                                 for item in list.iter() {
                                     if let Ok(dict) = item.downcast::<PyDict>() {
+                                        let name = dict
+                                            .get_item("name")
+                                            .ok()
+                                            .flatten()
+                                            .and_then(|v| v.extract::<String>().ok())
+                                            .unwrap_or_default();
+                                        let check_type = dict
+                                            .get_item("type")
+                                            .ok()
+                                            .flatten()
+                                            .and_then(|v| v.extract::<String>().ok())
+                                            .unwrap_or_default();
+                                        let target = dict
+                                            .get_item("target")
+                                            .ok()
+                                            .flatten()
+                                            .and_then(|v| v.extract::<String>().ok());
+                                        let description = dict
+                                            .get_item("description")
+                                            .ok()
+                                            .flatten()
+                                            .and_then(|v| v.extract::<String>().ok());
                                         let check = PluginCheck {
-                                            name: dict
-                                                .get_item("name")
-                                                .and_then(|v| v.extract().ok())
-                                                .unwrap_or_default(),
-                                            check_type: dict
-                                                .get_item("type")
-                                                .and_then(|v| v.extract().ok())
-                                                .unwrap_or_default(),
-                                            target: dict
-                                                .get_item("target")
-                                                .and_then(|v| v.extract().ok()),
-                                            description: dict
-                                                .get_item("description")
-                                                .and_then(|v| v.extract().ok()),
+                                            name,
+                                            check_type,
+                                            target,
+                                            description,
                                         };
                                         checks.push(check);
                                     }
@@ -256,7 +268,7 @@ impl PythonPluginManager {
 
             for plugin in &self.plugins {
                 // Try function-based plugins
-                if let Ok(module) = plugin.module.as_ref(py).downcast::<PyModule>() {
+                if let Ok(module) = plugin.module.bind(py).downcast::<PyModule>() {
                     if let Ok(run_func) = module.getattr("run_check") {
                         let args = (check_name, target);
                         if let Ok(result) = run_func.call1(args) {

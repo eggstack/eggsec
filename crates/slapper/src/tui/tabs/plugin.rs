@@ -118,14 +118,17 @@ impl PluginTab {
             };
             self.results_view.add_line(Line::from(vec![
                 Span::styled("  ", Style::default()),
-                Span::styled(&finding.severity, Style::default().fg(severity_color)),
+                Span::styled(
+                    finding.severity.clone(),
+                    Style::default().fg(severity_color),
+                ),
                 Span::raw(": "),
-                Span::raw(&finding.title),
+                Span::raw(finding.title.clone()),
             ]));
             if let Some(ref evidence) = finding.evidence {
                 self.results_view.add_line(Line::from(vec![
                     Span::raw("    Evidence: "),
-                    Span::raw(evidence.as_str()),
+                    Span::raw(evidence.clone()),
                 ]));
             }
         }

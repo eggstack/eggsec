@@ -425,6 +425,8 @@ pub struct App {
     pub cluster: tabs::ClusterTab,
     pub stress: tabs::StressTab,
     pub report: tabs::ReportTab,
+    #[cfg(feature = "python-plugins")]
+    pub plugin: tabs::PluginTab,
     pub settings: tabs::SettingsTab,
     pub http_options: GlobalHttpOptions,
     pub history: SharedHistory,
@@ -468,6 +470,8 @@ impl App {
             cluster: tabs::ClusterTab::new(),
             stress: tabs::StressTab::new(),
             report: tabs::ReportTab::new(),
+            #[cfg(feature = "python-plugins")]
+            plugin: tabs::PluginTab::new(),
             settings: tabs::SettingsTab::new(),
             dashboard: tabs::DashboardTab::new(),
             http_options: GlobalHttpOptions::default(),

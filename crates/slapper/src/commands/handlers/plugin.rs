@@ -3,6 +3,8 @@
 use anyhow::Result;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 use crate::commands::handlers::CommandContext;
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+use slapper_plugin::Plugin;
 
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
@@ -76,11 +78,11 @@ pub async fn handle_plugin(ctx: &CommandContext, args: crate::cli::PluginArgs) -
                     }
                 }
 
-                let results = python_mgr.run_check(&run_args.name, &run_args.target)?;
-                if !results.is_empty() {
+                let results = python_mgr.run_check(&run_args.name, &run_args.target).await?;
+                if !results.findings.is_empty() {
                     println!("Running Python plugin '{}' against target '{}'", run_args.name, run_args.target);
                     println!("\nPlugin Results:");
-                    for finding in &results {
+                    for finding in &results.findings {
                         println!("  - {:?}", finding);
                     }
                     if let Some(output_file) = &run_args.output {

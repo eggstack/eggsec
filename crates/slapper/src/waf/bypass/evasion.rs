@@ -263,7 +263,7 @@ impl EvasionBypass {
     }
 
     fn is_bypass_successful(&self, status: u16, _detection: &WafDetectionResult) -> bool {
-        !BLOCKED_STATUS_CODES.contains(&status) && status >= 200 && status < 300
+        !BLOCKED_STATUS_CODES.contains(&status) && (200..300).contains(&status)
     }
 }
 

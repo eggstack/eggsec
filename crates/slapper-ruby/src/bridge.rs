@@ -12,6 +12,14 @@ pub struct RubyBridge {
     loaded: bool,
 }
 
+// Safety: Ruby runtime is thread-safe when GIL is held.
+// The Ruby type contains PhantomData<*mut ()> which prevents auto-Send+Sync,
+// but magnus ensures proper GIL handling for thread safety.
+#[cfg(feature = "ruby-plugins")]
+unsafe impl Send for RubyBridge {}
+#[cfg(feature = "ruby-plugins")]
+unsafe impl Sync for RubyBridge {}
+
 impl RubyBridge {
     #[cfg(feature = "ruby-plugins")]
     pub fn new() -> Result<Self> {
