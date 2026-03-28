@@ -78,7 +78,7 @@ pub use slapper_nse as nse;
 #[cfg(all(feature = "nse", feature = "tool-api"))]
 pub mod nse_tool;
 
-#[cfg(feature = "python-plugins")]
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub use slapper_plugin as plugin;
 
 #[cfg(feature = "ruby-plugins")]

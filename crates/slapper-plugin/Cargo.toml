@@ -13,8 +13,9 @@ tracing = "0.1"
 async-trait = "0.1"
 dirs = { version = "5", optional = true }
 pyo3 = { version = "0.24", features = ["auto-initialize"], optional = true }
+magnus = { version = "0.8", optional = true }
 
 [features]
 default = []
 python-plugins = ["dep:pyo3", "dep:dirs"]
-ruby-plugins = []
+ruby-plugins = ["dep:magnus"]

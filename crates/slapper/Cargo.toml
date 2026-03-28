@@ -142,7 +142,7 @@ mcp-server = ["rest-api"]
 python-plugins = ["dep:slapper-plugin", "slapper-plugin/python-plugins"]
 
 # Ruby plugin support with Metasploit RPC integration
-ruby-plugins = ["dep:slapper-ruby", "slapper-ruby/ruby-plugins"]
+ruby-plugins = ["dep:slapper-plugin", "slapper-plugin/ruby-plugins", "dep:slapper-ruby", "slapper-ruby/ruby-plugins"]
 
 # Low-level network stress testing
 stress-testing = ["pnet", "pnet_packet", "socket2", "nix", "libc", "surge-ping", "slapper-nse?/stress-testing"]

@@ -157,3 +157,32 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 - Add doc comments to public functions with `# Examples` and `# Errors`
 - Keep modules focused - split files > 500 lines
 - Follow existing patterns in neighboring code
+
+## Plugin System
+
+### Feature Flag Interactions
+
+- `python-plugins` enables `slapper-plugin` (with `pyo3` + `dirs`) and exports `crate::plugin`
+- `ruby-plugins` enables both `slapper-plugin` (with `magnus`) and `slapper-ruby` (with `magnus`)
+- `commands/handlers/plugin.rs` is gated on `any(feature = "python-plugins", feature = "ruby-plugins")`
+- The `crate::plugin` re-export in `lib.rs` is gated on `any(feature = "python-plugins", feature = "ruby-plugins")`
+- `slapper-plugin` has separate feature flags: `python-plugins` (pyo3) and `ruby-plugins` (magnus)
+
+### Magnus 0.8 API (slapper-plugin/src/ruby.rs)
+
+- `eval::<()>` is not valid — use `let _: Value = eval(...)` to discard result
+- `funcall` returns `Result<Value>` — use explicit `Value` return type, not turbofish `::<_, Value>`
+- Hash field access uses `RHash::lookup::<_, Value>(key)` + `String::try_convert(v)`, not `funcall("get", ...)` + `to_s()`
+- Array iteration uses `RArray::each()` which yields `Result<Value>`
+
+### ProgressStyle Template
+
+Always use `.unwrap_or_else(|_| ProgressStyle::default_bar())` instead of `.unwrap()` on `ProgressStyle::template()`. The template method can fail on invalid format strings.
+
+## Deferred Items
+
+See `deferred.md` for items that were skipped or deferred from the remediation plan, including:
+- Ruby plugin thread safety (Plugin trait Send+Sync requirement)
+- TUI plugin integration (missing app.plugin field)
+- Arc<Mutex> usage review
+- PyO3/Python 3.14 forward compatibility

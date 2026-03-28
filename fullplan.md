@@ -75,10 +75,10 @@ Before any work begins, these compilation blockers must be resolved:
 
 **Status:** DONE
 
-### 5. `expect()` Calls in Hot Paths (Robustness) — DONE
+### 5. `expect()` Calls in Hot Paths (Robustness)
 
 **Source:** plan3.md #2, plan2.md #10
-**Status:** Completed. Replaced `ProgressStyle::template().unwrap()` with `.unwrap_or_else(|_| ProgressStyle::default_bar())` in 4 locations. Replaced all `duration_since(UNIX_EPOCH).unwrap()` with `.unwrap_or_default()` in NSE libraries.
+**Status:** DONE. Replaced `ProgressStyle::template().unwrap()` with `.unwrap_or_else(|_| ProgressStyle::default_bar())` in 6 locations: `scanner/ports/mod.rs`, `scanner/endpoints.rs`, `scanner/fingerprint.rs`, `stress/http.rs`, `pipeline/executor.rs`, `fuzzer/engine/execution.rs` (x2). Replaced all `duration_since(UNIX_EPOCH).unwrap()` with `.unwrap_or_default()` in NSE libraries.
 
 ### 6. Inconsistent Error Handling in proxy/mod.rs (Robustness)
 
@@ -179,7 +179,7 @@ match reverse_dns::reverse_dns_lookup(ip).await {
 
 **Action:** Audit `println!` calls to confirm they are user-facing output, not diagnostic logging. Convert any diagnostic `println!` to `tracing::info!`/`debug!`.
 
-**Status:** DONE (tracing already integrated; audit pending).
+**Status:** DONE (tracing integrated; audit complete — all `println!`/`eprintln!` in library code are in CLI-facing `run_cli()` methods or output utilities, which is appropriate for a CLI tool).
 
 ### 14. Plugin Directory Defaults Unification (Incomplete from plan.md)
 
@@ -347,41 +347,14 @@ cargo clippy --lib -p slapper --features full -- -D warnings
 
 ### A. Ruby Plugin Compilation Issues
 
-#### A1. Magnus API Compatibility (Critical)
-**Files:** `crates/slapper-ruby/src/api.rs`
-**Problem:** Magnus 0.7.1 API incompatibilities:
-1. `Error::runtime()` doesn't exist in magnus 0.7.1
-2. `function!` macro has trait bound issues for `RubyFunction` traits
-3. Type inference errors for `rt.block_on()` return values
-4. `SessionType` doesn't implement `IntoValue` trait
-5. `ModuleInfo` field `module_type` doesn't exist
-
-**Root Cause:** The code was written for magnus 0.8.x API but we're using 0.7.1.
-
-**Solution Options:**
-1. **Upgrade magnus to 0.8.2** (Recommended)
-   - Update `crates/slapper-ruby/Cargo.toml`: `magnus = "0.8"`
-   - Update API calls to match 0.8.x API
-   - Fix any breaking changes
-
-2. **Downgrade API calls to 0.7.1 compatibility**
-   - Replace `Error::runtime()` with `Error::new()` using appropriate exception class
-   - Update `function!` macro usage
-   - Add type annotations where needed
-   - Implement missing traits for custom types
-
-**Action Plan:**
-```rust
-// Current (broken):
-Err(Error::runtime(e.to_string()))
-
-// Option 1 (magnus 0.8.2):
-Err(Error::runtime(e.to_string())) // works in 0.8.2
-
-// Option 2 (magnus 0.7.1):
-let ruby = Ruby::get().unwrap();
-Err(Error::new(ruby.class_runtime_error(), e.to_string()))
-```
+#### A1. Magnus API Compatibility (Critical) — FIXED
+**Files:** `crates/slapper-plugin/src/ruby.rs`
+**Status:** DONE. `slapper-plugin` now uses magnus 0.8 and the Ruby code was rewritten for the 0.8 API:
+- `eval::<()>` replaced with `let _: Value = eval(...)`
+- `funcall` uses explicit `Value` return types
+- Hash field extraction uses `RHash::lookup` + `String::try_convert` instead of `funcall("get", ...)` + `to_s()`
+- `ruby-plugins` feature now includes `dep:magnus` in `slapper-plugin/Cargo.toml`
+- `slapper/Cargo.toml` `ruby-plugins` feature now includes `dep:slapper-plugin`
 
 #### A2. Thread Safety for RubyPluginAdapter (Critical)
 **Files:** `crates/slapper-ruby/src/loader.rs:133`
@@ -423,18 +396,9 @@ Err(Error::new(ruby.class_runtime_error(), e.to_string()))
 
 ### B. Python Plugin TUI Integration Issues
 
-#### B1. Missing Await for Async Method (Medium)
+#### B1. Missing Await for Async Method (Medium) — FIXED
 **Files:** `crates/slapper/src/commands/handlers/plugin.rs:81`
-**Problem:** `python_mgr.run_check()` returns `Pin<Box<dyn Future>>` but is used with `?` operator without `await`.
-
-**Solution:**
-```rust
-// Current (broken):
-let results = python_mgr.run_check(&run_args.name, &run_args.target)?;
-
-// Fixed:
-let results = python_mgr.run_check(&run_args.name, &run_args.target).await?;
-```
+**Status:** DONE. The `.await?` is already present on line 81.
 
 #### B2. TUI App Structure Missing Plugin Field (Medium)
 **Files:** `crates/slapper/src/tui/ui.rs:442, 599`
@@ -508,9 +472,9 @@ cargo clippy --lib -p slapper --features full -- -D warnings
 
 | Criterion | Current Status | Target |
 |-----------|----------------|--------|
-| Ruby plugins compile | ❌ Magnus API errors | ✅ Compiles with `--features ruby-plugins` |
-| Python plugins compile | ❌ TUI integration errors | ✅ Compiles with `--features python-plugins` |
-| Plugin trait thread safety | ❌ Requires Send+Sync | ✅ No requirement for non-thread-safe runtimes |
-| All features compile | ❌ Partial | ✅ Compiles with `--features full` |
-| Existing tests pass | ✅ 328+ | ✅ All passing |
+| Ruby plugins compile | ✅ Compiles with `--features ruby-plugins` | ✅ Compiles with `--features ruby-plugins` |
+| Python plugins compile | ✅ Compiles with `--features python-plugins` | ✅ Compiles with `--features python-plugins` |
+| Plugin trait thread safety | ⚠️ Requires Send+Sync (deferred) | ✅ No requirement for non-thread-safe runtimes |
+| All features compile | ⚠️ `python-plugins` + `ruby-plugins` compile separately; `full` needs NSE timeout | ✅ Compiles with `--features full` |
+| Existing tests pass | ✅ 328 | ✅ All passing |
 | Clippy warnings | ✅ 0 | ✅ 0 |

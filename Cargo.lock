@@ -4332,6 +4332,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "dirs 5.0.1",
+ "magnus",
  "pyo3",
  "serde",
  "serde_json",

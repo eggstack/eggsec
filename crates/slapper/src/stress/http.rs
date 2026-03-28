@@ -41,7 +41,7 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
             .template(
                 "{spinner:.red} [{elapsed_precise}] [{bar:40.red/yellow}] {pos}/{len}s - {msg}",
             )
-            .unwrap()
+            .unwrap_or_else(|_| ProgressStyle::default_bar())
             .progress_chars("=>-"),
     );
 
