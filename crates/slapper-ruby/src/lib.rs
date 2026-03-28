@@ -8,7 +8,6 @@ pub use bridge::RubyBridge;
 pub use loader::{PluginLoader, RubyPluginAdapter};
 pub use msf::{MsfClient, MsfConfig, ModuleType};
 
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

