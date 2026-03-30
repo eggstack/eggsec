@@ -1,501 +1,427 @@
-# Slapper Codebase Improvement Plan
+# Comprehensive Improvement Plan — Slapper Codebase
 
-Consolidated plan from code reviews (2026-03-28). Merges items from plan2–5, deduplicates, corrects inaccuracies.
+## Overview
 
-**Codebase Rating: 8.5/10** — Well-engineered with clear separation of concerns and solid test coverage.
+This plan consolidates all improvement work from four prior plan files into a single, ordered execution plan. It covers error handling, code quality, module refactoring, Ruby plugin updates, and testing improvements.
 
----
-
-## Already Addressed (No Action Needed)
-
-| Item | Location | Status |
-|------|----------|--------|
-| Regex pre-compilation | `crates/slapper/src/recon/secrets.rs` (uses `once_cell::sync::Lazy`) | Done |
-| Serialization unwraps in tests | `crates/slapper/src/waf/detector.rs`, `crates/slapper/src/scanner/fingerprint.rs`, `crates/slapper/src/scanner/endpoints.rs` — all in `#[cfg(test)]` blocks | Acceptable |
+**Total Estimated Effort:** ~45 hours
+**Created:** 2026-03-30
 
 ---
 
-## Critical Priority
+## Current Status (2026-03-30)
 
-### 1. TLS Fallback to Plaintext Exposes PSK (Security)
-
-**File:** `crates/slapper/src/distributed/remote.rs:79-102`
-
-`CoordinatorServer::with_tls()` and `WorkerClient::with_tls()` silently fall back to plaintext when TLS initialization fails. The PSK is transmitted in `AuthMessage` — if TLS fails, credentials go over cleartext.
-
-**Fix:**
-- Change `CoordinatorServer::with_tls()` return type to `anyhow::Result<Self>`, return `Err` on TLS failure
-- `WorkerClient::with_tls()` already returns `Result` — propagate the error instead of swallowing it
-- Add separate `new_plaintext()` constructors with clear naming and docs for intentional plaintext
-
-**Verify:** `cargo test --lib -p slapper -- distributed`
+| Metric | Value |
+|--------|-------|
+| Tests | 328 passing |
+| Build | Clean compilation |
+| Clippy | 8 warnings (7 dead code + 1 if_same_then_else) |
+| Largest file | `waf/detector.rs` (595 lines) |
+| `anyhow::Result` in lib | ~111 occurrences |
+| Feature flags | 10+ combinations |
+| Ruby plugin functions | 38+ need magnus 0.8 updates |
 
 ---
 
-### 2. HTTP Flood Missing Feature Gate (Security)
+## Phase 1: Quick Fixes (1–2 hours)
 
-**File:** `crates/slapper/src/stress/mod.rs:147-149`
+### 1.1 Create `deferred.md`
 
-`StressType::Http` / `StressType::Tcp` runs `http::run_http_flood()` without any `#[cfg(feature = "stress-testing")]` gate. Inconsistent with SYN/UDP/ICMP which are gated.
+`AGENTS.md` references `deferred.md` but the file doesn't exist. Create it with the four known deferred items:
+- Ruby plugin thread safety (Plugin trait Send+Sync requirement)
+- TUI plugin integration (missing `app.plugin` field)
+- `Arc<Mutex>` usage review
+- PyO3/Python 3.14 forward compatibility
 
-**Fix:**
+### 1.2 Fix Clippy: Consolidate Duplicate If Blocks
+
+**File:** `crates/slapper/src/fuzzer/engine/execution.rs:204-210`
+
+Both branches call identical code. Consolidate:
 ```rust
-StressType::Http | StressType::Tcp => {
-    #[cfg(feature = "stress-testing")]
-    { http::run_http_flood(&self.config, &self.metrics).await? }
-    #[cfg(not(feature = "stress-testing"))]
-    { anyhow::bail!("HTTP/TCP flood requires 'stress-testing' feature"); }
+let is_error = r.error.is_some()
+    || r.status_code == 0
+    || r.status_code == 429
+    || r.status_code == 503;
+
+if is_error {
+    limiter.record_error(Some(r.status_code));
+} else {
+    limiter.record_success();
 }
 ```
 
-**Verify:** `cargo check --lib -p slapper` (no features) and `cargo test --lib -p slapper --features stress-testing`
+### 1.3 Remove Unnecessary Clone
 
----
+**File:** `crates/slapper/src/scanner/endpoints.rs:612`
 
-### 3. IP Allowlist Bypass via Imprecise Prefix Matching (Security)
-
-**File:** `crates/slapper/src/distributed/remote.rs:179-183`
-
-String prefix matching allows bypass. E.g., allowlist entry `"10.0.0"` matches IP `"10.0.01"` because `"10.0.01".starts_with("10.0.0")` is true.
-
-**Fix:** Use proper CIDR matching via the existing `ipnetwork` crate, or exact dot-boundary segment comparison.
-
-**Verify:** `cargo test --lib -p slapper -- distributed`
-
----
-
-## High Priority
-
-### 4. SensitiveString Converted to Plain String in Notify (Security)
-
-**File:** `crates/slapper/src/notify/mod.rs:73`
-
-`from_settings()` converts `SensitiveString` webhook secrets to plain `String` via `expose_secret().to_string()`, defeating zeroization.
-
-**Fix:**
-- Change `WebhookConfig.secret` from `Option<String>` to `Option<SensitiveString>` in `crates/slapper/src/notify/webhook.rs`
-- Update `from_settings()` to clone the `SensitiveString`
-- Update code reading `webhook_config.secret` to use `expose_secret()`
-
-**Verify:** `cargo test --lib -p slapper -- notify`
-
----
-
-### 5. Proxy Passwords Stored as Plain String (Security)
-
-**File:** `crates/slapper/src/proxy/config.rs:71`
-
-`ProxyEntry.password` is `Option<String>`, not `SensitiveString`. The `to_url()` method embeds credentials in URLs that may be logged.
-
-**Fix:**
-- Change to `Option<SensitiveString>`
-- Update `with_auth()`, `to_url()`, `from_str()` accordingly
-- Serde handles `SensitiveString` transparently
-
-**Verify:** `cargo test --lib -p slapper -- proxy`
-
----
-
-### 6. Silent Error Swallowing in Fuzzer Concurrent Mode (Correctness)
-
-**File:** `crates/slapper/src/fuzzer/engine/execution.rs:108-110`
-
-Failed requests in `run_concurrent()` are silently dropped. Cannot distinguish "no vulnerability" from "request failed."
-
-**Fix:**
 ```rust
-match result {
-    Ok(r) => { results.lock().await.push(r); }
-    Err(e) => { tracing::debug!("Fuzz request failed: {e}"); }
-}
+// Before:
+format!("{}{}", base, endpoint.clone())
+// After:
+format!("{}{}", base, endpoint)
 ```
 
-**Verify:** `cargo test --lib -p slapper -- fuzzer`
+### 1.4 Remove Redundant Arc Alias
 
----
+**File:** `crates/slapper/src/scanner/ports/spoofed.rs:72-73`
 
-### 7. Fragile String-Based PayloadType Dispatch (Correctness)
+`Arc` is imported twice — once directly and once as `StdArc`. Remove the alias import and replace `StdArc::new(...)` at line 93 with `Arc::new(...)`.
 
-**File:** `crates/slapper/src/fuzzer/engine/core.rs:207-209`
+### 1.5 Simplify Redundant Owasp Branch
 
-Uses `format!("{:?}", pt).to_lowercase()` to match against hardcoded string array. If `PayloadType` Debug repr changes, dispatch breaks silently.
+**File:** `crates/slapper/src/waf/mod.rs:227-229`
 
-**Fix:** Add `PayloadType::is_advanced()` or `PayloadType::advanced_name()` method. Replace string dispatch with method call.
+Both branches of an if/else return the same `OwaspCategory`. Replace with direct assignment and remove the `#[allow(clippy::if_same_then_else)]` suppression.
 
-**Verify:** `cargo test --lib -p slapper -- fuzzer`
+### 1.6 Scope Module-Level `#![allow(dead_code)]` in WAF Smuggling
 
----
+**File:** `crates/slapper/src/waf/bypass/smuggling.rs:2`
 
-### 8. Remove Unused `dispatch_blocking()` Methods (Cleanup)
+Move `#![allow(dead_code)]` from module level to the two specific dead functions (`generate_cl_te_payloads()`, `generate_te_cl_payloads()`). Also move `#![allow(clippy::vec_init_then_push)]` to the specific functions that trigger it.
 
-**Files:** `crates/slapper/src/tool/registry.rs:154-164`, `crates/slapper/src/tool/dispatcher.rs:79-93`
+### 1.7 Remove Dead `validate_port()` Function
 
-Both methods are defined but never called. They use `rt.block_on()` which would panic if called from within an async context. Dead code that could mislead.
+**File:** `crates/slapper/src/utils/validation.rs:39-41`
 
-**Fix:** Remove both methods entirely.
+The function accepts a `u16`, ignores it, and always returns `Ok(())`. No callers exist (the only other `validate_port` is an unrelated TUI method). The `u16` type already guarantees valid range, making this function redundant.
 
-**Verify:** `cargo test --lib -p slapper`
-
----
-
-### 9. Excessive `unwrap()` in Production Code
-
-**Files:**
-- `crates/slapper/src/proxy/mod.rs:171` — `"0.0.0.0:0".parse::<SocketAddr>().unwrap()`
-- `crates/slapper/src/scanner/ports/mod.rs:284` — `ProgressStyle::template().unwrap()`
-- `crates/slapper/src/stress/metrics.rs:153` — `self.last_refill.lock().unwrap()`
-
-**Fix:** Replace with `.expect("descriptive message")` or proper error propagation via `context()` / `map_err()`.
-
-**Verify:** `cargo clippy --lib -p slapper`
-
----
-
-### 10. Excessive Clones in Recon Module
-
-**File:** `crates/slapper/src/recon/mod.rs:276-284`
-
-Creates 9 clones of `resolved_ip` and 5 clones of `domain` for `tokio::join!` futures.
-
-**Fix:** Wrap in `Arc<String>` and clone the `Arc` instead.
-
-**Verify:** `cargo test --lib -p slapper -- recon`
-
----
-
-### 11. Adaptive Mode Is No-Op Alias (Correctness)
-
-**File:** `crates/slapper/src/fuzzer/engine/execution.rs:177-182`
-
-`run_adaptive_with_session()` delegates directly to `run_sequential_with_session()`. The advertised "adaptive" mode does not adapt.
-
-**Fix:** Wire the existing `AdaptiveRateLimiter` (from `fuzzer/rate_limit.rs`) into the method. The infrastructure already exists.
-
-**Verify:** `cargo test --lib -p slapper -- fuzzer`
-
----
-
-## Medium Priority
-
-### 12. Payload Cloning in FuzzResult
-
-**File:** `crates/slapper/src/fuzzer/engine/execution.rs:214,228`
-
-Clones entire payload on every fuzz result, including error paths.
-
-**Fix:** Use `Arc<Payload>` in `FuzzResult`, or move payload on success and only clone on error.
-
-**Verify:** `cargo test --lib -p slapper -- fuzzer`
-
----
-
-### 13. Fuzzer Concurrency Has Minimum Floor of 100
-
-**File:** `crates/slapper/src/fuzzer/engine/core.rs:87`
-
-`args.concurrency.max(100)` sets a **minimum** of 100, not a cap. A user setting `--concurrency 50` silently gets 100 with no warning.
-
-**Fix:** Log a warning when the floor is applied: `if args.concurrency < 100 { tracing::warn!(...); }`. Or validate at the CLI layer.
-
-**Verify:** `cargo test --lib -p slapper -- fuzzer`
-
----
-
-### 14. Redundant Unwrap on Just-Assigned Option
-
-**File:** `crates/slapper/src/tui/workers/runner.rs:195-196` and `:878-879`
-
-Assigns `Some(e)` then immediately calls `.unwrap()` on it.
-
-**Fix:** Use `e.to_string()` directly before wrapping in `Some(e)`.
-
-**Verify:** `cargo check --lib -p slapper`
-
----
-
-### 15. Unnecessary Clone of Results Vec
-
-**File:** `crates/slapper/src/scanner/ports/mod.rs:327`
-
-`results.lock().await.clone()` clones the entire vector just to sort it.
-
-**Fix:** Sort in-place while holding the lock, or restructure to avoid the clone.
-
-**Verify:** `cargo test --lib -p slapper -- scanner`
-
----
-
-### 16. Config Clone in ProxyPool
-
-**File:** `crates/slapper/src/proxy/mod.rs:38`
-
-Clones entire config just to create proxy pool.
-
-**Fix:** Accept only necessary fields or use `Arc`.
-
-**Verify:** `cargo test --lib -p slapper -- proxy`
-
----
-
-### 17. Dead Code Annotations Hide Unused Code
-
-**Files:** `crates/slapper/src/recon/wayback.rs`, `recon/subdomain.rs`, `recon/ssl.rs`, `proxy/socks.rs`, `proxy/pool.rs`, `waf/bypass/smuggling.rs`, `fuzzer/redos_detect.rs`, `utils/rate_limiter.rs`
-
-Many wired modules have file-level `#![allow(dead_code)]` suppressing warnings for genuinely unused items.
-
-**Fix:** Remove file-level annotations one module at a time. Wire in, document, or remove each flagged item.
-
-**Verify:** `cargo check --lib -p slapper` with zero file-level `#![allow(dead_code)]` remaining.
-
----
-
-### 18. `deny.toml` Missing License and Ban Configuration
-
-**File:** `deny.toml`
-
-Only advisory checks configured. No license compliance or duplicate crate banning.
-
-**Fix:** Add `[licenses]` allowlist (MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC) and `[bans]` section.
-
-**Verify:** `cargo deny check`
-
----
-
-### 19. No Pinned Rust Toolchain
-
-No `rust-toolchain.toml`. CI uses `dtolnay/rust-toolchain@stable` with no version pin.
-
-**Fix:** Create `rust-toolchain.toml` with channel = "stable" and components = ["rustfmt", "clippy"].
-
-**Verify:** `cargo check --lib -p slapper`
-
----
-
-### 20. Clippy Configuration
-
-No clippy deny configuration for unwrap/expect in production code.
-
-**Fix:** Add `#![deny(clippy::unwrap_used)]` and `#![deny(clippy::expect_used)]` to `lib.rs`, or use `clippy.toml`.
-
-**Verify:** `cargo clippy --lib -p slapper`
-
----
-
-## Low Priority
-
-### 21. Standardize Error Types
-
-Mixed usage of `anyhow::Result` (76 files), `SlapperError::Result<T>` (tool API), and `std::io::Result` (e.g., `utils/privilege.rs`). Callers cannot pattern-match on error types.
-
-**Fix:** Migrate core library modules from `anyhow::Result` to `crate::error::Result<T>` incrementally. Keep `anyhow` for CLI command handlers and TUI. Add missing `SlapperError` variants for Proxy, Recon, Fingerprint, LoadTest.
-
-**Verify:** `anyhow` usage limited to `main.rs`, command handlers, and TUI after migration.
-
----
-
-### 22. Dual TLS Backends
-
-Both `native-tls` (distributed) and `rustls` (HTTP via reqwest) are compiled. Increases binary size and attack surface.
-
-**Fix:** Migrate `distributed/io.rs` from `tokio-native-tls` to `tokio-rustls`. Requires certificate format migration.
-
-**Verify:** `cargo tree -p slapper | grep native-tls` returns nothing.
-
----
-
-### 23. Pipeline Stages Execute Sequentially Only
-
-**File:** `crates/slapper/src/pipeline/executor.rs`
-
-Independent stages (e.g., PortScan + Recon) could run in parallel but execute sequentially.
-
-**Fix:** Add dependency graph; run independent stages concurrently via `tokio::join!`.
-
----
-
-### 24. Stub Encoder Implementations in Ruby API
-
-**File:** `crates/slapper-ruby/src/api.rs:934-949`
-
-`encoder_encode()` and `encoder_compatible_payloads()` return `Err("not yet implemented")`.
-
-**Fix:** Implement via MSF RPC delegation or remove from API surface.
-
----
-
-### 25. Untracked Spawned Task
-
-**File:** `crates/slapper/src/distributed/worker.rs:98-119`
-
-Heartbeat task spawns with no `JoinHandle` captured.
-
-**Fix:** Store `JoinHandle` and ensure cleanup on shutdown.
-
----
-
-## Larger Refactoring (Ongoing / Future)
-
-### 26. Split Large Files
-
-| File | Lines | Proposed Split |
-|------|-------|----------------|
-| `crates/slapper/src/tui/app.rs` | 2193 | `state.rs`, `events.rs`, `layout.rs` |
-| `crates/slapper/src/tool/protocol/mcp.rs` | 1710 | `handlers.rs`, `types.rs`, `server.rs` |
-| `crates/slapper/src/tui/workers/runner.rs` | 1192 | `scan_worker.rs`, `fuzz_worker.rs` |
-| `crates/slapper/src/packet/parse.rs` | 1111 | `headers.rs`, `payload.rs` |
-| `crates/slapper/src/tui/tabs/settings.rs` | 783 | `form.rs`, `validation.rs` |
-| `crates/slapper/src/fuzzer/payloads/jwt.rs` | 766 | `algorithms.rs`, `claims.rs` |
-| `crates/slapper/src/waf/waf_patterns.rs` | 743 | Split by vendor |
-
-### 27. Documentation
-
-- Add `# Examples` and `# Errors` to all public functions
-- Add module-level docs to `crates/slapper/src/distributed/`, `pipeline/`, `notify/`, `proxy/`
-- Update `ARCHITECTURE.md` with sequence diagrams and feature flag dependencies
-
-### 28. Testing
-
-- Add CIDR boundary and IPv6 scope tests for `crates/slapper/src/config/scope.rs`
-- Add WireMock fixtures for common WAF responses
-- Expand property-based testing (proptest) for port parser, URL normalization
-- Benchmark WAF detection, payload generation, scanner throughput
-
-### 29. Performance
-
-- Cache frequently-used payloads with `once_cell::Lazy` (return `&'static [Payload]`)
-- Use `Cow<str>` for WAF header comparisons
-- Implement work-stealing for port scanning
-- Use `bytes::BytesMut` pool for HTTP response buffers
-
-### 30. CI/CD
-
-- Matrix build for feature combinations
-- Add `cargo-deny`, `cargo-machete`, typos checker
-- Automate changelog generation
-- Track test coverage with `cargo-tarpaulin`
-
----
-
-## Execution Order
-
-```
-Critical (do first):
-  1.  TLS fallback to plaintext       (security)
-  2.  HTTP flood feature gate          (security)
-  3.  IP allowlist bypass              (security)
-
-High:
-  4.  Notify SensitiveString leak      (security)
-  5.  Proxy password SensitiveString   (security)
-  6.  Fuzzer silent error swallowing   (correctness)
-  7.  Fragile PayloadType dispatch     (correctness)
-  8.  Remove unused dispatch_blocking  (cleanup)
-  9.  Fix unwrap() in production code  (reliability)
-  10. Reduce clones in recon           (performance)
-  11. Wire adaptive mode               (correctness)
-
-Medium:
-  12. Payload cloning in FuzzResult    (performance)
-  13. Concurrency floor warning        (correctness)
-  14. Redundant unwrap in TUI runner   (code quality)
-  15. Unnecessary results clone        (performance)
-  16. Config clone in ProxyPool        (performance)
-  17. Dead code annotations cleanup    (maintainability)
-  18. deny.toml license/ban config     (compliance)
-  19. Pinned Rust toolchain            (CI stability)
-  20. Clippy configuration             (quality gates)
-
-Low:
-  21. Standardize error types          (architecture)
-  22. Unify TLS backends               (architecture)
-  23. Pipeline parallel stages         (performance)
-  24. Ruby encoder stubs               (correctness)
-  25. Untracked spawned task           (cleanup)
-
-Ongoing:
-  26. Split large files                (maintainability)
-  27. Documentation improvements       (developer experience)
-  28. Testing enhancements             (quality)
-  29. Performance optimizations        (performance)
-  30. CI/CD improvements               (quality gates)
-```
-
----
-
-## Verification Commands
-
-After each item:
+### Verification
 
 ```bash
-cargo check --lib -p slapper
 cargo test --lib -p slapper
-cargo clippy --lib -p slapper -- -D warnings
+cargo clippy --lib -p slapper
 ```
 
-For feature-gated items:
+---
+
+## Phase 2: Error Handling Unification (8–10 hours)
+
+Migrate core library modules from `anyhow::Result` to `crate::error::Result` (`SlapperError` variants) for better library-user experience.
+
+### 2.1 Add Missing Error Variants
+
+**File:** `crates/slapper/src/error/mod.rs`
+
+Add `Proxy`, `Fingerprint`, `Recon`, `LoadTest` variants. Add `From` impls for `hickory_resolver::error::ResolveError` and `reqwest::header::InvalidHeaderValue`.
+
+### 2.2 Migrate Core Modules
+
+**Priority order:**
+
+| Order | Module | Files |
+|-------|--------|-------|
+| 1 | waf | `waf/detector.rs`, `waf/bypass/*.rs` |
+| 2 | scanner | `scanner/ports/mod.rs`, `scanner/endpoints.rs`, etc. |
+| 3 | proxy | `proxy/mod.rs`, `proxy/pool.rs`, `proxy/health.rs` |
+| 4 | recon | `recon/*.rs` (8 files) |
+| 5 | fuzzer | `fuzzer/mod.rs`, `fuzzer/engine/*.rs` |
+| 6 | loadtest | `loadtest/mod.rs` |
+| 7 | stress | `stress/*.rs` |
+| 8 | pipeline | `pipeline/mod.rs`, `pipeline/executor.rs` |
+| 9 | distributed | `distributed/mod.rs`, `distributed/worker.rs` |
+| 10 | output | `output/report.rs` |
+
+**Migration pattern per file:**
+1. Change import: `use anyhow::Result` → `use crate::error::Result`
+2. Replace `anyhow::anyhow!()` / `anyhow::bail!()` with appropriate `SlapperError` variant
+3. Preserve error messages
+4. Run tests
+
+**NOT migrating (acceptable anyhow):**
+- `main.rs` — binary entry point
+- `commands/handlers/*.rs` — command handlers (binary-facing)
+- `tui/**/*.rs` — TUI code
+- `utils/privilege.rs`, `utils/scope.rs`, `utils/output.rs` — utility functions
+- Test code (`#[cfg(test)]`)
+
+### 2.3 Update Documentation Examples
+
+Change `anyhow::Result` → `slapper::error::Result` in doc examples in:
+`fuzzer/mod.rs`, `scanner/mod.rs`, `waf/mod.rs`, `recon/mod.rs`, `loadtest/mod.rs`, `pipeline/mod.rs`, `distributed/mod.rs`, `utils/mod.rs`
+
+### 2.4 Document Error Handling Policy
+
+**File:** `crates/slapper/src/lib.rs`
+
+Add a doc section explaining that public API functions return `crate::error::Result<T>`, while `anyhow::Result` is used in command handlers, TUI, and tests.
+
+### Verification
 
 ```bash
+cargo test --lib -p slapper
+cargo clippy --lib -p slapper
 cargo check --lib -p slapper --features full
-cargo test --lib -p slapper --features full
 ```
 
-For integration tests:
+---
+
+## Phase 3: WAF Module Refactor (3–4 hours)
+
+Split `waf/detector.rs` (595 lines) into focused submodules, each under 200 lines.
+
+### 3.1 Create Directory Structure
+
+```
+waf/
+├── mod.rs              # Re-exports (update paths)
+├── detector/
+│   ├── mod.rs          # WafDetector struct, new(), re-exports
+│   ├── detect.rs       # detect(), normalize_url()
+│   ├── block_check.rs  # check_waf_block()
+│   ├── compare.rs      # compare_responses(), ResponseDiff
+│   └── types.rs        # WafDetectionResult, WafSignatureLower
+├── waf_patterns.rs     # (existing, unchanged)
+├── bypass/             # (existing, unchanged)
+└── stress.rs           # (existing, unchanged)
+```
+
+### 3.2 Extract Components
+
+- **types.rs:** `WafDetectionResult`, `WafSignatureLower`, `ResponseDiff` + impl
+- **mod.rs:** `WafDetector` struct, `new()`, re-exports
+- **detect.rs:** `detect()`, `normalize_url()` methods
+- **block_check.rs:** `check_waf_block()` method
+- **compare.rs:** `compare_responses()` method
+
+### 3.3 Distribute Tests
+
+Place `#[cfg(test)]` blocks alongside their code in each submodule.
+
+### 3.4 Update `waf/mod.rs` Exports
+
+Update re-export paths after the split.
+
+### Verification
 
 ```bash
-cargo test --test negative_tests -p slapper
-cargo test --test scanner_tests -p slapper
-cargo test --test waf_tests -p slapper
+wc -l crates/slapper/src/waf/detector/*.rs   # each < 200 lines
+cargo test -p slapper --lib -- waf
+cargo clippy --lib -p slapper
 ```
+
+---
+
+## Phase 4: Code Quality & Clippy (2–3 hours)
+
+### 4.1 Fix Dead Code Warnings in Stress Module
+
+**Root cause:** The `http` module functions are used but only when `stress-testing` feature is enabled.
+
+**Fix:** Add `#[cfg(feature = "stress-testing")]` to the `mod http` declaration in `stress/mod.rs`.
+
+**Affected:**
+- `stress/mod.rs:83` — `metrics` field
+- `stress/http.rs` — 6 functions (`run_http_flood`, `build_client`, `build_reqwest_proxy`, `random_user_agent`, `random_ip`, `generate_random_path`)
+
+### 4.2 Replace Production `.unwrap()` with Proper Error Handling
+
+Replace `.unwrap()` and `.expect()` in non-test code with `?` operator or `ok_or_else()`.
+
+**Key locations:**
+- `scanner/ports/mod.rs:384-385` — JSON serialization roundtrip
+- `scanner/fingerprint.rs:573-574` — JSON serialization roundtrip
+- `scanner/endpoints.rs:494-495` — JSON serialization roundtrip
+- `waf/detector.rs:570-571,589-590` — JSON serialization roundtrip
+- `scanner/ports/spoofed.rs:379` — Path to string conversion
+- `types.rs:235-237` — SensitiveString serialization
+- `recon/secrets.rs:110-302` — Regex compilation (30+ instances)
+
+### 4.3 Address `#[allow(unused)]` Attribute
+
+**File:** `tui/workers/runner.rs:764`
+
+Remove if code is intentionally unused, or document why it's there.
+
+### 4.4 Review Feature-Gated Imports
+
+Ensure imports inside `#[cfg(...)]` blocks in:
+- `scanner/ports/spoofed.rs`
+- `stress/*.rs`
+- `packet/*.rs`
+
+### Verification
+
+```bash
+cargo clippy --lib -p slapper -- -D warnings
+cargo clippy --lib -p slapper --features full -- -D warnings
+cargo test --lib -p slapper
+```
+
+---
+
+## Phase 5: API Improvements (2–3 hours)
+
+### 5.1 Add `PayloadType::all_variants()`
+
+**File:** `crates/slapper/src/fuzzer/payloads/mod.rs`
+
+`get_payloads()` and `get_all_payloads()` both independently enumerate all 22 `PayloadType` variants. Add `all_variants()` returning a static slice, then refactor `get_all_payloads()` to use it.
+
+### 5.2 Reduce `SpoofConfig::from_args()` Parameter Count
+
+**File:** `crates/slapper/src/scanner/spoof.rs`
+
+The 15-parameter function triggers clippy's `too_many_arguments` lint. Replace with a builder pattern (`SpoofConfigBuilder`) with setter methods and a `build()` method.
+
+**Callers to update:**
+- `scanner/ports/mod.rs`
+- `commands/handlers/scan.rs`
+- CLI argument parsing code
+
+### 5.3 Standardize Truncation Usage
+
+**Files:** `scanner/endpoints.rs`, `loadtest/metrics.rs`
+
+Two modules alias `truncate_simple as truncate`, hiding a behavioral difference (control-char stripping vs. preservation). Audit which behavior is correct for each case and either switch to `truncate` or remove the alias to make the distinction explicit.
+
+### Verification
+
+```bash
+cargo test --lib -p slapper
+cargo test --test scanner_tests -p slapper
+cargo clippy --lib -p slapper
+```
+
+---
+
+## Phase 6: Ruby Plugin Overhaul (15 hours)
+
+Update Ruby plugin functions for magnus 0.8 API compatibility.
+
+### 6.1 Update Helper Functions
+
+**File:** `crates/slapper-ruby/src/api.rs`
+
+- `runtime_error()` — accept `&Ruby` parameter, use `ruby.exception_runtime_error()` instead of `ruby.class_runtime_error()`
+
+### 6.2 Fix Bridge Code
+
+**File:** `crates/slapper-ruby/src/bridge.rs`
+
+- `self.ruby.module()` → `self.ruby.class_object()` for `Slapper` module lookup
+- `ruby.class_runtime_error()` → `ruby.exception_runtime_error()`
+
+### 6.3 Update Function Categories
+
+| Category | Count | Files |
+|----------|-------|-------|
+| HTTP functions | 4 | `api.rs` |
+| Scanner functions | 3 | `api.rs` |
+| Fuzzer functions | 4 | `api.rs` |
+| Reporting functions | 6 | `api.rs` |
+| Metasploit functions | 13 | `api.rs` |
+| Encoder & Session functions | 8 | `api.rs` |
+
+All functions need `ruby: &Ruby` as first parameter.
+
+### 6.4 Fix Additional API Issues
+
+**File:** `crates/slapper-ruby/src/api.rs`
+
+- `ModuleInfo.module_type` field — check actual field name in magnus 0.8
+- `SessionType` — implement `IntoValue` or convert to string
+- `try_convert()` — add explicit type annotations
+
+### 6.5 Update Deprecated API Usage
+
+**File:** `crates/slapper-plugin/src/ruby.rs:109`
+
+Replace deprecated `RArray::each` with `into_iter()`.
+
+### Verification
+
+```bash
+cargo check --lib -p slapper --features ruby-plugins
+cargo check --lib -p slapper --features full
+cargo test --lib -p slapper
+cargo clippy --lib -p slapper --features ruby-plugins
+```
+
+---
+
+## Phase 7: Deferred Items (4–5 hours)
+
+### 7.1 Ruby Plugin Thread Safety
+
+Review `Arc<Mutex>` usage in `RubyPluginAdapter`. Ensure `RubyBridge` is properly thread-safe. Consider message-passing wrapper or thread-local Ruby VM.
+
+### 7.2 TUI Plugin Integration
+
+Add `plugin` field to TUI `App` struct once thread safety is resolved.
+
+### 7.3 PyO3/Python 3.14 Forward Compatibility
+
+Review PyO3 version in `crates/slapper-plugin/Cargo.toml`. Update when Python 3.14 is released.
+
+---
+
+## Phase 8: Testing & Documentation (8 hours)
+
+### 8.1 Expand Property-Based Tests
+
+Areas: URL parsing, port range parsing, scope rule matching, payload mutation.
+
+### 8.2 Increase Integration Test Coverage
+
+Areas: WAF bypass techniques, pipeline stage chaining, distributed worker coordination, proxy health checking.
+
+### 8.3 Document Public API Surface
+
+Add doc comments to all public functions in `utils/`, `proxy/`, and `output/` modules.
+
+---
+
+## Implementation Order
+
+| Phase | Description | Dependencies | Effort | Risk |
+|-------|-------------|-------------|--------|------|
+| 1 | Quick Fixes | None | 1-2 hrs | Low |
+| 2 | Error Handling | None | 8-10 hrs | Low |
+| 3 | WAF Refactor | Phase 2 | 3-4 hrs | Low |
+| 4 | Code Quality | None | 2-3 hrs | Low |
+| 5 | API Improvements | None | 2-3 hrs | Low |
+| 6 | Ruby Plugins | None | 15 hrs | Medium |
+| 7 | Deferred Items | Phase 6 | 4-5 hrs | Low |
+| 8 | Testing & Docs | All | 8 hrs | Low |
+
+**Recommended order:** 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 ---
 
 ## Success Criteria
 
-| Criterion | Current | Target |
-|-----------|---------|--------|
-| TLS fallback | Silent plaintext | Error on TLS failure |
-| HTTP flood feature gate | None | Gated behind `stress-testing` |
-| Webhook secret storage | Plain `String` | `SensitiveString` |
-| Proxy password storage | Plain `String` | `SensitiveString` |
-| Fuzzer concurrent errors | Silent drop | Logged via `tracing::warn!` |
-| PayloadType dispatch | String-based | Compile-time method |
-| `dispatch_blocking` | Unused, can deadlock | Removed |
-| IP allowlist | String prefix | Proper CIDR matching |
-| Adaptive mode | No-op alias | Real adaptive logic |
-| Dead code annotations | File-level suppressions | All removed |
-| `deny.toml` | Advisory only | + licenses + bans |
-| Toolchain | Unpinned | `rust-toolchain.toml` |
-| Production unwrap() | 3 locations | 0 (all have context/error) |
-| All tests | Passing | Still passing |
-| Clippy warnings | 0 | 0 |
+- [ ] Zero `.unwrap()` in production code paths
+- [ ] `anyhow::Result` in core library modules < 10 (from ~111)
+- [ ] Zero clippy warnings (excluding feature-gated code)
+- [ ] `waf/detector/` directory with all files < 200 lines
+- [ ] Ruby plugins compile clean with `--features ruby-plugins`
+- [ ] All 328+ tests passing
+- [ ] Public API documented
 
 ---
 
-## Risk Assessment
+## Final Verification
 
-### High-Risk (require extensive testing)
+```bash
+# Full test suite
+cargo test --lib -p slapper
+cargo test -p slapper
 
-| Change | Risk | Mitigation |
-|--------|------|------------|
-| TLS fallback change | Breaking distributed connections | Keep `new_plaintext()` fallback, add integration tests |
-| Payload caching | Stale payload data | Ensure `Lazy` is truly static |
-| Adaptive mode wiring | Behavioral change in fuzzer | Add unit tests for rate adjustment |
-| Dead code removal | Removing needed code | Do one module at a time, run full test suite |
+# Lint with warnings as errors
+cargo clippy --lib -p slapper -- -D warnings
+cargo clippy --lib -p slapper --features full -- -D warnings
 
-### Medium-Risk (standard review)
+# Confirm improvements
+wc -l crates/slapper/src/waf/detector/*.rs   # each < 200 lines
+```
 
-| Change | Risk | Mitigation |
-|--------|------|------------|
-| SensitiveString migration | Breaking serde deserialization | Serde handles transparently, test config loading |
-| IP allowlist change | Breaking legitimate CIDR patterns | Test with existing allowlist configs |
-| Error type migration | Breaking call sites | Incremental, one module at a time |
+---
 
-### Low-Risk (safe to implement)
+## Notes
 
-| Change | Risk |
-|--------|------|
-| Documentation additions | None |
-| New test cases | None |
-| Clippy configuration | None |
-| `deny.toml` additions | None |
-| `rust-toolchain.toml` creation | None |
+1. Test after each phase to catch issues early
+2. Some `.unwrap()` in test code is acceptable
+3. Feature-gated code may have acceptable dead code
+4. `ResponseSeverity::None` in `tool/response.rs` is intentional for API compatibility
+5. `LeakSeverity` and `CvssSeverity` may be intentionally separate due to domain-specific semantics

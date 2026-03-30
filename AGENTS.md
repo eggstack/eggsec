@@ -112,6 +112,21 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 
 `constants::waf` module has scoring and detection constants. Use these instead of magic numbers in WAF-related code.
 
+### Spoofed Scanner
+
+`scanner/ports/spoofed.rs` contains raw socket scanning (feature-gated). `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled. Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing.
+
+## Current Status (2026-03-30)
+
+| Metric | Value |
+|--------|-------|
+| Tests | 328 passing |
+| Build | Clean compilation |
+| Clippy | 8 warnings (7 dead code + 1 duplicate if) |
+| Largest file | `waf/detector.rs` (595 lines) |
+| Ruby plugins | Compile with warnings only |
+| Improvement plan | See `plan.md` |
+
 ## Lessons Learned
 
 ### Configuration
@@ -125,17 +140,12 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 - Check actual error messages: `err.to_string().contains("expected substring")`
 - Use `SpoofConfig::from_args()` with `Option<usize>` for decoy_count
 
-### Scanner Module
-
-- `scanner/ports/spoofed.rs` contains raw socket scanning (feature-gated)
-- `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled
-- Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing
-
 ### Common Pitfalls
 
 1. **Type mismatches**: `ScopeRule::new()` takes `String`, not `&str`
 2. **Option types**: `decoy_count` is `Option<usize>`, not `usize`
 3. **Unused imports**: Move feature-gated imports inside `#[cfg(...)]` blocks
+4. **Feature-gated dead code**: Functions used only under `#[cfg(feature = "...")]` appear as dead code to the compiler. Gate the module declaration itself, not just callers.
 
 ### Severity Enum
 
@@ -151,9 +161,18 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 - `PartialEq` uses constant-time comparison; safe for credential checking
 - Config deserialization works transparently — existing TOML files with plain strings still load
 
+### Truncation Functions
+
+Two truncation utilities exist with different behaviors:
+- `utils::truncate` — strips control characters
+- `utils::truncate_simple` — preserves all characters
+
+Some modules alias `truncate_simple as truncate`, hiding the difference. When adding new truncation calls, choose explicitly.
+
 ## Style Guidelines
 
-- Use `anyhow::Result` for error handling
+- Use `anyhow::Result` for error handling in commands/TUI/tests
+- Use `crate::error::Result` (`SlapperError`) in core library modules
 - Add doc comments to public functions with `# Examples` and `# Errors`
 - Keep modules focused - split files > 500 lines
 - Follow existing patterns in neighboring code
@@ -178,11 +197,3 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 ### ProgressStyle Template
 
 Always use `.unwrap_or_else(|_| ProgressStyle::default_bar())` instead of `.unwrap()` on `ProgressStyle::template()`. The template method can fail on invalid format strings.
-
-## Deferred Items
-
-See `deferred.md` for items that were skipped or deferred from the remediation plan, including:
-- Ruby plugin thread safety (Plugin trait Send+Sync requirement)
-- TUI plugin integration (missing app.plugin field)
-- Arc<Mutex> usage review
-- PyO3/Python 3.14 forward compatibility
