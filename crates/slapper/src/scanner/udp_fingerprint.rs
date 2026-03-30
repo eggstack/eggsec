@@ -2,7 +2,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use anyhow::Result;
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 use tokio::time::timeout;

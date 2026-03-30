@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use anyhow::{Context, Result};
+use crate::error::{Result, SlapperError};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -67,25 +67,41 @@ impl StressAuthorization {
             return Ok(StressScope::default());
         }
 
-        let content = std::fs::read_to_string(&config_path)
-            .with_context(|| format!("Failed to read stress config: {:?}", config_path))?;
+        let content = std::fs::read_to_string(&config_path).map_err(|e| {
+            SlapperError::Runtime(format!(
+                "Failed to read stress config: {:?}: {}",
+                config_path, e
+            ))
+        })?;
 
-        let config: StressScope = toml::from_str(&content)
-            .with_context(|| format!("Failed to parse stress config: {:?}", config_path))?;
+        let config: StressScope = toml::from_str(&content).map_err(|e| {
+            SlapperError::Runtime(format!(
+                "Failed to parse stress config: {:?}: {}",
+                config_path, e
+            ))
+        })?;
 
         Ok(config)
     }
 
     pub fn verify_target(&self, target: &str) -> Result<()> {
-        if !self.scope.is_target_allowed(target)? {
-            anyhow::bail!("Target '{}' is not in allowed scope", target);
+        if !self
+            .scope
+            .is_target_allowed(target)
+            .map_err(|e| SlapperError::ScopeViolation(e.to_string()))?
+        {
+            return Err(SlapperError::ScopeViolation(format!(
+                "Target '{}' is not in allowed scope",
+                target
+            )));
         }
 
         if !self.stress_scope.allow_stress_test {
-            anyhow::bail!(
+            return Err(SlapperError::ScopeViolation(
                 "Stress testing is not enabled for any targets. \
                  Add 'allow_stress_test = true' to your scope file for authorized targets."
-            );
+                    .to_string(),
+            ));
         }
 
         tracing::info!(
@@ -99,11 +115,10 @@ impl StressAuthorization {
     pub fn verify_rate(&self, rate_pps: u64) -> Result<()> {
         if let Some(max_rate) = self.stress_scope.max_rate_pps {
             if rate_pps > max_rate {
-                anyhow::bail!(
+                return Err(SlapperError::Validation(format!(
                     "Requested rate {} pps exceeds maximum allowed rate {} pps",
-                    rate_pps,
-                    max_rate
-                );
+                    rate_pps, max_rate
+                )));
             }
         }
         Ok(())
@@ -112,11 +127,10 @@ impl StressAuthorization {
     pub fn verify_duration(&self, duration_secs: u64) -> Result<()> {
         if let Some(max_duration) = self.stress_scope.max_duration_secs {
             if duration_secs > max_duration {
-                anyhow::bail!(
+                return Err(SlapperError::Validation(format!(
                     "Requested duration {}s exceeds maximum allowed duration {}s",
-                    duration_secs,
-                    max_duration
-                );
+                    duration_secs, max_duration
+                )));
             }
         }
         Ok(())
@@ -126,11 +140,10 @@ impl StressAuthorization {
         if let Some(ref allowed_types) = self.stress_scope.allowed_stress_types {
             let type_lower = stress_type.to_lowercase();
             if !allowed_types.iter().any(|t| t.to_lowercase() == type_lower) {
-                anyhow::bail!(
+                return Err(SlapperError::Validation(format!(
                     "Stress type '{}' is not in allowed types: {:?}",
-                    stress_type,
-                    allowed_types
-                );
+                    stress_type, allowed_types
+                )));
             }
         }
         Ok(())

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Result, SlapperError};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::net::SocketAddr;
@@ -41,7 +41,7 @@ impl std::fmt::Display for ProxyType {
 impl std::str::FromStr for ProxyType {
     type Err = String;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "socks4" | "socks4a" => Ok(ProxyType::Socks4),
             "socks5" | "socks" => Ok(ProxyType::Socks5),
@@ -122,7 +122,12 @@ impl ProxyEntry {
     pub fn socket_addr(&self) -> Result<SocketAddr> {
         format!("{}:{}", self.address, self.port)
             .parse()
-            .with_context(|| format!("Invalid proxy address: {}:{}", self.address, self.port))
+            .map_err(|e| {
+                SlapperError::Proxy(format!(
+                    "Invalid proxy address: {}:{}: {}",
+                    self.address, self.port, e
+                ))
+            })
     }
 
     pub fn to_url(&self) -> String {
@@ -143,8 +148,13 @@ impl ProxyEntry {
     }
 
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<Self>> {
-        let content = fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read proxy file: {:?}", path.as_ref()))?;
+        let content = fs::read_to_string(&path).map_err(|e| {
+            SlapperError::Proxy(format!(
+                "Failed to read proxy file: {:?}: {}",
+                path.as_ref(),
+                e
+            ))
+        })?;
 
         let proxies = if path
             .as_ref()
@@ -188,9 +198,7 @@ impl ProxyEntry {
         let parts: Vec<&str> = line.splitn(2, "://").collect();
         let (proxy_type, remainder) = if parts.len() == 2 {
             (
-                parts[0]
-                    .parse::<ProxyType>()
-                    .map_err(|e| anyhow::anyhow!(e))?,
+                parts[0].parse::<ProxyType>().map_err(SlapperError::Proxy)?,
                 parts[1],
             )
         } else {
@@ -222,7 +230,10 @@ impl ProxyEntry {
         let (address, port) = if parts.len() == 2 {
             (parts[1].to_string(), parts[0].parse()?)
         } else {
-            anyhow::bail!("Invalid proxy format: {}", line);
+            return Err(SlapperError::Proxy(format!(
+                "Invalid proxy format: {}",
+                line
+            )));
         };
 
         Ok(Self {

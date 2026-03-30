@@ -1,6 +1,6 @@
 
+use crate::error::{Result, SlapperError};
 use crate::utils::stealth::tool_user_agent;
-use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose, Engine as _};
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -48,10 +48,10 @@ impl LoadTestRunner {
         tui_mode: bool,
     ) -> Result<Self> {
         if concurrency == 0 {
-            return Err(anyhow!("Concurrency must be greater than 0"));
+            return Err(SlapperError::Validation("Concurrency must be greater than 0".to_string()));
         }
         if total_requests == 0 {
-            return Err(anyhow!("Total requests must be greater than 0"));
+            return Err(SlapperError::Validation("Total requests must be greater than 0".to_string()));
         }
 
         Ok(Self {

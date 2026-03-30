@@ -1,7 +1,7 @@
 
 #![allow(dead_code)]
 
-use anyhow::Result;
+use crate::error::Result;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioAsyncResolver;
 use serde::{Deserialize, Serialize};

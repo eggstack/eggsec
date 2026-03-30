@@ -4,7 +4,7 @@ pub mod headers;
 pub mod profiles;
 pub mod smuggling;
 
-use anyhow::Result;
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
 pub use evasion::EvasionBypass;

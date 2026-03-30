@@ -64,6 +64,15 @@ pub enum SlapperError {
 
     #[error("Cancelled")]
     Cancelled,
+
+    #[error("Proxy error: {0}")]
+    Proxy(String),
+
+    #[error("Recon error: {0}")]
+    Recon(String),
+
+    #[error("Load test error: {0}")]
+    LoadTest(String),
 }
 
 impl SlapperError {
@@ -151,5 +160,47 @@ impl From<serde_yaml::Error> for SlapperError {
 impl From<toml::ser::Error> for SlapperError {
     fn from(e: toml::ser::Error) -> Self {
         SlapperError::Parse(format!("TOML serialization error: {}", e))
+    }
+}
+
+impl From<std::string::FromUtf8Error> for SlapperError {
+    fn from(e: std::string::FromUtf8Error) -> Self {
+        SlapperError::Parse(format!("UTF-8 error: {}", e))
+    }
+}
+
+impl From<hickory_resolver::error::ResolveError> for SlapperError {
+    fn from(e: hickory_resolver::error::ResolveError) -> Self {
+        SlapperError::Network(format!("DNS resolution failed: {}", e))
+    }
+}
+
+impl From<anyhow::Error> for SlapperError {
+    fn from(e: anyhow::Error) -> Self {
+        SlapperError::Runtime(e.to_string())
+    }
+}
+
+impl From<std::num::ParseIntError> for SlapperError {
+    fn from(e: std::num::ParseIntError) -> Self {
+        SlapperError::Parse(format!("Integer parse error: {}", e))
+    }
+}
+
+impl From<tokio::sync::AcquireError> for SlapperError {
+    fn from(e: tokio::sync::AcquireError) -> Self {
+        SlapperError::Runtime(format!("Semaphore acquire error: {}", e))
+    }
+}
+
+impl From<quick_xml::Error> for SlapperError {
+    fn from(e: quick_xml::Error) -> Self {
+        SlapperError::Output(format!("XML error: {}", e))
+    }
+}
+
+impl From<maxminddb::MaxMindDbError> for SlapperError {
+    fn from(e: maxminddb::MaxMindDbError) -> Self {
+        SlapperError::Io(std::io::Error::other(format!("MaxMind DB error: {}", e)))
     }
 }

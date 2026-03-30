@@ -82,10 +82,10 @@ impl From<OAuthArgs> for FuzzArgs {
 
 pub async fn run_graphql(args: GraphQlArgs, config: &SlapperConfig) -> Result<()> {
     let fuzz_args = FuzzArgs::from(args);
-    crate::fuzzer::run_cli(fuzz_args, config).await
+    crate::fuzzer::run_cli(fuzz_args, config).await.map_err(|e| anyhow::anyhow!("{}", e))
 }
 
 pub async fn run_oauth(args: OAuthArgs, config: &SlapperConfig) -> Result<()> {
     let fuzz_args = FuzzArgs::from(args);
-    crate::fuzzer::run_cli(fuzz_args, config).await
+    crate::fuzzer::run_cli(fuzz_args, config).await.map_err(|e| anyhow::anyhow!("{}", e))
 }

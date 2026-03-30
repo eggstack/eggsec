@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use crate::error::{Result, SlapperError};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
@@ -132,7 +132,9 @@ impl SpoofConfig {
 
         if let Some(t) = ttl {
             if t == 0 {
-                anyhow::bail!("TTL must be between 1 and 255");
+                return Err(SlapperError::Validation(
+                    "TTL must be between 1 and 255".to_string(),
+                ));
             }
         }
 
@@ -158,7 +160,10 @@ impl SpoofConfig {
                 } else if let Ok(ip) = part.parse::<Ipv4Addr>() {
                     decoy_ips.push(ip);
                 } else {
-                    anyhow::bail!("Invalid decoy IP: {}", part);
+                    return Err(SlapperError::Validation(format!(
+                        "Invalid decoy IP: {}",
+                        part
+                    )));
                 }
             }
         }
@@ -244,18 +249,22 @@ impl Default for SpoofStats {
 pub fn random_ip_from_cidr(cidr: &str) -> Result<Ipv4Addr> {
     let parts: Vec<&str> = cidr.split('/').collect();
     if parts.len() != 2 {
-        return Err(anyhow!("Invalid CIDR format. Use: x.x.x.x/nn"));
+        return Err(SlapperError::Parse(
+            "Invalid CIDR format. Use: x.x.x.x/nn".to_string(),
+        ));
     }
 
     let base: Ipv4Addr = parts[0]
         .parse()
-        .map_err(|_| anyhow!("Invalid IP address in CIDR"))?;
+        .map_err(|_| SlapperError::Parse("Invalid IP address in CIDR".to_string()))?;
     let prefix: u8 = parts[1]
         .parse()
-        .map_err(|_| anyhow!("Invalid prefix length"))?;
+        .map_err(|_| SlapperError::Parse("Invalid prefix length".to_string()))?;
 
     if prefix > 32 {
-        return Err(anyhow!("Prefix must be between 0 and 32"));
+        return Err(SlapperError::Parse(
+            "Prefix must be between 0 and 32".to_string(),
+        ));
     }
 
     let mut rng = rand::thread_rng();
@@ -278,7 +287,9 @@ pub fn random_ip_from_cidr(cidr: &str) -> Result<Ipv4Addr> {
     }
 
     if max_offset < min_offset {
-        return Err(anyhow!("CIDR range too small to generate valid IPs"));
+        return Err(SlapperError::Parse(
+            "CIDR range too small to generate valid IPs".to_string(),
+        ));
     }
 
     let offset = rng.gen_range(min_offset..=max_offset);
@@ -326,7 +337,7 @@ pub fn build_tcp_packet(
     let mut buffer = vec![0u8; 20 + 20];
 
     let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[..20])
-        .ok_or_else(|| anyhow!("Failed to create IPv4 packet"))?;
+        .ok_or_else(|| SlapperError::Runtime("Failed to create IPv4 packet".to_string()))?;
 
     ipv4_packet.set_version(4);
     ipv4_packet.set_header_length(5);
@@ -342,7 +353,7 @@ pub fn build_tcp_packet(
     ipv4_packet.set_checksum(ipv4_checksum);
 
     let mut tcp_packet = MutableTcpPacket::new(&mut buffer[20..])
-        .ok_or_else(|| anyhow!("Failed to create TCP packet"))?;
+        .ok_or_else(|| SlapperError::Runtime("Failed to create TCP packet".to_string()))?;
 
     tcp_packet.set_source(src_port);
     tcp_packet.set_destination(dst_port);
@@ -394,7 +405,7 @@ pub fn build_fragmented_packets(
     let tcp_data = {
         let mut buffer = vec![0u8; 20];
         let mut tcp_packet = MutableTcpPacket::new(&mut buffer[..])
-            .ok_or_else(|| anyhow!("Failed to create TCP packet"))?;
+            .ok_or_else(|| SlapperError::Runtime("Failed to create TCP packet".to_string()))?;
 
         tcp_packet.set_source(src_port);
         tcp_packet.set_destination(dst_port);
@@ -427,7 +438,7 @@ pub fn build_fragmented_packets(
         let mut buffer = vec![0u8; 20 + fragment_size];
 
         let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[..20])
-            .ok_or_else(|| anyhow!("Failed to create IPv4 packet"))?;
+            .ok_or_else(|| SlapperError::Runtime("Failed to create IPv4 packet".to_string()))?;
 
         ipv4_packet.set_version(4);
         ipv4_packet.set_header_length(5);
@@ -469,7 +480,7 @@ pub fn get_network_interface() -> Result<NetworkInterface> {
                 && !iface.ips.is_empty()
                 && iface.ips.iter().any(|ip| ip.is_ipv4())
         })
-        .ok_or_else(|| anyhow!("No suitable network interface found for raw packet sending"))
+        .ok_or_else(|| SlapperError::Network("No suitable network interface found for raw packet sending".to_string()))
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
@@ -481,7 +492,7 @@ pub fn get_local_ip(interface: &NetworkInterface) -> Result<Ipv4Addr> {
             IpAddr::V4(ip) => Some(ip),
             _ => None,
         })
-        .ok_or_else(|| anyhow!("No IPv4 address found on interface"))
+        .ok_or_else(|| SlapperError::Network("No IPv4 address found on interface".to_string()))
 }
 
 pub fn format_spoof_warning(config: &SpoofConfig) -> String {

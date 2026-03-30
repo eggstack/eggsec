@@ -1,4 +1,5 @@
 pub mod authorization;
+#[cfg(feature = "stress-testing")]
 mod http;
 #[cfg(feature = "stress-testing")]
 mod icmp;
@@ -13,7 +14,7 @@ pub use authorization::StressAuthorization;
 pub use metrics::{StressMetrics, StressStats};
 pub use warning::{display_warning, require_confirmation};
 
-use anyhow::Result;
+use crate::error::{Result, SlapperError};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,6 +81,7 @@ impl Default for StressConfig {
 pub struct StressTest {
     config: StressConfig,
     _authorization: StressAuthorization,
+    #[cfg(feature = "stress-testing")]
     metrics: StressMetrics,
 }
 
@@ -94,6 +96,7 @@ impl StressTest {
         Ok(Self {
             config,
             _authorization: authorization,
+            #[cfg(feature = "stress-testing")]
             metrics: StressMetrics::new(),
         })
     }
@@ -102,7 +105,7 @@ impl StressTest {
         display_warning(&self.config)?;
 
         if !require_confirmation()? {
-            anyhow::bail!("Test cancelled by user");
+            return Err(SlapperError::Cancelled);
         }
 
         tracing::info!(
@@ -136,10 +139,11 @@ impl StressTest {
 
         #[cfg(not(feature = "stress-testing"))]
         {
-            anyhow::bail!(
+            Err(SlapperError::Runtime(
                 "Stress testing requires the 'stress-testing' feature: \
                  cargo build --features stress-testing"
-            );
+                    .to_string(),
+            ))
         }
     }
 }

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use anyhow::Result;
+use crate::error::Result;
 use std::io::{self, Write};
 
 use super::StressConfig;

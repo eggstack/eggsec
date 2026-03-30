@@ -48,7 +48,7 @@ pub mod report;
 pub mod session;
 pub mod stage;
 
-use anyhow::Result;
+use crate::error::Result;
 
 use crate::cli::ResumeArgs;
 use crate::cli::ScanArgs;

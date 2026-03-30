@@ -13,7 +13,7 @@ pub use rotator::ProxyRotator;
 
 use socks::connect_through_with_domain;
 
-use anyhow::Result;
+use crate::error::{Result, SlapperError};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -105,7 +105,7 @@ impl ProxyManager {
         let proxy = self
             .get_healthy_proxy()
             .await
-            .ok_or_else(|| anyhow::anyhow!("No healthy proxies available"))?;
+            .ok_or_else(|| SlapperError::Proxy("No healthy proxies available".to_string()))?;
 
         let target_addr = resolve_target(target).await?;
 
@@ -128,7 +128,7 @@ impl ProxyManager {
         let proxy = self
             .get_healthy_proxy()
             .await
-            .ok_or_else(|| anyhow::anyhow!("No healthy proxies available"))?;
+            .ok_or_else(|| SlapperError::Proxy("No healthy proxies available".to_string()))?;
 
         connect_through_with_domain(&proxy, domain, port)
             .await
@@ -152,17 +152,17 @@ impl ProxyManager {
         let proxies = pool.get_healthy();
 
         if proxies.len() < chain_length {
-            anyhow::bail!(
+            return Err(SlapperError::Proxy(format!(
                 "Not enough healthy proxies for chaining (have {}, need {})",
                 proxies.len(),
                 chain_length
-            );
+            )));
         }
 
         let chain = self
             .rotator
             .select_chain(&proxies, chain_length)
-            .ok_or_else(|| anyhow::anyhow!("Failed to select proxy chain"))?;
+            .ok_or_else(|| SlapperError::Proxy("Failed to select proxy chain".to_string()))?;
 
         drop(pool);
 
@@ -259,9 +259,9 @@ async fn resolve_target(target: &str) -> Result<SocketAddr> {
         addrs
             .into_iter()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("Failed to resolve {}", target))
+            .ok_or_else(|| SlapperError::Proxy(format!("Failed to resolve {}", target)))
     } else {
-        anyhow::bail!("Target must include port: {}", target);
+        Err(SlapperError::Proxy(format!("Target must include port: {}", target)))
     }
 }
 

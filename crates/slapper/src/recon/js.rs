@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use regex::Regex;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};

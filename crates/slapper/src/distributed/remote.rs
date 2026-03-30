@@ -11,6 +11,7 @@ use tokio::sync::{broadcast, RwLock};
 
 use crate::distributed::command::{CommandExecutor, CommandMessage, ResponseMessage};
 use crate::distributed::io::{LineWriter, StreamWrapper, TlsClient, TlsServer};
+use crate::error::{Result, SlapperError};
 
 const MAX_CONNECTIONS: usize = 100;
 const RATE_LIMIT_PER_MINUTE: u32 = 60;
@@ -76,9 +77,9 @@ impl RemoteListener {
         }
     }
 
-    pub fn with_tls(psk: String, tls_config: TlsConfig) -> anyhow::Result<Self> {
+    pub fn with_tls(psk: String, tls_config: TlsConfig) -> Result<Self> {
         let tls_server = TlsServer::from_pkcs12(&tls_config.pkcs12_path, &tls_config.password)
-            .map_err(|e| anyhow::anyhow!("Failed to initialize TLS: {}", e))?;
+            .map_err(|e| SlapperError::Network(format!("Failed to initialize TLS: {}", e)))?;
 
         let (shutdown_tx, _) = broadcast::channel(1);
         Ok(Self {
@@ -159,7 +160,7 @@ impl RemoteListener {
         false
     }
 
-    pub async fn start(&self, port: u16) -> anyhow::Result<()> {
+    pub async fn start(&self, port: u16) -> Result<()> {
         let addr = SocketAddr::from(([0, 0, 0, 0], port));
         let listener = TcpListener::bind(addr).await?;
 
@@ -237,7 +238,7 @@ impl RemoteListener {
         psk: String,
         connections: Arc<RwLock<Vec<String>>>,
         tls_acceptor: Option<tokio_native_tls::TlsAcceptor>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         tracing::info!("Connection from {}", addr);
 
         let stream = match tls_acceptor {
@@ -245,7 +246,7 @@ impl RemoteListener {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!("TLS handshake failed: {}", e);
-                    return Err(anyhow::anyhow!("TLS handshake failed: {}", e));
+                    return Err(SlapperError::Network(format!("TLS handshake failed: {}", e)));
                 }
             },
             None => StreamWrapper::plain(stream),
@@ -256,14 +257,14 @@ impl RemoteListener {
         // Read auth message
         let auth_line = line_writer.read_line().await?;
         let auth: AuthMessage =
-            serde_json::from_str(&auth_line.ok_or_else(|| anyhow::anyhow!("No auth"))?)?;
+            serde_json::from_str(&auth_line.ok_or_else(|| SlapperError::Validation("No auth".to_string()))?)?;
 
         if !bool::from(auth.psk.as_bytes().ct_eq(psk.as_bytes())) {
             let error = ResponseMessage::error("auth".to_string(), "Invalid PSK".to_string(), None);
             line_writer
                 .write_line(&serde_json::to_string(&error)?)
                 .await?;
-            return Err(anyhow::anyhow!("Invalid PSK from {}", addr));
+            return Err(SlapperError::Validation(format!("Invalid PSK from {}", addr)));
         }
 
         // Register connection
@@ -278,7 +279,12 @@ impl RemoteListener {
             output: Some("Authenticated".to_string()),
             error: None,
             duration_ms: None,
-            hostname: Some(hostname::get()?.to_string_lossy().to_string()),
+            hostname: Some(
+                hostname::get()
+                    .map_err(|e| SlapperError::Runtime(format!("Failed to get hostname: {}", e)))?
+                    .to_string_lossy()
+                    .to_string(),
+            ),
             capabilities: Some(Self::get_capabilities()),
         };
         line_writer
@@ -389,9 +395,9 @@ impl RemoteClient {
         Self { psk, tls: None }
     }
 
-    pub fn with_tls(psk: String, domain: &str) -> anyhow::Result<Self> {
+    pub fn with_tls(psk: String, domain: &str) -> Result<Self> {
         let tls = TlsClient::new(domain)
-            .map_err(|e| anyhow::anyhow!("Failed to initialize TLS client: {}", e))?;
+            .map_err(|e| SlapperError::Network(format!("Failed to initialize TLS client: {}", e)))?;
         Ok(Self { psk, tls: Some(tls) })
     }
 
@@ -409,19 +415,19 @@ impl RemoteClient {
         port: u16,
         command: Vec<String>,
         timeout_secs: Option<u64>,
-    ) -> anyhow::Result<crate::distributed::command::RemoteResult> {
+    ) -> Result<crate::distributed::command::RemoteResult> {
         let host_port = format!("{}:{}", host, port);
         let addr = tokio::net::lookup_host(&host_port)
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to resolve host: {}", e))?
+            .map_err(|e| SlapperError::Network(format!("Failed to resolve host: {}", e)))?
             .next()
-            .ok_or_else(|| anyhow::anyhow!("No addresses found for host"))?;
+            .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
 
         let connect_timeout = std::time::Duration::from_secs(5);
         let stream = tokio::time::timeout(connect_timeout, TcpStream::connect(addr))
             .await
-            .map_err(|_| anyhow::anyhow!("Connection timed out after 5 seconds"))?
-            .map_err(|e| anyhow::anyhow!("Failed to connect: {}", e))?;
+            .map_err(|_| SlapperError::Network("Connection timed out after 5 seconds".to_string()))?
+            .map_err(|e| SlapperError::Network(format!("Failed to connect: {}", e)))?;
 
         let stream = match &self.tls {
             Some(tls_client) => {
@@ -435,7 +441,7 @@ impl RemoteClient {
                     Ok(s) => s,
                     Err(e) => {
                         tracing::error!("TLS handshake failed: {}", e);
-                        return Err(anyhow::anyhow!("TLS handshake failed: {}", e));
+                        return Err(SlapperError::Network(format!("TLS handshake failed: {}", e)));
                     }
                 }
             }
@@ -457,17 +463,17 @@ impl RemoteClient {
                 let line = line_writer
                     .read_line()
                     .await?
-                    .ok_or_else(|| anyhow::anyhow!("No response"))?;
-                Ok::<_, anyhow::Error>(serde_json::from_str::<ResponseMessage>(&line)?)
+                    .ok_or_else(|| SlapperError::Network("No response".to_string()))?;
+                Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&line)?)
             })
             .await
-            .map_err(|_| anyhow::anyhow!("Authentication response timed out"))??;
+            .map_err(|_| SlapperError::Network("Authentication response timed out".to_string()))??;
 
         if !auth_response.success {
-            return Err(anyhow::anyhow!(
+            return Err(SlapperError::Validation(format!(
                 "Authentication failed: {:?}",
                 auth_response.error
-            ));
+            )));
         }
 
         let hostname = auth_response.hostname.unwrap_or_else(|| host.to_string());
@@ -489,15 +495,15 @@ impl RemoteClient {
             let response_line = line_writer
                 .read_line()
                 .await?
-                .ok_or_else(|| anyhow::anyhow!("No response"))?;
-            Ok::<_, anyhow::Error>(serde_json::from_str::<ResponseMessage>(&response_line)?)
+                .ok_or_else(|| SlapperError::Network("No response".to_string()))?;
+            Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&response_line)?)
         })
         .await
         .map_err(|_| {
-            anyhow::anyhow!(
+            SlapperError::Network(format!(
                 "Response timed out after {} seconds",
                 response_timeout.as_secs()
-            )
+            ))
         })??;
 
         Ok(crate::distributed::command::RemoteResult::new(

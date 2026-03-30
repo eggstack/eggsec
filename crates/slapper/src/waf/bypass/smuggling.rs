@@ -1,7 +1,4 @@
-#![allow(clippy::vec_init_then_push)]
-#![allow(dead_code)]
-
-use anyhow::Result;
+use crate::error::Result;
 use reqwest::Client;
 
 use super::{BypassResult, BypassTechnique, WafProfile};
@@ -9,7 +6,7 @@ use crate::constants::waf::BLOCKED_STATUS_CODES;
 use crate::waf::detector::WafDetectionResult;
 
 pub struct SmugglingBypass {
-    profile: Option<WafProfile>,
+    _profile: Option<WafProfile>,
 }
 
 #[derive(Debug, Clone)]
@@ -36,7 +33,7 @@ pub struct SmugglingRequest {
 
 impl SmugglingBypass {
     pub fn new(profile: Option<WafProfile>) -> Self {
-        Self { profile }
+        Self { _profile: profile }
     }
 
     pub async fn run(
@@ -148,6 +145,7 @@ impl SmugglingBypass {
         requests
     }
 
+    #[allow(clippy::vec_init_then_push)]
     fn generate_advanced_smuggling(&self, path: &str) -> Vec<SmugglingRequest> {
         let mut requests = Vec::new();
 
@@ -287,6 +285,7 @@ impl SmugglingBypass {
     }
 }
 
+#[allow(dead_code)]
 pub fn generate_cl_te_payloads() -> Vec<String> {
     vec![
         "0\r\n\r\nGET /admin HTTP/1.1\r\nHost: localhost\r\n\r\n".to_string(),
@@ -294,6 +293,7 @@ pub fn generate_cl_te_payloads() -> Vec<String> {
     ]
 }
 
+#[allow(dead_code)]
 pub fn generate_te_cl_payloads() -> Vec<String> {
     vec![
         "5\r\nhello\r\n0\r\n\r\n".to_string(),

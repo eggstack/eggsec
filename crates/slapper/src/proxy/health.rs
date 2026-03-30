@@ -1,5 +1,5 @@
 
-use anyhow::Result;
+use crate::error::Result;
 use std::time::{Duration, Instant};
 
 use super::config::{HealthCheckConfig, ProxyEntry};

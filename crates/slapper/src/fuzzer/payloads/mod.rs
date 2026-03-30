@@ -93,6 +93,33 @@ impl PayloadType {
                 | PayloadType::Grpc
         )
     }
+
+    pub fn all_variants() -> &'static [PayloadType] {
+        &[
+            PayloadType::Sqli,
+            PayloadType::Xss,
+            PayloadType::Traversal,
+            PayloadType::Ssrf,
+            PayloadType::Redirect,
+            PayloadType::Redos,
+            PayloadType::Headers,
+            PayloadType::Compression,
+            PayloadType::GraphQL,
+            PayloadType::OAuth,
+            PayloadType::Jwt,
+            PayloadType::Idor,
+            PayloadType::Ssti,
+            PayloadType::Grpc,
+            PayloadType::Xxe,
+            PayloadType::Ldap,
+            PayloadType::Cmd,
+            PayloadType::Deser,
+            PayloadType::Host,
+            PayloadType::Cache,
+            PayloadType::Csv,
+            PayloadType::Soap,
+        ]
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,31 +162,8 @@ pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
 
 pub fn get_all_payloads() -> Vec<Payload> {
     let mut payloads = Vec::new();
-    for pt in [
-        PayloadType::Sqli,
-        PayloadType::Xss,
-        PayloadType::Traversal,
-        PayloadType::Ssrf,
-        PayloadType::Redirect,
-        PayloadType::Redos,
-        PayloadType::Headers,
-        PayloadType::Compression,
-        PayloadType::GraphQL,
-        PayloadType::OAuth,
-        PayloadType::Jwt,
-        PayloadType::Idor,
-        PayloadType::Ssti,
-        PayloadType::Grpc,
-        PayloadType::Xxe,
-        PayloadType::Ldap,
-        PayloadType::Cmd,
-        PayloadType::Deser,
-        PayloadType::Host,
-        PayloadType::Cache,
-        PayloadType::Csv,
-        PayloadType::Soap,
-    ] {
-        payloads.extend(get_payloads(pt));
+    for pt in PayloadType::all_variants() {
+        payloads.extend(get_payloads(*pt));
     }
     payloads
 }

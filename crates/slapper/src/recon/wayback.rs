@@ -1,7 +1,7 @@
 
 #![allow(dead_code)]
 
-use anyhow::Result;
+use crate::error::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 

@@ -1,9 +1,8 @@
-use anyhow::{anyhow, Result};
+use crate::error::{Result, SlapperError};
+use crate::utils::extract_target_from_url;
 use serde::{Deserialize, Serialize};
 use std::net::ToSocketAddrs;
 use std::time::Duration;
-
-use crate::utils::extract_target_from_url;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WhoisResult {
@@ -62,7 +61,7 @@ pub async fn whois_lookup_with_config(domain: &str, config: &WhoisConfig) -> Res
         }
     }
 
-    Err(last_error.unwrap_or_else(|| anyhow!("WHOIS lookup failed")))
+    Err(last_error.unwrap_or_else(|| SlapperError::Network("WHOIS lookup failed".to_string())))
 }
 
 fn clean_domain(domain: &str) -> String {
@@ -138,7 +137,7 @@ async fn lookup_whois(domain: &str, server: &str) -> Result<String> {
     let mut addrs = addr.to_socket_addrs()?;
     let socket_addr = addrs
         .next()
-        .ok_or_else(|| anyhow!("No address found for {}", server))?;
+        .ok_or_else(|| SlapperError::Network(format!("No address found for {}", server)))?;
 
     let stream = tokio::net::TcpStream::connect(socket_addr).await?;
 
@@ -173,11 +172,11 @@ async fn lookup_whois(domain: &str, server: &str) -> Result<String> {
     let response_str = String::from_utf8_lossy(&response).to_string();
 
     if response_str.contains("Throttled") || response_str.contains("Rate limit") {
-        return Err(anyhow!("WHOIS rate limited"));
+        return Err(SlapperError::RateLimited("WHOIS rate limited".to_string()));
     }
 
     if response_str.is_empty() {
-        return Err(anyhow!("Empty WHOIS response"));
+        return Err(SlapperError::Network("Empty WHOIS response".to_string()));
     }
 
     Ok(response_str)

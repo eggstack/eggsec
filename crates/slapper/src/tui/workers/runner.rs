@@ -905,7 +905,7 @@ impl TaskRunner {
             max_retries,
             last_error
         );
-        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Unknown error")))
+        Err(last_error.unwrap_or_else(|| crate::error::SlapperError::Runtime("Unknown error".to_string())).into())
     }
 
     #[cfg(all(feature = "packet-inspection", unix))]

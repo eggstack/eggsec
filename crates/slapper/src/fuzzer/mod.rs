@@ -102,7 +102,7 @@ pub use advanced::{
     WebSocketFuzzer,
 };
 
-use anyhow::Result;
+use crate::error::Result;
 
 use crate::cli::FuzzArgs;
 use crate::config::SlapperConfig;

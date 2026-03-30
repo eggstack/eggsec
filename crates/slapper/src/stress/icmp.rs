@@ -1,5 +1,5 @@
 #[cfg(all(feature = "stress-testing", unix))]
-use anyhow::{anyhow, Result};
+use crate::error::{Result, SlapperError};
 #[cfg(all(feature = "stress-testing", unix))]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(all(feature = "stress-testing", unix))]
@@ -66,7 +66,11 @@ pub async fn run_icmp_flood(config: &StressConfig, metrics: &StressMetrics) -> R
             src_ip,
             match target_addr.ip() {
                 IpAddr::V4(ip) => ip,
-                IpAddr::V6(_) => anyhow::bail!("IPv6 not supported for ICMP flood"),
+                IpAddr::V6(_) => {
+                    return Err(SlapperError::Runtime(
+                        "IPv6 not supported for ICMP flood".to_string(),
+                    ))
+                }
             },
             identifier,
             &payload,
@@ -106,7 +110,7 @@ fn build_icmp_packet(
     let mut buffer = vec![0u8; total_len];
 
     let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[..20])
-        .ok_or_else(|| anyhow!("Failed to create IPv4 packet"))?;
+        .ok_or_else(|| SlapperError::Runtime("Failed to create IPv4 packet".to_string()))?;
 
     ipv4_packet.set_version(4);
     ipv4_packet.set_header_length(5);
@@ -117,7 +121,7 @@ fn build_icmp_packet(
     ipv4_packet.set_destination(dst_ip);
 
     let mut icmp_packet = MutableEchoRequestPacket::new(&mut buffer[20..])
-        .ok_or_else(|| anyhow!("Failed to create ICMP packet"))?;
+        .ok_or_else(|| SlapperError::Runtime("Failed to create ICMP packet".to_string()))?;
 
     icmp_packet.set_icmp_type(IcmpTypes::EchoRequest);
     icmp_packet.set_icmp_code(IcmpCode(0));
@@ -142,7 +146,7 @@ async fn resolve_target(target: &str) -> Result<IpAddr> {
     addrs
         .first()
         .map(|a| a.ip())
-        .ok_or_else(|| anyhow!("Failed to resolve target: {}", target))
+        .ok_or_else(|| SlapperError::Runtime(format!("Failed to resolve target: {}", target)))
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
@@ -152,7 +156,7 @@ fn get_network_interface() -> Result<NetworkInterface> {
     interfaces
         .into_iter()
         .find(|iface| iface.is_up() && !iface.is_loopback() && !iface.ips.is_empty())
-        .ok_or_else(|| anyhow!("No suitable network interface found"))
+        .ok_or_else(|| SlapperError::Runtime("No suitable network interface found".to_string()))
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
@@ -166,8 +170,8 @@ fn create_channel(
 
     match datalink::channel(interface, config) {
         Ok(Ethernet(tx, rx)) => Ok((tx, rx)),
-        Ok(_) => Err(anyhow!("Unsupported channel type")),
-        Err(e) => Err(anyhow!("Failed to create channel: {}", e)),
+        Ok(_) => Err(SlapperError::Runtime("Unsupported channel type".to_string())),
+        Err(e) => Err(SlapperError::Runtime(format!("Failed to create channel: {}", e))),
     }
 }
 
@@ -180,7 +184,7 @@ fn get_local_ip(interface: &NetworkInterface) -> Result<Ipv4Addr> {
             IpAddr::V4(ip) => Some(ip),
             _ => None,
         })
-        .ok_or_else(|| anyhow!("No IPv4 address found on interface"))
+        .ok_or_else(|| SlapperError::Runtime("No IPv4 address found on interface".to_string()))
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
@@ -221,6 +225,8 @@ fn generate_payload(size: usize) -> Vec<u8> {
 pub async fn run_icmp_flood(
     _config: &super::StressConfig,
     _metrics: &super::metrics::StressMetrics,
-) -> anyhow::Result<super::StressStats> {
-    anyhow::bail!("ICMP flood requires Unix and 'stress-testing' feature enabled");
+) -> crate::error::Result<super::StressStats> {
+    Err(SlapperError::Runtime(
+        "ICMP flood requires Unix and 'stress-testing' feature enabled".to_string(),
+    ))
 }

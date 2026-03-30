@@ -1,7 +1,7 @@
 
 #![allow(dead_code)]
 
-use anyhow::{anyhow, Context, Result};
+use crate::error::{Result, SlapperError};
 use std::net::{IpAddr, SocketAddr};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -59,7 +59,7 @@ impl SocksProxy {
             SocksVersion::V4a => self.connect_socks4a(domain, port).await,
             SocksVersion::V5 => self.connect_socks5_domain(domain, port).await,
             SocksVersion::V4 => {
-                anyhow::bail!("SOCKS4 requires IP address, use SOCKS4a for domain support");
+                Err(SlapperError::Proxy("SOCKS4 requires IP address, use SOCKS4a for domain support".to_string()))
             }
         }
     }
@@ -67,12 +67,12 @@ impl SocksProxy {
     async fn connect_socks4(&self, target: SocketAddr) -> Result<TcpStream> {
         let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
             .await
-            .context("Connection timeout")?
-            .context("Failed to connect to proxy")?;
+            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
+            .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         let ip = match target.ip() {
             IpAddr::V4(ip) => ip,
-            IpAddr::V6(_) => anyhow::bail!("SOCKS4 does not support IPv6"),
+            IpAddr::V6(_) => return Err(SlapperError::Proxy("SOCKS4 does not support IPv6".to_string())),
         };
 
         let mut request = vec![
@@ -90,10 +90,10 @@ impl SocksProxy {
         stream.read_exact(&mut response).await?;
 
         if response[1] != 0x5A {
-            anyhow::bail!(
+            return Err(SlapperError::Proxy(format!(
                 "SOCKS4 proxy rejected connection: status 0x{:02X}",
                 response[1]
-            );
+            )));
         }
 
         Ok(stream)
@@ -102,8 +102,8 @@ impl SocksProxy {
     async fn connect_socks4a(&self, domain: &str, port: u16) -> Result<TcpStream> {
         let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
             .await
-            .context("Connection timeout")?
-            .context("Failed to connect to proxy")?;
+            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
+            .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         let mut request = vec![
             0x04,
@@ -125,10 +125,10 @@ impl SocksProxy {
         stream.read_exact(&mut response).await?;
 
         if response[1] != 0x5A {
-            anyhow::bail!(
+            return Err(SlapperError::Proxy(format!(
                 "SOCKS4a proxy rejected connection: status 0x{:02X}",
                 response[1]
-            );
+            )));
         }
 
         Ok(stream)
@@ -137,8 +137,8 @@ impl SocksProxy {
     async fn connect_socks5(&self, target: SocketAddr) -> Result<TcpStream> {
         let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
             .await
-            .context("Connection timeout")?
-            .context("Failed to connect to proxy")?;
+            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
+            .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         self.socks5_handshake(&mut stream).await?;
         self.socks5_connect(&mut stream, &target.ip(), target.port())
@@ -150,8 +150,8 @@ impl SocksProxy {
     async fn connect_socks5_domain(&self, domain: &str, port: u16) -> Result<TcpStream> {
         let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
             .await
-            .context("Connection timeout")?
-            .context("Failed to connect to proxy")?;
+            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
+            .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         self.socks5_handshake(&mut stream).await?;
         self.socks5_connect_domain(&mut stream, domain, port)
@@ -175,7 +175,7 @@ impl SocksProxy {
         stream.read_exact(&mut response).await?;
 
         if response[0] != 0x05 {
-            anyhow::bail!("Invalid SOCKS5 response");
+            return Err(SlapperError::Proxy("Invalid SOCKS5 response".to_string()));
         }
 
         match response[1] {
@@ -184,10 +184,10 @@ impl SocksProxy {
                 self.socks5_auth(stream).await?;
             }
             0xFF => {
-                anyhow::bail!("SOCKS5 proxy: no acceptable authentication method");
+                return Err(SlapperError::Proxy("SOCKS5 proxy: no acceptable authentication method".to_string()));
             }
             method => {
-                anyhow::bail!("SOCKS5 proxy: unsupported auth method 0x{:02X}", method);
+                return Err(SlapperError::Proxy(format!("SOCKS5 proxy: unsupported auth method 0x{:02X}", method)));
             }
         }
 
@@ -198,14 +198,14 @@ impl SocksProxy {
         let username = self
             .username
             .as_ref()
-            .ok_or_else(|| anyhow!("Username required"))?;
+            .ok_or_else(|| SlapperError::Proxy("Username required".to_string()))?;
         let password = self
             .password
             .as_ref()
-            .ok_or_else(|| anyhow!("Password required"))?;
+            .ok_or_else(|| SlapperError::Proxy("Password required".to_string()))?;
 
         if username.len() > 255 || password.len() > 255 {
-            anyhow::bail!("Username or password too long");
+            return Err(SlapperError::Proxy("Username or password too long".to_string()));
         }
 
         let mut request = vec![0x01, username.len() as u8];
@@ -219,7 +219,7 @@ impl SocksProxy {
         stream.read_exact(&mut response).await?;
 
         if response[1] != 0x00 {
-            anyhow::bail!("SOCKS5 authentication failed");
+            return Err(SlapperError::Proxy("SOCKS5 authentication failed".to_string()));
         }
 
         Ok(())
@@ -259,7 +259,7 @@ impl SocksProxy {
                 stream.read_exact(&mut len).await?;
                 len[0] as usize + 1
             }
-            _ => anyhow::bail!("Invalid address type in SOCKS5 response"),
+            _ => return Err(SlapperError::Proxy("Invalid address type in SOCKS5 response".to_string())),
         };
 
         let mut remaining = vec![0u8; bind_addr_len + 2];
@@ -275,7 +275,7 @@ impl SocksProxy {
         port: u16,
     ) -> Result<()> {
         if domain.len() > 255 {
-            anyhow::bail!("Domain name too long");
+            return Err(SlapperError::Proxy("Domain name too long".to_string()));
         }
 
         let mut request = vec![0x05, 0x01, 0x00, 0x03];
@@ -301,7 +301,7 @@ impl SocksProxy {
                 stream.read_exact(&mut len).await?;
                 len[0] as usize + 1
             }
-            _ => anyhow::bail!("Invalid address type in SOCKS5 response"),
+            _ => return Err(SlapperError::Proxy("Invalid address type in SOCKS5 response".to_string())),
         };
 
         let mut remaining = vec![0u8; bind_addr_len + 2];
@@ -311,17 +311,17 @@ impl SocksProxy {
     }
 }
 
-fn map_socks5_error(code: u8) -> anyhow::Error {
+fn map_socks5_error(code: u8) -> SlapperError {
     match code {
-        0x01 => anyhow!("SOCKS5: General failure"),
-        0x02 => anyhow!("SOCKS5: Connection not allowed by ruleset"),
-        0x03 => anyhow!("SOCKS5: Network unreachable"),
-        0x04 => anyhow!("SOCKS5: Host unreachable"),
-        0x05 => anyhow!("SOCKS5: Connection refused"),
-        0x06 => anyhow!("SOCKS5: TTL expired"),
-        0x07 => anyhow!("SOCKS5: Command not supported"),
-        0x08 => anyhow!("SOCKS5: Address type not supported"),
-        _ => anyhow!("SOCKS5: Unknown error 0x{:02X}", code),
+        0x01 => SlapperError::Proxy("SOCKS5: General failure".to_string()),
+        0x02 => SlapperError::Proxy("SOCKS5: Connection not allowed by ruleset".to_string()),
+        0x03 => SlapperError::Proxy("SOCKS5: Network unreachable".to_string()),
+        0x04 => SlapperError::Proxy("SOCKS5: Host unreachable".to_string()),
+        0x05 => SlapperError::Proxy("SOCKS5: Connection refused".to_string()),
+        0x06 => SlapperError::Proxy("SOCKS5: TTL expired".to_string()),
+        0x07 => SlapperError::Proxy("SOCKS5: Command not supported".to_string()),
+        0x08 => SlapperError::Proxy("SOCKS5: Address type not supported".to_string()),
+        _ => SlapperError::Proxy(format!("SOCKS5: Unknown error 0x{:02X}", code)),
     }
 }
 
@@ -329,7 +329,7 @@ pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<Pr
     let version = match proxy.proxy_type {
         ProxyType::Socks4 => SocksVersion::V4,
         ProxyType::Socks5 | ProxyType::Tor => SocksVersion::V5,
-        _ => anyhow::bail!("Not a SOCKS proxy"),
+        _ => return Err(SlapperError::Proxy("Not a SOCKS proxy".to_string())),
     };
 
     let proxy_addr = proxy.socket_addr()?;
@@ -381,7 +381,7 @@ pub async fn connect_through_with_domain(
 
 pub async fn chain_connect(proxies: &[ProxyEntry], target: SocketAddr) -> Result<TcpStream> {
     if proxies.is_empty() {
-        anyhow::bail!("No proxies in chain");
+        return Err(SlapperError::Proxy("No proxies in chain".to_string()));
     }
 
     let mut current_stream: Option<TcpStream> = None;
@@ -396,8 +396,8 @@ pub async fn chain_connect(proxies: &[ProxyEntry], target: SocketAddr) -> Result
                 TcpStream::connect(proxy_addr),
             )
             .await
-            .context("Connection timeout")?
-            .context("Failed to connect to first proxy")?,
+            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
+            .map_err(|e| SlapperError::Proxy(format!("Failed to connect to first proxy: {}", e)))?,
         };
 
         let socks = SocksProxy::new(SocksVersion::V5, proxy_addr)
@@ -417,5 +417,5 @@ pub async fn chain_connect(proxies: &[ProxyEntry], target: SocketAddr) -> Result
         });
     }
 
-    current_stream.ok_or_else(|| anyhow!("Failed to establish proxy chain"))
+    current_stream.ok_or_else(|| SlapperError::Proxy("Failed to establish proxy chain".to_string()))
 }

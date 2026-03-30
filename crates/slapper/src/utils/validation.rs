@@ -1,4 +1,3 @@
-
 use crate::constants::{http, scan};
 use anyhow::{anyhow, Result};
 
@@ -33,10 +32,6 @@ pub fn validate_timeout(timeout: u64) -> Result<()> {
             http::DEFAULT_TIMEOUT_SECS * 10
         ));
     }
-    Ok(())
-}
-
-pub fn validate_port(_port: u16) -> Result<()> {
     Ok(())
 }
 

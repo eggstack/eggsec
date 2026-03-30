@@ -77,7 +77,7 @@ pub mod payloads;
 pub mod types;
 pub mod waf_patterns;
 
-use anyhow::Result;
+use crate::error::Result;
 use std::time::Instant;
 
 use crate::cli::WafArgs;
@@ -221,12 +221,7 @@ impl WafEngine {
                 } else {
                     Severity::Low
                 };
-                let owasp = if br.success {
-                    OwaspCategory::A05_2021_SecurityMisconfiguration
-                } else {
-                    #[allow(clippy::if_same_then_else)]
-                    OwaspCategory::A05_2021_SecurityMisconfiguration
-                };
+                let owasp = OwaspCategory::A05_2021_SecurityMisconfiguration;
 
                 Finding::new(
                     format!("WAF Bypass - {:?}", br.technique),

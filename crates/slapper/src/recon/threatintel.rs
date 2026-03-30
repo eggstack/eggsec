@@ -1,7 +1,7 @@
 
 #![allow(dead_code)]
 
-use anyhow::Result;
+use crate::error::{Result, SlapperError};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -135,7 +135,7 @@ impl ThreatIntelClient {
             .await?;
 
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!("VT API request failed"));
+            return Err(SlapperError::Recon("VT API request failed".to_string()));
         }
 
         let vt_resp: serde_json::Value = response.json().await?;
@@ -143,11 +143,11 @@ impl ThreatIntelClient {
         let data = vt_resp
             .get("data")
             .and_then(|d| d.get("attributes"))
-            .ok_or_else(|| anyhow::anyhow!("Invalid VT response"))?;
+            .ok_or_else(|| SlapperError::Recon("Invalid VT response".to_string()))?;
 
         let last_analysis = data
             .get("last_analysis_stats")
-            .ok_or_else(|| anyhow::anyhow!("No analysis stats"))?;
+            .ok_or_else(|| SlapperError::Recon("No analysis stats".to_string()))?;
 
         let malicious = last_analysis
             .get("malicious")
@@ -206,7 +206,7 @@ impl ThreatIntelClient {
             .await?;
 
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!("VT API request failed"));
+            return Err(SlapperError::Recon("VT API request failed".to_string()));
         }
 
         let vt_resp: serde_json::Value = response.json().await?;
@@ -214,11 +214,11 @@ impl ThreatIntelClient {
         let data = vt_resp
             .get("data")
             .and_then(|d| d.get("attributes"))
-            .ok_or_else(|| anyhow::anyhow!("Invalid VT response"))?;
+            .ok_or_else(|| SlapperError::Recon("Invalid VT response".to_string()))?;
 
         let last_analysis = data
             .get("last_analysis_stats")
-            .ok_or_else(|| anyhow::anyhow!("No analysis stats"))?;
+            .ok_or_else(|| SlapperError::Recon("No analysis stats".to_string()))?;
 
         let malicious = last_analysis
             .get("malicious")
@@ -276,7 +276,7 @@ impl ThreatIntelClient {
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!("Shodan API request failed"));
+            return Err(SlapperError::Recon("Shodan API request failed".to_string()));
         }
 
         let shodan_resp: serde_json::Value = response.json().await?;

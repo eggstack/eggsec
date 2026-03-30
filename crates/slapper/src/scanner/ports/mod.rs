@@ -8,7 +8,7 @@ mod spoofed;
 use crate::scanner::spoof::{format_spoof_warning, SpoofConfig, SpoofStats};
 use crate::utils::parsing::{parse_ports, resolve_host};
 use crate::utils::truncate;
-use anyhow::Result;
+use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};

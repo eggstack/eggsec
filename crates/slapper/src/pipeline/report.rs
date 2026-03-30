@@ -78,7 +78,7 @@ fn truncate(s: &str, max_len: usize) -> String {
     }
 }
 
-pub fn generate_html(report: &PipelineReport) -> anyhow::Result<String> {
+pub fn generate_html(report: &PipelineReport) -> crate::error::Result<String> {
     let mut html = String::new();
     html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
     html.push_str("<title>Security Assessment Report</title>\n");
@@ -170,7 +170,7 @@ pub fn generate_html(report: &PipelineReport) -> anyhow::Result<String> {
     Ok(html)
 }
 
-pub fn generate_csv(report: &PipelineReport) -> anyhow::Result<String> {
+pub fn generate_csv(report: &PipelineReport) -> crate::error::Result<String> {
     let mut csv = String::new();
 
     csv.push_str("Security Assessment Report\n");

@@ -41,7 +41,7 @@
 pub mod metrics;
 pub mod runner;
 
-use anyhow::Result;
+use crate::error::Result;
 
 use crate::cli::LoadArgs;
 use crate::config::SlapperConfig;

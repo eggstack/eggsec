@@ -1,5 +1,5 @@
 #[cfg(feature = "stress-testing")]
-use anyhow::{anyhow, Result};
+use crate::error::{Result, SlapperError};
 #[cfg(feature = "stress-testing")]
 use rand::Rng;
 #[cfg(feature = "stress-testing")]
@@ -96,7 +96,7 @@ async fn resolve_target(target: &str) -> Result<IpAddr> {
     addrs
         .first()
         .map(|a| a.ip())
-        .ok_or_else(|| anyhow!("Failed to resolve target: {}", target))
+        .ok_or_else(|| SlapperError::Runtime(format!("Failed to resolve target: {}", target)))
 }
 
 #[cfg(feature = "stress-testing")]
@@ -124,6 +124,8 @@ fn generate_payload(size: usize) -> Vec<u8> {
 pub async fn run_udp_flood(
     _config: &super::StressConfig,
     _metrics: &super::metrics::StressMetrics,
-) -> anyhow::Result<super::StressStats> {
-    anyhow::bail!("UDP flood requires 'stress-testing' feature enabled");
+) -> crate::error::Result<super::StressStats> {
+    Err(SlapperError::Runtime(
+        "UDP flood requires 'stress-testing' feature enabled".to_string(),
+    ))
 }

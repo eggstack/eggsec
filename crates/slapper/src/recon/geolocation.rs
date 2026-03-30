@@ -1,5 +1,6 @@
 
-use anyhow::{anyhow, Result};
+use crate::error::{Result, SlapperError};
+use crate::utils::create_http_client_with_options;
 use maxminddb::geoip2;
 use maxminddb::Reader;
 use serde::{Deserialize, Serialize};
@@ -7,8 +8,6 @@ use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::sync::LazyLock;
-
-use crate::utils::create_http_client_with_options;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GeoLocation {
@@ -184,7 +183,10 @@ impl GeoLocator {
         let response = self.client.get(url).send().await?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("Failed to download IP66 DB: {}", response.status()));
+            return Err(SlapperError::Network(format!(
+                "Failed to download IP66 DB: {}",
+                response.status()
+            )));
         }
 
         let bytes = response.bytes().await?;
@@ -198,11 +200,11 @@ impl GeoLocator {
     async fn download_maxmind_db(&self, settings: &MaxMindSettings) -> Result<()> {
         let account_id = settings
             .account_id
-            .ok_or_else(|| anyhow!("MaxMind account_id required"))?;
+            .ok_or_else(|| SlapperError::Config("MaxMind account_id required".to_string()))?;
         let license_key = settings
             .license_key
             .as_ref()
-            .ok_or_else(|| anyhow!("MaxMind license_key required"))?;
+            .ok_or_else(|| SlapperError::Config("MaxMind license_key required".to_string()))?;
 
         let data_dir = &settings.data_dir;
         tokio::fs::create_dir_all(data_dir).await?;
@@ -222,10 +224,10 @@ impl GeoLocator {
             .await?;
 
         if !response.status().is_success() {
-            return Err(anyhow!(
+            return Err(SlapperError::Network(format!(
                 "Failed to download MaxMind DB: {}",
                 response.status()
-            ));
+            )));
         }
 
         let bytes = response.bytes().await?;
@@ -428,7 +430,7 @@ impl GeoLocator {
         let response = self.client.get(&url).send().await?;
 
         if response.status() == 429 || response.status() == 403 {
-            return Err(anyhow!("Rate limited or forbidden"));
+            return Err(SlapperError::RateLimited("Rate limited or forbidden".to_string()));
         }
 
         #[derive(Deserialize)]
@@ -604,7 +606,7 @@ impl GeoLocator {
             });
         }
 
-        Err(anyhow!("ip2c lookup failed: {}", text))
+        Err(SlapperError::Network(format!("ip2c lookup failed: {}", text)))
     }
 }
 

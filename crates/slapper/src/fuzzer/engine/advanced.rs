@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::{Result, SlapperError};
 use std::time::Duration;
 
 use super::super::advanced::{
@@ -90,11 +90,11 @@ impl FuzzEngine {
             }
             "websocket" => {
                 let mut fuzzer = WebSocketFuzzer::new(self.args.url.clone());
-                fuzzer.fuzz(&client).await
+                fuzzer.fuzz(&client).await.map_err(crate::error::SlapperError::from)
             }
             "grpc" => {
                 let mut fuzzer = GrpcFuzzer::new(self.args.url.clone());
-                fuzzer.fuzz(&client).await
+                fuzzer.fuzz(&client).await.map_err(crate::error::SlapperError::from)
             }
             _ => Ok(Vec::new()),
         }
@@ -160,7 +160,7 @@ impl FuzzEngine {
             .collect();
 
         if types.is_empty() {
-            anyhow::bail!("No valid payload types specified");
+            return Err(SlapperError::Payload("No valid payload types specified".to_string()));
         }
 
         Ok(types)

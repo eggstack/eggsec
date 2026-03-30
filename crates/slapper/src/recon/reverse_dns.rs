@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::{Result, SlapperError};
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioAsyncResolver;
 use serde::{Deserialize, Serialize};
@@ -121,7 +121,7 @@ pub async fn lookup_domain_info(target: &str) -> Result<ReverseDnsResult> {
     } else {
         let ips = resolve_domain(target).await?;
         if ips.is_empty() {
-            anyhow::bail!("Could not resolve domain: {}", target);
+            return Err(SlapperError::Network(format!("Could not resolve domain: {}", target)));
         }
         ips[0].clone()
     };

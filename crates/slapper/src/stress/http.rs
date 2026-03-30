@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::{Result, SlapperError};
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng;
@@ -56,7 +56,7 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     let _requests_per_second = config.rate_pps;
 
     for _ in 0..total_requests {
-        let permit = semaphore.clone().acquire_owned().await?;
+        let permit = semaphore.clone().acquire_owned().await.map_err(|e| SlapperError::Runtime(e.to_string()))?;
         let client = client.clone();
         let url = target_url.clone();
         let metrics = metrics.clone();

@@ -3,7 +3,7 @@
 use std::net::IpAddr;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use crate::error::{Result, SlapperError};
 use surge_ping::{IcmpPacket, PingIdentifier, PingSequence};
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -110,11 +110,11 @@ async fn resolve_hostname(hostname: &str) -> Result<IpAddr> {
 
     let addrs: Vec<_> = (hostname, 0)
         .to_socket_addrs()
-        .context("DNS lookup failed")?
+        .map_err(|e| SlapperError::Network(format!("DNS lookup failed: {}", e)))?
         .collect();
 
     addrs
         .first()
         .map(|s| s.ip())
-        .ok_or_else(|| anyhow::anyhow!("No addresses found for hostname"))
+        .ok_or_else(|| SlapperError::Network("No addresses found for hostname".to_string()))
 }

@@ -48,7 +48,10 @@ fn test_proxy_entry_with_auth() {
     let entry = ProxyEntry::new(ProxyType::Http, "proxy.example.com".to_string(), 8080)
         .with_auth("user".to_string(), "pass".to_string());
     assert_eq!(entry.username, Some("user".to_string()));
-    assert_eq!(entry.password, Some("pass".to_string()));
+    assert_eq!(
+        entry.password.as_ref().map(|p| p.expose_secret()),
+        Some("pass")
+    );
 }
 
 #[test]

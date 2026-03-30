@@ -1,3 +1,4 @@
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 
 use super::context::PipelineContext;
@@ -11,13 +12,13 @@ pub struct PipelineSession {
     pub context: PipelineContext,
 }
 
-pub fn save(path: &str, session: &PipelineSession) -> anyhow::Result<()> {
+pub fn save(path: &str, session: &PipelineSession) -> Result<()> {
     let json = serde_json::to_string_pretty(session)?;
     std::fs::write(path, json)?;
     Ok(())
 }
 
-pub fn load(path: &str) -> anyhow::Result<PipelineSession> {
+pub fn load(path: &str) -> Result<PipelineSession> {
     let json = std::fs::read_to_string(path)?;
     let session: PipelineSession = serde_json::from_str(&json)?;
     Ok(session)

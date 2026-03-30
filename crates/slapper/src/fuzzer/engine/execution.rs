@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Method;
@@ -201,9 +201,12 @@ impl FuzzEngine {
 
             match result {
                 Ok(r) => {
-                    if r.error.is_some() || r.status_code == 0 {
-                        limiter.record_error(Some(r.status_code));
-                    } else if r.status_code == 429 || r.status_code == 503 {
+                    let is_error = r.error.is_some()
+                        || r.status_code == 0
+                        || r.status_code == 429
+                        || r.status_code == 503;
+
+                    if is_error {
                         limiter.record_error(Some(r.status_code));
                     } else {
                         limiter.record_success();

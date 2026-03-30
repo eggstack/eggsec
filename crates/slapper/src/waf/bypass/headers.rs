@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use rand::seq::SliceRandom;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};

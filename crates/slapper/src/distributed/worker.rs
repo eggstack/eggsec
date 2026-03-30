@@ -1,5 +1,5 @@
 use crate::distributed::{Heartbeat, Task, TaskResult, TaskType, WorkerRegistration, WorkerStatus};
-use anyhow::Result;
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;

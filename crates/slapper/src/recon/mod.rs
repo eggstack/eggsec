@@ -63,7 +63,7 @@ pub mod whois;
 
 use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
-use anyhow::Result;
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

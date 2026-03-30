@@ -1,7 +1,7 @@
 
 use crate::utils::parsing::parse_ports;
 use crate::utils::truncate;
-use anyhow::Result;
+use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};

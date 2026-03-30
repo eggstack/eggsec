@@ -3,7 +3,7 @@
 //! Provides raw socket-based port scanning with IP spoofing, decoy support,
 //! and packet fragmentation capabilities.
 
-use anyhow::Result;
+use crate::error::{Result, SlapperError};
 use std::time::Duration;
 
 use crate::scanner::spoof::SpoofConfig;
@@ -70,7 +70,6 @@ pub(crate) async fn scan_ports_spoofed(
     use rand::Rng;
     use std::net::Ipv4Addr;
     use std::sync::Arc;
-    use std::sync::Arc as StdArc;
     use tokio::sync::Mutex;
 
     use super::{get_service_name, PortResult};
@@ -78,7 +77,7 @@ pub(crate) async fn scan_ports_spoofed(
     let target_ip = resolve_host(host)?;
     let target_ipv4 = match target_ip {
         std::net::IpAddr::V4(ip) => ip,
-        std::net::IpAddr::V6(_) => anyhow::bail!("IPv6 not supported for spoofed scanning"),
+        std::net::IpAddr::V6(_) => return Err(SlapperError::Runtime("IPv6 not supported for spoofed scanning".to_string())),
     };
 
     let interface = get_network_interface()?;
@@ -86,11 +85,11 @@ pub(crate) async fn scan_ports_spoofed(
 
     let (tx, _rx) = match pnet::datalink::channel(&interface, Config::default()) {
         Ok(pnet::datalink::Channel::Ethernet(tx, rx)) => (tx, rx),
-        Ok(_) => anyhow::bail!("Unsupported channel type"),
-        Err(e) => anyhow::bail!("Failed to create datalink channel: {}", e),
+        Ok(_) => return Err(SlapperError::Runtime("Unsupported channel type".to_string())),
+        Err(e) => return Err(SlapperError::Runtime(format!("Failed to create datalink channel: {}", e))),
     };
 
-    let tx = StdArc::new(parking_lot::Mutex::new(tx));
+    let tx = Arc::new(parking_lot::Mutex::new(tx));
     let results = Arc::new(Mutex::new(Vec::new()));
     let progress = if tui_mode {
         None
@@ -127,7 +126,7 @@ pub(crate) async fn scan_ports_spoofed(
             *ip
         } else if let Some(ref range) = spoof_config.ip_range {
             random_ip_from_cidr(range)
-                .map_err(|e| anyhow::anyhow!("Invalid spoof range '{}': {}", range, e))?
+                .map_err(|e| SlapperError::Parse(format!("Invalid spoof range '{}': {}", range, e)))?
         } else {
             local_ip
         };
@@ -365,7 +364,7 @@ pub(crate) async fn scan_ports_spoofed(
     _tui_mode: bool,
     _spoof_config: SpoofConfig,
 ) -> Result<PortScanResults> {
-    anyhow::bail!("IP spoofing requires 'stress-testing' feature and Unix system");
+    Err(SlapperError::Runtime("IP spoofing requires 'stress-testing' feature and Unix system".to_string()))
 }
 
 #[cfg(test)]

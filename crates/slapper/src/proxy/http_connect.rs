@@ -1,7 +1,7 @@
 
 #![allow(dead_code)]
 
-use anyhow::{anyhow, Context, Result};
+use crate::error::{Result, SlapperError};
 use base64::{engine::general_purpose, Engine as _};
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -50,8 +50,8 @@ impl HttpConnectProxy {
     pub async fn connect(&self, target: SocketAddr) -> Result<TcpStream> {
         let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
             .await
-            .context("Connection timeout")?
-            .context("Failed to connect to proxy")?;
+            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
+            .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         let connect_request = self.build_connect_request(target);
         stream.write_all(connect_request.as_bytes()).await?;
@@ -65,8 +65,8 @@ impl HttpConnectProxy {
     pub async fn connect_with_host(&self, host: &str, port: u16) -> Result<TcpStream> {
         let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
             .await
-            .context("Connection timeout")?
-            .context("Failed to connect to proxy")?;
+            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
+            .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         let connect_request = self.build_connect_request_with_host(host, port);
         stream.write_all(connect_request.as_bytes()).await?;
@@ -152,23 +152,23 @@ impl HttpConnectProxy {
         let first_line = response
             .lines()
             .next()
-            .ok_or_else(|| anyhow!("Empty response from proxy"))?;
+            .ok_or_else(|| SlapperError::Proxy("Empty response from proxy".to_string()))?;
 
         let parts: Vec<&str> = first_line.splitn(3, ' ').collect();
         if parts.len() < 2 {
-            anyhow::bail!("Invalid response from proxy: {}", first_line);
+            return Err(SlapperError::Proxy(format!("Invalid response from proxy: {}", first_line)));
         }
 
         let status_code: u16 = parts[1]
             .parse()
-            .with_context(|| format!("Invalid status code: {}", parts[1]))?;
+            .map_err(|e| SlapperError::Proxy(format!("Invalid status code: {}: {}", parts[1], e)))?;
 
         if !(200..300).contains(&status_code) {
-            anyhow::bail!(
+            return Err(SlapperError::Proxy(format!(
                 "Proxy returned error: {} {}",
                 status_code,
                 parts.get(2).unwrap_or(&"")
-            );
+            )));
         }
 
         Ok(())
