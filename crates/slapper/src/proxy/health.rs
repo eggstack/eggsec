@@ -89,7 +89,7 @@ impl HealthChecker {
         );
 
         let reqwest_proxy = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
-            reqwest::Proxy::all(&proxy_url)?.basic_auth(user, pass)
+            reqwest::Proxy::all(&proxy_url)?.basic_auth(user, pass.expose_secret())
         } else {
             reqwest::Proxy::all(&proxy_url)?
         };

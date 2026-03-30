@@ -324,8 +324,9 @@ pub async fn scan_ports(
         pb.finish_and_clear();
     }
 
-    let mut results = results.lock().await.clone();
+    let mut results = results.lock().await;
     results.sort_by_key(|p| p.port);
+    let results = std::mem::take(&mut *results);
 
     Ok(PortScanResults {
         host: host.to_string(),

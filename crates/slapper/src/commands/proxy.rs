@@ -1,4 +1,5 @@
 use crate::proxy::{ProxyEntry, ProxyType};
+use crate::types::SensitiveString;
 use anyhow::Result;
 
 #[allow(clippy::type_complexity)]
@@ -59,7 +60,7 @@ pub fn create_proxy_entry(proxy_url: &str) -> Result<ProxyEntry> {
         address,
         port,
         username,
-        password,
+        password: password.map(SensitiveString::new),
         weight: 1,
         priority: 0,
         timeout_ms: 10000,

@@ -113,50 +113,34 @@ impl StressTest {
             "Starting stress test"
         );
 
-        let stats = match self.config.stress_type {
-            StressType::Syn => {
-                #[cfg(feature = "stress-testing")]
-                {
-                    syn::run_syn_flood(&self.config, &self.metrics).await?
+        #[cfg(feature = "stress-testing")]
+        {
+            let stats = match self.config.stress_type {
+                StressType::Syn => syn::run_syn_flood(&self.config, &self.metrics).await?,
+                StressType::Udp => udp::run_udp_flood(&self.config, &self.metrics).await?,
+                StressType::Icmp => icmp::run_icmp_flood(&self.config, &self.metrics).await?,
+                StressType::Http | StressType::Tcp => {
+                    http::run_http_flood(&self.config, &self.metrics).await?
                 }
-                #[cfg(not(feature = "stress-testing"))]
-                {
-                    anyhow::bail!("SYN flood requires 'stress-testing' feature");
-                }
-            }
-            StressType::Udp => {
-                #[cfg(feature = "stress-testing")]
-                {
-                    udp::run_udp_flood(&self.config, &self.metrics).await?
-                }
-                #[cfg(not(feature = "stress-testing"))]
-                {
-                    anyhow::bail!("UDP flood requires 'stress-testing' feature");
-                }
-            }
-            StressType::Icmp => {
-                #[cfg(feature = "stress-testing")]
-                {
-                    icmp::run_icmp_flood(&self.config, &self.metrics).await?
-                }
-                #[cfg(not(feature = "stress-testing"))]
-                {
-                    anyhow::bail!("ICMP flood requires 'stress-testing' feature");
-                }
-            }
-            StressType::Http | StressType::Tcp => {
-                http::run_http_flood(&self.config, &self.metrics).await?
-            }
-        };
+            };
 
-        tracing::info!(
-            packets_sent = stats.packets_sent,
-            bytes_sent = stats.bytes_sent,
-            duration_ms = stats.duration_ms,
-            "Stress test completed"
-        );
+            tracing::info!(
+                packets_sent = stats.packets_sent,
+                bytes_sent = stats.bytes_sent,
+                duration_ms = stats.duration_ms,
+                "Stress test completed"
+            );
 
-        Ok(stats)
+            Ok(stats)
+        }
+
+        #[cfg(not(feature = "stress-testing"))]
+        {
+            anyhow::bail!(
+                "Stress testing requires the 'stress-testing' feature: \
+                 cargo build --features stress-testing"
+            );
+        }
     }
 }
 

@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::types::SensitiveString;
 use crate::utils::create_http_client;
 use anyhow::Result;
 
@@ -54,7 +55,7 @@ pub struct WebhookNotifier {
 pub struct WebhookConfig {
     pub name: String,
     pub url: String,
-    pub secret: Option<String>,
+    pub secret: Option<SensitiveString>,
     pub headers: HashMap<String, String>,
     pub events: Vec<WebhookEvent>,
 }
@@ -93,7 +94,7 @@ impl WebhookNotifier {
         let mut request = client.post(&webhook.url);
 
         if let Some(ref secret) = webhook.secret {
-            request = request.header("X-Webhook-Secret", secret);
+            request = request.header("X-Webhook-Secret", secret.expose_secret());
         }
 
         for (key, value) in &webhook.headers {

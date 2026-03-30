@@ -1,9 +1,10 @@
-
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
+
+use crate::types::SensitiveString;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProxyType {
@@ -68,7 +69,7 @@ pub struct ProxyEntry {
     pub username: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub password: Option<String>,
+    pub password: Option<SensitiveString>,
 
     #[serde(default)]
     pub weight: u32,
@@ -109,7 +110,7 @@ impl ProxyEntry {
 
     pub fn with_auth(mut self, username: String, password: String) -> Self {
         self.username = Some(username);
-        self.password = Some(password);
+        self.password = Some(SensitiveString::new(password));
         self
     }
 
@@ -130,7 +131,11 @@ impl ProxyEntry {
             (Some(user), Some(pass)) => {
                 format!(
                     "{}://{}:{}@{}:{}",
-                    scheme, user, pass, self.address, self.port
+                    scheme,
+                    user,
+                    pass.expose_secret(),
+                    self.address,
+                    self.port
                 )
             }
             _ => format!("{}://{}:{}", scheme, self.address, self.port),
@@ -202,7 +207,10 @@ impl ProxyEntry {
         let (username, password) = if let Some(auth_str) = auth {
             let parts: Vec<&str> = auth_str.splitn(2, ':').collect();
             if parts.len() == 2 {
-                (Some(parts[0].to_string()), Some(parts[1].to_string()))
+                (
+                    Some(parts[0].to_string()),
+                    Some(SensitiveString::new(parts[1].to_string())),
+                )
             } else {
                 (Some(parts[0].to_string()), None)
             }

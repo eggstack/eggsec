@@ -1,7 +1,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -76,21 +76,12 @@ impl RemoteListener {
         }
     }
 
-    pub fn with_tls(psk: String, tls_config: TlsConfig) -> Self {
-        let tls_server = match TlsServer::from_pkcs12(&tls_config.pkcs12_path, &tls_config.password)
-        {
-            Ok(server) => Some(Arc::new(server)),
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to initialize TLS: {}. Falling back to plaintext.",
-                    e
-                );
-                None
-            }
-        };
+    pub fn with_tls(psk: String, tls_config: TlsConfig) -> anyhow::Result<Self> {
+        let tls_server = TlsServer::from_pkcs12(&tls_config.pkcs12_path, &tls_config.password)
+            .map_err(|e| anyhow::anyhow!("Failed to initialize TLS: {}", e))?;
 
         let (shutdown_tx, _) = broadcast::channel(1);
-        Self {
+        Ok(Self {
             psk,
             shutdown_tx,
             connections: Arc::new(RwLock::new(Vec::new())),
@@ -98,8 +89,12 @@ impl RemoteListener {
             max_connections: MAX_CONNECTIONS,
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
-            tls_server,
-        }
+            tls_server: Some(Arc::new(tls_server)),
+        })
+    }
+
+    pub fn new_plaintext(psk: String) -> Self {
+        Self::new(psk)
     }
 
     pub fn is_tls(&self) -> bool {
@@ -149,6 +144,21 @@ impl RemoteListener {
         true
     }
 
+    fn ip_matches_allowlist(ip: IpAddr, allowlist: &[String]) -> bool {
+        for entry in allowlist {
+            if let Ok(cidr) = entry.parse::<ipnetwork::IpNetwork>() {
+                if cidr.contains(ip) {
+                    return true;
+                }
+            } else if let Ok(addr) = entry.parse::<IpAddr>() {
+                if addr == ip {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     pub async fn start(&self, port: u16) -> anyhow::Result<()> {
         let addr = SocketAddr::from(([0, 0, 0, 0], port));
         let listener = TcpListener::bind(addr).await?;
@@ -177,11 +187,8 @@ impl RemoteListener {
                         Ok((stream, addr)) => {
                             // Check IP allowlist
                             if let Some(ref allowlist) = self.ip_allowlist {
-                                let ip = addr.ip().to_string();
-                                if !allowlist.iter().any(|allowed| {
-                                    allowed == &ip || allowed.starts_with(&ip[..ip.rfind('.').unwrap_or(0)])
-                                }) {
-                                    tracing::warn!("Connection rejected: IP {} not in allowlist", ip);
+                                if !Self::ip_matches_allowlist(addr.ip(), allowlist) {
+                                    tracing::warn!("Connection rejected: IP {} not in allowlist", addr.ip());
                                     continue;
                                 }
                             }
@@ -383,17 +390,13 @@ impl RemoteClient {
     }
 
     pub fn with_tls(psk: String, domain: &str) -> anyhow::Result<Self> {
-        let tls = match TlsClient::new(domain) {
-            Ok(c) => Some(c),
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to initialize TLS client: {}. Falling back to plaintext.",
-                    e
-                );
-                None
-            }
-        };
-        Ok(Self { psk, tls })
+        let tls = TlsClient::new(domain)
+            .map_err(|e| anyhow::anyhow!("Failed to initialize TLS client: {}", e))?;
+        Ok(Self { psk, tls: Some(tls) })
+    }
+
+    pub fn new_plaintext(psk: String) -> Self {
+        Self::new(psk)
     }
 
     pub fn is_tls(&self) -> bool {

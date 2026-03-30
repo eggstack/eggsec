@@ -85,6 +85,12 @@ impl FuzzEngine {
 
     fn build_client(args: &FuzzArgs) -> Result<Client> {
         let concurrency = args.concurrency.max(100);
+        if args.concurrency < 100 {
+            tracing::warn!(
+                "Concurrency {} below minimum of 100, using 100",
+                args.concurrency
+            );
+        }
 
         let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(args.timeout))
@@ -193,20 +199,9 @@ impl FuzzEngine {
         let mut all_results = Vec::with_capacity(2048);
         let start = Instant::now();
 
-        let advanced_types = [
-            "graphql",
-            "oauth",
-            "jwt",
-            "idor",
-            "ssti",
-            "websocket",
-            "grpc",
-        ];
-
         for pt in payload_types {
-            let pt_str = format!("{:?}", pt).to_lowercase();
-
-            if advanced_types.contains(&pt_str.as_str()) {
+            if pt.is_advanced() {
+                let pt_str = format!("{:?}", pt).to_lowercase();
                 all_results.extend(self.run_advanced_fuzzer(&pt_str).await?);
             } else {
                 let payloads = self.prepare_payloads(pt)?;

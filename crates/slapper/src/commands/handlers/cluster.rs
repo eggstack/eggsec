@@ -163,7 +163,7 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
                     pkcs12_path: tls_cert.clone().into(),
                     password,
                 };
-                RemoteListener::with_tls(psk, tls_config)
+                RemoteListener::with_tls(psk, tls_config)?
             } else {
                 RemoteListener::new(psk)
             };

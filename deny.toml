@@ -1,5 +1,5 @@
 # Cargo deny configuration for Slapper
-# Run with: cargo deny check advisories
+# Run with: cargo deny check
 
 [advisories]
 db-path = "advisory-db"
@@ -13,3 +13,23 @@ ignore = [
     { id = "RUSTSEC-2025-0057", reason = "fxhash is used indirectly via selectors->scraper. No alternative available. Monitoring for upstream fix.", expires = "2026-06-01" },
     { id = "RUSTSEC-2025-0119", reason = "number_prefix is used indirectly via indicatif. Will be fixed when indicatif updates their dependencies.", expires = "2026-06-01" },
 ]
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "CC0-1.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"

@@ -336,7 +336,7 @@ pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<Pr
     let socks = SocksProxy::new(version, proxy_addr);
 
     let socks = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
-        socks.with_auth(user.clone(), pass.clone())
+        socks.with_auth(user.clone(), pass.expose_secret().to_string())
     } else {
         socks
     };
@@ -371,7 +371,7 @@ pub async fn connect_through_with_domain(
         .with_timeout(Duration::from_millis(proxy.timeout_ms));
 
     let socks = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
-        socks.with_auth(user.clone(), pass.clone())
+        socks.with_auth(user.clone(), pass.expose_secret().to_string())
     } else {
         socks
     };
@@ -404,7 +404,7 @@ pub async fn chain_connect(proxies: &[ProxyEntry], target: SocketAddr) -> Result
             .with_timeout(Duration::from_millis(proxy.timeout_ms));
 
         let socks = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
-            socks.with_auth(user.clone(), pass.clone())
+            socks.with_auth(user.clone(), pass.expose_secret().to_string())
         } else {
             socks
         };

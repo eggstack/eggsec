@@ -70,7 +70,7 @@ impl NotifyManager {
             webhooks.push(webhook::WebhookConfig {
                 name: wh.name.clone(),
                 url: wh.url.clone(),
-                secret: wh.secret.as_ref().map(|s| s.expose_secret().to_string()),
+                secret: wh.secret.clone(),
                 headers: wh.headers.clone(),
                 events: wh
                     .events

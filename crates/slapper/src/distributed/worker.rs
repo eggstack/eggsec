@@ -2,6 +2,7 @@ use crate::distributed::{Heartbeat, Task, TaskResult, TaskType, WorkerRegistrati
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerConfig {
@@ -36,6 +37,7 @@ pub struct Worker {
     stats: WorkerStats,
     receiver: Option<mpsc::Receiver<Task>>,
     client: reqwest::Client,
+    heartbeat_handle: Option<JoinHandle<()>>,
 }
 
 impl Worker {
@@ -51,6 +53,7 @@ impl Worker {
             },
             receiver: None,
             client: reqwest::Client::new(),
+            heartbeat_handle: None,
         }
     }
 
@@ -89,13 +92,13 @@ impl Worker {
         Ok(())
     }
 
-    async fn start_heartbeat_loop(&self) {
+    async fn start_heartbeat_loop(&mut self) {
         let worker_id = self.config.worker_id.clone();
         let coordinator_url = self.config.coordinator_url.clone();
         let interval = self.config.heartbeat_interval_secs;
         let client = self.client.clone();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval));
 
             loop {
@@ -117,6 +120,7 @@ impl Worker {
                 }
             }
         });
+        self.heartbeat_handle = Some(handle);
     }
 
     async fn start_task_processing_loop(&mut self) {

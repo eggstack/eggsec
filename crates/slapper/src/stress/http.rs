@@ -137,7 +137,7 @@ fn build_reqwest_proxy(proxy: &ProxyEntry) -> Result<reqwest::Proxy> {
     let mut reqwest_proxy = reqwest::Proxy::all(&proxy_url)?;
 
     if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
-        reqwest_proxy = reqwest_proxy.basic_auth(user, pass);
+        reqwest_proxy = reqwest_proxy.basic_auth(user, pass.expose_secret());
     }
 
     Ok(reqwest_proxy)

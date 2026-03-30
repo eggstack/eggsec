@@ -107,6 +107,8 @@ impl FuzzEngine {
 
                 if let Ok(r) = result {
                     results.lock().await.push(r);
+                } else {
+                    tracing::debug!("Fuzz request failed: {:?}", result.err());
                 }
 
                 if let Some(ref pb) = progress {
@@ -178,7 +180,48 @@ impl FuzzEngine {
         &mut self,
         payloads: Vec<Payload>,
     ) -> Result<Vec<FuzzResult>> {
-        self.run_sequential_with_session(payloads).await
+        use super::super::rate_limit::AdaptiveRateLimiter;
+
+        let limiter = AdaptiveRateLimiter::new(
+            self.args.concurrency as u64,
+            1,
+            self.args.timeout * 1000,
+        );
+
+        let mut results = Vec::with_capacity(payloads.len());
+
+        for payload in payloads {
+            let rate = limiter.get_rate();
+            if rate == 0 {
+                tracing::warn!("Adaptive rate limiter backed off to 0, stopping");
+                break;
+            }
+
+            let result = self.send_fuzz_request(&payload, Method::GET).await;
+
+            match result {
+                Ok(r) => {
+                    if r.error.is_some() || r.status_code == 0 {
+                        limiter.record_error(Some(r.status_code));
+                    } else if r.status_code == 429 || r.status_code == 503 {
+                        limiter.record_error(Some(r.status_code));
+                    } else {
+                        limiter.record_success();
+                    }
+                    results.push(r);
+                }
+                Err(e) => {
+                    limiter.record_timeout();
+                    tracing::debug!("Adaptive fuzz request failed: {e}");
+                }
+            }
+        }
+
+        if self.args.session {
+            self.update_session_from_results(&results).await;
+        }
+
+        Ok(results)
     }
 
     pub(crate) async fn send_fuzz_request(&self, payload: &Payload, method: Method) -> Result<FuzzResult> {

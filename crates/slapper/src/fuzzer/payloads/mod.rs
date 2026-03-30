@@ -81,6 +81,20 @@ impl std::fmt::Display for PayloadType {
     }
 }
 
+impl PayloadType {
+    pub fn is_advanced(&self) -> bool {
+        matches!(
+            self,
+            PayloadType::GraphQL
+                | PayloadType::OAuth
+                | PayloadType::Jwt
+                | PayloadType::Idor
+                | PayloadType::Ssti
+                | PayloadType::Grpc
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Payload {
     pub payload_type: PayloadType,

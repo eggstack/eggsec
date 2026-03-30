@@ -1,4 +1,5 @@
 use crate::notify::{WebhookNotifier, NotificationPayload, WebhookConfig, WebhookEvent};
+use crate::types::SensitiveString;
 
 pub struct WebhookTestConfig {
     pub slack: Option<String>,
@@ -57,7 +58,7 @@ pub async fn send_webhook_notifications(
         let webhook_config = vec![WebhookConfig {
             name: "test".to_string(),
             url: webhook_url.clone(),
-            secret: config.secret.clone(),
+            secret: config.secret.clone().map(SensitiveString::new),
             headers: std::collections::HashMap::new(),
             events: vec![WebhookEvent::ScanComplete],
         }];
