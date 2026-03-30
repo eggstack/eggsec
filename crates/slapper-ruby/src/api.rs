@@ -728,6 +728,14 @@ fn msf_module_info(ruby: &Ruby, module_type: String, module_name: String) -> Res
                     let _ = hash.aset("description", info.description);
                     let refs_flat: Vec<String> = info.references.into_iter().flatten().collect();
                     let _ = hash.aset("references", refs_flat.join(", "));
+
+                    // Include targets (compatible payloads/exploits) if available
+                    if let Some(targets) = info.targets {
+                        let target_names: Vec<String> =
+                            targets.into_iter().map(|t| t.name).collect();
+                        let _ = hash.aset("targets", target_names);
+                    }
+
                     Ok(())
                 }
                 Err(e) => Err(runtime_error(ruby, e.to_string())),
@@ -751,7 +759,10 @@ fn msf_execute_module(
         "exploit" => crate::msf::ModuleType::Exploit,
         "auxiliary" => crate::msf::ModuleType::Auxiliary,
         "post" => crate::msf::ModuleType::Post,
-        _ => return Err(runtime_error(ruby, "Invalid module type")),
+        "encoder" => crate::msf::ModuleType::Encoder,
+        "payload" => crate::msf::ModuleType::Payload,
+        "nop" => crate::msf::ModuleType::Nop,
+        _ => return Err(runtime_error(ruby, format!("Invalid module type: {}", module_type))),
     };
 
     let hash = ruby.hash_new();
@@ -956,31 +967,68 @@ fn encoder_encode(
     encoder_name: String,
     options: magnus::RArray,
 ) -> Result<String, Error> {
-    // Add payload to options
+    // Pass payload as an option so the MSF encoder module can process it
     options.push(ruby.str_new(&format!("PAYLOAD={}", payload)))?;
-    
+
     // Delegate to msf_execute_module with encoder type
-    let result = msf_execute_module(ruby, "encoder".to_string(), encoder_name, options)?;
-    
-    // Extract the encoded payload from the result
-    let encoded: String = result
-        .lookup::<_, magnus::Value>("encoded_payload")
+    let result = msf_execute_module(ruby, "encoder".to_string(), encoder_name.clone(), options)?;
+
+    // MSF encoder execution returns success/message/uuid.
+    // Extract message which may contain the encoded output, or return a descriptive error.
+    let success: bool = result
+        .lookup::<_, magnus::Value>("success")
         .ok()
-        .and_then(|v| String::try_convert(v).ok())
-        .unwrap_or_default();
-    
-    Ok(encoded)
+        .and_then(|v| bool::try_convert(v).ok())
+        .unwrap_or(false);
+
+    if success {
+        let message: String = result
+            .lookup::<_, magnus::Value>("message")
+            .ok()
+            .and_then(|v| String::try_convert(v).ok())
+            .unwrap_or_default();
+        if message.is_empty() {
+            tracing::warn!(
+                encoder = %encoder_name,
+                "Encoder executed successfully but returned no encoded payload"
+            );
+        }
+        Ok(message)
+    } else {
+        let message: String = result
+            .lookup::<_, magnus::Value>("message")
+            .ok()
+            .and_then(|v| String::try_convert(v).ok())
+            .unwrap_or_else(|| "Encoder execution failed".to_string());
+        Err(runtime_error(ruby, message))
+    }
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn encoder_compatible_payloads(_ruby: &Ruby, encoder_name: String) -> Result<Vec<String>, Error> {
-    // This would require querying the Metasploit database for compatible payloads
-    // For now, return an empty list with a note that this feature is not fully implemented
-    tracing::warn!(
-        encoder = %encoder_name,
-        "encoder_compatible_payloads called but not fully implemented - returning empty list"
-    );
-    Ok(Vec::new())
+fn encoder_compatible_payloads(ruby: &Ruby, encoder_name: String) -> Result<Vec<String>, Error> {
+    // Try to get encoder module info from MSF to find compatible payload targets
+    let info = msf_module_info(ruby, "encoder".to_string(), encoder_name.clone())?;
+
+    // Extract compatible payload names from the targets field if available
+    let targets: Vec<String> = info
+        .lookup::<_, magnus::Value>("targets")
+        .ok()
+        .and_then(|v| magnus::RArray::try_convert(v).ok())
+        .map(|arr| {
+            arr.into_iter()
+                .filter_map(|v| String::try_convert(v).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if targets.is_empty() {
+        tracing::info!(
+            encoder = %encoder_name,
+            "No compatible payloads listed in encoder module info"
+        );
+    }
+
+    Ok(targets)
 }
 
 #[cfg(feature = "ruby-plugins")]

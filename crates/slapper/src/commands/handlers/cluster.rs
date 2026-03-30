@@ -20,7 +20,7 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
             let worker_id = worker_args.worker_id.clone().unwrap_or_else(|| {
                 use std::time::{SystemTime, UNIX_EPOCH};
                 let duration = SystemTime::now().duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards");
+                    .unwrap_or_default();
                 format!("worker-{}", duration.as_millis())
             });
 

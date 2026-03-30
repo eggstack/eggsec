@@ -133,9 +133,10 @@ fn draw_http_options_popup(f: &mut Frame, app: &App) {
 fn draw_command_palette(f: &mut Frame, app: &App) {
     use ratatui::widgets::{Clear, List, ListItem, Paragraph};
 
-    let palette = app
-        .get_command_palette()
-        .expect("palette checked in caller");
+    let Some(palette) = app.get_command_palette() else {
+        tracing::error!("Command palette unavailable despite being checked in caller");
+        return;
+    };
     let area = f.area();
     let popup_width = 60;
     let popup_height = 20;

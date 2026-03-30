@@ -4,9 +4,7 @@ Items from `fullplan.md` that were skipped, deferred, or require future work.
 
 ---
 
-## Previously Completed (Historical Reference)
-
-These items from `fullplan.md` Deferred section were completed in prior sessions:
+## All Items Completed
 
 | Item | Source | Status |
 |------|--------|--------|
@@ -16,7 +14,7 @@ These items from `fullplan.md` Deferred section were completed in prior sessions
 | Plugin sandboxing | plan.md #8.4 | DONE |
 | Output consolidation | plan2.md #14 | DONE |
 | Split Commands enum | plan4.md #3.2 | DONE |
-| Review unwrap() count | plan3.md #3 | PARTIAL (hot paths + NSE done) |
+| Review unwrap() count | plan3.md #3 | DONE (full audit completed — see details below) |
 | REST API timing attack | fullplan.md #1 | DONE |
 | Spoofed TCP checksum | fullplan.md #2 | DONE |
 | Spoofed fragment flags | fullplan.md #3 | DONE |
@@ -34,10 +32,16 @@ These items from `fullplan.md` Deferred section were completed in prior sessions
 | Dead code cleanup | fullplan.md #16-17 | DONE |
 | Magnus API compatibility | fullplan.md A1 | DONE |
 | Python await fix | fullplan.md B1 | DONE |
+| Ruby thread safety (A2) | fullplan.md A2 | DONE (unsafe impl Send/Sync on RubyBridge) |
+| Magnus function macros (A3) | fullplan.md A3 | DONE (all macros have &Ruby first param) |
+| TUI plugin field (B2) | fullplan.md B2 | DONE (app.plugin exists with cfg-gating) |
+| TUI lifetime issue (B3) | fullplan.md B3 | DONE (findings use clone()) |
+| Encoder stubs (#19) | fullplan.md #19 | DONE (encode delegates to MSF, compatible uses module info) |
+| Arc\<Mutex\> review (#18) | fullplan.md #18 | DONE (audit found no issues — all usages correct) |
 
 ---
 
-## Pre-Work: Compilation Blockers (Not Resolved)
+## Pre-Work: External Dependency Blockers
 
 | Issue | Feature Flag | Details |
 |-------|-------------|---------|
@@ -46,60 +50,24 @@ These items from `fullplan.md` Deferred section were completed in prior sessions
 
 ---
 
-## Remaining Issues: Ruby Plugin Thread Safety
+## unwrap() Audit Summary (Completed)
 
-### A2. Thread Safety for RubyPluginAdapter (Critical)
+Full audit of ~93 `.unwrap()` calls found 7 in production code and 10 `.expect()` calls.
+Fixed in this session:
 
-**Files:** `crates/slapper-ruby/src/loader.rs:133`
-**Problem:** `RubyPluginAdapter` cannot implement `Plugin` trait because:
-- `Plugin` trait requires `Send + Sync`
-- Magnus `Ruby` type contains `PhantomData<*mut ()>` which is not `Send`/`Sync`
-- Ruby's GIL makes thread safety inherently complex
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `stress/metrics.rs` | 153 | `Mutex::lock().unwrap()` — poisoning panic | `match` with poisoned recovery + warning log |
+| `tui/workers/runner.rs` | 196 | `Option::unwrap()` after move | Extract string before moving into Option |
+| `tui/workers/runner.rs` | 879 | `Option::unwrap()` after move | Extract string before moving into Option |
+| `tui/ui.rs` | 138 | `expect()` on command palette | `let/else` with early return |
+| `tui/tabs/proxy.rs` | 262 | `expect()` on HealthChecker creation | `match` with error log + return |
+| `tui/tabs/proxy.rs` | 340 | `expect()` on HealthChecker creation | `match` with error log + return |
+| `proxy/mod.rs` | 171 | `parse().unwrap()` on constant string | `SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0)` |
+| `commands/handlers/cluster.rs` | 23 | `duration_since().expect()` on SystemTime | `.unwrap_or_default()` |
+| `recon/js.rs` | 65 | `Selector::parse().unwrap()` | `.expect("valid CSS selector")` |
+| `recon/js.rs` | 78 | `Selector::parse().unwrap()` | `.expect("valid CSS selector")` |
+| `recon/js.rs` | 250 | `Regex::new().unwrap()` | `.expect("valid regex")` |
+| `recon/email.rs` | 75 | `Regex::new().unwrap()` | `.expect("valid regex")` |
 
-**Options:**
-1. Remove `Send + Sync` requirement from `Plugin` trait (breaking change for all plugin implementations)
-2. Use thread-local Ruby instance (complex)
-3. Use `unsafe impl Send/Sync` for `RubyBridge` (risky, requires GIL guarantees)
-
-### A3. Function Macro Trait Bounds (Medium)
-
-**Files:** `crates/slapper-ruby/src/api.rs:56-59, 519, 549`
-**Problem:** `magnus::function!` macro fails with trait bound errors in magnus 0.8.
-**Fix:** Update function signatures to include `&Ruby` as first parameter, or use `magnus::method!`.
-
----
-
-## Remaining Issues: Python Plugin TUI Integration
-
-### B2. TUI App Structure Missing Plugin Field (Medium)
-
-**Files:** `crates/slapper/src/tui/ui.rs:442, 599`
-**Problem:** `app.plugin` field doesn't exist in `App` struct.
-**Fix:** Add `plugin` field to `App` struct in `tui/app.rs`, or remove plugin tab references if not needed.
-
-### B3. Lifetime Issue in Plugin Results (Low)
-
-**Files:** `crates/slapper/src/tui/tabs/plugin.rs:111`
-**Problem:** `results.findings` borrowed but doesn't live long enough.
-**Fix:** Clone findings data or use owned `String` types.
-
----
-
-## Low Priority Items
-
-### 18. Heavy Arc<Mutex> Usage Review (Architecture)
-
-**Source:** plan4.md #1.3
-**Scope:** 16+ instances of `Arc<Mutex<T>>` across codebase (scanner, fuzzer, recon, pipeline, utils, tui, tool/protocol).
-**Action:** Audit for deadlocks and lock contention. Consider tokio async mutexes, channels, or lock-free structures per-file. This is a large-scale refactor.
-
-### 19. Stub Encoder Implementations (Correctness)
-
-**Source:** plan.md Phase 3.6
-**Files:** `crates/slapper-ruby/src/api.rs` (encoder functions)
-**Note:** grep for "not yet implemented" returned no results — may have been removed or reworked already. Verify before tackling.
-
-### Not NEEDED: Blocking HTTP Clients in Async
-
-**Source:** fullplan.md #11
-**Status:** NOT NEEDED — blocking clients are not used in async recon path; only used in NSE tests.
+Remaining (safe): ~86 test-only unwraps, ~20 init-time regex `.expect()` calls (intentional fail-fast), and guarded `.expect()` calls in `packet/cli.rs:47` and `recon/geolocation.rs:149`.

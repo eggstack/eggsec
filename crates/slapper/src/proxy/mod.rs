@@ -168,7 +168,10 @@ impl ProxyManager {
 
         let target_addr = resolve_target(target).await?;
 
-        let mut final_local_addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
+        let mut final_local_addr = std::net::SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+            0,
+        );
 
         for proxy in chain.iter() {
             let conn = match proxy.proxy_type {

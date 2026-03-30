@@ -150,7 +150,13 @@ impl RateLimiter {
     }
 
     pub fn refill(&self) {
-        let mut last = self.last_refill.lock().unwrap();
+        let mut last = match self.last_refill.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Rate limiter mutex was poisoned, recovering");
+                poisoned.into_inner()
+            }
+        };
         let now = Instant::now();
         let elapsed_ns = now.duration_since(*last).as_nanos() as u64;
 

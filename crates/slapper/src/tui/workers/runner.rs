@@ -192,8 +192,8 @@ where
         match operation().await {
             Ok(result) => return Ok(result),
             Err(e) => {
+                let error_str = e.to_string();
                 last_error = Some(e);
-                let error_str = last_error.as_ref().unwrap().to_string();
 
                 if is_retryable_error(&error_str) && attempt < max_retries {
                     let delay = base_delay_secs * 2u64.pow(attempt - 1);
@@ -875,8 +875,8 @@ impl TaskRunner {
                     return Ok(());
                 }
                 Err(e) => {
+                    let error_str = e.to_string().to_lowercase();
                     last_error = Some(e);
-                    let error_str = last_error.as_ref().unwrap().to_string().to_lowercase();
 
                     let is_retryable = error_str.contains("timeout")
                         || error_str.contains("connection")

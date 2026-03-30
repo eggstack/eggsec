@@ -120,7 +120,7 @@ impl FuzzTab {
         self.state = AppState::Completed;
         self.results_view.clear();
 
-        let s = &self.session.as_ref().expect("session set above");
+        let s = &self.session.as_ref().expect("session set two lines above");
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("Fuzzing Complete: {}", s.target_url),

@@ -259,7 +259,13 @@ impl ProxyTab {
             max_failures: 3,
         };
 
-        let checker = HealthChecker::new(health_config).expect("Failed to create health checker");
+        let checker = match HealthChecker::new(health_config) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("Failed to create health checker: {}", e);
+                return;
+            }
+        };
 
         match checker.check_all(&proxy_entries).await {
             Ok(results) => {
@@ -337,7 +343,13 @@ impl ProxyTab {
             max_failures: 3,
         };
 
-        let checker = HealthChecker::new(health_config).expect("Failed to create health checker");
+        let checker = match HealthChecker::new(health_config) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("Failed to create health checker: {}", e);
+                return;
+            }
+        };
         let result = checker.check(&proxy_entry).await;
 
         self.test_result = Some(ProxyTestResult {

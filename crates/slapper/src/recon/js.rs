@@ -62,7 +62,8 @@ impl JsAnalyzer {
         let (javascript_files, inline_scripts) = {
             let document = Html::parse_document(&html);
 
-            let script_selector = Selector::parse("script[src]").unwrap();
+            let script_selector = Selector::parse("script[src]")
+                .expect("valid CSS selector: script[src]");
             let mut javascript_files = Vec::new();
             for element in document.select(&script_selector) {
                 if let Some(src) = element.value().attr("src") {
@@ -75,7 +76,8 @@ impl JsAnalyzer {
                 }
             }
 
-            let script_selector = Selector::parse("script").unwrap();
+            let script_selector = Selector::parse("script")
+                .expect("valid CSS selector: script");
             let mut inline_scripts = Vec::new();
             for element in document.select(&script_selector) {
                 if let Some(inner_html) = element.text().next() {
@@ -247,7 +249,8 @@ impl JsAnalyzer {
     fn extract_urls(&self, content: &str) -> Vec<String> {
         let mut urls = HashSet::new();
 
-        let url_pattern = Regex::new(r#"https?://[^\s\"'<>]+"#).unwrap();
+        let url_pattern = Regex::new(r#"https?://[^\s\"'<>]+"#)
+            .expect("valid URL extraction regex");
         for cap in url_pattern.find_iter(content) {
             let url = cap.as_str().to_string();
             if url.len() > 10 && !url.contains(".js") && !url.contains(".css") {

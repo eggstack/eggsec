@@ -72,7 +72,8 @@ impl EmailDiscoveryClient {
     }
 
     fn extract_emails(&self, content: &str) -> Vec<EmailContact> {
-        let email_regex = Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap();
+        let email_regex = Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+            .expect("valid email extraction regex");
 
         let mut emails = HashSet::new();
         for cap in email_regex.find_iter(content) {
