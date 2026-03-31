@@ -2,23 +2,23 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 
 use slapper_plugin::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult};
 
-use super::bridge::RubyBridge;
+use super::bridge::RubyPluginClient;
 use super::{RubyPlugin, RubyPluginResult};
 
 pub struct PluginLoader {
-    bridge: Arc<Mutex<RubyBridge>>,
+    client: Arc<RubyPluginClient>,
     plugin_dirs: Vec<PathBuf>,
     loaded_plugins: Vec<RubyPlugin>,
 }
 
 impl PluginLoader {
     pub fn new(plugin_dirs: Vec<PathBuf>) -> Result<Self> {
-        let bridge = Arc::new(Mutex::new(RubyBridge::new()?));
+        let client = Arc::new(RubyPluginClient::new()?);
 
         let dirs = if plugin_dirs.is_empty() {
             vec![PathBuf::from("./plugins")]
@@ -27,7 +27,7 @@ impl PluginLoader {
         };
 
         Ok(Self {
-            bridge,
+            client,
             plugin_dirs: dirs,
             loaded_plugins: Vec::new(),
         })
@@ -53,8 +53,7 @@ impl PluginLoader {
                 let path = entry.path();
 
                 if path.extension().map(|e| e == "rb").unwrap_or(false) {
-                    let bridge = self.bridge.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-                    if let Ok(plugin) = bridge.load_plugin(&path) {
+                    if let Ok(plugin) = self.client.load_plugin(&path) {
                         tracing::info!(
                             name = %plugin.name,
                             version = %plugin.version,
@@ -72,8 +71,7 @@ impl PluginLoader {
     }
 
     pub fn load_plugin(&mut self, path: &Path) -> Result<RubyPlugin> {
-        let bridge = self.bridge.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let plugin = bridge.load_plugin(path)?;
+        let plugin = self.client.load_plugin(path)?;
         self.loaded_plugins.push(plugin.clone());
         Ok(plugin)
     }
@@ -85,8 +83,7 @@ impl PluginLoader {
             .find(|p| p.name == name)
             .ok_or_else(|| anyhow!("Plugin not found: {}", name))?;
 
-        let bridge = self.bridge.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        bridge.run_plugin(plugin, target)
+        self.client.run_plugin(plugin, target)
     }
 
     pub fn list_plugins(&self) -> &[RubyPlugin] {
@@ -105,14 +102,15 @@ impl Default for PluginLoader {
 }
 
 /// Adapter that wraps a Ruby plugin and implements the unified `Plugin` trait.
+/// Thread-safe via the message-passing RubyPluginClient — no unsafe code needed.
 pub struct RubyPluginAdapter {
     plugin: RubyPlugin,
-    bridge: Arc<Mutex<RubyBridge>>,
+    client: Arc<RubyPluginClient>,
     info: PluginInfo,
 }
 
 impl RubyPluginAdapter {
-    pub fn new(plugin: RubyPlugin, bridge: Arc<Mutex<RubyBridge>>) -> Self {
+    pub fn new(plugin: RubyPlugin, client: Arc<RubyPluginClient>) -> Self {
         let info = PluginInfo {
             name: plugin.name.clone(),
             version: plugin.version.clone(),
@@ -123,7 +121,7 @@ impl RubyPluginAdapter {
         };
         Self {
             plugin,
-            bridge,
+            client,
             info,
         }
     }
@@ -155,8 +153,7 @@ impl Plugin for RubyPluginAdapter {
             anyhow::bail!("Unknown check: {}", check_name);
         }
 
-        let bridge = self.bridge.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let ruby_result = bridge.run_plugin(&self.plugin, target)?;
+        let ruby_result = self.client.run_plugin(&self.plugin, target)?;
         let execution_time_ms = start.elapsed().as_millis() as u64;
 
         let findings = ruby_result

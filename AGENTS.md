@@ -71,6 +71,12 @@ crates/slapper/
 - `nse-sandbox` - NSE sandbox mode (restricts `io.popen`, `os.setenv`, filesystem access)
 - `full` - All features combined
 
+### PyO3 Dependency
+
+- Current version: 0.25 (supports Python 3.14)
+- In `crates/slapper-plugin/Cargo.toml`: `pyo3 = { version = "0.25", features = ["auto-initialize"], optional = true }`
+- When upgrading: check PyO3 CHANGELOG for breaking changes; `Python::with_gil` still works in 0.25 (renamed to `Python::attach` in 0.26)
+
 ## Codebase Health
 
 ### Severity Enum (Unified)
@@ -116,7 +122,7 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 
 `scanner/ports/spoofed.rs` contains raw socket scanning (feature-gated). `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled. Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing.
 
-## Current Status (2026-03-31)
+## Current Status (2026-03-31 after Phase 7)
 
 | Metric | Value |
 |--------|-------|
@@ -126,7 +132,7 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 | Doctests | 14 pass, 1 ignored, 0 fail |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
 | Largest file | `waf/detector/detect.rs` (195 lines) |
-| Improvement plan | See `plan.md` |
+| Improvement plan | All phases complete (see `plan.md`) |
 
 ## Lessons Learned
 
@@ -147,6 +153,8 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 2. **Option types**: `decoy_count` is `Option<usize>`, not `usize`
 3. **Unused imports**: Move feature-gated imports inside `#[cfg(...)]` blocks
 4. **Feature-gated dead code**: Functions used only under `#[cfg(feature = "...")]` appear as dead code to the compiler. Gate the module declaration itself, not just callers.
+5. **Clippy redundant closures**: `.map(|arr| func(arr))` should be `.map(func)` when the argument is passed directly
+6. **Clippy needless borrows**: `.post(&format!(...))` should be `.post(format!(...))` when the format result implements the required traits
 
 ### Severity Enum
 
@@ -187,6 +195,16 @@ Some modules alias `truncate_simple as truncate`, hiding the difference. When ad
 - `commands/handlers/plugin.rs` is gated on `any(feature = "python-plugins", feature = "ruby-plugins")`
 - The `crate::plugin` re-export in `lib.rs` is gated on `any(feature = "python-plugins", feature = "ruby-plugins")`
 - `slapper-plugin` has separate feature flags: `python-plugins` (pyo3) and `ruby-plugins` (magnus)
+- TUI plugin tab is gated on `any(feature = "python-plugins", feature = "ruby-plugins")` in all TUI files
+
+### Ruby Plugin Thread Safety
+
+`RubyBridge` is NOT `Send + Sync` (magnus `Ruby` type has `PhantomData<*mut ()>`). Thread safety is achieved via message-passing:
+
+- `RubyPluginClient` spawns a dedicated `ruby-vm` thread that owns the `RubyBridge`
+- Communication via `std::sync::mpsc` channels — each request gets its own response channel
+- `RubyPluginAdapter` holds `Arc<RubyPluginClient>` — naturally `Send + Sync`, no unsafe code
+- The `unsafe impl Send + Sync` on `RubyBridge` has been REMOVED — the bridge is now private
 
 ### Magnus 0.8 API (slapper-plugin/src/ruby.rs)
 
@@ -198,3 +216,11 @@ Some modules alias `truncate_simple as truncate`, hiding the difference. When ad
 ### ProgressStyle Template
 
 Always use `.unwrap_or_else(|_| ProgressStyle::default_bar())` instead of `.unwrap()` on `ProgressStyle::template()`. The template method can fail on invalid format strings.
+
+### Plugin Command Handler
+
+`commands/handlers/plugin.rs` uses `slapper_plugin::Plugin` trait methods (e.g., `run_check`). The trait must be imported:
+```rust
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+use slapper_plugin::Plugin;
+```

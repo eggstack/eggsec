@@ -283,9 +283,9 @@ pub fn help_popup_for_tab(tab: crate::tui::tabs::Tab) -> Popup {
                 "  Enter            - Execute report action".to_string()
             }
             crate::tui::tabs::Tab::Nse => "  Enter            - Run NSE scripts".to_string(),
-            #[cfg(feature = "python-plugins")]
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
             crate::tui::tabs::Tab::Plugin => "  Enter            - Run plugin".to_string(),
-            #[cfg(not(feature = "python-plugins"))]
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             crate::tui::tabs::Tab::Plugin => "".to_string(),
             crate::tui::tabs::Tab::Settings => "  s               - Save settings".to_string(),
             crate::tui::tabs::Tab::History => "  Up/Down         - Navigate entries".to_string(),

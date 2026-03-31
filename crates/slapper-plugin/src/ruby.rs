@@ -1,7 +1,10 @@
 #[cfg(feature = "ruby-plugins")]
 use magnus::{prelude::*, Error, Ruby, TryConvert, Value};
 
-use crate::{PluginFinding, PluginInfo, PluginLanguage};
+#[cfg(feature = "ruby-plugins")]
+use crate::PluginFinding;
+use crate::{PluginInfo, PluginLanguage};
+#[cfg(feature = "ruby-plugins")]
 use std::collections::HashMap;
 use std::path::PathBuf;
 

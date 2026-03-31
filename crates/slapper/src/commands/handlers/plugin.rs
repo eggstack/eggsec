@@ -3,6 +3,8 @@
 use anyhow::Result;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 use crate::commands::handlers::CommandContext;
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+use slapper_plugin::Plugin;
 
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]

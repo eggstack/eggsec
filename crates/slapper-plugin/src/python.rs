@@ -1,5 +1,3 @@
-#![cfg(feature = "python-plugins")]
-
 use anyhow::Result;
 use async_trait::async_trait;
 use pyo3::prelude::*;

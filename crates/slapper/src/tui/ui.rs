@@ -324,9 +324,9 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
         crate::tui::tabs::Tab::Stress => vec!["Stress Testing"],
         crate::tui::tabs::Tab::Report => vec!["Report"],
         crate::tui::tabs::Tab::Nse => vec!["NSE Scripts"],
-        #[cfg(feature = "python-plugins")]
+        #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
         crate::tui::tabs::Tab::Plugin => vec!["Plugins"],
-        #[cfg(not(feature = "python-plugins"))]
+        #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
         crate::tui::tabs::Tab::Plugin => vec!["Plugins"],
         crate::tui::tabs::Tab::Settings => vec!["Settings"],
         crate::tui::tabs::Tab::History => vec!["History"],
@@ -438,11 +438,11 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
         }
         #[cfg(not(feature = "nse"))]
         crate::tui::tabs::Tab::Nse => {}
-        #[cfg(feature = "python-plugins")]
+        #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
         crate::tui::tabs::Tab::Plugin => {
             app.plugin.render(f, area, insert_mode);
         }
-        #[cfg(not(feature = "python-plugins"))]
+        #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
         crate::tui::tabs::Tab::Plugin => {}
         crate::tui::tabs::Tab::Settings => {
             app.settings.render(f, area, insert_mode);
@@ -596,14 +596,14 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         },
         #[cfg(not(feature = "nse"))]
         crate::tui::tabs::Tab::Nse => ("NSE not available", Color::Gray),
-        #[cfg(feature = "python-plugins")]
+        #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
         crate::tui::tabs::Tab::Plugin => match &app.plugin.state {
             AppState::Idle => ("Ready - Select plugin and press Enter to run", Color::Gray),
             AppState::Running => ("Running plugin - Ctrl+C to stop", Color::Yellow),
             AppState::Completed => ("Plugin completed", Color::Green),
             AppState::Error(e) => (e.as_str(), Color::Red),
         },
-        #[cfg(not(feature = "python-plugins"))]
+        #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
         crate::tui::tabs::Tab::Plugin => ("Plugins not available", Color::Gray),
     };
 

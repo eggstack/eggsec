@@ -1,29 +1,103 @@
 use anyhow::{anyhow, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::thread;
 
 use super::{RubyPlugin, RubyPluginResult};
 
 #[cfg(feature = "ruby-plugins")]
 use magnus::{prelude::*, Ruby};
 
+/// Internal bridge that owns the Ruby VM. NOT Send/Sync — lives on one thread only.
 pub struct RubyBridge {
     #[cfg(feature = "ruby-plugins")]
     ruby: Ruby,
     loaded: bool,
 }
 
-// Safety: Ruby runtime is thread-safe when GIL is held.
-// The Ruby type contains PhantomData<*mut ()> which prevents auto-Send+Sync,
-// but magnus ensures proper GIL handling for thread safety.
-#[cfg(feature = "ruby-plugins")]
-unsafe impl Send for RubyBridge {}
-#[cfg(feature = "ruby-plugins")]
-unsafe impl Sync for RubyBridge {}
+/// Messages sent to the Ruby VM thread.
+enum RubyRequest {
+    LoadPlugin {
+        path: PathBuf,
+        resp: mpsc::Sender<Result<RubyPlugin>>,
+    },
+    RunPlugin {
+        plugin: RubyPlugin,
+        target: String,
+        resp: mpsc::Sender<Result<RubyPluginResult>>,
+    },
+}
+
+/// Thread-safe client for the Ruby VM. Send + Sync via message-passing.
+pub struct RubyPluginClient {
+    tx: mpsc::Sender<RubyRequest>,
+    _thread: thread::JoinHandle<()>,
+}
+
+impl RubyPluginClient {
+    pub fn new() -> Result<Self> {
+        let (tx, rx) = mpsc::channel();
+
+        let _thread = thread::Builder::new()
+            .name("ruby-vm".into())
+            .spawn(move || {
+                let bridge = match RubyBridge::new() {
+                    Ok(b) => b,
+                    Err(e) => {
+                        tracing::error!("Failed to initialize Ruby VM: {}", e);
+                        return;
+                    }
+                };
+
+                for msg in rx {
+                    match msg {
+                        RubyRequest::LoadPlugin { path, resp } => {
+                            let _ = resp.send(bridge.load_plugin(&path));
+                        }
+                        RubyRequest::RunPlugin {
+                            plugin,
+                            target,
+                            resp,
+                        } => {
+                            let _ = resp.send(bridge.run_plugin(&plugin, &target));
+                        }
+                    }
+                }
+            })
+            .map_err(|e| anyhow!("Failed to spawn Ruby VM thread: {}", e))?;
+
+        Ok(Self { tx, _thread })
+    }
+
+    pub fn load_plugin(&self, path: &Path) -> Result<RubyPlugin> {
+        let (tx, rx) = mpsc::channel();
+        self.tx
+            .send(RubyRequest::LoadPlugin {
+                path: path.to_path_buf(),
+                resp: tx,
+            })
+            .map_err(|_| anyhow!("Ruby VM thread has shut down"))?;
+        rx.recv()
+            .map_err(|_| anyhow!("Ruby VM thread did not respond"))?
+    }
+
+    pub fn run_plugin(&self, plugin: &RubyPlugin, target: &str) -> Result<RubyPluginResult> {
+        let (tx, rx) = mpsc::channel();
+        self.tx
+            .send(RubyRequest::RunPlugin {
+                plugin: plugin.clone(),
+                target: target.to_string(),
+                resp: tx,
+            })
+            .map_err(|_| anyhow!("Ruby VM thread has shut down"))?;
+        rx.recv()
+            .map_err(|_| anyhow!("Ruby VM thread did not respond"))?
+    }
+}
 
 impl RubyBridge {
     #[cfg(feature = "ruby-plugins")]
-    pub fn new() -> Result<Self> {
-        // Initialize Ruby runtime
+    fn new() -> Result<Self> {
         let init_result = magnus::Ruby::init(|ruby| {
             super::api::register_api(ruby)?;
             Ok(())
@@ -31,8 +105,6 @@ impl RubyBridge {
 
         match init_result {
             Ok(()) => {
-                // Get a Ruby handle after initialization
-                // Ruby is a ZST marker type, we can get it via get_with on any value
                 let ruby = unsafe { magnus::Ruby::get_unchecked() };
                 Ok(Self { ruby, loaded: true })
             }
@@ -41,12 +113,12 @@ impl RubyBridge {
     }
 
     #[cfg(not(feature = "ruby-plugins"))]
-    pub fn new() -> Result<Self> {
+    fn new() -> Result<Self> {
         Ok(Self { loaded: false })
     }
 
     #[cfg(feature = "ruby-plugins")]
-    pub fn load_plugin(&self, path: &Path) -> Result<RubyPlugin> {
+    fn load_plugin(&self, path: &Path) -> Result<RubyPlugin> {
         let path_str = path
             .to_str()
             .ok_or_else(|| anyhow!("Invalid plugin path"))?;
@@ -75,12 +147,12 @@ impl RubyBridge {
     }
 
     #[cfg(not(feature = "ruby-plugins"))]
-    pub fn load_plugin(&self, _path: &Path) -> Result<RubyPlugin> {
+    fn load_plugin(&self, _path: &Path) -> Result<RubyPlugin> {
         anyhow::bail!("Ruby plugins require 'ruby-plugins' feature");
     }
 
     #[cfg(feature = "ruby-plugins")]
-    pub fn run_plugin(&self, _plugin: &RubyPlugin, target: &str) -> Result<RubyPluginResult> {
+    fn run_plugin(&self, _plugin: &RubyPlugin, target: &str) -> Result<RubyPluginResult> {
         let plugin_class = self
             .ruby
             .class_object()
@@ -106,7 +178,6 @@ impl RubyBridge {
         )
         .map_err(|e: magnus::Error| anyhow!("Invalid success value: {}", e))?;
 
-        // Accept both {success, message} and {success, target, results} formats
         let message: Option<String> = hash
             .lookup::<_, magnus::Value>("message")
             .ok()
@@ -118,14 +189,13 @@ impl RubyBridge {
             });
         let message = message.unwrap_or_default();
 
-        // Extract findings from either "findings" or "results" key
         let findings: Vec<super::RubyPluginFinding> = hash
             .lookup::<_, magnus::Value>("findings")
             .ok()
             .and_then(|v| {
                 magnus::RArray::try_convert(v)
                     .ok()
-                    .map(|arr| extract_findings_from_array(arr))
+                    .map(extract_findings_from_array)
             })
             .or_else(|| {
                 hash.lookup::<_, magnus::Value>("results")
@@ -133,7 +203,7 @@ impl RubyBridge {
                     .and_then(|v| {
                         magnus::RArray::try_convert(v)
                             .ok()
-                            .map(|arr| extract_findings_from_array(arr))
+                            .map(extract_findings_from_array)
                     })
             })
             .unwrap_or_default();
@@ -152,18 +222,13 @@ impl RubyBridge {
     }
 
     #[cfg(not(feature = "ruby-plugins"))]
-    pub fn run_plugin(&self, _plugin: &RubyPlugin, _target: &str) -> Result<RubyPluginResult> {
+    fn run_plugin(&self, _plugin: &RubyPlugin, _target: &str) -> Result<RubyPluginResult> {
         anyhow::bail!("Ruby plugins require 'ruby-plugins' feature");
     }
 
+    #[allow(dead_code)]
     pub fn is_available(&self) -> bool {
         self.loaded
-    }
-}
-
-impl Default for RubyBridge {
-    fn default() -> Self {
-        Self::new().expect("Failed to create Ruby bridge")
     }
 }
 

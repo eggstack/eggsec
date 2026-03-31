@@ -57,7 +57,7 @@ impl MsfClient {
 
         let response = self
             .client
-            .post(&format!("{}/api/v1/auth/login", self.config.url))
+            .post(format!("{}/api/v1/auth/login", self.config.url))
             .json(&serde_json::json!({
                 "username": username,
                 "password": password,
@@ -89,7 +89,7 @@ impl MsfClient {
     pub async fn disconnect(&mut self) -> Result<()> {
         if let Some(ref conn) = self.connection {
             self.client
-                .post(&format!("{}/api/v1/auth/logout", conn.url))
+                .post(format!("{}/api/v1/auth/logout", conn.url))
                 .json(&serde_json::json!({
                     "token": conn.token,
                 }))
@@ -122,7 +122,7 @@ impl MsfClient {
 
         let response = self
             .client
-            .post(&format!("{}/api/v1/{}", conn.url, method))
+            .post(format!("{}/api/v1/{}", conn.url, method))
             .json(&serde_json::json!({
                 "token": conn.token,
                 "params": params,

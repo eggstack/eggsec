@@ -12,7 +12,7 @@ mod load;
 pub mod nse;
 pub mod oauth;
 pub mod packet;
-#[cfg(feature = "python-plugins")]
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 mod plugin;
 pub mod proxy;
 pub mod recon;
@@ -37,7 +37,7 @@ pub use load::LoadTab;
 pub use nse::NseTab;
 pub use oauth::OAuthTab;
 pub use packet::PacketTab;
-#[cfg(feature = "python-plugins")]
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub use plugin::PluginTab;
 pub use proxy::ProxyTab;
 pub use recon::ReconTab;

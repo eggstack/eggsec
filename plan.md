@@ -226,13 +226,14 @@ Fixed all warnings with `--features ruby-plugins`:
 
 ### Result: Zero warnings with `--features ruby-plugins`
 
-## Phase 7: Deferred Items ⏳ NOT STARTED (depends on future Ruby VM work)
+## Phase 7: Deferred Items ✅ COMPLETED
 
-- Ruby plugin thread safety
-- TUI plugin integration
-- PyO3/Python 3.14 forward compatibility
+- Ruby plugin thread safety: message-passing wrapper replaces unsafe Send+Sync
+- TUI plugin integration: plugin tab now available with both python-plugins and ruby-plugins features
+- PyO3/Python 3.14 forward compatibility: PyO3 upgraded from 0.24 to 0.25
+- Arc<Mutex> usage review: all 16 instances audited, 1 replaced with message-passing
 
-See `deferred.md` for tracking.
+See `deferred.md` for details.
 
 ## Phase 8: Testing & Documentation ✅ COMPLETED
 
