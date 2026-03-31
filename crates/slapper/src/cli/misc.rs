@@ -85,10 +85,10 @@ pub struct RemoteStartArgs {
     pub port: u16,
     #[arg(long, help = "Pre-shared key for authentication")]
     pub auth: Option<String>,
-    #[arg(long, help = "TLS certificate file (PKCS12 format)")]
+    #[arg(long, help = "TLS certificate file (PEM format)")]
     pub tls_cert: Option<String>,
-    #[arg(long, help = "Password for TLS certificate")]
-    pub tls_password: Option<String>,
+    #[arg(long, help = "TLS private key file (PEM format)")]
+    pub tls_key: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -101,16 +101,16 @@ pub struct ExecArgs {
     pub auth: Option<String>,
     #[arg(long, default_value = "60", help = "Timeout in seconds")]
     pub timeout: u64,
-    #[arg(long, help = "TLS certificate file (PKCS12 format)")]
+    #[arg(long, help = "TLS certificate file (PEM format)")]
     pub tls_cert: Option<String>,
+    #[arg(long, help = "TLS private key file (PEM format)")]
+    pub tls_key: Option<String>,
     #[arg(
         long,
         default_value = "localhost",
         help = "TLS domain for certificate verification"
     )]
     pub tls_domain: Option<String>,
-    #[arg(long, help = "Password for TLS certificate")]
-    pub tls_password: Option<String>,
     #[arg(help = "The command to execute")]
     pub command: Vec<String>,
 }

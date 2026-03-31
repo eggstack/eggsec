@@ -132,19 +132,15 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
             println!("=========================");
             println!();
             println!("To create a TLS certificate for distributed communication,");
-            println!("use OpenSSL to generate a PKCS12 file:");
+            println!("use OpenSSL to generate PEM files:");
             println!();
             println!("  # Generate private key and certificate");
             println!("  openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'");
             println!();
-            println!("  # Convert to PKCS12 format (required by native-tls)");
-            println!("  openssl pkcs12 -export -out cert.p12 -inkey key.pem -in cert.pem");
-            println!();
             println!("Usage:");
-            println!("  slapper remote start --tls-cert cert.p12");
+            println!("  slapper remote start --tls-cert cert.pem --tls-key key.pem");
             println!();
-            println!("Note: The password used in the openssl command must be provided");
-            println!("      when starting the remote listener.");
+            println!("Note: Both certificate and key paths must be provided.");
         }
         RemoteCommand::Start(start_args) => {
             let psk = start_args.auth.clone()
@@ -157,11 +153,11 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
                 });
 
             let listener = if let Some(tls_cert) = &start_args.tls_cert {
-                let password = start_args.tls_password.clone()
-                    .unwrap_or_else(|| "password".to_string());
+                let tls_key = start_args.tls_key.as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("TLS key path required when using --tls-cert"))?;
                 let tls_config = TlsConfig {
-                    pkcs12_path: tls_cert.clone().into(),
-                    password,
+                    cert_path: tls_cert.clone().into(),
+                    key_path: tls_key.clone().into(),
                 };
                 RemoteListener::with_tls(psk, tls_config)?
             } else {

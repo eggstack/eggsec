@@ -23,7 +23,9 @@ exclude = [
 
 [dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "fs", "process", "io-util", "io-std", "signal"] }
-tokio-native-tls = "0.3"
+tokio-rustls = "0.26"
+rustls = { version = "0.23", features = ["ring"] }
+rustls-pemfile = "2"
 reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2", "form", "query", "blocking"], default-features = false }
 ratatui = "0.30"
 crossterm = "0.28"
@@ -65,7 +67,7 @@ subtle = "2"
 crossbeam = "0.8"
 dashmap = "6"
 scraper = "0.21"
-native-tls = "0.2.18"
+rustls-pki-types = "1"
 maxminddb = "0.27"
 shellexpand = "3"
 rcgen = { version = "0.14", features = ["pem"] }

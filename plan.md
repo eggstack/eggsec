@@ -17,7 +17,7 @@ Consolidated from CODE_REVIEW_PLAN.md, plan2.md, plan3.md, plan4.md, and plan5.m
 | `once_cell` in slapper | 0 |
 | `mcp-server` feature | Removed |
 | MSRV | 1.80 |
-| Large files (>1000 lines) | 4 files (tui/app.rs 2193, tool/protocol/mcp.rs 1710, tui/workers/runner.rs 1192, generated code) |
+| Large files (>1000 lines) | 1 file (tui/workers/runner.rs 1192) |
 
 ## Already Complete
 
@@ -41,6 +41,13 @@ These items from the source plans are confirmed done:
 - `thiserror` upgraded to 2.x
 - `once_cell` replaced with `std::sync::LazyLock` (17 files)
 - MSRV set to 1.80 in workspace root + 4 crates
+- `native-tls` migrated to `rustls` (distributed/io.rs, distributed/remote.rs, recon/ssl.rs)
+- `tool/protocol/mcp.rs` (1710 lines) split into `tool/protocol/mcp/` (6 files, largest 890 lines)
+- `tui/app.rs` (2193 lines) split into `tui/app/` (5 files, largest 1192 lines in runner.rs)
+- `docs/FEATURES.md` updated with complete feature flag documentation
+- `SlapperError` doc examples expanded with helper method usage
+- CI workflow updated with plugin feature checks
+- Feature flag integration test added (`tests/feature_tests.rs`)
 
 ---
 
@@ -455,20 +462,38 @@ Use sub-agents to parallelize independent work:
 
 ## Success Criteria
 
-| Criterion | Target |
+| Criterion | Status |
 |-----------|--------|
-| prost/prost-build versions | Matching (both 0.13) |
-| Config reloading | Uses `ctx.config` directly |
-| Port scanner errors | No silently dropped results |
-| `Fingerprint` variant | Added |
-| `InvalidHeaderValue` From impl | Added |
-| Doc examples using `anyhow` | 0 |
-| Unused `_config` parameters | Removed |
-| `mcp-server` feature | Removed |
-| `thiserror` version | 2.x |
-| `once_cell` in slapper | 0 |
-| MSRV declared | Yes (1.80) |
-| Plugin CI checks | Present |
-| Feature flag docs | Complete |
-| Clippy warnings | 0 |
+| prost/prost-build versions | ✅ Matching (both 0.13) |
+| Config reloading | ✅ Uses `ctx.config` directly |
+| Port scanner errors | ✅ No silently dropped results |
+| `Fingerprint` variant | ✅ Added |
+| `InvalidHeaderValue` From impl | ✅ Added |
+| Doc examples using `anyhow` | ✅ 0 |
+| Unused `_config` parameters | ✅ Removed |
+| `mcp-server` feature | ✅ Removed |
+| `thiserror` version | ✅ 2.x |
+| `once_cell` in slapper | ✅ 0 |
+| MSRV declared | ✅ Yes (1.80) |
+| Plugin CI checks | ✅ Present |
+| Feature flag docs | ✅ Complete |
+| `native-tls` → `rustls` | ✅ Migrated |
+| `mcp.rs` split | ✅ 6 files, largest 890 lines |
+| `tui/app.rs` split | ✅ 5 files |
+| Clippy warnings | 1 (MSRV `is_multiple_of`, non-blocking) |
 | All tests | 350+ passing |
+
+---
+
+## Remaining Work
+
+### Phase 7: Architecture Improvements (Future Work)
+
+These are larger initiatives for future planning:
+
+- **7.1** Scope Enforcement Audit (2 days)
+- **7.2** External API Circuit Breaker (2 days)
+- **7.3** Sensitive Data Logging Audit (1 day)
+- **7.4** Payload Lazy Loading (2 days)
+- **7.5** Performance Optimizations (2 days)
+- **7.6** Truncation Function Cleanup (1 day)

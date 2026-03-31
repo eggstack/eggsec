@@ -19,8 +19,8 @@ const RATE_LIMIT_WINDOW_SECS: u64 = 60;
 
 #[derive(Clone)]
 pub struct TlsConfig {
-    pub pkcs12_path: PathBuf,
-    pub password: String,
+    pub cert_path: PathBuf,
+    pub key_path: PathBuf,
 }
 
 pub struct RemoteListener {
@@ -78,7 +78,7 @@ impl RemoteListener {
     }
 
     pub fn with_tls(psk: String, tls_config: TlsConfig) -> Result<Self> {
-        let tls_server = TlsServer::from_pkcs12(&tls_config.pkcs12_path, &tls_config.password)
+        let tls_server = TlsServer::from_pem(&tls_config.cert_path, &tls_config.key_path)
             .map_err(|e| SlapperError::Network(format!("Failed to initialize TLS: {}", e)))?;
 
         let (shutdown_tx, _) = broadcast::channel(1);
@@ -237,7 +237,7 @@ impl RemoteListener {
         addr: SocketAddr,
         psk: String,
         connections: Arc<RwLock<Vec<String>>>,
-        tls_acceptor: Option<tokio_native_tls::TlsAcceptor>,
+        tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
     ) -> Result<()> {
         tracing::info!("Connection from {}", addr);
 

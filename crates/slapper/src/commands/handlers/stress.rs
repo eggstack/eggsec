@@ -140,7 +140,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                 };
                 let mut entry = ProxyEntry::new(pt, p.address.clone(), p.port);
                 entry.username = p.username.clone();
-                entry.password = p.password.clone().map(|s| s.into_secret());
+                entry.password = p.password.clone();
                 entry.weight = p.weight;
                 entry.priority = p.priority;
                 entry.enabled = p.enabled;

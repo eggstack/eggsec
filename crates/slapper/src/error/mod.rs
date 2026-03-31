@@ -1,5 +1,45 @@
 use thiserror::Error;
 
+/// The primary error type for slapper operations.
+///
+/// Each variant represents a distinct failure domain. Use the corresponding
+/// variant when propagating errors from library code; `From` impls handle
+/// automatic conversion from common third-party error types.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use slapper::error::{SlapperError, Result};
+///
+/// fn validate_target(host: &str) -> Result<()> {
+///     if host.is_empty() {
+///         return Err(SlapperError::InvalidTarget("empty host".into()));
+///     }
+///     Ok(())
+/// }
+///
+/// let err = validate_target("").unwrap_err();
+/// assert!(err.to_string().contains("empty host"));
+/// ```
+///
+/// Using helper methods:
+///
+/// ```
+/// use slapper::error::{SlapperError, Result};
+///
+/// fn check_timeout() -> Result<()> {
+///     Err(SlapperError::Timeout {
+///         timeout_ms: 5000,
+///         operation: "scan".into(),
+///     })
+/// }
+///
+/// let err = check_timeout().unwrap_err();
+/// assert!(err.is_timeout());
+/// assert!(!err.is_network());
+/// ```
 #[derive(Debug, Error)]
 pub enum SlapperError {
     #[error("Configuration error: {0}")]
@@ -211,5 +251,54 @@ impl From<maxminddb::MaxMindDbError> for SlapperError {
 impl From<reqwest::header::InvalidHeaderValue> for SlapperError {
     fn from(e: reqwest::header::InvalidHeaderValue) -> Self {
         SlapperError::Http(format!("Invalid header value: {}", e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_is_timeout() {
+        let err = SlapperError::Timeout {
+            timeout_ms: 5000,
+            operation: "http request".to_string(),
+        };
+        assert!(err.is_timeout());
+        assert!(!err.is_network());
+    }
+
+    #[test]
+    fn test_error_is_network() {
+        let err = SlapperError::Network("connection refused".to_string());
+        assert!(err.is_network());
+        assert!(!err.is_timeout());
+    }
+
+    #[test]
+    fn test_error_http_status() {
+        let err = SlapperError::HttpStatus {
+            status: 404,
+            message: "Not Found".to_string(),
+        };
+        assert_eq!(err.http_status(), Some(404));
+
+        let err = SlapperError::Config("test".to_string());
+        assert_eq!(err.http_status(), None);
+    }
+
+    #[test]
+    fn test_error_display() {
+        let err = SlapperError::InvalidTarget("empty host".to_string());
+        assert_eq!(err.to_string(), "Invalid target: empty host");
+    }
+
+    #[test]
+    fn test_result_type() {
+        fn example() -> Result<String> {
+            Err(SlapperError::Runtime("something went wrong".to_string()))
+        }
+        let err = example().unwrap_err();
+        assert_eq!(err.to_string(), "Runtime error: something went wrong");
     }
 }

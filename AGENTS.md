@@ -46,6 +46,11 @@ crates/slapper/
 │   ├── waf/           # WAF detection and bypass
 │   ├── recon/         # Reconnaissance modules
 │   ├── output/        # Report generation (JSON, HTML, SARIF, JUnit)
+│   ├── tool/          # Tool abstraction layer
+│   │   └── protocol/
+│   │       └── mcp/   # MCP server (mod.rs, handlers.rs, routes.rs, types.rs, auth.rs, streaming.rs)
+│   ├── tui/           # Terminal UI
+│   │   └── app/       # App state and logic (mod.rs, runner.rs, error.rs, input.rs, options.rs)
 │   └── utils/         # Common utilities
 ├── tests/             # Integration tests
 └── Cargo.toml
@@ -120,6 +125,14 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 
 `constants::waf` module has scoring and detection constants. Use these instead of magic numbers in WAF-related code.
 
+### TLS
+
+`rustls` (0.23) + `tokio-rustls` (0.26) is the only TLS backend. `native-tls` has been removed.
+- `distributed/io.rs` — `StreamWrapper` enum with `Plain`, `TlsClient`, `TlsServer` variants
+- `TlsServer::from_pem(cert_path, key_path)` — loads PEM cert + key files
+- `TlsClient::new(domain)` — creates client with `NoVerifier` (insecure, for internal use)
+- `recon/ssl.rs` uses `rustls_pki_types::CertificateDer` for cert extraction
+
 ### Spoofed Scanner
 
 `scanner/ports/spoofed.rs` contains raw socket scanning (feature-gated). `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled. Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing.
@@ -137,8 +150,8 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `waf/detector/detect.rs` (195 lines) |
-| Improvement plan | See `plan.md` (consolidated from 5 source plans) |
+| Largest file | `tui/workers/runner.rs` (1192 lines) |
+| Improvement plan | See `plan.md` (all phases 1-6 complete; phase 7 remaining) |
 
 ## Planning
 

@@ -77,6 +77,27 @@ jobs:
             cargo test -p slapper --features ${{ matrix.features }}
           fi
 
+  check-plugins:
+    name: Check Plugin Features
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Check python-plugins
+        run: cargo check -p slapper --features python-plugins
+      
+      - name: Check ruby-plugins
+        run: cargo check -p slapper --features ruby-plugins
+      
+      - name: Check all-plugins
+        run: cargo check -p slapper --features all-plugins
+
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest

@@ -6,15 +6,20 @@ This document explains the available build configurations and feature flags for 
 
 Slapper uses Cargo feature flags to enable optional capabilities. This allows users to build a minimal binary or include all features depending on their needs.
 
-| Feature | Description |
-|---------|-------------|
-| `default` | Core functionality: load testing, port scanning, fuzzing, WAF testing |
-| `stress-testing` | DoS testing tools, proxy management, ICMP |
-| `packet-inspection` | Live packet capture, advanced packet tools |
-| `python-plugins` | Python plugin support |
-| `ruby-plugins` | Ruby plugin support + Metasploit RPC |
-| `all-plugins` | Both Python and Ruby plugin support |
-| `full` | All features combined |
+| Feature | Description | Dependencies |
+|---------|-------------|--------------|
+| `default` | Core functionality: load testing, port scanning, fuzzing, WAF testing | None |
+| `tool-api` | Tool abstraction layer (SecurityTool trait, ToolRegistry) | None |
+| `rest-api` | REST API server with MCP (Model Context Protocol) for AI agent integration | `tool-api`, axum, tower |
+| `grpc-api` | gRPC API server for external tool integration | `tool-api`, tonic, prost |
+| `stress-testing` | DoS testing tools, proxy management, ICMP, IP spoofing | pnet, pnet_packet, socket2, nix, libc, surge-ping |
+| `packet-inspection` | Live packet capture, advanced packet tools | pnet, pnet_packet, libc |
+| `python-plugins` | Python plugin support (PyO3) | slapper-plugin (pyo3, dirs) |
+| `ruby-plugins` | Ruby plugin support + Metasploit RPC | slapper-plugin (magnus), slapper-ruby |
+| `all-plugins` | Both Python and Ruby plugin support | python-plugins, ruby-plugins |
+| `nse` | Nmap Scripting Engine support - run Lua NSE scripts | tool-api, slapper-nse |
+| `nse-sandbox` | NSE sandbox mode - restrict dangerous Lua operations | nse, slapper-nse/sandbox |
+| `full` | All features combined | python-plugins, ruby-plugins, stress-testing, packet-inspection, rest-api, nse |
 
 ## Available Builds
 
@@ -100,6 +105,118 @@ Includes all features:
 - Stress testing tools
 - Packet inspection
 - Python and Ruby plugin support
+- REST API server
+- NSE (Nmap Scripting Engine) support
+
+## Feature Hierarchy
+
+```
+full
+├── python-plugins
+│   └── slapper-plugin (pyo3)
+├── ruby-plugins
+│   ├── slapper-plugin (magnus)
+│   └── slapper-ruby
+├── stress-testing
+│   ├── pnet, pnet_packet
+│   ├── socket2, nix, libc
+│   └── surge-ping
+├── packet-inspection
+│   ├── pnet, pnet_packet
+│   └── libc
+├── rest-api
+│   ├── tool-api
+│   ├── axum, tower
+│   └── async-stream
+└── nse
+    ├── tool-api
+    └── slapper-nse
+        └── sandbox (optional)
+
+grpc-api (standalone)
+└── tool-api
+    ├── tonic
+    └── prost, prost-build
+```
+
+## API Server Features
+
+### REST API
+
+```bash
+cargo build --release --features rest-api
+```
+
+Adds:
+- REST API server with Axum
+- MCP (Model Context Protocol) endpoints for AI agent integration
+- SSE streaming support
+- Health check and metrics endpoints
+
+### gRPC API
+
+```bash
+cargo build --release --features grpc-api
+```
+
+Adds:
+- gRPC API server with Tonic
+- Protocol Buffers message definitions
+- Bidirectional streaming support
+
+## NSE (Nmap Scripting Engine)
+
+### Basic NSE Support
+
+```bash
+cargo build --release --features nse
+```
+
+Adds:
+- Run Lua NSE scripts
+- NSE script loading and execution
+- Integration with Slapper's scanning pipeline
+
+### NSE Sandbox Mode
+
+```bash
+cargo build --release --features nse-sandbox
+```
+
+Adds:
+- Restricted Lua environment for untrusted NSE scripts
+- Blocks dangerous operations: `io.popen`, `os.setenv`, filesystem access
+- Safe subset of NSE libraries
+
+## Build Time Impact
+
+| Feature | Approx. Compile Time Impact | Binary Size Impact |
+|---------|---------------------------|-------------------|
+| `tool-api` | Minimal | Minimal |
+| `rest-api` | Low (axum + tower) | Medium |
+| `grpc-api` | Medium (tonic + prost) | Medium |
+| `stress-testing` | Medium (pnet + nix) | Medium |
+| `packet-inspection` | Low (pnet) | Low |
+| `python-plugins` | Medium (pyo3 + Python) | Medium |
+| `ruby-plugins` | High (magnus + Ruby) | High |
+| `nse` | Medium (mlua + Lua) | Medium |
+| `full` | High (all combined) | High |
+
+## Verifying Enabled Features
+
+To see which features are enabled in your current build:
+
+```bash
+./slapper --version
+```
+
+To check available commands:
+
+```bash
+slapper --help
+```
+
+If a command is not available, rebuild with the required feature flag.
 
 ## Command Feature Requirements
 
@@ -134,65 +251,4 @@ The following commands require specific build features:
 | `packet capture` | `packet-inspection` |
 | `packet send` | `packet-inspection` |
 | `plugin` | `python-plugins` or `ruby-plugins` |
-
-## WAF Detection Support
-
-Slapper detects 26 WAF products and supports targeted bypass profiles:
-
-| WAF | Detection Method | Bypass Profile |
-|-----|------------------|----------------|
-| Cloudflare | Headers, cookies, IP ranges | Yes |
-| Akamai | Headers, IP ranges | Yes |
-| AWS WAF | Headers, IP ranges | Yes |
-| Azure WAF | Headers, IP ranges | Yes |
-| Google Cloud Armor | Headers, IP ranges | No |
-| Fastly | Headers, IP ranges | No |
-| Imperva | Headers, cookies, IP ranges | Yes |
-| Sucuri | Headers, IP ranges | No |
-| CloudFront | Headers, IP ranges | Yes |
-| F5 BIG-IP | Headers, cookies | No |
-| Barracuda | Headers, cookies | No |
-| Fortinet | Headers | No |
-| Citrix NetScaler | Headers, cookies | No |
-| ModSecurity | Body patterns | No |
-| Wordfence | Headers, cookies | No |
-| DataDome | Headers, cookies, IP ranges | No |
-| PerimeterX | Headers, cookies | No |
-| Nginx | Headers, body patterns | No |
-| Traefik | Headers | No |
-| Kong | Headers | No |
-| Varnish | Headers | No |
-| Radware | Headers | No |
-| Signal Sciences | Headers, IP ranges | No |
-| Wallarm | Headers, IP ranges | No |
-| Reblaze | Headers, IP ranges | No |
-
-### WAF Bypass Profiles
-
-Use `--profile` flag with `waf` command for targeted bypass:
-
-```bash
-slapper waf https://example.com --profile cloudflare --bypass
-slapper waf https://example.com --profile akamai --bypass
-slapper waf https://example.com --profile imperva --bypass
-slapper waf https://example.com --profile aws-waf --bypass
-slapper waf https://example.com --profile azure-waf --bypass
-```
-
-Available profiles: `cloudflare`, `akamai`, `aws-waf`, `azure-waf`, `imperva`, `f5-asm`, `cloudfront`, `sucuri`, `auto`
-
-## Verifying Available Features
-
-To see which features are enabled in your current build:
-
-```bash
-./slapper --version
-```
-
-To check available commands:
-
-```bash
-slapper --help
-```
-
-If a command is not available, rebuild with the required feature flag.
+| `nse` | `nse` |

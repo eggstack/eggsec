@@ -1,13 +1,15 @@
-use anyhow::Result;
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use ratatui::{backend::CrosstermBackend, Terminal};
-use std::io;
+pub(crate) mod error;
+pub mod input;
+mod options;
+mod runner;
 
-use crate::tui::components;
+pub use input::InputMode;
+pub use options::GlobalHttpOptions;
+pub use runner::run;
+
+use anyhow::Result;
+use crossterm::event::KeyCode;
+use super::error::make_friendly_error;
 use crate::tui::help::{HelpManager, HelpOverlay, CommandPalette, HelpContext};
 use crate::tui::state::{self, SharedHistory};
 use crate::tui::tabs;
@@ -15,394 +17,6 @@ use crate::tui::tabs::{Tab, TabInput, TabState};
 use crate::tui::ui;
 use crate::tui::workers;
 use crate::output::ExportFormat;
-fn make_friendly_error(error: &anyhow::Error) -> String {
-    let error_str = error.to_string().to_lowercase();
-    
-    if error_str.contains("connection refused") {
-        return "Connection refused. The target may be down or not accepting connections.".to_string();
-    }
-    if error_str.contains("timeout") || error_str.contains("timed out") {
-        return "Request timed out. The target may be slow or unreachable.".to_string();
-    }
-    if error_str.contains("name or service not known") || error_str.contains("dns") {
-        return "DNS resolution failed. Please check the target domain is correct.".to_string();
-    }
-    if error_str.contains("certificate") || error_str.contains("tls") || error_str.contains("ssl") {
-        return "SSL/TLS error. The website may have certificate issues.".to_string();
-    }
-    if error_str.contains("permission denied") {
-        return "Permission denied. Try running with elevated privileges.".to_string();
-    }
-    if error_str.contains("rate limit") || error_str.contains("429") {
-        return "Rate limited. Too many requests. Please try again later.".to_string();
-    }
-    if error_str.contains("unauthorized") || error_str.contains("401") || error_str.contains("forbidden") {
-        return "Unauthorized. Check your API keys in the configuration.".to_string();
-    }
-    if error_str.contains("not found") || error_str.contains("404") {
-        return "Resource not found. The target may not exist.".to_string();
-    }
-    if error_str.contains("no route to host") || error_str.contains("network") {
-        return "Network error. Check your internet connection.".to_string();
-    }
-    if error_str.contains("broken pipe") || error_str.contains("reset") {
-        return "Connection broken. The remote host closed the connection.".to_string();
-    }
-    
-    format!("Error: {}", error)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum InputMode {
-    #[default]
-    Normal,
-    Insert,
-}
-
-impl std::fmt::Display for InputMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            InputMode::Normal => write!(f, "NOR"),
-            InputMode::Insert => write!(f, "INS"),
-        }
-    }
-}
-
-pub fn run(config_path: Option<String>) -> Result<()> {
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    let history = state::create_shared_history();
-    let mut app = App::new(history);
-    if let Some(path) = config_path {
-        app.settings.set_config_path(path);
-    }
-    let res = run_app(&mut terminal, &mut app);
-
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    if let Err(err) = res {
-        eprintln!("Error: {:?}", err);
-    }
-
-    Ok(())
-}
-
-fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
-    let MouseEventKind::Down(button) = mouse_event.kind else {
-        return;
-    };
-
-    if button == MouseButton::Left {
-        let tab_area = ratatui::layout::Rect {
-            x: 0,
-            y: 1,
-            width: u16::MAX,
-            height: 3,
-        };
-
-        if app.show_help || app.show_search || app.show_http_options {
-            return;
-        }
-
-        if let Some(ref palette) = app.command_palette {
-            if palette.visible {
-                return;
-            }
-        }
-
-        if tab_area.contains((mouse_event.column, mouse_event.row).into()) {
-            let tab_width = tab_area.width / 15;
-            let tab_index = (mouse_event.column.saturating_sub(1) / tab_width) as usize;
-            if tab_index < 15 {
-                app.select_tab(tab_index);
-            }
-        }
-    }
-}
-
-fn run_app<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
-    app: &mut App,
-) -> Result<()>
-where
-    B::Error: Send + Sync + 'static,
-{
-    loop {
-        terminal.draw(|f| ui::draw(f, app))?;
-
-        if event::poll(std::time::Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if let Some(pending) = app.pending_key.take() {
-                    match (key.modifiers, key.code, pending) {
-                        (_, KeyCode::Char('g'), KeyCode::Char('g')) if app.mode == InputMode::Normal => {
-                            app.handle_top();
-                            continue;
-                        }
-                        _ => {}
-                    }
-                }
-
-                match (key.modifiers, key.code) {
-                    (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
-                        if app.is_running() {
-                            app.stop();
-                        } else {
-                            return Ok(());
-                        }
-                    }
-                    (KeyModifiers::CONTROL, KeyCode::Char('u')) => {
-                        app.page_up();
-                    }
-                    (KeyModifiers::CONTROL, KeyCode::Char('d')) => {
-                        app.page_down();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Esc) => {
-                        if app.show_search {
-                            app.toggle_search();
-                        } else {
-                            app.mode = InputMode::Normal;
-                            app.handle_escape();
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('i')) if app.mode == InputMode::Normal => {
-                        app.mode = InputMode::Insert;
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('q')) if app.mode == InputMode::Normal => {
-                        if !app.is_running() {
-                            return Ok(());
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char(' ')) if app.mode == InputMode::Normal => {
-                        app.toggle_help();
-                    }
-                    (KeyModifiers::CONTROL, KeyCode::Char('/')) => {
-                        app.toggle_help();
-                    }
-                    (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
-                        app.toggle_command_palette();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('/')) if app.mode == InputMode::Normal => {
-                        app.toggle_command_palette();
-                    }
-                    _ if app.get_command_palette().map(&|cp: &CommandPalette| cp.visible).unwrap_or(false) => {
-                        match (key.modifiers, key.code) {
-                            (KeyModifiers::NONE, KeyCode::Esc) => {
-                                app.toggle_command_palette();
-                            }
-                            (KeyModifiers::NONE, KeyCode::Enter) => {
-                                let index = app.command_palette.as_ref().map(|p| p.selected_index).unwrap_or(0);
-                                app.select_command_palette_item(index);
-                            }
-                            (KeyModifiers::NONE, KeyCode::Up) => {
-                                if let Some(ref mut palette) = app.command_palette {
-                                    palette.selected_index = palette.selected_index.saturating_sub(1);
-                                    if palette.selected_index >= palette.results.len() {
-                                        palette.selected_index = palette.results.len().saturating_sub(1);
-                                    }
-                                }
-                            }
-                            (KeyModifiers::NONE, KeyCode::Down) => {
-                                if let Some(ref mut palette) = app.command_palette {
-                                    palette.selected_index = (palette.selected_index + 1).min(palette.results.len().saturating_sub(1));
-                                }
-                            }
-                            (KeyModifiers::NONE, KeyCode::Backspace) => {
-                                let query = app.command_palette.as_ref().map(|p| p.query.clone()).unwrap_or_default();
-                                if !query.is_empty() {
-                                    if let Some(ref mut palette) = app.command_palette {
-                                        palette.query.pop();
-                                        let new_query = palette.query.clone();
-                                        app.update_command_palette_query(&new_query);
-                                    }
-                                }
-                            }
-                            (KeyModifiers::NONE, KeyCode::Char(c)) => {
-                                if let Some(ref mut palette) = app.command_palette {
-                                    palette.query.push(c);
-                                    let new_query = palette.query.clone();
-                                    app.update_command_palette_query(&new_query);
-                                }
-                            }
-                            (KeyModifiers::NONE, KeyCode::Tab) => {
-                                if let Some(ref mut palette) = app.command_palette {
-                                    palette.selected_index = (palette.selected_index + 1).min(palette.results.len().saturating_sub(1));
-                                }
-                            }
-                            (KeyModifiers::SHIFT, KeyCode::BackTab) => {
-                                if let Some(ref mut palette) = app.command_palette {
-                                    palette.selected_index = palette.selected_index.saturating_sub(1);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Tab) => {
-                        if app.mode == InputMode::Insert {
-                            app.handle_tab();
-                        } else {
-                            app.handle_focus_next();
-                        }
-                    }
-                    (KeyModifiers::SHIFT, KeyCode::BackTab) => {
-                        app.handle_focus_prev();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('h')) | (KeyModifiers::NONE, KeyCode::Left) if app.mode == InputMode::Normal => {
-                        app.handle_left();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('j')) | (KeyModifiers::NONE, KeyCode::Down) if app.mode == InputMode::Normal => {
-                        app.handle_down();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('k')) | (KeyModifiers::NONE, KeyCode::Up) if app.mode == InputMode::Normal => {
-                        app.handle_up();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('l')) | (KeyModifiers::NONE, KeyCode::Right) if app.mode == InputMode::Normal => {
-                        app.handle_right();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('H')) if app.mode == InputMode::Normal => {
-                        app.handle_home();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('L')) if app.mode == InputMode::Normal => {
-                        app.handle_end();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('G')) if app.mode == InputMode::Normal => {
-                        app.handle_bottom();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('g')) if app.mode == InputMode::Normal => {
-                        app.pending_key = Some(KeyCode::Char('g'));
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('w')) if app.mode == InputMode::Normal => {
-                        app.handle_word_forward();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
-                        app.handle_word_backward();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('n')) | (KeyModifiers::NONE, KeyCode::Char('N')) if app.mode == InputMode::Normal => {
-                        if key.code == KeyCode::Char('n') {
-                            app.next_tab();
-                        } else {
-                            app.prev_tab();
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('g')) => {
-                        app.handle_bottom();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Backspace) => {
-                        app.handle_backspace();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('h')) | (KeyModifiers::NONE, KeyCode::Left) if app.mode == InputMode::Normal => {
-                        app.handle_left();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('j')) | (KeyModifiers::NONE, KeyCode::Down) if app.mode == InputMode::Normal => {
-                        app.handle_down();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('k')) | (KeyModifiers::NONE, KeyCode::Up) if app.mode == InputMode::Normal => {
-                        app.handle_up();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('l')) | (KeyModifiers::NONE, KeyCode::Right) if app.mode == InputMode::Normal => {
-                        app.handle_right();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('H')) if app.mode == InputMode::Normal => {
-                        app.handle_home();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('L')) if app.mode == InputMode::Normal => {
-                        app.handle_end();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('G')) if app.mode == InputMode::Normal => {
-                        app.handle_bottom();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('w')) if app.mode == InputMode::Normal => {
-                        app.handle_word_forward();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
-                        app.handle_word_backward();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('n')) | (KeyModifiers::NONE, KeyCode::Char('N')) if app.mode == InputMode::Normal => {
-                        if key.code == KeyCode::Char('n') {
-                            app.next_tab();
-                        } else {
-                            app.prev_tab();
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('p')) if app.mode == InputMode::Normal => {
-                        app.prev_tab();
-                    }
-                    (KeyModifiers::SHIFT, KeyCode::Char('H')) if app.mode == InputMode::Normal => {
-                        app.prev_tab();
-                    }
-                    (KeyModifiers::SHIFT, KeyCode::Char('L')) if app.mode == InputMode::Normal => {
-                        app.next_tab();
-                    }
-                    (KeyModifiers::SHIFT, KeyCode::Char('E')) if app.mode == InputMode::Normal => {
-                        app.cycle_export_format();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('/')) if app.mode == InputMode::Normal => {
-                        app.toggle_search();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('r')) if app.mode == InputMode::Normal => {
-                        if !app.is_running() {
-                            app.reset_current_tab();
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('s')) if app.mode == InputMode::Normal => {
-                        if !app.is_running() {
-                            app.save_settings();
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('d')) if app.mode == InputMode::Normal => {
-                        if !app.is_running() && app.current_tab == Tab::History {
-                            app.delete_history_entry();
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Enter) => {
-                        if app.show_search {
-                            app.perform_search();
-                        } else {
-                            app.handle_enter();
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char(c)) if app.show_search => {
-                        app.search_query.push(c);
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char(c)) if app.mode == InputMode::Insert => {
-                        app.handle_char(c);
-                    }
-                    _ => {}
-                }
-            }
-
-            if let Event::Mouse(mouse_event) = event::read()? {
-                handle_mouse_event(mouse_event, app);
-            }
-        }
-
-        app.update();
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct GlobalHttpOptions {
-    pub insecure: bool,
-    pub proxy: Option<String>,
-    pub proxy_auth: Option<String>,
-    pub auth: Option<String>,
-    pub bearer: Option<String>,
-    pub cookie: Option<String>,
-    pub api_key: Option<String>,
-    pub user_agent: Option<String>,
-    pub stealth: bool,
-    pub rate_limit: Option<u32>,
-    pub jitter: Option<String>,
-}
 
 pub struct App {
     pub current_tab: Tab,
@@ -425,6 +39,8 @@ pub struct App {
     pub cluster: tabs::ClusterTab,
     pub stress: tabs::StressTab,
     pub report: tabs::ReportTab,
+    #[cfg(feature = "nse")]
+    pub nse: tabs::NseTab,
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     pub plugin: tabs::PluginTab,
     pub settings: tabs::SettingsTab,
@@ -470,6 +86,8 @@ impl App {
             cluster: tabs::ClusterTab::new(),
             stress: tabs::StressTab::new(),
             report: tabs::ReportTab::new(),
+            #[cfg(feature = "nse")]
+            nse: tabs::NseTab::new(),
             #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
             plugin: tabs::PluginTab::new(),
             settings: tabs::SettingsTab::new(),
@@ -2152,6 +1770,10 @@ impl App {
             }
             workers::TaskResult::OAuth(r) => {
                 self.oauth.set_results(r);
+            }
+            #[cfg(feature = "nse")]
+            workers::TaskResult::Nse(r) => {
+                self.nse.set_results(r);
             }
             workers::TaskResult::Error(msg) => {
                 match self.current_tab {

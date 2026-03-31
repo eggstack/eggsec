@@ -3809,7 +3809,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c665f33d38cea657d9614f766881e4d510e0eda4239891eea56b4cadcf01801b"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
+ "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
@@ -3826,6 +3828,15 @@ dependencies = [
  "rustls-pki-types",
  "schannel",
  "security-framework",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
@@ -4223,7 +4234,6 @@ dependencies = [
  "libc",
  "maxminddb",
  "md-5",
- "native-tls",
  "nix",
  "parking_lot",
  "pnet",
@@ -4237,6 +4247,9 @@ dependencies = [
  "rcgen",
  "regex",
  "reqwest",
+ "rustls",
+ "rustls-pemfile",
+ "rustls-pki-types",
  "scraper",
  "serde",
  "serde_json",
@@ -4252,7 +4265,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "tokio-native-tls",
+ "tokio-rustls",
  "toml",
  "tonic",
  "tower 0.4.13",
@@ -4730,16 +4743,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.116",
-]
-
-[[package]]
-name = "tokio-native-tls"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
-dependencies = [
- "native-tls",
- "tokio",
 ]
 
 [[package]]

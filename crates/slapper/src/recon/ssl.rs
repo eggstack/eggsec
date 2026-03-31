@@ -84,7 +84,7 @@ impl SslAnalyzer {
             if response.status().as_u16() != 0 {
                 analysis.has_ssl = port == 443 || connect_url.contains("https");
 
-                if let Some(cert) = response.extensions().get::<native_tls::Certificate>() {
+                if let Some(cert) = response.extensions().get::<rustls_pki_types::CertificateDer<'_>>() {
                     if let Ok(cert_info) = self.extract_certificate_info(cert) {
                         analysis.certificate = Some(cert_info);
                     }
@@ -106,7 +106,7 @@ impl SslAnalyzer {
         Ok(analysis)
     }
 
-    fn extract_certificate_info(&self, _cert: &native_tls::Certificate) -> Result<CertificateInfo> {
+    fn extract_certificate_info(&self, _cert: &rustls_pki_types::CertificateDer<'_>) -> Result<CertificateInfo> {
         Ok(CertificateInfo {
             subject: "Certificate info not available".to_string(),
             issuer: "Certificate info not available".to_string(),

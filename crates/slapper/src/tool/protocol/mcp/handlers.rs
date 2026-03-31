@@ -1,43 +1,33 @@
-use axum::{
-    extract::{Json, State},
-    http::StatusCode,
-    response::{sse::Event as SseEvent, IntoResponse, Sse},
-    routing::{get, post},
-    Router,
-};
-use async_stream::stream;
 use chrono::Utc;
-use futures::Stream;
-use serde::{Deserialize, Serialize};
-use std::{sync::Arc, time::Duration};
-use subtle::ConstantTimeEq;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
-use tokio::sync::broadcast;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::tool::{
-    CancellationToken, ExecutionHistory, RateLimitConfig, RateLimiter, OpenApiGenerator, ChainPlanner,
-    ExecutionPlan, PlanRequest, RequestOptions, SessionManager, Target, ToolDispatcher, ToolInfo, 
+    CancellationToken, ExecutionHistory, RateLimitConfig, RateLimiter, RequestOptions, SessionManager, Target, ToolDispatcher, ToolInfo, 
     ToolRegistry, ToolRequest, ToolResponse,
 };
-use std::collections::HashMap;
-use tokio::sync::Mutex;
+
+use super::auth::{validate_auth, validate_auth_params};
+use super::types::{CapabilitySummary, McpError, McpRequest, McpResource, McpResponse, McpTool};
+use super::streaming::StreamEvent;
 
 #[derive(Clone)]
 pub struct McpServer {
-    registry: ToolRegistry,
+    pub(crate) registry: ToolRegistry,
     dispatcher: ToolDispatcher,
     api_key: Option<String>,
     rate_limiter: RateLimiter,
     session_manager: Option<SessionManager>,
     pending_cancellations: Arc<Mutex<HashMap<String, CancellationToken>>>,
     completed_results: Arc<Mutex<HashMap<String, ToolResponse>>>,
-    stream_events: Arc<broadcast::Sender<StreamEvent>>,
+    stream_events: Arc<tokio::sync::broadcast::Sender<StreamEvent>>,
 }
 
 impl McpServer {
     pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
-        let (stream_events, _) = broadcast::channel(1000);
+        let (stream_events, _) = tokio::sync::broadcast::channel(1000);
         
         Self {
             registry,
@@ -75,31 +65,12 @@ impl McpServer {
         }
     }
 
-    fn validate_auth_internal(&self, key_input: Option<&str>) -> Result<(), McpError> {
-        if let Some(ref key) = self.api_key {
-            match key_input {
-                Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
-                _ => Err(McpError::unauthorized()),
-            }
-        } else {
-            Ok(())
-        }
-    }
-
     pub fn validate_auth(&self, headers: &axum::http::HeaderMap) -> Result<(), McpError> {
-        let key = headers
-            .get("authorization")
-            .or_else(|| headers.get("x-api-key"))
-            .and_then(|v| v.to_str().ok());
-        self.validate_auth_internal(key)
+        validate_auth(&self.api_key, headers)
     }
 
     pub fn validate_auth_params(&self, params: &Option<serde_json::Value>) -> Result<(), McpError> {
-        let key = params
-            .as_ref()
-            .and_then(|p| p.get("api_key"))
-            .and_then(|v| v.as_str());
-        self.validate_auth_internal(key)
+        validate_auth_params(&self.api_key, params)
     }
 
     pub async fn handle_request(&self, req: McpRequest) -> McpResponse {
@@ -442,34 +413,6 @@ impl McpServer {
         }))
     }
 
-    async fn handle_tools_cancel(&self, req: McpRequest) -> McpResponse {
-        let params = match &req.params {
-            Some(p) => p,
-            None => return req.error_response(McpError::invalid_params("Missing params")),
-        };
-
-        let request_id = match params.get("request_id").and_then(|v| v.as_str()) {
-            Some(id) => id,
-            None => return req.error_response(McpError::invalid_params("Missing request_id")),
-        };
-
-        if let Some(cancellation) = self.pending_cancellations.lock().await.remove(request_id) {
-            cancellation.cancel();
-            let result = serde_json::json!({
-                "cancelled": true,
-                "request_id": request_id
-            });
-            req.success_response(result)
-        } else {
-            let result = serde_json::json!({
-                "cancelled": false,
-                "request_id": request_id,
-                "message": "Request not found or already completed"
-            });
-            req.success_response(result)
-        }
-    }
-
     async fn handle_tools_call_stream(&self, req: McpRequest) -> McpResponse {
         let params = match &req.params {
             Some(p) => p,
@@ -632,6 +575,34 @@ impl McpServer {
             "stream_url": format!("/mcp/stream/{}", request_id_for_response)
         });
         req.success_response(result)
+    }
+
+    async fn handle_tools_cancel(&self, req: McpRequest) -> McpResponse {
+        let params = match &req.params {
+            Some(p) => p,
+            None => return req.error_response(McpError::invalid_params("Missing params")),
+        };
+
+        let request_id = match params.get("request_id").and_then(|v| v.as_str()) {
+            Some(id) => id,
+            None => return req.error_response(McpError::invalid_params("Missing request_id")),
+        };
+
+        if let Some(cancellation) = self.pending_cancellations.lock().await.remove(request_id) {
+            cancellation.cancel();
+            let result = serde_json::json!({
+                "cancelled": true,
+                "request_id": request_id
+            });
+            req.success_response(result)
+        } else {
+            let result = serde_json::json!({
+                "cancelled": false,
+                "request_id": request_id,
+                "message": "Request not found or already completed"
+            });
+            req.success_response(result)
+        }
     }
 
     async fn handle_tools_result(&self, req: McpRequest) -> McpResponse {
@@ -848,26 +819,8 @@ impl McpServer {
         req.success_response(result)
     }
 
-    pub fn subscribe_to_stream(&self) -> broadcast::Receiver<StreamEvent> {
+    pub fn subscribe_to_stream(&self) -> tokio::sync::broadcast::Receiver<StreamEvent> {
         self.stream_events.subscribe()
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StreamEvent {
-    #[serde(rename = "event")]
-    pub event_type: String,
-    pub request_id: String,
-    pub data: serde_json::Value,
-}
-
-impl StreamEvent {
-    pub fn to_sse_data(&self) -> String {
-        format!(
-            "event: {}\ndata: {}\n\n",
-            self.event_type,
-            serde_json::to_string(&self.data).unwrap_or_default()
-        )
     }
 }
 
@@ -889,14 +842,6 @@ fn build_capabilities_summary(info: &ToolInfo) -> Vec<CapabilitySummary> {
                 .collect(),
         })
         .collect()
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CapabilitySummary {
-    pub name: String,
-    pub description: String,
-    pub attack_surface: Vec<String>,
-    pub severity_potential: Vec<String>,
 }
 
 fn build_input_schema(info: &ToolInfo) -> serde_json::Value {
@@ -942,769 +887,4 @@ fn build_input_schema(info: &ToolInfo) -> serde_json::Value {
         "properties": properties,
         "required": required
     })
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct McpRequest {
-    #[serde(rename = "jsonrpc")]
-    pub jsonrpc: String,
-    pub id: Option<serde_json::Value>,
-    pub method: String,
-    pub params: Option<serde_json::Value>,
-}
-
-impl McpRequest {
-    pub fn success_response(&self, result: serde_json::Value) -> McpResponse {
-        McpResponse {
-            jsonrpc: "2.0".to_string(),
-            id: self.id.clone(),
-            result: Some(result),
-            error: None,
-        }
-    }
-
-    pub fn error_response(&self, error: McpError) -> McpResponse {
-        McpResponse {
-            jsonrpc: "2.0".to_string(),
-            id: self.id.clone(),
-            result: None,
-            error: Some(error),
-        }
-    }
-
-    pub fn not_found_method(&self) -> McpResponse {
-        self.error_response(McpError::method_not_found(&self.method))
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct McpResponse {
-    #[serde(rename = "jsonrpc")]
-    pub jsonrpc: String,
-    pub id: Option<serde_json::Value>,
-    pub result: Option<serde_json::Value>,
-    pub error: Option<McpError>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct McpError {
-    pub code: i32,
-    pub message: String,
-    pub data: Option<serde_json::Value>,
-}
-
-impl McpError {
-    pub fn parse_error(msg: &str) -> Self {
-        Self {
-            code: -32700,
-            message: msg.to_string(),
-            data: None,
-        }
-    }
-
-    pub fn invalid_request(msg: &str) -> Self {
-        Self {
-            code: -32600,
-            message: msg.to_string(),
-            data: None,
-        }
-    }
-
-    pub fn method_not_found(method: &str) -> Self {
-        Self {
-            code: -32601,
-            message: format!("Method not found: {}", method),
-            data: None,
-        }
-    }
-
-    pub fn invalid_params(msg: &str) -> Self {
-        Self {
-            code: -32602,
-            message: msg.to_string(),
-            data: None,
-        }
-    }
-
-    pub fn internal(msg: &str) -> Self {
-        Self {
-            code: -32603,
-            message: msg.to_string(),
-            data: None,
-        }
-    }
-
-    pub fn unauthorized() -> Self {
-        Self {
-            code: -32001,
-            message: "Unauthorized".to_string(),
-            data: None,
-        }
-    }
-
-    pub fn rate_limited(msg: &str) -> Self {
-        Self {
-            code: -32002,
-            message: format!("Rate limit exceeded: {}", msg),
-            data: None,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct McpTool {
-    pub name: String,
-    pub description: String,
-    #[serde(rename = "inputSchema")]
-    pub input_schema: serde_json::Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub capabilities: Option<Vec<CapabilitySummary>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct McpResource {
-    pub uri: String,
-    pub name: String,
-    pub description: String,
-    #[serde(rename = "mimeType")]
-    pub mime_type: Option<String>,
-}
-
-struct AppState {
-    mcp_server: Arc<McpServer>,
-    planner: ChainPlanner,
-    openapi_generator: OpenApiGenerator,
-}
-
-async fn handle_openapi_json(
-    State(state): State<Arc<AppState>>,
-) -> axum::Json<serde_json::Value> {
-    let spec = state.openapi_generator.generate(&state.mcp_server.registry);
-    axum::Json(serde_json::from_str(&spec.to_json()).unwrap_or_default())
-}
-
-async fn handle_openapi_yaml(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let spec = state.openapi_generator.generate(&state.mcp_server.registry);
-    (
-        [("Content-Type", "application/x-yaml")],
-        spec.to_yaml(),
-    )
-}
-
-async fn handle_create_plan(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<PlanRequest>,
-) -> axum::Json<ExecutionPlan> {
-    let plan = state.planner.plan(&request);
-    let validation = state.planner.validate_plan(&plan);
-    
-    if !validation.valid {
-        tracing::warn!("Plan validation failed: {:?}", validation.errors);
-    }
-    
-    if !validation.warnings.is_empty() {
-        tracing::info!("Plan warnings: {:?}", validation.warnings);
-    }
-    
-    axum::Json(plan)
-}
-
-pub async fn create_mcp_router(registry: ToolRegistry, api_key: Option<String>) -> Router {
-    let server = Arc::new(McpServer::new(registry.clone(), api_key));
-    let planner = ChainPlanner::new(registry.clone());
-    let openapi_generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
-    
-    let app_state = Arc::new(AppState {
-        mcp_server: server,
-        planner,
-        openapi_generator,
-    });
-
-    Router::new()
-        .route("/mcp", post(handle_mcp))
-        .route("/json-rpc", post(handle_mcp))
-        .route("/mcp/stream/:request_id", get(handle_sse_stream))
-        .route("/health", get(handle_health))
-        .route("/openapi.json", get(handle_openapi_json))
-        .route("/openapi.yaml", get(handle_openapi_yaml))
-        .route("/plan", post(handle_create_plan))
-        .with_state(app_state)
-}
-
-async fn handle_health() -> axum::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "status": "healthy",
-        "service": "slapper-mcp",
-        "version": "0.1.0"
-    }))
-}
-
-struct SseStreamState {
-    receiver: broadcast::Receiver<StreamEvent>,
-    request_id: String,
-}
-
-async fn handle_sse_stream(
-    State(state): State<Arc<AppState>>,
-    axum::extract::Path(request_id): axum::extract::Path<String>,
-) -> Sse<impl Stream<Item = Result<SseEvent, axum::Error>>> {
-    let receiver = state.mcp_server.subscribe_to_stream();
-    
-    let state = Arc::new(tokio::sync::Mutex::new(SseStreamState {
-        receiver,
-        request_id: request_id.clone(),
-    }));
-    
-    let stream = stream! {
-        let mut tick_interval = tokio::time::interval(Duration::from_secs(30));
-        
-        loop {
-            let event = {
-                let mut s = state.lock().await;
-                s.receiver.recv().await
-            };
-            
-            match event {
-                Ok(event) => {
-                    let current_request_id = {
-                        let s = state.lock().await;
-                        s.request_id.clone()
-                    };
-                    if event.request_id == current_request_id || event.request_id == "*" {
-                        yield Ok::<_, axum::Error>(SseEvent::default()
-                            .event(&event.event_type)
-                            .data(serde_json::to_string(&event.data).unwrap_or_default()));
-                    }
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    yield Ok::<_, axum::Error>(SseEvent::default()
-                        .event("lagged")
-                        .data(format!("{{\"lagged_events\": {}}}", n)));
-                }
-                Err(broadcast::error::RecvError::Closed) => {
-                    break;
-                }
-            }
-
-            tokio::select! {
-                _ = tick_interval.tick() => {
-                    yield Ok::<_, axum::Error>(SseEvent::default()
-                        .event("heartbeat")
-                        .data("{\"timestamp\": \"alive\"}"));
-                }
-                _ = tokio::time::sleep(Duration::from_millis(100)) => {
-                    // Small delay to prevent busy loop
-                }
-            }
-        }
-    };
-
-    Sse::new(stream)
-        .keep_alive(axum::response::sse::KeepAlive::new()
-            .interval(Duration::from_secs(15)))
-}
-
-async fn handle_mcp(
-    State(state): State<Arc<AppState>>,
-    headers: axum::http::HeaderMap,
-    Json(requests): Json<Vec<McpRequest>>,
-) -> impl IntoResponse {
-    const MAX_BATCH_SIZE: usize = 100;
-
-    if requests.len() > MAX_BATCH_SIZE {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(vec![McpResponse {
-                jsonrpc: "2.0".to_string(),
-                id: None,
-                result: None,
-                error: Some(McpError::invalid_request(&format!(
-                    "Batch size exceeds limit of {}",
-                    MAX_BATCH_SIZE
-                ))),
-            }]),
-        );
-    }
-
-    let mut responses = Vec::new();
-
-    for req in requests {
-        if req.method != "initialize" {
-            if let Err(e) = state.mcp_server.validate_auth(&headers) {
-                responses.push(req.error_response(e));
-                continue;
-            }
-        }
-
-        let response = state.mcp_server.handle_request(req).await;
-        responses.push(response);
-    }
-
-    (StatusCode::OK, Json(responses))
-}
-
-pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>) {
-    let server = Arc::new(McpServer::new(registry, api_key));
-
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
-
-    let mut reader: tokio::io::Lines<BufReader<tokio::io::Stdin>> = BufReader::new(stdin).lines();
-    let mut writer = BufWriter::new(stdout);
-
-    tracing::info!("MCP stdio server started, waiting for requests...");
-
-    while let Ok(Some(line)) = reader.next_line().await {
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let requests: Result<Vec<McpRequest>, _> = serde_json::from_str(&line);
-
-        match requests {
-            Ok(reqs) => {
-                if reqs.len() > 100 {
-                    let error = McpError::invalid_request("Batch size exceeds limit of 100");
-                    let response = McpResponse {
-                        jsonrpc: "2.0".to_string(),
-                        id: None,
-                        result: None,
-                        error: Some(error),
-                    };
-                    if let Ok(response_json) = serde_json::to_string(&response) {
-                        let _ = writer.write_all(response_json.as_bytes()).await;
-                        let _ = writer.write_all(b"\n").await;
-                        let _ = writer.flush().await;
-                    }
-                    continue;
-                }
-
-                let mut responses = Vec::new();
-
-                for req in reqs {
-                    if req.method != "initialize" {
-                        if let Err(e) = server.validate_auth_params(&req.params) {
-                            responses.push(req.error_response(e));
-                            continue;
-                        }
-                    }
-
-                    let response = server.handle_request(req).await;
-                    responses.push(response);
-                }
-
-                if let Ok(response_json) = serde_json::to_string(&responses) {
-                    let _ = writer.write_all(response_json.as_bytes()).await;
-                    let _ = writer.write_all(b"\n").await;
-                    let _ = writer.flush().await;
-                }
-            }
-            Err(e) => {
-                let error = McpError::parse_error(&format!("Invalid JSON: {}", e));
-                let response = McpResponse {
-                    jsonrpc: "2.0".to_string(),
-                    id: None,
-                    result: None,
-                    error: Some(error),
-                };
-                if let Ok(response_json) = serde_json::to_string(&response) {
-                    let _ = writer.write_all(response_json.as_bytes()).await;
-                    let _ = writer.write_all(b"\n").await;
-                    let _ = writer.flush().await;
-                }
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::tool::protocol::mcp::{McpRequest, McpResponse};
-    use crate::tool::{
-        ChainPlanner, create_default_registry, OpenApiGenerator, PlanRequest, 
-        protocol::mcp::McpServer,
-    };
-
-    fn create_test_server() -> McpServer {
-        let registry = create_default_registry();
-        McpServer::new(registry, Some("test-api-key".to_string()))
-    }
-
-    #[tokio::test]
-    async fn test_initialize() {
-        let server = create_test_server();
-        
-        let request = McpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "initialize".to_string(),
-            params: None,
-        };
-        
-        let response = server.handle_request(request).await;
-        
-        assert!(response.error.is_none());
-        assert!(response.result.is_some());
-        
-        let result = response.result.unwrap();
-        assert!(result.get("serverInfo").is_some());
-        assert!(result.get("capabilities").is_some());
-    }
-
-    #[tokio::test]
-    async fn test_tools_list() {
-        let server = create_test_server();
-        
-        let request = McpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "tools/list".to_string(),
-            params: Some(serde_json::json!({
-                "api_key": "test-api-key"
-            })),
-        };
-        
-        let response = server.handle_request(request).await;
-        
-        assert!(response.error.is_none());
-        assert!(response.result.is_some());
-        
-        let result = response.result.unwrap();
-        assert!(result.get("tools").is_some());
-        assert!(result.get("count").is_some());
-    }
-
-    #[tokio::test]
-    async fn test_tools_list_by_category() {
-        let server = create_test_server();
-        
-        let request = McpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "tools/list-by-category".to_string(),
-            params: Some(serde_json::json!({
-                "api_key": "test-api-key"
-            })),
-        };
-        
-        let response = server.handle_request(request).await;
-        
-        assert!(response.error.is_none());
-        
-        let result = response.result.unwrap();
-        assert!(result.get("categories").is_some());
-        assert!(result.get("total_tools").is_some());
-    }
-
-    #[tokio::test]
-    async fn test_ping() {
-        let server = create_test_server();
-        
-        let request = McpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "ping".to_string(),
-            params: None,
-        };
-        
-        let response = server.handle_request(request).await;
-        
-        assert!(response.error.is_none());
-        
-        let result = response.result.unwrap();
-        assert_eq!(result.get("status").unwrap(), "ok");
-    }
-
-    #[tokio::test]
-    async fn test_session_create() {
-        let server = create_test_server();
-        
-        let request = McpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "session/create".to_string(),
-            params: Some(serde_json::json!({
-                "api_key": "test-api-key",
-                "target": "https://example.com"
-            })),
-        };
-        
-        let response = server.handle_request(request).await;
-        
-        assert!(response.error.is_none());
-        
-        let result = response.result.unwrap();
-        assert!(result.get("session_id").is_some());
-        assert!(result.get("status").is_some());
-    }
-
-    #[tokio::test]
-    async fn test_rate_limit_status() {
-        let server = create_test_server();
-        
-        let request = McpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "rate-limit/status".to_string(),
-            params: Some(serde_json::json!({
-                "api_key": "test-api-key"
-            })),
-        };
-        
-        let response = server.handle_request(request).await;
-        
-        assert!(response.error.is_none());
-        
-        let result = response.result.unwrap();
-        assert!(result.get("requests_per_minute").is_some());
-        assert!(result.get("concurrent_limit").is_some());
-    }
-
-    #[tokio::test]
-    async fn test_resources_list() {
-        let server = create_test_server();
-        
-        let request = McpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "resources/list".to_string(),
-            params: None,
-        };
-        
-        let response = server.handle_request(request).await;
-        
-        assert!(response.error.is_none());
-        
-        let result = response.result.unwrap();
-        assert!(result.get("resources").is_some());
-    }
-
-    #[tokio::test]
-    async fn test_resources_read_manifest() {
-        let server = create_test_server();
-        
-        let request = McpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "resources/read".to_string(),
-            params: Some(serde_json::json!({
-                "uri": "slapper://manifest"
-            })),
-        };
-        
-        let response = server.handle_request(request).await;
-        
-        assert!(response.error.is_none());
-        
-        let result = response.result.unwrap();
-        assert!(result.get("contents").is_some());
-    }
-
-    #[tokio::test]
-    async fn test_unknown_method() {
-        let server = create_test_server();
-        
-        let request = McpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: Some(serde_json::json!(1)),
-            method: "unknown/method".to_string(),
-            params: None,
-        };
-        
-        let response = server.handle_request(request).await;
-        
-        assert!(response.error.is_some());
-        let error = response.error.unwrap();
-        assert_eq!(error.code, -32601);
-    }
-
-    #[tokio::test]
-    async fn test_authorization() {
-        let server = create_test_server();
-        
-        assert!(server.validate_auth_params(&Some(serde_json::json!({
-            "api_key": "wrong-key"
-        }))).is_err());
-    }
-
-    #[tokio::test]
-    async fn test_auth_with_correct_key() {
-        let server = create_test_server();
-        
-        assert!(server.validate_auth_params(&Some(serde_json::json!({
-            "api_key": "test-api-key"
-        }))).is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_planner_integration() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let planner = ChainPlanner::new(registry);
-        
-        let request = PlanRequest {
-            goal: "full_assessment".to_string(),
-            target: "https://example.com".to_string(),
-            ..Default::default()
-        };
-        
-        let plan = planner.plan(&request);
-        assert!(!plan.stages.is_empty());
-        assert!(plan.total_tools() > 0);
-        
-        let validation = planner.validate_plan(&plan);
-        assert!(validation.valid);
-    }
-
-    #[tokio::test]
-    async fn test_planner_recon_only() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let planner = ChainPlanner::new(registry);
-        
-        let request = PlanRequest {
-            goal: "recon".to_string(),
-            target: "https://example.com".to_string(),
-            ..Default::default()
-        };
-        
-        let plan = planner.plan(&request);
-        assert!(!plan.stages.is_empty());
-        
-        let validation = planner.validate_plan(&plan);
-        assert!(validation.valid);
-    }
-
-    #[tokio::test]
-    async fn test_planner_vuln_scan() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let planner = ChainPlanner::new(registry);
-        
-        let request = PlanRequest {
-            goal: "vuln_scan".to_string(),
-            target: "https://api.example.com".to_string(),
-            ..Default::default()
-        };
-        
-        let plan = planner.plan(&request);
-        assert!(!plan.stages.is_empty());
-        
-        let stage_names: Vec<&str> = plan.stages.iter().map(|s| s.name.as_str()).collect();
-        assert!(stage_names.contains(&"reconnaissance"));
-        assert!(stage_names.contains(&"vulnerability_scanning"));
-    }
-
-    #[tokio::test]
-    async fn test_planner_api_security() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let planner = ChainPlanner::new(registry);
-        
-        let request = PlanRequest {
-            goal: "api".to_string(),
-            target: "https://api.example.com".to_string(),
-            ..Default::default()
-        };
-        
-        let plan = planner.plan(&request);
-        assert!(!plan.stages.is_empty());
-        
-        let stage_names: Vec<&str> = plan.stages.iter().map(|s| s.name.as_str()).collect();
-        assert!(stage_names.contains(&"api_security"));
-    }
-
-    #[tokio::test]
-    async fn test_planner_quick_scan() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let planner = ChainPlanner::new(registry);
-        
-        let request = PlanRequest {
-            goal: "quick".to_string(),
-            target: "https://example.com".to_string(),
-            ..Default::default()
-        };
-        
-        let plan = planner.plan(&request);
-        assert!(!plan.stages.is_empty());
-        
-        let validation = planner.validate_plan(&plan);
-        assert!(validation.valid);
-    }
-
-    #[tokio::test]
-    async fn test_openapi_generation() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
-        let spec = generator.generate(&registry);
-        
-        assert_eq!(spec.openapi, "3.1.0");
-        assert!(!spec.paths.is_empty());
-        assert!(spec.paths.contains_key("/health"));
-    }
-
-    #[tokio::test]
-    async fn test_openapi_has_required_paths() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
-        let spec = generator.generate(&registry);
-        
-        assert!(spec.paths.contains_key("/mcp"));
-        assert!(spec.paths.contains_key("/health"));
-        assert!(!spec.components.schemas.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_openapi_json_output() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
-        let spec = generator.generate(&registry);
-        
-        let json = spec.to_json();
-        assert!(json.contains("openapi"));
-        assert!(json.contains("Slapper"));
-        assert!(serde_json::from_str::<serde_json::Value>(&json).is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_openapi_yaml_output() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
-        let spec = generator.generate(&registry);
-        
-        let yaml = spec.to_yaml();
-        assert!(yaml.contains("openapi:"));
-        assert!(yaml.contains("Slapper"));
-    }
-
-    #[tokio::test]
-    async fn test_tool_suggestions() {
-        use crate::tool::create_default_registry;
-        
-        let registry = create_default_registry();
-        let planner = ChainPlanner::new(registry);
-        
-        let web_tools = planner.suggest_tools_for_attack_surface(crate::tool::AttackSurface::Web);
-        assert!(!web_tools.is_empty());
-        
-        let api_tools = planner.suggest_tools_for_attack_surface(crate::tool::AttackSurface::Api);
-        assert!(!api_tools.is_empty());
-        
-        let network_tools = planner.suggest_tools_for_attack_surface(crate::tool::AttackSurface::Network);
-        assert!(!network_tools.is_empty());
-    }
 }

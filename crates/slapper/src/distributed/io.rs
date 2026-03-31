@@ -1,17 +1,26 @@
 
-use std::path::Path;
+use std::io::{BufReader, Cursor};
 use std::pin::Pin;
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use std::sync::Arc;
+
+use rustls::pki_types::{CertificateDer, ServerName};
+use rustls::server::ServerConfig;
+use rustls::ClientConfig;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader as TokioBufReader};
 use tokio::net::TcpStream;
-use tokio_native_tls::{native_tls, TlsAcceptor, TlsConnector};
+use tokio_rustls::server::TlsStream as ServerTlsStream;
+use tokio_rustls::TlsAcceptor;
+use tokio_rustls::TlsConnector;
 
 pub enum StreamWrapper {
     Plain(InnerStream),
-    Tls(TlsStreamWrapper),
+    TlsClient(TlsStreamClient),
+    TlsServer(TlsStreamServer),
 }
 
 pub type InnerStream = TcpStream;
-pub type TlsStreamWrapper = tokio_native_tls::TlsStream<TcpStream>;
+pub type TlsStreamClient = tokio_rustls::client::TlsStream<TcpStream>;
+pub type TlsStreamServer = ServerTlsStream<TcpStream>;
 
 impl StreamWrapper {
     pub async fn accept_tls(
@@ -19,7 +28,7 @@ impl StreamWrapper {
         stream: TcpStream,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let tls_stream = acceptor.accept(stream).await?;
-        Ok(StreamWrapper::Tls(tls_stream))
+        Ok(StreamWrapper::TlsServer(tls_stream))
     }
 
     pub async fn connect_tls(
@@ -27,8 +36,9 @@ impl StreamWrapper {
         domain: &str,
         stream: TcpStream,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let domain: ServerName<'static> = domain.to_owned().try_into()?;
         let tls_stream = connector.connect(domain, stream).await?;
-        Ok(StreamWrapper::Tls(tls_stream))
+        Ok(StreamWrapper::TlsClient(tls_stream))
     }
 
     pub fn plain(stream: TcpStream) -> Self {
@@ -36,7 +46,7 @@ impl StreamWrapper {
     }
 
     pub fn is_tls(&self) -> bool {
-        matches!(self, StreamWrapper::Tls(_))
+        matches!(self, StreamWrapper::TlsClient(_) | StreamWrapper::TlsServer(_))
     }
 }
 
@@ -48,7 +58,8 @@ impl AsyncRead for StreamWrapper {
     ) -> std::task::Poll<std::io::Result<()>> {
         match &mut *self {
             StreamWrapper::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
-            StreamWrapper::Tls(stream) => Pin::new(stream).poll_read(cx, buf),
+            StreamWrapper::TlsClient(stream) => Pin::new(stream).poll_read(cx, buf),
+            StreamWrapper::TlsServer(stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
@@ -61,7 +72,8 @@ impl AsyncWrite for StreamWrapper {
     ) -> std::task::Poll<std::io::Result<usize>> {
         match &mut *self {
             StreamWrapper::Plain(stream) => Pin::new(stream).poll_write(cx, buf),
-            StreamWrapper::Tls(stream) => Pin::new(stream).poll_write(cx, buf),
+            StreamWrapper::TlsClient(stream) => Pin::new(stream).poll_write(cx, buf),
+            StreamWrapper::TlsServer(stream) => Pin::new(stream).poll_write(cx, buf),
         }
     }
 
@@ -71,7 +83,8 @@ impl AsyncWrite for StreamWrapper {
     ) -> std::task::Poll<std::io::Result<()>> {
         match &mut *self {
             StreamWrapper::Plain(stream) => Pin::new(stream).poll_flush(cx),
-            StreamWrapper::Tls(stream) => Pin::new(stream).poll_flush(cx),
+            StreamWrapper::TlsClient(stream) => Pin::new(stream).poll_flush(cx),
+            StreamWrapper::TlsServer(stream) => Pin::new(stream).poll_flush(cx),
         }
     }
 
@@ -81,7 +94,8 @@ impl AsyncWrite for StreamWrapper {
     ) -> std::task::Poll<std::io::Result<()>> {
         match &mut *self {
             StreamWrapper::Plain(stream) => Pin::new(stream).poll_shutdown(cx),
-            StreamWrapper::Tls(stream) => Pin::new(stream).poll_shutdown(cx),
+            StreamWrapper::TlsClient(stream) => Pin::new(stream).poll_shutdown(cx),
+            StreamWrapper::TlsServer(stream) => Pin::new(stream).poll_shutdown(cx),
         }
     }
 }
@@ -91,14 +105,28 @@ pub struct TlsServer {
 }
 
 impl TlsServer {
-    pub fn from_pkcs12<P: AsRef<Path>>(
-        path: P,
-        password: &str,
+    pub fn from_pem<P: AsRef<std::path::Path>>(
+        cert_path: P,
+        key_path: P,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let identity = native_tls::Identity::from_pkcs12(&std::fs::read(path)?, password)?;
-        let acceptor = native_tls::TlsAcceptor::new(identity)?;
-        let acceptor = TlsAcceptor::from(acceptor);
-        Ok(Self { acceptor })
+        let cert_data = std::fs::read(&cert_path)?;
+        let mut cert_reader = BufReader::new(Cursor::new(cert_data));
+        let certs: Vec<CertificateDer<'_>> = rustls_pemfile::certs(&mut cert_reader)
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let key_data = std::fs::read(&key_path)?;
+        let mut key_reader = BufReader::new(Cursor::new(key_data));
+        let key = rustls_pemfile::private_key(&mut key_reader)?
+            .ok_or("No private key found in PEM file")?;
+
+        let config = ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .map_err(|e| format!("Failed to build server config: {}", e))?;
+
+        Ok(Self {
+            acceptor: TlsAcceptor::from(Arc::new(config)),
+        })
     }
 
     pub fn acceptor(&self) -> &TlsAcceptor {
@@ -117,19 +145,15 @@ pub struct TlsClient {
 
 impl TlsClient {
     pub fn new(domain: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let connector = native_tls::TlsConnector::new()?;
-        let connector = TlsConnector::from(connector);
+        let config = ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoVerifier))
+            .with_no_client_auth();
+
         Ok(Self {
-            connector,
+            connector: TlsConnector::from(Arc::new(config)),
             domain: domain.to_string(),
         })
-    }
-
-    pub fn from_native(connector: native_tls::TlsConnector, domain: &str) -> Self {
-        Self {
-            connector: TlsConnector::from(connector),
-            domain: domain.to_string(),
-        }
     }
 
     pub fn connector(&self) -> &TlsConnector {
@@ -142,6 +166,56 @@ impl TlsClient {
 
     pub fn clone_connector(&self) -> TlsConnector {
         self.connector.clone()
+    }
+}
+
+#[derive(Debug)]
+struct NoVerifier;
+
+impl rustls::client::danger::ServerCertVerifier for NoVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> std::result::Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> std::result::Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> std::result::Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        rustls::crypto::ring::default_provider()
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
@@ -171,7 +245,7 @@ impl LineWriter {
     }
 
     pub async fn read_line(&mut self) -> std::io::Result<Option<String>> {
-        let mut reader = BufReader::new(&mut self.stream);
+        let mut reader = TokioBufReader::new(&mut self.stream);
         let mut line = String::new();
         match reader.read_line(&mut line).await {
             Ok(0) => Ok(None),
@@ -190,7 +264,8 @@ mod tests {
     #[test]
     fn test_stream_wrapper_enum_variants() {
         let _ = StreamWrapper::Plain;
-        let _ = StreamWrapper::Tls;
+        let _ = StreamWrapper::TlsClient;
+        let _ = StreamWrapper::TlsServer;
     }
 
     #[tokio::test]
@@ -205,7 +280,7 @@ mod tests {
         });
 
         let client = TcpStream::connect(addr).await?;
-        let mut reader = BufReader::new(client);
+        let mut reader = TokioBufReader::new(client);
         let mut line = String::new();
         reader.read_line(&mut line).await?;
 
@@ -277,14 +352,15 @@ mod tls_tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_tls_acceptor_creation() {
-        let server = TlsServer::from_pkcs12("test", "password");
+    async fn test_tls_server_from_pem_invalid() {
+        let server = TlsServer::from_pem("nonexistent.pem", "nonexistent.key");
         assert!(server.is_err());
     }
 
     #[test]
     fn test_stream_wrapper_enum_variants() {
         let _ = StreamWrapper::Plain;
-        let _ = StreamWrapper::Tls;
+        let _ = StreamWrapper::TlsClient;
+        let _ = StreamWrapper::TlsServer;
     }
 }
