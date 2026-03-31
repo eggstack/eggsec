@@ -1,6 +1,6 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretFinding {
@@ -308,14 +308,14 @@ fn build_patterns() -> Vec<SecretPattern> {
     ]
 }
 
-static PATTERNS: Lazy<Vec<SecretPattern>> = Lazy::new(build_patterns);
+static PATTERNS: LazyLock<Vec<SecretPattern>> = LazyLock::new(build_patterns);
 
 pub struct SecretScanner;
 
 impl SecretScanner {
     pub fn new() -> Self {
         // Force lazy initialization so any pattern errors surface immediately
-        Lazy::force(&PATTERNS);
+        LazyLock::force(&PATTERNS);
         Self
     }
 

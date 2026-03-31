@@ -36,7 +36,7 @@
 //! use slapper::cli::{FuzzArgs, FuzzMode, CommonHttpArgs};
 //! use slapper::fuzzer::FuzzEngine;
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let args = FuzzArgs {
 //!     url: "https://example.com/api?id=1".to_string(),
 //!     payload_type: "sqli".to_string(),
@@ -105,7 +105,6 @@ pub use advanced::{
 use crate::error::Result;
 
 use crate::cli::FuzzArgs;
-use crate::config::SlapperConfig;
 
 pub use chain::{
     AutoExploiter, ChainAction, ChainExecutionResult, ChainExecutor, ChainedFuzzResult,
@@ -126,12 +125,11 @@ pub use waf_fingerprint::{WafDetectionResult, WafFingerprint, WafFingerprinter};
 /// # Arguments
 ///
 /// * `args` - Fuzzing arguments from the CLI
-/// * `config` - Slapper configuration
 ///
 /// # Returns
 ///
 /// Result indicating success or failure of the fuzzing operation
-pub async fn run_cli(args: FuzzArgs, _config: &SlapperConfig) -> Result<()> {
+pub async fn run_cli(args: FuzzArgs) -> Result<()> {
     let mut engine = engine::FuzzEngine::new(args.clone())?;
     engine.run().await
 }
@@ -143,15 +141,11 @@ pub async fn run_cli(args: FuzzArgs, _config: &SlapperConfig) -> Result<()> {
 /// # Arguments
 ///
 /// * `args` - WAF stress testing arguments
-/// * `config` - Slapper configuration
 ///
 /// # Returns
 ///
 /// Result indicating success or failure of the stress test
-pub async fn run_waf_stress(
-    args: crate::cli::WafStressArgs,
-    _config: &SlapperConfig,
-) -> Result<()> {
+pub async fn run_waf_stress(args: crate::cli::WafStressArgs) -> Result<()> {
     let mut engine = engine::FuzzEngine::new_from_waf_args(args.clone())?;
     engine.run_all_types().await
 }

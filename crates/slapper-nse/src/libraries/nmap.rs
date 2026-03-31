@@ -3,7 +3,7 @@
 //! Provides access to Nmap internals like host info, ports, and socket operations.
 
 use mlua::{Lua, Result as LuaResult, Table};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -15,8 +15,8 @@ struct ConnectionEntry {
     created_at: u64,
 }
 
-static CONNECTION_REGISTRY: Lazy<RwLock<HashMap<String, ConnectionEntry>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static CONNECTION_REGISTRY: LazyLock<RwLock<HashMap<String, ConnectionEntry>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 fn get_connection_key(host: &str, port: u16) -> String {
     format!("{}:{}", host, port)

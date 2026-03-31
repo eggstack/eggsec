@@ -7,8 +7,8 @@ use mlua::{Lua, Result as LuaResult, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-static TEST_RESULTS: once_cell::sync::Lazy<Mutex<HashMap<String, Vec<TestResult>>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
+static TEST_RESULTS: std::sync::LazyLock<Mutex<HashMap<String, Vec<TestResult>>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Debug)]
 struct TestResult {

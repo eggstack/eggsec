@@ -152,8 +152,7 @@ impl SecurityTool for FuzzerTool {
             common: crate::cli::CommonHttpArgs::default(),
         };
 
-        let config = crate::config::load_config(None::<&str>).unwrap_or_default();
-        let result = crate::fuzzer::run_cli(args, &config).await;
+        let result = crate::fuzzer::run_cli(args).await;
 
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;

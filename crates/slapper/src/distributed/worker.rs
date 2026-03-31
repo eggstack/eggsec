@@ -397,8 +397,7 @@ async fn process_waf(task: Task) -> Result<serde_json::Value> {
         common: crate::cli::CommonHttpArgs::default(),
     };
 
-    let config = crate::config::SlapperConfig::default();
-    crate::waf::run_cli(args, &config).await?;
+    crate::waf::run_cli(args).await?;
 
     Ok(serde_json::json!({
         "target": target,

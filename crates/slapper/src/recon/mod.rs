@@ -19,7 +19,7 @@
 //! use slapper::cli::ReconArgs;
 //! use slapper::config::SlapperConfig;
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let args = ReconArgs {
 //!     target: "example.com".to_string(),
 //!     concurrency: Some(10),

@@ -5,7 +5,7 @@
 //! session establishment, and file operations.
 
 use mlua::{Lua, Result as LuaResult, Table};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::Mutex;
@@ -13,7 +13,7 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream as AsyncTcpStream;
 
-static SMB_SESSIONS: Lazy<Mutex<Vec<SmbSession>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static SMB_SESSIONS: LazyLock<Mutex<Vec<SmbSession>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 #[derive(Clone)]
 struct SmbSession {

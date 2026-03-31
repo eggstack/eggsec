@@ -4,17 +4,17 @@
 //! Based on Nmap's httpspider library: https://nmap.org/nsedoc/lib/httpspider.html
 
 use mlua::{Lua, Result as LuaResult, Table, Value};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use scraper::{Html, Selector};
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 use url::Url;
 
-static CRAWLERS: Lazy<Mutex<HashMap<String, CrawlerState>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static CRAWLER_COUNTER: Lazy<Mutex<u64>> = Lazy::new(|| Mutex::new(0));
+static CRAWLERS: LazyLock<Mutex<HashMap<String, CrawlerState>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static CRAWLER_COUNTER: LazyLock<Mutex<u64>> = LazyLock::new(|| Mutex::new(0));
 
 struct CrawlerState {
     host: String,

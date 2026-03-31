@@ -27,7 +27,7 @@
 //! ```rust,no_run
 //! use slapper::waf::{WafDetector, WafDetectionResult};
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let detector = WafDetector::new()?;
 //! let detection = detector.detect("https://example.com").await?;
 //!
@@ -49,7 +49,7 @@
 //! use slapper::waf::{BypassEngine, TestType, get_profile_by_name};
 //! use slapper::cli::WafArgs;
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let args = WafArgs {
 //!     url: "https://example.com".to_string(),
 //!     bypass: true,
@@ -81,7 +81,6 @@ use crate::error::Result;
 use std::time::Instant;
 
 use crate::cli::WafArgs;
-use crate::config::SlapperConfig;
 
 pub use bypass::{
     get_auto_profile, get_profile_by_name, BypassEngine, BypassResult, TestType, WafProfile,
@@ -94,12 +93,11 @@ pub use types::{Finding, OwaspCategory, ScanResults, Severity};
 /// # Arguments
 ///
 /// * `args` - WAF testing arguments from CLI
-/// * `config` - Slapper configuration
 ///
 /// # Returns
 ///
 /// Result indicating success or failure
-pub async fn run_cli(args: WafArgs, _config: &SlapperConfig) -> Result<()> {
+pub async fn run_cli(args: WafArgs) -> Result<()> {
     let mut engine = WafEngine::new(args)?;
     engine.run().await
 }

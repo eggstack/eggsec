@@ -1,6 +1,6 @@
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeakMatch {
@@ -43,8 +43,9 @@ impl std::fmt::Display for LeakCategory {
     }
 }
 
-static PATTERNS: Lazy<Vec<(String, LeakCategory, LeakSeverity)>> = Lazy::new(get_all_patterns);
-static MATCHER: Lazy<AhoCorasick> = Lazy::new(|| {
+static PATTERNS: LazyLock<Vec<(String, LeakCategory, LeakSeverity)>> =
+    LazyLock::new(get_all_patterns);
+static MATCHER: LazyLock<AhoCorasick> = LazyLock::new(|| {
     let pattern_strings: Vec<&str> = PATTERNS.iter().map(|(p, _, _)| p.as_str()).collect();
     AhoCorasickBuilder::new()
         .match_kind(MatchKind::LeftmostLongest)

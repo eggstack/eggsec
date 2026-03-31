@@ -812,8 +812,8 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
     use std::collections::HashMap;
     use std::sync::Mutex;
 
-    static THREAD_RESULTS: once_cell::sync::Lazy<Mutex<HashMap<i64, String>>> =
-        once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
+    static THREAD_RESULTS: std::sync::LazyLock<Mutex<HashMap<i64, String>>> =
+        std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
     let new_thread_fn =
         lua.create_function(|_lua, (_func, _args): (mlua::Function, Option<Table>)| {

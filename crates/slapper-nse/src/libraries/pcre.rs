@@ -7,11 +7,11 @@ use mlua::{Lua, Result as LuaResult};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-static COMPILED_REGEX: once_cell::sync::Lazy<Mutex<HashMap<usize, regex::Regex>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
+static COMPILED_REGEX: std::sync::LazyLock<Mutex<HashMap<usize, regex::Regex>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
-static REGEX_COUNTER: once_cell::sync::Lazy<Mutex<usize>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(1));
+static REGEX_COUNTER: std::sync::LazyLock<Mutex<usize>> =
+    std::sync::LazyLock::new(|| Mutex::new(1));
 
 pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();

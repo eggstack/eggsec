@@ -27,7 +27,7 @@
 //! use slapper::scanner::{scan_ports, SpoofConfig};
 //! use std::time::Duration;
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let results = scan_ports(
 //!     "example.com",
 //!     vec![80, 443, 8080],
@@ -50,7 +50,7 @@
 //! use slapper::scanner::{scan_endpoints, SpoofConfig};
 //! use std::time::Duration;
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let results = scan_endpoints(
 //!     "https://example.com",
 //!     vec!["admin".to_string(), "login".to_string()],

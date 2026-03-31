@@ -6,10 +6,10 @@
 use mlua::{Lua, Result as LuaResult};
 use std::sync::Mutex;
 
-static USERNAMES: once_cell::sync::Lazy<Mutex<Vec<String>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(get_default_usernames()));
-static PASSWORDS: once_cell::sync::Lazy<Mutex<Vec<String>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(get_default_passwords()));
+static USERNAMES: std::sync::LazyLock<Mutex<Vec<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(get_default_usernames()));
+static PASSWORDS: std::sync::LazyLock<Mutex<Vec<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(get_default_passwords()));
 
 fn get_default_usernames() -> Vec<String> {
     vec![

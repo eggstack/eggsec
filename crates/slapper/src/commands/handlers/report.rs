@@ -1,6 +1,5 @@
 use anyhow::Result;
 use crate::commands::handlers::CommandContext;
-use crate::config::load_config;
 use crate::constants::DEFAULT_CONFIG_FILE;
 
 pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -> Result<()> {
@@ -79,7 +78,7 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
         ReportCommand::Schedule(schedule_args) => {
             match &schedule_args.command {
                 crate::cli::ScheduleCommand::List => {
-                    let config = load_config(ctx.config_path())?;
+                    let config = &ctx.config;
                     if config.schedule.is_empty() {
                         println!("No scheduled scans configured.");
                         println!("\nTo add a schedule, use:");
@@ -99,7 +98,7 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                 }
                 crate::cli::ScheduleCommand::Add(add_args) => {
                     let config_path = ctx.config_path().unwrap_or(DEFAULT_CONFIG_FILE);
-                    let mut config = load_config(Some(config_path))?;
+                    let mut config = ctx.config.clone();
 
                     let new_sched = ScheduledScan {
                         schedule: add_args.schedule.clone(),
@@ -123,7 +122,7 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                 }
                 crate::cli::ScheduleCommand::Remove(remove_args) => {
                     let config_path = ctx.config_path().unwrap_or(DEFAULT_CONFIG_FILE);
-                    let mut config = load_config(Some(config_path))?;
+                    let mut config = ctx.config.clone();
 
                     if let Ok(idx) = remove_args.id.parse::<usize>() {
                         if idx == 0 || idx > config.schedule.len() {
@@ -139,7 +138,7 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                     }
                 }
                 crate::cli::ScheduleCommand::Cron(cron_args) => {
-                    let config = load_config(ctx.config_path())?;
+                    let config = &ctx.config;
 
                     if config.schedule.is_empty() {
                         println!("No scheduled scans configured.");

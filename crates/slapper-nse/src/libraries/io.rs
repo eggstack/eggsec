@@ -11,10 +11,10 @@ use std::sync::Mutex;
 
 use crate::SandboxConfig;
 
-static FILE_HANDLES: once_cell::sync::Lazy<Mutex<HashMap<i32, File>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
+static FILE_HANDLES: std::sync::LazyLock<Mutex<HashMap<i32, File>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
-static NEXT_FD: once_cell::sync::Lazy<Mutex<i32>> = once_cell::sync::Lazy::new(|| Mutex::new(100));
+static NEXT_FD: std::sync::LazyLock<Mutex<i32>> = std::sync::LazyLock::new(|| Mutex::new(100));
 
 pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> {
     let globals = lua.globals();

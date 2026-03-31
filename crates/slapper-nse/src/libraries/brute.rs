@@ -10,11 +10,11 @@ use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::Duration;
 
-static CREDS_STORE: once_cell::sync::Lazy<Mutex<HashMap<String, Vec<(String, String)>>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
+static CREDS_STORE: std::sync::LazyLock<Mutex<HashMap<String, Vec<(String, String)>>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
-static ACCOUNT_STORE: once_cell::sync::Lazy<Mutex<Vec<(String, String, bool)>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(Vec::new()));
+static ACCOUNT_STORE: std::sync::LazyLock<Mutex<Vec<(String, String, bool)>>> =
+    std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
 
 pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
@@ -441,19 +441,17 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
                         result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                         return Ok(result);
                     }
-                    };
-                    let mut stream = match TcpStream::connect_timeout(
-                        &socket_addr,
-                        Duration::from_secs(10),
-                    ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("success", false)?;
-                        result.set("status", "error")?;
-                        result.set("error", format!("connection failed: {}", e))?;
-                        return Ok(result);
-                    }
                 };
+                let mut stream =
+                    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            result.set("success", false)?;
+                            result.set("status", "error")?;
+                            result.set("error", format!("connection failed: {}", e))?;
+                            return Ok(result);
+                        }
+                    };
 
                 stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
                 stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
@@ -533,19 +531,17 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
                         result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                         return Ok(result);
                     }
-                    };
-                    let mut stream = match TcpStream::connect_timeout(
-                        &socket_addr,
-                        Duration::from_secs(10),
-                    ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("success", false)?;
-                        result.set("status", "error")?;
-                        result.set("error", format!("connection failed: {}", e))?;
-                        return Ok(result);
-                    }
                 };
+                let mut stream =
+                    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            result.set("success", false)?;
+                            result.set("status", "error")?;
+                            result.set("error", format!("connection failed: {}", e))?;
+                            return Ok(result);
+                        }
+                    };
 
                 stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
                 stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
@@ -652,16 +648,17 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("success", false)?;
-                        result.set("status", "error")?;
-                        result.set("error", format!("connection failed: {}", e))?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("success", false)?;
+                    result.set("status", "error")?;
+                    result.set("error", format!("connection failed: {}", e))?;
+                    return Ok(result);
+                }
+            };
 
             stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
             stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
@@ -739,19 +736,17 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
                         result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                         return Ok(result);
                     }
-                    };
-                    let mut stream = match TcpStream::connect_timeout(
-                        &socket_addr,
-                        Duration::from_secs(10),
-                    ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("success", false)?;
-                        result.set("status", "error")?;
-                        result.set("error", format!("connection failed: {}", e))?;
-                        return Ok(result);
-                    }
                 };
+                let mut stream =
+                    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            result.set("success", false)?;
+                            result.set("status", "error")?;
+                            result.set("error", format!("connection failed: {}", e))?;
+                            return Ok(result);
+                        }
+                    };
 
                 stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
                 stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
@@ -850,19 +845,17 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
                         result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                         return Ok(result);
                     }
-                    };
-                    let mut stream = match TcpStream::connect_timeout(
-                        &socket_addr,
-                        Duration::from_secs(10),
-                    ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("success", false)?;
-                        result.set("status", "error")?;
-                        result.set("error", format!("connection failed: {}", e))?;
-                        return Ok(result);
-                    }
                 };
+                let mut stream =
+                    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            result.set("success", false)?;
+                            result.set("status", "error")?;
+                            result.set("error", format!("connection failed: {}", e))?;
+                            return Ok(result);
+                        }
+                    };
 
                 stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
                 stream.set_write_timeout(Some(Duration::from_secs(10))).ok();

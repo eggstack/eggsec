@@ -8,12 +8,15 @@ Consolidated from CODE_REVIEW_PLAN.md, plan2.md, plan3.md, plan4.md, and plan5.m
 |--------|-------|
 | Tests | 350 passing |
 | Build | Clean compilation |
-| Clippy | 0 warnings |
+| Clippy | 1 warning (MSRV `is_multiple_of`, non-blocking) |
 | Doctests | 14 pass, 1 ignored, 0 fail |
-| `SlapperError` variants | 22 (Proxy, Recon, LoadTest added; Fingerprint missing) |
+| `SlapperError` variants | 23 (Fingerprint added) |
 | `waf/detector/` split | Complete (6 files, all <200 lines) |
-| `anyhow::Result` in core | <10 (policy documented in lib.rs) |
-| Doc examples | 11 still use `anyhow::Result` |
+| `anyhow::Result` in core | 0 (policy documented in lib.rs) |
+| Doc examples using `anyhow::Result` | 0 |
+| `once_cell` in slapper | 0 |
+| `mcp-server` feature | Removed |
+| MSRV | 1.80 |
 | Large files (>1000 lines) | 4 files (tui/app.rs 2193, tool/protocol/mcp.rs 1710, tui/workers/runner.rs 1192, generated code) |
 
 ## Already Complete
@@ -21,13 +24,23 @@ Consolidated from CODE_REVIEW_PLAN.md, plan2.md, plan3.md, plan4.md, and plan5.m
 These items from the source plans are confirmed done:
 
 - `waf/detector.rs` split into `waf/detector/` directory (6 files, all <200 lines)
-- `SlapperError` has 22 variants (Proxy, Recon, LoadTest added)
+- `SlapperError` has 23 variants (Proxy, Recon, LoadTest, Fingerprint added)
 - Core library modules migrated from `anyhow::Result` to `crate::error::Result`
 - `lib.rs` documents anyhow usage policy (lines 39-48)
 - Severity import paths in `fuzzer/engine/` use correct re-export path
 - `unreachable!` in `fuzzer/chain.rs:148` already replaced with error return
 - NSE `duration_since` unwraps already replaced with `unwrap_or_default()`
 - Ruby plugins zero warnings with `--features ruby-plugins`
+- prost/prost-build both at 0.13.5
+- Config reloading uses `ctx.config` directly (no `load_config()` re-reads)
+- Port scanner records open/closed/filtered states
+- `InvalidHeaderValue` `From` impl added
+- Doc examples use `slapper::error::Result` (0 using `anyhow::Result`)
+- Unused `_config` parameters removed from `fuzzer::run_cli`, `fuzzer::run_waf_stress`, `waf::run_cli`
+- Deprecated `mcp-server` feature removed
+- `thiserror` upgraded to 2.x
+- `once_cell` replaced with `std::sync::LazyLock` (17 files)
+- MSRV set to 1.80 in workspace root + 4 crates
 
 ---
 

@@ -71,6 +71,8 @@ crates/slapper/
 - `nse-sandbox` - NSE sandbox mode (restricts `io.popen`, `os.setenv`, filesystem access)
 - `full` - All features combined
 
+Note: `mcp-server` feature has been removed. Use `rest-api` instead.
+
 ### PyO3 Dependency
 
 - Current version: 0.25 (supports Python 3.14)
@@ -128,8 +130,12 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 |--------|-------|
 | Tests | 350 passing |
 | Build | Clean compilation |
-| Clippy | 0 warnings |
+| Clippy | 1 warning (MSRV `is_multiple_of`, non-blocking) |
 | Doctests | 14 pass, 1 ignored, 0 fail |
+| `SlapperError` variants | 23 |
+| `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
+| MSRV | 1.80 |
+| `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
 | Largest file | `waf/detector/detect.rs` (195 lines) |
 | Improvement plan | See `plan.md` (consolidated from 5 source plans) |

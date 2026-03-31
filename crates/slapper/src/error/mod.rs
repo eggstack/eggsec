@@ -73,6 +73,9 @@ pub enum SlapperError {
 
     #[error("Load test error: {0}")]
     LoadTest(String),
+
+    #[error("Fingerprint error: {0}")]
+    Fingerprint(String),
 }
 
 impl SlapperError {
@@ -202,5 +205,11 @@ impl From<quick_xml::Error> for SlapperError {
 impl From<maxminddb::MaxMindDbError> for SlapperError {
     fn from(e: maxminddb::MaxMindDbError) -> Self {
         SlapperError::Io(std::io::Error::other(format!("MaxMind DB error: {}", e)))
+    }
+}
+
+impl From<reqwest::header::InvalidHeaderValue> for SlapperError {
+    fn from(e: reqwest::header::InvalidHeaderValue) -> Self {
+        SlapperError::Http(format!("Invalid header value: {}", e))
     }
 }

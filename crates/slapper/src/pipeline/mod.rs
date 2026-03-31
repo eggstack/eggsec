@@ -16,7 +16,7 @@
 //! use slapper::pipeline::{Pipeline, Stage};
 //! use slapper::cli::ScanArgs;
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let args = ScanArgs {
 //!     target: "example.com".to_string(),
 //!     stages: Some("port,fingerprint,endpoint,fuzz".to_string()),

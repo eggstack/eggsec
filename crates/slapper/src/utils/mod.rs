@@ -17,7 +17,7 @@
 //! ```rust,no_run
 //! use slapper::utils::{check_scope, create_http_client, truncate};
 //!
-//! # fn example() -> anyhow::Result<()> {
+//! # fn example() -> slapper::error::Result<()> {
 //! // Create HTTP client
 //! let client = create_http_client(30)?;
 //!

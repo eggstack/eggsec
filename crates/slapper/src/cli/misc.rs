@@ -250,7 +250,7 @@ pub struct ServeArgs {
     pub api_key: Option<String>,
 }
 
-#[cfg(feature = "mcp-server")]
+#[cfg(feature = "rest-api")]
 #[derive(clap::Args)]
 pub struct McpServeArgs {
     #[arg(long, default_value = "8081", help = "Port to listen on")]

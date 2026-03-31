@@ -17,7 +17,7 @@
 //! ```rust,no_run
 //! use slapper::distributed::RemoteListener;
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let listener = RemoteListener::new("my-secret-psk".to_string());
 //! listener.start(9000).await?;
 //! # Ok(())
@@ -29,7 +29,7 @@
 //! ```rust,no_run
 //! use slapper::distributed::RemoteClient;
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let client = RemoteClient::new("my-secret-psk".to_string());
 //! let result = client.execute(
 //!     "worker-host",

@@ -3,7 +3,7 @@
 //! Provides HTTP client functionality compatible with NSE scripts.
 
 use mlua::{Lua, Result as LuaResult, Table};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use reqwest::blocking::Client;
 use reqwest::Client as AsyncClient;
 use std::collections::HashMap;
@@ -38,14 +38,14 @@ fn build_client(accept_invalid_certs: bool, accept_invalid_hostnames: bool) -> C
     builder.build().unwrap_or_else(|_| Client::new())
 }
 
-static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
+static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     build_client(
         ACCEPT_INVALID_CERTS.load(Ordering::SeqCst),
         ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst),
     )
 });
 
-static HTTPS_CLIENT: Lazy<Client> = Lazy::new(|| {
+static HTTPS_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     build_client(
         ACCEPT_INVALID_CERTS.load(Ordering::SeqCst),
         ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst),
@@ -53,7 +53,7 @@ static HTTPS_CLIENT: Lazy<Client> = Lazy::new(|| {
 });
 
 // Async HTTP client for async functions
-static ASYNC_HTTP_CLIENT: Lazy<AsyncClient> = Lazy::new(|| {
+static ASYNC_HTTP_CLIENT: LazyLock<AsyncClient> = LazyLock::new(|| {
     let accept_invalid_certs = ACCEPT_INVALID_CERTS.load(Ordering::SeqCst);
     let accept_invalid_hostnames = ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst);
 
@@ -73,7 +73,7 @@ static ASYNC_HTTP_CLIENT: Lazy<AsyncClient> = Lazy::new(|| {
     builder.build().expect("Failed to create async HTTP client")
 });
 
-static ASYNC_HTTPS_CLIENT: Lazy<AsyncClient> = Lazy::new(|| {
+static ASYNC_HTTPS_CLIENT: LazyLock<AsyncClient> = LazyLock::new(|| {
     let accept_invalid_certs = ACCEPT_INVALID_CERTS.load(Ordering::SeqCst);
     let accept_invalid_hostnames = ACCEPT_INVALID_HOSTNAMES.load(Ordering::SeqCst);
 

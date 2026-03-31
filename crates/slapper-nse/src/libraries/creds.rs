@@ -7,8 +7,8 @@ use mlua::{Lua, Result as LuaResult};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-static CREDENTIALS_STORE: once_cell::sync::Lazy<Mutex<HashMap<String, Vec<Credential>>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
+static CREDENTIALS_STORE: std::sync::LazyLock<Mutex<HashMap<String, Vec<Credential>>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Clone, Debug)]
 struct Credential {

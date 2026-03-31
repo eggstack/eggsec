@@ -303,12 +303,28 @@ pub async fn scan_ports(
             let result = timeout(timeout_dur, TcpStream::connect(&socket_addr)).await;
 
             let mut results = results.lock().await;
-            if let Ok(Ok(_)) = result {
-                results.push(PortResult {
-                    port,
-                    status: "open".to_string(),
-                    service: get_service_name(port),
-                });
+            match result {
+                Ok(Ok(_)) => {
+                    results.push(PortResult {
+                        port,
+                        status: "open".to_string(),
+                        service: get_service_name(port),
+                    });
+                }
+                Ok(Err(_)) => {
+                    results.push(PortResult {
+                        port,
+                        status: "closed".to_string(),
+                        service: get_service_name(port),
+                    });
+                }
+                Err(_) => {
+                    results.push(PortResult {
+                        port,
+                        status: "filtered".to_string(),
+                        service: get_service_name(port),
+                    });
+                }
             }
             if let Some(ref pb) = progress {
                 pb.inc(1);

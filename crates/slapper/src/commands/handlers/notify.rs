@@ -90,7 +90,7 @@ pub async fn handle_serve(ctx: &CommandContext, args: crate::cli::ServeArgs) -> 
     Ok(())
 }
 
-#[cfg(feature = "mcp-server")]
+#[cfg(feature = "rest-api")]
 pub async fn handle_mcp_serve(ctx: &CommandContext, args: crate::cli::McpServeArgs) -> Result<()> {
     eprintln!("[STUB] MCP server is not yet implemented.");
     eprintln!("  Bind: {}", args.bind);

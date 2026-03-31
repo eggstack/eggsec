@@ -4,8 +4,6 @@ use anyhow::Result;
 #[cfg(feature = "stress-testing")]
 use crate::commands::handlers::CommandContext;
 #[cfg(feature = "stress-testing")]
-use crate::config::load_config;
-#[cfg(feature = "stress-testing")]
 use crate::constants::DEFAULT_CONFIG_FILE;
 
 #[cfg(feature = "stress-testing")]
@@ -68,7 +66,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             let proxies = ProxyEntry::load_from_file(&add_args.file)?;
             let count = proxies.len();
 
-            let mut config = load_config(ctx.config_path())?;
+            let mut config = ctx.config.clone();
             let new_entries: Vec<ProxyConfigEntry> = proxies.iter().map(|p| {
                 ProxyConfigEntry {
                     proxy_type: p.proxy_type.to_string(),
@@ -98,7 +96,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             }
         }
         ProxyCommand::List(list_args) => {
-            let config = load_config(ctx.config_path())?;
+            let config = &ctx.config;
 
             if config.proxies.is_empty() {
                 println!("No proxies loaded.");
@@ -124,7 +122,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             }
         }
         ProxyCommand::HealthCheck(health_args) => {
-            let config = load_config(ctx.config_path())?;
+            let config = &ctx.config;
 
             if config.proxies.is_empty() {
                 println!("No proxies loaded.");

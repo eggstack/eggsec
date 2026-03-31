@@ -10,8 +10,8 @@ use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::Duration;
 
-static SSL_SESSIONS: once_cell::sync::Lazy<Mutex<std::collections::HashMap<String, TlsConnector>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(std::collections::HashMap::new()));
+static SSL_SESSIONS: std::sync::LazyLock<Mutex<std::collections::HashMap<String, TlsConnector>>> =
+    std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
 fn create_ssl_connection(
     host: &str,
@@ -163,9 +163,8 @@ pub fn register_openssl_library(lua: &Lua) -> LuaResult<()> {
                     }
                 };
 
-                match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
-                { Ok(stream) => {
-                    match connector.connect(&host, stream) {
+                match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                    Ok(stream) => match connector.connect(&host, stream) {
                         Ok(_) => {
                             result.set("valid", true)?;
                             result.set("error", "")?;
@@ -176,12 +175,13 @@ pub fn register_openssl_library(lua: &Lua) -> LuaResult<()> {
                             result.set("error", e.to_string())?;
                             result.set("error_code", -1)?;
                         }
+                    },
+                    _ => {
+                        result.set("valid", false)?;
+                        result.set("error", "Connection failed")?;
+                        result.set("error_code", -1)?;
                     }
-                } _ => {
-                    result.set("valid", false)?;
-                    result.set("error", "Connection failed")?;
-                    result.set("error_code", -1)?;
-                }}
+                }
             }
             Err(e) => {
                 result.set("valid", false)?;

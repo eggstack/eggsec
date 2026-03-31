@@ -8,8 +8,8 @@ use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-static COMPILED_PATTERNS: once_cell::sync::Lazy<Mutex<HashMap<String, Regex>>> =
-    once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
+static COMPILED_PATTERNS: std::sync::LazyLock<Mutex<HashMap<String, Regex>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn parse_options(options: &str) -> (bool, bool) {
     let mut case_insensitive = false;

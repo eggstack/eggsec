@@ -6,10 +6,11 @@
 //! - Pattern caching for repeated use
 
 use dashmap::DashMap;
-use once_cell::sync::Lazy;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
-static PATTERN_CACHE: Lazy<DashMap<String, Arc<CompiledPattern>>> = Lazy::new(|| DashMap::new());
+static PATTERN_CACHE: LazyLock<DashMap<String, Arc<CompiledPattern>>> =
+    LazyLock::new(|| DashMap::new());
 static CACHE_MAX_SIZE: usize = 10_000;
 
 pub struct CompiledPattern {

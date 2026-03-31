@@ -117,7 +117,7 @@ pub enum Commands {
     #[cfg(feature = "rest-api")]
     #[command(about = "Start REST API server for external tool integration")]
     Serve(ServeArgs),
-    #[cfg(feature = "mcp-server")]
+    #[cfg(feature = "rest-api")]
     #[command(
         about = "Start MCP server for AI assistant integration",
         alias = "mcp-serve"

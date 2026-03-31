@@ -442,9 +442,7 @@ impl Pipeline {
             common: self.common.clone(),
         };
 
-        let default_config = SlapperConfig::default();
-        let config = self.config.as_ref().unwrap_or(&default_config);
-        crate::waf::run_cli(args, config).await?;
+        crate::waf::run_cli(args).await?;
 
         Ok(())
     }

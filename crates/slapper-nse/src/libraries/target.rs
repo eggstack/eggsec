@@ -6,8 +6,8 @@ use mlua::{Lua, Result as LuaResult};
 use std::net::ToSocketAddrs;
 use std::sync::{Arc, Mutex};
 
-static TARGET_QUEUE: once_cell::sync::Lazy<Arc<Mutex<Vec<String>>>> =
-    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(Vec::new())));
+static TARGET_QUEUE: std::sync::LazyLock<Arc<Mutex<Vec<String>>>> =
+    std::sync::LazyLock::new(|| Arc::new(Mutex::new(Vec::new())));
 
 pub fn register_target_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
@@ -70,12 +70,9 @@ pub fn register_target_library(lua: &Lua) -> LuaResult<()> {
 
     target.set(
         "count",
-        lua.create_function(|_lua, _: ()| {
-            match TARGET_QUEUE.lock() { Ok(queue) => {
-                Ok(queue.len() as i32)
-            } _ => {
-                Ok(0)
-            }}
+        lua.create_function(|_lua, _: ()| match TARGET_QUEUE.lock() {
+            Ok(queue) => Ok(queue.len() as i32),
+            _ => Ok(0),
         })?,
     )?;
 
@@ -91,12 +88,9 @@ pub fn register_target_library(lua: &Lua) -> LuaResult<()> {
 
     target.set(
         "exists",
-        lua.create_function(|_lua, host: String| {
-            match TARGET_QUEUE.lock() { Ok(queue) => {
-                Ok(queue.contains(&host))
-            } _ => {
-                Ok(false)
-            }}
+        lua.create_function(|_lua, host: String| match TARGET_QUEUE.lock() {
+            Ok(queue) => Ok(queue.contains(&host)),
+            _ => Ok(false),
         })?,
     )?;
 

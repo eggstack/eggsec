@@ -97,7 +97,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Exec(args)) => handle_exec(ctx, args).await,
         #[cfg(feature = "rest-api")]
         Some(Commands::Serve(args)) => handle_serve(ctx, args).await,
-        #[cfg(feature = "mcp-server")]
+        #[cfg(feature = "rest-api")]
         Some(Commands::McpServe(args)) => handle_mcp_serve(ctx, args).await,
     }
 }

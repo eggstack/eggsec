@@ -78,8 +78,7 @@ pub mod waf;
 #[cfg(any(
     feature = "tool-api",
     feature = "rest-api",
-    feature = "grpc-api",
-    feature = "mcp-server"
+    feature = "grpc-api"
 ))]
 pub mod tool;
 

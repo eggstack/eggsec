@@ -1,5 +1,5 @@
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 pub static COMMON_PORTS: &[(u16, &str)] = &[
     (21, "FTP"),
@@ -51,8 +51,8 @@ pub static COMMON_PORTS: &[(u16, &str)] = &[
     (27017, "MongoDB"),
 ];
 
-pub static PORT_SERVICE_MAP: Lazy<HashMap<u16, &'static str>> =
-    Lazy::new(|| COMMON_PORTS.iter().cloned().collect());
+pub static PORT_SERVICE_MAP: LazyLock<HashMap<u16, &'static str>> =
+    LazyLock::new(|| COMMON_PORTS.iter().cloned().collect());
 
 pub fn get_service_name(port: u16) -> &'static str {
     PORT_SERVICE_MAP.get(&port).copied().unwrap_or("unknown")

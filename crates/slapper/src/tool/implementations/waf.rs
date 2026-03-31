@@ -108,8 +108,7 @@ impl SecurityTool for WafTool {
                     output: None,
                     common: crate::cli::CommonHttpArgs::default(),
                 };
-                let config = crate::config::load_config(None::<&str>).unwrap_or_default();
-                crate::waf::run_cli(args, &config).await
+                crate::waf::run_cli(args).await
             }
             WafMode::Bypass => {
                 let args = crate::cli::WafArgs {
@@ -128,8 +127,7 @@ impl SecurityTool for WafTool {
                     output: None,
                     common: crate::cli::CommonHttpArgs::default(),
                 };
-                let config = crate::config::load_config(None::<&str>).unwrap_or_default();
-                crate::waf::run_cli(args, &config).await
+                crate::waf::run_cli(args).await
             }
             WafMode::Stress => {
                 let args = crate::cli::WafStressArgs {
@@ -141,8 +139,7 @@ impl SecurityTool for WafTool {
                     output: None,
                     common: crate::cli::CommonHttpArgs::default(),
                 };
-                let config = crate::config::load_config(None::<&str>).unwrap_or_default();
-                crate::fuzzer::run_waf_stress(args, &config).await
+                crate::fuzzer::run_waf_stress(args).await
             }
         };
 

@@ -3,6 +3,7 @@ name = "slapper-plugin"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
 description = "Python plugin support for Slapper security testing toolkit"
 
 [dependencies]

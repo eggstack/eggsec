@@ -15,7 +15,7 @@
 //! use slapper::loadtest::LoadTestRunner;
 //! use std::time::Duration;
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() -> slapper::error::Result<()> {
 //! let runner = LoadTestRunner::new(
 //!     "https://example.com".to_string(),
 //!     1000,  // total requests
