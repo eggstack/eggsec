@@ -25,6 +25,7 @@ pub mod xss;
 pub mod xxe;
 
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PayloadType {
@@ -133,6 +134,15 @@ pub struct Payload {
 
 pub use crate::types::Severity;
 
+static PAYLOAD_CACHE: LazyLock<std::collections::HashMap<PayloadType, Vec<Payload>>> =
+    LazyLock::new(|| {
+        let mut map = std::collections::HashMap::new();
+        for pt in PayloadType::all_variants() {
+            map.insert(*pt, get_payloads(*pt));
+        }
+        map
+    });
+
 pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
     match payload_type {
         PayloadType::Sqli => sqli::get_payloads(),
@@ -160,10 +170,18 @@ pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
     }
 }
 
+pub fn get_payloads_cached(payload_type: PayloadType) -> &'static Vec<Payload> {
+    PAYLOAD_CACHE.get(&payload_type).unwrap_or_else(|| {
+        static EMPTY: LazyLock<Vec<Payload>> = LazyLock::new(Vec::new);
+        &EMPTY
+    })
+}
+
+#[deprecated(since = "0.1.0", note = "Use get_all_payloads_cached instead")]
 pub fn get_all_payloads() -> Vec<Payload> {
-    let mut payloads = Vec::new();
-    for pt in PayloadType::all_variants() {
-        payloads.extend(get_payloads(*pt));
-    }
-    payloads
+    get_all_payloads_cached()
+}
+
+pub fn get_all_payloads_cached() -> Vec<Payload> {
+    PAYLOAD_CACHE.values().flatten().cloned().collect()
 }

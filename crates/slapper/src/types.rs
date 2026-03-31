@@ -114,6 +114,41 @@ impl SensitiveString {
     pub fn into_secret(mut self) -> String {
         std::mem::take(&mut self.0)
     }
+
+    /// Log the secret value safely using tracing.
+    ///
+    /// When `redact_logs` is enabled, logs "[REDACTED]" instead of the actual value.
+    pub fn log_secret(&self, logger: impl FnOnce(&str), redact: bool) {
+        if redact {
+            logger("[REDACTED]");
+        } else {
+            logger(self.expose_secret());
+        }
+    }
+
+    /// Create a display-safe version for logging.
+    ///
+    /// Returns "[REDACTED]" when `redact` is true, otherwise returns the actual value.
+    /// WARNING: Only use `redact=true` when you control the logging output destination.
+    pub fn for_logging(&self, redact: bool) -> impl std::fmt::Display + '_ {
+        struct SecretViewer<'a> {
+            value: &'a str,
+            redact: bool,
+        }
+        impl std::fmt::Display for SecretViewer<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                if self.redact {
+                    write!(f, "[REDACTED]")
+                } else {
+                    write!(f, "{}", self.value)
+                }
+            }
+        }
+        SecretViewer {
+            value: self.expose_secret(),
+            redact,
+        }
+    }
 }
 
 impl std::fmt::Debug for SensitiveString {

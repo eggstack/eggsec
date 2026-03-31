@@ -1,6 +1,6 @@
 
 use crate::scanner::spoof::{format_spoof_warning, SpoofConfig};
-use crate::utils::truncate_simple;
+use crate::utils::preserve_all;
 use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -263,7 +263,7 @@ pub struct EndpointScanResults {
 impl std::fmt::Display for EndpointScanResults {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Endpoint Scan Results")?;
-        writeln!(f, "target: {}", truncate_simple(&self.base_url, 60))?;
+        writeln!(f, "target: {}", preserve_all(&self.base_url, 60))?;
         writeln!(f, "scanned: {} endpoints", self.endpoints_scanned)?;
         writeln!(f, "found: {} endpoints", self.endpoints_found)?;
 

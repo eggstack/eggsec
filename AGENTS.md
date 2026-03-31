@@ -113,9 +113,26 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 - Zeroizes on drop
 - `expose_secret()` borrows the inner string
 - `into_secret()` consumes and returns the inner string
+- `log_secret()` logs safely with redaction option
+- `for_logging()` creates display-safe wrapper for logging
 - `Debug` and `Display` show `[REDACTED]`
 - Constant-time equality (via `subtle::ConstantTimeEq`)
 - Serializes transparently for config file compatibility
+
+### Circuit Breaker
+
+`utils/circuit_breaker.rs` provides circuit breaker pattern for external API resilience:
+- `CircuitBreaker` - individual breaker with state (Closed/Open/HalfOpen)
+- `CircuitBreakerRegistry` - manages multiple breakers by name
+- Tracks failure/success counts, total calls, failure rate
+- Configurable failure threshold, success threshold, and timeout
+
+### Truncation Functions
+
+Two truncation utilities in `utils/formatting.rs`:
+- `strip_controls` - removes control characters (recommended)
+- `preserve_all` - preserves all characters
+- `truncate` and `truncate_simple` are deprecated aliases
 
 ### Macros
 

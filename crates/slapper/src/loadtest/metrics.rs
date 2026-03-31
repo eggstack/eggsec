@@ -1,4 +1,4 @@
-use crate::utils::truncate_simple;
+use crate::utils::preserve_all;
 use hdrhistogram::Histogram;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -25,7 +25,7 @@ pub struct LoadTestResults {
 impl std::fmt::Display for LoadTestResults {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Load Test Results")?;
-        writeln!(f, "target: {}", truncate_simple(&self.target_url, 60))?;
+        writeln!(f, "target: {}", preserve_all(&self.target_url, 60))?;
         writeln!(
             f,
             "requests: {} total, {} successful, {} failed",
@@ -51,7 +51,7 @@ impl std::fmt::Display for LoadTestResults {
         if !self.errors.is_empty() {
             let _ = writeln!(f, "errors (first 5)");
             for error in self.errors.iter().take(5) {
-                writeln!(f, "\t{}", truncate_simple(error, 60))?;
+                writeln!(f, "\t{}", preserve_all(error, 60))?;
             }
         }
 

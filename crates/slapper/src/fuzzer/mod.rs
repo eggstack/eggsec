@@ -113,7 +113,7 @@ pub use diff::{DiffResult, ResponseDiff, ResponseDiffer};
 pub use engine::{FuzzEngine, FuzzResult, FuzzSession, OwaspSummary};
 pub use grammar::{Grammar, GrammarFuzzer};
 pub use mutator::generate_mutations;
-pub use payloads::{get_all_payloads, get_payloads, Payload, PayloadType, Severity};
+pub use payloads::{get_all_payloads, get_all_payloads_cached, get_payloads, get_payloads_cached, Payload, PayloadType, Severity};
 pub use rate_limit::{AdaptiveRateLimiter, RateLimiterTokenBucket};
 pub use redos_detect::{PayloadReDosChecker, ReDosDetector, ReDosResult, RegexExecutor};
 pub use state::{AuthCredentials, AuthHandler, AuthType, HttpSession, SessionManager};
