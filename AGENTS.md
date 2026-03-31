@@ -122,7 +122,7 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 
 `scanner/ports/spoofed.rs` contains raw socket scanning (feature-gated). `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled. Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing.
 
-## Current Status (2026-03-31 after Phase 7)
+## Codebase Health
 
 | Metric | Value |
 |--------|-------|
@@ -132,7 +132,14 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 | Doctests | 14 pass, 1 ignored, 0 fail |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
 | Largest file | `waf/detector/detect.rs` (195 lines) |
-| Improvement plan | All phases complete (see `plan.md`) |
+| Improvement plan | See `plan.md` (consolidated from 5 source plans) |
+
+## Planning
+
+- `plan.md` — Consolidated improvement plan with sequential phases and parallelization strategy
+- `CODE_REVIEW_PLAN.md` — Historical reference (anyhow migration + waf/detector split, completed)
+- Work items in `plan.md` are ordered by priority; the parallelization section maps tasks to sub-agents
+- Always check the "Already Complete" section in `plan.md` before starting work — some items were verified done during consolidation
 
 ## Lessons Learned
 
