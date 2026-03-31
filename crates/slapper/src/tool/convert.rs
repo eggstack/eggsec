@@ -1,6 +1,5 @@
 use crate::output::agent::{
-    AgentFinding, AttackSurface, Confidence, Evidence, FindingStatus, Remediation,
-    RemediationEffort, Severity as AgentSeverity,
+    AgentFinding, AttackSurface, Confidence, Evidence, Remediation, Severity as AgentSeverity,
 };
 use crate::tool::response::{Finding as ResponseFinding, ResponseSeverity, ToolResponse};
 

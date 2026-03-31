@@ -3,12 +3,10 @@
 use anyhow::Result;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 use crate::commands::handlers::CommandContext;
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-use slapper_plugin::Plugin;
 
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-pub async fn handle_plugin(ctx: &CommandContext, args: crate::cli::PluginArgs) -> Result<()> {
+pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) -> Result<()> {
     use crate::cli::PluginCommand;
 
     let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(None);

@@ -10,9 +10,6 @@ use std::net::IpAddr;
 use pnet::datalink::{self, NetworkInterface};
 #[cfg(all(feature = "stress-testing", unix))]
 use pnet::packet::ip::IpNextHeaderProtocols;
-#[cfg(all(feature = "stress-testing", unix))]
-use pnet::packet::tcp::MutableTcpPacket;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DecoyMode {
     Simultaneous,
@@ -480,7 +477,11 @@ pub fn get_network_interface() -> Result<NetworkInterface> {
                 && !iface.ips.is_empty()
                 && iface.ips.iter().any(|ip| ip.is_ipv4())
         })
-        .ok_or_else(|| SlapperError::Network("No suitable network interface found for raw packet sending".to_string()))
+        .ok_or_else(|| {
+            SlapperError::Network(
+                "No suitable network interface found for raw packet sending".to_string(),
+            )
+        })
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
@@ -542,4 +543,52 @@ pub fn format_spoof_warning(config: &SpoofConfig) -> String {
     warning.push_str("\nThis feature is intended for authorized security testing only.\n");
 
     warning
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    #[test]
+    fn test_random_ip_from_cidr_24() {
+        let ip = random_ip_from_cidr("10.0.0.0/24").unwrap();
+        let ip_u32 = u32::from(ip);
+        assert!(ip_u32 >= u32::from(Ipv4Addr::new(10, 0, 0, 1)));
+        assert!(ip_u32 <= u32::from(Ipv4Addr::new(10, 0, 0, 254)));
+    }
+
+    #[test]
+    fn test_random_ip_from_cidr_32() {
+        let ip = random_ip_from_cidr("192.168.1.1/32").unwrap();
+        assert_eq!(ip, Ipv4Addr::new(192, 168, 1, 1));
+    }
+
+    #[test]
+    fn test_random_ip_from_cidr_invalid() {
+        assert!(random_ip_from_cidr("invalid").is_err());
+        assert!(random_ip_from_cidr("10.0.0.0/33").is_err());
+        assert!(random_ip_from_cidr("10.0.0.0").is_err());
+    }
+
+    #[test]
+    fn test_spoof_config_default() {
+        let config = SpoofConfig::default();
+        assert!(!config.enabled);
+        assert!(!config.use_raw_sockets);
+    }
+
+    proptest! {
+        #[test]
+        fn test_random_ip_in_cidr_range(prefix in 24u8..=30) {
+            let cidr = format!("10.0.0.0/{}", prefix);
+            let ip = random_ip_from_cidr(&cidr).unwrap();
+            let ip_u32 = u32::from(ip);
+            let base_u32 = u32::from(Ipv4Addr::new(10, 0, 0, 0));
+            let host_bits = 32 - prefix;
+            let max_network = base_u32 | ((1u32 << host_bits) - 1);
+            prop_assert!(ip_u32 >= base_u32);
+            prop_assert!(ip_u32 <= max_network);
+        }
+    }
 }

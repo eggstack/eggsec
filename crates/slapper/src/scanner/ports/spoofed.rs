@@ -67,7 +67,6 @@ pub(crate) async fn scan_ports_spoofed(
     use futures::future::join_all;
     use indicatif::{ProgressBar, ProgressStyle};
     use pnet::datalink::Config;
-    use rand::Rng;
     use std::net::Ipv4Addr;
     use std::sync::Arc;
     use tokio::sync::Mutex;

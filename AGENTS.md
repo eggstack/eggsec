@@ -116,15 +116,16 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 
 `scanner/ports/spoofed.rs` contains raw socket scanning (feature-gated). `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled. Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing.
 
-## Current Status (2026-03-30)
+## Current Status (2026-03-31)
 
 | Metric | Value |
 |--------|-------|
-| Tests | 328 passing |
+| Tests | 350 passing |
 | Build | Clean compilation |
-| Clippy | 8 warnings (7 dead code + 1 duplicate if) |
-| Largest file | `waf/detector.rs` (595 lines) |
-| Ruby plugins | Compile with warnings only |
+| Clippy | 0 warnings |
+| Doctests | 14 pass, 1 ignored, 0 fail |
+| Ruby plugins | Zero warnings with `--features ruby-plugins` |
+| Largest file | `waf/detector/detect.rs` (195 lines) |
 | Improvement plan | See `plan.md` |
 
 ## Lessons Learned

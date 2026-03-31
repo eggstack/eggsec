@@ -26,8 +26,6 @@ pub async fn handle_packet_capture(
 
     #[cfg(all(feature = "packet-inspection", unix))]
     {
-        use crate::packet::capture::CaptureStats;
-
         println!("Starting packet capture...");
 
         if args.interface.is_none() {

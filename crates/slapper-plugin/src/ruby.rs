@@ -12,8 +12,8 @@ pub struct RubyPluginManager {
 
 #[cfg(feature = "ruby-plugins")]
 struct RubyPlugin {
-    name: String,
-    path: PathBuf,
+    _name: String,
+    _path: PathBuf,
 }
 
 #[cfg(feature = "ruby-plugins")]
@@ -62,8 +62,8 @@ impl RubyPluginManager {
         self.loaded_modules.insert(
             plugin_name.clone(),
             RubyPlugin {
-                name: plugin_name,
-                path: path.clone(),
+                _name: plugin_name,
+                _path: path.clone(),
             },
         );
 
@@ -106,43 +106,41 @@ impl RubyPluginManager {
                 let mut findings = Vec::new();
                 if let Ok(array_value) = value.funcall("to_a", ()) {
                     if let Ok(array) = magnus::RArray::try_convert(array_value) {
-                        for item in array.each() {
-                            if let Ok(item_value) = item {
-                                if let Ok(hash_value) = item_value.funcall("to_h", ()) {
-                                    if let Ok(hash) = magnus::RHash::try_convert(hash_value) {
-                                        let title = hash
-                                            .lookup::<_, Value>("title")
-                                            .ok()
-                                            .and_then(|v| String::try_convert(v).ok())
-                                            .unwrap_or_default();
+                        for item_value in array.into_iter() {
+                            if let Ok(hash_value) = item_value.funcall("to_h", ()) {
+                                if let Ok(hash) = magnus::RHash::try_convert(hash_value) {
+                                    let title = hash
+                                        .lookup::<_, Value>("title")
+                                        .ok()
+                                        .and_then(|v| String::try_convert(v).ok())
+                                        .unwrap_or_default();
 
-                                        let description = hash
-                                            .lookup::<_, Value>("description")
-                                            .ok()
-                                            .and_then(|v| String::try_convert(v).ok())
-                                            .unwrap_or_default();
+                                    let description = hash
+                                        .lookup::<_, Value>("description")
+                                        .ok()
+                                        .and_then(|v| String::try_convert(v).ok())
+                                        .unwrap_or_default();
 
-                                        let severity = hash
-                                            .lookup::<_, Value>("severity")
-                                            .ok()
-                                            .and_then(|v| String::try_convert(v).ok())
-                                            .unwrap_or_default();
+                                    let severity = hash
+                                        .lookup::<_, Value>("severity")
+                                        .ok()
+                                        .and_then(|v| String::try_convert(v).ok())
+                                        .unwrap_or_default();
 
-                                        let location = hash
-                                            .lookup::<_, Value>("location")
-                                            .ok()
-                                            .and_then(|v| String::try_convert(v).ok())
-                                            .unwrap_or_default();
+                                    let location = hash
+                                        .lookup::<_, Value>("location")
+                                        .ok()
+                                        .and_then(|v| String::try_convert(v).ok())
+                                        .unwrap_or_default();
 
-                                        findings.push(PluginFinding {
-                                            title,
-                                            description,
-                                            severity,
-                                            location,
-                                            evidence: None,
-                                            cve_ids: vec![],
-                                        });
-                                    }
+                                    findings.push(PluginFinding {
+                                        title,
+                                        description,
+                                        severity,
+                                        location,
+                                        evidence: None,
+                                        cve_ids: vec![],
+                                    });
                                 }
                             }
                         }

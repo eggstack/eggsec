@@ -1,4 +1,3 @@
-
 pub fn encode(s: &str) -> String {
     let mut encoded = String::new();
     for c in s.chars() {
@@ -43,6 +42,7 @@ pub fn decode(s: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn test_encode_simple() {
@@ -78,5 +78,21 @@ mod tests {
     #[test]
     fn test_decode_plus() {
         assert_eq!(decode("hello+world").unwrap(), "hello world");
+    }
+
+    proptest! {
+        #[test]
+        fn test_encode_decode_roundtrip(s in "[ -~]{0,100}") {
+            let encoded = encode(&s);
+            let decoded = decode(&encoded).unwrap();
+            prop_assert_eq!(decoded, s);
+        }
+
+        #[test]
+        fn test_decode_plus_is_space(input in "[a-zA-Z0-9]{0,20}") {
+            let encoded = format!("{}+{}", input, input);
+            let decoded = decode(&encoded).unwrap();
+            prop_assert_eq!(decoded, format!("{} {}", input, input));
+        }
     }
 }

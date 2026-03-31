@@ -1,15 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
 
 #[cfg(all(feature = "stress-testing", unix))]
-use crate::scanner::icmp_probe;
-
-#[cfg(all(feature = "stress-testing", unix))]
 use surge_ping;
-
-#[cfg(all(feature = "stress-testing", unix))]
-use rand;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TracerouteConfig {
@@ -320,7 +314,7 @@ impl Traceroute {
 
     #[cfg(all(feature = "stress-testing", unix))]
     async fn probe_hop_icmp_parallel(&self, target: IpAddr, ttl: u8) -> TracerouteHop {
-        use surge_ping::{Client, Config, PingIdentifier, PingSequence};
+        use surge_ping::{Client, Config};
 
         let mut hop = TracerouteHop::new(ttl);
         let timeout = self.config.timeout;

@@ -21,6 +21,7 @@ pub fn truncate_simple(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn test_truncate_short_string() {
@@ -56,5 +57,19 @@ mod tests {
     fn test_truncate_simple_long() {
         let result = truncate_simple("hello world this is a test", 10);
         assert_eq!(result, "hello w...");
+    }
+
+    proptest! {
+        #[test]
+        fn test_truncate_never_exceeds_max_len(s in "\\PC{0,100}", max_len in 5usize..50) {
+            let result = truncate(&s, max_len);
+            prop_assert!(result.len() <= max_len);
+        }
+
+        #[test]
+        fn test_truncate_simple_never_exceeds_max_len(s in "[ -~]{0,100}", max_len in 5usize..50) {
+            let result = truncate_simple(&s, max_len);
+            prop_assert!(result.len() <= max_len);
+        }
     }
 }

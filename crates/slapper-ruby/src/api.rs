@@ -28,7 +28,7 @@ pub fn register_api(ruby: &Ruby) -> Result<(), Error> {
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn register_http_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
+fn register_http_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
     let http = slapper.define_module("HTTP")?;
 
     http.define_module_function("get", magnus::function!(http_get, 1))?;
@@ -41,7 +41,7 @@ fn register_http_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn register_scanner_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
+fn register_scanner_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
     let scanner = slapper.define_module("Scanner")?;
 
     scanner.define_module_function("tcp_connect", magnus::function!(tcp_connect, 2))?;
@@ -52,7 +52,7 @@ fn register_scanner_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Er
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn register_fuzzer_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
+fn register_fuzzer_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
     let fuzzer = slapper.define_module("Fuzzer")?;
 
     fuzzer.define_module_function("fuzz_param", magnus::function!(fuzz_param, 4))?;
@@ -64,7 +64,7 @@ fn register_fuzzer_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Err
 }
 
 #[cfg(feature = "ruby-plugins")]
-fn register_reporting_api(ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
+fn register_reporting_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), Error> {
     let report = slapper.define_module("Report")?;
 
     report.define_module_function("finding", magnus::function!(report_finding, 4))?;
@@ -579,7 +579,7 @@ static MSF_CLIENT: std::sync::OnceLock<tokio::sync::Mutex<Option<MsfClientState>
 
 struct MsfClientState {
     client: crate::msf::MsfClient,
-    url: String,
+    _url: String,
 }
 
 #[cfg(feature = "ruby-plugins")]
@@ -600,13 +600,16 @@ fn msf_connect(_ruby: &Ruby, url: String, username: String, password: String) ->
         timeout_secs: 30,
     };
 
-    let mut client = crate::msf::MsfClient::new(config);
+    let mut client = match crate::msf::MsfClient::new(config) {
+        Ok(c) => c,
+        Err(e) => return Err(runtime_error(_ruby, e.to_string())),
+    };
 
     let result = rt.block_on(async { client.connect().await });
 
     match result {
         Ok(()) => {
-            let state = MsfClientState { client, url };
+            let state = MsfClientState { client, _url: url };
             let rt = get_runtime();
             rt.block_on(async {
                 let mut guard = get_msf_client().lock().await;
@@ -631,8 +634,11 @@ fn msf_connect_with_token(_ruby: &Ruby, url: String, token: String) -> Result<bo
         timeout_secs: 30,
     };
 
-    let client = crate::msf::MsfClient::new(config);
-    let state = MsfClientState { client, url };
+    let client = match crate::msf::MsfClient::new(config) {
+        Ok(c) => c,
+        Err(e) => return Err(runtime_error(_ruby, e.to_string())),
+    };
+    let state = MsfClientState { client, _url: url };
 
     rt.block_on(async {
         let mut guard = get_msf_client().lock().await;

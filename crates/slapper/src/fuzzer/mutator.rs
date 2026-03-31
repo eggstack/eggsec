@@ -1,4 +1,3 @@
-
 use crate::utils::urlencoding;
 use rand::rngs::SmallRng;
 use rand::Rng;
@@ -203,4 +202,40 @@ pub fn generate_mutations(payload: &str, count: usize) -> Vec<String> {
 
     mutations.truncate(count + 1);
     mutations
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    #[test]
+    fn test_generate_mutations_count() {
+        let mutations = generate_mutations("' OR 1=1--", 5);
+        assert!(mutations.len() <= 6); // original + up to 5 mutations
+        assert!(mutations.len() >= 1); // at least the original
+    }
+
+    #[test]
+    fn test_generate_mutations_includes_original() {
+        let mutations = generate_mutations("test", 3);
+        assert_eq!(mutations[0], "test");
+    }
+
+    #[test]
+    fn test_generate_mutations_unique() {
+        let mutations = generate_mutations("' OR 1=1--", 10);
+        let mut unique = mutations.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(mutations.len(), unique.len());
+    }
+
+    proptest! {
+        #[test]
+        fn test_generate_mutations_returns_at_most_count_plus_one(payload in "[ -~]{1,30}", count in 1usize..10) {
+            let mutations = generate_mutations(&payload, count);
+            prop_assert!(mutations.len() <= count + 1);
+        }
+    }
 }

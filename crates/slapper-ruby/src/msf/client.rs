@@ -17,21 +17,21 @@ pub struct MsfClient {
 }
 
 impl MsfClient {
-    pub fn new(config: MsfConfig) -> Self {
+    pub fn new(config: MsfConfig) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .danger_accept_invalid_certs(!config.verify_ssl)
             .build()
-            .expect("Failed to create HTTP client");
+            .context("Failed to create HTTP client")?;
 
-        Self {
+        Ok(Self {
             client,
             config,
             connection: None,
-        }
+        })
     }
 
-    pub fn from_url(url: &str) -> Self {
+    pub fn from_url(url: &str) -> Result<Self> {
         Self::new(MsfConfig {
             url: url.to_string(),
             ..Default::default()

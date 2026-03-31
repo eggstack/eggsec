@@ -3,22 +3,14 @@ use crate::error::{Result, SlapperError};
 #[cfg(all(feature = "stress-testing", unix))]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(all(feature = "stress-testing", unix))]
-use std::sync::Arc;
-#[cfg(all(feature = "stress-testing", unix))]
 use std::time::{Duration, Instant};
 
 #[cfg(all(feature = "stress-testing", unix))]
 use pnet::datalink::{self, Channel::Ethernet, Config, NetworkInterface};
 #[cfg(all(feature = "stress-testing", unix))]
-use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
-#[cfg(all(feature = "stress-testing", unix))]
 use pnet::packet::ip::IpNextHeaderProtocols;
 #[cfg(all(feature = "stress-testing", unix))]
-use pnet::packet::ipv4::Ipv4Packet;
-#[cfg(all(feature = "stress-testing", unix))]
-use pnet::packet::tcp::{TcpFlags, TcpPacket};
-#[cfg(all(feature = "stress-testing", unix))]
-use pnet::packet::Packet;
+use pnet::packet::tcp::TcpFlags;
 
 #[cfg(all(feature = "stress-testing", unix))]
 use rand::Rng;

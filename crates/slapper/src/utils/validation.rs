@@ -50,6 +50,7 @@ pub fn validate_rate_limit(rps: u32) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn test_validate_url_valid() {
@@ -104,5 +105,22 @@ mod tests {
     #[test]
     fn test_validate_rate_limit_zero() {
         assert!(validate_rate_limit(0).is_err());
+    }
+
+    proptest! {
+        #[test]
+        fn test_validate_concurrency_in_range_passes(val in 1usize..scan::DEFAULT_PORT_CONCURRENCY) {
+            prop_assert!(validate_concurrency(val).is_ok());
+        }
+
+        #[test]
+        fn test_validate_timeout_in_range_passes(val in 1u64..http::DEFAULT_TIMEOUT_SECS * 10) {
+            prop_assert!(validate_timeout(val).is_ok());
+        }
+
+        #[test]
+        fn test_validate_rate_limit_in_range_passes(val in 1u32..10000) {
+            prop_assert!(validate_rate_limit(val).is_ok());
+        }
     }
 }

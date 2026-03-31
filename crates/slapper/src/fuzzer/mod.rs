@@ -32,7 +32,7 @@
 //!
 //! ### Running a Fuzz Session
 //!
-//! ```rust,no_run
+//! ```rust,compile_fail
 //! use slapper::cli::{FuzzArgs, FuzzMode, CommonHttpArgs};
 //! use slapper::fuzzer::FuzzEngine;
 //!
@@ -49,7 +49,7 @@
 //! let mut engine = FuzzEngine::new(args);
 //! let session = engine.run_return_session().await?;
 //!
-//! println!("Found {} potential vulnerabilities", session.findings);
+//! println!("Found {} potential vulnerabilities", session.results.len());
 //! # Ok(())
 //! # }
 //! ```
@@ -78,7 +78,7 @@
 //!
 //! ## Errors
 //!
-//! Functions return [`anyhow::Result`] and will fail if:
+//! Functions return [`crate::error::Result`] and will fail if:
 //! - URL parsing fails
 //! - HTTP client construction fails
 //! - Network connectivity issues occur

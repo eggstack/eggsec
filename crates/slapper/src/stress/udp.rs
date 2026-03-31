@@ -3,7 +3,7 @@ use crate::error::{Result, SlapperError};
 #[cfg(feature = "stress-testing")]
 use rand::Rng;
 #[cfg(feature = "stress-testing")]
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 #[cfg(feature = "stress-testing")]
 use std::sync::Arc;
 #[cfg(feature = "stress-testing")]

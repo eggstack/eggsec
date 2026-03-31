@@ -11,7 +11,6 @@ use crate::constants::DEFAULT_CONFIG_FILE;
 #[cfg(feature = "stress-testing")]
 pub async fn handle_stress(ctx: &CommandContext, args: crate::cli::StressArgs) -> Result<()> {
     use crate::stress::{StressConfig, StressType, StressTest};
-    use crate::types::SensitiveString;
 
     ctx.ensure_scope(&args.target)?;
 

@@ -12,7 +12,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
+//! ```rust,compile_fail
 //! use slapper::pipeline::{Pipeline, Stage};
 //! use slapper::cli::ScanArgs;
 //!

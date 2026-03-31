@@ -35,6 +35,17 @@
 //! - `rest-api` / `grpc-api` - API server integration
 //! - `nse` - Nmap NSE script support
 //! - `full` - All features combined
+//!
+//! ## Error Handling
+//!
+//! Core library modules use [`SlapperError`] (via [`Result`]) as the canonical
+//! error type. Each variant maps to a failure domain (network, config, scan, etc.).
+//! Command handlers and binary entry points use `anyhow::Result` for convenience;
+//! `.map_err()` bridges convert between the two at call-site boundaries.
+//!
+//! Prefer `SlapperError` variants over `anyhow!()` in library code. Use
+//! `From` impls (e.g., `From<std::io::Error>`) for automatic conversion from
+//! third-party error types.
 
 #![allow(clippy::too_many_arguments)] // CLI structs like FuzzArgs, ScanArgs need 20+ fields
 #![allow(clippy::new_without_default)] // Builder patterns prefer explicit new()

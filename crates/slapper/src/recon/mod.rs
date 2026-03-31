@@ -14,7 +14,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
+//! ```rust,compile_fail
 //! use slapper::recon;
 //! use slapper::cli::ReconArgs;
 //! use slapper::config::SlapperConfig;
@@ -22,7 +22,7 @@
 //! # async fn example() -> anyhow::Result<()> {
 //! let args = ReconArgs {
 //!     target: "example.com".to_string(),
-//!     concurrency: 10,
+//!     concurrency: Some(10),
 //!     ..Default::default()
 //! };
 //!

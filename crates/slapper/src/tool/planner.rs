@@ -1,7 +1,7 @@
-use crate::tool::traits::{AttackSurface, ToolCapability};
+use crate::tool::traits::AttackSurface;
 use crate::tool::{ToolInfo, ToolRegistry};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionPlan {

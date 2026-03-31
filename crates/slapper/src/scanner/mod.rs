@@ -47,27 +47,28 @@
 //! ### Endpoint Discovery
 //!
 //! ```rust,no_run
-//! use slapper::scanner::scan_endpoints;
-//! use slapper::cli::CommonHttpArgs;
+//! use slapper::scanner::{scan_endpoints, SpoofConfig};
+//! use std::time::Duration;
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! let results = scan_endpoints(
 //!     "https://example.com",
-//!     "wordlists/common.txt",
+//!     vec!["admin".to_string(), "login".to_string()],
 //!     20,  // concurrency
-//!     30,  // timeout_secs
+//!     Duration::from_secs(30),
+//!     false,  // include_404
 //!     false,  // tui_mode
-//!     CommonHttpArgs::default(),
+//!     SpoofConfig::default(),
 //! ).await?;
 //!
-//! println!("Found {} endpoints", results.endpoints.len());
+//! println!("Found {} endpoints", results.results.len());
 //! # Ok(())
 //! # }
 //! ```
 //!
 //! ## Errors
 //!
-//! Functions return [`anyhow::Result`] and will fail if:
+//! Functions return [`crate::error::Result`] and will fail if:
 //! - DNS resolution fails for the target host
 //! - Network connectivity issues occur
 //! - Invalid port ranges are specified

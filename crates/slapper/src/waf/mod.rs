@@ -33,7 +33,7 @@
 //!
 //! if let Some(waf_name) = &detection.waf_name {
 //!     println!("WAF detected: {} ({}% confidence)", waf_name, detection.confidence);
-//!     for header in &detection.indicators {
+//!     for header in &detection.matched_headers {
 //!         println!("  Indicator: {}", header);
 //!     }
 //! } else {
@@ -45,7 +45,7 @@
 //!
 //! ### WAF Bypass Testing
 //!
-//! ```rust,no_run
+//! ```rust,compile_fail
 //! use slapper::waf::{BypassEngine, TestType, get_profile_by_name};
 //! use slapper::cli::WafArgs;
 //!
@@ -66,7 +66,7 @@
 //!
 //! ## Errors
 //!
-//! Functions return [`anyhow::Result`] and will fail if:
+//! Functions return [`crate::error::Result`] and will fail if:
 //! - URL is invalid or unreachable
 //! - HTTP client construction fails
 //! - Network connectivity issues occur

@@ -101,6 +101,7 @@ impl std::fmt::Display for SessionType {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct Platform {
     pub name: String,
     pub arch: Option<String>,
@@ -117,6 +118,7 @@ pub struct ModuleOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct AdvancedOption {
     pub default: Option<String>,
     pub desc: Option<String>,

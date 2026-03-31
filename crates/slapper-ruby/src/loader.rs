@@ -53,7 +53,7 @@ impl PluginLoader {
                 let path = entry.path();
 
                 if path.extension().map(|e| e == "rb").unwrap_or(false) {
-                    let bridge = self.bridge.lock().unwrap();
+                    let bridge = self.bridge.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
                     if let Ok(plugin) = bridge.load_plugin(&path) {
                         tracing::info!(
                             name = %plugin.name,
@@ -72,7 +72,7 @@ impl PluginLoader {
     }
 
     pub fn load_plugin(&mut self, path: &Path) -> Result<RubyPlugin> {
-        let bridge = self.bridge.lock().unwrap();
+        let bridge = self.bridge.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let plugin = bridge.load_plugin(path)?;
         self.loaded_plugins.push(plugin.clone());
         Ok(plugin)
@@ -85,7 +85,7 @@ impl PluginLoader {
             .find(|p| p.name == name)
             .ok_or_else(|| anyhow!("Plugin not found: {}", name))?;
 
-        let bridge = self.bridge.lock().unwrap();
+        let bridge = self.bridge.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         bridge.run_plugin(plugin, target)
     }
 
@@ -155,7 +155,7 @@ impl Plugin for RubyPluginAdapter {
             anyhow::bail!("Unknown check: {}", check_name);
         }
 
-        let bridge = self.bridge.lock().unwrap();
+        let bridge = self.bridge.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let ruby_result = bridge.run_plugin(&self.plugin, target)?;
         let execution_time_ms = start.elapsed().as_millis() as u64;
 

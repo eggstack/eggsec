@@ -24,6 +24,7 @@ pub struct PayloadOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct PayloadConfig {
     pub payload: String,
     pub lhost: String,
@@ -36,6 +37,7 @@ pub struct PayloadConfig {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[allow(dead_code)]
 pub enum PayloadFormat {
     #[default]
     #[serde(rename = "raw")]
@@ -113,6 +115,7 @@ impl std::str::FromStr for PayloadFormat {
     }
 }
 
+#[allow(dead_code)]
 impl PayloadConfig {
     pub fn new(payload: String, lhost: String, lport: u16) -> Self {
         Self {

@@ -1,4 +1,3 @@
-
 use anyhow::{anyhow, Result};
 use std::net::{IpAddr, ToSocketAddrs};
 
@@ -67,6 +66,7 @@ pub fn resolve_host(host: &str) -> Result<IpAddr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn test_parse_ports_single() {
@@ -102,6 +102,35 @@ mod tests {
         assert!(parse_ports("abc").is_err());
     }
 
+    proptest! {
+        #[test]
+        fn test_parse_ports_all_valid_u16(port in 1u16..65535) {
+            let spec = port.to_string();
+            let ports = parse_ports(&spec).unwrap();
+            prop_assert_eq!(ports, vec![port]);
+        }
+
+        #[test]
+        fn test_parse_ports_range_property(start in 1u16..65530, len in 1u16..10) {
+            let end = start.saturating_add(len).min(65535);
+            let spec = format!("{}-{}", start, end);
+            let ports = parse_ports(&spec).unwrap();
+            let expected_count = (end - start + 1) as usize;
+            prop_assert_eq!(ports.len(), expected_count);
+            prop_assert_eq!(ports[0], start);
+            prop_assert_eq!(*ports.last().unwrap(), end);
+        }
+
+        #[test]
+        fn test_parse_ports_returns_valid_ports(port in 1u16..65535) {
+            let spec = format!("{},80,443", port);
+            let ports = parse_ports(&spec).unwrap();
+            for p in &ports {
+                prop_assert!(*p >= 1);
+            }
+        }
+    }
+
     #[test]
     fn test_parse_headers_valid() {
         let headers = vec!["Content-Type: application/json".to_string()];
@@ -129,6 +158,16 @@ mod tests {
         assert!(parsed.is_empty());
     }
 
+    proptest! {
+        #[test]
+        fn test_parse_headers_key_always_nonempty(key in "[a-zA-Z][a-zA-Z0-9-]*", value in "[ -~]{0,50}") {
+            let header = format!("{}: {}", key, value);
+            let parsed = parse_headers(&[header]);
+            prop_assert!(!parsed.is_empty());
+            prop_assert_eq!(&parsed[0].0, key.trim());
+        }
+    }
+
     #[test]
     fn test_parse_url_valid() {
         let url = parse_url("https://example.com/path").unwrap();
@@ -151,5 +190,23 @@ mod tests {
     #[test]
     fn test_parse_url_validated_no_host() {
         assert!(parse_url_validated("https://").is_err());
+    }
+
+    proptest! {
+        #[test]
+        fn test_parse_url_validated_accepts_http_https(host in "[a-z][a-z0-9]{0,10}\\.[a-z]{2,4}", scheme in proptest::sample::select(vec!["http", "https"])) {
+            let url = format!("{}://{}/path", scheme, host);
+            let parsed = parse_url_validated(&url);
+            prop_assert!(parsed.is_ok());
+            let parsed = parsed.unwrap();
+            prop_assert_eq!(parsed.scheme(), scheme);
+        }
+
+        #[test]
+        fn test_parse_url_validated_rejects_non_http(scheme in proptest::sample::select(vec!["ftp", "file", "ssh", "telnet", "mailto"])) {
+            let url = format!("{}://example.com", scheme);
+            let result = parse_url_validated(&url);
+            prop_assert!(result.is_err());
+        }
     }
 }
