@@ -1,6 +1,6 @@
 # Slapper Consolidated Improvement Plan
 
-Consolidated from CODE_REVIEW_PLAN.md, plan2.md, plan3.md, plan4.md, and plan5.md on 2026-03-31.
+Consolidated from plan2.md, plan3.md, plan4.md, and plan5.md on 2026-03-31.
 
 ## Current Status
 
@@ -10,14 +10,14 @@ Consolidated from CODE_REVIEW_PLAN.md, plan2.md, plan3.md, plan4.md, and plan5.m
 | Build | Clean compilation |
 | Clippy | 1 warning (MSRV `is_multiple_of`, non-blocking) |
 | Doctests | 14 pass, 1 ignored, 0 fail |
-| `SlapperError` variants | 23 (Fingerprint added) |
-| `waf/detector/` split | Complete (6 files, all <200 lines) |
-| `anyhow::Result` in core | 0 (policy documented in lib.rs) |
-| Doc examples using `anyhow::Result` | 0 |
-| `once_cell` in slapper | 0 |
-| `mcp-server` feature | Removed |
+| `SlapperError` variants | 23 |
+| `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
 | MSRV | 1.80 |
-| Large files (>1000 lines) | 1 file (tui/workers/runner.rs 1192) |
+| `thiserror` | 2.x |
+| Largest file | `tui/workers/runner.rs` (1192 lines) |
+| `mcp-server` feature | Removed |
+| `native-tls` in slapper | Migrated to `rustls` |
+| prost/prost-build | Both 0.13 |
 
 ## Already Complete
 
@@ -26,14 +26,14 @@ These items from the source plans are confirmed done:
 - `waf/detector.rs` split into `waf/detector/` directory (6 files, all <200 lines)
 - `SlapperError` has 23 variants (Proxy, Recon, LoadTest, Fingerprint added)
 - Core library modules migrated from `anyhow::Result` to `crate::error::Result`
-- `lib.rs` documents anyhow usage policy (lines 39-48)
+- `lib.rs` documents anyhow usage policy
 - Severity import paths in `fuzzer/engine/` use correct re-export path
-- `unreachable!` in `fuzzer/chain.rs:148` already replaced with error return
-- NSE `duration_since` unwraps already replaced with `unwrap_or_default()`
+- `unreachable!` in `fuzzer/chain.rs:148` replaced with error return
+- NSE `duration_since` unwraps replaced with `unwrap_or_default()`
 - Ruby plugins zero warnings with `--features ruby-plugins`
 - prost/prost-build both at 0.13.5
 - Config reloading uses `ctx.config` directly (no `load_config()` re-reads)
-- Port scanner records open/closed/filtered states
+- Port scanner records open/closed/filtered states (3 match arms in `scanner/ports/mod.rs:306-327`)
 - `InvalidHeaderValue` `From` impl added
 - Doc examples use `slapper::error::Result` (0 using `anyhow::Result`)
 - Unused `_config` parameters removed from `fuzzer::run_cli`, `fuzzer::run_waf_stress`, `waf::run_cli`
@@ -48,319 +48,793 @@ These items from the source plans are confirmed done:
 - `SlapperError` doc examples expanded with helper method usage
 - CI workflow updated with plugin feature checks
 - Feature flag integration test added (`tests/feature_tests.rs`)
+- Scope enforcement audit complete (`tests/scope_tests.rs` added)
+- Circuit breaker implemented (`utils/circuit_breaker.rs`)
+- Sensitive data logging audit complete (`SensitiveString` helpers added)
+- Payload lazy loading implemented (`fuzzer/payloads/mod.rs` uses `LazyLock`)
+- Truncation functions renamed (`strip_controls`, `preserve_all`)
 
 ---
 
-## Phase 1: Critical Fixes (High Priority)
+## Wave 1: Quick Bug Fixes (Independent, Low Risk)
 
-Independent tasks — run in parallel with 3 sub-agents.
+These tasks are independent, touch different files, and can all run in parallel.
 
-### 1.1 Fix prost/prost-build Version Mismatch
+### 1.1 Remove Duplicated Keybinding Block in TUI Runner
 
-**Problem:** `prost` 0.13 declared alongside `prost-build` 0.12. Lockfile resolves both versions, doubling compilation time and risking incompatibility.
+**Problem:** `tui/app/runner.rs:284-332` contains a verbatim duplicate of lines 226-277. Dead code from a bad merge.
 
-**File:** `crates/slapper/Cargo.toml`
+**File:** `crates/slapper/src/tui/app/runner.rs`
 
-Upgrade prost-build from 0.12 to 0.13 (backward-compatible):
-```toml
-[build-dependencies.prost-build]
-version = "0.13"
-optional = true
+**Fix:** Delete lines 284-332 entirely.
+
+**Verify:** `cargo check -p slapper && cargo clippy --lib -p slapper`
+
+**Effort:** 5 min | **Risk:** None
+
+---
+
+### 1.2 Fix Mouse Tab Click Calculation
+
+**Problem:** `tui/app/runner.rs:75-77` uses hardcoded `/ 15` for tab width and `< 15` limit. There are actually 22 tabs. Tabs 15-21 are unreachable by mouse click.
+
+**File:** `crates/slapper/src/tui/app/runner.rs:51-82`
+
+**Fix:** Use `Tab::all().len()` dynamically:
+```rust
+let tab_count = crate::tui::tabs::Tab::all().len() as u16;
+let tab_width = tab_area.width / tab_count;
+if tab_width == 0 { return; }
+let tab_index = (mouse_event.column.saturating_sub(tab_area.x) / tab_width) as usize;
+if tab_index < tab_count as usize { app.select_tab(tab_index); }
 ```
 
-If tonic 0.12 doesn't support prost 0.13, upgrade tonic to 0.13 as well.
+**Verify:** `cargo check -p slapper`
 
-**Verify:**
-```bash
-cargo update -p prost-build -p prost -p tonic
-cargo check -p slapper --features grpc-api
-cargo test -p slapper --features grpc-api
-```
+**Effort:** 10 min | **Risk:** Low
+
+---
+
+### 1.3 Fix WebSocket/gRPC `PayloadType` Misclassification
+
+**Problem:** `websocket.rs` and `grpc.rs` set `payload_type: PayloadType::GraphQL` in `get_payloads()`. There is no `PayloadType::WebSocket` variant.
+
+**Files:**
+- `crates/slapper/src/fuzzer/payloads/websocket.rs` — lines 267, 275, 283
+- `crates/slapper/src/fuzzer/payloads/grpc.rs` — lines 320, 328
+- `crates/slapper/src/fuzzer/payloads/mod.rs` — enum at lines 31-54
+
+**Fix:**
+1. Add `WebSocket` variant to `PayloadType` enum (after `Grpc`)
+2. Add `Display` arm: `PayloadType::WebSocket => write!(f, "WebSocket")`
+3. Add to `all_variants()` slice
+4. Add match arm in `get_payloads()`: `PayloadType::WebSocket => websocket::get_payloads()`
+5. Fix `websocket.rs` to use `PayloadType::WebSocket`
+6. Fix `grpc.rs` to use `PayloadType::Grpc`
+
+**Verify:** `cargo test -p slapper -- websocket grpc`
 
 **Effort:** 15 min | **Risk:** Low
 
-### 1.2 Fix Config Reloading in Command Handlers
+---
 
-**Problem:** `handle_report` (4 call sites) and `handle_proxy` (3 call sites via `stress.rs`) call `load_config(ctx.config_path())` to re-read config from disk, bypassing already-loaded `ctx.config`.
+### 1.4 Fix Port Scanner Error Logging
 
-**Files:**
-- `crates/slapper/src/commands/handlers/report.rs` (lines 82, 102, 126, 142)
-- `crates/slapper/src/commands/handlers/stress.rs` (lines 71, 101, 127)
-
-Replace each `load_config(ctx.config_path())?` with `&ctx.config` (read-only) or `ctx.config.clone()` (if mutation needed). Remove unused `load_config` imports.
-
-**Verify:**
-```bash
-cargo check -p slapper --features full
-cargo test -p slapper --features full
-```
-
-**Effort:** 20 min | **Risk:** Low
-
-### 1.3 Fix Port Scanner Error Swallowing
-
-**Problem:** `scanner/ports/mod.rs:301-317` — the async spawn block only records open ports (`Ok(Ok(_))`). Closed and filtered ports are silently dropped, making it impossible to distinguish "filtered" from "closed".
+**Problem:** Port scanner at `scanner/ports/mod.rs:314-327` classifies errors with zero diagnostic logging.
 
 **File:** `crates/slapper/src/scanner/ports/mod.rs`
 
-Add match arms for each outcome:
-- `Ok(Ok(_))` → port open (already handled)
-- `Ok(Err(_))` → connection refused → port closed
-- `Err(_)` → timeout → port filtered
-
-**Verify:**
-```bash
-cargo check -p slapper
-cargo test -p slapper -- scanner
+**Fix:** Add `tracing::debug!` to each match arm:
+```rust
+Ok(Err(e)) => { tracing::debug!("Port {} closed on {}: {}", port, host, e); ... }
+Err(_) => { tracing::debug!("Port {} filtered (timeout) on {}", port, host); ... }
 ```
+
+Also fix `ports_scanned: ports_count as u16` (line 349) — change `PortScanResults.ports_scanned` field to `u32` or `usize`.
+
+**Verify:** `cargo check -p slapper`
+
+**Effort:** 15 min | **Risk:** None
+
+---
+
+### 1.5 Fix `CircuitBreakerRegistry::get_state()` Stub
+
+**Problem:** `utils/circuit_breaker.rs:157-159` — `get_state()` always returns `None`. Stub never implemented.
+
+**File:** `crates/slapper/src/utils/circuit_breaker.rs`
+
+**Fix:** Implement properly:
+```rust
+pub async fn get_state(&self, name: &str) -> Option<CircuitState> {
+    let breakers = self.breakers.lock().await;
+    breakers.get(name).map(|b| b.get_state().clone())
+}
+```
+
+**Verify:** `cargo test -p slapper -- circuit_breaker`
+
+**Effort:** 5 min | **Risk:** Low (no external callers)
+
+---
+
+### 1.6 Fix Conflicting `/` Key Binding
+
+**Problem:** `runner.rs:144` toggles command palette, `runner.rs:345` toggles search. Due to match ordering, search toggle is unreachable.
+
+**File:** `crates/slapper/src/tui/app/runner.rs` — lines 144, 345
+
+**Fix:** Decide which behavior `/` should have, remove the unreachable arm. If both needed, assign different keys.
+
+**Effort:** 5 min | **Risk:** Low
+
+---
+
+### 1.7 Fix Double `event::read()` in Event Loop
+
+**Problem:** Two `event::read()` calls per loop iteration (lines 92 and 380). Second call can block or lose events.
+
+**File:** `crates/slapper/src/tui/app/runner.rs` — lines 92, 380
+
+**Fix:** Use a single `event::read()` and match on the variant:
+```rust
+let event = event::read()?;
+match event {
+    Event::Key(key) => { /* handle key */ }
+    Event::Mouse(mouse_event) => { handle_mouse_event(mouse_event, app); }
+    _ => {}
+}
+```
+
+**Verify:** `cargo check -p slapper`
+
+**Effort:** 15 min | **Risk:** Low
+
+---
+
+## Wave 2: Security Fixes
+
+### 2.1 Fix XSS in HTML Report Converter
+
+**Problem:** `convert_to_html` directly interpolates `report.target`, `report.scan_type`, `report.timestamp` into HTML without escaping.
+
+**File:** `crates/slapper/src/output/convert.rs` — lines 172-213
+
+**Fix:** Add `html_escape(s: &str) -> String` helper that escapes `&`, `<`, `>`, `"`, `'`. Apply to all interpolated fields.
+
+**Verify:** `cargo test -p slapper -- convert`
+
+**Effort:** 20 min | **Risk:** Low
+
+---
+
+### 2.2 Fix JUnit XML Attribute Escaping
+
+**Problem:** XML attributes written without escaping. Special characters in hostnames/messages produce malformed XML.
+
+**File:** `crates/slapper/src/output/junit.rs` — lines 313-343
+
+**Fix:** Use `quick_xml`'s built-in escaping or add `xml_escape` helper. Verify if `quick_xml::events::BytesStart::push_attribute` already handles escaping.
+
+**Verify:** `cargo test -p slapper -- junit`
+
+**Effort:** 20 min | **Risk:** Low
+
+---
+
+### 2.3 Fix JUnit XML Empty Numeric Attributes in `convert.rs`
+
+**Problem:** `convert_to_junit` produces `<testsuites tests="" failures="" errors="" time="">` with empty string attributes.
+
+**File:** `crates/slapper/src/output/convert.rs` — line 55
+
+**Fix:** Compute actual counts and use numeric values.
+
+**Effort:** 15 min | **Risk:** Low
+
+---
+
+### 2.4 Fix Discord Token Regex (Actually Slack Pattern)
+
+**Problem:** `recon/secrets.rs:277` uses `xox[baprs]-` pattern (Slack tokens) but labels it as `SecretType::DiscordToken`.
+
+**File:** `crates/slapper/src/recon/secrets.rs` — line 277
+
+**Fix:** Change to `SecretType::SlackToken`, add proper Discord token pattern.
+
+**Verify:** `cargo test -p slapper -- secrets`
+
+**Effort:** 10 min | **Risk:** None
+
+---
+
+### 2.5 Fix Wildcard Scope Matching Apex Domain
+
+**Problem:** `*.example.com` matches both `sub.example.com` AND `example.com` (line 166). Most bug-bounty programs exclude apex from wildcard scope.
+
+**File:** `crates/slapper/src/config/scope.rs` — line 166
+
+**Fix:** Change wildcard matching to NOT match apex domain:
+```rust
+if self.pattern.starts_with("*.") {
+    let suffix = &self.pattern[1..]; // ".example.com"
+    return target.host.ends_with(suffix); // Only subdomains
+}
+```
+
+**Verify:** `cargo test -p slapper -- scope`
+
+**Effort:** 10 min | **Risk:** Low (behavior change, more correct)
+
+---
+
+### 2.6 Fix DNS Rebinding TOCTOU in Scope Checking
+
+**Problem:** `TargetScope::parse()` resolves hostname to IP at scope-check time. The actual scan later may resolve to a different IP.
+
+**File:** `crates/slapper/src/config/scope.rs` — lines 193-208
+
+**Fix:** Add `pinned_ip: Option<IpAddr>` field to `TargetScope`. Before executing network operations, re-resolve and compare.
+
+**Verify:** `cargo test -p slapper -- scope`
+
+**Effort:** 45 min | **Risk:** Low
+
+---
+
+### 2.7 Use `SensitiveString` for Webhook URLs and TUI Credentials
+
+**Problem:** Webhook URLs are plain `String` in config. TUI `GlobalHttpOptions` uses plain `String` for credentials.
+
+**Files:**
+- `crates/slapper/src/config/settings.rs` — lines 419-425
+- `crates/slapper/src/tui/app/options.rs` — lines 5-9
+
+**Fix:** Change to `Option<SensitiveString>`. Update TUI display to show `[REDACTED]`.
+
+**Verify:** `cargo check -p slapper && cargo test -p slapper`
 
 **Effort:** 30 min | **Risk:** Low
 
 ---
 
-## Phase 2: Quick Fixes (Medium Priority)
+### 2.8 Add Scope Enforcement to TUI Task Runners
 
-All independent — run in parallel with sub-agents.
+**Problem:** CLI command handlers call `ctx.ensure_scope()` before execution. TUI task runners in `workers/runner.rs` have zero scope validation.
 
-### 2.1 Add `Fingerprint` Error Variant
+**File:** `crates/slapper/src/tui/workers/runner.rs`
 
-**Problem:** `scanner/fingerprint.rs` modules lack a dedicated error variant for categorization.
+**Fix:** Add `scope: Option<Arc<Scope>>` field to `TaskRunner`. Add scope check at start of each `run_*` method.
 
-**File:** `crates/slapper/src/error/mod.rs`
+**Verify:** `cargo check -p slapper`
 
-Add after existing variants:
-```rust
-#[error("Fingerprint error: {0}")]
-Fingerprint(String),
-```
-
-**Effort:** 5 min | **Risk:** None
-
-### 2.2 Add `InvalidHeaderValue` From Implementation
-
-**Problem:** No `From<reqwest::header::InvalidHeaderValue>` impl, requiring manual `.map_err()` at every call site.
-
-**File:** `crates/slapper/src/error/mod.rs`
-
-```rust
-impl From<reqwest::header::InvalidHeaderValue> for SlapperError {
-    fn from(e: reqwest::header::InvalidHeaderValue) -> Self {
-        SlapperError::Http(format!("Invalid header value: {}", e))
-    }
-}
-```
-
-**Effort:** 5 min | **Risk:** None
-
-### 2.3 Update Doc Examples (11 instances)
-
-**Problem:** 11 doc examples in core library modules still use `anyhow::Result` instead of `slapper::error::Result`.
-
-**Files (8 mod.rs files):**
-
-| File | Lines |
-|------|-------|
-| `fuzzer/mod.rs` | 39 |
-| `waf/mod.rs` | 30, 52 |
-| `scanner/mod.rs` | 30, 53 |
-| `recon/mod.rs` | 22 |
-| `pipeline/mod.rs` | 19 |
-| `loadtest/mod.rs` | 18 |
-| `distributed/mod.rs` | 20, 32 |
-| `utils/mod.rs` | 20 |
-
-Change `anyhow::Result<()>` → `slapper::error::Result<()>` in each.
-
-**Verify:** `cargo test --doc -p slapper`
-
-**Effort:** 15 min | **Risk:** None
-
-### 2.4 Remove Unused `_config` Parameters
-
-**Problem:** Three `run_cli` functions accept `_config: &SlapperConfig` but never use it.
-
-**Files:**
-- `crates/slapper/src/fuzzer/mod.rs:134` — `run_cli(args, _config)`
-- `crates/slapper/src/fuzzer/mod.rs:153` — `run_waf_stress(args, _config)`
-- `crates/slapper/src/waf/mod.rs:102` — `run_cli(args, _config)`
-
-**Callers to update (~10 sites):**
-- `commands/handlers/fuzz.rs:6,11,16`
-- `commands/fuzz_convert.rs:85,90`
-- `pipeline/executor.rs:447`
-- `distributed/worker.rs:401`
-- `tool/implementations/fuzzer.rs:156`
-- `tool/implementations/waf.rs:112,132,145`
-
-**Verify:**
-```bash
-cargo check -p slapper --features full
-cargo test -p slapper --features full
-```
-
-**Effort:** 15 min | **Risk:** Low (internal callers only)
-
-### 2.5 Remove Deprecated `mcp-server` Feature
-
-**Problem:** `mcp-server` feature is marked DEPRECATED but still present as alias for `rest-api`.
-
-**File:** `crates/slapper/Cargo.toml`
-
-Remove `mcp-server = ["rest-api"]` line. Update 4 `#[cfg(feature = "mcp-server")]` references:
-- `cli/mod.rs:120`
-- `commands/handlers/mod.rs:100`
-- `commands/handlers/notify.rs:93`
-- `cli/misc.rs:253`
-
-**Effort:** 10 min | **Risk:** Low
+**Effort:** 1 hour | **Risk:** Medium (TUI integration)
 
 ---
 
-## Phase 3: Dependency Updates (Medium Priority)
+### 2.9 Fix ip-api.com HTTP (Not HTTPS) Fallback
 
-All independent except 3.2 depends on 3.3 (LazyLock requires MSRV 1.80+).
+**Problem:** Uses `http://` (not `https://`) for ip-api.com. Leaks reconnaissance activity.
 
-### 3.1 Upgrade `thiserror` to 2.x
+**File:** `crates/slapper/src/recon/geolocation.rs` — line 484
 
-**Problem:** `thiserror` 1.x used; 2.x has improved derive macros and faster compilation.
-
-**File:** `crates/slapper/Cargo.toml`
-
-Change `thiserror = "1"` → `thiserror = "2"`.
-
-API is backward-compatible for the `#[derive(Error)]` patterns used here.
-
-**Verify:**
-```bash
-cargo check -p slapper --features full
-cargo test -p slapper --features full
-cargo clippy --lib -p slapper
-```
-
-**Effort:** 10 min | **Risk:** Low
-
-### 3.2 Replace `once_cell` with `std::sync::LazyLock`
-
-**Problem:** `once_cell` used in 3 files in slapper + 14 files in slapper-nse. Since Rust 1.80, `std::sync::LazyLock` provides identical functionality.
-
-**Depends on:** Phase 3.3 (MSRV must be 1.80+).
-
-**slapper files (3):**
-- `crates/slapper/src/fuzzer/detection/aho_corasick.rs`
-- `crates/slapper/src/utils/service_detection.rs`
-- `crates/slapper/src/recon/secrets.rs`
-
-**slapper-nse files (14):** Libraries in `crates/slapper-nse/src/libraries/`
-
-Replace `use once_cell::sync::Lazy` → `use std::sync::LazyLock` and `Lazy<T>` → `LazyLock<T>`. Remove `once_cell` from both Cargo.toml files.
-
-**Verify:**
-```bash
-cargo check -p slapper --features full
-cargo test -p slapper --features full
-```
-
-**Effort:** 20 min | **Risk:** None
-
-### 3.3 Add MSRV to Workspace
-
-**Problem:** No `rust-version` field in any Cargo.toml.
-
-**File:** `Cargo.toml` (workspace root) + 4 crate Cargo.toml files
-
-Add `rust-version = "1.80"` to `[workspace.package]` and propagate to each crate with `rust-version.workspace = true`.
+**Fix:** Change to `https://ip-api.com/json/{}`. Free tier supports HTTPS.
 
 **Effort:** 5 min | **Risk:** None
 
-### 3.4 Investigate `native-tls` Necessity
+---
 
-**Problem:** `native-tls` 0.2.18 and `tokio-native-tls` 0.3 declared alongside `reqwest` with `rustls-tls`. Two TLS backends increase compile time and binary size.
+### 2.10 Fix Geolocation License Key Exposure
 
-Audit with `grep -rn "native_tls\|tokio_native_tls" crates/slapper/src/`. Remove direct declarations if only used transitively.
+**Problem:** MaxMind license key passed as URL query parameter. May be logged by intermediaries.
 
-**Effort:** 10 min | **Risk:** Low
+**File:** `crates/slapper/src/recon/geolocation.rs` — line 214
+
+**Fix:** Already uses HTTP Basic Auth (line 222). Verify the license_key in URL is not needed — if so, remove it from query string.
+
+**Effort:** 15 min | **Risk:** Low
 
 ---
 
-## Phase 4: CI and Documentation (Medium Priority)
+### 2.11 Fix `SensitiveFile.severity` Populated with Category String
 
-All independent — run in parallel.
+**Problem:** `content.rs` line 101 sets `severity: content.category.clone()` — a category string instead of a severity level.
 
-### 4.1 Add Plugin Feature Checks to CI
+**File:** `crates/slapper/src/recon/content.rs` — line 101
 
-**Problem:** `python-plugins` and `ruby-plugins` never tested in CI. Breakage goes undetected.
+**Fix:** Map category to actual severity using `Severity` enum.
 
-**File:** `.github/workflows/test.yml`
+**Effort:** 10 min | **Risk:** None
 
-Add `check-plugins` job with `cargo check -p slapper --features python-plugins` and `cargo check -p slapper --features ruby-plugins` (no runtime needed, compile-only).
+---
 
-**Effort:** 15 min | **Risk:** None
+### 2.12 Fix Empty Match Pattern for "RedTeam C2" Fingerprint
 
-### 4.2 Create Feature Flag Documentation
+**Problem:** `scanner/fingerprint.rs` line 286 has an empty match pattern `""` for "RedTeam C2". Empty string matches any response.
 
-**Problem:** 14 feature flags with complex dependencies not documented in one place.
+**File:** `crates/slapper/src/scanner/fingerprint.rs` — line 286
 
-Document in `docs/features.md` or `ARCHITECTURE.md`:
-- Feature hierarchy and dependencies
-- Which modules each feature enables
-- Build time impact notes
+**Fix:** Add a real match pattern or remove the entry entirely.
+
+**Effort:** 5 min | **Risk:** None
+
+---
+
+## Wave 3: Async Correctness
+
+### 3.1 Migrate `recon/asn.rs` to Async HTTP
+
+**Problem:** Uses `reqwest::blocking::Client`. Blocks tokio runtime threads.
+
+**File:** `crates/slapper/src/recon/asn.rs`
+
+**Fix:** Replace with `reqwest::Client`, make public methods async, update callers.
+
+**Verify:** `cargo check -p slapper`
+
+**Effort:** 30 min | **Risk:** Low
+
+---
+
+### 3.2 Migrate `recon/cve_lookup.rs` to Async HTTP
+
+**Problem:** Uses `reqwest::blocking::Client`. Same issue as 3.1.
+
+**File:** `crates/slapper/src/recon/cve_lookup.rs`
+
+**Fix:** Replace with `reqwest::Client`, make public methods async, update callers.
+
+**Verify:** `cargo check -p slapper`
+
+**Effort:** 30 min | **Risk:** Low
+
+---
+
+### 3.3 Fix Blocking DNS Lookups in `recon/dns_enhanced.rs`
+
+**Problem:** Uses `dns_lookup::lookup_host()` which is blocking.
+
+**File:** `crates/slapper/src/recon/dns_enhanced.rs`
+
+**Fix:** Replace with `hickory_resolver` (already a dependency) for async DNS, or wrap in `tokio::task::spawn_blocking`.
+
+**Effort:** 30 min | **Risk:** Low
+
+---
+
+## Wave 4: Recon Accuracy
+
+### 4.1 Implement Real SSL Certificate Extraction
+
+**Problem:** `extract_certificate_info` returns placeholder text for all fields. TLS versions/ciphers are hardcoded, not negotiated.
+
+**File:** `crates/slapper/src/recon/ssl.rs`
+
+**Fix:** Parse `rustls_pki_types::CertificateDer` to extract real certificate data. Remove hardcoded `supported_versions`/`supported_cipher_suites` or mark as "not tested".
+
+**Verify:** `cargo check -p slapper`
+
+**Effort:** 2 hours | **Risk:** Medium (new dependency, certificate parsing complexity)
+
+---
+
+### 4.2 Remove Alexa Subdomain Query Stub
+
+**Problem:** `query_alexa` always returns empty `HashSet`. Alexa Top Sites API was discontinued in 2022.
+
+**File:** `crates/slapper/src/recon/subdomain.rs` — lines 123-125
+
+**Fix:** Remove `query_alexa` method entirely and remove from `enumerate_subdomains` call chain.
+
+**Effort:** 10 min | **Risk:** None
+
+---
+
+### 4.3 Implement `check_zone_transfer` or Remove It
+
+**Problem:** `check_zone_transfer` always returns empty `Vec`. Dead code.
+
+**File:** `crates/slapper/src/recon/dns_enhanced.rs` — lines 224-226
+
+**Fix:** Either implement zone transfer checking or remove the method and all references.
+
+**Effort:** 30 min (implement) or 10 min (remove) | **Risk:** Low
+
+---
+
+### 4.4 Fix Cloud Discovery "Access Denied" vs "Not Found"
+
+**Problem:** Both 403 (Access Denied) and 404 (Not Found) treated as "not public". A 403 means the bucket exists but is private — a valuable finding.
+
+**File:** `crates/slapper/src/recon/cloud.rs` — lines 79-92
+
+**Fix:** Distinguish between 403 and 404, recording 403 as a "private" finding.
+
+**Effort:** 15 min | **Risk:** Low
+
+---
+
+## Wave 5: Code Quality and Dead Code
+
+### 5.1 Fix `preserve_all` UTF-8 Byte Slicing
+
+**Problem:** `preserve_all` uses `&s[..max_len]` byte slicing. Panics on multi-byte UTF-8 characters if `max_len` falls mid-character.
+
+**File:** `crates/slapper/src/utils/formatting.rs` — line 15
+
+**Fix:** Replace with character-aware truncation using `char_indices()`.
+
+**Verify:** `cargo test -p slapper -- formatting`
+
+**Effort:** 15 min | **Risk:** Low
+
+---
+
+### 5.2 Fix `build_packet_send_task` Wrong Field for Port
+
+**Problem:** `self.packet.filter()` returns a BPF filter string, not a port number. Parsing it as `u16` always fails, defaulting to 80.
+
+**File:** `crates/slapper/src/tui/app/mod.rs` — line 1591
+
+**Fix:** Add a `port` field to the packet tab UI and use that instead of parsing the filter string.
+
+**Effort:** 20 min | **Risk:** Low
+
+---
+
+### 5.3 Fix Silent Export Serialization Failures
+
+**Problem:** `.unwrap_or_default()` on `serde_json::to_string_pretty()` writes empty files on failure with no error logged.
+
+**File:** `crates/slapper/src/tui/app/mod.rs` — lines 1120-1163
+
+**Fix:** Replace with proper error handling and logging.
+
+**Effort:** 20 min | **Risk:** Low
+
+---
+
+### 5.4 Fix Orphaned Tasks in TUI
+
+**Problem:** Starting a new TUI task replaces the handle without aborting the old task.
+
+**File:** `crates/slapper/src/tui/app/mod.rs` — lines 1401-1423
+
+**Fix:** Before spawning a new task, abort the existing one and drain old channels.
+
+**Effort:** 15 min | **Risk:** Low
+
+---
+
+### 5.5 Replace `eprintln!`/`println!` in Export with TUI-Safe Display
+
+**Problem:** `save_export` uses `eprintln!` and `println!` which corrupt the raw-mode terminal.
+
+**File:** `crates/slapper/src/tui/app/mod.rs` — lines 1234-1257
+
+**Fix:** Return result and display via status message in the TUI status bar.
+
+**Effort:** 20 min | **Risk:** Low
+
+---
+
+### 5.6 Remove `#![allow(dead_code)]` and `#![allow(unused_imports)]`
+
+**Problem:** Three files use blanket allow attributes masking real issues:
+- `crates/slapper/src/tui/mod.rs:1` — `#![allow(unused_imports)]`
+- `crates/slapper/src/tui/tabs/mod.rs:2` — `#![allow(dead_code)]`
+- `crates/slapper/src/tui/workers/runner.rs:1` — `#![allow(dead_code)]`
+
+**Fix:** Remove allow attributes. Fix any warnings by removing unused imports or properly gating feature-dependent code.
+
+**Verify:** `cargo check -p slapper --features full && cargo clippy --lib -p slapper --features full`
+
+**Effort:** 30 min | **Risk:** Low
+
+---
+
+## Wave 6: Fuzzer Improvements
+
+### 6.1 Migrate `cmd.rs` to Use `payload_vec!` Macro
+
+**Problem:** `cmd.rs` manually constructs 38 payloads with 370 lines of boilerplate.
+
+**File:** `crates/slapper/src/fuzzer/payloads/cmd.rs`
+
+**Fix:** Refactor to use `payload_vec!` macro.
+
+**Verify:** `cargo test -p slapper -- cmd`
+
+**Effort:** 30 min | **Risk:** Low
+
+---
+
+### 6.2 Fix `payload_vec!` Macro Capacity
+
+**Problem:** Fixed capacity of 64 regardless of actual count.
+
+**File:** `crates/slapper/src/fuzzer/payloads/macros.rs` — line 26
+
+**Fix:** Count tuples at compile time using a helper macro pattern.
+
+**Verify:** `cargo test -p slapper -- payload`
+
+**Effort:** 20 min | **Risk:** Low
+
+---
+
+### 6.3 Fix No-op `update_session_from_results`
+
+**Problem:** Empty `if` block. Does nothing.
+
+**File:** `crates/slapper/src/fuzzer/engine/utils.rs` — lines 160-166
+
+**Fix:** Implement session cookie extraction logic or remove the function.
+
+**Effort:** 20 min | **Risk:** Low
+
+---
+
+### 6.4 Fix Empty HeaderMap in Diffing
+
+**Problem:** `capture_baseline_for_diffing` and `apply_diffing` create empty `HeaderMap::new()` instead of extracting actual response headers.
+
+**File:** `crates/slapper/src/fuzzer/engine/utils.rs` — lines 94, 119
+
+**Fix:** Replace with `response.headers().clone()`.
+
+**Verify:** `cargo test -p slapper -- diff`
+
+**Effort:** 10 min | **Risk:** None
+
+---
+
+### 6.5 Reduce `FuzzerResultConverter` Boilerplate
+
+**Problem:** 7 nearly identical `FuzzerResultConverter` impl blocks.
+
+**File:** `crates/slapper/src/fuzzer/advanced.rs` — lines 59-495
+
+**Fix:** Create a macro or helper function to reduce duplication.
+
+**Effort:** 1 hour | **Risk:** Medium (macro complexity)
+
+---
+
+### 6.6 Add Missing Tests for Payload Modules
+
+**Problem:** Several payload modules have zero tests: `headers.rs`, `compression.rs`, `cache.rs`, `csv.rs`, `soap.rs`, `host.rs`.
+
+**Fix:** Add `#[cfg(test)]` modules with `test_get_payloads_not_empty()` and `test_payload_types_correct()`.
 
 **Effort:** 1 hour | **Risk:** None
 
 ---
 
-## Phase 5: Large File Refactoring (Lower Priority)
+## Wave 7: WAF and Config Fixes
 
-Independent of each other — can parallelize.
+### 7.1 Unify Bypass Success Criteria
 
-### 5.1 Split `tui/app.rs` (2,193 lines)
+**Problem:** Three different definitions of "bypass successful" across `headers.rs`, `evasion.rs`, `smuggling.rs`.
 
-**Structure:**
-```
-tui/
-├── app/
-│   ├── mod.rs          # App struct, new(), re-exports
-│   ├── runner.rs       # run(), run_app() main loop
-│   ├── error.rs        # make_friendly_error()
-│   ├── input.rs        # InputMode enum, input handling
-│   ├── events.rs       # Mouse/keyboard event handlers
-│   └── options.rs      # GlobalHttpOptions struct
-```
+**Files:** `waf/bypass/headers.rs`, `waf/bypass/evasion.rs`, `waf/bypass/smuggling.rs`
 
-**Effort:** 2-3 hours | **Risk:** Medium (complex UI state management)
+**Fix:** Create a shared function `is_bypass_successful(status, original_status) -> bool`.
 
-### 5.2 Split `tool/protocol/mcp.rs` (1,710 lines)
+**Verify:** `cargo test -p slapper -- waf`
 
-**Structure:**
-```
-tool/protocol/
-├── mcp/
-│   ├── mod.rs          # McpServer struct, public API
-│   ├── auth.rs         # Authentication, API key validation
-│   ├── handlers.rs     # Request/response handlers
-│   ├── streaming.rs    # SSE streaming implementation
-│   └── types.rs        # McpError, request/response types
-```
-
-**Effort:** 2 hours | **Risk:** Low (well-defined API boundaries)
+**Effort:** 20 min | **Risk:** Low
 
 ---
 
-## Phase 6: Testing Improvements (Medium Priority)
+### 7.2 Remove Unused `HomoglyphMap` Struct
 
-### 6.1 Add `error::Result` Doc Example
+**Problem:** `HomoglyphMap` struct defined but never used.
 
-Add doc example in `error/mod.rs` demonstrating proper usage of `SlapperError` variants.
+**File:** `crates/slapper/src/waf/bypass/evasion.rs` — lines 405-424
 
-**Effort:** 15 min | **Risk:** None
+**Fix:** Remove the struct and its `new()` method.
 
-### 6.2 Add Feature Flag Integration Test
+**Effort:** 5 min | **Risk:** None
 
-Add `tests/feature_tests.rs` verifying feature flag interactions compile correctly.
+---
 
-**Effort:** 30 min | **Risk:** None
+### 7.3 Document HTTP Smuggling Limitation
 
-### 6.3 Expand Test Coverage
+**Problem:** `reqwest`/`hyper` normalizes headers, so malformed smuggling headers never reach the network.
+
+**File:** `crates/slapper/src/waf/bypass/smuggling.rs`
+
+**Fix:** Add `tracing::warn!` documenting the limitation. Mark results accordingly.
+
+**Effort:** 10 min | **Risk:** Low
+
+---
+
+### 7.4 Fix `Verbosity` Enum Serialization
+
+**Problem:** `Verbosity` enum serializes as PascalCase while `Severity` uses lowercase. Inconsistent.
+
+**File:** `crates/slapper/src/config/settings.rs` — lines 470-477
+
+**Fix:** Add `#[serde(rename_all = "lowercase")]` to `Verbosity` enum.
+
+**Effort:** 5 min | **Risk:** Low
+
+---
+
+## Wave 8: TUI Architecture Improvements
+
+### 8.1 Replace Match-Based Dispatch with Trait Method
+
+**Problem:** `app/mod.rs` has ~15 delegation methods, each with a 30+ line match statement dispatching to the current tab.
+
+**Files:**
+- `crates/slapper/src/tui/tabs/mod.rs`
+- `crates/slapper/src/tui/app/mod.rs`
+
+**Fix:** Add a dispatch method to the `Tab` enum that returns a mutable reference to a trait object, or use an enum-based dispatch pattern.
+
+**Verify:** `cargo check -p slapper --features full && cargo test -p slapper --features full`
+
+**Effort:** 2-3 hours | **Risk:** Medium
+
+---
+
+### 8.2 Replace Busy-Loop Defaults in TabInput
+
+**Problem:** Default trait implementations use busy-loops (`for _ in 0..100 { self.handle_left(); }`).
+
+**File:** `crates/slapper/src/tui/tabs/mod.rs` — lines 255-284
+
+**Fix:** Replace defaults with no-op or direct cursor/index manipulation.
+
+**Effort:** 1-2 hours | **Risk:** Low
+
+---
+
+### 8.3 Fix Export Format Fallback
+
+**Problem:** Most export formats fall back to JSON: Html, Markdown, Sarif, Junit all call `self.export_json()`.
+
+**File:** `crates/slapper/src/tui/app/mod.rs` — lines 1106-1113
+
+**Fix:** Wire up existing `output/` module reporters for each format.
+
+**Effort:** 2-4 hours | **Risk:** Medium
+
+---
+
+### 8.4 Implement Real GraphQL Worker Logic
+
+**Problem:** `run_graphql` returns hardcoded fake results.
+
+**File:** `crates/slapper/src/tui/workers/runner.rs` — lines 1086-1117
+
+**Fix:** Perform actual GraphQL security testing using `fuzzer::payloads::graphql` module.
+
+**Verify:** `cargo check -p slapper --features full`
+
+**Effort:** 2-3 hours | **Risk:** Medium
+
+---
+
+### 8.5 Implement Real OAuth Worker Logic
+
+**Problem:** `run_oauth` returns hardcoded fake results.
+
+**File:** `crates/slapper/src/tui/workers/runner.rs` — lines 1119-1157
+
+**Fix:** Perform actual OAuth security testing using `fuzzer::payloads::oauth` module.
+
+**Verify:** `cargo check -p slapper --features full`
+
+**Effort:** 2-3 hours | **Risk:** Medium
+
+---
+
+### 8.6 Implement Real NSE Worker Logic
+
+**Problem:** `run_nse` returns fake output string.
+
+**File:** `crates/slapper/src/tui/workers/runner.rs` — lines 1159-1191
+
+**Fix:** Actually execute Nmap NSE scripts via `tokio::process::Command`.
+
+**Verify:** `cargo check -p slapper --features nse`
+
+**Effort:** 1 hour | **Risk:** Low
+
+---
+
+### 8.7 Implement Tab Input Handlers for Stub Tabs
+
+**Problem:** GraphQL, OAuth, Cluster, Stress, Report, Nse, Plugin tabs have empty `{}` bodies for all input handlers.
+
+**File:** `crates/slapper/src/tui/app/mod.rs`
+
+**Fix:** Implement at minimum `handle_enter()`, `handle_escape()`, `is_input_focused()`, `is_running()` for each stub tab.
+
+**Verify:** `cargo check -p slapper --features full`
+
+**Effort:** 2-3 hours | **Risk:** Low
+
+---
+
+### 8.8 Add Confirmation for Destructive Operations
+
+**Problem:** No confirmation for history deletion, tab reset, settings save.
+
+**Fix:** Add a `PendingAction` enum and confirmation dialog popup.
+
+**Effort:** 1-2 hours | **Risk:** Low
+
+---
+
+## Wave 9: Large File Refactoring
+
+### 9.1 Split `tui/workers/runner.rs` (1192 lines)
+
+**Problem:** Single file handles all task types. Style guidelines say split files > 500 lines.
+
+**File:** `crates/slapper/src/tui/workers/runner.rs`
+
+**Proposed split — 7 files, each under 500 lines:**
+
+```
+tui/workers/
+├── mod.rs         # Re-exports (update)
+├── runner.rs      # Types + TaskRunner::run() dispatch (~460 lines)
+├── scanner.rs     # run_port_scan, run_endpoint_scan, run_fingerprint (~130 lines)
+├── fuzzer.rs      # run_fuzz, run_waf (~160 lines)
+├── network.rs     # run_load_test, run_stress_test, run_packet_capture, run_packet_traceroute, run_packet_send (~220 lines)
+├── api.rs         # run_graphql, run_oauth, run_nse (~130 lines)
+└── recon.rs       # run_recon, run_pipeline (~150 lines)
+```
+
+**Verify:** `cargo check -p slapper --features full && cargo test -p slapper --features full`
+
+**Effort:** 1-2 hours | **Risk:** Medium
+
+---
+
+### 9.2 Fix Spoofed Port Scanner — No Response Parsing
+
+**Problem:** `spoofed.rs` sends SYN packets but never reads responses. `_rx` receiver is unused. Every port is reported as "decoy" or "spoofed" regardless of actual state.
+
+**File:** `crates/slapper/src/scanner/ports/spoofed.rs`
+
+**Fix:** Use the `_rx` channel to receive packets. Parse for SYN-ACK (open) vs RST (closed). Add timeout for filtered ports.
+
+**Note:** Non-trivial raw socket implementation. If full response parsing is too large:
+- Add `tracing::warn!` documenting that response parsing is not yet implemented
+- Change status labels to `"sent"` instead of `"decoy"`/`"spoofed"`
+
+**Verify:** `cargo check -p slapper --features stress-testing`
+
+**Effort:** 2-4 hours | **Risk:** Medium
+
+---
+
+## Wave 10: Documentation and Testing
+
+### 10.1 Document `native-tls` in `slapper-nse`
+
+**Problem:** `native-tls` was removed from main `slapper` crate but `slapper-nse` still uses it (25 usages across 6 files). This is intentional for Nmap compatibility but undocumented.
+
+**Fix:** Add note to `AGENTS.md` under TLS section and `docs/FEATURES.md` under `nse` feature.
+
+**Effort:** 10 min | **Risk:** None
+
+---
+
+### 10.2 Add Missing Tests for Payload Modules
+
+Covered in 6.6 above.
+
+---
+
+### 10.3 Expand Test Coverage
 
 - Property-based tests for parsing modules (proptest)
 - Expand negative tests in `tests/negative_tests.rs`
@@ -371,52 +845,9 @@ Add `tests/feature_tests.rs` verifying feature flag interactions compile correct
 
 ---
 
-## Phase 7: Architecture Improvements (Completed 2026-03-31)
-
-All items completed in this session.
-
-### 7.1 Scope Enforcement Audit ✅
-- All command handlers verified with scope checks before network activity
-- Added `tests/scope_tests.rs` integration tests for scope bypass attempts
-- DNS resolution happens after scope validation (handlers call `ctx.ensure_scope_*` first)
-
-### 7.2 External API Circuit Breaker ✅
-- Implemented `CircuitBreaker` struct in `utils/circuit_breaker.rs`
-- `CircuitState` enum (Closed/Open/HalfOpen)
-- `CircuitBreakerRegistry` for managing multiple breakers
-- Stats tracking (total_calls, total_failures, failure_rate)
-- Ready for integration with NVD CVE, geolocation, and threat intel APIs
-
-### 7.3 Sensitive Data Logging Audit ✅
-- No credential exposure found in logging statements
-- Added `SensitiveString::log_secret()` helper method
-- Added `SensitiveString::for_logging()` for display-safe logging
-- `--redact-logs` flag deferred (requires broader CLI changes)
-
-### 7.4 Payload Lazy Loading ✅
-- Refactored `fuzzer/payloads/mod.rs` to use `LazyLock` for payload caching
-- Added `get_payloads_cached()` and `get_all_payloads_cached()` functions
-- `PAYLOAD_CACHE` static initializes all payloads on first use
-- Feature flags for specific payload categories deferred (future work)
-
-### 7.5 Performance Optimizations ✅
-- Reviewed connection pool config (pool_max_idle_per_host, pool_idle_timeout)
-- Found existing metrics in loadtest, stress modules
-- Request batching for recon modules deferred
-- Memory profiling deferred
-
-### 7.6 Truncation Function Cleanup ✅
-- Renamed `truncate` → `strip_controls` (removes control characters)
-- Renamed `truncate_simple` → `preserve_all` (preserves all characters)
-- Added `#[deprecated]` annotations with migration notes
-- Updated `loadtest/metrics.rs` and `scanner/endpoints.rs` to use new names
-- Added unit tests documenting expected behavior for each function
-
----
-
 ## Verification Commands
 
-After each phase:
+After each wave:
 ```bash
 cargo check -p slapper --features full
 cargo test -p slapper --features full
@@ -426,44 +857,52 @@ cargo test --doc -p slapper
 
 Final verification:
 ```bash
-# prost versions aligned
-grep "prost" Cargo.lock | sort -u
-
-# once_cell removed from slapper
-grep -rn "once_cell" crates/slapper/src/ --include="*.rs" | wc -l  # Expected: 0
-
-# No unused _config params
-grep -rn "_config.*SlapperConfig" crates/slapper/src/ --include="*.rs" | wc -l  # Expected: 0
-
-# No deprecated features
-grep "mcp-server" crates/slapper/Cargo.toml  # Expected: no match
-
 # Full test suite
 cargo test -p slapper --features full
 
 # Lint
 cargo clippy -p slapper --features full -- -D warnings
+
+# Doctests
+cargo test --doc -p slapper
 ```
 
 ---
 
-## Parallelization Strategy
+## Parallelization Strategy (Waves)
 
-Use sub-agents to parallelize independent work:
+Waves are ordered by dependency and risk. Tasks **within** a wave are independent and can run in parallel with sub-agents. Waves themselves should run sequentially.
 
-| Sub-Agent | Phases | Rationale |
-|-----------|--------|-----------|
-| Agent 1 | 1.1 prost/tonic fix | Cargo.toml edit + lockfile update |
-| Agent 2 | 1.2 config reloading fix | 2 files, 7 call sites |
-| Agent 3 | 1.3 port scanner fix | 1 file, match arm changes |
-| Agent 4 | 2.1 + 2.2 + 2.3 error variants + doc examples | All in error/mod.rs + 8 mod.rs files |
-| Agent 5 | 2.4 + 2.5 unused params + mcp-server removal | ~15 files (3 func defs + ~10 callers + 4 cfg refs) |
-| Agent 6 | 3.1 + 3.2 + 3.3 dependency updates | Cargo.toml changes (run after 3.3 for LazyLock) |
-| Agent 7 | 3.4 + 4.1 + 4.2 CI + docs + audit | Non-code changes |
-| Agent 8 | 5.1 tui/app.rs split | Large refactor, isolated |
-| Agent 9 | 5.2 mcp.rs split | Large refactor, isolated |
+| Wave | Focus | Tasks | Can Parallelize |
+|------|-------|-------|-----------------|
+| 1 | Quick Bug Fixes | 1.1-1.7 | Yes — all touch different files |
+| 2 | Security Fixes | 2.1-2.12 | Yes — all independent |
+| 3 | Async Correctness | 3.1-3.3 | Yes — different recon modules |
+| 4 | Recon Accuracy | 4.1-4.4 | Yes — different recon modules |
+| 5 | Code Quality | 5.1-5.6 | Yes — different files |
+| 6 | Fuzzer Improvements | 6.1-6.6 | Yes — different fuzzer files |
+| 7 | WAF and Config Fixes | 7.1-7.4 | Yes — different modules |
+| 8 | TUI Architecture | 8.1-8.8 | Partially — 8.4/8.5/8.6/8.7 independent; 8.1/8.2/8.3 touch shared files |
+| 9 | Large File Refactoring | 9.1-9.2 | Yes — independent files |
+| 10 | Documentation and Testing | 10.1-10.3 | Yes — independent |
 
-**Note:** Sub-agents within a group are sequential; groups can run in parallel. Agent 6 should run 3.3 (MSRV) first, then 3.2 (LazyLock).
+**Sub-agent mapping for Wave 1 (Quick Bug Fixes):**
+- Agent 1: 1.1 (duplicate keybindings) + 1.6 (conflicting `/` key)
+- Agent 2: 1.2 (mouse tab calculation)
+- Agent 3: 1.3 (WebSocket/gRPC types)
+- Agent 4: 1.4 (port scanner logging) + 1.5 (circuit breaker stub)
+- Agent 5: 1.7 (double event::read)
+
+**Sub-agent mapping for Wave 2 (Security Fixes):**
+- Agent 1: 2.1 (XSS) + 2.2 (JUnit escaping) + 2.3 (JUnit empty attrs)
+- Agent 2: 2.4 (Discord/Slack regex) + 2.5 (wildcard scope) + 2.9 (ip-api HTTPS)
+- Agent 3: 2.6 (DNS rebinding) + 2.7 (SensitiveString) + 2.10 (license key) + 2.11 (severity mapping) + 2.12 (fingerprint)
+- Agent 4: 2.8 (TUI scope enforcement)
+
+**Sub-agent mapping for Wave 5 (Code Quality):**
+- Agent 1: 5.1 (UTF-8 slicing) + 5.6 (allow attributes)
+- Agent 2: 5.2 (packet send port) + 5.3 (export serialization)
+- Agent 3: 5.4 (orphaned tasks) + 5.5 (eprintln in export)
 
 ---
 
@@ -471,36 +910,37 @@ Use sub-agents to parallelize independent work:
 
 | Criterion | Status |
 |-----------|--------|
-| prost/prost-build versions | ✅ Matching (both 0.13) |
-| Config reloading | ✅ Uses `ctx.config` directly |
-| Port scanner errors | ✅ No silently dropped results |
-| `Fingerprint` variant | ✅ Added |
-| `InvalidHeaderValue` From impl | ✅ Added |
-| Doc examples using `anyhow` | ✅ 0 |
-| Unused `_config` parameters | ✅ Removed |
-| `mcp-server` feature | ✅ Removed |
-| `thiserror` version | ✅ 2.x |
-| `once_cell` in slapper | ✅ 0 |
-| MSRV declared | ✅ Yes (1.80) |
-| Plugin CI checks | ✅ Present |
-| Feature flag docs | ✅ Complete |
-| `native-tls` → `rustls` | ✅ Migrated |
-| `mcp.rs` split | ✅ 6 files, largest 890 lines |
-| `tui/app.rs` split | ✅ 5 files |
-| Clippy warnings | 1 (MSRV `is_multiple_of`, non-blocking) |
-| All tests | 350+ passing |
-
----
-
-## Remaining Work
-
-### Phase 7: Architecture Improvements (Future Work)
-
-These are larger initiatives for future planning:
-
-- **7.1** Scope Enforcement Audit (2 days)
-- **7.2** External API Circuit Breaker (2 days)
-- **7.3** Sensitive Data Logging Audit (1 day)
-- **7.4** Payload Lazy Loading (2 days)
-- **7.5** Performance Optimizations (2 days)
-- **7.6** Truncation Function Cleanup (1 day)
+| Duplicated keybindings removed | Pending |
+| Mouse tab calculation dynamic | Pending |
+| WebSocket/gRPC PayloadType correct | Pending |
+| Port scanner error logging | Pending |
+| CircuitBreakerRegistry::get_state() implemented | Pending |
+| Conflicting `/` key resolved | Pending |
+| Single event::read() per loop | Pending |
+| XSS in HTML report fixed | Pending |
+| JUnit XML escaping correct | Pending |
+| Discord/Slack token patterns correct | Pending |
+| Wildcard scope excludes apex | Pending |
+| DNS rebinding protection | Pending |
+| Webhook URLs use SensitiveString | Pending |
+| TUI scope enforcement | Pending |
+| ip-api.com uses HTTPS | Pending |
+| recon/asn.rs async | Pending |
+| recon/cve_lookup.rs async | Pending |
+| Blocking DNS lookups fixed | Pending |
+| SSL certificate extraction real | Pending |
+| Alexa stub removed | Pending |
+| preserve_all UTF-8 safe | Pending |
+| Export serialization errors logged | Pending |
+| Orphaned TUI tasks prevented | Pending |
+| Allow attributes removed | Pending |
+| cmd.rs uses payload_vec! macro | Pending |
+| payload_vec! macro capacity dynamic | Pending |
+| No-op session update fixed | Pending |
+| Empty HeaderMap in diffing fixed | Pending |
+| Verbosity serialization lowercase | Pending |
+| tui/workers/runner.rs split | Pending |
+| Spoofed scanner response parsing | Pending |
+| native-tls in slapper-nse documented | Pending |
+| All tests passing | 350+ |
+| Clippy warnings | 1 (MSRV, non-blocking) |
