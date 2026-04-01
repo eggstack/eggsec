@@ -74,6 +74,7 @@ crates/slapper/
 - `rest-api` / `grpc-api` - API server integration
 - `nse` - Nmap NSE script support
 - `nse-sandbox` - NSE sandbox mode (restricts `io.popen`, `os.setenv`, filesystem access)
+- `ai-integration` - AI/LLM features (planned)
 - `full` - All features combined
 
 Note: `mcp-server` feature has been removed. Use `rest-api` instead.
@@ -132,9 +133,9 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 Two truncation utilities in `utils/formatting.rs`:
 - `strip_controls` - removes control characters (recommended)
 - `preserve_all` - preserves all characters
-- `truncate` and `truncate_simple` are deprecated aliases
+- `truncate` and `truncate_simple` are deprecated aliases (may have been removed)
 
-**Warning:** Both `preserve_all` and `strip_controls` use byte slicing (`&s[..max_len]`) which can panic on multi-byte UTF-8 characters. Use character-based truncation when fixing (plan.md Wave 2.1).
+Both use `.chars().take()` for safe character-based truncation (no byte slicing panic risk).
 
 ### Macros
 
@@ -158,24 +159,22 @@ Two truncation utilities in `utils/formatting.rs`:
 
 `scanner/ports/spoofed.rs` contains raw socket scanning (feature-gated). `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled. Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing.
 
-## Codebase Health
-
 | Metric | Value |
 |--------|-------|
 | Tests | 363 passing |
 | Build | Clean compilation |
-| Clippy | 0 warnings |
+| Clippy | 114 warnings |
 | Doctests | 14 pass, 1 ignored, 0 fail |
 | `SlapperError` variants | 23 |
 | `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (1917 lines — needs dispatch refactor) |
+| Largest file | `tui/app/mod.rs` (1963 lines — needs dispatch refactor) |
 
 ## Planning
 
-- `plan.md` — Consolidated improvement plan (10 waves, all items resolved)
+- `plan.md` — Consolidated improvement plan (10 waves, parallelizable in 3 blocks)
 
 ## Lessons Learned
 
@@ -216,44 +215,15 @@ Two truncation utilities in `utils/formatting.rs`:
 - `PartialEq` uses constant-time comparison; safe for credential checking
 - Config deserialization works transparently — existing TOML files with plain strings still load
 
-### Truncation Functions
-
-Two truncation utilities exist with different behaviors:
-- `utils::formatting::strip_controls` — strips control characters (recommended)
-- `utils::formatting::preserve_all` — preserves all characters
-- `utils::formatting::truncate` and `truncate_simple` are deprecated aliases
-
-Both use `.chars().take()` for safe character-based truncation (no byte slicing panic risk).
-
-### Known Bugs (Resolved)
-
-All bugs documented in `plan.md` have been resolved as of 2026-04-02:
-
-- **UTF-8 byte slicing panic** in `preserve_all` and `strip_controls` — Fixed with `.chars().take()`
-- **Concurrency override**: `fuzzer/engine/core.rs:87` forces min 100 — Fixed with `clamp(1, 500)`
-- **Duplicate key handlers**: `tui/app/runner.rs` duplicate `g` handler — Removed dead code
-- **Mouse tab selection**: hardcoded 15 tabs — Fixed with `Tab::all().len()`
-- **`g` key in Insert mode**: missing `InputMode` guard — Fixed
-- **`default_value = "None"`**: `cli/fuzz.rs` Option fields — Removed `default_value`
-- **MCP auth Bearer stripping**: full header compared — Fixed with `strip_prefix`
-- **Scope bypass**: malformed URLs pass scope check — Fixed with validation
-- **Distributed worker**: no coordinator — Documented (architectural gap)
-- **Proxy chaining**: connections not chained — Fixed to use `chain_connect()`
-- **MCP HashMaps**: unbounded growth — Fixed with background reaper
-- **Blocking DNS in async**: `to_socket_addrs()` — Replaced with `tokio::net::lookup_host()`
-- **`Severity::from_str` shadowing**: inherent method renamed to `parse_or_default`
-- **`eprintln!` in library code**: all replaced with `tracing::error!`/`tracing::warn!`
-- **`fingerprint_tests.rs`**: missing `concurrency` parameter fixed
-
 ### TUI-Specific Patterns
 
 - `tui/app/runner.rs` contains the main event loop (`run_app`)
 - `tui/app/mod.rs` contains the `App` struct and all delegation methods
-- `tui/workers/` directory contains 6 files: `runner.rs` (459 lines), `scanner.rs` (82), `fuzzer.rs` (130), `network.rs` (268), `api.rs` (351), `recon.rs` (149)
-- Tab dispatch uses match statements across ~15 methods (22-arm matches)
+- `tui/workers/` directory contains 6 files: `runner.rs`, `scanner.rs`, `fuzzer.rs`, `network.rs`, `api.rs`, `recon.rs`
+- Tab dispatch uses match statements across ~18+ methods (22-arm matches)
 - TUI uses ratatui 0.30 + crossterm 0.28 with immediate-mode rendering
-- 22 tab variants exist; all have proper input handlers
-- `tui/app/mod.rs` is 1917 lines with ~30 methods containing 22-arm matches — needs macro-based dispatch refactor (see plan.md Wave 7.3)
+- 22 tab variants exist; 15 are fully functional, 7 have empty dispatch arms (GraphQl, OAuth, Cluster, Stress, Report, Nse, Plugin)
+- `tui/app/mod.rs` is 1963 lines with ~30 methods containing 22-arm matches — needs macro-based dispatch refactor (see plan.md Wave 4)
 
 ### Output Module
 
@@ -324,3 +294,7 @@ Use the appropriate output method based on the context:
 - **`println!`** — Final output only (scan results, reports, completion messages)
 
 The TUI has its own rendering layer; use `tracing` for logging from background workers.
+
+### Plan Consolidation
+
+When consolidating multiple plan files, verify each item against the actual codebase before including. Plans may describe issues from an earlier code state that have since been resolved. Use `rg` to confirm file paths, line numbers, and patterns still exist.
