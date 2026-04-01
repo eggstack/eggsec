@@ -134,6 +134,8 @@ Two truncation utilities in `utils/formatting.rs`:
 - `preserve_all` - preserves all characters
 - `truncate` and `truncate_simple` are deprecated aliases
 
+**Warning:** Both `preserve_all` and `strip_controls` use byte slicing (`&s[..max_len]`) which can panic on multi-byte UTF-8 characters. Use character-based truncation when fixing (plan.md Wave 2.1).
+
 ### Macros
 
 `fuzzer/payloads/macros.rs` defines `payload_vec!` for building payload vectors from inline data. Reduces repetitive `for` loops in payload modules (e.g., sqli.rs went from 8 loops to 1 macro call).
@@ -169,14 +171,11 @@ Two truncation utilities in `utils/formatting.rs`:
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `tui/workers/runner.rs` (1192 lines) |
-| Improvement plan | See `plan.md` (10 waves, all complete) |
+| Largest file | `tui/app/mod.rs` (1917 lines — needs dispatch refactor) |
 
 ## Planning
 
-- `plan.md` — Consolidated improvement plan (all complete as of 2026-04-01)
-- `CODE_REVIEW_PLAN.md` — Historical reference (anyhow migration + waf/detector split, completed)
-- Always check the "Already Complete" section in `plan.md` before starting work
+- `plan.md` — Consolidated improvement plan (10 waves, 60+ items, not yet started)
 
 ## Lessons Learned
 
@@ -199,6 +198,7 @@ Two truncation utilities in `utils/formatting.rs`:
 4. **Feature-gated dead code**: Functions used only under `#[cfg(feature = "...")]` appear as dead code to the compiler. Gate the module declaration itself, not just callers.
 5. **Clippy redundant closures**: `.map(|arr| func(arr))` should be `.map(func)` when the argument is passed directly
 6. **Clippy needless borrows**: `.post(&format!(...))` should be `.post(format!(...))` when the format result implements the required traits
+7. **`default_value = "None"` on Options**: Never use `#[arg(default_value = "None")]` on `Option<T>` fields — clap assigns the string `"None"` instead of `None`. Omit `default_value` entirely; `Option` defaults to `None` automatically.
 
 ### Severity Enum
 
@@ -206,6 +206,7 @@ Two truncation utilities in `utils/formatting.rs`:
 - Use `as_int()` for severity comparisons, not `>` or `<`
 - `Display` outputs UPPERCASE ("CRITICAL"), `as_str()` outputs lowercase ("critical")
 - `serde` serialization uses lowercase (due to `#[serde(rename_all = "lowercase")]`)
+- `Severity` has a custom `from_str` inherent method but does NOT implement `FromStr` trait (plan.md Wave 6.1)
 
 ### SensitiveString
 
@@ -221,22 +222,32 @@ Two truncation utilities exist with different behaviors:
 - `utils::formatting::preserve_all` — preserves all characters
 - `utils::formatting::truncate` and `truncate_simple` are deprecated aliases
 
-**Warning:** `preserve_all` uses byte slicing (`&s[..max_len]`) which can panic on multi-byte UTF-8 characters. This is a known bug (plan.md Wave 5.1).
+**Warning:** Both `preserve_all` and `strip_controls` use byte slicing (`&s[..max_len]`) which can panic on multi-byte UTF-8 characters. Use character-based truncation when fixing (plan.md Wave 2.1).
 
 ### Known Bugs (Not Yet Fixed)
 
 These are confirmed bugs documented in `plan.md` that agents should be aware of:
 
-No currently known bugs — all items in plan.md have been completed.
+- **UTF-8 byte slicing panic** in `preserve_all` and `strip_controls` (plan.md Wave 2.1)
+- **Concurrency override**: `fuzzer/engine/core.rs:87` forces min 100 (plan.md Wave 1.4)
+- **Duplicate key handlers**: `tui/app/runner.rs:287-335` unreachable dead code (plan.md Wave 1.1)
+- **Mouse tab selection**: hardcoded 15 tabs, 7 unreachable (plan.md Wave 1.3)
+- **`g` key in Insert mode**: missing `InputMode` guard (plan.md Wave 1.2)
+- **`default_value = "None"`**: `cli/fuzz.rs` Option fields get `Some("None")` (plan.md Wave 1.5)
+- **MCP auth Bearer stripping**: full header compared, not just key (plan.md Wave 1.8)
+- **Scope bypass**: malformed URLs pass scope check (plan.md Wave 1.9)
+- **Distributed worker**: completely non-functional (plan.md Wave 3.1)
+- **Proxy chaining**: connections not actually chained (plan.md Wave 3.3)
 
 ### TUI-Specific Patterns
 
 - `tui/app/runner.rs` contains the main event loop (`run_app`)
 - `tui/app/mod.rs` contains the `App` struct and all delegation methods
 - `tui/workers/` directory contains 6 files: `runner.rs` (459 lines), `scanner.rs` (82), `fuzzer.rs` (130), `network.rs` (268), `api.rs` (351), `recon.rs` (149)
-- Tab dispatch uses match statements across ~15 methods
+- Tab dispatch uses match statements across ~15 methods (22-arm matches)
 - TUI uses ratatui 0.30 + crossterm 0.28 with immediate-mode rendering
 - 22 tab variants exist; all have proper input handlers
+- `tui/app/mod.rs` is 1917 lines with ~30 methods containing 22-arm matches — needs macro-based dispatch refactor (see plan.md Wave 7.3)
 
 ### Output Module
 
@@ -247,8 +258,8 @@ No currently known bugs — all items in plan.md have been completed.
 
 - `config/scope.rs` handles target scope validation
 - `ScopeRule` supports wildcard patterns (`*.example.com`)
-- Wildcard matching correctly excludes apex domain
-- `TargetScope` has `pinned_ip` field to prevent DNS rebinding
+- Wildcard matching **includes** apex domain (`*.example.com` matches `example.com`)
+- `TargetScope` has `host` and `ip` fields (no `pinned_ip` — that field does not exist)
 
 ## Style Guidelines
 
