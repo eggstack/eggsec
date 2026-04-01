@@ -272,11 +272,17 @@ fn get_psk_from_args_or_config(
 }
 
 fn extract_host_and_port(addr: &str) -> (String, u16) {
-    let parts: Vec<&str> = addr.split(':').collect();
-    if parts.len() >= 2 {
-        let port = parts[1].parse().unwrap_or(22);
-        (parts[0].to_string(), port)
-    } else {
-        (addr.to_string(), 22)
+    if let Some(addr) = addr.strip_prefix('[') {
+        if let Some(bracket_end) = addr.find("]:") {
+            let host = addr[..bracket_end].to_string();
+            let port: u16 = addr[bracket_end + 2..].parse().unwrap_or(22);
+            return (host, port);
+        }
     }
+    if let Some((host, port_str)) = addr.rsplit_once(':') {
+        if let Ok(port) = port_str.parse::<u16>() {
+            return (host.to_string(), port);
+        }
+    }
+    (addr.to_string(), 22)
 }

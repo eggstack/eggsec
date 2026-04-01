@@ -16,7 +16,21 @@ pub const DEFAULT_ICMP_PAYLOAD_SIZE: usize = 56;
 pub const DEFAULT_CONFIG_FILE: &str = "slapper.toml";
 pub const DEFAULT_WORDLIST: &str = "wordlists/directories.txt";
 
-pub const SUPPORTED_WAF_COUNT: usize = 30;
+pub const SUPPORTED_WAF_COUNT: usize = 26;
+
+#[cfg(test)]
+mod tests {
+    use super::SUPPORTED_WAF_COUNT;
+
+    #[test]
+    fn supported_waf_count_matches_actual() {
+        let count = crate::waf::waf_patterns::get_waf_signatures().len();
+        assert_eq!(
+            count, SUPPORTED_WAF_COUNT,
+            "SUPPORTED_WAF_COUNT must match actual detector count"
+        );
+    }
+}
 
 pub mod http {
     pub const DEFAULT_TIMEOUT_SECS: u64 = 30;

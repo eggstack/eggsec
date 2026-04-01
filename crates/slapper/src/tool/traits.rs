@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 use crate::error::SlapperError;
 use crate::tool::{request::ToolRequest, response::ToolResponse};
 
-pub type ToolResult<T> = Result<T, SlapperError>;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Ord, PartialOrd)]
 pub enum ToolCategory {
     Recon,

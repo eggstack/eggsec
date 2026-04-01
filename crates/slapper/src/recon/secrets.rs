@@ -325,8 +325,8 @@ impl SecretScanner {
         for pattern in PATTERNS.iter() {
             for mat in pattern.pattern.find_iter(content) {
                 let value = mat.as_str();
-                let preview = if value.len() > 20 {
-                    format!("{}...", &value[..20])
+                let preview = if value.chars().count() > 20 {
+                    format!("{}...", value.chars().take(20).collect::<String>())
                 } else {
                     value.to_string()
                 };

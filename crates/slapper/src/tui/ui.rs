@@ -467,150 +467,75 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
+fn get_tab_status(
+    _tab: crate::tui::tabs::Tab,
+    state: &crate::tui::tabs::AppState,
+) -> (String, Color) {
+    use crate::tui::tabs::AppState;
+    match state {
+        AppState::Idle => ("Ready - Press Enter to start".to_string(), Color::Gray),
+        AppState::Running => ("Running - Ctrl+C to stop".to_string(), Color::Yellow),
+        AppState::Completed => ("Completed".to_string(), Color::Green),
+        AppState::Error(e) => (e.to_string(), Color::Red),
+    }
+}
+
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     use crate::tui::tabs::AppState;
 
     let (status_text, status_color) = match app.current_tab {
-        crate::tui::tabs::Tab::Recon => match &app.recon.state {
-            AppState::Idle => (
-                "Ready - Enter target and press Enter to start recon",
-                Color::Gray,
-            ),
-            AppState::Running => ("Running recon - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Recon completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Load => match &app.load.state {
-            AppState::Idle => ("Ready - Press Enter to start", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::ScanPorts => match &app.scan_ports.state {
-            AppState::Idle => ("Ready - Press Enter to start", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::ScanEndpoints => match &app.scan_endpoints.state {
-            AppState::Idle => ("Ready - Press Enter to start", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Fingerprint => match &app.fingerprint.state {
-            AppState::Idle => ("Ready - Press Enter to start", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Fuzz => match &app.fuzz.state {
-            AppState::Idle => ("Ready - Press Enter to start", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Waf => match &app.waf.state {
-            AppState::Idle => ("Ready - Press Enter to start", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::WafStress => match &app.waf_stress.state {
-            AppState::Idle => ("Ready - Press Enter to start", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Scan => match &app.scan.state {
-            AppState::Idle => ("Ready - Press Enter to start", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Resume => match &app.resume.state {
-            AppState::Idle => ("Ready - Enter session file and press Enter", Color::Gray),
-            AppState::Running => ("Loading session - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Session loaded", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Proxy => match &app.proxy.state {
-            AppState::Idle => ("Ready - Select view and press Enter", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Packet => match &app.packet.state {
-            AppState::Idle => ("Ready - Enter parameters and press Enter", Color::Gray),
-            AppState::Running => ("Running - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Settings => {
-            ("Press 's' to save settings, 'r' to reset", Color::Gray)
+        crate::tui::tabs::Tab::Recon => get_tab_status(app.current_tab, &app.recon.state),
+        crate::tui::tabs::Tab::Load => get_tab_status(app.current_tab, &app.load.state),
+        crate::tui::tabs::Tab::ScanPorts => get_tab_status(app.current_tab, &app.scan_ports.state),
+        crate::tui::tabs::Tab::ScanEndpoints => {
+            get_tab_status(app.current_tab, &app.scan_endpoints.state)
         }
-        crate::tui::tabs::Tab::History => ("↑↓ Navigate | 'd' Delete | 'r' Clear all", Color::Gray),
-        crate::tui::tabs::Tab::Dashboard => ("Dashboard - View scan results overview", Color::Gray),
-        crate::tui::tabs::Tab::GraphQl => match &app.graphql.state {
+        crate::tui::tabs::Tab::Fingerprint => {
+            get_tab_status(app.current_tab, &app.fingerprint.state)
+        }
+        crate::tui::tabs::Tab::Fuzz => get_tab_status(app.current_tab, &app.fuzz.state),
+        crate::tui::tabs::Tab::Waf => get_tab_status(app.current_tab, &app.waf.state),
+        crate::tui::tabs::Tab::WafStress => get_tab_status(app.current_tab, &app.waf_stress.state),
+        crate::tui::tabs::Tab::Scan => get_tab_status(app.current_tab, &app.scan.state),
+        crate::tui::tabs::Tab::Resume => match &app.resume.state {
             AppState::Idle => (
-                "Ready - Enter endpoint and press Enter to test",
+                "Ready - Enter session file and press Enter".to_string(),
                 Color::Gray,
             ),
-            AppState::Running => ("Testing GraphQL - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("GraphQL test completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::OAuth => match &app.oauth.state {
-            AppState::Idle => (
-                "Ready - Enter endpoint and press Enter to test",
-                Color::Gray,
+            AppState::Running => (
+                "Loading session - Ctrl+C to stop".to_string(),
+                Color::Yellow,
             ),
-            AppState::Running => ("Testing OAuth - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("OAuth test completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
+            AppState::Completed => ("Session loaded".to_string(), Color::Green),
+            AppState::Error(e) => (e.to_string(), Color::Red),
         },
-        crate::tui::tabs::Tab::Cluster => match &app.cluster.state {
-            AppState::Idle => ("Ready - Select mode and press Enter", Color::Gray),
-            AppState::Running => ("Running cluster operation - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Cluster operation completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Stress => match &app.stress.state {
-            AppState::Idle => (
-                "Ready - Enter target and press Enter to start stress test",
-                Color::Gray,
-            ),
-            AppState::Running => ("Stress testing - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Stress test completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
-        crate::tui::tabs::Tab::Report => match &app.report.state {
-            AppState::Idle => ("Ready - Select mode and press Enter", Color::Gray),
-            AppState::Running => ("Running report operation - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Report operation completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
+        crate::tui::tabs::Tab::Proxy => get_tab_status(app.current_tab, &app.proxy.state),
+        crate::tui::tabs::Tab::Packet => get_tab_status(app.current_tab, &app.packet.state),
+        crate::tui::tabs::Tab::Settings => (
+            "Press 's' to save settings, 'r' to reset".to_string(),
+            Color::Gray,
+        ),
+        crate::tui::tabs::Tab::History => (
+            "↑↓ Navigate | 'd' Delete | 'r' Clear all".to_string(),
+            Color::Gray,
+        ),
+        crate::tui::tabs::Tab::Dashboard => (
+            "Dashboard - View scan results overview".to_string(),
+            Color::Gray,
+        ),
+        crate::tui::tabs::Tab::GraphQl => get_tab_status(app.current_tab, &app.graphql.state),
+        crate::tui::tabs::Tab::OAuth => get_tab_status(app.current_tab, &app.oauth.state),
+        crate::tui::tabs::Tab::Cluster => get_tab_status(app.current_tab, &app.cluster.state),
+        crate::tui::tabs::Tab::Stress => get_tab_status(app.current_tab, &app.stress.state),
+        crate::tui::tabs::Tab::Report => get_tab_status(app.current_tab, &app.report.state),
         #[cfg(feature = "nse")]
-        crate::tui::tabs::Tab::Nse => match &app.nse.state {
-            AppState::Idle => (
-                "Ready - Enter target and press Enter to run NSE scripts",
-                Color::Gray,
-            ),
-            AppState::Running => ("Running NSE scripts - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("NSE scripts completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
+        crate::tui::tabs::Tab::Nse => get_tab_status(app.current_tab, &app.nse.state),
         #[cfg(not(feature = "nse"))]
-        crate::tui::tabs::Tab::Nse => ("NSE not available", Color::Gray),
+        crate::tui::tabs::Tab::Nse => ("NSE not available".to_string(), Color::Gray),
         #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-        crate::tui::tabs::Tab::Plugin => match &app.plugin.state {
-            AppState::Idle => ("Ready - Select plugin and press Enter to run", Color::Gray),
-            AppState::Running => ("Running plugin - Ctrl+C to stop", Color::Yellow),
-            AppState::Completed => ("Plugin completed", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
-        },
+        crate::tui::tabs::Tab::Plugin => get_tab_status(app.current_tab, &app.plugin.state),
         #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-        crate::tui::tabs::Tab::Plugin => ("Plugins not available", Color::Gray),
+        crate::tui::tabs::Tab::Plugin => ("Plugins not available".to_string(), Color::Gray),
     };
 
     let _mode_style = match app.mode {

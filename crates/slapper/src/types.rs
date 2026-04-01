@@ -22,14 +22,9 @@ pub enum Severity {
 
 impl Severity {
     /// Parse a severity from a string, defaulting to `Info` for unknown values.
+    #[deprecated(since = "0.0.0", note = "Use `str.parse::<Severity>()` instead")]
     pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "critical" => Severity::Critical,
-            "high" => Severity::High,
-            "medium" | "moderate" => Severity::Medium,
-            "low" => Severity::Low,
-            _ => Severity::Info,
-        }
+        s.parse().unwrap_or(Severity::Info)
     }
 
     /// Derive severity from a CVSS score.
@@ -85,6 +80,20 @@ impl std::fmt::Display for Severity {
             Severity::Medium => write!(f, "MEDIUM"),
             Severity::Low => write!(f, "LOW"),
             Severity::Info => write!(f, "INFO"),
+        }
+    }
+}
+
+impl std::str::FromStr for Severity {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "critical" => Ok(Severity::Critical),
+            "high" => Ok(Severity::High),
+            "medium" | "moderate" => Ok(Severity::Medium),
+            "low" => Ok(Severity::Low),
+            _ => Ok(Severity::Info),
         }
     }
 }

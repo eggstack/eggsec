@@ -30,12 +30,8 @@ pub use response::{
 pub use state::{AgentSession, ScanContext, SessionManager, SessionStatus};
 pub use traits::{
     validate_parameters, AttackSurface, CapabilityExample, ParameterDef, ParameterType,
-    SecurityTool, ToolCapability, ToolCategory,
+    SecurityTool, ToolCapability, ToolCategory, ToolResult,
 };
-
-use crate::error::SlapperError;
-
-pub type ToolResult<T> = Result<T, SlapperError>;
 
 pub fn create_default_registry() -> ToolRegistry {
     let registry = ToolRegistry::new();

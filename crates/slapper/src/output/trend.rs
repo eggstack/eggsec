@@ -23,6 +23,7 @@ pub struct ResultSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[deprecated(since = "0.1.0", note = "Use AgentFinding from output::agent instead")]
 pub struct Finding {
     pub severity: Severity,
     pub category: String,
@@ -31,6 +32,20 @@ pub struct Finding {
     pub evidence: Vec<String>,
     pub remediation: Option<String>,
     pub cve: Option<String>,
+}
+
+impl From<&crate::output::AgentFinding> for Finding {
+    fn from(f: &crate::output::AgentFinding) -> Self {
+        Self {
+            severity: f.severity,
+            category: f.vulnerability_type.clone(),
+            title: f.title.clone(),
+            description: f.description.clone(),
+            evidence: f.evidence.request.iter().cloned().collect(),
+            remediation: Some(f.remediation.summary.clone()),
+            cve: f.cwe_ids.first().cloned(),
+        }
+    }
 }
 
 pub use crate::types::Severity;

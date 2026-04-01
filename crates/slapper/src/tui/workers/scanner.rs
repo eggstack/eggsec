@@ -74,7 +74,7 @@ pub async fn run_fingerprint(
     use crate::scanner::fingerprint::fingerprint_services;
 
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
-    let results = fingerprint_services(&target, port_list, timeout, true).await?;
+    let results = fingerprint_services(&target, port_list, timeout, true, 20).await?;
 
     let total = results.ports_scanned as u64;
     let _ = result_tx.send(TaskResult::Fingerprint(results)).await;

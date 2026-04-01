@@ -244,6 +244,7 @@ async fn process_fingerprint(task: Task) -> Result<serde_json::Value> {
         ports,
         std::time::Duration::from_secs(timeout),
         false,
+        20,
     )
     .await?;
 

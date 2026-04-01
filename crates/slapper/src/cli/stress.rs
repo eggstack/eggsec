@@ -72,7 +72,6 @@ pub struct IcmpArgs {
     )]
     pub interval: f64,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
 }
 
@@ -94,7 +93,6 @@ pub struct TracerouteArgs {
     #[arg(long, help = "Disable reverse DNS lookup")]
     pub no_resolve: bool,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
 }
 
@@ -140,7 +138,6 @@ pub struct StressArgs {
     #[arg(long, help = "Proxy pool file")]
     pub proxy_file: Option<String>,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
 }
 

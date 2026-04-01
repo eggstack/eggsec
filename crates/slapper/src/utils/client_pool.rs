@@ -57,9 +57,12 @@ impl ClientPool {
         Self::new(pool_size, timeout, insecure, user_agent, proxy)
     }
 
-    pub fn get(&self) -> Client {
+    pub fn get(&self) -> Option<Client> {
+        if self.clients.is_empty() {
+            return None;
+        }
         let index = self.current_index.fetch_add(1, Ordering::Relaxed) % self.clients.len();
-        self.clients[index].clone()
+        Some(self.clients[index].clone())
     }
 
     pub fn len(&self) -> usize {
@@ -88,7 +91,7 @@ impl OptimizedClientPool {
         }
     }
 
-    pub fn get(&self) -> Client {
+    pub fn get(&self) -> Option<Client> {
         self.pool.get()
     }
 }

@@ -85,11 +85,7 @@ pub struct LoadArgs {
     pub headers: Vec<String>,
     #[arg(long, default_value = "30", help = "Request timeout in seconds")]
     pub timeout: u64,
-    #[arg(
-        long,
-        help = "Output results as JSON (use --global-json for same effect)"
-    )]
-    #[arg(hide = true)]
+    #[arg(long, help = "Output results as JSON")]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
@@ -135,8 +131,6 @@ pub struct ReconArgs {
     pub no_email: bool,
     #[arg(long, help = "Concurrency for parallel scans (default: 10)")]
     pub concurrency: Option<usize>,
-    #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Quiet mode (no spinner)")]
     pub quiet: bool,
@@ -162,8 +156,6 @@ pub struct GraphQlArgs {
     pub concurrency: usize,
     #[arg(long, default_value = "15", help = "Request timeout in seconds")]
     pub timeout: u64,
-    #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
@@ -193,8 +185,6 @@ pub struct OAuthArgs {
     pub concurrency: usize,
     #[arg(long, default_value = "15", help = "Request timeout in seconds")]
     pub timeout: u64,
-    #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,

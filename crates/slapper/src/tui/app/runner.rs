@@ -73,9 +73,10 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
         }
 
         if tab_area.contains((mouse_event.column, mouse_event.row).into()) {
-            let tab_width = tab_area.width / 15;
+            let tab_count = Tab::all().len();
+            let tab_width = tab_area.width / tab_count as u16;
             let tab_index = (mouse_event.column.saturating_sub(1) / tab_width) as usize;
-            if tab_index < 15 {
+            if tab_index < tab_count {
                 app.select_tab(tab_index);
             }
         }
@@ -90,7 +91,9 @@ where
         terminal.draw(|f| ui::draw(f, app))?;
 
         if event::poll(std::time::Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
+            let event = event::read()?;
+
+            if let Event::Key(key) = &event {
                 if let Some(pending) = app.pending_key.take() {
                     match (key.modifiers, key.code, pending) {
                         (_, KeyCode::Char('g'), KeyCode::Char('g'))
@@ -278,60 +281,11 @@ where
                             app.prev_tab();
                         }
                     }
-                    (KeyModifiers::NONE, KeyCode::Char('g')) => {
+                    (KeyModifiers::NONE, KeyCode::Char('g')) if app.mode == InputMode::Normal => {
                         app.handle_bottom();
                     }
                     (KeyModifiers::NONE, KeyCode::Backspace) => {
                         app.handle_backspace();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('h'))
-                    | (KeyModifiers::NONE, KeyCode::Left)
-                        if app.mode == InputMode::Normal =>
-                    {
-                        app.handle_left();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('j'))
-                    | (KeyModifiers::NONE, KeyCode::Down)
-                        if app.mode == InputMode::Normal =>
-                    {
-                        app.handle_down();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('k'))
-                    | (KeyModifiers::NONE, KeyCode::Up)
-                        if app.mode == InputMode::Normal =>
-                    {
-                        app.handle_up();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('l'))
-                    | (KeyModifiers::NONE, KeyCode::Right)
-                        if app.mode == InputMode::Normal =>
-                    {
-                        app.handle_right();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('H')) if app.mode == InputMode::Normal => {
-                        app.handle_home();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('L')) if app.mode == InputMode::Normal => {
-                        app.handle_end();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('G')) if app.mode == InputMode::Normal => {
-                        app.handle_bottom();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('w')) if app.mode == InputMode::Normal => {
-                        app.handle_word_forward();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
-                        app.handle_word_backward();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('n'))
-                    | (KeyModifiers::NONE, KeyCode::Char('N'))
-                        if app.mode == InputMode::Normal =>
-                    {
-                        if key.code == KeyCode::Char('n') {
-                            app.next_tab();
-                        } else {
-                            app.prev_tab();
-                        }
                     }
                     (KeyModifiers::NONE, KeyCode::Char('p')) if app.mode == InputMode::Normal => {
                         app.prev_tab();
@@ -386,7 +340,7 @@ where
                 }
             }
 
-            if let Event::Mouse(mouse_event) = event::read()? {
+            if let Event::Mouse(mouse_event) = event {
                 handle_mouse_event(mouse_event, app);
             }
         }

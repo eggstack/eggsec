@@ -1,8 +1,10 @@
 use crate::constants::{self, cache};
+use crate::proxy::ProxyType;
 use crate::types::SensitiveString;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use thiserror::Error;
 
 /// Directory paths for payloads, plugins, and wordlists.
 ///
@@ -88,7 +90,7 @@ pub struct ScheduledScan {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyConfigEntry {
-    pub proxy_type: String,
+    pub proxy_type: ProxyType,
     pub address: String,
     pub port: u16,
     #[serde(default)]
@@ -477,6 +479,66 @@ pub enum Verbosity {
 }
 
 pub use crate::types::Severity;
+
+#[derive(Debug, Error)]
+pub enum ConfigValidationError {
+    #[error("Invalid log level '{0}': must be one of trace, debug, info, warn, error")]
+    InvalidLogLevel(String),
+    #[error("Invalid proxy URL '{0}': must be a valid URL (http, https, socks5)")]
+    InvalidProxyUrl(String),
+    #[error("Invalid timeout value {0}: must be positive")]
+    InvalidTimeout(u64),
+    #[error("Invalid concurrency value {0}: must be at least 1")]
+    InvalidConcurrency(usize),
+    #[error("Invalid rate limit value {0}: must be at least 1")]
+    InvalidRateLimit(u32),
+}
+
+impl SlapperConfig {
+    pub fn validate(&self) -> Result<(), ConfigValidationError> {
+        if let Some(ref proxy) = self.http.proxy {
+            if !proxy.starts_with("http://")
+                && !proxy.starts_with("https://")
+                && !proxy.starts_with("socks5://")
+            {
+                return Err(ConfigValidationError::InvalidProxyUrl(proxy.clone()));
+            }
+        }
+
+        if self.http.timeout_secs == 0 {
+            return Err(ConfigValidationError::InvalidTimeout(
+                self.http.timeout_secs,
+            ));
+        }
+        if self.http.max_retries > 10 {
+            return Err(ConfigValidationError::InvalidTimeout(
+                self.http.max_retries as u64,
+            ));
+        }
+
+        if self.scan.default_concurrency == 0 {
+            return Err(ConfigValidationError::InvalidConcurrency(
+                self.scan.default_concurrency,
+            ));
+        }
+
+        if let Some(rate_limit) = self.scan.rate_limit_per_second {
+            if rate_limit == 0 {
+                return Err(ConfigValidationError::InvalidRateLimit(rate_limit));
+            }
+        }
+
+        for proxy in &self.proxies {
+            if proxy.weight == 0 {
+                return Err(ConfigValidationError::InvalidConcurrency(
+                    proxy.weight as usize,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
 
 fn default_timeout() -> u64 {
     30

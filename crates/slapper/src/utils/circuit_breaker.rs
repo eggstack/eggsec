@@ -17,10 +17,14 @@ pub struct CircuitBreaker {
     timeout: Duration,
     failure_count: Arc<AtomicU64>,
     success_count: Arc<AtomicU64>,
-    state: Arc<Mutex<CircuitState>>,
-    last_failure: Arc<Mutex<Option<Instant>>>,
+    state: Arc<Mutex<CircuitBreakerState>>,
     total_calls: Arc<AtomicUsize>,
     total_failures: Arc<AtomicUsize>,
+}
+
+struct CircuitBreakerState {
+    state: CircuitState,
+    last_failure: Option<Instant>,
 }
 
 impl CircuitBreaker {
@@ -31,21 +35,23 @@ impl CircuitBreaker {
             timeout,
             failure_count: Arc::new(AtomicU64::new(0)),
             success_count: Arc::new(AtomicU64::new(0)),
-            state: Arc::new(Mutex::new(CircuitState::Closed)),
-            last_failure: Arc::new(Mutex::new(None)),
+            state: Arc::new(Mutex::new(CircuitBreakerState {
+                state: CircuitState::Closed,
+                last_failure: None,
+            })),
             total_calls: Arc::new(AtomicUsize::new(0)),
             total_failures: Arc::new(AtomicUsize::new(0)),
         }
     }
 
     pub async fn is_available(&self) -> bool {
-        let state = self.state.lock().await;
-        match *state {
+        let mut state = self.state.lock().await;
+        match state.state {
             CircuitState::Closed => true,
             CircuitState::Open => {
-                if let Some(last) = *self.last_failure.lock().await {
+                if let Some(last) = state.last_failure {
                     if last.elapsed() >= self.timeout {
-                        *self.state.lock().await = CircuitState::HalfOpen;
+                        state.state = CircuitState::HalfOpen;
                         true
                     } else {
                         false
@@ -63,10 +69,10 @@ impl CircuitBreaker {
         self.success_count.fetch_add(1, Ordering::Relaxed);
 
         let mut state = self.state.lock().await;
-        if *state == CircuitState::HalfOpen {
+        if state.state == CircuitState::HalfOpen {
             let successes = self.success_count.load(Ordering::Relaxed);
             if successes >= self.success_threshold {
-                *state = CircuitState::Closed;
+                state.state = CircuitState::Closed;
                 self.failure_count.store(0, Ordering::Relaxed);
                 self.success_count.store(0, Ordering::Relaxed);
             }
@@ -79,21 +85,22 @@ impl CircuitBreaker {
         self.total_calls.fetch_add(1, Ordering::Relaxed);
         self.total_failures.fetch_add(1, Ordering::Relaxed);
         self.failure_count.fetch_add(1, Ordering::Relaxed);
-        *self.last_failure.lock().await = Some(Instant::now());
 
         let mut state = self.state.lock().await;
-        if *state == CircuitState::HalfOpen {
-            *state = CircuitState::Open;
-        } else if *state == CircuitState::Closed {
+        state.last_failure = Some(Instant::now());
+
+        if state.state == CircuitState::HalfOpen {
+            state.state = CircuitState::Open;
+        } else if state.state == CircuitState::Closed {
             let failures = self.failure_count.load(Ordering::Relaxed);
             if failures >= self.failure_threshold {
-                *state = CircuitState::Open;
+                state.state = CircuitState::Open;
             }
         }
     }
 
     pub async fn get_state(&self) -> CircuitState {
-        *self.state.lock().await
+        self.state.lock().await.state
     }
 
     pub fn total_calls(&self) -> usize {
@@ -154,8 +161,10 @@ impl CircuitBreakerRegistry {
         breaker
     }
 
-    pub fn get_state(&self, _name: &str) -> Option<CircuitState> {
-        None
+    pub async fn get_state(&self, name: &str) -> Option<CircuitState> {
+        let breakers = self.breakers.lock().await;
+        let breaker = breakers.get(name)?;
+        Some(breaker.get_state().await)
     }
 
     pub async fn stats(&self) -> Vec<(String, CircuitState, usize, usize, f64)> {
@@ -181,7 +190,6 @@ impl Clone for CircuitBreaker {
             failure_count: self.failure_count.clone(),
             success_count: self.success_count.clone(),
             state: self.state.clone(),
-            last_failure: self.last_failure.clone(),
             total_calls: self.total_calls.clone(),
             total_failures: self.total_failures.clone(),
         }

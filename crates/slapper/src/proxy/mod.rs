@@ -173,6 +173,8 @@ impl ProxyManager {
             0,
         );
 
+        let mut all_connections: Vec<ProxiedConnection> = Vec::new();
+
         for proxy in chain.iter() {
             let conn = match proxy.proxy_type {
                 ProxyType::Socks4 | ProxyType::Socks5 => {
@@ -183,11 +185,17 @@ impl ProxyManager {
                 }
                 ProxyType::Tor => socks::connect_through_tor(proxy.clone(), target_addr).await?,
             };
-            final_local_addr = conn.local_addr;
+            all_connections.push(conn);
         }
 
+        if let Some(last_conn) = all_connections.last() {
+            final_local_addr = last_conn.local_addr;
+        }
+
+        let proxy_chain: Vec<ProxyEntry> = chain.into_iter().collect();
+
         Ok(ProxiedConnection {
-            proxy_chain: chain,
+            proxy_chain,
             local_addr: final_local_addr,
             target_addr,
         })
@@ -252,12 +260,12 @@ async fn resolve_target(target: &str) -> Result<SocketAddr> {
         let host = parts[0];
         let port: u16 = parts[1].parse()?;
 
-        use std::net::ToSocketAddrs;
-
-        let addrs: Vec<_> = (host, port).to_socket_addrs()?.collect();
+        let target_addr = format!("{}:{}", host, port);
+        let mut addrs = tokio::net::lookup_host(&target_addr)
+            .await
+            .map_err(|e| SlapperError::Proxy(format!("DNS lookup failed: {}", e)))?;
 
         addrs
-            .into_iter()
             .next()
             .ok_or_else(|| SlapperError::Proxy(format!("Failed to resolve {}", target)))
     } else {

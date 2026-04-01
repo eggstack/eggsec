@@ -307,3 +307,14 @@ Always use `.unwrap_or_else(|_| ProgressStyle::default_bar())` instead of `.unwr
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 use slapper_plugin::Plugin;
 ```
+
+### Output Patterns
+
+Use the appropriate output method based on the context:
+
+- **`eprintln!`** — Progress messages (user-initiated operations, step-by-step feedback)
+- **`tracing::warn!`** — Recoverable logged issues (retries, degraded functionality)
+- **`tracing::error!`** — Unrecoverable errors (failures that halt operations)
+- **`println!`** — Final output only (scan results, reports, completion messages)
+
+The TUI has its own rendering layer; use `tracing` for logging from background workers.

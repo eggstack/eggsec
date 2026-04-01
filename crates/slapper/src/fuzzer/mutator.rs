@@ -130,9 +130,10 @@ impl Mutator {
     }
 
     fn truncate(&mut self, payload: &str) -> Option<String> {
-        if payload.len() > 3 {
-            let new_len = self.rng.gen_range(1..payload.len() - 1);
-            Some(payload[..new_len].to_string())
+        let char_count = payload.chars().count();
+        if char_count > 3 {
+            let new_len = self.rng.gen_range(1..char_count - 1);
+            Some(payload.chars().take(new_len).collect())
         } else {
             None
         }
@@ -154,9 +155,14 @@ impl Mutator {
         let comments = ["/**/", "/*!50000*/", "--", "#", "/*comment*/"];
         let comment = comments[self.rng.gen_range(0..comments.len())];
 
-        if payload.len() > 1 {
-            let mid = payload.len() / 2;
-            format!("{}{}{}", &payload[..mid], comment, &payload[mid..])
+        let char_count = payload.chars().count();
+        if char_count > 1 {
+            let mid = char_count / 2;
+            let (prefix, suffix): (String, String) = (
+                payload.chars().take(mid).collect(),
+                payload.chars().skip(mid).collect(),
+            );
+            format!("{}{}{}", prefix, comment, suffix)
         } else {
             format!("{}{}", comment, payload)
         }
@@ -166,9 +172,14 @@ impl Mutator {
         let whitespace = [" ", "\t", "\n", "\r\n", "%09", "%0a", "%0d"];
         let ws = whitespace[self.rng.gen_range(0..whitespace.len())];
 
-        if payload.len() > 1 {
-            let pos = self.rng.gen_range(1..payload.len());
-            format!("{}{}{}", &payload[..pos], ws, &payload[pos..])
+        let char_count = payload.chars().count();
+        if char_count > 1 {
+            let pos = self.rng.gen_range(1..char_count);
+            let (prefix, suffix): (String, String) = (
+                payload.chars().take(pos).collect(),
+                payload.chars().skip(pos).collect(),
+            );
+            format!("{}{}{}", prefix, ws, suffix)
         } else {
             format!("{}{}", payload, ws)
         }

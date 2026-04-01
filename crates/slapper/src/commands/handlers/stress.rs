@@ -69,7 +69,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             let mut config = ctx.config.clone();
             let new_entries: Vec<ProxyConfigEntry> = proxies.iter().map(|p| {
                 ProxyConfigEntry {
-                    proxy_type: p.proxy_type.to_string(),
+                    proxy_type: p.proxy_type,
                     address: p.address.clone(),
                     port: p.port,
                     username: p.username.clone(),
@@ -131,14 +131,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             }
 
             let proxy_entries: Vec<ProxyEntry> = config.proxies.iter().map(|p| {
-                let pt = match p.proxy_type.as_str() {
-                    "socks4" => crate::proxy::ProxyType::Socks4,
-                    "socks5" => crate::proxy::ProxyType::Socks5,
-                    "https" => crate::proxy::ProxyType::Https,
-                    "tor" => crate::proxy::ProxyType::Tor,
-                    _ => crate::proxy::ProxyType::Http,
-                };
-                let mut entry = ProxyEntry::new(pt, p.address.clone(), p.port);
+                let mut entry = ProxyEntry::new(p.proxy_type, p.address.clone(), p.port);
                 entry.username = p.username.clone();
                 entry.password = p.password.clone();
                 entry.weight = p.weight;

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::cli::ScanProfile;
 use crate::scanner::spoof::SpoofConfig;
 use crate::tui::tabs::recon::ReconOptions;

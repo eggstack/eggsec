@@ -46,7 +46,6 @@ pub struct PacketCaptureArgs {
     #[arg(long, help = "Promiscuous mode")]
     pub promiscuous: bool,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
@@ -73,7 +72,6 @@ pub struct PacketSendArgs {
     #[arg(long, help = "TTL/Hop limit")]
     pub ttl: Option<u8>,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
@@ -96,7 +94,6 @@ pub struct PacketDumpArgs {
     #[arg(long, help = "Bytes per line")]
     pub bytes_per_line: Option<usize>,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
@@ -125,7 +122,6 @@ pub struct PacketTracerouteArgs {
     #[arg(long, help = "Disable reverse DNS lookup")]
     pub no_resolve: bool,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,

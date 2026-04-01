@@ -1,4 +1,3 @@
-
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -209,6 +208,9 @@ impl StealthConfig {
     }
 
     pub fn random_user_agent(&self) -> String {
+        if self.user_agents.is_empty() {
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string();
+        }
         let mut rng = rand::thread_rng();
         let idx = rng.gen_range(0..self.user_agents.len());
         self.user_agents[idx].clone()
@@ -219,7 +221,9 @@ impl StealthConfig {
             return None;
         }
         let mut rng = rand::thread_rng();
-        let ms = rng.gen_range(self.jitter_min_ms..=self.jitter_max_ms);
+        let min = self.jitter_min_ms.min(self.jitter_max_ms);
+        let max = self.jitter_min_ms.max(self.jitter_max_ms);
+        let ms = rng.gen_range(min..=max);
         Some(Duration::from_millis(ms))
     }
 

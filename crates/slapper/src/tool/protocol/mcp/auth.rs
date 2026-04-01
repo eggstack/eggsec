@@ -23,7 +23,8 @@ pub fn validate_auth(
     let key = headers
         .get("authorization")
         .or_else(|| headers.get("x-api-key"))
-        .and_then(|v| v.to_str().ok());
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer ").or(Some(v)));
     validate_auth_internal(api_key, key)
 }
 

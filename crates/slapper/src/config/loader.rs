@@ -39,6 +39,8 @@ pub fn load_config(config_path: Option<&str>) -> Result<SlapperConfig> {
             .with_context(|| format!("Failed to parse TOML config: {:?}", path))?
     };
 
+    config.validate().map_err(|e| anyhow::anyhow!("{}", e))?;
+
     Ok(config)
 }
 

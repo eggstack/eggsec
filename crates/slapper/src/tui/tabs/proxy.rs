@@ -212,7 +212,7 @@ impl ProxyTab {
         self.proxies = entries
             .iter()
             .map(|p| ProxyConfigEntry {
-                proxy_type: p.proxy_type.to_string(),
+                proxy_type: p.proxy_type,
                 address: p.address.clone(),
                 port: p.port,
                 username: p.username.clone(),
@@ -238,7 +238,7 @@ impl ProxyTab {
             .iter()
             .map(|p| ProxyEntry {
                 name: None,
-                proxy_type: ProxyType::from_str(&p.proxy_type).unwrap_or(ProxyType::Http),
+                proxy_type: p.proxy_type,
                 address: p.address.clone(),
                 port: p.port,
                 username: p.username.clone(),

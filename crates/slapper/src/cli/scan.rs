@@ -90,7 +90,6 @@ pub struct PortScanArgs {
     #[arg(long, default_value = "2", help = "Connection timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(
         short = 'S',
@@ -185,7 +184,6 @@ pub struct EndpointScanArgs {
     #[arg(long, help = "Include 404 responses in output")]
     pub include_404: bool,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(
         long,
@@ -239,7 +237,6 @@ pub struct FingerprintArgs {
     #[arg(long, default_value = "5", help = "Connection timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Enable UDP service fingerprinting (requires root/sudo)")]
     pub udp: bool,
@@ -247,6 +244,13 @@ pub struct FingerprintArgs {
     pub verbose: bool,
     #[arg(long, help = "Output to file")]
     pub output: Option<String>,
+    #[arg(
+        short = 'c',
+        long,
+        default_value = "20",
+        help = "Concurrent connections"
+    )]
+    pub concurrency: usize,
 }
 
 #[derive(clap::Args)]
@@ -265,7 +269,6 @@ pub struct NseArgs {
     #[arg(short = 'f', long, help = "Path to custom NSE script file")]
     pub script_file: Option<String>,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
@@ -303,7 +306,6 @@ pub struct ScanArgs {
     #[arg(short = 'c', long, default_value = "10", help = "Concurrent requests")]
     pub concurrency: usize,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, short = 'o', help = "Output file path")]
     pub output: Option<String>,

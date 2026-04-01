@@ -1,6 +1,4 @@
 
-#![allow(dead_code)]
-
 mod cluster;
 mod dashboard;
 mod fingerprint;

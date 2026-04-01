@@ -184,10 +184,10 @@ pub(crate) async fn scan_ports_spoofed(
                 if let Some((src_ip, dst_port, status)) = parse_tcp_response(&packet) {
                     if src_ip == target_ip_u32 || src_ip == local_ip_u32 {
                         let sent_guard = sent_packets.lock();
-                        for (port, _target_ip) in sent_guard.iter() {
+                        if sent_guard.contains_key(&dst_port) {
                             let mut resp_guard = responses.lock();
-                            if !resp_guard.contains_key(port) {
-                                resp_guard.insert(*port, status.clone());
+                            if !resp_guard.contains_key(&dst_port) {
+                                resp_guard.insert(dst_port, status.clone());
                             }
                         }
                     }

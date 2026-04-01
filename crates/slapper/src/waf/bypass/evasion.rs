@@ -2,7 +2,6 @@ use crate::error::Result;
 use reqwest::Client;
 
 use super::{BypassResult, BypassTechnique, TestType, WafProfile};
-use crate::constants::waf::BLOCKED_STATUS_CODES;
 use crate::waf::detector::WafDetectionResult;
 use crate::waf::payloads::encoding::{
     get_command_injection_payloads, get_sqli_payloads, get_ssrf_payloads, get_traversal_payloads,
@@ -262,8 +261,8 @@ impl EvasionBypass {
         })
     }
 
-    fn is_bypass_successful(&self, status: u16, _detection: &WafDetectionResult) -> bool {
-        !BLOCKED_STATUS_CODES.contains(&status) && (200..300).contains(&status)
+    fn is_bypass_successful(&self, status: u16, detection: &WafDetectionResult) -> bool {
+        super::is_bypass_successful(status, detection)
     }
 }
 
@@ -402,6 +401,7 @@ pub fn apply_null_byte(input: &str) -> String {
     result
 }
 
+#[allow(dead_code)]
 pub struct HomoglyphMap {
     pub cyrillic: std::collections::HashMap<char, char>,
     pub greek: std::collections::HashMap<char, char>,

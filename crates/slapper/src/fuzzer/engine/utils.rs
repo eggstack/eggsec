@@ -90,8 +90,8 @@ impl FuzzEngine {
                 .await?;
 
             let status_code = response.status().as_u16();
+            let headers = response.headers().clone();
             let body = response.bytes().await.unwrap_or_default();
-            let headers = reqwest::header::HeaderMap::new();
             let timing_ms = start.elapsed().as_millis() as u64;
 
             differ.capture_baseline(status_code, &headers, &body, timing_ms);
@@ -115,8 +115,8 @@ impl FuzzEngine {
                     .await
                 {
                     let status_code = resp.status().as_u16();
+                    let headers = resp.headers().clone();
                     let body = resp.bytes().await.unwrap_or_default();
-                    let headers = reqwest::header::HeaderMap::new();
                     let timing_ms = start.elapsed().as_millis() as u64;
 
                     let diff = differ.diff(status_code, &headers, &body, timing_ms);
@@ -158,9 +158,15 @@ impl FuzzEngine {
     }
 
     pub(crate) async fn update_session_from_results(&mut self, results: &[FuzzResult]) {
-        if let Some(ref mut _session) = self.http_session {
+        if let Some(ref mut session) = self.http_session {
             for result in results {
-                if result.status_code == 200 || result.status_code == 302 {}
+                if result.status_code == 200 || result.status_code == 302 {
+                    for leak in &result.leaks_found {
+                        if leak.contains("session") || leak.contains("token") || leak.contains("auth") {
+                            session.state_data.insert("auth_detected".to_string(), leak.clone());
+                        }
+                    }
+                }
             }
         }
     }

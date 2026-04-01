@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 mod app;
 mod components;
 mod help;

@@ -265,6 +265,7 @@ impl Pipeline {
             ports,
             std::time::Duration::from_secs(5),
             self.tui_mode,
+            20,
         )
         .await?;
 

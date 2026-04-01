@@ -80,7 +80,7 @@ pub struct ProxyEntry {
     #[serde(default = "default_timeout")]
     pub timeout_ms: u64,
 
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub enabled: bool,
 
     #[serde(default)]
@@ -89,6 +89,10 @@ pub struct ProxyEntry {
 
 fn default_timeout() -> u64 {
     10000
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl ProxyEntry {

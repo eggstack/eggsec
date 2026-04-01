@@ -4,15 +4,18 @@ pub fn strip_controls(s: &str, max_len: usize) -> String {
         .filter(|c| c.is_ascii_graphic() || *c == ' ')
         .collect();
     if cleaned.len() > max_len {
-        format!("{}...", &cleaned[..max_len.saturating_sub(3)])
+        let truncated: String = cleaned.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     } else {
         format!("{:<width$}", cleaned, width = max_len)
     }
 }
 
 pub fn preserve_all(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
+    let char_count = s.chars().count();
+    if char_count > max_len {
+        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     } else {
         format!("{:<width$}", s, width = max_len)
     }

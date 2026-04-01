@@ -1,6 +1,4 @@
 
-#![allow(dead_code)]
-
 use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -9,6 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::task;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReDosResult {
     pub pattern: String,

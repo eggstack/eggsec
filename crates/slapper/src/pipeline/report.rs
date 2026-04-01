@@ -5,6 +5,22 @@ use crate::scanner::endpoints::EndpointResult;
 use crate::scanner::fingerprint::ServiceFingerprint;
 use crate::scanner::ports::PortResult;
 
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn escape_csv(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PipelineReport {
     pub target: String,
@@ -100,7 +116,7 @@ pub fn generate_html(report: &PipelineReport) -> crate::error::Result<String> {
     html.push_str("<h1>Security Assessment Report</h1>\n");
     html.push_str(&format!(
         "<p><strong>Target:</strong> {}</p>\n",
-        report.target
+        escape_html(&report.target)
     ));
     html.push_str(&format!(
         "<p><strong>Duration:</strong> {}ms</p>\n",
@@ -117,7 +133,9 @@ pub fn generate_html(report: &PipelineReport) -> crate::error::Result<String> {
         };
         html.push_str(&format!(
             "<tr><td>{}</td><td>{}ms</td><td>{}</td></tr>\n",
-            result.stage, result.duration_ms, status
+            escape_html(&format!("{}", result.stage)),
+            result.duration_ms,
+            status
         ));
     }
     html.push_str("</table>\n</div>\n");
@@ -128,7 +146,9 @@ pub fn generate_html(report: &PipelineReport) -> crate::error::Result<String> {
         for port in &report.open_ports {
             html.push_str(&format!(
                 "<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n",
-                port.port, port.status, port.service
+                port.port,
+                port.status,
+                escape_html(&port.service)
             ));
         }
         html.push_str("</table>\n</div>\n");
@@ -141,9 +161,9 @@ pub fn generate_html(report: &PipelineReport) -> crate::error::Result<String> {
             html.push_str(&format!(
                 "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
                 service.port,
-                service.service,
-                service.product.as_deref().unwrap_or("-"),
-                service.version.as_deref().unwrap_or("-")
+                escape_html(&service.service),
+                escape_html(service.product.as_deref().unwrap_or("-")),
+                escape_html(service.version.as_deref().unwrap_or("-"))
             ));
         }
         html.push_str("</table>\n</div>\n");
@@ -160,7 +180,9 @@ pub fn generate_html(report: &PipelineReport) -> crate::error::Result<String> {
                 .unwrap_or_else(|| "-".to_string());
             html.push_str(&format!(
                 "<tr><td class='interesting'>{}</td><td>{}</td><td>{}</td></tr>\n",
-                endpoint.path, endpoint.status_code, size
+                escape_html(&endpoint.path),
+                endpoint.status_code,
+                size
             ));
         }
         html.push_str("</table>\n</div>\n");
@@ -174,14 +196,19 @@ pub fn generate_csv(report: &PipelineReport) -> crate::error::Result<String> {
     let mut csv = String::new();
 
     csv.push_str("Security Assessment Report\n");
-    csv.push_str(&format!("Target,{}\n", report.target));
+    csv.push_str(&format!("Target,{}\n", escape_csv(&report.target)));
     csv.push_str(&format!("Duration (ms),{}\n\n", report.total_duration_ms));
 
     if !report.open_ports.is_empty() {
         csv.push_str("Open Ports\n");
         csv.push_str("Port,Status,Service\n");
         for port in &report.open_ports {
-            csv.push_str(&format!("{},{},{}\n", port.port, port.status, port.service));
+            csv.push_str(&format!(
+                "{},{},{}\n",
+                port.port,
+                port.status,
+                escape_csv(&port.service)
+            ));
         }
         csv.push('\n');
     }
@@ -193,9 +220,9 @@ pub fn generate_csv(report: &PipelineReport) -> crate::error::Result<String> {
             csv.push_str(&format!(
                 "{},{},{},{}\n",
                 service.port,
-                service.service,
-                service.product.as_deref().unwrap_or("-"),
-                service.version.as_deref().unwrap_or("-")
+                escape_csv(&service.service),
+                escape_csv(service.product.as_deref().unwrap_or("-")),
+                escape_csv(service.version.as_deref().unwrap_or("-"))
             ));
         }
         csv.push('\n');
@@ -211,7 +238,10 @@ pub fn generate_csv(report: &PipelineReport) -> crate::error::Result<String> {
                 .unwrap_or_else(|| "-".to_string());
             csv.push_str(&format!(
                 "{},{},{},{}\n",
-                endpoint.path, endpoint.status_code, size, endpoint.interesting
+                escape_csv(&endpoint.path),
+                endpoint.status_code,
+                size,
+                endpoint.interesting
             ));
         }
     }

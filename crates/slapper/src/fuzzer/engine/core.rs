@@ -84,13 +84,7 @@ impl FuzzEngine {
     }
 
     fn build_client(args: &FuzzArgs) -> Result<Client> {
-        let concurrency = args.concurrency.max(100);
-        if args.concurrency < 100 {
-            tracing::warn!(
-                "Concurrency {} below minimum of 100, using 100",
-                args.concurrency
-            );
-        }
+        let concurrency = args.concurrency.clamp(1, 500);
 
         let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(args.timeout))

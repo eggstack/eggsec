@@ -47,13 +47,6 @@
 //! `From` impls (e.g., `From<std::io::Error>`) for automatic conversion from
 //! third-party error types.
 
-#![allow(clippy::too_many_arguments)] // CLI structs like FuzzArgs, ScanArgs need 20+ fields
-#![allow(clippy::new_without_default)] // Builder patterns prefer explicit new()
-#![allow(clippy::derivable_impls)] // Manual Default impls for custom formatting/ordering
-#![allow(clippy::should_implement_trait)] // Builder new() differs from Default
-#![allow(clippy::large_enum_variant)] // Commands enum has large variants (boxed args impractical)
-#![allow(clippy::upper_case_acronyms)] // Security domain: SQLi, SSRF, XSS, WAF, CVE, etc.
-
 pub mod cli;
 pub mod commands;
 pub mod config;

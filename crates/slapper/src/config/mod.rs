@@ -47,9 +47,9 @@ mod settings;
 pub use loader::{config_dir, load_config, load_scope};
 pub use scope::{Scope, ScopeRule, TargetScope};
 pub use settings::{
-    AllowedWorker, ApiConfig, ApiKeyConfig, HttpConfig, NotificationConfig, OutputConfig,
-    PathsConfig, ProxyConfigEntry, ReconConfig, RemoteConfig, ScanConfig, ScanProfile,
-    ScheduledScan, SlapperConfig, WaybackConfig, WebhookConfig, WebhookEvent,
+    AllowedWorker, ApiConfig, ApiKeyConfig, ConfigValidationError, HttpConfig, NotificationConfig,
+    OutputConfig, PathsConfig, ProxyConfigEntry, ReconConfig, RemoteConfig, ScanConfig,
+    ScanProfile, ScheduledScan, SlapperConfig, WaybackConfig, WebhookConfig, WebhookEvent,
 };
 
 pub const ENV_PREFIX: &str = "SLAPPER_";

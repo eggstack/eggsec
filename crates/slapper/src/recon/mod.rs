@@ -54,6 +54,7 @@ pub mod geolocation;
 pub mod js;
 pub mod reverse_dns;
 pub mod secrets;
+pub mod spinner;
 pub mod ssl;
 pub mod subdomain;
 pub mod techdetect;
@@ -68,37 +69,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-struct Spinner {
-    chars: &'static [&'static str],
-    idx: usize,
-    stop: Arc<AtomicBool>,
-    stage: Arc<Mutex<String>>,
-}
-
-impl Spinner {
-    fn new(stop: Arc<AtomicBool>, stage: Arc<Mutex<String>>) -> Self {
-        Self {
-            chars: &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-            idx: 0,
-            stop,
-            stage,
-        }
-    }
-
-    fn tick(&mut self) {
-        if !self.stop.load(Ordering::Relaxed) {
-            if let Ok(stage) = self.stage.lock() {
-                eprint!("\r{} {}", self.chars[self.idx], stage);
-                self.idx = (self.idx + 1) % self.chars.len();
-            }
-        }
-    }
-
-    fn stop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        eprint!("\r                                                      \r");
-    }
-}
+pub use spinner::Spinner;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FullReconResult {

@@ -1346,15 +1346,15 @@ impl App {
         let mut file = match std::fs::File::create(&path) {
             Ok(file) => file,
             Err(e) => {
-                eprintln!("Could not create export file: {}", e);
+                tracing::error!("Could not create export file: {}", e);
                 return;
             }
         };
         
         if let Err(e) = file.write_all(data.as_bytes()) {
-            eprintln!("Could not write to export file: {}", e);
+            tracing::error!("Could not write to export file: {}", e);
         } else {
-            println!("Exported results to: {}", path);
+            tracing::info!("Exported results to: {}", path);
         }
     }
 

@@ -153,7 +153,7 @@ pub async fn run_cli(args: FingerprintArgs, config: &SlapperConfig) -> Result<()
     } else {
         let ports = parse_ports(&args.ports)?;
         let results =
-            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false)
+            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency)
                 .await?;
 
         if args.json {
@@ -171,6 +171,7 @@ pub async fn fingerprint_services(
     ports: Vec<u16>,
     timeout_duration: Duration,
     tui_mode: bool,
+    concurrency: usize,
 ) -> Result<FingerprintResults> {
     let results: Arc<Mutex<Vec<ServiceFingerprint>>> = Arc::new(Mutex::new(Vec::new()));
 
@@ -187,7 +188,7 @@ pub async fn fingerprint_services(
         Some(pb)
     };
 
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(20));
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
     let mut handles = Vec::new();
     let start = std::time::Instant::now();
     let ports_count = ports.len();

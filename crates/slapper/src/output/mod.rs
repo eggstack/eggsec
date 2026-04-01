@@ -30,3 +30,8 @@ pub use trend::{
     ComparisonResult, Finding as TrendFinding, ResultComparator, ResultSummary, ScanResult,
     Severity as TrendSeverity, TrendAnalysis, TrendAnalyzer, TrendDirection,
 };
+
+#[allow(deprecated)]
+pub use markdown::Finding as DeprecatedMarkdownFinding;
+#[allow(deprecated)]
+pub use trend::Finding as DeprecatedTrendFinding;

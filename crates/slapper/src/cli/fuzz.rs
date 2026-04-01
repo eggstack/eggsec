@@ -110,15 +110,12 @@ pub struct FuzzArgs {
     #[arg(long, default_value = "10", help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, short = 'o', help = "Output file path")]
-    #[arg(default_value = "None")]
     pub output: Option<String>,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
     #[arg(long, help = "Output format: json, html, csv, markdown")]
-    #[arg(default_value = "None")]
     pub format: Option<OutputFormat>,
     #[arg(
         long,
@@ -203,7 +200,6 @@ pub struct WafStressArgs {
     #[arg(long, default_value = "10", help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
@@ -237,7 +233,7 @@ impl From<WafStressArgs> for FuzzArgs {
             timeout: args.timeout,
             json: args.json,
             output: None,
-            verbose: false,
+            verbose: args.verbose,
             format: None,
             target: None,
             jwt_token: None,
@@ -289,7 +285,6 @@ pub struct WafArgs {
     #[arg(long, default_value = "15", help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
-    #[arg(hide = true)]
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,

@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+use crate::output::agent::AgentFinding;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[deprecated(since = "0.1.0", note = "Use AgentFinding from output::agent instead")]
 pub struct Finding {
     pub title: String,
     pub severity: String,
@@ -11,6 +14,22 @@ pub struct Finding {
     pub remediation: Option<String>,
     pub references: Vec<String>,
     pub cve_ids: Vec<String>,
+}
+
+impl From<&AgentFinding> for Finding {
+    fn from(f: &AgentFinding) -> Self {
+        Self {
+            title: f.title.clone(),
+            severity: f.severity.as_str().to_string(),
+            category: f.vulnerability_type.clone(),
+            description: f.description.clone(),
+            location: f.endpoint.clone(),
+            evidence: f.evidence.request.clone(),
+            remediation: Some(f.remediation.summary.clone()),
+            references: f.remediation.references.clone(),
+            cve_ids: f.cwe_ids.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
