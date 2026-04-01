@@ -16,9 +16,8 @@ use super::App;
 use super::PendingAction;
 use crate::tui::help::CommandPalette;
 use crate::tui::state;
-use crate::tui::tabs::{Tab, TabState};
+use crate::tui::tabs::Tab;
 use crate::tui::ui;
-use crate::tui::workers;
 
 pub fn run(config_path: Option<String>) -> Result<()> {
     enable_raw_mode()?;
@@ -43,7 +42,7 @@ pub fn run(config_path: Option<String>) -> Result<()> {
     terminal.show_cursor()?;
 
     if let Err(err) = res {
-        eprintln!("Error: {:?}", err);
+        tracing::error!("TUI exited with error: {:?}", err);
     }
 
     Ok(())

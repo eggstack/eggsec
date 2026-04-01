@@ -22,6 +22,7 @@ async fn test_fingerprint_http_service() {
         vec![port],
         std::time::Duration::from_secs(5),
         true, // tui_mode to suppress progress bar
+        10,   // concurrency
     )
     .await
     .unwrap();
@@ -41,6 +42,7 @@ async fn test_fingerprint_unreachable_port() {
         vec![1], // TCPMUX port, typically closed
         std::time::Duration::from_secs(1),
         true,
+        10, // concurrency
     )
     .await
     .unwrap();

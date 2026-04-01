@@ -199,6 +199,7 @@ Two truncation utilities in `utils/formatting.rs`:
 5. **Clippy redundant closures**: `.map(|arr| func(arr))` should be `.map(func)` when the argument is passed directly
 6. **Clippy needless borrows**: `.post(&format!(...))` should be `.post(format!(...))` when the format result implements the required traits
 7. **`default_value = "None"` on Options**: Never use `#[arg(default_value = "None")]` on `Option<T>` fields — clap assigns the string `"None"` instead of `None`. Omit `default_value` entirely; `Option` defaults to `None` automatically.
+8. **`fingerprint_services` signature**: Takes 5 args: `host`, `ports`, `timeout`, `tui_mode`, `concurrency` — don't forget `concurrency`
 
 ### Severity Enum
 
@@ -206,7 +207,7 @@ Two truncation utilities in `utils/formatting.rs`:
 - Use `as_int()` for severity comparisons, not `>` or `<`
 - `Display` outputs UPPERCASE ("CRITICAL"), `as_str()` outputs lowercase ("critical")
 - `serde` serialization uses lowercase (due to `#[serde(rename_all = "lowercase")]`)
-- `Severity` implements `FromStr` trait (inherent `from_str` method deprecated)
+- `Severity` implements `FromStr` trait; inherent method renamed to `parse_or_default`
 
 ### SensitiveString
 
@@ -222,11 +223,11 @@ Two truncation utilities exist with different behaviors:
 - `utils::formatting::preserve_all` — preserves all characters
 - `utils::formatting::truncate` and `truncate_simple` are deprecated aliases
 
-**Warning:** Both `preserve_all` and `strip_controls` use byte slicing (`&s[..max_len]`) which can panic on multi-byte UTF-8 characters. Use character-based truncation when fixing (plan.md Wave 2.1).
+Both use `.chars().take()` for safe character-based truncation (no byte slicing panic risk).
 
 ### Known Bugs (Resolved)
 
-All bugs documented in `plan.md` have been resolved as of 2026-04-01:
+All bugs documented in `plan.md` have been resolved as of 2026-04-02:
 
 - **UTF-8 byte slicing panic** in `preserve_all` and `strip_controls` — Fixed with `.chars().take()`
 - **Concurrency override**: `fuzzer/engine/core.rs:87` forces min 100 — Fixed with `clamp(1, 500)`
@@ -240,6 +241,9 @@ All bugs documented in `plan.md` have been resolved as of 2026-04-01:
 - **Proxy chaining**: connections not chained — Fixed to use `chain_connect()`
 - **MCP HashMaps**: unbounded growth — Fixed with background reaper
 - **Blocking DNS in async**: `to_socket_addrs()` — Replaced with `tokio::net::lookup_host()`
+- **`Severity::from_str` shadowing**: inherent method renamed to `parse_or_default`
+- **`eprintln!` in library code**: all replaced with `tracing::error!`/`tracing::warn!`
+- **`fingerprint_tests.rs`**: missing `concurrency` parameter fixed
 
 ### TUI-Specific Patterns
 

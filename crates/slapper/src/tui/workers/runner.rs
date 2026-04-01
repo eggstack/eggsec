@@ -1,5 +1,4 @@
 use crate::cli::ScanProfile;
-use crate::scanner::spoof::SpoofConfig;
 use crate::tui::tabs::recon::ReconOptions;
 use std::time::Duration;
 

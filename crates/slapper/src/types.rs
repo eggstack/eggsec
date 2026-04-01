@@ -22,8 +22,9 @@ pub enum Severity {
 
 impl Severity {
     /// Parse a severity from a string, defaulting to `Info` for unknown values.
-    #[deprecated(since = "0.0.0", note = "Use `str.parse::<Severity>()` instead")]
-    pub fn from_str(s: &str) -> Self {
+    ///
+    /// Prefer `s.parse::<Severity>()` for new code.
+    pub fn parse_or_default(s: &str) -> Self {
         s.parse().unwrap_or(Severity::Info)
     }
 
@@ -220,10 +221,10 @@ mod tests {
 
     #[test]
     fn severity_from_str() {
-        assert_eq!(Severity::from_str("critical"), Severity::Critical);
-        assert_eq!(Severity::from_str("HIGH"), Severity::High);
-        assert_eq!(Severity::from_str("moderate"), Severity::Medium);
-        assert_eq!(Severity::from_str("unknown"), Severity::Info);
+        assert_eq!("critical".parse::<Severity>().unwrap(), Severity::Critical);
+        assert_eq!("HIGH".parse::<Severity>().unwrap(), Severity::High);
+        assert_eq!("moderate".parse::<Severity>().unwrap(), Severity::Medium);
+        assert_eq!("unknown".parse::<Severity>().unwrap(), Severity::Info);
     }
 
     #[test]

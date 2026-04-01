@@ -116,7 +116,7 @@ impl Worker {
 
                 let url = format!("{}/api/workers/heartbeat", coordinator_url);
                 if let Err(e) = client.post(&url).json(&heartbeat).send().await {
-                    eprintln!("Heartbeat failed: {}", e);
+                    tracing::warn!("Heartbeat failed: {}", e);
                 }
             }
         });
@@ -132,7 +132,7 @@ impl Worker {
                     tokio::spawn(async move {
                         let result = process_task(task).await;
                         if let Err(e) = result {
-                            eprintln!("Task processing error: {}", e);
+                            tracing::error!("Task processing error: {}", e);
                         }
                     });
                 }

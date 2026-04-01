@@ -1,7 +1,7 @@
 # Consolidated Improvement Plan
 
 Generated: 2026-04-02
-Last verified: 2026-04-01
+Last verified: 2026-04-02
 
 ## Overview
 
@@ -53,6 +53,7 @@ critical and high priority bugs have been addressed.
 - 3.1: **DOCUMENTED** — Distributed worker has registration, heartbeat, and task processing
   but no coordinator server exists. This is architectural debt - worker is functional
   but requires external coordinator implementation. Marked as low priority.
+  `eprintln!` calls in worker heartbeat/task loops replaced with `tracing::warn!`/`tracing::error!`.
 - 3.2: Fixed LineWriter buffered data
 - 3.3: **FIXED** — `create_chained_connection` in `proxy/mod.rs` now uses `chain_connect`
   for SOCKS proxy chains when all proxies in chain are SOCKS4/SOCKS5
@@ -79,8 +80,8 @@ critical and high priority bugs have been addressed.
 
 - 5.1: Fixed mouse event double-read (single `handle_mouse_event` call)
 - 5.2: **FIXED** — Export formats now call JSON generation first, then convert
-- 5.3: **MOSTLY FIXED** — One `eprintln!` remains in teardown error path
-  (`tui/app/runner.rs:46`); TUI runtime itself is clean
+- 5.3: **FIXED** — Last `eprintln!` in teardown error path (`tui/app/runner.rs:46`)
+  replaced with `tracing::error!`; TUI runtime and teardown are now fully clean
 - 5.4: **FIXED** — Search now replaces history with search_backup support
 - 5.5: Silent mutex lock (documented)
 - 5.6: **FIXED** — Added mode indicator in status bar (NORMAL/INSERT)
@@ -90,7 +91,9 @@ critical and high priority bugs have been addressed.
 
 ### Wave 6: Code Quality & Consistency (P2) - 14 of 14 FIXED
 
-- 6.1: Implemented `FromStr` for `Severity` (trait impl + deprecated inherent method)
+- 6.1: **FIXED** — Renamed inherent `Severity::from_str` to `parse_or_default` to eliminate
+  clippy warning about trait method confusion. `FromStr` trait impl remains the canonical path.
+  Test updated to use `.parse::<Severity>()`.
 - 6.2: Fixed `CircuitBreakerRegistry::get_state` (returns actual state)
 - 6.3: Fixed race condition in circuit breaker
 - 6.4: Removed duplicate `ToolDispatcher` (single definition in `tool/dispatcher.rs`)
@@ -145,9 +148,10 @@ critical and high priority bugs have been addressed.
 
 ## Remaining Work
 
-### Low Priority (All Items Documented/Skipped)
+### Low Priority (All Items Documented/Skipped/Architectural)
 
-- 3.1: Distributed worker coordinator (requires external implementation)
+- 3.1: Distributed worker coordinator (requires external implementation; HTTP architecture
+  is a skeleton — `RemoteListener`/`RemoteClient` TCP architecture is the functional path)
 - 7.1: Finding struct consolidation (architectural decision - keep separate types)
 - 7.4: Dead code suppressions (intentional for feature-gated code)
 - 10.1/10.2: Clippy suppressions (intentional for payload macros)
@@ -172,15 +176,18 @@ cargo clippy --lib -p slapper
 ## Notes
 
 - 363 tests pass, 0 failures
-- Zero clippy errors
+- Zero clippy errors (~97 warnings, down from ~118)
 - UTF-8 panic fixes verified — `.chars().take()` used in all truncation paths
 - MCP auth works with `Authorization: Bearer <token>` headers
-- `Severity` implements `FromStr` trait (inherent `from_str` deprecated)
+- `Severity` implements `FromStr` trait; inherent `from_str` renamed to `parse_or_default`
 - `SUPPORTED_WAF_COUNT` validated against actual signature count at test time
 - Mouse clicks work on all 22 tabs via `Tab::all().len()`
 - Circuit breaker `get_state` returns actual circuit state
 - Proxy chaining now uses `chain_connect()` for SOCKS chains
 - MCP HashMaps now have background reaper for stale entries
 - All blocking DNS calls in async contexts replaced with tokio async versions
+- All `eprintln!` in library code replaced with `tracing::error!`/`tracing::warn!`
+- `fingerprint_tests.rs` fixed to pass required `concurrency` parameter
+- 3 unused imports removed from TUI modules
 
 (End of file)
