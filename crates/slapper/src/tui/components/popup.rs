@@ -313,3 +313,11 @@ pub fn help_popup_for_tab(tab: crate::tui::tabs::Tab) -> Popup {
         .with_height(35)
         .buttons(vec!["Close"])
 }
+
+pub fn confirm_popup(title: &str, message: &[String]) -> Popup {
+    Popup::new(title, PopupKind::Confirm)
+        .content(message.to_vec())
+        .with_width(50)
+        .with_height(8)
+        .buttons(vec!["Yes", "No"])
+}

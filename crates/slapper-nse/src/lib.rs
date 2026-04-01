@@ -189,7 +189,7 @@ pub async fn run_cli(_config: NseConfig) -> anyhow::Result<()> {
 }
 
 #[cfg(feature = "nse")]
-fn get_builtin_script(name: &str) -> String {
+pub fn get_builtin_script(name: &str) -> String {
     match name {
         "default" | "discovery" => r#"
 -- Default NSE discovery script

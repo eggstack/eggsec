@@ -13,6 +13,7 @@ use std::io;
 use super::error::make_friendly_error;
 use super::input::InputMode;
 use super::App;
+use super::PendingAction;
 use crate::tui::help::CommandPalette;
 use crate::tui::state;
 use crate::tui::tabs::{Tab, TabState};
@@ -119,6 +120,8 @@ where
                     (KeyModifiers::NONE, KeyCode::Esc) => {
                         if app.show_search {
                             app.toggle_search();
+                        } else if app.is_confirm_popup_visible() {
+                            app.cancel_action();
                         } else {
                             app.mode = InputMode::Normal;
                             app.handle_escape();
@@ -347,22 +350,30 @@ where
                     }
                     (KeyModifiers::NONE, KeyCode::Char('r')) if app.mode == InputMode::Normal => {
                         if !app.is_running() {
-                            app.reset_current_tab();
+                            if app.current_tab == Tab::History {
+                                app.request_confirmation(PendingAction::ClearHistory);
+                            } else {
+                                app.request_confirmation(PendingAction::ResetTab);
+                            }
                         }
                     }
                     (KeyModifiers::NONE, KeyCode::Char('s')) if app.mode == InputMode::Normal => {
                         if !app.is_running() {
-                            app.save_settings();
+                            if app.current_tab == Tab::Settings {
+                                app.request_confirmation(PendingAction::SaveSettings);
+                            }
                         }
                     }
                     (KeyModifiers::NONE, KeyCode::Char('d')) if app.mode == InputMode::Normal => {
                         if !app.is_running() && app.current_tab == Tab::History {
-                            app.delete_history_entry();
+                            app.request_confirmation(PendingAction::DeleteHistoryEntry);
                         }
                     }
                     (KeyModifiers::NONE, KeyCode::Enter) => {
                         if app.show_search {
                             app.perform_search();
+                        } else if app.is_confirm_popup_visible() {
+                            app.confirm_action();
                         } else {
                             app.handle_enter();
                         }

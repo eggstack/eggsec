@@ -154,7 +154,7 @@ impl CircuitBreakerRegistry {
         breaker
     }
 
-    pub fn get_state(&self, name: &str) -> Option<CircuitState> {
+    pub fn get_state(&self, _name: &str) -> Option<CircuitState> {
         None
     }
 

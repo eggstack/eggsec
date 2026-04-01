@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::App;
-use crate::tui::components::help_popup_for_tab;
+use crate::tui::components::{confirm_popup, help_popup_for_tab};
 
 pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -57,6 +57,12 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     if app.show_http_options {
         draw_http_options_popup(f, app);
+    }
+
+    if let Some(action) = app.pending_action {
+        let (title, message) = action.message();
+        let popup = confirm_popup(&title, &message);
+        popup.render(f, f.area());
     }
 }
 

@@ -7,6 +7,58 @@ pub use input::InputMode;
 pub use options::GlobalHttpOptions;
 pub use runner::run;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PendingAction {
+    ResetTab,
+    SaveSettings,
+    DeleteHistoryEntry,
+    ClearHistory,
+}
+
+impl PendingAction {
+    pub fn message(&self) -> (String, Vec<String>) {
+        match self {
+            PendingAction::ResetTab => (
+                "Confirm Reset".to_string(),
+                vec![
+                    "Are you sure you want to reset this tab?".to_string(),
+                    "All current input will be lost.".to_string(),
+                ],
+            ),
+            PendingAction::SaveSettings => (
+                "Confirm Save Settings".to_string(),
+                vec![
+                    "Are you sure you want to save settings?".to_string(),
+                    "This will overwrite your configuration file.".to_string(),
+                ],
+            ),
+            PendingAction::DeleteHistoryEntry => (
+                "Confirm Delete".to_string(),
+                vec![
+                    "Are you sure you want to delete this history entry?".to_string(),
+                    "This action cannot be undone.".to_string(),
+                ],
+            ),
+            PendingAction::ClearHistory => (
+                "Confirm Clear History".to_string(),
+                vec![
+                    "Are you sure you want to clear all history?".to_string(),
+                    "This action cannot be undone.".to_string(),
+                ],
+            ),
+        }
+    }
+
+    pub fn execute(self, app: &mut App) {
+        match self {
+            PendingAction::ResetTab => app.reset_current_tab(),
+            PendingAction::SaveSettings => app.save_settings(),
+            PendingAction::DeleteHistoryEntry => app.delete_history_entry(),
+            PendingAction::ClearHistory => app.clear_all_history(),
+        }
+    }
+}
+
 use anyhow::Result;
 use crossterm::event::KeyCode;
 use super::error::make_friendly_error;
@@ -61,6 +113,7 @@ pub struct App {
     pub help_overlay: Option<HelpOverlay>,
     pub command_palette: Option<CommandPalette>,
     pub help_context: HelpContext,
+    pub pending_action: Option<PendingAction>,
 }
 
 impl App {
@@ -108,6 +161,7 @@ impl App {
             help_overlay: None,
             command_palette: None,
             help_context: HelpContext::Normal,
+            pending_action: None,
         }
     }
 
@@ -235,8 +289,14 @@ impl App {
             Tab::OAuth => self.oauth.is_running(),
             Tab::Cluster => self.cluster.is_running(),
             Tab::Stress => self.stress.is_running(),
-            Tab::Report => false,
+            Tab::Report => self.report.is_running(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.is_running(),
+            #[cfg(not(feature = "nse"))]
             Tab::Nse => false,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.is_running(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => false,
             Tab::Settings => false,
             Tab::History => false,
@@ -262,13 +322,19 @@ impl App {
             Tab::Resume => self.resume.stop(),
             Tab::Proxy => self.proxy.stop(),
             Tab::Packet => self.packet.stop(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.stop(),
+            Tab::OAuth => self.oauth.stop(),
+            Tab::Cluster => self.cluster.stop(),
+            Tab::Stress => self.stress.stop(),
+            Tab::Report => self.report.stop(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.stop(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.stop(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => {}
             Tab::History => {}
             Tab::Dashboard => {}
@@ -355,13 +421,19 @@ impl App {
                     }
                 }
             }
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_enter(),
+            Tab::OAuth => self.oauth.handle_enter(),
+            Tab::Cluster => self.cluster.handle_enter(),
+            Tab::Stress => self.stress.handle_enter(),
+            Tab::Report => self.report.handle_enter(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_enter(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_enter(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_enter(),
             Tab::History => {}
             Tab::Dashboard => self.dashboard.handle_enter(),
@@ -387,13 +459,19 @@ impl App {
             Tab::Resume => self.resume.handle_escape(),
             Tab::Proxy => self.proxy.handle_escape(),
             Tab::Packet => self.packet.handle_escape(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_escape(),
+            Tab::OAuth => self.oauth.handle_escape(),
+            Tab::Cluster => self.cluster.handle_escape(),
+            Tab::Stress => self.stress.handle_escape(),
+            Tab::Report => self.report.handle_escape(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_escape(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_escape(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_escape(),
             Tab::History => {}
             Tab::Dashboard => self.dashboard.handle_escape(),
@@ -824,6 +902,30 @@ impl App {
         if let Ok(mut h) = self.history.lock() {
             h.delete_selected();
         }
+    }
+
+    pub fn clear_all_history(&mut self) {
+        if let Ok(mut h) = self.history.lock() {
+            h.clear_all();
+        }
+    }
+
+    pub fn request_confirmation(&mut self, action: PendingAction) {
+        self.pending_action = Some(action);
+    }
+
+    pub fn confirm_action(&mut self) {
+        if let Some(action) = self.pending_action.take() {
+            action.execute(self);
+        }
+    }
+
+    pub fn cancel_action(&mut self) {
+        self.pending_action = None;
+    }
+
+    pub fn is_confirm_popup_visible(&self) -> bool {
+        self.pending_action.is_some()
     }
 
     pub fn page_up(&mut self) {

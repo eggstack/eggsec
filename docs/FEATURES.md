@@ -177,6 +177,8 @@ Adds:
 - NSE script loading and execution
 - Integration with Slapper's scanning pipeline
 
+**Note:** `slapper-nse` uses `native-tls` (OpenSSL) for TLS support. This is intentional — Nmap NSE scripts expect OpenSSL-based TLS behavior. Do not migrate to `rustls`.
+
 ### NSE Sandbox Mode
 
 ```bash

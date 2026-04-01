@@ -4,10 +4,47 @@
 //! and packet fragmentation capabilities.
 
 use crate::error::{Result, SlapperError};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::scanner::spoof::SpoofConfig;
 use super::PortScanResults;
+
+fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
+    if packet.len() < 20 {
+        return None;
+    }
+
+    let ip_header_len = ((packet[0] & 0x0F) as usize) * 4;
+    if packet.len() < ip_header_len + 20 {
+        return None;
+    }
+
+    let src_ip_bytes = &packet[12..16];
+    let dst_ip_bytes = &packet[16..20];
+    let src_ip = u32::from_be_bytes([src_ip_bytes[0], src_ip_bytes[1], src_ip_bytes[2], src_ip_bytes[3]]);
+
+    let tcp_data = &packet[ip_header_len..];
+    if tcp_data.len() < 20 {
+        return None;
+    }
+
+    let src_port = u16::from_be_bytes([tcp_data[0], tcp_data[1]]);
+    let dst_port = u16::from_be_bytes([tcp_data[2], tcp_data[3]]);
+    let flags = u16::from_be_bytes([tcp_data[12], tcp_data[13]]);
+
+    let syn_ack = (flags & 0x12) == 0x12;
+    let rst = (flags & 0x04) == 0x04;
+
+    if syn_ack {
+        Some((src_ip, dst_port, "open".to_string()))
+    } else if rst {
+        Some((src_ip, dst_port, "closed".to_string()))
+    } else {
+        None
+    }
+}
 
 static PACKET_TRACE_FILE: std::sync::OnceLock<std::sync::Mutex<std::fs::File>> =
     std::sync::OnceLock::new();
@@ -82,13 +119,18 @@ pub(crate) async fn scan_ports_spoofed(
     let interface = get_network_interface()?;
     let local_ip = get_local_ip(&interface)?;
 
-    let (tx, _rx) = match pnet::datalink::channel(&interface, Config::default()) {
+    let (tx, rx) = match pnet::datalink::channel(&interface, Config::default()) {
         Ok(pnet::datalink::Channel::Ethernet(tx, rx)) => (tx, rx),
         Ok(_) => return Err(SlapperError::Runtime("Unsupported channel type".to_string())),
         Err(e) => return Err(SlapperError::Runtime(format!("Failed to create datalink channel: {}", e))),
     };
 
-    let tx = Arc::new(parking_lot::Mutex::new(tx));
+    let target_ip_u32: u32 = u32::from(target_ipv4);
+    let local_ip_u32: u32 = u32::from(local_ip);
+
+    let sent_packets: Arc<parking_lot::Mutex<HashMap<u16, u32>>> = Arc::new(parking_lot::Mutex::new(HashMap::new()));
+    let responses: Arc<parking_lot::Mutex<HashMap<u16, String>>> = Arc::new(parking_lot::Mutex::new(HashMap::new()));
+    let stop_receiver = Arc::new(AtomicBool::new(false));
     let results = Arc::new(Mutex::new(Vec::new()));
     let progress = if tui_mode {
         None
@@ -103,6 +145,8 @@ pub(crate) async fn scan_ports_spoofed(
         Some(pb)
     };
 
+    let tx = Arc::new(parking_lot::Mutex::new(tx));
+
     let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
     let mut handles = Vec::new();
     let start = std::time::Instant::now();
@@ -112,6 +156,46 @@ pub(crate) async fn scan_ports_spoofed(
 
     let has_decoys = spoof_config.has_decoys();
     let use_staggered = spoof_config.decoy_mode == crate::scanner::spoof::DecoyMode::Staggered;
+
+    std::thread::spawn({
+        let rx = Arc::new(parking_lot::Mutex::new(rx));
+        let sent_packets = sent_packets.clone();
+        let responses = responses.clone();
+        let stop_receiver = stop_receiver.clone();
+        let target_ip_u32 = target_ip_u32;
+        let local_ip_u32 = local_ip_u32;
+        
+        move || {
+            loop {
+                if stop_receiver.load(Ordering::Relaxed) {
+                    break;
+                }
+                
+                let packet = {
+                    let mut rx_guard = rx.lock();
+                    match rx_guard.next() {
+                        Ok(p) => p.to_vec(),
+                        Err(_) => {
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                            continue;
+                        }
+                    }
+                };
+                
+                if let Some((src_ip, dst_port, status)) = parse_tcp_response(&packet) {
+                    if src_ip == target_ip_u32 || src_ip == local_ip_u32 {
+                        let sent_guard = sent_packets.lock();
+                        for (port, _target_ip) in sent_guard.iter() {
+                            let mut resp_guard = responses.lock();
+                            if !resp_guard.contains_key(port) {
+                                resp_guard.insert(*port, status.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
 
     for port in ports {
         let permit = semaphore.clone().acquire_owned().await?;
@@ -131,6 +215,8 @@ pub(crate) async fn scan_ports_spoofed(
         };
 
         let packets_sent = packets_sent.clone();
+        let sent_packets = sent_packets.clone();
+        let responses = responses.clone();
         let scan_type = spoof_config.scan_type;
         let do_fragment = spoof_config.fragment;
         let packet_trace = spoof_config.packet_trace.clone();
@@ -187,6 +273,8 @@ pub(crate) async fn scan_ports_spoofed(
                         match tx_guard.send_to(&packet, Some(interface.clone())) {
                             Some(Ok(_)) => {
                                 packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                let src_ip_u32: u32 = u32::from(src_ip);
+                                sent_packets.lock().insert(port, src_ip_u32);
                             }
                             _ => {}
                         }
@@ -286,7 +374,23 @@ pub(crate) async fn scan_ports_spoofed(
                 }
             }
 
-            let status = if has_decoys { "decoy" } else { "spoofed" };
+            let status = {
+                let wait_start = std::time::Instant::now();
+                let timeout_ms = timeout_duration.as_millis() as u64;
+                let mut status = "filtered".to_string();
+                
+                while (wait_start.elapsed().as_millis() as u64) < timeout_ms {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    
+                    let responses_guard = responses.lock();
+                    if let Some(resp) = responses_guard.get(&port) {
+                        status = resp.clone();
+                        break;
+                    }
+                }
+                
+                status
+            };
 
             if packet_trace.is_some() {
                 log_packet_trace(
@@ -321,6 +425,9 @@ pub(crate) async fn scan_ports_spoofed(
     }
 
     join_all(handles).await;
+    
+    stop_receiver.store(true, Ordering::Relaxed);
+    
     if let Some(ref pb) = progress {
         pb.finish_and_clear();
     }

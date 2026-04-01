@@ -227,51 +227,28 @@ Two truncation utilities exist with different behaviors:
 
 These are confirmed bugs documented in `plan.md` that agents should be aware of:
 
-1. **Duplicated keybindings** in `tui/app/runner.rs:284-332` — dead code duplicate of lines 226-277
-2. **Mouse tab calculation** in `tui/app/runner.rs:75-77` — hardcoded for 15 tabs, actual count is 22
-3. **WebSocket/gRPC PayloadType** — both modules use `PayloadType::GraphQL` incorrectly
-4. **Double `event::read()`** in `tui/app/runner.rs` — lines 92 and 380, second call can lose events
-5. **Conflicting `/` key** — command palette toggle (line 144) shadows search toggle (line 345)
-6. **XSS in HTML reports** — `output/convert.rs` interpolates user data without escaping
-7. **Discord token regex** — actually matches Slack tokens (`xox[baprs]-`)
-8. **Wildcard scope** — `*.example.com` incorrectly matches apex domain `example.com`
-9. **SSL certificate extraction** — returns placeholder text, not real certificate data
-10. **Alexa subdomain query** — always returns empty (API discontinued 2022)
-11. **ip-api.com uses HTTP** — line 484 in `recon/geolocation.rs` should use HTTPS
-12. **Export format fallback** — HTML/Markdown/Sarif/Junit all fall back to JSON in TUI
-13. **`save_export` uses `eprintln!`/`println!`** — corrupts raw-mode TUI terminal
-14. **Orphaned TUI tasks** — starting new task doesn't abort old one
-15. **`CircuitBreakerRegistry::get_state()`** — always returns `None` (stub)
-16. **`payload_vec!` macro** — fixed capacity of 64 regardless of actual count
-17. **`cmd.rs`** — 370 lines of manual payload construction instead of using `payload_vec!` macro
-18. **Blocking HTTP in recon** — `recon/asn.rs` and `recon/cve_lookup.rs` use `reqwest::blocking`
-19. **`SensitiveFile.severity`** — populated with category string instead of `Severity` enum
-20. **RedTeam C2 fingerprint** — empty match pattern `""` causes false positives
+No currently known bugs — all items in plan.md have been completed.
 
 ### TUI-Specific Patterns
 
 - `tui/app/runner.rs` contains the main event loop (`run_app`)
 - `tui/app/mod.rs` contains the `App` struct and all delegation methods
-- `tui/workers/runner.rs` (1192 lines) handles all task execution — needs splitting
-- `tui/app/mod.rs` (1815 lines) — already split from original 2193-line `app.rs`
-- Tab dispatch uses match statements across ~15 methods — refactoring opportunity
-- `TabInput` trait default implementations use busy-loops (known issue)
+- `tui/workers/` directory contains 6 files: `runner.rs` (459 lines), `scanner.rs` (82), `fuzzer.rs` (130), `network.rs` (268), `api.rs` (351), `recon.rs` (149)
+- Tab dispatch uses match statements across ~15 methods
 - TUI uses ratatui 0.30 + crossterm 0.28 with immediate-mode rendering
-- 22 tab variants exist; 9 have empty/stub input handlers
+- 22 tab variants exist; all have proper input handlers
 
 ### Output Module
 
 - `output/convert.rs` converts findings to HTML, JUnit, SARIF, JSON
 - `output/junit.rs` generates JUnit XML reports
-- HTML report generation has XSS vulnerability (unescaped interpolation)
-- JUnit XML attribute escaping may be incomplete
 
 ### Scope Module
 
 - `config/scope.rs` handles target scope validation
 - `ScopeRule` supports wildcard patterns (`*.example.com`)
-- Wildcard matching includes apex domain (incorrect — should exclude it)
-- `TargetScope::parse()` resolves hostname to IP at parse time (TOCTOU risk)
+- Wildcard matching correctly excludes apex domain
+- `TargetScope` has `pinned_ip` field to prevent DNS rebinding
 
 ## Style Guidelines
 
