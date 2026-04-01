@@ -1,5 +1,6 @@
 use crate::tui::workers::TaskResult;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_fuzz(
     target: String,
     payload_type: String,

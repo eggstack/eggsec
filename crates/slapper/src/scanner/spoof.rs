@@ -10,30 +10,20 @@ use std::net::IpAddr;
 use pnet::datalink::{self, NetworkInterface};
 #[cfg(all(feature = "stress-testing", unix))]
 use pnet::packet::ip::IpNextHeaderProtocols;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DecoyMode {
+    #[default]
     Simultaneous,
     Staggered,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ScanType {
+    #[default]
     Syn,
     Null,
     Fin,
     Xmas,
-}
-
-impl Default for ScanType {
-    fn default() -> Self {
-        Self::Syn
-    }
-}
-
-impl Default for DecoyMode {
-    fn default() -> Self {
-        Self::Simultaneous
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,6 +68,7 @@ impl Default for SpoofConfig {
 }
 
 impl SpoofConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn from_args(
         source_ip: Option<String>,
         spoof_range: Option<String>,

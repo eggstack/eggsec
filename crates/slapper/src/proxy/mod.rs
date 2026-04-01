@@ -168,7 +168,7 @@ impl ProxyManager {
 
         let target_addr = resolve_target(target).await?;
 
-        let chain_vec: Vec<ProxyEntry> = chain.iter().cloned().collect();
+        let chain_vec: Vec<ProxyEntry> = chain.to_vec();
 
         let all_socks = chain_vec
             .iter()

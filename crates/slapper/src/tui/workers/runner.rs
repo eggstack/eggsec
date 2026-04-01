@@ -3,6 +3,7 @@ use crate::tui::tabs::recon::ReconOptions;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum TaskConfig {
     LoadTest {
         target: String,
@@ -114,6 +115,7 @@ pub enum TaskConfig {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum TaskResult {
     LoadTest(crate::loadtest::metrics::LoadTestResults),
     #[cfg(feature = "stress-testing")]
@@ -408,6 +410,7 @@ impl TaskRunner {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn is_retryable_error(error: &str) -> bool {
     let error_lower = error.to_lowercase();
     error_lower.contains("timeout")
@@ -418,6 +421,7 @@ pub(crate) fn is_retryable_error(error: &str) -> bool {
         || error_lower.contains("network")
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_with_retry<T, F, Fut>(
     max_retries: u32,
     progress_tx: &tokio::sync::mpsc::Sender<(u64, u64)>,

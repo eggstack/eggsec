@@ -184,6 +184,7 @@ impl ScrollableText {
     }
 }
 
+#[allow(dead_code)]
 pub struct ScrollableTable {
     pub title: String,
     pub headers: Vec<String>,
@@ -193,6 +194,7 @@ pub struct ScrollableTable {
     pub column_widths: Vec<usize>,
 }
 
+#[allow(dead_code)]
 impl ScrollableTable {
     pub fn new(title: impl Into<String>, headers: Vec<String>) -> Self {
         Self {

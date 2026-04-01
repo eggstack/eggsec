@@ -1,5 +1,5 @@
 use crate::scanner::spoof::SpoofConfig;
-use crate::tui::workers::{TaskResult, TracerouteHopResult};
+use crate::tui::workers::TaskResult;
 
 pub async fn run_port_scan(
     target: String,

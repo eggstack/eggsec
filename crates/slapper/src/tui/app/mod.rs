@@ -59,14 +59,12 @@ impl PendingAction {
     }
 }
 
-use anyhow::Result;
 use crossterm::event::KeyCode;
 use super::error::make_friendly_error;
 use crate::tui::help::{HelpManager, HelpOverlay, CommandPalette, HelpContext};
-use crate::tui::state::{self, SharedHistory};
+use crate::tui::state::SharedHistory;
 use crate::tui::tabs;
 use crate::tui::tabs::{Tab, TabInput, TabState};
-use crate::tui::ui;
 use crate::tui::workers;
 use crate::output::ExportFormat;
 
@@ -517,13 +515,19 @@ impl App {
             Tab::Resume => self.resume.handle_char(c),
             Tab::Proxy => self.proxy.handle_char(c),
             Tab::Packet => self.packet.handle_char(c),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_char(c),
+            Tab::OAuth => self.oauth.handle_char(c),
+            Tab::Cluster => self.cluster.handle_char(c),
+            Tab::Stress => self.stress.handle_char(c),
+            Tab::Report => self.report.handle_char(c),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_char(c),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_char(c),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_char(c),
             Tab::History => {}
             Tab::Dashboard => self.dashboard.handle_char(c),
@@ -548,13 +552,19 @@ impl App {
             Tab::Resume => self.resume.handle_backspace(),
             Tab::Proxy => self.proxy.handle_backspace(),
             Tab::Packet => self.packet.handle_backspace(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_backspace(),
+            Tab::OAuth => self.oauth.handle_backspace(),
+            Tab::Cluster => self.cluster.handle_backspace(),
+            Tab::Stress => self.stress.handle_backspace(),
+            Tab::Report => self.report.handle_backspace(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_backspace(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_backspace(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_backspace(),
             Tab::History => {}
             Tab::Dashboard => self.dashboard.handle_backspace(),
@@ -579,13 +589,19 @@ impl App {
             Tab::Resume => self.resume.handle_tab(),
             Tab::Proxy => self.proxy.handle_tab(),
             Tab::Packet => self.packet.handle_tab(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_focus_next(),
+            Tab::OAuth => self.oauth.handle_focus_next(),
+            Tab::Cluster => self.cluster.handle_focus_next(),
+            Tab::Stress => self.stress.handle_focus_next(),
+            Tab::Report => self.report.handle_focus_next(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_focus_next(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_focus_next(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_tab(),
             Tab::History => {}
             Tab::Dashboard => {}
@@ -610,13 +626,19 @@ impl App {
             Tab::Resume => self.resume.handle_up(),
             Tab::Proxy => self.proxy.handle_up(),
             Tab::Packet => self.packet.handle_up(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_up(),
+            Tab::OAuth => self.oauth.handle_up(),
+            Tab::Cluster => self.cluster.handle_up(),
+            Tab::Stress => self.stress.handle_up(),
+            Tab::Report => self.report.handle_up(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_up(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_up(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_up(),
             Tab::History => {}
             Tab::Dashboard => {}
@@ -641,13 +663,19 @@ impl App {
             Tab::Resume => self.resume.handle_down(),
             Tab::Proxy => self.proxy.handle_down(),
             Tab::Packet => self.packet.handle_down(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_down(),
+            Tab::OAuth => self.oauth.handle_down(),
+            Tab::Cluster => self.cluster.handle_down(),
+            Tab::Stress => self.stress.handle_down(),
+            Tab::Report => self.report.handle_down(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_down(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_down(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_down(),
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -676,12 +704,18 @@ impl App {
             Tab::Resume => self.resume.handle_left(),
             Tab::Proxy => self.proxy.handle_left(),
             Tab::Packet => self.packet.handle_left(),
-            Tab::GraphQl => false,
-            Tab::OAuth => false,
-            Tab::Cluster => false,
-            Tab::Stress => false,
-            Tab::Report => false,
+            Tab::GraphQl => self.graphql.handle_left(),
+            Tab::OAuth => self.oauth.handle_left(),
+            Tab::Cluster => self.cluster.handle_left(),
+            Tab::Stress => self.stress.handle_left(),
+            Tab::Report => self.report.handle_left(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_left(),
+            #[cfg(not(feature = "nse"))]
             Tab::Nse => false,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_left(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => false,
             Tab::Settings => self.settings.handle_left(),
             Tab::History => {
@@ -717,12 +751,18 @@ impl App {
             Tab::Resume => self.resume.handle_right(),
             Tab::Proxy => self.proxy.handle_right(),
             Tab::Packet => self.packet.handle_right(),
-            Tab::GraphQl => false,
-            Tab::OAuth => false,
-            Tab::Cluster => false,
-            Tab::Stress => false,
-            Tab::Report => false,
+            Tab::GraphQl => self.graphql.handle_right(),
+            Tab::OAuth => self.oauth.handle_right(),
+            Tab::Cluster => self.cluster.handle_right(),
+            Tab::Stress => self.stress.handle_right(),
+            Tab::Report => self.report.handle_right(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_right(),
+            #[cfg(not(feature = "nse"))]
             Tab::Nse => false,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_right(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => false,
             Tab::Settings => self.settings.handle_right(),
             Tab::History => {
@@ -758,13 +798,19 @@ impl App {
             Tab::Resume => self.resume.handle_focus_next(),
             Tab::Proxy => self.proxy.handle_focus_next(),
             Tab::Packet => self.packet.handle_focus_next(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_focus_next(),
+            Tab::OAuth => self.oauth.handle_focus_next(),
+            Tab::Cluster => self.cluster.handle_focus_next(),
+            Tab::Stress => self.stress.handle_focus_next(),
+            Tab::Report => self.report.handle_focus_next(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_focus_next(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_focus_next(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_focus_next(),
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -793,13 +839,19 @@ impl App {
             Tab::Resume => self.resume.handle_focus_prev(),
             Tab::Proxy => self.proxy.handle_focus_prev(),
             Tab::Packet => self.packet.handle_focus_prev(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_focus_prev(),
+            Tab::OAuth => self.oauth.handle_focus_prev(),
+            Tab::Cluster => self.cluster.handle_focus_prev(),
+            Tab::Stress => self.stress.handle_focus_prev(),
+            Tab::Report => self.report.handle_focus_prev(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_focus_prev(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_focus_prev(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_focus_prev(),
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -827,12 +879,18 @@ impl App {
             Tab::Resume => self.resume.is_at_left_edge(),
             Tab::Proxy => self.proxy.is_at_left_edge(),
             Tab::Packet => self.packet.is_at_left_edge(),
-            Tab::GraphQl => false,
-            Tab::OAuth => false,
-            Tab::Cluster => false,
-            Tab::Stress => false,
-            Tab::Report => false,
+            Tab::GraphQl => self.graphql.is_at_left_edge(),
+            Tab::OAuth => self.oauth.is_at_left_edge(),
+            Tab::Cluster => self.cluster.is_at_left_edge(),
+            Tab::Stress => self.stress.is_at_left_edge(),
+            Tab::Report => self.report.is_at_left_edge(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.is_at_left_edge(),
+            #[cfg(not(feature = "nse"))]
             Tab::Nse => false,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.is_at_left_edge(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => false,
             Tab::Settings => self.settings.is_at_left_edge(),
             Tab::History => true,
@@ -863,12 +921,18 @@ impl App {
             Tab::Resume => self.resume.is_at_right_edge(),
             Tab::Proxy => self.proxy.is_at_right_edge(),
             Tab::Packet => self.packet.is_at_right_edge(),
-            Tab::GraphQl => false,
-            Tab::OAuth => false,
-            Tab::Cluster => false,
-            Tab::Stress => false,
-            Tab::Report => false,
+            Tab::GraphQl => self.graphql.is_at_right_edge(),
+            Tab::OAuth => self.oauth.is_at_right_edge(),
+            Tab::Cluster => self.cluster.is_at_right_edge(),
+            Tab::Stress => self.stress.is_at_right_edge(),
+            Tab::Report => self.report.is_at_right_edge(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.is_at_right_edge(),
+            #[cfg(not(feature = "nse"))]
             Tab::Nse => false,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.is_at_right_edge(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => false,
             Tab::Settings => self.settings.is_at_right_edge(),
             Tab::History => true,
@@ -896,13 +960,19 @@ impl App {
             Tab::Resume => self.resume.reset(),
             Tab::Proxy => self.proxy.reset(),
             Tab::Packet => self.packet.reset(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.reset(),
+            Tab::OAuth => self.oauth.reset(),
+            Tab::Cluster => self.cluster.reset(),
+            Tab::Stress => self.stress.reset(),
+            Tab::Report => self.report.reset(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.reset(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.reset(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.reset(),
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -964,13 +1034,19 @@ impl App {
             Tab::Resume => self.resume.page_up(PAGE_SIZE),
             Tab::Proxy => self.proxy.page_up(PAGE_SIZE),
             Tab::Packet => self.packet.page_up(PAGE_SIZE),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.page_up(PAGE_SIZE),
+            Tab::OAuth => self.oauth.page_up(PAGE_SIZE),
+            Tab::Cluster => self.cluster.page_up(PAGE_SIZE),
+            Tab::Stress => self.stress.page_up(PAGE_SIZE),
+            Tab::Report => self.report.page_up(PAGE_SIZE),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.page_up(PAGE_SIZE),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.page_up(PAGE_SIZE),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => {}
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -996,13 +1072,19 @@ impl App {
             Tab::Resume => self.resume.page_down(PAGE_SIZE),
             Tab::Proxy => self.proxy.page_down(PAGE_SIZE),
             Tab::Packet => self.packet.page_down(PAGE_SIZE),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.page_down(PAGE_SIZE),
+            Tab::OAuth => self.oauth.page_down(PAGE_SIZE),
+            Tab::Cluster => self.cluster.page_down(PAGE_SIZE),
+            Tab::Stress => self.stress.page_down(PAGE_SIZE),
+            Tab::Report => self.report.page_down(PAGE_SIZE),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.page_down(PAGE_SIZE),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.page_down(PAGE_SIZE),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => {}
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -1028,13 +1110,19 @@ impl App {
             Tab::Resume => self.resume.handle_word_forward(),
             Tab::Proxy => self.proxy.handle_word_forward(),
             Tab::Packet => self.packet.handle_word_forward(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_word_forward(),
+            Tab::OAuth => self.oauth.handle_word_forward(),
+            Tab::Cluster => self.cluster.handle_word_forward(),
+            Tab::Stress => self.stress.handle_word_forward(),
+            Tab::Report => self.report.handle_word_forward(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_word_forward(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_word_forward(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => {}
             Tab::History => {}
             Tab::Dashboard => self.dashboard.handle_word_forward(),
@@ -1056,13 +1144,19 @@ impl App {
             Tab::Resume => self.resume.handle_word_backward(),
             Tab::Proxy => self.proxy.handle_word_backward(),
             Tab::Packet => self.packet.handle_word_backward(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_word_backward(),
+            Tab::OAuth => self.oauth.handle_word_backward(),
+            Tab::Cluster => self.cluster.handle_word_backward(),
+            Tab::Stress => self.stress.handle_word_backward(),
+            Tab::Report => self.report.handle_word_backward(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_word_backward(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_word_backward(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => {}
             Tab::History => {}
             Tab::Dashboard => self.dashboard.handle_word_backward(),
@@ -1084,13 +1178,19 @@ impl App {
             Tab::Resume => self.resume.handle_home(),
             Tab::Proxy => self.proxy.handle_home(),
             Tab::Packet => self.packet.handle_home(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_home(),
+            Tab::OAuth => self.oauth.handle_home(),
+            Tab::Cluster => self.cluster.handle_home(),
+            Tab::Stress => self.stress.handle_home(),
+            Tab::Report => self.report.handle_home(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_home(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_home(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_home(),
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -1116,13 +1216,19 @@ impl App {
             Tab::Resume => self.resume.handle_end(),
             Tab::Proxy => self.proxy.handle_end(),
             Tab::Packet => self.packet.handle_end(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_end(),
+            Tab::OAuth => self.oauth.handle_end(),
+            Tab::Cluster => self.cluster.handle_end(),
+            Tab::Stress => self.stress.handle_end(),
+            Tab::Report => self.report.handle_end(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_end(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_end(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_end(),
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -1148,13 +1254,19 @@ impl App {
             Tab::Resume => self.resume.handle_top(),
             Tab::Proxy => self.proxy.handle_top(),
             Tab::Packet => self.packet.handle_top(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_top(),
+            Tab::OAuth => self.oauth.handle_top(),
+            Tab::Cluster => self.cluster.handle_top(),
+            Tab::Stress => self.stress.handle_top(),
+            Tab::Report => self.report.handle_top(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_top(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_top(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_top(),
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -1180,13 +1292,19 @@ impl App {
             Tab::Resume => self.resume.handle_bottom(),
             Tab::Proxy => self.proxy.handle_bottom(),
             Tab::Packet => self.packet.handle_bottom(),
-            Tab::GraphQl => {}
-            Tab::OAuth => {}
-            Tab::Cluster => {}
-            Tab::Stress => {}
-            Tab::Report => {}
-            Tab::Nse => {}
-            Tab::Plugin => {}
+            Tab::GraphQl => self.graphql.handle_bottom(),
+            Tab::OAuth => self.oauth.handle_bottom(),
+            Tab::Cluster => self.cluster.handle_bottom(),
+            Tab::Stress => self.stress.handle_bottom(),
+            Tab::Report => self.report.handle_bottom(),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.handle_bottom(),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {},
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.handle_bottom(),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {},
             Tab::Settings => self.settings.handle_bottom(),
             Tab::History => {
                 if let Ok(mut h) = self.history.lock() {
@@ -1212,13 +1330,19 @@ impl App {
             Tab::Resume => "resume_results",
             Tab::Proxy => "proxy_results",
             Tab::Packet => "packet_results",
-            Tab::GraphQl => "unknown",
-            Tab::OAuth => "unknown",
-            Tab::Cluster => "unknown",
-            Tab::Stress => "unknown",
-            Tab::Report => "unknown",
-            Tab::Nse => "unknown",
-            Tab::Plugin => "unknown",
+            Tab::GraphQl => "graphql_results",
+            Tab::OAuth => "oauth_results",
+            Tab::Cluster => "cluster_status",
+            Tab::Stress => "stress_results",
+            Tab::Report => "report_results",
+            #[cfg(feature = "nse")]
+            Tab::Nse => "nse_results",
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => "nse_results",
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => "plugin_results",
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => "plugin_results",
             Tab::Settings => "settings",
             Tab::History => "history",
             Tab::Dashboard => "dashboard",

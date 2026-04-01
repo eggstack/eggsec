@@ -6,7 +6,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders},
     Frame,
 };
 
@@ -384,6 +384,14 @@ impl StressTab {
         if self.state == AppState::Running {
             self.state = AppState::Idle;
         }
+    }
+
+    pub fn page_up(&mut self, page_size: usize) {
+        self.results_view.scroll_up(page_size);
+    }
+
+    pub fn page_down(&mut self, page_size: usize) {
+        self.results_view.scroll_down(page_size);
     }
 
     pub fn handle_word_forward(&mut self) {

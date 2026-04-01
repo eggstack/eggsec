@@ -11,7 +11,7 @@ pub enum TimingPreset {
 }
 
 impl TimingPreset {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "t0" | "paranoid" | "0" => TimingPreset::Paranoid,
             "t1" | "sneaky" | "1" => TimingPreset::Sneaky,
@@ -134,10 +134,6 @@ impl TimingConfig {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
-        Self::from_preset(TimingPreset::from_str(s))
-    }
-
     pub fn from_u8(v: u8) -> Self {
         Self::from_preset(TimingPreset::from_u8(v))
     }
@@ -243,12 +239,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_timing_preset_from_str() {
-        assert_eq!(TimingPreset::from_str("T0"), TimingPreset::Paranoid);
-        assert_eq!(TimingPreset::from_str("paranoid"), TimingPreset::Paranoid);
-        assert_eq!(TimingPreset::from_str("T5"), TimingPreset::Insane);
-        assert_eq!(TimingPreset::from_str("insane"), TimingPreset::Insane);
-        assert_eq!(TimingPreset::from_str("invalid"), TimingPreset::Normal);
+    fn test_timing_preset_parse() {
+        assert_eq!(TimingPreset::parse("T0"), TimingPreset::Paranoid);
+        assert_eq!(TimingPreset::parse("paranoid"), TimingPreset::Paranoid);
+        assert_eq!(TimingPreset::parse("T5"), TimingPreset::Insane);
+        assert_eq!(TimingPreset::parse("insane"), TimingPreset::Insane);
+        assert_eq!(TimingPreset::parse("invalid"), TimingPreset::Normal);
     }
 
     #[test]

@@ -407,6 +407,12 @@ pub struct HomoglyphMap {
     pub greek: std::collections::HashMap<char, char>,
 }
 
+impl Default for HomoglyphMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HomoglyphMap {
     pub fn new() -> Self {
         let mut cyrillic = std::collections::HashMap::new();

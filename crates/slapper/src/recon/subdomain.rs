@@ -256,18 +256,12 @@ struct CrtShEntry {
 }
 
 #[derive(Debug, Deserialize)]
+#[derive(Default)]
 struct ThreatMinerResponse {
     #[serde(default)]
     results: Vec<String>,
 }
 
-impl Default for ThreatMinerResponse {
-    fn default() -> Self {
-        Self {
-            results: Vec::new(),
-        }
-    }
-}
 
 pub async fn enumerate_subdomains(domain: &str, concurrency: usize) -> Result<SubdomainResult> {
     let enumerator = SubdomainEnumerator::new(concurrency)?;

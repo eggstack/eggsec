@@ -26,7 +26,7 @@ pub fn print_detection_json(detection: &WafDetectionResult) {
 pub fn print_results(
     detection: &WafDetectionResult,
     bypass_results: &[BypassResult],
-    selected_profile: Option<&String>,
+    _selected_profile: Option<&String>,
 ) {
     print_detection(detection);
 

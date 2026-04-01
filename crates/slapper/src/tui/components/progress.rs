@@ -82,12 +82,14 @@ impl ProgressGauge {
     }
 }
 
+#[allow(dead_code)]
 pub struct StatusBar {
     pub status: String,
     pub status_color: Color,
     pub help_text: String,
 }
 
+#[allow(dead_code)]
 impl StatusBar {
     pub fn new() -> Self {
         Self {

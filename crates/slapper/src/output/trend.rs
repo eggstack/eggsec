@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(deprecated)]
 pub struct ScanResult {
     pub id: String,
     pub target: String,
@@ -34,6 +35,7 @@ pub struct Finding {
     pub cve: Option<String>,
 }
 
+#[allow(deprecated)]
 impl From<&crate::output::AgentFinding> for Finding {
     fn from(f: &crate::output::AgentFinding) -> Self {
         Self {
@@ -52,6 +54,7 @@ pub use crate::types::Severity;
 
 pub struct ResultComparator;
 
+#[allow(deprecated)]
 impl ResultComparator {
     pub fn compare(old: &ScanResult, new: &ScanResult) -> ComparisonResult {
         let mut added = Vec::new();
@@ -116,6 +119,7 @@ impl ResultComparator {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(deprecated)]
 pub struct ComparisonResult {
     pub added: Vec<Finding>,
     pub removed: Vec<Finding>,
@@ -136,6 +140,7 @@ pub struct TrendAnalyzer {
     results: Vec<ScanResult>,
 }
 
+#[allow(deprecated)]
 impl TrendAnalyzer {
     pub fn new() -> Self {
         Self {

@@ -10,7 +10,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use std::str::FromStr;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum ProxyView {

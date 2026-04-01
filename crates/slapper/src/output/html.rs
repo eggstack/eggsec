@@ -17,12 +17,14 @@ impl Default for HtmlConfig {
     }
 }
 
+#[allow(deprecated)]
 pub struct HtmlReport {
     findings: Vec<super::markdown::Finding>,
     summary: super::markdown::ScanSummary,
     config: HtmlConfig,
 }
 
+#[allow(deprecated)]
 impl HtmlReport {
     pub fn new(
         summary: super::markdown::ScanSummary,
@@ -317,6 +319,7 @@ fn escape_html(s: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+#[allow(deprecated)]
 pub fn generate_html_report(
     summary: super::markdown::ScanSummary,
     findings: Vec<super::markdown::Finding>,

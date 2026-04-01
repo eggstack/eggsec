@@ -26,6 +26,7 @@ pub use report::{Report, ReportMetadata, ReportTemplate, SeverityCounts};
 pub use sarif::{SarifBuilder, SarifReport};
 pub use schedule::{Priority, ScanOptions, ScanQueue, ScanType};
 pub use session::{ScanSession, SessionInfo};
+#[allow(deprecated)]
 pub use trend::{
     ComparisonResult, Finding as TrendFinding, ResultComparator, ResultSummary, ScanResult,
     Severity as TrendSeverity, TrendAnalysis, TrendAnalyzer, TrendDirection,

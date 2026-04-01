@@ -312,6 +312,12 @@ static PATTERNS: LazyLock<Vec<SecretPattern>> = LazyLock::new(build_patterns);
 
 pub struct SecretScanner;
 
+impl Default for SecretScanner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SecretScanner {
     pub fn new() -> Self {
         // Force lazy initialization so any pattern errors surface immediately

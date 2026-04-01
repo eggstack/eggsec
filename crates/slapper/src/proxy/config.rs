@@ -7,10 +7,12 @@ use std::path::Path;
 use crate::types::SensitiveString;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ProxyType {
     #[serde(rename = "socks4")]
     Socks4,
     #[serde(rename = "socks5")]
+    #[default]
     Socks5,
     #[serde(rename = "http")]
     Http,
@@ -20,11 +22,6 @@ pub enum ProxyType {
     Tor,
 }
 
-impl Default for ProxyType {
-    fn default() -> Self {
-        Self::Socks5
-    }
-}
 
 impl std::fmt::Display for ProxyType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -6,25 +6,31 @@ This plan consolidates items from plan2–plan9 into a single prioritized roadma
 
 Items already resolved (eprintln! migration, println! migration, utils SlapperError migration, blocking DNS in scope, config validation, config template, deprecated truncation aliases, etc.) have been removed. Only verified, still-present issues remain.
 
-**Current State (verified 2026-04-02):**
+**Current State (verified 2026-04-01):**
 
 | Metric | Value |
 |--------|-------|
 | Tests | 363 passing |
 | Build | Clean compilation |
-| Clippy | 114 warnings (25 auto-fixable) |
+| Clippy | 0 warnings (114 → 0, waves 1-2) |
 | `eprintln!` in library code | 0 (already migrated) |
 | `println!` in library modules | 0 (already migrated) |
 | `pub fn anyhow::Result` in utils | 0 (already migrated) |
-| Largest file | `tui/app/mod.rs` (1,963 lines) |
-| TUI empty dispatch arms | 7 tabs × 18+ methods |
-| `.bak` files | 4 |
+| Largest file | `tui/app/mod.rs` (2,087 lines) |
+| TUI empty dispatch arms | 0 (wave 3 completed) |
+| `.bak` files | 0 (removed) |
 | Source files | 210 |
 | `SlapperError` variants | 23 |
 | Tab variants | 22 |
 
-**Total Estimated Effort:** 75–115 hours across 10 waves
-**Estimated Calendar Time (with parallelization):** 5–7 weeks
+**Completed:**
+- Wave 1: Critical bug fixes (fuzzer error swallowing, burst concurrency)
+- Wave 2: Code quality & Clippy (114 → 0 warnings)
+- Wave 3: TUI wiring fixes (all 22 tabs functional)
+- `.bak` files removed (4 files)
+
+**Total Estimated Effort:** 55–85 hours remaining across 7 waves
+**Estimated Calendar Time (with parallelization):** 4–5 weeks remaining
 
 ---
 
@@ -49,9 +55,11 @@ Block C (Weeks 3–5):  Wave 8 ─┐
 
 ---
 
-## Wave 1: Critical Bug Fixes
+## Wave 1: Critical Bug Fixes ✅ COMPLETED
 
 **Risk:** Low | **Effort:** 2–4 hours | **Files:** 2–3
+
+**Status:** Completed 2026-04-01
 
 ### Task 1.1: Fix Silent Error Swallowing in Fuzzer
 
@@ -99,9 +107,11 @@ cargo clippy --lib -p slapper
 
 ---
 
-## Wave 2: Code Quality & Clippy
+## Wave 2: Code Quality & Clippy ✅ COMPLETED
 
 **Risk:** Low | **Effort:** 3–5 hours | **Files:** ~15
+
+**Status:** Completed 2026-04-01. 114 → 0 warnings.
 
 ### Task 2.1: Auto-fix Clippy Warnings
 
@@ -149,9 +159,11 @@ cargo clippy --lib -p slapper -- -D warnings
 
 ---
 
-## Wave 3: TUI Wiring Fixes
+## Wave 3: TUI Wiring Fixes ✅ COMPLETED
 
 **Risk:** Medium | **Effort:** 6–10 hours | **Files:** 5–6
+
+**Status:** Completed 2026-04-01. All 22 tabs functional. Added `page_up`/`page_down` to 5 new tab structs.
 
 The TUI has 22 tabs with a central `App` struct dispatching input, tasks, and results. 7 newer tabs (GraphQl, OAuth, Cluster, Stress, Report, Nse, Plugin) render correctly but are **non-functional** because `app/mod.rs` has empty `{}` arms instead of forwarding to tab structs.
 
@@ -622,15 +634,15 @@ All other features reuse existing dependencies (`reqwest`, `axum`, `serde_json`,
 
 ## Success Criteria
 
-| Criterion | Before | After |
-|-----------|--------|-------|
-| Clippy warnings | 114 | 0 |
-| Fuzzer errors silently dropped | Yes | No (Wave 1.1) |
-| Burst concurrency unbounded | Yes | Semaphore-limited (Wave 1.2) |
-| TUI tabs functional | 15 of 22 | All 22 (Wave 3) |
-| `app/mod.rs` line count | 1,963 | < 600 (Wave 4) |
-| Severity Ord ordering | Inverted | Semantic (Wave 5.1) |
-| .bak files | 4 | 0 (Wave 4.3) |
-| New CLI commands | 0 | plan, ci, ai-analyze (Waves 6, 8, 10) |
-| AI features | 0 | Analysis, payloads, WAF bypass, adaptive scanning (Wave 10) |
-| All tests passing | 363 | 363+ (no regressions) |
+| Criterion | Before | After | Status |
+|-----------|--------|-------|--------|
+| Clippy warnings | 114 | 0 | ✅ Done |
+| Fuzzer errors silently dropped | Yes | No (Wave 1.1) | ✅ Done |
+| Burst concurrency unbounded | Yes | Semaphore-limited (Wave 1.2) | ✅ Done |
+| TUI tabs functional | 15 of 22 | All 22 (Wave 3) | ✅ Done |
+| `app/mod.rs` line count | 1,963 | < 600 (Wave 4) | Pending |
+| Severity Ord ordering | Inverted | Semantic (Wave 5.1) | Pending |
+| .bak files | 4 | 0 | ✅ Done |
+| New CLI commands | 0 | plan, ci, ai-analyze (Waves 6, 8, 10) | Pending |
+| AI features | 0 | Analysis, payloads, WAF bypass, adaptive scanning (Wave 10) | Pending |
+| All tests passing | 363 | 363+ (no regressions) | ✅ Done |

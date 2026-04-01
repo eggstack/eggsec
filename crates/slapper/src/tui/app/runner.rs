@@ -10,7 +10,6 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
-use super::error::make_friendly_error;
 use super::input::InputMode;
 use super::App;
 use super::PendingAction;

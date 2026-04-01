@@ -1,4 +1,4 @@
-use crate::tui::workers::{TaskResult, TracerouteHopResult};
+use crate::tui::workers::TaskResult;
 use std::time::Duration;
 
 pub async fn run_load_test(

@@ -4,9 +4,6 @@
 //! and packet fragmentation capabilities.
 
 use crate::error::{Result, SlapperError};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::scanner::spoof::SpoofConfig;

@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum PopupKind {
     Info,
     Warning,
@@ -37,6 +38,7 @@ pub struct Popup {
     pub buttons: Vec<String>,
 }
 
+#[allow(dead_code)]
 impl Popup {
     pub fn new(title: impl Into<String>, kind: PopupKind) -> Self {
         Self {
@@ -181,6 +183,7 @@ pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
+#[allow(dead_code)]
 pub fn help_popup() -> Popup {
     Popup::new("Help - Keyboard Shortcuts", PopupKind::Help)
         .content(vec![

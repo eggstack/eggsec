@@ -1,5 +1,6 @@
 use crate::tui::workers::TaskResult;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_graphql(
     url: String,
     do_introspection: bool,
@@ -177,6 +178,7 @@ fn is_graphql_success(response: &str) -> bool {
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_oauth(
     url: String,
     client_id: Option<String>,

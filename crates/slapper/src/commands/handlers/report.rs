@@ -18,7 +18,9 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                 ReportFormat::Junit => convert::convert_to_junit(&report),
                 ReportFormat::Sarif => convert::convert_to_sarif(&report),
                 ReportFormat::Html => {
+                    #[allow(deprecated)]
                     let summary = crate::output::markdown::ScanSummary::from(&report);
+                    #[allow(deprecated)]
                     let findings: Vec<crate::output::markdown::Finding> =
                         report.findings.iter().map(Into::into).collect();
                     crate::output::html::HtmlReport::new(summary, findings).generate()

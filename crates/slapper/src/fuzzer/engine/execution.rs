@@ -105,10 +105,9 @@ impl FuzzEngine {
                 )
                 .await;
 
-                if let Ok(r) = result {
-                    results.lock().await.push(r);
-                } else {
-                    tracing::debug!("Fuzz request failed: {:?}", result.err());
+                match result {
+                    Ok(r) => { results.lock().await.push(r); }
+                    Err(e) => { tracing::debug!("Fuzz request failed: {:?}", e); }
                 }
 
                 if let Some(ref pb) = progress {
@@ -161,13 +160,71 @@ impl FuzzEngine {
     }
 
     pub(crate) async fn run_burst_with_session(&mut self, payloads: Vec<Payload>) -> Result<Vec<FuzzResult>> {
-        let mut futures = Vec::new();
-        for payload in &payloads {
-            futures.push(self.send_fuzz_request(payload, Method::GET));
+        let payload_count = payloads.len();
+
+        let progress = if self.tui_mode {
+            None
+        } else {
+            let pb = Arc::new(ProgressBar::new(payload_count as u64));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} - burst")
+                    .unwrap_or_else(|_| ProgressStyle::default_bar())
+                    .progress_chars("#>-"),
+            );
+            Some(pb)
+        };
+
+        let results: Arc<Mutex<Vec<FuzzResult>>> =
+            Arc::new(Mutex::new(Vec::with_capacity(payload_count)));
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.args.concurrency));
+        let mut handles = Vec::new();
+
+        for payload in payloads {
+            let permit = semaphore.clone().acquire_owned().await?;
+            let client = self.client.clone();
+            let url = self.args.url.clone();
+            let method = self.args.method.clone();
+            let param = self.args.param.clone();
+            let timing_analyzer = self.timing_analyzer.clone();
+            let pattern_matcher = self.pattern_matcher.clone();
+            let results = results.clone();
+            let progress = progress.clone();
+            let payload_clone = payload.clone();
+            let user_agent = self.user_agent.clone();
+
+            let handle = tokio::spawn(async move {
+                let result = send_payload_async(
+                    client,
+                    &url,
+                    &method,
+                    param.as_deref(),
+                    &payload_clone,
+                    timing_analyzer,
+                    pattern_matcher,
+                    &user_agent,
+                )
+                .await;
+
+                match result {
+                    Ok(r) => { results.lock().await.push(r); }
+                    Err(e) => { tracing::debug!("Fuzz request failed: {:?}", e); }
+                }
+
+                if let Some(ref pb) = progress {
+                    pb.inc(1);
+                }
+                drop(permit);
+            });
+
+            handles.push(handle);
         }
 
-        let results: Vec<Result<FuzzResult>> = join_all(futures).await;
-        let results: Vec<FuzzResult> = results.into_iter().collect::<Result<Vec<_>>>()?;
+        join_all(handles).await;
+        if let Some(ref pb) = progress {
+            pb.finish_and_clear();
+        }
+        let results = results.lock().await.clone();
 
         if self.args.session {
             self.update_session_from_results(&results).await;

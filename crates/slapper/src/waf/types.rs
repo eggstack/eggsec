@@ -155,6 +155,7 @@ pub struct Finding {
 }
 
 impl Finding {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         title: String,
         description: String,

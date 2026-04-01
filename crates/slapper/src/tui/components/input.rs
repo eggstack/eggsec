@@ -329,6 +329,7 @@ impl InputField {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum InputState {
     None,
     Focused(usize),

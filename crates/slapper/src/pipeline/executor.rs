@@ -510,6 +510,7 @@ fn get_default_endpoints() -> Vec<String> {
     ]
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for CommonHttpArgs {
     fn default() -> Self {
         Self {

@@ -197,6 +197,7 @@ impl RegexExecutor {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct RegexMatchResult {
     is_match: bool,
     match_length: usize,

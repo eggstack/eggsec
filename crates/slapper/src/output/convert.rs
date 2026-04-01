@@ -79,7 +79,7 @@ pub fn convert_to_junit(report: &ScanReportData) -> String {
     let junit_report = builder.build();
     junit_report
         .to_xml()
-        .unwrap_or_else(|_| format!("<error>Failed to generate JUnit XML</error>"))
+        .unwrap_or_else(|_| "<error>Failed to generate JUnit XML</error>".to_string())
 }
 
 pub fn convert_to_sarif(report: &ScanReportData) -> String {
@@ -151,6 +151,7 @@ pub fn convert_to_csv(report: &ScanReportData) -> String {
     csv
 }
 
+#[allow(dead_code)]
 fn escape_xml(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -159,6 +160,7 @@ fn escape_xml(s: &str) -> String {
         .replace('\'', "&apos;")
 }
 
+#[allow(dead_code)]
 fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -195,6 +197,7 @@ impl From<&ScanReportData> for super::markdown::ScanSummary {
     }
 }
 
+#[allow(deprecated)]
 impl From<&FindingData> for super::markdown::Finding {
     fn from(f: &FindingData) -> Self {
         #[allow(deprecated)]

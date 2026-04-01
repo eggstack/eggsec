@@ -221,6 +221,7 @@ pub enum AppState {
     Error(String),
 }
 
+#[allow(dead_code)]
 pub trait TabState {
     fn state(&self) -> AppState;
     fn progress(&self) -> f64;
@@ -239,6 +240,7 @@ pub trait TabRender {
     }
 }
 
+#[allow(dead_code)]
 pub trait TabInput {
     fn handle_focus_next(&mut self);
     fn handle_focus_prev(&mut self);
