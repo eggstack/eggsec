@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::utils::truncate;
+use crate::utils::strip_controls;
 use crate::waf::types::{OwaspCategory, Severity};
 
 use super::super::payloads::Payload;
@@ -177,7 +177,7 @@ pub struct BaselineResponse {
 impl std::fmt::Display for FuzzSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Fuzz Results")?;
-        writeln!(f, "target: {}", truncate(&self.target_url, 60))?;
+        writeln!(f, "target: {}", strip_controls(&self.target_url, 60))?;
         writeln!(f, "mode: {} | payloads: {}", self.mode, self.total_payloads)?;
         writeln!(
             f,
@@ -217,13 +217,13 @@ impl std::fmt::Display for FuzzSession {
                     "\t[{}] {} | {} | {}ms",
                     severity,
                     result.status_code,
-                    truncate(&result.payload.description, 40),
+                    strip_controls(&result.payload.description, 40),
                     result.response_time_ms
                 )?;
 
                 if !result.leaks_found.is_empty() {
                     for leak in result.leaks_found.iter().take(2) {
-                        writeln!(f, "\t\tleak: {}", truncate(leak, 50))?;
+                        writeln!(f, "\t\tleak: {}", strip_controls(leak, 50))?;
                     }
                 }
             }

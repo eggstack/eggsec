@@ -4,13 +4,12 @@
 //! and packet fragmentation capabilities.
 
 use crate::error::{Result, SlapperError};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::scanner::spoof::SpoofConfig;
 use super::PortScanResults;
 
+#[cfg(all(feature = "stress-testing", unix))]
 fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
     if packet.len() < 20 {
         return None;
@@ -22,7 +21,7 @@ fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
     }
 
     let src_ip_bytes = &packet[12..16];
-    let dst_ip_bytes = &packet[16..20];
+    let _dst_ip_bytes = &packet[16..20];
     let src_ip = u32::from_be_bytes([src_ip_bytes[0], src_ip_bytes[1], src_ip_bytes[2], src_ip_bytes[3]]);
 
     let tcp_data = &packet[ip_header_len..];
@@ -30,7 +29,7 @@ fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
         return None;
     }
 
-    let src_port = u16::from_be_bytes([tcp_data[0], tcp_data[1]]);
+    let _src_port = u16::from_be_bytes([tcp_data[0], tcp_data[1]]);
     let dst_port = u16::from_be_bytes([tcp_data[2], tcp_data[3]]);
     let flags = u16::from_be_bytes([tcp_data[12], tcp_data[13]]);
 

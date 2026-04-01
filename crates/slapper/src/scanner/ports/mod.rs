@@ -7,7 +7,7 @@ mod spoofed;
 
 use crate::scanner::spoof::{format_spoof_warning, SpoofConfig, SpoofStats};
 use crate::utils::parsing::{parse_ports, resolve_host};
-use crate::utils::truncate;
+use crate::utils::strip_controls;
 use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -76,7 +76,7 @@ pub struct PortScanResults {
 impl std::fmt::Display for PortScanResults {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Port Scan Results")?;
-        writeln!(f, "host: {}", truncate(&self.host, 60))?;
+        writeln!(f, "host: {}", strip_controls(&self.host, 60))?;
         writeln!(f, "scanned: {} ports", self.ports_scanned)?;
         writeln!(f, "open: {} ports", self.open_ports.len())?;
 

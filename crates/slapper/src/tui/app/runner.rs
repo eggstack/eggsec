@@ -358,10 +358,8 @@ where
                         }
                     }
                     (KeyModifiers::NONE, KeyCode::Char('s')) if app.mode == InputMode::Normal => {
-                        if !app.is_running() {
-                            if app.current_tab == Tab::Settings {
-                                app.request_confirmation(PendingAction::SaveSettings);
-                            }
+                        if !app.is_running() && app.current_tab == Tab::Settings {
+                            app.request_confirmation(PendingAction::SaveSettings);
                         }
                     }
                     (KeyModifiers::NONE, KeyCode::Char('d')) if app.mode == InputMode::Normal => {

@@ -69,7 +69,7 @@ pub async fn run_graphql(
     let test_queries = fuzzer.generate_injection_queries(do_depth_bypass, do_alias_overload);
     let batch_queries = fuzzer.generate_batch_queries(do_alias_overload);
     let batch_count = batch_queries.len();
-    let mut all_queries: Vec<(String, GraphQLTestResult)> = test_queries
+    let all_queries: Vec<(String, GraphQLTestResult)> = test_queries
         .into_iter()
         .map(|tr| (tr.query.clone(), tr))
         .chain(batch_queries.into_iter().map(|tr| (tr.query.clone(), tr)))

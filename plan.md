@@ -178,12 +178,21 @@ These items from the source plans are confirmed done:
 | Spoofed scanner response parsing | ✅ Complete |
 | native-tls in slapper-nse documented | ✅ Complete |
 | All tests passing | ✅ 350+ |
-| Clippy warnings | ~30 (deprecated functions, unused vars) |
+| Clippy warnings | ✅ 0 |
 
 ## Remaining Issues (Known Bugs)
 
-1. Unused imports in some files (HashMap, AtomicBool/Ordering)
-2. Deprecated function warnings (get_all_payloads, truncate)
-3. Unused variables in spoofed scanner (dst_ip_bytes, src_port)
+(None - all issues resolved 2026-04-01)
+
+## Cleanup Completed (2026-04-01)
+
+All minor known issues resolved:
+1. Removed unused imports: `HashMap`, `AtomicBool`, `Ordering` in spoofed scanner
+2. Fixed deprecated functions: `get_all_payloads` → `get_all_payloads_cached`, `truncate` → `strip_controls`
+3. Fixed unused variables: `dst_ip_bytes`, `src_port` in spoofed scanner (prefixed with `_`)
+4. Added feature gate to `parse_tcp_response` function
+5. Fixed MSRV compatibility: replaced `is_multiple_of(2)` with `len % 2 == 0`
+6. Fixed mutable variable warning: removed unnecessary `mut` in `all_queries`
+7. Collapsed nested if statement in TUI runner
 
 (End of file)

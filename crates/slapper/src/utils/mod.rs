@@ -44,7 +44,7 @@ pub mod validation;
 #[cfg(any(feature = "stress-testing", feature = "packet-inspection"))]
 pub mod privilege;
 
-pub use formatting::{preserve_all, strip_controls, truncate, truncate_simple};
+pub use formatting::{preserve_all, strip_controls};
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerRegistry, CircuitState};
 pub use http::{
     create_http_client, create_http_client_with_options, create_http_client_with_proxy,

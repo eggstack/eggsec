@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 use tokio::time::timeout;
 
-use crate::utils::truncate;
+use crate::utils::strip_controls;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UdpServiceFingerprint {
@@ -30,7 +30,7 @@ pub struct UdpFingerprintResults {
 impl std::fmt::Display for UdpFingerprintResults {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "UDP Service Fingerprint Results")?;
-        writeln!(f, "Host: {}", truncate(&self.host, 65))?;
+        writeln!(f, "Host: {}", strip_controls(&self.host, 65))?;
         writeln!(f, "Ports Scanned: {}", self.ports_scanned)?;
         writeln!(f, "Services Identified: {}", self.services_identified)?;
         writeln!(f, "Duration: {}ms", self.duration_ms)?;
@@ -51,8 +51,8 @@ impl std::fmt::Display for UdpFingerprintResults {
                     f,
                     "{:>6} {:<15} {:<50}",
                     fp.port,
-                    truncate(&fp.service, 15),
-                    truncate(&response, 50)
+                    strip_controls(&fp.service, 15),
+                    strip_controls(&response, 50)
                 )?;
             }
         }

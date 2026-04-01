@@ -1,6 +1,6 @@
 
 use crate::utils::parsing::parse_ports;
-use crate::utils::truncate;
+use crate::utils::strip_controls;
 use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -87,7 +87,7 @@ pub struct FingerprintResults {
 impl std::fmt::Display for FingerprintResults {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Service Fingerprint Results")?;
-        writeln!(f, "Host: {}", truncate(&self.host, 65))?;
+        writeln!(f, "Host: {}", strip_controls(&self.host, 65))?;
         writeln!(f, "Ports Scanned: {}", self.ports_scanned)?;
         writeln!(f, "Services Identified: {}", self.services_identified)?;
         writeln!(f, "Duration: {}ms", self.duration_ms)?;
@@ -118,9 +118,9 @@ impl std::fmt::Display for FingerprintResults {
                     f,
                     "{:>6} {:<15} {:<20} {:<30}",
                     fp.port,
-                    truncate(&fp.service, 15),
-                    truncate(&product_version, 20),
-                    truncate(banner, 30)
+                    strip_controls(&fp.service, 15),
+                    strip_controls(&product_version, 20),
+                    strip_controls(banner, 30)
                 )?;
             }
         }

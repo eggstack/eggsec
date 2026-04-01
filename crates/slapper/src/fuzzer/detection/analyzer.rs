@@ -1,4 +1,3 @@
-
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -115,7 +114,7 @@ impl TimingAnalyzer {
         let sum: f64 = sorted.iter().sum();
         let mean = sum / len as f64;
 
-        let median = if len.is_multiple_of(2) {
+        let median = if len % 2 == 0 {
             (sorted[len / 2 - 1] + sorted[len / 2]) / 2.0
         } else {
             sorted[len / 2]

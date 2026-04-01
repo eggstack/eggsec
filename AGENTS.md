@@ -160,9 +160,9 @@ Two truncation utilities in `utils/formatting.rs`:
 
 | Metric | Value |
 |--------|-------|
-| Tests | 350 passing |
+| Tests | 350+ passing |
 | Build | Clean compilation |
-| Clippy | 1 warning (MSRV `is_multiple_of`, non-blocking) |
+| Clippy | 0 warnings (all issues resolved 2026-04-01) |
 | Doctests | 14 pass, 1 ignored, 0 fail |
 | `SlapperError` variants | 23 |
 | `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
@@ -170,11 +170,11 @@ Two truncation utilities in `utils/formatting.rs`:
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
 | Largest file | `tui/workers/runner.rs` (1192 lines) |
-| Improvement plan | See `plan.md` (10 waves, all pending) |
+| Improvement plan | See `plan.md` (10 waves, all complete) |
 
 ## Planning
 
-- `plan.md` — Consolidated improvement plan organized into 10 waves with parallelization strategy
+- `plan.md` — Consolidated improvement plan (all complete as of 2026-04-01)
 - `CODE_REVIEW_PLAN.md` — Historical reference (anyhow migration + waf/detector split, completed)
 - Always check the "Already Complete" section in `plan.md` before starting work
 

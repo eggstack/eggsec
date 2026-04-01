@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 
 use super::super::diff::ResponseDiffer;
 use super::super::grammar::{Grammar, GrammarFuzzer};
-use super::super::payloads::{get_all_payloads, get_payloads, Payload, PayloadType};
+use super::super::payloads::{get_all_payloads_cached, get_payloads, Payload, PayloadType};
 use super::super::state::HttpSession;
 use super::super::targets::get_target_payloads;
 
@@ -237,9 +237,9 @@ impl FuzzEngine {
 
     pub async fn run_all_types(&mut self) -> Result<()> {
         let payloads = if self.args.mutate {
-            self.mutate_payloads(get_all_payloads())
+            self.mutate_payloads(get_all_payloads_cached())
         } else {
-            get_all_payloads()
+            get_all_payloads_cached()
         };
 
         let start = Instant::now();
