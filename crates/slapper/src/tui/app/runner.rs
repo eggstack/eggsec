@@ -120,6 +120,12 @@ where
                     (KeyModifiers::CONTROL, KeyCode::Char('d')) => {
                         app.page_down();
                     }
+                    (KeyModifiers::NONE, KeyCode::PageUp) => {
+                        app.page_up();
+                    }
+                    (KeyModifiers::NONE, KeyCode::PageDown) => {
+                        app.page_down();
+                    }
                     (KeyModifiers::NONE, KeyCode::Esc) => {
                         if app.show_search {
                             app.toggle_search();
@@ -280,9 +286,6 @@ where
                         } else {
                             app.prev_tab();
                         }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('g')) if app.mode == InputMode::Normal => {
-                        app.handle_bottom();
                     }
                     (KeyModifiers::NONE, KeyCode::Backspace) => {
                         app.handle_backspace();

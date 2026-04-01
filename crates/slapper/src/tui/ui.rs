@@ -571,25 +571,24 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(5),
+            Constraint::Length(10),  // [MODE][HELP]
             Constraint::Percentage(55),
             Constraint::Percentage(40),
         ])
         .split(area);
 
-    let help_indicator = if app.is_help_visible() {
-        " HELP ".to_string()
-    } else {
-        "      ".to_string()
+    // Mode indicator (NORMAL/INSERT)
+    let mode_text = match app.mode {
+        super::InputMode::Normal => "NORMAL",
+        super::InputMode::Insert => "INSERT",
     };
-
-    let help_indicator_widget = ratatui::widgets::Paragraph::new(help_indicator).style(
-        Style::default()
-            .fg(Color::Yellow)
-            .bg(Color::Blue)
-            .add_modifier(Modifier::BOLD),
-    );
-    f.render_widget(help_indicator_widget, chunks[0]);
+    let mode_color = match app.mode {
+        super::InputMode::Normal => Color::Green,
+        super::InputMode::Insert => Color::Yellow,
+    };
+    let mode_indicator_widget = ratatui::widgets::Paragraph::new(format!(" {} ", mode_text))
+        .style(Style::default().fg(Color::Black).bg(mode_color).add_modifier(Modifier::BOLD));
+    f.render_widget(mode_indicator_widget, chunks[0]);
 
     let status =
         ratatui::widgets::Paragraph::new(status_text).style(Style::default().fg(status_color));

@@ -183,6 +183,10 @@ impl TargetScope {
     pub fn parse(target: &str) -> Result<Self, ScopeError> {
         let target = target.trim();
 
+        if target.is_empty() {
+            return Err(ScopeError::InvalidTarget(target.to_string()));
+        }
+
         if let Ok(ip) = IpAddr::from_str(target) {
             return Ok(Self {
                 host: target.to_string(),
@@ -201,7 +205,15 @@ impl TargetScope {
             return Ok(Self { host, ip });
         }
 
+        if target.contains('/') || target.contains(' ') {
+            return Err(ScopeError::InvalidTarget(target.to_string()));
+        }
+
         let host = target.split(':').next().unwrap_or(target).to_string();
+
+        if host.is_empty() {
+            return Err(ScopeError::InvalidTarget(target.to_string()));
+        }
 
         let ip = Self::resolve_host(&host).ok();
 

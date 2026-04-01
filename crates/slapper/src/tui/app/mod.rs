@@ -103,6 +103,7 @@ pub struct App {
     pub show_http_options: bool,
     pub show_search: bool,
     pub search_query: String,
+    pub search_backup: Option<std::collections::VecDeque<crate::tui::tabs::history::HistoryEntry>>,
     pub pending_key: Option<KeyCode>,
     pub dashboard: tabs::DashboardTab,
     pub export_format: ExportFormat,
@@ -152,6 +153,7 @@ impl App {
             show_http_options: false,
             show_search: false,
             search_query: String::new(),
+            search_backup: None,
             pending_key: None,
             export_format: ExportFormat::Json,
             task_handle: None,
@@ -189,6 +191,10 @@ impl App {
     }
 
     pub fn toggle_search(&mut self) {
+        if self.show_search {
+            // Closing search - restore original history if on History tab
+            self.restore_search();
+        }
         self.show_search = !self.show_search;
         if self.show_search {
             self.search_query.clear();
@@ -203,6 +209,9 @@ impl App {
         if self.current_tab == Tab::History {
             let query = self.search_query.clone();
             if let Ok(mut h) = self.history.lock() {
+                // Store original history as backup before searching
+                self.search_backup = Some(h.entries.clone());
+                
                 let results: Vec<_> = h.search(&query).into_iter().cloned().collect();
                 h.entries.clear();
                 for entry in results {
@@ -216,6 +225,18 @@ impl App {
         }
         
         self.show_search = false;
+    }
+    
+    pub fn restore_search(&mut self) {
+        if self.current_tab == Tab::History {
+            if let Some(backup) = self.search_backup.take() {
+                if let Ok(mut h) = self.history.lock() {
+                    h.entries = backup;
+                    h.selected = Some(0);
+                    h.update_details_view();
+                }
+            }
+        }
     }
 
     pub fn cycle_export_format(&mut self) {
@@ -1208,10 +1229,11 @@ impl App {
         match self.export_format {
             ExportFormat::Json => self.export_json(),
             ExportFormat::Csv => self.export_csv(&filename),
-            ExportFormat::Html => self.export_json(),
-            ExportFormat::Markdown => self.export_json(),
-            ExportFormat::Sarif => self.export_json(),
-            ExportFormat::Junit => self.export_json(),
+            // Generate JSON first, then convert to other formats
+            ExportFormat::Html | ExportFormat::Markdown | ExportFormat::Sarif | ExportFormat::Junit => {
+                self.export_json();
+                self.export_converted(&filename);
+            }
         }
     }
 
@@ -1330,6 +1352,30 @@ impl App {
             _ => {
                 self.export_json();
             }
+        }
+    }
+
+    fn export_converted(&mut self, filename: &str) {
+        use crate::output::convert::load_scan_report;
+        
+        // Get the base name and read the JSON file we just created
+        let base_name = filename.trim_end_matches(".html").trim_end_matches(".md")
+            .trim_end_matches(".sarif").trim_end_matches(".junit")
+            .trim_end_matches(".json");
+        
+        let json_filename = format!("{}.json", base_name);
+        let json_path = format!("./exports/{}", json_filename);
+        
+        // Load and convert the JSON
+        if let Ok(report) = load_scan_report(&json_path) {
+            let converted = match self.export_format {
+                ExportFormat::Html => crate::output::convert::convert_to_html(&report),
+                ExportFormat::Markdown => crate::output::convert::convert_to_markdown(&report),
+                ExportFormat::Sarif => crate::output::convert::convert_to_sarif(&report),
+                ExportFormat::Junit => crate::output::convert::convert_to_junit(&report),
+                _ => return, // Nothing to do for Json or Csv
+            };
+            self.save_export(filename, converted);
         }
     }
 

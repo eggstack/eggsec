@@ -169,11 +169,9 @@ pub async fn run_packet_traceroute(
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
     use crate::packet::traceroute::{Traceroute, TracerouteConfig};
-    use std::net::ToSocketAddrs;
-
     let addr = format!("{}:80", target);
-    let _socket_addr = addr
-        .to_socket_addrs()
+    let _socket_addr = tokio::net::lookup_host((&addr, 0))
+        .await
         .map_err(|e| anyhow::anyhow!("Invalid target: {}", e))?
         .next()
         .ok_or_else(|| anyhow::anyhow!("Could not resolve target"))?;

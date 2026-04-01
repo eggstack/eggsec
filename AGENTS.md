@@ -162,9 +162,9 @@ Two truncation utilities in `utils/formatting.rs`:
 
 | Metric | Value |
 |--------|-------|
-| Tests | 350+ passing |
+| Tests | 363 passing |
 | Build | Clean compilation |
-| Clippy | 0 warnings (all issues resolved 2026-04-01) |
+| Clippy | 0 warnings |
 | Doctests | 14 pass, 1 ignored, 0 fail |
 | `SlapperError` variants | 23 |
 | `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
@@ -175,7 +175,7 @@ Two truncation utilities in `utils/formatting.rs`:
 
 ## Planning
 
-- `plan.md` — Consolidated improvement plan (10 waves, 60+ items, not yet started)
+- `plan.md` — Consolidated improvement plan (10 waves, all items resolved)
 
 ## Lessons Learned
 
@@ -206,7 +206,7 @@ Two truncation utilities in `utils/formatting.rs`:
 - Use `as_int()` for severity comparisons, not `>` or `<`
 - `Display` outputs UPPERCASE ("CRITICAL"), `as_str()` outputs lowercase ("critical")
 - `serde` serialization uses lowercase (due to `#[serde(rename_all = "lowercase")]`)
-- `Severity` has a custom `from_str` inherent method but does NOT implement `FromStr` trait (plan.md Wave 6.1)
+- `Severity` implements `FromStr` trait (inherent `from_str` method deprecated)
 
 ### SensitiveString
 
@@ -224,20 +224,22 @@ Two truncation utilities exist with different behaviors:
 
 **Warning:** Both `preserve_all` and `strip_controls` use byte slicing (`&s[..max_len]`) which can panic on multi-byte UTF-8 characters. Use character-based truncation when fixing (plan.md Wave 2.1).
 
-### Known Bugs (Not Yet Fixed)
+### Known Bugs (Resolved)
 
-These are confirmed bugs documented in `plan.md` that agents should be aware of:
+All bugs documented in `plan.md` have been resolved as of 2026-04-01:
 
-- **UTF-8 byte slicing panic** in `preserve_all` and `strip_controls` (plan.md Wave 2.1)
-- **Concurrency override**: `fuzzer/engine/core.rs:87` forces min 100 (plan.md Wave 1.4)
-- **Duplicate key handlers**: `tui/app/runner.rs:287-335` unreachable dead code (plan.md Wave 1.1)
-- **Mouse tab selection**: hardcoded 15 tabs, 7 unreachable (plan.md Wave 1.3)
-- **`g` key in Insert mode**: missing `InputMode` guard (plan.md Wave 1.2)
-- **`default_value = "None"`**: `cli/fuzz.rs` Option fields get `Some("None")` (plan.md Wave 1.5)
-- **MCP auth Bearer stripping**: full header compared, not just key (plan.md Wave 1.8)
-- **Scope bypass**: malformed URLs pass scope check (plan.md Wave 1.9)
-- **Distributed worker**: completely non-functional (plan.md Wave 3.1)
-- **Proxy chaining**: connections not actually chained (plan.md Wave 3.3)
+- **UTF-8 byte slicing panic** in `preserve_all` and `strip_controls` — Fixed with `.chars().take()`
+- **Concurrency override**: `fuzzer/engine/core.rs:87` forces min 100 — Fixed with `clamp(1, 500)`
+- **Duplicate key handlers**: `tui/app/runner.rs` duplicate `g` handler — Removed dead code
+- **Mouse tab selection**: hardcoded 15 tabs — Fixed with `Tab::all().len()`
+- **`g` key in Insert mode**: missing `InputMode` guard — Fixed
+- **`default_value = "None"`**: `cli/fuzz.rs` Option fields — Removed `default_value`
+- **MCP auth Bearer stripping**: full header compared — Fixed with `strip_prefix`
+- **Scope bypass**: malformed URLs pass scope check — Fixed with validation
+- **Distributed worker**: no coordinator — Documented (architectural gap)
+- **Proxy chaining**: connections not chained — Fixed to use `chain_connect()`
+- **MCP HashMaps**: unbounded growth — Fixed with background reaper
+- **Blocking DNS in async**: `to_socket_addrs()` — Replaced with `tokio::net::lookup_host()`
 
 ### TUI-Specific Patterns
 

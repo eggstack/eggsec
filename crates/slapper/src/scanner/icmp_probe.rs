@@ -106,10 +106,8 @@ async fn resolve_target(target: &str) -> Result<IpAddr> {
 }
 
 async fn resolve_hostname(hostname: &str) -> Result<IpAddr> {
-    use std::net::ToSocketAddrs;
-
-    let addrs: Vec<_> = (hostname, 0)
-        .to_socket_addrs()
+    let addrs: Vec<_> = tokio::net::lookup_host((hostname, 0))
+        .await
         .map_err(|e| SlapperError::Network(format!("DNS lookup failed: {}", e)))?
         .collect();
 

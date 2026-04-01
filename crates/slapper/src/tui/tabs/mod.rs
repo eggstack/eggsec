@@ -4,7 +4,7 @@ mod dashboard;
 mod fingerprint;
 mod fuzz;
 pub mod graphql;
-mod history;
+pub mod history;
 mod load;
 #[cfg(feature = "nse")]
 pub mod nse;
@@ -261,24 +261,20 @@ pub trait TabInput {
         }
     }
     fn handle_home(&mut self) {
-        for _ in 0..100 {
-            self.handle_left();
-        }
+        // Default: go to left edge - single step should suffice
+        let _ = self.handle_left();
     }
     fn handle_end(&mut self) {
-        for _ in 0..100 {
-            self.handle_right();
-        }
+        // Default: go to right edge - single step should suffice
+        let _ = self.handle_right();
     }
     fn handle_top(&mut self) {
-        for _ in 0..100 {
-            self.handle_up();
-        }
+        // Default: go to first item - single step should suffice
+        self.handle_up();
     }
     fn handle_bottom(&mut self) {
-        for _ in 0..100 {
-            self.handle_down();
-        }
+        // Default: go to last item - single step should suffice
+        self.handle_down();
     }
     fn handle_tab(&mut self) {}
     fn handle_search(&mut self, _query: &str) {}

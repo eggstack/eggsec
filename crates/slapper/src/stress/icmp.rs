@@ -139,9 +139,9 @@ async fn resolve_target(target: &str) -> Result<IpAddr> {
         return Ok(ip);
     }
 
-    use std::net::ToSocketAddrs;
-
-    let addrs: Vec<_> = (target, 0).to_socket_addrs()?.collect();
+    let addrs: Vec<_> = tokio::net::lookup_host((target, 0))
+        .await?
+        .collect();
 
     addrs
         .first()

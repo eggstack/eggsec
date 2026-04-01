@@ -2,6 +2,7 @@ use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::{Duration, Interval};
 
 use crate::tool::{
     CancellationToken, ExecutionHistory, RateLimitConfig, RateLimiter, RequestOptions, SessionManager, Target, ToolDispatcher, ToolInfo, 
@@ -29,16 +30,23 @@ impl McpServer {
         let dispatcher = ToolDispatcher::new(registry.clone());
         let (stream_events, _) = tokio::sync::broadcast::channel(1000);
         
-        Self {
+        let pending_cancellations = Arc::new(Mutex::new(HashMap::new()));
+        let completed_results = Arc::new(Mutex::new(HashMap::new()));
+        
+        let server = Self {
             registry,
             dispatcher,
             api_key,
             rate_limiter: RateLimiter::new(RateLimitConfig::default()),
             session_manager: None,
-            pending_cancellations: Arc::new(Mutex::new(HashMap::new())),
-            completed_results: Arc::new(Mutex::new(HashMap::new())),
+            pending_cancellations,
+            completed_results,
             stream_events: Arc::new(stream_events),
-        }
+        };
+        
+        server.start_hashmap_reaper(60);
+        
+        server
     }
 
     pub fn with_session_manager(mut self, session_manager: SessionManager) -> Self {
@@ -71,6 +79,43 @@ impl McpServer {
 
     pub fn validate_auth_params(&self, params: &Option<serde_json::Value>) -> Result<(), McpError> {
         validate_auth_params(&self.api_key, params)
+    }
+
+    pub fn start_hashmap_reaper(&self, interval_secs: u64) {
+        let pending_cancellations = Arc::clone(&self.pending_cancellations);
+        let completed_results = Arc::clone(&self.completed_results);
+
+        tokio::spawn(async move {
+            let mut interval: Interval = tokio::time::interval(Duration::from_secs(interval_secs));
+            
+            loop {
+                interval.tick().await;
+                
+                const ENTRY_TTL_SECS: i64 = 300;
+
+                {
+                    let mut pending = pending_cancellations.lock().await;
+                    pending.retain(|_, token| {
+                        !token.is_cancelled()
+                    });
+                }
+
+                let mut to_remove: Vec<String> = Vec::new();
+                {
+                    let mut results = completed_results.lock().await;
+                    let now = Utc::now();
+                    for (id, response) in results.iter() {
+                        let age = now.signed_duration_since(response.metadata.completed_at);
+                        if age.num_seconds() > ENTRY_TTL_SECS {
+                            to_remove.push(id.clone());
+                        }
+                    }
+                    for id in to_remove {
+                        results.remove(&id);
+                    }
+                }
+            }
+        });
     }
 
     pub async fn handle_request(&self, req: McpRequest) -> McpResponse {
