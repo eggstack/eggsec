@@ -1,8 +1,5 @@
 pub fn strip_controls(s: &str, max_len: usize) -> String {
-    let cleaned: String = s
-        .chars()
-        .filter(|c| c.is_ascii_graphic() || *c == ' ')
-        .collect();
+    let cleaned: String = s.chars().filter(|c| !c.is_control() || *c == ' ').collect();
     if cleaned.len() > max_len {
         let truncated: String = cleaned.chars().take(max_len.saturating_sub(3)).collect();
         format!("{}...", truncated)
@@ -19,16 +16,6 @@ pub fn preserve_all(s: &str, max_len: usize) -> String {
     } else {
         format!("{:<width$}", s, width = max_len)
     }
-}
-
-#[deprecated(since = "0.1.0", note = "Use strip_controls instead")]
-pub fn truncate(s: &str, max_len: usize) -> String {
-    strip_controls(s, max_len)
-}
-
-#[deprecated(since = "0.1.0", note = "Use preserve_all instead")]
-pub fn truncate_simple(s: &str, max_len: usize) -> String {
-    preserve_all(s, max_len)
 }
 
 #[cfg(test)]
@@ -61,6 +48,13 @@ mod tests {
     }
 
     #[test]
+    fn test_strip_controls_preserves_unicode() {
+        let result = strip_controls("héllo wörld", 15);
+        assert!(result.contains("héllo"));
+        assert!(result.contains("wörld"));
+    }
+
+    #[test]
     fn test_preserve_all_short() {
         let result = preserve_all("hello", 10);
         assert_eq!(result, "hello     ");
@@ -72,31 +66,17 @@ mod tests {
         assert_eq!(result, "hello w...");
     }
 
-    #[test]
-    fn test_deprecated_truncate() {
-        #[allow(deprecated)]
-        let result = truncate("hello world", 10);
-        assert_eq!(result, "hello w...");
-    }
-
-    #[test]
-    fn test_deprecated_truncate_simple() {
-        #[allow(deprecated)]
-        let result = truncate_simple("hello world", 10);
-        assert_eq!(result, "hello w...");
-    }
-
     proptest! {
         #[test]
         fn test_strip_controls_never_exceeds_max_len(s in "\\PC{0,100}", max_len in 5usize..50) {
             let result = strip_controls(&s, max_len);
-            prop_assert!(result.len() <= max_len);
+            prop_assert!(result.chars().count() <= max_len);
         }
 
         #[test]
         fn test_preserve_all_never_exceeds_max_len(s in "[ -~]{0,100}", max_len in 5usize..50) {
             let result = preserve_all(&s, max_len);
-            prop_assert!(result.len() <= max_len);
+            prop_assert!(result.chars().count() <= max_len);
         }
     }
 }

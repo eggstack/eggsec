@@ -55,6 +55,9 @@ pub struct SlapperConfig {
 
     #[serde(default)]
     pub proxies: Vec<ProxyConfigEntry>,
+
+    #[serde(default)]
+    pub ai: Option<AiConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -554,4 +557,25 @@ fn default_concurrency() -> usize {
 }
 fn default_port_timeout() -> u64 {
     2
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiConfig {
+    pub api_url: Option<String>,
+    pub api_key: Option<SensitiveString>,
+    pub model: Option<String>,
+    pub max_tokens: Option<u32>,
+    pub temperature: Option<f32>,
+}
+
+impl Default for AiConfig {
+    fn default() -> Self {
+        Self {
+            api_url: None,
+            api_key: None,
+            model: Some("gpt-4".to_string()),
+            max_tokens: Some(4096),
+            temperature: Some(0.7),
+        }
+    }
 }

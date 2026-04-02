@@ -1,6 +1,9 @@
 pub mod agent;
+pub mod ai_schema;
+pub mod baseline;
 pub mod convert;
 pub mod csv;
+pub mod dedup;
 pub mod html;
 pub mod junit;
 pub mod markdown;

@@ -321,3 +321,82 @@ Tab::Nse => self.nse.method(),
 Tab::Nse => { /* fallback */ },
 ```
 Without the `#[cfg(not(...))]` arm, compilation fails when the feature is disabled because the enum variant still exists but has no matching arm.
+
+### New Feature Modules
+
+#### AI Integration Module (`ai/`)
+
+The AI module provides integration with LLM APIs for security testing:
+- `ai/client.rs` — HTTP client for OpenAI-compatible APIs with `apply_auth()` helper
+- `ai/payloads.rs` — `AiPayloadGenerator` with HashMap cache for payload suggestions
+- `ai/waf_bypass.rs` — `SmartWafBypass` with knowledge base persistence to `~/.config/slapper/waf_bypasses.json`
+- `ai/adaptive.rs` — `AdaptiveScanEngine` with strategy adjustment based on findings
+
+Feature gate: `#[cfg(feature = "ai-integration")]` in `lib.rs`.
+
+#### Agent Registry (`tool/agents/`)
+
+The agent module provides multi-agent orchestration:
+- `tool/agents/registry.rs` — `AgentRegistry` with Arc<RwLock<HashMap>> for async CRUD
+- `tool/agents/delegation.rs` — `DelegationRequest`/`DelegationResponse` types
+
+Feature gate: `#[cfg(feature = "rest-api")]` in `tool/mod.rs`.
+
+#### MCP Prompts & Sampling
+
+- `tool/protocol/mcp/prompts.rs` — 7 builtin prompt templates with `get_builtin_prompts()`
+- `tool/protocol/mcp/sampling.rs` — Request/response types for AI completions
+
+Feature gates: prompts always available, sampling gated on `ai-integration`.
+
+#### OpenAI Protocol Module
+
+- `tool/protocol/openai/` — Chat completions endpoint at `/v1/chat/completions`
+- Auto-generates tool definitions from `ToolRegistry`
+
+Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
+
+#### CI/CD Module
+
+- `cli/ci.rs` — CI-specific command with `--fail-on`, `--baseline`, `--quiet` flags
+- `commands/handlers/ci.rs` — Handler with exit codes (0=pass, 1=fail, 2=error, 3=scope violation)
+- `output/baseline.rs` — `BaselineComparison` struct for regression detection
+
+#### Plan Command
+
+- `cli/plan.rs` — Preview execution plans without running them
+- `commands/handlers/plan.rs` — Handler that outputs JSON or formatted table
+
+#### Deduplication Engine
+
+- `output/dedup.rs` — `DedupEngine` with `Strict`, `Fuzzy`, `Disabled` strategies
+
+#### AI Output Schema
+
+- `output/ai_schema.rs` — `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` types
+
+### Severity Ordering
+
+`Severity` now has correct semantic ordering via custom `Ord` implementation:
+- Critical > High > Medium > Low > Info
+- Manual implementations of `PartialOrd` and `Ord` using `as_int()` method
+- Removed from derive macro to avoid declaration-order footgun
+
+### strip_controls Fix
+
+The `strip_controls` function in `utils/formatting.rs` now uses `!c.is_control()` filter instead of `is_ascii_graphic()`, preserving Unicode characters while still removing control characters.
+
+### Deprecated Aliases Removed
+
+`truncate` and `truncate_simple` functions have been removed from `utils/formatting.rs`. Use `strip_controls` and `preserve_all` directly.
+
+### Dead Code Removal
+
+Unused code in `waf/bypass/evasion.rs` has been removed:
+- `EvasionTechnique` enum (never matched)
+- `HomoglyphMap` struct (never used)
+- `apply_hex_encoding()` and `apply_null_byte()` functions (never called)
+
+### Property-Based Tests
+
+Proptest assertions should use `chars().count()` instead of `len()` when checking character-based truncation, as Unicode characters have variable byte lengths.

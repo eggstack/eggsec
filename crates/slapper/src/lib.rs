@@ -13,8 +13,8 @@
 //! - **`commands`** - Command dispatch and handler implementations
 //! - **`config`** - Configuration loading (TOML/YAML), scope enforcement
 //! - **`scanner`** - Port scanning, endpoint discovery, service fingerprinting
-//! - **`fuzzer`** - Security fuzzing engine with 20+ payload types
-//! - **`waf`** - WAF detection (30+ products) and bypass techniques
+//! - **`fuzzer`** - Security fuzzing engine with 22 payload types
+//! - **`waf`** - WAF detection (26 products) and bypass techniques
 //! - **`recon`** - Passive reconnaissance (DNS, WHOIS, SSL, tech detection, CVE mapping)
 //! - **`loadtest`** - HTTP load testing with metrics
 //! - **`pipeline`** - Chained security assessment profiles
@@ -74,6 +74,9 @@ pub mod waf;
     feature = "grpc-api"
 ))]
 pub mod tool;
+
+#[cfg(feature = "ai-integration")]
+pub mod ai;
 
 #[cfg(feature = "nse")]
 pub use slapper_nse as nse;

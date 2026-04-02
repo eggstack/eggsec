@@ -1,26 +1,37 @@
+pub mod ci;
 pub mod scan;
 pub mod fuzz;
 pub mod load;
 pub mod cluster;
 pub mod recon;
 pub mod network;
+pub mod plan;
 pub mod plugin;
 pub mod report;
 pub mod stress;
 pub mod notify;
 
+pub use ci::*;
 pub use scan::*;
 pub use fuzz::*;
 pub use load::*;
 pub use cluster::*;
 pub use recon::*;
 pub use network::*;
+pub use plan::*;
+
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub use plugin::*;
 pub use report::*;
 #[cfg(feature = "stress-testing")]
 pub use stress::*;
 pub use notify::*;
+
+#[cfg(feature = "ai-integration")]
+pub mod ai_analyze;
+
+#[cfg(feature = "ai-integration")]
+pub use ai_analyze::*;
 
 use anyhow::Result;
 use crate::cli::Cli;
@@ -77,6 +88,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Scan(args)) => handle_scan(ctx, args).await,
         Some(Commands::Resume(args)) => handle_resume(args).await,
         Some(Commands::Recon(args)) => handle_recon(ctx, args).await,
+        Some(Commands::Plan(args)) => handle_plan(ctx, args).await,
+        Some(Commands::Ci(args)) => handle_ci(ctx, args).await,
         Some(Commands::Graphql(args)) => handle_graphql(ctx, args).await,
         Some(Commands::OAuth(args)) => handle_oauth(ctx, args).await,
         Some(Commands::Packet(args)) => handle_packet(ctx, args).await,
@@ -99,5 +112,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Serve(args)) => handle_serve(ctx, args).await,
         #[cfg(feature = "rest-api")]
         Some(Commands::McpServe(args)) => handle_mcp_serve(ctx, args).await,
+        #[cfg(feature = "ai-integration")]
+        Some(Commands::AiAnalyze(args)) => handle_ai_analyze(args).await,
     }
 }

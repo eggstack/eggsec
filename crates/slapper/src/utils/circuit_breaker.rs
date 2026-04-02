@@ -1,7 +1,7 @@
 
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +24,7 @@ pub struct CircuitBreaker {
 
 struct CircuitBreakerState {
     state: CircuitState,
-    last_failure: Option<Instant>,
+    last_failure: Option<tokio::time::Instant>,
 }
 
 impl CircuitBreaker {
@@ -87,7 +87,7 @@ impl CircuitBreaker {
         self.failure_count.fetch_add(1, Ordering::Relaxed);
 
         let mut state = self.state.lock().await;
-        state.last_failure = Some(Instant::now());
+        state.last_failure = Some(tokio::time::Instant::now());
 
         if state.state == CircuitState::HalfOpen {
             state.state = CircuitState::Open;
@@ -222,25 +222,27 @@ mod tests {
 
     #[tokio::test]
     async fn test_circuit_breaker_half_open() {
+        tokio::time::pause();
         let cb = CircuitBreaker::new(2, 2, Duration::from_millis(50));
 
         cb.record_failure().await;
         cb.record_failure().await;
         assert!(!cb.is_available().await);
 
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        tokio::time::advance(Duration::from_millis(60)).await;
         assert!(cb.is_available().await);
         assert_eq!(cb.get_state().await, CircuitState::HalfOpen);
     }
 
     #[tokio::test]
     async fn test_circuit_breaker_closes_after_successes() {
+        tokio::time::pause();
         let cb = CircuitBreaker::new(2, 2, Duration::from_millis(50));
 
         cb.record_failure().await;
         cb.record_failure().await;
 
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        tokio::time::advance(Duration::from_millis(60)).await;
         assert!(cb.is_available().await);
 
         cb.record_success().await;
@@ -250,15 +252,35 @@ mod tests {
 
     #[tokio::test]
     async fn test_circuit_breaker_reopens_on_failure_in_half_open() {
+        tokio::time::pause();
         let cb = CircuitBreaker::new(2, 2, Duration::from_millis(50));
 
         cb.record_failure().await;
         cb.record_failure().await;
 
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        tokio::time::advance(Duration::from_millis(60)).await;
         cb.record_failure().await;
 
         assert!(!cb.is_available().await);
         assert_eq!(cb.get_state().await, CircuitState::Open);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_record() {
+        tokio::time::pause();
+        let breaker = Arc::new(CircuitBreaker::new(5, 3, Duration::from_secs(1)));
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let b = breaker.clone();
+            handles.push(tokio::spawn(async move {
+                b.record_failure().await;
+            }));
+        }
+        for h in handles {
+            h.await.unwrap();
+        }
+        assert_eq!(breaker.total_calls(), 10);
+        assert_eq!(breaker.total_failures(), 10);
+        assert_eq!(breaker.get_state().await, CircuitState::Open);
     }
 }

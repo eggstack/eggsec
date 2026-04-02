@@ -2,20 +2,30 @@ use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use serde::{Deserialize, Serialize};
 
+pub mod ci;
 pub mod cluster;
 pub mod fuzz;
 pub mod http;
 pub mod misc;
 pub mod packet;
+pub mod plan;
 pub mod scan;
 pub mod stress;
 
+pub use ci::*;
 pub use cluster::*;
 pub use fuzz::*;
 pub use http::*;
 pub use misc::*;
 pub use packet::*;
+pub use plan::*;
 pub use scan::*;
+
+#[cfg(feature = "ai-integration")]
+pub mod ai_analyze;
+
+#[cfg(feature = "ai-integration")]
+pub use ai_analyze::*;
 #[cfg(feature = "stress-testing")]
 pub use stress::*;
 
@@ -75,6 +85,12 @@ pub enum Commands {
     #[command(about = "Gather reconnaissance information", long_about = RECON_ABOUT)]
     Recon(ReconArgs),
 
+    // --- Planning & CI ---
+    #[command(about = "Preview execution plan without running it")]
+    Plan(PlanArgs),
+    #[command(about = "Run security checks in CI/CD mode")]
+    Ci(CiArgs),
+
     // --- Load testing ---
     #[command(about = "Run HTTP load test against target URL", long_about = LOAD_ABOUT)]
     Load(LoadArgs),
@@ -123,6 +139,11 @@ pub enum Commands {
         alias = "mcp-serve"
     )]
     McpServe(McpServeArgs),
+
+    // --- AI operations ---
+    #[cfg(feature = "ai-integration")]
+    #[command(about = "Post-scan AI analysis of findings")]
+    AiAnalyze(AiAnalyzeArgs),
 }
 
 #[derive(clap::Args, Clone)]

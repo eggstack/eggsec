@@ -7,9 +7,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 /// Canonical severity rating for findings and vulnerabilities.
 ///
 /// Used by the fuzzer, WAF detector, recon, output, and tool modules.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     Critical,
@@ -96,6 +94,18 @@ impl std::str::FromStr for Severity {
             "low" => Ok(Severity::Low),
             _ => Ok(Severity::Info),
         }
+    }
+}
+
+impl PartialOrd for Severity {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Severity {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_int().cmp(&other.as_int())
     }
 }
 

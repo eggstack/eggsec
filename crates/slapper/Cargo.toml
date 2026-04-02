@@ -22,7 +22,7 @@ exclude = [
 ]
 
 [dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "fs", "process", "io-util", "io-std", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "fs", "process", "io-util", "io-std", "signal", "test-util"] }
 tokio-rustls = "0.26"
 rustls = { version = "0.23", features = ["ring"] }
 rustls-pemfile = "2"
@@ -109,6 +109,10 @@ optional = true
 version = "0.7"
 optional = true
 
+[dependencies.eventsource-stream]
+version = "0.2"
+optional = true
+
 [dependencies.tower]
 version = "0.4"
 optional = true
@@ -159,7 +163,10 @@ nse = ["tool-api", "dep:slapper-nse", "slapper-nse/nse"]
 nse-sandbox = ["nse", "slapper-nse/sandbox"]
 
 # Full build with all features
-full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse"]
+full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration"]
+
+# AI integration for analysis, payload generation, WAF bypass suggestions
+ai-integration = ["tool-api", "eventsource-stream"]
 
 [[bin]]
 name = "slapper"

@@ -1,3 +1,5 @@
+#[macro_use]
+pub(crate) mod dispatch;
 pub(crate) mod error;
 pub mod input;
 mod options;
@@ -6,6 +8,15 @@ mod runner;
 pub use input::InputMode;
 pub use options::GlobalHttpOptions;
 pub use runner::run;
+
+use crossterm::event::KeyCode;
+use super::error::make_friendly_error;
+use crate::tui::help::{HelpManager, HelpOverlay, CommandPalette, HelpContext};
+use crate::tui::state::SharedHistory;
+use crate::tui::tabs;
+use crate::tui::tabs::{Tab, TabInput, TabState};
+use crate::tui::workers;
+use crate::output::ExportFormat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PendingAction {
@@ -58,15 +69,6 @@ impl PendingAction {
         }
     }
 }
-
-use crossterm::event::KeyCode;
-use super::error::make_friendly_error;
-use crate::tui::help::{HelpManager, HelpOverlay, CommandPalette, HelpContext};
-use crate::tui::state::SharedHistory;
-use crate::tui::tabs;
-use crate::tui::tabs::{Tab, TabInput, TabState};
-use crate::tui::workers;
-use crate::output::ExportFormat;
 
 pub struct App {
     pub current_tab: Tab,
@@ -190,7 +192,6 @@ impl App {
 
     pub fn toggle_search(&mut self) {
         if self.show_search {
-            // Closing search - restore original history if on History tab
             self.restore_search();
         }
         self.show_search = !self.show_search;
@@ -207,7 +208,6 @@ impl App {
         if self.current_tab == Tab::History {
             let query = self.search_query.clone();
             if let Ok(mut h) = self.history.lock() {
-                // Store original history as backup before searching
                 self.search_backup = Some(h.entries.clone());
                 
                 let results: Vec<_> = h.search(&query).into_iter().cloned().collect();
@@ -291,73 +291,14 @@ impl App {
     }
 
     pub fn is_running(&self) -> bool {
-        match self.current_tab {
-            Tab::Recon => self.recon.is_running(),
-            Tab::Load => self.load.is_running(),
-            Tab::ScanPorts => self.scan_ports.is_running(),
-            Tab::ScanEndpoints => self.scan_endpoints.is_running(),
-            Tab::Fingerprint => self.fingerprint.is_running(),
-            Tab::Fuzz => self.fuzz.is_running(),
-            Tab::Waf => self.waf.is_running(),
-            Tab::WafStress => self.waf_stress.is_running(),
-            Tab::Scan => self.scan.is_running(),
-            Tab::Resume => self.resume.is_running(),
-            Tab::Proxy => self.proxy.is_running(),
-            Tab::Packet => self.packet.is_running(),
-            Tab::GraphQl => self.graphql.is_running(),
-            Tab::OAuth => self.oauth.is_running(),
-            Tab::Cluster => self.cluster.is_running(),
-            Tab::Stress => self.stress.is_running(),
-            Tab::Report => self.report.is_running(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.is_running(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.is_running(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => false,
-            Tab::History => false,
-            Tab::Dashboard => false,
-        }
+        dispatch_is_running!(self)
     }
 
     pub fn stop(&mut self) {
         if let Some(handle) = self.task_handle.take() {
             handle.abort();
         }
-
-        match self.current_tab {
-            Tab::Recon => self.recon.stop(),
-            Tab::Load => self.load.stop(),
-            Tab::ScanPorts => self.scan_ports.stop(),
-            Tab::ScanEndpoints => self.scan_endpoints.stop(),
-            Tab::Fingerprint => self.fingerprint.stop(),
-            Tab::Fuzz => self.fuzz.stop(),
-            Tab::Waf => self.waf.stop(),
-            Tab::WafStress => self.waf_stress.stop(),
-            Tab::Scan => self.scan.stop(),
-            Tab::Resume => self.resume.stop(),
-            Tab::Proxy => self.proxy.stop(),
-            Tab::Packet => self.packet.stop(),
-            Tab::GraphQl => self.graphql.stop(),
-            Tab::OAuth => self.oauth.stop(),
-            Tab::Cluster => self.cluster.stop(),
-            Tab::Stress => self.stress.stop(),
-            Tab::Report => self.report.stop(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.stop(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.stop(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => {}
-            Tab::History => {}
-            Tab::Dashboard => {}
-        }
+        dispatch_stop!(self);
     }
 
     pub fn handle_enter(&mut self) {
@@ -464,111 +405,21 @@ impl App {
             self.show_help = false;
             return;
         }
-
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_escape(),
-            Tab::Load => self.load.handle_escape(),
-            Tab::ScanPorts => self.scan_ports.handle_escape(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_escape(),
-            Tab::Fingerprint => self.fingerprint.handle_escape(),
-            Tab::Fuzz => self.fuzz.handle_escape(),
-            Tab::Waf => self.waf.handle_escape(),
-            Tab::WafStress => self.waf_stress.handle_escape(),
-            Tab::Scan => self.scan.handle_escape(),
-            Tab::Resume => self.resume.handle_escape(),
-            Tab::Proxy => self.proxy.handle_escape(),
-            Tab::Packet => self.packet.handle_escape(),
-            Tab::GraphQl => self.graphql.handle_escape(),
-            Tab::OAuth => self.oauth.handle_escape(),
-            Tab::Cluster => self.cluster.handle_escape(),
-            Tab::Stress => self.stress.handle_escape(),
-            Tab::Report => self.report.handle_escape(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_escape(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_escape(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_escape(),
-            Tab::History => {}
-            Tab::Dashboard => self.dashboard.handle_escape(),
-        }
+        dispatch_void_with_special!(self, handle_escape(), {});
     }
 
     pub fn handle_char(&mut self, c: char) {
         if self.show_help {
             return;
         }
-
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_char(c),
-            Tab::Load => self.load.handle_char(c),
-            Tab::ScanPorts => self.scan_ports.handle_char(c),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_char(c),
-            Tab::Fingerprint => self.fingerprint.handle_char(c),
-            Tab::Fuzz => self.fuzz.handle_char(c),
-            Tab::Waf => self.waf.handle_char(c),
-            Tab::WafStress => self.waf_stress.handle_char(c),
-            Tab::Scan => self.scan.handle_char(c),
-            Tab::Resume => self.resume.handle_char(c),
-            Tab::Proxy => self.proxy.handle_char(c),
-            Tab::Packet => self.packet.handle_char(c),
-            Tab::GraphQl => self.graphql.handle_char(c),
-            Tab::OAuth => self.oauth.handle_char(c),
-            Tab::Cluster => self.cluster.handle_char(c),
-            Tab::Stress => self.stress.handle_char(c),
-            Tab::Report => self.report.handle_char(c),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_char(c),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_char(c),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_char(c),
-            Tab::History => {}
-            Tab::Dashboard => self.dashboard.handle_char(c),
-        }
+        dispatch_void_with_special!(self, handle_char(c), {});
     }
 
     pub fn handle_backspace(&mut self) {
         if self.show_help {
             return;
         }
-
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_backspace(),
-            Tab::Load => self.load.handle_backspace(),
-            Tab::ScanPorts => self.scan_ports.handle_backspace(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_backspace(),
-            Tab::Fingerprint => self.fingerprint.handle_backspace(),
-            Tab::Fuzz => self.fuzz.handle_backspace(),
-            Tab::Waf => self.waf.handle_backspace(),
-            Tab::WafStress => self.waf_stress.handle_backspace(),
-            Tab::Scan => self.scan.handle_backspace(),
-            Tab::Resume => self.resume.handle_backspace(),
-            Tab::Proxy => self.proxy.handle_backspace(),
-            Tab::Packet => self.packet.handle_backspace(),
-            Tab::GraphQl => self.graphql.handle_backspace(),
-            Tab::OAuth => self.oauth.handle_backspace(),
-            Tab::Cluster => self.cluster.handle_backspace(),
-            Tab::Stress => self.stress.handle_backspace(),
-            Tab::Report => self.report.handle_backspace(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_backspace(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_backspace(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_backspace(),
-            Tab::History => {}
-            Tab::Dashboard => self.dashboard.handle_backspace(),
-        }
+        dispatch_void_with_special!(self, handle_backspace(), {});
     }
 
     pub fn handle_tab(&mut self) {
@@ -612,78 +463,18 @@ impl App {
         if self.show_help {
             return;
         }
-
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_up(),
-            Tab::Load => self.load.handle_up(),
-            Tab::ScanPorts => self.scan_ports.handle_up(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_up(),
-            Tab::Fingerprint => self.fingerprint.handle_up(),
-            Tab::Fuzz => self.fuzz.handle_up(),
-            Tab::Waf => self.waf.handle_up(),
-            Tab::WafStress => self.waf_stress.handle_up(),
-            Tab::Scan => self.scan.handle_up(),
-            Tab::Resume => self.resume.handle_up(),
-            Tab::Proxy => self.proxy.handle_up(),
-            Tab::Packet => self.packet.handle_up(),
-            Tab::GraphQl => self.graphql.handle_up(),
-            Tab::OAuth => self.oauth.handle_up(),
-            Tab::Cluster => self.cluster.handle_up(),
-            Tab::Stress => self.stress.handle_up(),
-            Tab::Report => self.report.handle_up(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_up(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_up(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_up(),
-            Tab::History => {}
-            Tab::Dashboard => {}
-        }
+        dispatch_void_with_special!(self, handle_up(), {});
     }
 
     pub fn handle_down(&mut self) {
         if self.show_help {
             return;
         }
-
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_down(),
-            Tab::Load => self.load.handle_down(),
-            Tab::ScanPorts => self.scan_ports.handle_down(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_down(),
-            Tab::Fingerprint => self.fingerprint.handle_down(),
-            Tab::Fuzz => self.fuzz.handle_down(),
-            Tab::Waf => self.waf.handle_down(),
-            Tab::WafStress => self.waf_stress.handle_down(),
-            Tab::Scan => self.scan.handle_down(),
-            Tab::Resume => self.resume.handle_down(),
-            Tab::Proxy => self.proxy.handle_down(),
-            Tab::Packet => self.packet.handle_down(),
-            Tab::GraphQl => self.graphql.handle_down(),
-            Tab::OAuth => self.oauth.handle_down(),
-            Tab::Cluster => self.cluster.handle_down(),
-            Tab::Stress => self.stress.handle_down(),
-            Tab::Report => self.report.handle_down(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_down(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_down(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_down(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_down();
-                }
+        dispatch_void_with_special!(self, handle_down(), {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_down();
             }
-            Tab::Dashboard => self.dashboard.handle_down(),
-        }
+        });
     }
 
     pub fn handle_left(&mut self) {
@@ -691,42 +482,13 @@ impl App {
             return;
         }
 
-        let moved = match self.current_tab {
-            Tab::Recon => self.recon.handle_left(),
-            Tab::Load => self.load.handle_left(),
-            Tab::ScanPorts => self.scan_ports.handle_left(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_left(),
-            Tab::Fingerprint => self.fingerprint.handle_left(),
-            Tab::Fuzz => self.fuzz.handle_left(),
-            Tab::Waf => self.waf.handle_left(),
-            Tab::WafStress => self.waf_stress.handle_left(),
-            Tab::Scan => self.scan.handle_left(),
-            Tab::Resume => self.resume.handle_left(),
-            Tab::Proxy => self.proxy.handle_left(),
-            Tab::Packet => self.packet.handle_left(),
-            Tab::GraphQl => self.graphql.handle_left(),
-            Tab::OAuth => self.oauth.handle_left(),
-            Tab::Cluster => self.cluster.handle_left(),
-            Tab::Stress => self.stress.handle_left(),
-            Tab::Report => self.report.handle_left(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_left(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_left(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => self.settings.handle_left(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_left()
-                } else {
-                    false
-                }
+        let moved = dispatch_bool_with_special!(self, handle_left(), {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_left()
+            } else {
+                false
             }
-            Tab::Dashboard => self.dashboard.handle_left(),
-        };
+        });
 
         if !moved {
             self.prev_tab();
@@ -738,42 +500,13 @@ impl App {
             return;
         }
 
-        let moved = match self.current_tab {
-            Tab::Recon => self.recon.handle_right(),
-            Tab::Load => self.load.handle_right(),
-            Tab::ScanPorts => self.scan_ports.handle_right(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_right(),
-            Tab::Fingerprint => self.fingerprint.handle_right(),
-            Tab::Fuzz => self.fuzz.handle_right(),
-            Tab::Waf => self.waf.handle_right(),
-            Tab::WafStress => self.waf_stress.handle_right(),
-            Tab::Scan => self.scan.handle_right(),
-            Tab::Resume => self.resume.handle_right(),
-            Tab::Proxy => self.proxy.handle_right(),
-            Tab::Packet => self.packet.handle_right(),
-            Tab::GraphQl => self.graphql.handle_right(),
-            Tab::OAuth => self.oauth.handle_right(),
-            Tab::Cluster => self.cluster.handle_right(),
-            Tab::Stress => self.stress.handle_right(),
-            Tab::Report => self.report.handle_right(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_right(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_right(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => self.settings.handle_right(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_right()
-                } else {
-                    false
-                }
+        let moved = dispatch_bool_with_special!(self, handle_right(), {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_right()
+            } else {
+                false
             }
-            Tab::Dashboard => self.dashboard.handle_right(),
-        };
+        });
 
         if !moved {
             self.next_tab();
@@ -784,118 +517,29 @@ impl App {
         if self.show_help {
             return;
         }
-
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_focus_next(),
-            Tab::Load => self.load.handle_focus_next(),
-            Tab::ScanPorts => self.scan_ports.handle_focus_next(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_focus_next(),
-            Tab::Fingerprint => self.fingerprint.handle_focus_next(),
-            Tab::Fuzz => self.fuzz.handle_focus_next(),
-            Tab::Waf => self.waf.handle_focus_next(),
-            Tab::WafStress => self.waf_stress.handle_focus_next(),
-            Tab::Scan => self.scan.handle_focus_next(),
-            Tab::Resume => self.resume.handle_focus_next(),
-            Tab::Proxy => self.proxy.handle_focus_next(),
-            Tab::Packet => self.packet.handle_focus_next(),
-            Tab::GraphQl => self.graphql.handle_focus_next(),
-            Tab::OAuth => self.oauth.handle_focus_next(),
-            Tab::Cluster => self.cluster.handle_focus_next(),
-            Tab::Stress => self.stress.handle_focus_next(),
-            Tab::Report => self.report.handle_focus_next(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_focus_next(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_focus_next(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_focus_next(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_focus_next();
-                }
+        dispatch_void_with_special!(self, handle_focus_next(), {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_focus_next();
             }
-            Tab::Dashboard => self.dashboard.handle_focus_next(),
-        }
+        });
     }
 
     pub fn handle_focus_prev(&mut self) {
         if self.show_help {
             return;
         }
-
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_focus_prev(),
-            Tab::Load => self.load.handle_focus_prev(),
-            Tab::ScanPorts => self.scan_ports.handle_focus_prev(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_focus_prev(),
-            Tab::Fingerprint => self.fingerprint.handle_focus_prev(),
-            Tab::Fuzz => self.fuzz.handle_focus_prev(),
-            Tab::Waf => self.waf.handle_focus_prev(),
-            Tab::WafStress => self.waf_stress.handle_focus_prev(),
-            Tab::Scan => self.scan.handle_focus_prev(),
-            Tab::Resume => self.resume.handle_focus_prev(),
-            Tab::Proxy => self.proxy.handle_focus_prev(),
-            Tab::Packet => self.packet.handle_focus_prev(),
-            Tab::GraphQl => self.graphql.handle_focus_prev(),
-            Tab::OAuth => self.oauth.handle_focus_prev(),
-            Tab::Cluster => self.cluster.handle_focus_prev(),
-            Tab::Stress => self.stress.handle_focus_prev(),
-            Tab::Report => self.report.handle_focus_prev(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_focus_prev(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_focus_prev(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_focus_prev(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_focus_prev();
-                }
+        dispatch_void_with_special!(self, handle_focus_prev(), {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_focus_prev();
             }
-            Tab::Dashboard => self.dashboard.handle_focus_prev(),
-        }
+        });
     }
 
     pub fn handle_left_or_prev_tab(&mut self) -> bool {
         if self.show_help {
             return false;
         }
-        let at_left_edge = match self.current_tab {
-            Tab::Recon => self.recon.is_at_left_edge(),
-            Tab::Load => self.load.is_at_left_edge(),
-            Tab::ScanPorts => self.scan_ports.is_at_left_edge(),
-            Tab::ScanEndpoints => self.scan_endpoints.is_at_left_edge(),
-            Tab::Fingerprint => self.fingerprint.is_at_left_edge(),
-            Tab::Fuzz => self.fuzz.is_at_left_edge(),
-            Tab::Waf => self.waf.is_at_left_edge(),
-            Tab::WafStress => self.waf_stress.is_at_left_edge(),
-            Tab::Scan => self.scan.is_at_left_edge(),
-            Tab::Resume => self.resume.is_at_left_edge(),
-            Tab::Proxy => self.proxy.is_at_left_edge(),
-            Tab::Packet => self.packet.is_at_left_edge(),
-            Tab::GraphQl => self.graphql.is_at_left_edge(),
-            Tab::OAuth => self.oauth.is_at_left_edge(),
-            Tab::Cluster => self.cluster.is_at_left_edge(),
-            Tab::Stress => self.stress.is_at_left_edge(),
-            Tab::Report => self.report.is_at_left_edge(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.is_at_left_edge(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.is_at_left_edge(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => self.settings.is_at_left_edge(),
-            Tab::History => true,
-            Tab::Dashboard => true,
-        };
+        let at_left_edge = dispatch_is_at_left_edge!(self);
         if at_left_edge {
             false
         } else {
@@ -908,36 +552,7 @@ impl App {
         if self.show_help {
             return false;
         }
-        let at_right_edge = match self.current_tab {
-            Tab::Recon => self.recon.is_at_right_edge(),
-            Tab::Load => self.load.is_at_right_edge(),
-            Tab::ScanPorts => self.scan_ports.is_at_right_edge(),
-            Tab::ScanEndpoints => self.scan_endpoints.is_at_right_edge(),
-            Tab::Fingerprint => self.fingerprint.is_at_right_edge(),
-            Tab::Fuzz => self.fuzz.is_at_right_edge(),
-            Tab::Waf => self.waf.is_at_right_edge(),
-            Tab::WafStress => self.waf_stress.is_at_right_edge(),
-            Tab::Scan => self.scan.is_at_right_edge(),
-            Tab::Resume => self.resume.is_at_right_edge(),
-            Tab::Proxy => self.proxy.is_at_right_edge(),
-            Tab::Packet => self.packet.is_at_right_edge(),
-            Tab::GraphQl => self.graphql.is_at_right_edge(),
-            Tab::OAuth => self.oauth.is_at_right_edge(),
-            Tab::Cluster => self.cluster.is_at_right_edge(),
-            Tab::Stress => self.stress.is_at_right_edge(),
-            Tab::Report => self.report.is_at_right_edge(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.is_at_right_edge(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.is_at_right_edge(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => self.settings.is_at_right_edge(),
-            Tab::History => true,
-            Tab::Dashboard => true,
-        };
+        let at_right_edge = dispatch_is_at_right_edge!(self);
         if at_right_edge {
             false
         } else {
@@ -947,40 +562,7 @@ impl App {
     }
 
     pub fn reset_current_tab(&mut self) {
-        match self.current_tab {
-            Tab::Recon => self.recon.reset(),
-            Tab::Load => self.load.reset(),
-            Tab::ScanPorts => self.scan_ports.reset(),
-            Tab::ScanEndpoints => self.scan_endpoints.reset(),
-            Tab::Fingerprint => self.fingerprint.reset(),
-            Tab::Fuzz => self.fuzz.reset(),
-            Tab::Waf => self.waf.reset(),
-            Tab::WafStress => self.waf_stress.reset(),
-            Tab::Scan => self.scan.reset(),
-            Tab::Resume => self.resume.reset(),
-            Tab::Proxy => self.proxy.reset(),
-            Tab::Packet => self.packet.reset(),
-            Tab::GraphQl => self.graphql.reset(),
-            Tab::OAuth => self.oauth.reset(),
-            Tab::Cluster => self.cluster.reset(),
-            Tab::Stress => self.stress.reset(),
-            Tab::Report => self.report.reset(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.reset(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.reset(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.reset(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.clear_all();
-                }
-            }
-            Tab::Dashboard => self.dashboard.reset(),
-        }
+        dispatch_reset!(self);
     }
 
     pub fn save_settings(&mut self) {
@@ -1021,298 +603,58 @@ impl App {
 
     pub fn page_up(&mut self) {
         const PAGE_SIZE: usize = 10;
-        match self.current_tab {
-            Tab::Recon => self.recon.page_up(PAGE_SIZE),
-            Tab::Load => self.load.page_up(PAGE_SIZE),
-            Tab::ScanPorts => self.scan_ports.page_up(PAGE_SIZE),
-            Tab::ScanEndpoints => self.scan_endpoints.page_up(PAGE_SIZE),
-            Tab::Fingerprint => self.fingerprint.page_up(PAGE_SIZE),
-            Tab::Fuzz => self.fuzz.page_up(PAGE_SIZE),
-            Tab::Waf => self.waf.page_up(PAGE_SIZE),
-            Tab::WafStress => self.waf_stress.page_up(PAGE_SIZE),
-            Tab::Scan => self.scan.page_up(PAGE_SIZE),
-            Tab::Resume => self.resume.page_up(PAGE_SIZE),
-            Tab::Proxy => self.proxy.page_up(PAGE_SIZE),
-            Tab::Packet => self.packet.page_up(PAGE_SIZE),
-            Tab::GraphQl => self.graphql.page_up(PAGE_SIZE),
-            Tab::OAuth => self.oauth.page_up(PAGE_SIZE),
-            Tab::Cluster => self.cluster.page_up(PAGE_SIZE),
-            Tab::Stress => self.stress.page_up(PAGE_SIZE),
-            Tab::Report => self.report.page_up(PAGE_SIZE),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.page_up(PAGE_SIZE),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.page_up(PAGE_SIZE),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => {}
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.page_up(PAGE_SIZE);
-                }
-            }
-            Tab::Dashboard => self.dashboard.page_up(PAGE_SIZE),
-        }
+        dispatch_page!(self, page_up, PAGE_SIZE);
     }
 
     pub fn page_down(&mut self) {
         const PAGE_SIZE: usize = 10;
-        match self.current_tab {
-            Tab::Recon => self.recon.page_down(PAGE_SIZE),
-            Tab::Load => self.load.page_down(PAGE_SIZE),
-            Tab::ScanPorts => self.scan_ports.page_down(PAGE_SIZE),
-            Tab::ScanEndpoints => self.scan_endpoints.page_down(PAGE_SIZE),
-            Tab::Fingerprint => self.fingerprint.page_down(PAGE_SIZE),
-            Tab::Fuzz => self.fuzz.page_down(PAGE_SIZE),
-            Tab::Waf => self.waf.page_down(PAGE_SIZE),
-            Tab::WafStress => self.waf_stress.page_down(PAGE_SIZE),
-            Tab::Scan => self.scan.page_down(PAGE_SIZE),
-            Tab::Resume => self.resume.page_down(PAGE_SIZE),
-            Tab::Proxy => self.proxy.page_down(PAGE_SIZE),
-            Tab::Packet => self.packet.page_down(PAGE_SIZE),
-            Tab::GraphQl => self.graphql.page_down(PAGE_SIZE),
-            Tab::OAuth => self.oauth.page_down(PAGE_SIZE),
-            Tab::Cluster => self.cluster.page_down(PAGE_SIZE),
-            Tab::Stress => self.stress.page_down(PAGE_SIZE),
-            Tab::Report => self.report.page_down(PAGE_SIZE),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.page_down(PAGE_SIZE),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.page_down(PAGE_SIZE),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => {}
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.page_down(PAGE_SIZE);
-                }
-            }
-            Tab::Dashboard => self.dashboard.page_down(PAGE_SIZE),
-        }
+        dispatch_page!(self, page_down, PAGE_SIZE);
     }
 
     pub fn handle_word_forward(&mut self) {
         if self.show_help { return; }
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_word_forward(),
-            Tab::Load => self.load.handle_word_forward(),
-            Tab::ScanPorts => self.scan_ports.handle_word_forward(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_word_forward(),
-            Tab::Fingerprint => self.fingerprint.handle_word_forward(),
-            Tab::Fuzz => self.fuzz.handle_word_forward(),
-            Tab::Waf => self.waf.handle_word_forward(),
-            Tab::WafStress => self.waf_stress.handle_word_forward(),
-            Tab::Scan => self.scan.handle_word_forward(),
-            Tab::Resume => self.resume.handle_word_forward(),
-            Tab::Proxy => self.proxy.handle_word_forward(),
-            Tab::Packet => self.packet.handle_word_forward(),
-            Tab::GraphQl => self.graphql.handle_word_forward(),
-            Tab::OAuth => self.oauth.handle_word_forward(),
-            Tab::Cluster => self.cluster.handle_word_forward(),
-            Tab::Stress => self.stress.handle_word_forward(),
-            Tab::Report => self.report.handle_word_forward(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_word_forward(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_word_forward(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => {}
-            Tab::History => {}
-            Tab::Dashboard => self.dashboard.handle_word_forward(),
-        }
+        dispatch_void_with_special!(self, handle_word_forward(), {});
     }
 
     pub fn handle_word_backward(&mut self) {
         if self.show_help { return; }
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_word_backward(),
-            Tab::Load => self.load.handle_word_backward(),
-            Tab::ScanPorts => self.scan_ports.handle_word_backward(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_word_backward(),
-            Tab::Fingerprint => self.fingerprint.handle_word_backward(),
-            Tab::Fuzz => self.fuzz.handle_word_backward(),
-            Tab::Waf => self.waf.handle_word_backward(),
-            Tab::WafStress => self.waf_stress.handle_word_backward(),
-            Tab::Scan => self.scan.handle_word_backward(),
-            Tab::Resume => self.resume.handle_word_backward(),
-            Tab::Proxy => self.proxy.handle_word_backward(),
-            Tab::Packet => self.packet.handle_word_backward(),
-            Tab::GraphQl => self.graphql.handle_word_backward(),
-            Tab::OAuth => self.oauth.handle_word_backward(),
-            Tab::Cluster => self.cluster.handle_word_backward(),
-            Tab::Stress => self.stress.handle_word_backward(),
-            Tab::Report => self.report.handle_word_backward(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_word_backward(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_word_backward(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => {}
-            Tab::History => {}
-            Tab::Dashboard => self.dashboard.handle_word_backward(),
-        }
+        dispatch_void_with_special!(self, handle_word_backward(), {});
     }
 
     pub fn handle_home(&mut self) {
         if self.show_help { return; }
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_home(),
-            Tab::Load => self.load.handle_home(),
-            Tab::ScanPorts => self.scan_ports.handle_home(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_home(),
-            Tab::Fingerprint => self.fingerprint.handle_home(),
-            Tab::Fuzz => self.fuzz.handle_home(),
-            Tab::Waf => self.waf.handle_home(),
-            Tab::WafStress => self.waf_stress.handle_home(),
-            Tab::Scan => self.scan.handle_home(),
-            Tab::Resume => self.resume.handle_home(),
-            Tab::Proxy => self.proxy.handle_home(),
-            Tab::Packet => self.packet.handle_home(),
-            Tab::GraphQl => self.graphql.handle_home(),
-            Tab::OAuth => self.oauth.handle_home(),
-            Tab::Cluster => self.cluster.handle_home(),
-            Tab::Stress => self.stress.handle_home(),
-            Tab::Report => self.report.handle_home(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_home(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_home(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_home(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_home();
-                }
+        dispatch_void_with_special!(self, handle_home(), {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_home();
             }
-            Tab::Dashboard => self.dashboard.handle_home(),
-        }
+        });
     }
 
     pub fn handle_end(&mut self) {
         if self.show_help { return; }
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_end(),
-            Tab::Load => self.load.handle_end(),
-            Tab::ScanPorts => self.scan_ports.handle_end(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_end(),
-            Tab::Fingerprint => self.fingerprint.handle_end(),
-            Tab::Fuzz => self.fuzz.handle_end(),
-            Tab::Waf => self.waf.handle_end(),
-            Tab::WafStress => self.waf_stress.handle_end(),
-            Tab::Scan => self.scan.handle_end(),
-            Tab::Resume => self.resume.handle_end(),
-            Tab::Proxy => self.proxy.handle_end(),
-            Tab::Packet => self.packet.handle_end(),
-            Tab::GraphQl => self.graphql.handle_end(),
-            Tab::OAuth => self.oauth.handle_end(),
-            Tab::Cluster => self.cluster.handle_end(),
-            Tab::Stress => self.stress.handle_end(),
-            Tab::Report => self.report.handle_end(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_end(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_end(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_end(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_end();
-                }
+        dispatch_void_with_special!(self, handle_end(), {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_end();
             }
-            Tab::Dashboard => self.dashboard.handle_end(),
-        }
+        });
     }
 
     pub fn handle_top(&mut self) {
         if self.show_help { return; }
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_top(),
-            Tab::Load => self.load.handle_top(),
-            Tab::ScanPorts => self.scan_ports.handle_top(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_top(),
-            Tab::Fingerprint => self.fingerprint.handle_top(),
-            Tab::Fuzz => self.fuzz.handle_top(),
-            Tab::Waf => self.waf.handle_top(),
-            Tab::WafStress => self.waf_stress.handle_top(),
-            Tab::Scan => self.scan.handle_top(),
-            Tab::Resume => self.resume.handle_top(),
-            Tab::Proxy => self.proxy.handle_top(),
-            Tab::Packet => self.packet.handle_top(),
-            Tab::GraphQl => self.graphql.handle_top(),
-            Tab::OAuth => self.oauth.handle_top(),
-            Tab::Cluster => self.cluster.handle_top(),
-            Tab::Stress => self.stress.handle_top(),
-            Tab::Report => self.report.handle_top(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_top(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_top(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_top(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_top();
-                }
+        dispatch_void_with_special!(self, handle_top(), {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_top();
             }
-            Tab::Dashboard => self.dashboard.handle_top(),
-        }
+        });
     }
 
     pub fn handle_bottom(&mut self) {
         if self.show_help { return; }
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_bottom(),
-            Tab::Load => self.load.handle_bottom(),
-            Tab::ScanPorts => self.scan_ports.handle_bottom(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_bottom(),
-            Tab::Fingerprint => self.fingerprint.handle_bottom(),
-            Tab::Fuzz => self.fuzz.handle_bottom(),
-            Tab::Waf => self.waf.handle_bottom(),
-            Tab::WafStress => self.waf_stress.handle_bottom(),
-            Tab::Scan => self.scan.handle_bottom(),
-            Tab::Resume => self.resume.handle_bottom(),
-            Tab::Proxy => self.proxy.handle_bottom(),
-            Tab::Packet => self.packet.handle_bottom(),
-            Tab::GraphQl => self.graphql.handle_bottom(),
-            Tab::OAuth => self.oauth.handle_bottom(),
-            Tab::Cluster => self.cluster.handle_bottom(),
-            Tab::Stress => self.stress.handle_bottom(),
-            Tab::Report => self.report.handle_bottom(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_bottom(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_bottom(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_bottom(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_bottom();
-                }
+        dispatch_void_with_special!(self, handle_bottom(), {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_bottom();
             }
-            Tab::Dashboard => self.dashboard.handle_bottom(),
-        }
+        });
     }
 
     pub fn export_results(&mut self) {
@@ -1335,13 +677,7 @@ impl App {
             Tab::Cluster => "cluster_status",
             Tab::Stress => "stress_results",
             Tab::Report => "report_results",
-            #[cfg(feature = "nse")]
             Tab::Nse => "nse_results",
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => "nse_results",
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => "plugin_results",
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => "plugin_results",
             Tab::Settings => "settings",
             Tab::History => "history",
@@ -1353,7 +689,6 @@ impl App {
         match self.export_format {
             ExportFormat::Json => self.export_json(),
             ExportFormat::Csv => self.export_csv(&filename),
-            // Generate JSON first, then convert to other formats
             ExportFormat::Html | ExportFormat::Markdown | ExportFormat::Sarif | ExportFormat::Junit => {
                 self.export_json();
                 self.export_converted(&filename);
@@ -1411,9 +746,7 @@ impl App {
                     self.save_export("pipeline_scan_report.json", serde_json::to_string_pretty(report).unwrap_or_default());
                 }
             }
-            Tab::Resume => {
-                // No results to export for resume tab
-            }
+            Tab::Resume => {}
             Tab::GraphQl => {}
             Tab::OAuth => {}
             Tab::Cluster => {}
@@ -1421,24 +754,16 @@ impl App {
             Tab::Report => {}
             Tab::Nse => {}
             Tab::Plugin => {}
-            Tab::Settings => {
-                // No results to export for settings tab
-            }
+            Tab::Settings => {}
             Tab::History => {
                 if let Ok(h) = self.history.lock() {
                     let history_data = h.export();
                     self.save_export("history.json", history_data);
                 }
             }
-            Tab::Dashboard => {
-                // No results to export for dashboard tab
-            }
-            Tab::Proxy => {
-                // No results to export for proxy tab
-            }
-            Tab::Packet => {
-                // No results to export for packet tab
-            }
+            Tab::Dashboard => {}
+            Tab::Proxy => {}
+            Tab::Packet => {}
         }
     }
 
@@ -1482,7 +807,6 @@ impl App {
     fn export_converted(&mut self, filename: &str) {
         use crate::output::convert::load_scan_report;
         
-        // Get the base name and read the JSON file we just created
         let base_name = filename.trim_end_matches(".html").trim_end_matches(".md")
             .trim_end_matches(".sarif").trim_end_matches(".junit")
             .trim_end_matches(".json");
@@ -1490,21 +814,19 @@ impl App {
         let json_filename = format!("{}.json", base_name);
         let json_path = format!("./exports/{}", json_filename);
         
-        // Load and convert the JSON
         if let Ok(report) = load_scan_report(&json_path) {
             let converted = match self.export_format {
                 ExportFormat::Html => crate::output::convert::convert_to_html(&report),
                 ExportFormat::Markdown => crate::output::convert::convert_to_markdown(&report),
                 ExportFormat::Sarif => crate::output::convert::convert_to_sarif(&report),
                 ExportFormat::Junit => crate::output::convert::convert_to_junit(&report),
-                _ => return, // Nothing to do for Json or Csv
+                _ => return,
             };
             self.save_export(filename, converted);
         }
     }
 
     fn save_export(&self, filename: &str, data: String) {
-        
         use std::io::Write;
         
         let path = format!("./exports/{}", filename);
@@ -1652,9 +974,7 @@ impl App {
             "http-options" | "http" => {
                 self.show_http_options = !self.show_http_options;
             }
-            _ => {
-                // Unknown command, could show error or do nothing
-            }
+            _ => {}
         }
     }
 
@@ -2049,36 +1369,16 @@ impl App {
             }
             workers::TaskResult::Error(msg) => {
                 match self.current_tab {
-                    Tab::Recon => {
-                        self.recon.set_error(msg);
-                    }
-                    Tab::Load => {
-                        self.load.set_error(msg);
-                    }
-                    Tab::ScanPorts => {
-                        self.scan_ports.set_error(msg);
-                    }
-                    Tab::ScanEndpoints => {
-                        self.scan_endpoints.set_error(msg);
-                    }
-                    Tab::Fingerprint => {
-                        self.fingerprint.set_error(msg);
-                    }
-                    Tab::Fuzz => {
-                        self.fuzz.set_error(msg);
-                    }
-                    Tab::Waf => {
-                        self.waf.set_error(msg);
-                    }
-                    Tab::WafStress => {
-                        self.waf_stress.set_error(msg);
-                    }
-                    Tab::Scan => {
-                        self.scan.set_error(msg);
-                    }
-                    Tab::Packet => {
-                        self.packet.set_error(msg);
-                    }
+                    Tab::Recon => self.recon.set_error(msg),
+                    Tab::Load => self.load.set_error(msg),
+                    Tab::ScanPorts => self.scan_ports.set_error(msg),
+                    Tab::ScanEndpoints => self.scan_endpoints.set_error(msg),
+                    Tab::Fingerprint => self.fingerprint.set_error(msg),
+                    Tab::Fuzz => self.fuzz.set_error(msg),
+                    Tab::Waf => self.waf.set_error(msg),
+                    Tab::WafStress => self.waf_stress.set_error(msg),
+                    Tab::Scan => self.scan.set_error(msg),
+                    Tab::Packet => self.packet.set_error(msg),
                     _ => {}
                 }
             }

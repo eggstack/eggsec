@@ -12,6 +12,8 @@ pub mod traits;
 
 pub mod implementations;
 
+#[cfg(feature = "rest-api")]
+pub mod agents;
 pub mod protocol;
 
 pub use dispatcher::ToolDispatcher;

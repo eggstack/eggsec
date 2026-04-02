@@ -1,6 +1,10 @@
 mod auth;
 mod handlers;
+#[cfg(feature = "rest-api")]
+pub mod prompts;
 mod routes;
+#[cfg(feature = "ai-integration")]
+pub mod sampling;
 mod streaming;
 mod types;
 

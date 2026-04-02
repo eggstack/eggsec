@@ -131,6 +131,10 @@ pub trait SecurityTool: Send + Sync {
     fn supported_protocols(&self) -> Vec<&'static str> {
         vec!["http", "https"]
     }
+
+    fn output_schema(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 #[async_trait]

@@ -190,6 +190,7 @@ impl SettingsTab {
             schedule: Vec::new(),
             remote: crate::config::RemoteConfig::default(),
             proxies: Vec::new(),
+            ai: None,
         }
     }
 

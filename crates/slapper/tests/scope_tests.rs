@@ -12,10 +12,8 @@ fn test_scope_bypass_with_url_path() {
         .push(ScopeRule::new("example.com".to_string()));
 
     let result = scope.is_target_allowed("https://evil.com/fake?redirect=https://example.com");
-    assert!(
-        result.is_ok(),
-        "Should reject out-of-scope redirects in URL"
-    );
+    let allowed = result.expect("is_target_allowed should not error");
+    assert!(!allowed, "Should reject out-of-scope redirects in URL");
 }
 
 #[test]
@@ -26,7 +24,11 @@ fn test_scope_bypass_with_subdomain() {
         .push(ScopeRule::new("example.com".to_string()));
 
     let result = scope.is_target_allowed("evil.example.com");
-    assert!(result.is_ok(), "Should handle subdomain matching correctly");
+    let allowed = result.expect("is_target_allowed should not error");
+    assert!(
+        !allowed,
+        "Should reject evil.example.com when only example.com is in scope (no wildcard)"
+    );
 }
 
 #[test]
@@ -37,7 +39,11 @@ fn test_scope_bypass_with_at_symbol() {
         .push(ScopeRule::new("example.com".to_string()));
 
     let result = scope.is_target_allowed("user@example.com");
-    assert!(result.is_ok(), "Should handle @ symbol in targets");
+    let allowed = result.expect("is_target_allowed should not error");
+    assert!(
+        !allowed,
+        "Should reject user@example.com when only example.com is in scope"
+    );
 }
 
 #[test]

@@ -12,19 +12,6 @@ pub struct EvasionBypass {
     profile: Option<WafProfile>,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum EvasionTechnique {
-    Homoglyph,
-    ZeroWidth,
-    CaseRotation,
-    UnicodeEncoding,
-    CommentObfuscation,
-    WhitespaceVariation,
-    DoubleEncoding,
-    NullByte,
-    HexEncoding,
-}
-
 impl EvasionBypass {
     pub fn new(profile: Option<WafProfile>) -> Self {
         Self { profile }
@@ -376,57 +363,4 @@ pub fn apply_unicode_encoding(input: &str) -> String {
 pub fn apply_double_encoding(input: &str) -> String {
     let first_encode = urlencoding::encode(input);
     urlencoding::encode(&first_encode).to_string()
-}
-
-pub fn apply_hex_encoding(input: &str) -> String {
-    let mut result = String::new();
-    for c in input.chars() {
-        if c.is_ascii() {
-            result.push_str(&format!("0x{:02x}", c as u8));
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
-
-pub fn apply_null_byte(input: &str) -> String {
-    let mut result = String::new();
-    for (i, c) in input.chars().enumerate() {
-        result.push(c);
-        if i == 0 {
-            result.push('\0');
-        }
-    }
-    result
-}
-
-#[allow(dead_code)]
-pub struct HomoglyphMap {
-    pub cyrillic: std::collections::HashMap<char, char>,
-    pub greek: std::collections::HashMap<char, char>,
-}
-
-impl Default for HomoglyphMap {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl HomoglyphMap {
-    pub fn new() -> Self {
-        let mut cyrillic = std::collections::HashMap::new();
-        cyrillic.insert('a', '\u{0430}');
-        cyrillic.insert('c', '\u{0441}');
-        cyrillic.insert('e', '\u{0435}');
-        cyrillic.insert('o', '\u{043E}');
-        cyrillic.insert('p', '\u{0440}');
-        cyrillic.insert('x', '\u{0445}');
-        cyrillic.insert('y', '\u{0443}');
-
-        Self {
-            cyrillic,
-            greek: std::collections::HashMap::new(),
-        }
-    }
 }
