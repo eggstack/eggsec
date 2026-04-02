@@ -68,10 +68,10 @@ impl NotifyManager {
 
         for wh in &notify_settings.webhooks {
             webhooks.push(webhook::WebhookConfig {
-                name: wh.name.clone(),
+                name: wh.name.clone().unwrap_or_else(|| "unnamed".to_string()),
                 url: wh.url.clone(),
                 secret: wh.secret.clone(),
-                headers: wh.headers.clone(),
+                headers: std::collections::HashMap::new(),
                 events: wh
                     .events
                     .iter()

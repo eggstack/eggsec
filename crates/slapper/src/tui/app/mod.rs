@@ -291,14 +291,14 @@ impl App {
     }
 
     pub fn is_running(&self) -> bool {
-        dispatch_is_running!(self)
+        dispatch_bool!(self, is_running())
     }
 
     pub fn stop(&mut self) {
         if let Some(handle) = self.task_handle.take() {
             handle.abort();
         }
-        dispatch_stop!(self);
+        dispatch_void!(self, stop())
     }
 
     pub fn handle_enter(&mut self) {
@@ -405,21 +405,21 @@ impl App {
             self.show_help = false;
             return;
         }
-        dispatch_void_with_special!(self, handle_escape(), {});
+                dispatch!(self, handle_escape(), {}, ())
     }
 
     pub fn handle_char(&mut self, c: char) {
         if self.show_help {
             return;
         }
-        dispatch_void_with_special!(self, handle_char(c), {});
+        dispatch_void!(self, handle_char(c))
     }
 
     pub fn handle_backspace(&mut self) {
         if self.show_help {
             return;
         }
-        dispatch_void_with_special!(self, handle_backspace(), {});
+        dispatch_void!(self, handle_backspace())
     }
 
     pub fn handle_tab(&mut self) {
@@ -463,18 +463,21 @@ impl App {
         if self.show_help {
             return;
         }
-        dispatch_void_with_special!(self, handle_up(), {});
+        dispatch_void!(self, handle_up())
     }
 
     pub fn handle_down(&mut self) {
         if self.show_help {
             return;
         }
-        dispatch_void_with_special!(self, handle_down(), {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_down();
+        match self.current_tab {
+            Tab::History => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.handle_down();
+                }
             }
-        });
+            _ => dispatch_void!(self, handle_down()),
+        }
     }
 
     pub fn handle_left(&mut self) {
@@ -482,13 +485,13 @@ impl App {
             return;
         }
 
-        let moved = dispatch_bool_with_special!(self, handle_left(), {
+        let moved = dispatch!(self, handle_left(), {
             if let Ok(mut h) = self.history.lock() {
                 h.handle_left()
             } else {
                 false
             }
-        });
+        }, false);
 
         if !moved {
             self.prev_tab();
@@ -500,13 +503,13 @@ impl App {
             return;
         }
 
-        let moved = dispatch_bool_with_special!(self, handle_right(), {
+        let moved = dispatch!(self, handle_right(), {
             if let Ok(mut h) = self.history.lock() {
                 h.handle_right()
             } else {
                 false
             }
-        });
+        }, false);
 
         if !moved {
             self.next_tab();
@@ -517,29 +520,35 @@ impl App {
         if self.show_help {
             return;
         }
-        dispatch_void_with_special!(self, handle_focus_next(), {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_focus_next();
+        match self.current_tab {
+            Tab::History => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.handle_focus_next();
+                }
             }
-        });
+            _ => dispatch_void!(self, handle_focus_next()),
+        }
     }
 
     pub fn handle_focus_prev(&mut self) {
         if self.show_help {
             return;
         }
-        dispatch_void_with_special!(self, handle_focus_prev(), {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_focus_prev();
+        match self.current_tab {
+            Tab::History => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.handle_focus_prev();
+                }
             }
-        });
+            _ => dispatch_void!(self, handle_focus_prev()),
+        }
     }
 
     pub fn handle_left_or_prev_tab(&mut self) -> bool {
         if self.show_help {
             return false;
         }
-        let at_left_edge = dispatch_is_at_left_edge!(self);
+        let at_left_edge = dispatch_is_at_edge!(self, is_at_left_edge, false);
         if at_left_edge {
             false
         } else {
@@ -552,7 +561,7 @@ impl App {
         if self.show_help {
             return false;
         }
-        let at_right_edge = dispatch_is_at_right_edge!(self);
+        let at_right_edge = dispatch_is_at_edge!(self, is_at_right_edge, false);
         if at_right_edge {
             false
         } else {
@@ -562,7 +571,14 @@ impl App {
     }
 
     pub fn reset_current_tab(&mut self) {
-        dispatch_reset!(self);
+        match self.current_tab {
+            Tab::History => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.clear_all();
+                }
+            }
+            _ => dispatch_reset!(self),
+        }
     }
 
     pub fn save_settings(&mut self) {
@@ -613,48 +629,60 @@ impl App {
 
     pub fn handle_word_forward(&mut self) {
         if self.show_help { return; }
-        dispatch_void_with_special!(self, handle_word_forward(), {});
+        dispatch_void!(self, handle_word_forward())
     }
 
     pub fn handle_word_backward(&mut self) {
         if self.show_help { return; }
-        dispatch_void_with_special!(self, handle_word_backward(), {});
+        dispatch_void!(self, handle_word_backward())
     }
 
     pub fn handle_home(&mut self) {
         if self.show_help { return; }
-        dispatch_void_with_special!(self, handle_home(), {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_home();
+        match self.current_tab {
+            Tab::History => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.handle_home();
+                }
             }
-        });
+            _ => dispatch_void!(self, handle_home()),
+        }
     }
 
     pub fn handle_end(&mut self) {
         if self.show_help { return; }
-        dispatch_void_with_special!(self, handle_end(), {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_end();
+        match self.current_tab {
+            Tab::History => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.handle_end();
+                }
             }
-        });
+            _ => dispatch_void!(self, handle_end()),
+        }
     }
 
     pub fn handle_top(&mut self) {
         if self.show_help { return; }
-        dispatch_void_with_special!(self, handle_top(), {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_top();
+        match self.current_tab {
+            Tab::History => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.handle_top();
+                }
             }
-        });
+            _ => dispatch_void!(self, handle_top()),
+        }
     }
 
     pub fn handle_bottom(&mut self) {
         if self.show_help { return; }
-        dispatch_void_with_special!(self, handle_bottom(), {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_bottom();
+        match self.current_tab {
+            Tab::History => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.handle_bottom();
+                }
             }
-        });
+            _ => dispatch_void!(self, handle_bottom()),
+        }
     }
 
     pub fn export_results(&mut self) {

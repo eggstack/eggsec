@@ -1,0 +1,160 @@
+use crate::constants::http;
+use crate::types::SensitiveString;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+fn default_concurrency() -> usize {
+    http::DEFAULT_CONCURRENCY
+}
+
+fn default_port_timeout() -> u64 {
+    2
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanConfig {
+    #[serde(default = "default_concurrency")]
+    pub default_concurrency: usize,
+
+    #[serde(default)]
+    pub rate_limit_per_second: Option<u32>,
+
+    #[serde(default)]
+    pub jitter_ms: Option<(u64, u64)>,
+
+    #[serde(default)]
+    pub stealth_mode: bool,
+
+    #[serde(default)]
+    pub exclude_ports: Vec<u16>,
+
+    #[serde(default)]
+    pub exclude_hosts: Vec<String>,
+
+    #[serde(default = "default_port_timeout")]
+    pub port_timeout_secs: u64,
+
+    #[serde(default)]
+    pub save_session: bool,
+
+    #[serde(default)]
+    pub session_dir: Option<PathBuf>,
+}
+
+impl Default for ScanConfig {
+    fn default() -> Self {
+        Self {
+            default_concurrency: default_concurrency(),
+            rate_limit_per_second: None,
+            jitter_ms: None,
+            stealth_mode: false,
+            exclude_ports: vec![],
+            exclude_hosts: vec![],
+            port_timeout_secs: default_port_timeout(),
+            save_session: false,
+            session_dir: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutputConfig {
+    #[serde(default)]
+    pub format: super::http::OutputFormat,
+
+    #[serde(default)]
+    pub verbosity: super::http::Verbosity,
+
+    #[serde(default)]
+    pub color: bool,
+
+    #[serde(default)]
+    pub progress_bars: bool,
+
+    #[serde(default)]
+    pub save_results: bool,
+
+    #[serde(default)]
+    pub results_dir: Option<PathBuf>,
+
+    #[serde(default)]
+    pub include_timestamp: bool,
+}
+
+impl Default for OutputConfig {
+    fn default() -> Self {
+        Self {
+            format: super::http::OutputFormat::Pretty,
+            verbosity: super::http::Verbosity::Normal,
+            color: true,
+            progress_bars: true,
+            save_results: false,
+            results_dir: None,
+            include_timestamp: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NotificationConfig {
+    #[serde(default)]
+    pub webhooks: Vec<WebhookConfig>,
+
+    #[serde(default)]
+    pub slack_webhook: Option<String>,
+
+    #[serde(default)]
+    pub discord_webhook: Option<String>,
+
+    #[serde(default)]
+    pub email_notifications: bool,
+
+    #[serde(default)]
+    pub teams_webhook: Option<String>,
+
+    #[serde(default)]
+    pub notify_on_complete: bool,
+
+    #[serde(default)]
+    pub notify_on_findings: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebhookConfig {
+    pub url: String,
+
+    #[serde(default)]
+    pub name: Option<String>,
+
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
+
+    #[serde(default)]
+    pub events: Vec<WebhookEvent>,
+
+    #[serde(default)]
+    pub secret: Option<SensitiveString>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WebhookEvent {
+    ScanStart,
+    ScanComplete,
+    Finding,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScanProfile {
+    pub name: String,
+    pub http: Option<super::http::HttpConfig>,
+    pub scan: Option<ScanConfig>,
+    pub fuzz: Option<FuzzProfile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FuzzProfile {
+    pub payload_types: Vec<String>,
+    pub concurrency: Option<usize>,
+    pub timeout_ms: Option<u64>,
+}

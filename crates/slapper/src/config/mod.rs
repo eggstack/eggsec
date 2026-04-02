@@ -40,16 +40,24 @@
 //! - Linux/macOS: `~/.config/slapper/config.toml`
 //! - Windows: `%APPDATA%\slapper\config.toml`
 
+mod api;
+mod http;
 mod loader;
+mod scan;
 mod scope;
 mod settings;
 
+pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, WaybackConfig};
+pub use http::{HttpConfig, OutputFormat, Verbosity};
 pub use loader::{config_dir, load_config, load_scope};
+pub use scan::{
+    FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,
+    WebhookEvent,
+};
 pub use scope::{Scope, ScopeRule, TargetScope};
 pub use settings::{
-    AllowedWorker, ApiConfig, ApiKeyConfig, ConfigValidationError, HttpConfig, NotificationConfig,
-    OutputConfig, PathsConfig, ProxyConfigEntry, ReconConfig, RemoteConfig, ScanConfig,
-    ScanProfile, ScheduledScan, SlapperConfig, WaybackConfig, WebhookConfig, WebhookEvent,
+    AiConfig, AllowedWorker, CacheConfig, ConfigError, PathsConfig, ProxyConfigEntry, ReconConfig,
+    RemoteConfig, ScheduledScan, SlapperConfig,
 };
 
 pub const ENV_PREFIX: &str = "SLAPPER_";

@@ -169,7 +169,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (1387 lines — needs dispatch refactor) |
+| Largest file | `tui/app/mod.rs` (1415 lines — dispatch macros in dispatch.rs) |
 
 ## Planning
 
@@ -222,7 +222,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 - Tab dispatch uses match statements across ~18+ methods (22-arm matches)
 - TUI uses ratatui 0.30 + crossterm 0.28 with immediate-mode rendering
 - 22 tab variants exist; all 22 are fully functional (wired in Wave 3)
-- `tui/app/mod.rs` is 1387 lines with ~30 methods containing 22-arm matches — needs macro-based dispatch refactor (see plan.md Wave 4)
+- `tui/app/mod.rs` contains ~1400 lines - uses dispatch macros in `dispatch.rs` for tab delegation
 - Tab cfg attributes: `Nse` and `Plugin` variants are always present in the Tab enum; use both `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]` arms for feature-gated dispatch
 
 ### Output Module

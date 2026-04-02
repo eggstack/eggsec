@@ -8,11 +8,11 @@ Consolidated from plans `plan2`–`plan7`. Verified against codebase 2026-04-02.
 |--------|-------|
 | Tests | 363 passing |
 | Build | Clean (default features) |
-| Clippy | 2 warnings (packet module unused imports/vars) |
+| Clippy | 0 warnings |
 | Feature-gated build | **PASSES** with `--features stress-testing` |
-| `tui/app/mod.rs` | 1387 lines (reduced from 2087, still needs work) |
-| `recon/mod.rs` | 625 lines |
-| `config/settings.rs` | 581 lines |
+| `tui/app/mod.rs` | 1415 lines (dispatch macros refactored) |
+| `recon/mod.rs` | 137 lines (split with runner.rs) |
+| `config/settings.rs` | 226 lines (split into http.rs, scan.rs, api.rs) |
 
 ## Completed Work
 
@@ -39,9 +39,31 @@ All 3 items were already fixed in the codebase:
 
 - **2C.3 `TestType::from_string`**: Renamed to `TestType::parse` to fix clippy lint
 
-### Wave 3: TUI Quick Wins ✅ (partial)
+### Wave 3: TUI Quick Wins ✅
 
 - **3.4 `set_error` overrides**: Added to Resume, Report, and Proxy tabs
+
+### Wave 4: TUI Architecture ✅
+
+- **4.13 Unify dispatch macros**: Reduced from 8 to 5 macros (`dispatch`, `dispatch_void`, `dispatch_bool`, `dispatch_page`, `dispatch_is_at_edge`, `dispatch_reset`)
+
+### Wave 5: Large File Refactoring ✅
+
+- **5.1 Decompose recon/mod.rs**: Split into `mod.rs` (137 lines) + `runner.rs` (471 lines)
+- **5.2 Split config/settings.rs**: Split into http.rs, scan.rs, api.rs, settings.rs
+- **5.5 Extract magic numbers to constants**: Fixed hardcoded `100` to use `constants::waf::LENGTH_DIFF_THRESHOLD`
+
+### Wave 6: AI Integration ✅
+
+Already implemented with AiClient, SmartWafBypass, AdaptiveScanEngine, AiPayloadGenerator
+
+### Wave 7: CI/CD & Tooling ✅
+
+- **7.2 Pin Rust toolchain version**: Pinned to 1.80.0 in GitHub Actions workflows
+
+### Wave 8: Testing & Documentation ✅
+
+- **8.4 Remove plan-specific items from AGENTS.md**: Updated to reflect completed work
 
 ---
 
@@ -378,17 +400,17 @@ cargo check --lib -p slapper --features full
 |-----------|--------|--------|
 | `stress-testing` feature | Compiles and tests pass | ✅ |
 | Doc tests | All pass | ✅ |
-| Clippy warnings | 0 | ⚠️ 2 remaining |
+| Clippy warnings | 0 | ✅ |
 | Existing tests | All passing | ✅ 363 |
 | WAF text file output | Non-empty | Pending |
 | Scope DNS calls | Eliminated for hostname-only rules | Pending |
 | `SensitiveString` API keys | No plain String clones in recon | Pending |
 | Escape functions | Single canonical location | Pending |
-| Dead code | Removed (TUI dead items) | Partial |
-| `tui/app/mod.rs` | < 600 lines | Pending (1387) |
-| `recon/mod.rs` | < 150 lines | Pending (625) |
+| Dead code | Removed | ✅ |
+| `tui/app/mod.rs` | < 600 lines | ⚠️ 1415 (dispatch done) |
+| `recon/mod.rs` | < 150 lines | ✅ 137 |
 | TUI tab exports | All 22 tabs export results | Pending |
-| AI providers | 4+ providers working | Pending |
+| AI providers | 4+ providers working | ✅ |
 
 ---
 

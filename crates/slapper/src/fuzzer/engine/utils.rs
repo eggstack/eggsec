@@ -127,7 +127,7 @@ impl FuzzEngine {
                             .leaks_found
                             .push(format!("Status changed: {}", diff.diff.status_changed));
                     }
-                    if diff.diff.body_length_diff.abs() > 100 {
+                    if diff.diff.body_length_diff.abs() > crate::constants::waf::LENGTH_DIFF_THRESHOLD as isize {
                         updated_result.is_anomaly = true;
                         updated_result
                             .leaks_found

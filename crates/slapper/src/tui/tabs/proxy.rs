@@ -216,8 +216,9 @@ impl ProxyTab {
                 port: p.port,
                 username: p.username.clone(),
                 password: p.password.clone(),
-                weight: p.weight,
-                priority: p.priority,
+                local_addr: None,
+                weight: Some(p.weight),
+                priority: Some(p.priority as u32),
                 enabled: p.enabled,
             })
             .collect();
@@ -242,8 +243,8 @@ impl ProxyTab {
                 port: p.port,
                 username: p.username.clone(),
                 password: p.password.clone(),
-                weight: p.weight,
-                priority: p.priority,
+                weight: p.weight.unwrap_or(1),
+                priority: p.priority.unwrap_or(1) as u8,
                 timeout_ms: 10000,
                 enabled: p.enabled,
                 tags: Vec::new(),
