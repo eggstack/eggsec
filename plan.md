@@ -1,600 +1,728 @@
 # Consolidated Improvement Plan
 
-## Overview
+Consolidated from plans `plan2`–`plan7`. Verified against codebase 2026-04-02.
 
-This plan consolidates items from plan2–plan9 into a single prioritized roadmap. Items are organized into **waves** that can be executed in parallel by sub-agents when they touch independent file sets.
-
-Items already resolved (eprintln! migration, println! migration, utils SlapperError migration, blocking DNS in scope, config validation, config template, deprecated truncation aliases, etc.) have been removed. Only verified, still-present issues remain.
-
-**Current State (verified 2026-04-02):**
+## Current State
 
 | Metric | Value |
 |--------|-------|
-| Tests | 363 passing |
-| Build | Clean compilation |
-| Clippy | 0 warnings (114 → 0, waves 1-2) |
-| `eprintln!` in library code | 0 (already migrated) |
-| `println!` in library modules | 0 (already migrated) |
-| `pub fn anyhow::Result` in utils | 0 (already migrated) |
-| Largest file | `tui/app/mod.rs` (1,387 lines) |
-| TUI empty dispatch arms | 0 (wave 3 completed) |
-| `.bak` files | 0 (removed) |
-| Source files | 229 |
-| `SlapperError` variants | 23 |
-| Tab variants | 22 |
-
-**Completed:**
-- Wave 1: Critical bug fixes (fuzzer error swallowing, burst concurrency)
-- Wave 2: Code quality & Clippy (114 → 0 warnings)
-- Wave 3: TUI wiring fixes (all 22 tabs functional)
-- `.bak` files removed (4 files)
-- Wave 4: TUI macro dispatch refactor
-- Wave 5: Code hygiene (Severity Ord, stale docs, dead code, strip_controls, deprecated aliases)
-- Wave 6: Foundation features (plan CLI, dedup engine, ai-integration feature, AI output schema)
-- Wave 7: Test coverage (circuit breaker time mocking, scope test assertions)
-- Wave 8: CI/CD pipeline (ci command, baseline comparison)
-- Wave 9: OpenAI API & MCP (OpenAI endpoint, MCP prompts, MCP sampling, output_schema)
-- Wave 10: Multi-Agent & AI features (agent registry, AI client, ai-analyze, payloads, WAF bypass, adaptive scan)
-
-**All Waves Complete**
+| Tests | ~363 passing |
+| Build | Clean (default features) |
+| Clippy | 0 warnings |
+| Feature-gated build | **FAILS** with `--features stress-testing` |
+| `tui/app/mod.rs` | 1387 lines (reduced from 2087, still needs work) |
+| `recon/mod.rs` | 625 lines |
+| `config/settings.rs` | 581 lines |
 
 ---
 
-## Parallelization Strategy
+## Wave 1: Critical Fixes (30 min, must be first)
 
-Waves are grouped into **execution blocks**. Within each block, waves touch independent file sets and can run concurrently via sub-agents.
+These break compilation or test runs. Fix before everything else.
 
+### 1.1 Fix missing imports in `scanner/ports/spoofed.rs`
+
+**File:** `crates/slapper/src/scanner/ports/spoofed.rs:130-132,169`
+
+**Status:** CONFIRMED — `cargo check --lib -p slapper --features stress-testing` fails. `HashMap`, `AtomicBool`, `Ordering` used without imports inside `scan_ports_spoofed()`.
+
+**Fix:** Add to the function's import block:
+```rust
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 ```
-Block A (Weeks 1–2):  Wave 1 ─┐
-                      Wave 2 ─┤─ All parallel (different files)
-                      Wave 3 ─┘
 
-Block B (Weeks 2–3):  Wave 4 (TUI refactor, depends on Wave 3)
-                      Wave 5 (Code hygiene, independent)
-                      Wave 6 (Foundation features, independent)
-                      Wave 7 (Tests, independent)
+**Verify:** `cargo check --lib -p slapper --features stress-testing`
 
-Block C (Weeks 3–5):  Wave 8 ─┐
-                      Wave 9 ─┤─ All parallel (independent modules)
-                      Wave 10 ─┘
+### 1.2 Fix stale doctest in `utils/mod.rs`
+
+**File:** `crates/slapper/src/utils/mod.rs:18,25`
+
+**Status:** CONFIRMED — doc example references removed `truncate` function. `cargo test --doc` will fail.
+
+**Fix:** Replace `truncate` references with `strip_controls`:
+```rust
+//! use slapper::utils::{check_scope, create_http_client, strip_controls};
+//! let cleaned = strip_controls("Some text with \x00 control chars");
 ```
+
+**Verify:** `cargo test --doc -p slapper`
+
+### 1.3 Gate `stress` module declaration behind feature flag
+
+**File:** `crates/slapper/src/lib.rs:65`
+
+**Status:** CONFIRMED — `pub mod stress;` is unconditional. Submodules are gated internally but the module itself is always compiled.
+
+**Fix:**
+```rust
+#[cfg(feature = "stress-testing")]
+pub mod stress;
+```
+
+**Verify:** `cargo check --lib -p slapper && cargo check --lib -p slapper --features stress-testing`
 
 ---
 
-## Wave 1: Critical Bug Fixes ✅ COMPLETED
+## Wave 2: Code Quality & Correctness (4-6 hours)
 
-**Risk:** Low | **Effort:** 2–4 hours | **Files:** 2–3
+### Sub-wave 2A: Security & Correctness (parallelizable per item)
 
-**Status:** Completed 2026-04-01
+#### 2A.1 Defer DNS resolution in scope checks
 
-### Task 1.1: Fix Silent Error Swallowing in Fuzzer
+**File:** `crates/slapper/src/config/scope.rs:203,218`
 
-**File:** `crates/slapper/src/fuzzer/engine/execution.rs:108–112`
+**Status:** CONFIRMED — `TargetScope::parse()` calls `resolve_host()` during construction. `Scope::is_target_allowed()` calls `TargetScope::parse()` on every invocation, causing DNS lookups per request.
 
-**Problem:** In `run_concurrent()`, `if let Ok(r) = result` consumes `result`, then `result.err()` always returns `None`. Failed requests are silently dropped.
+**Fix:** Split scope checking: fast path for hostname string matching (no DNS), slow path for DNS + CIDR only when IP-based rules exist.
 
+**Verify:** `cargo test --lib -p slapper -- scope`
+
+#### 2A.2 Preserve timeout value in `SlapperError::Timeout`
+
+**File:** `crates/slapper/src/error/mod.rs:147`
+
+**Status:** CONFIRMED — timeout errors map to `timeout_ms: 0` because reqwest doesn't expose configured timeout. Callers lose timeout context.
+
+**Fix:** Add `with_timeout` helper to `SlapperError`. Call sites that know their timeout use `.map_err(|e| SlapperError::from(e).with_timeout(configured_ms))`.
+
+**Verify:** `cargo test --lib -p slapper -- error`
+
+#### 2A.3 Stop cloning API keys from `SensitiveString` to plain `String`
+
+**File:** `crates/slapper/src/recon/mod.rs:229,233,243-246`
+
+**Status:** CONFIRMED — 6 API keys extracted via `s.expose_secret().to_string()`, producing plain `String` that persists after zeroization.
+
+**Fix:** Pass `&SensitiveString` references to recon modules, or wrap clones in new `SensitiveString`.
+
+**Verify:** `cargo test --lib -p slapper -- recon`
+
+#### 2A.4 Fix non-JSON WAF file output writing empty string
+
+**File:** `crates/slapper/src/waf/mod.rs:255-259`
+
+**Status:** CONFIRMED — when `!self.args.json`, `output` is `String::new()`. File writes empty content.
+
+**Fix:** Generate text output before the file-write block (move format generation into the else branch).
+
+**Verify:** `cargo test --lib -p slapper -- waf`
+
+#### 2A.5 Fix CircuitBreaker TOCTOU race
+
+**File:** `crates/slapper/src/utils/circuit_breaker.rs:67-99`
+
+**Status:** CONFIRMED — `fetch_add` then `load` under lock creates race window. Use `fetch_add` return values instead of loading.
+
+**Verify:** `cargo test --lib -p slapper -- circuit_breaker`
+
+#### 2A.6 Fix `is_vulnerable()` semantics
+
+**File:** `crates/slapper/src/fuzzer/engine/types.rs:24-29`
+
+**Status:** CONFIRMED — returns `true` when `is_waf_blocked` is `true`. WAF block = protection, not vulnerability.
+
+**Fix:** Add `is_true_positive()` method:
 ```rust
-// Current (broken):
-if let Ok(r) = result {
-    results.lock().await.push(r);
-} else {
-    tracing::debug!("Fuzz request failed: {:?}", result.err()); // always None
-}
-
-// Fix:
-match result {
-    Ok(r) => { results.lock().await.push(r); }
-    Err(e) => { tracing::debug!("Fuzz request failed: {:?}", e); }
-}
-```
-
-### Task 1.2: Fix Unbounded Burst Concurrency (Session Mode)
-
-**File:** `crates/slapper/src/fuzzer/engine/execution.rs:163–177`
-
-**Problem:** `run_burst_with_session()` collects all futures and calls `join_all` with no concurrency limit. With 1000 payloads, all 1000 requests fly simultaneously.
-
-```rust
-// Current (unbounded):
-let mut futures = Vec::new();
-for payload in &payloads {
-    futures.push(self.send_fuzz_request(payload, Method::GET));
-}
-let results: Vec<Result<FuzzResult>> = join_all(futures).await;
-```
-
-**Fix:** Use semaphore-based concurrency matching the pattern in `run_concurrent()` (line 79).
-
-**Verification:**
-```bash
-cargo test --lib -p slapper -- fuzzer
-cargo clippy --lib -p slapper
-```
-
----
-
-## Wave 2: Code Quality & Clippy ✅ COMPLETED
-
-**Risk:** Low | **Effort:** 3–5 hours | **Files:** ~15
-
-**Status:** Completed 2026-04-01. 114 → 0 warnings.
-
-### Task 2.1: Auto-fix Clippy Warnings
-
-Run `cargo clippy --fix --lib -p slapper` for the 25 auto-fixable warnings. Then manually address remaining ~89 warnings.
-
-**Warning breakdown:**
-
-| Warning | Count | Fix |
-|---------|-------|-----|
-| Deprecated `Finding` struct | ~39 | Task 2.2 |
-| Unused imports | ~10 | Auto-fix |
-| Derivable `impl Default` | 5 | Task 2.3 |
-| Too many arguments | 2 | Task 2.4 |
-| `from_str` confusion | 2 | Task 2.5 |
-| Never-constructed variants | ~9 | Task 2.6 |
-| Useless `format!` | 1 | Auto-fix |
-
-### Task 2.2: Remove Deprecated Finding Types
-
-**Files:** `output/markdown.rs`, `output/trend.rs`
-
-Audit usage. If no external consumers, remove deprecated types and migrate references to `AgentFinding`. Otherwise suppress with `#[allow(deprecated)]`.
-
-### Task 2.3: Add `Default` Impls
-
-Add `impl Default` for any types where `Clippy` warns about derivable defaults.
-
-### Task 2.4: Reduce Function Arguments
-
-Use builder pattern, config struct parameter, or `#[allow(clippy::too_many_arguments)]` if internal-only.
-
-### Task 2.5: Rename Conflicting `from_str` Methods
-
-Methods named `from_str` that aren't `FromStr` trait implementations should be renamed (e.g., `parse_from_str`).
-
-### Task 2.6: Audit Dead Code
-
-Review items flagged by Clippy as never-constructed or never-used. Either remove or add `#[allow(dead_code)]` with justification.
-
-**Verification:**
-```bash
-cargo clippy --lib -p slapper -- -D warnings
-# Target: 0 warnings
-```
-
----
-
-## Wave 3: TUI Wiring Fixes ✅ COMPLETED
-
-**Risk:** Medium | **Effort:** 6–10 hours | **Files:** 5–6
-
-**Status:** Completed 2026-04-01. All 22 tabs functional. Added `page_up`/`page_down` to 5 new tab structs.
-
-The TUI has 22 tabs with a central `App` struct dispatching input, tasks, and results. 7 newer tabs (GraphQl, OAuth, Cluster, Stress, Report, Nse, Plugin) render correctly but are **non-functional** because `app/mod.rs` has empty `{}` arms instead of forwarding to tab structs.
-
-### Task 3.1: Fix TabInput Delegation (18+ Methods)
-
-**File:** `crates/slapper/src/tui/app/mod.rs`
-
-Replace empty `{}` arms with proper delegation for all 7 tabs across these methods:
-
-`handle_char`, `handle_backspace`, `handle_tab`, `handle_up`, `handle_down`, `handle_left`, `handle_right`, `handle_focus_next`, `handle_focus_prev`, `is_at_left_edge`, `is_at_right_edge`, `reset_current_tab`, `page_up`, `page_down`, `handle_word_forward`, `handle_word_backward`, `handle_home`, `handle_end`, `handle_top`, `handle_bottom`
-
-**Pattern:**
-```rust
-// Before:
-Tab::GraphQl => {}
-// After:
-Tab::GraphQl => self.graphql.handle_char(c),
-```
-
-Feature-gate Nse/Plugin arms with `#[cfg(feature = "nse")]` / `#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]`.
-
-### Task 3.2: Add `build_*_task` Methods
-
-**File:** `crates/slapper/src/tui/app/mod.rs`
-
-Add missing task builders:
-- `build_graphql_task()` — reads endpoint, concurrency, timeout, checkboxes
-- `build_oauth_task()` — reads endpoint, client_id, redirect_uri, checkboxes
-- `build_nse_task()` — reads target, script, script_args (feature-gated)
-
-**Prerequisites:** Add checkbox accessor methods to `GraphQlTab` and `OAuthTab` if they don't exist.
-
-### Task 3.3: Wire `handle_enter` for Task-Spawning Tabs
-
-For GraphQl, OAuth, Nse — update `handle_enter` arms to call `handle_enter()`, check `is_running()`, then `spawn_task()`.
-
-### Task 3.4: Fix Result Handling
-
-**File:** `crates/slapper/src/tui/app/mod.rs`
-
-- Expand `TaskResult::Error` routing to cover all 22 tabs (currently only handles ~9)
-- Add history entries for GraphQl/OAuth results
-- Fix WAF history target if hardcoded as `"<target>"`
-
-### Task 3.5: Fix Export Naming
-
-**File:** `crates/slapper/src/tui/app/mod.rs`
-
-Replace `"unknown"` export base names with descriptive names:
-```rust
-Tab::GraphQl => "graphql_results",
-Tab::OAuth => "oauth_results",
-Tab::Cluster => "cluster_status",
-Tab::Stress => "stress_results",
-Tab::Report => "report_results",
-Tab::Nse => "nse_results",
-Tab::Plugin => "plugin_results",
-```
-
-### Task 3.6: Fix History Tab Input Handling
-
-Forward `handle_escape`, `handle_char`, `handle_backspace` for `Tab::History`.
-
-### Task 3.7: Fix Redundant Feature Gates in `ui.rs`
-
-If `draw_breadcrumb()` has identical Plugin arms for both `#[cfg(...)]` and `#[cfg(not(...))]`, collapse to single arm.
-
-**Verification:**
-```bash
-cargo check --lib -p slapper
-cargo check --lib -p slapper --features full
-cargo test --lib -p slapper
-```
-
----
-
-## Wave 4: TUI Macro Dispatch Refactor ✅ COMPLETED
-
-**Risk:** Medium | **Effort:** 8–12 hours | **Files:** 4–6
-
-**Depends on:** Wave 3 (wiring fixes must be complete first)
-
-**Status:** Completed 2026-04-02. `app/mod.rs` reduced from 2087 to 1387 lines. Dispatch macros created. Tab metadata consolidated. Duplicate `centered_rect` removed. Duplicate "resume" command palette entry removed.
-
-### Task 4.1: Introduce `dispatch_tab!` Macro
-
-**File:** New `crates/slapper/src/tui/app/dispatch.rs`
-
-Create a macro that generates 22-arm match dispatch code. Each of the ~30 methods in `app/mod.rs` becomes a one-liner.
-
-```rust
-macro_rules! dispatch_tab {
-    ($self:expr, $method:ident $(, $args:expr)*) => {
-        match $self.current_tab {
-            Tab::Recon => $self.recon.$method($($args),*),
-            Tab::Fuzz => $self.fuzz.$method($($args),*),
-            // ... all 22 tabs
-        }
-    };
+pub fn is_true_positive(&self) -> bool {
+    self.is_vulnerable && !self.is_waf_blocked
 }
 ```
 
-**Expected reduction:** `app/mod.rs` from ~1,963 lines to ~400–500 lines.
+**Verify:** `cargo test --lib -p slapper -- fuzzer`
 
-### Task 4.2: Consolidate Tab Metadata
+#### 2A.7 Fix overly broad `select_profile()` WAF matching
 
-**File:** `crates/slapper/src/tui/tabs/mod.rs`
+**File:** `crates/slapper/src/waf/mod.rs:138-143`
 
-Replace 22-arm match statements (`title()`, `cli_command()`, `description()`) with a const array of structs indexed by discriminant.
+**Status:** CONFIRMED — last condition `waf_lower.contains(&sig_lower.to_string())` matches arbitrary substrings (e.g., signature `"a"` matches `"cloudflare"`).
 
-### Task 4.3: Remove `.bak` Files
+**Fix:** Remove bare `contains()` fallback, use word-boundary matching only.
 
-Delete:
-- `crates/slapper/src/tui/tabs/mod.rs.bak`
-- `crates/slapper/src/tui/ui.rs.bak`
-- `crates/slapper/src/tui/app/runner.rs.bak`
-- `crates/slapper/src/tui/app/mod.rs.bak`
+**Verify:** `cargo test --lib -p slapper -- waf`
 
-### Task 4.4: Remove Duplicated Utilities
+#### 2A.8 Fix wrong error variants in `SlapperConfig::validate()`
 
-If `centered_rect` or other functions are duplicated across files, consolidate to one location. Remove duplicate `"resume"` command palette entry if present.
+**File:** `crates/slapper/src/config/settings.rs:517,536`
 
-**Verification:**
-```bash
-cargo check --lib -p slapper
-cargo check --lib -p slapper --features full
-cargo clippy --lib -p slapper
-```
+**Status:** CONFIRMED — `max_retries > 10` returns `InvalidTimeout`; proxy weight returns `InvalidConcurrency`. Both semantically wrong.
 
----
+**Fix:** Use `ConfigValidationError::Validation` with descriptive messages.
 
-## Wave 5: Code Hygiene ✅ COMPLETED
+**Verify:** `cargo test --lib -p slapper -- config`
 
-**Risk:** Low | **Effort:** 3–5 hours | **Files:** 5–8
+#### 2A.9 Fix `create_dir()` to `create_dir_all()` in TUI export
 
-**Status:** Completed 2026-04-02. Severity Ord fixed (semantic ordering via as_int()). lib.rs docs updated. Dead code removed from evasion module. strip_controls preserves Unicode. Deprecated aliases removed.
+**File:** `crates/slapper/src/tui/app/mod.rs:835`
 
-### Task 5.1: Fix Severity `Ord` Footgun
+**Status:** CONFIRMED — `create_dir()` fails if parent dirs don't exist.
+
+**Fix:** Replace with `create_dir_all()`.
+
+**Verify:** `cargo test --lib -p slapper`
+
+#### 2A.10 Fix `danger_accept_invalid_certs(true)` hardcoded
+
+**File:** `crates/slapper/src/scanner/endpoints.rs:582`
+
+**Status:** CONFIRMED — always ignores TLS cert validation during endpoint scanning.
+
+**Fix:** Make configurable via args, default to `false`.
+
+**Verify:** `cargo test --lib -p slapper -- scanner`
+
+### Sub-wave 2B: Dead Code Removal & Deduplication (parallelizable per item)
+
+#### 2B.1 Remove dead `constants::errors` module
+
+**File:** `crates/slapper/src/constants.rs:64-80`
+
+**Status:** CONFIRMED — 15 constants defined, none used.
+
+**Fix:** Remove the module.
+
+#### 2B.2 Remove duplicate `centered_rect()` from `tui/ui.rs`
+
+**File:** `crates/slapper/src/tui/ui.rs:241` (duplicate of `tui/components/popup.rs:166`)
+
+**Status:** CONFIRMED — identical private function.
+
+**Fix:** Remove from `ui.rs`, import from `popup.rs`.
+
+#### 2B.3 Remove dead TUI code
+
+**Status:** CONFIRMED — all items verified.
+
+| Location | Item | Lines |
+|----------|------|-------|
+| `tui/components/scrollable.rs:187-323` | `ScrollableTable` struct + impl | ~136 lines |
+| `tui/components/progress.rs:85-135` | `StatusBar` struct + impl | ~50 lines |
+| `tui/workers/runner.rs:413-461` | `is_retryable_error()` + `run_with_retry()` | ~49 lines |
+| `tui/components/popup.rs:186-324` | `help_popup()` function | ~138 lines |
+
+#### 2B.4 Remove `_mode_style` dead variable
+
+**File:** `crates/slapper/src/tui/ui.rs:541`
+
+**Status:** CONFIRMED — computed but never used.
+
+#### 2B.5 Consolidate escape functions
+
+**Files:** `output/convert.rs:164,171`, `output/csv.rs:110`, `output/html.rs:314`
+
+**Status:** CONFIRMED — `escape_csv` duplicated in convert.rs and csv.rs; `escape_html` duplicated in convert.rs and html.rs; `escape_xml` in convert.rs is dead.
+
+**Fix:** Create `output/escape.rs` with canonical implementations. Remove duplicates.
+
+#### 2B.6 Deduplicate fuzzer execution logic
+
+**File:** `crates/slapper/src/fuzzer/engine/execution.rs:57-128 vs 162-234`
+
+**Status:** CONFIRMED — `run_concurrent` and `run_burst_with_session` are nearly identical. `run_sequential` and `run_sequential_with_session` also duplicated.
+
+**Fix:** Extract shared internal method with optional session callback.
+
+#### 2B.7 Remove dead `ScopeError::OutOfScope` variant
+
+**File:** `crates/slapper/src/config/scope.rs`
+
+**Status:** CONFIRMED — never constructed.
+
+#### 2B.8 Fix `urlencoding::decode()` error type
+
+**File:** `crates/slapper/src/utils/urlencoding.rs:18`
+
+**Status:** CONFIRMED — returns `Result<String, String>` instead of `crate::error::Result<String>`.
+
+**Fix:** Use `SlapperError::Parse`.
+
+### Sub-wave 2C: Minor Fixes & Documentation (parallelizable per item)
+
+#### 2C.1 Add `is_empty()` to `ClientPool`
+
+**File:** `crates/slapper/src/utils/client_pool.rs`
+
+**Status:** CONFIRMED — has `len()` but no `is_empty()`.
+
+#### 2C.2 Remove module-level `#![allow(dead_code)]`
+
+**Files:** `utils/rate_limiter.rs:2`, `recon/ssl.rs:2`
+
+**Status:** CONFIRMED — hides unused code.
+
+**Fix:** Replace with targeted `#[allow(dead_code)]` or gate module declaration.
+
+#### 2C.3 Rename `TestType::from_string` to `parse`
+
+**File:** `crates/slapper/src/waf/bypass/mod.rs`
+
+**Status:** CONFIRMED — triggers clippy `should_implement_trait` lint.
+
+#### 2C.4 Replace glob re-exports with explicit exports
+
+**Files:** `commands/handlers/mod.rs`, `cli/mod.rs`
+
+**Status:** CONFIRMED — `pub use module::*` for 8-12 modules causes namespace pollution.
+
+#### 2C.5 Align `utils/` error types with crate conventions
+
+**Files:** `utils/http.rs`, `utils/scope.rs`, `utils/validation.rs`, `utils/parsing.rs`
+
+**Status:** CONFIRMED — these use `anyhow::Result` while core should use `SlapperError`.
+
+#### 2C.6 Fix no-op test assertion
+
+**File:** Test files with `assert!(!config.http.verify_tls || config.http.verify_tls)` — always `true`.
+
+#### 2C.7 Fix `From<anyhow::Error>` to preserve error chain
+
+**File:** `crates/slapper/src/error/mod.rs`
+
+**Status:** CONFIRMED — uses `e.to_string()`, losing chain. Fix: use `format!("{:#}", e)`.
+
+#### 2C.8 Extract magic number to constant
+
+**File:** `crates/slapper/src/fuzzer/engine/utils.rs:130` — hardcoded `100` body length diff threshold.
+
+#### 2C.9 Document `SensitiveString` Hash omission
 
 **File:** `crates/slapper/src/types.rs`
 
-`Severity` derives `Ord` by declaration order (Critical < High), which is semantically inverted. Remove derives and provide custom `Ord` implementation using `as_int()`.
+**Fix:** Add doc comment explaining `Hash` is intentionally not implemented.
 
-**First:** Search for all `Severity` comparisons to find any code relying on the inverted order:
-```bash
-rg "sort.*[Ss]everity|\.cmp.*[Ss]everity" crates/slapper/src/
-```
+#### 2C.10 Plan deprecated `Finding` type migration
 
-### Task 5.2: Update Stale Documentation
+**File:** `output/` module (21 occurrences of `#[allow(deprecated)]`)
 
-**File:** `crates/slapper/src/lib.rs`
-
-Update payload type and WAF product counts to match actual values.
-
-### Task 5.3: Remove Dead Code in WAF Evasion Module
-
-If `HomoglyphMap` has empty fields or `EvasionTechnique` variants are never matched, complete or remove them.
-
-### Task 5.4: Fix `strip_controls` Name/Behavior Mismatch
-
-**File:** `crates/slapper/src/utils/formatting.rs`
-
-If `strip_controls` strips all non-ASCII rather than just control characters, either rename to `ascii_only` or change the filter to `!c.is_control()`.
-
-### Task 5.5: Remove Deprecated Truncation Aliases
-
-**File:** `crates/slapper/src/utils/formatting.rs`
-
-If `truncate` and `truncate_simple` are still present and deprecated, verify no callers exist and remove them.
-
-**Verification:**
-```bash
-cargo test --lib -p slapper
-cargo clippy --lib -p slapper
-```
+**Fix:** Document migration path (deprecated → `AgentFinding`). Multi-PR effort.
 
 ---
 
-## Wave 6: Foundation Features ✅ COMPLETED
+## Wave 3: TUI Quick Wins (low effort, medium impact)
 
-**Risk:** Low | **Effort:** 8–12 hours | **Files:** New files + minor modifications
+These are self-contained TUI improvements that can be done in parallel.
 
-**Status:** Completed 2026-04-02. plan CLI command created. DedupEngine with Strict/Fuzzy/Disabled strategies. ai-integration feature flag with eventsource-stream dependency. AiConfig struct added to SlapperConfig. ai_schema.rs with AiOutput/AiFinding/AiEvidence/AiRemediation/AiSummary types.
+### 3.1 Use `SensitiveString` for credential fields
 
-### Task 6.1: `plan` CLI Command
+**File:** `crates/slapper/src/tui/app/options.rs:5-9`
 
-Let users/AI preview execution plans without running them.
+**Status:** CONFIRMED — `bearer`, `cookie`, `api_key`, `proxy_auth`, `auth` all use `Option<String>`.
 
-**New files:** `cli/plan.rs`, `commands/handlers/plan.rs`
-**Modify:** `cli/mod.rs`, `commands/handlers/mod.rs`
+**Fix:** Change to `Option<SensitiveString>`. Update read sites to use `expose_secret()`.
 
-Reuse `ChainPlanner`, `ToolRegistry::with_defaults()`. Output as JSON or formatted table.
+### 3.2 Implement GraphQL checkbox toggle
 
-### Task 6.2: Finding Deduplication Engine
+**File:** `crates/slapper/src/tui/tabs/graphql.rs:350-352`
 
-**New file:** `crates/slapper/src/output/dedup.rs`
+**Status:** CONFIRMED — `handle_enter` for Options has empty body with comment `// Toggle focused checkbox`.
+
+**Fix:** Track focused checkbox index, toggle corresponding boolean field on enter.
+
+### 3.3 Implement OAuth checkbox toggle
+
+**File:** `crates/slapper/src/tui/tabs/oauth.rs:387-389`
+
+**Status:** CONFIRMED — identical no-op as GraphQL.
+
+### 3.4 Add `set_error` overrides to missing tabs
+
+**Status:** CONFIRMED — Resume, Report, Proxy tabs silently discard errors via trait default no-op.
+
+**Fix:** Implement `set_error` following existing tab patterns.
+
+### 3.5 Implement WafStress `get_results()`
+
+**File:** `crates/slapper/src/tui/tabs/waf_stress.rs:31-33`
+
+**Status:** CONFIRMED — always returns `None`. Export never works.
+
+### 3.6 Add navigation methods to minimal tabs
+
+**Status:** CONFIRMED — Resume, Nse, Plugin tabs lack `page_up`/`page_down`/`handle_top`/`handle_bottom`.
+
+### 3.7 Remove empty `render_overlays` stubs
+
+**Files:** `tui/tabs/proxy.rs`, `tui/tabs/packet.rs`
+
+**Status:** CONFIRMED — empty override bodies.
+
+### 3.8 Make history limit configurable
+
+**File:** `crates/slapper/src/tui/tabs/history.rs:74`
+
+**Status:** CONFIRMED — hardcoded limit of 100 entries.
+
+### 3.9 Fix phantom keybindings in help docs
+
+**File:** `crates/slapper/src/tui/help.rs:456-501`
+
+**Status:** CONFIRMED — Ctrl+Q, Ctrl+S, Ctrl+R, Ctrl+F, Ctrl+G documented but handlers missing.
+
+**Fix:** Either wire up handlers (recommended) or remove from docs.
+
+### 3.10 Wire up digit keys for direct tab jumping
+
+**File:** `crates/slapper/src/tui/app/runner.rs`
+
+**Status:** CONFIRMED — tab titles show `[1] Recon` etc. but pressing digits does nothing.
+
+### 3.11 Add mouse scroll wheel support
+
+**File:** `crates/slapper/src/tui/app/runner.rs:50-82`
+
+**Status:** CONFIRMED — only `MouseButton::Left` clicks handled. `WheelUp`/`WheelDown` ignored.
+
+### 3.12 Add spinner animation for indeterminate progress
+
+**File:** `crates/slapper/src/tui/components/progress.rs`
+
+**Problem:** Long-running ops with unknown totals show no activity indicator.
+
+---
+
+## Wave 4: TUI Functionality & Architecture (medium-high effort)
+
+### 4.1 Inline input validation feedback
+
+**File:** `crates/slapper/src/tui/components/input.rs`
+
+**Problem:** 5 validators exist but almost never used. No real-time validation during rendering.
+
+**Fix:** Add `validation_error` field, `validate_on_change` flag, render errors below input border.
+
+### 4.2 Fuzzy matching in command palette
+
+**File:** `crates/slapper/src/tui/help.rs`
+
+**Problem:** Uses simple case-insensitive substring match. No fuzzy matching.
+
+### 4.3 Add breadcrumbs to all tabs
+
+**Status:** CONFIRMED — only Proxy and Packet tabs implement `breadcrumb()`. Other 20 tabs show just tab name.
+
+### 4.4 Implement tab-agnostic search
+
+**File:** `crates/slapper/src/tui/app/mod.rs` — `perform_search()`
+
+**Status:** CONFIRMED — search only works on History tab. `TabInput::handle_search` exists but unused.
+
+### 4.5 Complete export support for all tabs
+
+**File:** `crates/slapper/src/tui/app/mod.rs:749-766`
+
+**Status:** CONFIRMED — 12 of 22 tabs have empty `export_json` arms. Plus WafStress returns `None` from `get_results()`.
+
+### 4.6 Fix progress display for tabs showing 0%
+
+**Status:** CONFIRMED — Cluster, Report, Resume, Proxy, Packet, Plugin, Nse tabs always show 0%.
+
+### 4.7 Fix Cluster view result rendering
+
+**File:** `crates/slapper/src/tui/tabs/cluster.rs`
+
+**Status:** CONFIRMED — only Status view has results. Worker/Coordinator views have no result methods.
+
+### 4.8 Create shared Checkbox/Input component
+
+**Files:** `tui/tabs/graphql.rs`, `oauth.rs`, `stress.rs`, `plugin.rs`
+
+**Status:** CONFIRMED — graphql.rs and oauth.rs are heavily duplicated (~400+ lines shared pattern).
+
+### 4.9 Add global loading indicator
+
+**File:** `crates/slapper/src/tui/ui.rs`
+
+**Problem:** No visible indicator when switching tabs while a task runs on another tab.
+
+### 4.10 Tab grouping / collapsing for narrow terminals
+
+**Files:** `tui/tabs/mod.rs`, `tui/ui.rs`, `tui/app/runner.rs`
+
+**Problem:** 22 tabs exceed 200 chars on terminals < 120 cols.
+
+**Fix:** Add `TabGroup` enum, grouped display mode for narrow terminals, `Shift+J`/`Shift+K` for group cycling.
+
+### 4.11 Enum-dispatch trait pattern (replace match blocks)
+
+**Files:** New `tui/app/tab_dispatch.rs`, `tui/app/mod.rs`, `tui/app/dispatch.rs`, `tui/tabs/mod.rs`
+
+**Problem:** 19+ separate 22-arm match statements. Adding a tab requires 15+ updates.
+
+**Fix — phased approach:**
+- Phase A: Move `title()`, `cli_command()`, `description()` into per-tab trait impls
+- Phase B: Consolidate export dispatch via `base_export_name()` and `get_json_results()` trait methods
+- Phase C: Evaluate trait dispatch for `draw_content()`, `draw_breadcrumb()`, `draw_status_bar()`
+- Phase D: Merge 8 dispatch macros into 2
+
+### 4.12 Extract `app/mod.rs` into submodules
+
+**File:** `crates/slapper/src/tui/app/mod.rs` (1387 lines)
+
+**Fix:** Extract export, task-building, command-palette logic into separate files. Target: `mod.rs` < 600 lines.
+
+### 4.13 Unify dispatch macros
+
+**File:** `crates/slapper/src/tui/app/dispatch.rs` (295 lines, 8 macros)
+
+**Fix:** Merge into 2 macros (`dispatch_void!`, `dispatch_check!`). Target: ~80 lines.
+
+### 4.14 Responsive layout for small terminals
+
+**Files:** `tui/tabs/fuzz.rs`, `scan.rs`, `settings.rs`, `ui.rs`
+
+**Problem:** Fixed layout proportions break on small terminals. Fuzz tab hardcodes 27 rows for config.
+
+### 4.15 Enhanced mouse support (click-to-focus, click-to-select)
+
+**File:** `crates/slapper/src/tui/app/runner.rs:50-82`
+
+**Problem:** Only tab bar click works. No click-to-focus-input, no click-to-select in lists.
+
+### 4.16 Configurable color theme
+
+**Files:** New `tui/theme.rs`, `config/mod.rs`, `tui/ui.rs`, `tui/tabs/*.rs`
+
+**Problem:** All colors hardcoded. No user configuration, no dark/light mode.
+
+### 4.17 Dynamic help system
+
+**File:** `crates/slapper/src/tui/help.rs:99-735`
+
+**Problem:** Help content hardcoded, doesn't reflect compiled features or runtime state.
+
+### 4.18 Configurable export path with user feedback
+
+**File:** `crates/slapper/src/tui/app/mod.rs:829-851`
+
+**Status:** CONFIRMED — `save_export()` hardcodes `"./exports/"` and ignores existing `OutputConfig.results_dir`.
+
+### 4.19 Replace ScrollableText with Table widget where appropriate
+
+**Problem:** ScanPorts, ScanEndpoints, Proxy, Fingerprint tabs use plain `ScrollableText` where `Table` with columns would be better.
+
+### 4.20 Implement Packet tab operations
+
+**File:** `crates/slapper/src/tui/tabs/packet.rs`
+
+**Problem:** Traceroute, ICMP, capture, send operations are stubs saying "Use CLI for this".
+
+---
+
+## Wave 5: Large File Refactoring (non-TUI)
+
+### 5.1 Decompose `recon/mod.rs` (625 lines)
+
+**Fix:** Extract parallel execution to `recon/runner.rs`, output formatting to `recon/output.rs`. Target: `mod.rs` < 150 lines.
+
+### 5.2 Split `config/settings.rs` (581 lines)
+
+**Fix:** Split into `config/settings/` directory with `http.rs`, `scan.rs`, `output.rs`, `recon.rs`, `paths.rs`, `mod.rs`. No file > 200 lines.
+
+### 5.3 Split `waf/detector.rs` (595 lines)
+
+**File:** `crates/slapper/src/waf/detector.rs`
+
+**Problem:** Contains WafDetector struct, 4 async methods, ResponseDiff, and 20+ tests in one file.
+
+**Fix:**
+```
+waf/detector/
+  mod.rs         # WafDetector struct, new(), re-exports
+  detect.rs      # detect(), normalize_url()
+  block_check.rs # check_waf_block()
+  compare.rs     # compare_responses(), ResponseDiff
+  types.rs       # WafDetectionResult, WafSignatureLower
+```
+Target: no file > 200 lines.
+
+### 5.4 Unify error handling: anyhow → SlapperError
+
+**Problem:** Core library modules (waf, scanner, proxy, recon, fuzzer, loadtest, stress, pipeline, distributed, output) use `anyhow::Result` instead of `crate::error::Result`. ~55 usages across ~25 core files.
+
+**Fix — phased migration (leaf → root):**
+
+1. Add new `SlapperError` variants: `Proxy(String)`, `Fingerprint(String)`, `Recon(String)`, `LoadTest(String)`
+2. Add `From` impls: `ResolveError → Network`, `InvalidHeaderValue → Http`
+3. Migrate modules in order: waf → scanner → proxy → recon → fuzzer → loadtest → stress → pipeline → distributed → output
+4. Update doc examples from `anyhow::Result` to `slapper::error::Result`
+5. Document acceptable `anyhow` usage: `main.rs`, `commands/handlers/`, `tui/`, test code
+
+**Not migrating (acceptable anyhow):** `main.rs`, command handlers, TUI code, test code.
+
+**Verify:** `rg "use anyhow" crates/slapper/src/{waf,scanner,proxy,recon,fuzzer,loadtest,stress,pipeline,distributed,output}/ | wc -l` — target < 10
+
+### 5.5 Extract magic numbers to constants
+
+**File:** Various — extract hardcoded values (e.g., `100` body length threshold in fuzzer) to `constants.rs`.
+
+---
+
+## Wave 6: Multi-Provider AI Integration
+
+Consolidated from plan5. Supports 41 LLM providers.
+
+### 6.1 Add core chat types
+
+**File:** `crates/slapper/src/ai/types.rs`
+
+Add `ChatMessage`, `ChatRequest`, `ChatResponse`, `TokenUsage`, `FinishReason`, `ChatChunk`, `AiTool`. Keep existing types unchanged. Gate behind `ai-integration`.
+
+### 6.2 Define Provider trait
+
+**File:** `crates/slapper/src/ai/providers/mod.rs` (new)
 
 ```rust
-pub enum DedupStrategy { Strict, Fuzzy, Disabled }
-
-pub struct DedupEngine {
-    strategy: DedupStrategy,
-    seen: HashMap<String, Uuid>,
-}
-
-impl DedupEngine {
-    pub fn deduplicate(&mut self, findings: &[AgentFinding]) -> Vec<AgentFinding>;
+#[async_trait]
+pub trait AiProvider: Send + Sync {
+    fn name(&self) -> &str;
+    fn supports_streaming(&self) -> bool;
+    async fn chat(&self, request: ChatRequest) -> AiResult<ChatResponse>;
+    async fn chat_stream(&self, _request: ChatRequest) -> AiResult<ChatStream>;
 }
 ```
 
-Add `dedup_strategy` field to `SlapperConfig`.
+### 6.3 Implement OpenAI-compatible provider
 
-### Task 6.3: AI Feature Flag and Config
+**File:** `crates/slapper/src/ai/providers/openai.rs` (new)
 
-**Modify:** `crates/slapper/Cargo.toml`, `crates/slapper/src/config/settings.rs`
+Covers 35+ providers. Differentiated by `base_url`, `default_model`, auth style. Supports Azure deployment URLs.
+
+### 6.4 Implement Anthropic provider
+
+**File:** `crates/slapper/src/ai/providers/anthropic.rs` (new)
+
+Uses `x-api-key` header + `anthropic-version`. `system` is top-level field. Different request/response format.
+
+### 6.5 Implement Gemini provider
+
+**File:** `crates/slapper/src/ai/providers/gemini.rs` (new)
+
+Auto-detects Vertex AI via `GOOGLE_CLOUD_PROJECT` env. API key as query param.
+
+### 6.6 Implement Bedrock provider
+
+**File:** `crates/slapper/src/ai/providers/bedrock.rs` (new)
+
+Bearer token auth (SigV4 deferred). Supports Claude models initially.
+
+### 6.7 Provider registry & presets
+
+**File:** `crates/slapper/src/ai/providers/registry.rs` (new)
+
+Static map of 41 providers with `AuthStyle` enum (Bearer, AnthropicKey, ApiKeyParam, None).
+
+### 6.8 Refactor AiClient
+
+**File:** `crates/slapper/src/ai/client.rs`
+
+Replace monolithic client with provider delegation. Public API unchanged for backward compat.
+
+### 6.9 Config overhaul
+
+**File:** `crates/slapper/src/config/settings.rs`
+
+Add `providers: HashMap<String, AiProviderConfig>` while preserving legacy flat fields.
+
+### 6.10 Wire MCP sampling to provider system
+
+**File:** `crates/slapper/src/tool/protocol/mcp/sampling.rs`
+
+Currently unused. Route through AI provider.
+
+### 6.11 Enhance OpenAI protocol endpoint
+
+**File:** `crates/slapper/src/tool/protocol/openai/handlers.rs`
+
+Current stub returns static response. Wire to `AiClient.chat()` with tool-call loop.
+
+### 6.12 Tests
+
+New integration test file `tests/ai_provider_tests.rs`. Unit tests per provider with mocked HTTP. Config backward compat tests.
+
+### 6.13 Cargo.toml changes
 
 ```toml
-[features]
-ai-integration = ["tool-api", "eventsource-stream"]
+# Add async-stream to ai-integration deps:
+ai-integration = ["tool-api", "eventsource-stream", "async-stream"]
 ```
 
-Add `AiConfig` struct (api_url, api_key, model, max_tokens, temperature) to `SlapperConfig`.
-
-### Task 6.4: Structured AI Output Schema
-
-**New file:** `crates/slapper/src/output/ai_schema.rs`
-
-Define `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` structs for machine-readable output. Add `AiJson` variant to `OutputFormat`.
-
-**Verification:**
-```bash
-cargo test --test plan_tests -p slapper
-cargo test --lib -p slapper -- output::dedup
-cargo check --lib -p slapper --features ai-integration
-```
+No new crates needed.
 
 ---
 
-## Wave 7: Test Coverage ✅ COMPLETED
+## Wave 7: CI/CD & Tooling
 
-**Risk:** Low | **Effort:** 6–10 hours | **Files:** 4–6
+### 7.1 Tighten CI security checks
 
-**Status:** Completed 2026-04-02. Circuit breaker tests now use tokio::time::pause()/advance() for deterministic time control. Added concurrent record test. Scope tests now use specific assertions checking actual allowed/rejected values.
+**File:** `.github/workflows/test.yml`
 
-### Task 7.1: Fix Circuit Breaker Test Flakiness
+Remove `continue-on-error: true` from security audit for `main` branch pushes. Add weekly dependency review job.
 
-**File:** `crates/slapper/src/utils/circuit_breaker.rs` (tests)
+### 7.2 Pin Rust toolchain version
 
-Replace `tokio::time::sleep` with `tokio::time::pause()` + `tokio::time::advance()` for deterministic time control.
+**File:** `rust-toolchain.toml`
 
-### Task 7.2: Add Circuit Breaker Concurrency Test
+Pin to `1.80` to match MSRV. Currently uses `stable` without pinning.
 
-Spawn N tasks calling `record_failure()`/`record_success()` concurrently, verify breaker state.
+### 7.3 Migrate to Criterion benchmarks
 
-### Task 7.3: Improve Scope Bypass Test Assertions
+**File:** `crates/slapper/benches/bench.rs` (203 lines)
 
-**File:** `crates/slapper/tests/scope_tests.rs`
+Replace custom `Instant`-based benchmarks with Criterion for statistical analysis and regression detection.
 
-Replace weak `assert!(result.is_ok())` with specific assertions checking the out-of-scope target was rejected.
+### 7.4 Expand proptest regression corpus
 
-### Task 7.4: Add HTTP Client Behavior Tests
+**File:** `proptest-regressions/`
 
-**File:** `crates/slapper/src/utils/http.rs` (tests)
+Only `utils/formatting.txt` exists. Run all property tests to generate corpus files.
 
-Test timeout enforcement, insecure TLS, proxy configuration.
+### 7.5 Use strum `EnumIter` for `PayloadType`
 
-### Task 7.5: Property-Based Tests
+**File:** `crates/slapper/src/fuzzer/payloads/mod.rs`
 
-**New file:** `crates/slapper/tests/prop_tests.rs`
-
-- Scope wildcard matching invariants (wildcard matches apex, subdomain matches, rejects unrelated)
-- URL parsing invariants
-- Severity round-trip and monotonicity invariants
-
-**Verification:**
-```bash
-cargo test --lib -p slapper -- circuit_breaker
-cargo test --test scope_tests -p slapper
-cargo test --test prop_tests -p slapper
-```
+Currently manually lists all 22 variants. Use `#[derive(EnumIter)]` to auto-generate.
 
 ---
 
-## Wave 8: CI/CD Pipeline ✅ COMPLETED
+## Wave 8: Testing & Documentation
 
-**Risk:** Low | **Effort:** 6–10 hours | **Files:** New files + minor modifications
+### 8.1 Add tests for untested high-value modules
 
-**Status:** Completed 2026-04-02. ci CLI command with --fail-on, --baseline, --quiet flags. Exit codes: 0 (pass), 1 (fail), 2 (error), 3 (scope violation). Baseline comparison module for regression detection.
+Priority targets: command handlers (14 files), recon modules (`ssl.rs`, `subdomain.rs`, `cors.rs`), fuzzer engine (`core.rs`, `advanced.rs`), output modules (`html.rs`, `csv.rs`, `dedup.rs`).
 
-### Task 8.1: `ci` Command
+### 8.2 Fix weak test assertions
 
-**New files:** `cli/ci.rs`, `commands/handlers/ci.rs`, `output/baseline.rs`
+**File:** Various test files — replace `assert!(x == y)` with `assert_eq!`, add diagnostic messages.
 
-Purpose-built for CI/CD with:
-- Exit codes: 0 (pass), 1 (fail), 2 (error), 3 (scope violation)
-- `--fail-on <severity>` and `--max-findings <n>` thresholds
-- `--baseline <sarif>` for regression-only mode
-- SARIF, JUnit, JSON output
-- `--quiet` mode for CI-friendly output
+### 8.3 Audit all doc examples
 
-### Task 8.2: Baseline Comparison Module
+Run `cargo test --doc -p slapper`. Fix any failures from stale references.
 
-**New file:** `crates/slapper/src/output/baseline.rs`
+### 8.4 Remove plan-specific items from AGENTS.md
 
-```rust
-pub struct BaselineComparison {
-    pub new_findings: Vec<AgentFinding>,
-    pub resolved_findings: Vec<AgentFinding>,
-    pub unchanged_findings: Vec<AgentFinding>,
-}
-```
-
-**Verification:**
-```bash
-cargo test --test ci_tests -p slapper
-```
+Clean up AGENTS.md references to individual plan files. Keep codebase knowledge.
 
 ---
 
-## Wave 9: OpenAI-Compatible API & MCP Enhancements ✅ COMPLETED
+## Parallelization Summary
 
-**Risk:** Low-Medium | **Effort:** 8–12 hours | **Files:** New files under `tool/protocol/`
+| Wave | Items | Can parallelize? | Depends on |
+|------|-------|-----------------|------------|
+| **1** Critical fixes | 3 items | No (sequential, each is a blocker) | — |
+| **2A** Security/correctness | 10 items | Yes (different files) | Wave 1 |
+| **2B** Dead code/dedup | 8 items | Yes (different files) | Wave 1 |
+| **2C** Minor fixes | 10 items | Yes (different files) | Wave 1 |
+| **3** TUI quick wins | 12 items | Yes (different tabs/components) | Wave 1 |
+| **4** TUI architecture | 20 items | Partially (4.12/4.13 before 4.11) | Wave 3 |
+| **5** Large file refactoring | 5 items | Partially (5.1-5.3 parallel, 5.4 sequential) | Wave 2B |
+| **6** AI multi-provider | 13 items | Mostly sequential (6.1→6.2→6.3-6.6→6.7-6.9→6.10-6.13) | Wave 1 |
+| **7** CI/CD & tooling | 5 items | Yes (independent) | Wave 1 |
+| **8** Testing & docs | 4 items | Yes (independent) | All waves |
 
-**Status:** Completed 2026-04-02. OpenAI chat completions endpoint created. MCP prompts module with 7 builtin prompts. MCP sampling module. output_schema() method added to SecurityTool trait.
-
-### Task 9.1: OpenAI Function-Calling Endpoint
-
-**New files:** `tool/protocol/openai/mod.rs`, `types.rs`, `handlers.rs`
-
-Expose slapper tools via OpenAI chat completions format at `/v1/chat/completions`. Auto-generate tool definitions from `ToolRegistry`. Feature-gated behind `rest-api`.
-
-### Task 9.2: MCP Prompts
-
-**New file:** `tool/protocol/mcp/prompts.rs`
-
-Built-in prompt templates: `vulnerability-analysis`, `attack-chain`, `remediation`, `scope-check`, `report-summary`, `payload-suggestion`, `waf-bypass`. New MCP methods: `prompts/list`, `prompts/get`.
-
-### Task 9.3: MCP Sampling
-
-**New file:** `tool/protocol/mcp/sampling.rs`
-
-Allow MCP clients to request AI completions through the server. Feature-gated behind `ai-integration`.
-
-### Task 9.4: MCP Tool Output Schema
-
-Add `output_schema() -> Option<serde_json::Value>` to `SecurityTool` trait (default `None`).
-
-**Verification:**
-```bash
-cargo test --test openai_tests -p slapper --features rest-api
-cargo test --lib -p slapper -- tool::protocol::mcp --features rest-api
-```
-
----
-
-## Wave 10: Multi-Agent Orchestration & AI Features ✅ COMPLETED
-
-**Risk:** Medium | **Effort:** 16–24 hours | **Files:** New `ai/` module + integrations
-
-**Status:** Completed 2026-04-02. AgentRegistry with async CRUD operations. Agent MCP methods. AiClient with analyze_findings, suggest_payloads, suggest_waf_bypass. ai-analyze command. AiPayloadGenerator with caching. SmartWafBypass with knowledge base persistence. AdaptiveScanEngine.
-
-### Task 10.1: Agent Registry
-
-**New files:** `tool/agents/mod.rs`, `registry.rs`, `delegation.rs`
-
-Agent registration, heartbeat, task delegation via HTTP callbacks. Feature-gated behind `rest-api`.
-
-### Task 10.2: Agent MCP Methods
-
-New MCP methods: `agents/register`, `agents/unregister`, `agents/list`, `agents/delegate`, `agents/status`, `agents/result`.
-
-### Task 10.3: AI Client Module
-
-**New files:** `ai/mod.rs`, `client.rs`, `types.rs`
-
-Reusable HTTP client for OpenAI-compatible APIs. Supports completions, streaming, finding analysis, payload suggestions, WAF bypass suggestions.
-
-### Task 10.4: `ai-analyze` Command
-
-**New files:** `cli/ai_analyze.rs`, `commands/handlers/ai_analyze.rs`
-
-Post-scan AI analysis: severity reassessment, exploitability analysis, attack chain identification, prioritized remediation.
-
-### Task 10.5: AI Payload Generation
-
-**New file:** `ai/payloads.rs`
-
-Context-aware payload generation based on detected technology. Cache results. Max 50 AI payloads per type. `--ai-payloads` CLI flag.
-
-### Task 10.6: Smart WAF Bypass
-
-**New file:** `ai/waf_bypass.rs`
-
-Iterative AI-driven bypass (max 10 iterations). Builds local knowledge base. Persists to `~/.config/slapper/waf_bypasses.json`.
-
-### Task 10.7: Adaptive Scan Engine
-
-**New file:** `ai/adaptive.rs`
-
-AI-guided pipeline that adjusts strategy based on intermediate findings. Falls back to standard pipeline if AI fails.
-
-**Verification:**
-```bash
-cargo test --lib -p slapper -- tool::agents --features rest-api
-cargo test --lib -p slapper -- ai --features ai-integration
-cargo test --test ai_analyze_tests -p slapper --features ai-integration
-```
-
----
-
-## Implementation Order
-
-| Wave | Theme | Risk | Est. Hours | Parallelizable With |
-|------|-------|------|------------|---------------------|
-| 1 | Critical bug fixes | Low | 2–4 | Waves 2, 3 |
-| 2 | Code quality + Clippy | Low | 3–5 | Waves 1, 3 |
-| 3 | TUI wiring fixes | Medium | 6–10 | Waves 1, 2 |
-| 4 | TUI macro refactor | Medium | 8–12 | Waves 5, 6, 7 |
-| 5 | Code hygiene | Low | 3–5 | Waves 4, 6, 7 |
-| 6 | Foundation features | Low | 8–12 | Waves 4, 5, 7 |
-| 7 | Test coverage | Low | 6–10 | Waves 4, 5, 6 |
-| 8 | CI/CD pipeline | Low | 6–10 | Waves 9, 10 |
-| 9 | OpenAI API + MCP | Low-Med | 8–12 | Waves 8, 10 |
-| 10 | Multi-agent + AI features | Medium | 16–24 | Waves 8, 9 |
-| **Total** | | | **66–104** | |
+**Parallel execution blocks:**
+- **Block A (after Wave 1):** 2A + 2B + 2C + 3 — 40 items, fully parallel across sub-agents
+- **Block B (after Block A):** 4 + 5 + 6 + 7 — ~41 items, partially parallel
+- **Block C (after Block B):** 8 — 4 items, final cleanup
 
 ---
 
@@ -604,65 +732,56 @@ After each wave:
 
 ```bash
 cargo check --lib -p slapper
-cargo check --lib -p slapper --features full
 cargo test --lib -p slapper
 cargo clippy --lib -p slapper
+cargo test --doc -p slapper
+```
+
+Feature combinations:
+
+```bash
+cargo check --lib -p slapper --features stress-testing
+cargo check --lib -p slapper --features nse
+cargo check --lib -p slapper --features rest-api
+cargo check --lib -p slapper --features python-plugins
+cargo check --lib -p slapper --features full
 ```
 
 After all waves:
 
 ```bash
-cargo build --release --features full
-cargo test -p slapper --features full
-cargo clippy -p slapper --features full -- -D warnings
-cargo test --doc -p slapper --features full
+cargo test -p slapper
+cargo clippy --lib -p slapper -- -D warnings
+cargo build --release -p slapper
 ```
-
----
-
-## Feature Flag Summary
-
-| Feature | Gates |
-|---------|-------|
-| `stress-testing` | Spoofed scanner |
-| `rest-api` | Waves 9.1, 9.2, 9.4, 10.1, 10.2 |
-| `grpc-api` | Future gRPC service |
-| `ai-integration` (new) | Waves 6.3, 9.3, 10.3–10.7 |
-| `nse` | Wave 3 (Nse tab wiring) |
-| `python-plugins` / `ruby-plugins` | Wave 3 (Plugin tab wiring) |
-
----
-
-## New Dependencies
-
-| Dependency | Version | Feature Gate | Used In |
-|-----------|---------|-------------|---------|
-| `eventsource-stream` | 0.2 | `ai-integration` | AI streaming responses |
-
-All other features reuse existing dependencies (`reqwest`, `axum`, `serde_json`, `tokio`, `async-trait`, `parking_lot`, `dashmap`, `futures`, `chrono`, `thiserror`).
-
----
-
-## Rollback Plan
-
-- **Waves 1–3:** Individual file changes, easily revertible
-- **Wave 4:** Macro introduction + match removal — revert by restoring original match statements from git
-- **Waves 5–7:** Low-risk refactors, easily revertible
-- **Waves 8–10:** All feature-gated; no impact on core functionality without flags
 
 ---
 
 ## Success Criteria
 
-| Criterion | Before | After | Status |
-|-----------|--------|-------|--------|
-| Clippy warnings | 114 | 0 | ✅ Done |
-| Fuzzer errors silently dropped | Yes | No (Wave 1.1) | ✅ Done |
-| Burst concurrency unbounded | Yes | Semaphore-limited (Wave 1.2) | ✅ Done |
-| TUI tabs functional | 15 of 22 | All 22 (Wave 3) | ✅ Done |
-| `app/mod.rs` line count | 1,963 | 1,387 (Wave 4) | ✅ Done |
-| Severity Ord ordering | Inverted | Semantic (Wave 5.1) | ✅ Done |
-| .bak files | 4 | 0 | ✅ Done |
-| New CLI commands | 0 | plan, ci, ai-analyze (Waves 6, 8, 10) | ✅ Done |
-| AI features | 0 | Analysis, payloads, WAF bypass, adaptive scanning (Wave 10) | ✅ Done |
-| All tests passing | 363 | 363 (no regressions) | ✅ Done |
+| Criterion | Target |
+|-----------|--------|
+| `stress-testing` feature | Compiles and tests pass |
+| Doc tests | All pass |
+| Clippy warnings | 0 |
+| Existing tests | All passing |
+| WAF text file output | Non-empty |
+| Scope DNS calls | Eliminated for hostname-only rules |
+| `SensitiveString` API keys | No plain String clones in recon |
+| Escape functions | Single canonical location |
+| Dead code | Removed (`constants::errors`, `ScopeError::OutOfScope`, TUI dead items) |
+| `tui/app/mod.rs` | < 600 lines |
+| `recon/mod.rs` | < 150 lines |
+| TUI tab exports | All 22 tabs export results |
+| AI providers | 4+ providers working (OpenAI, Anthropic, Gemini, Bedrock) |
+
+---
+
+## Rollback Plan
+
+- **Waves 1-3:** Individual commit reverts (each fix is independent)
+- **Wave 4:** Phased — can revert individual items without affecting others
+- **Wave 6:** AI provider changes are additive; legacy config path preserved
+- **All waves:** No public API changes except `open_ports` rename (includes serde alias)
+
+No plan files remain after consolidation. This is the single source of truth.

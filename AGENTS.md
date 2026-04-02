@@ -133,7 +133,6 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 Two truncation utilities in `utils/formatting.rs`:
 - `strip_controls` - removes control characters (recommended)
 - `preserve_all` - preserves all characters
-- `truncate` and `truncate_simple` are deprecated aliases (may have been removed)
 
 Both use `.chars().take()` for safe character-based truncation (no byte slicing panic risk).
 
@@ -170,11 +169,11 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (2087 lines — needs dispatch refactor) |
+| Largest file | `tui/app/mod.rs` (1387 lines — needs dispatch refactor) |
 
 ## Planning
 
-- `plan.md` — Consolidated improvement plan (10 waves, parallelizable in 3 blocks)
+- `plan.md` — Consolidated improvement plan (8 waves, parallelizable in 3 blocks)
 
 ## Lessons Learned
 
@@ -202,8 +201,8 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ### Severity Enum
 
-- `Severity` derives `Ord` by declaration order (Critical < High), NOT semantic order
-- Use `as_int()` for severity comparisons, not `>` or `<`
+- `Severity` has custom `Ord`/`PartialOrd` implementations using `as_int()` for correct semantic ordering (Critical > High > Medium > Low > Info)
+- Use `as_int()` for numeric severity comparisons
 - `Display` outputs UPPERCASE ("CRITICAL"), `as_str()` outputs lowercase ("critical")
 - `serde` serialization uses lowercase (due to `#[serde(rename_all = "lowercase")]`)
 - `Severity` implements `FromStr` trait; inherent method renamed to `parse_or_default`
@@ -223,7 +222,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 - Tab dispatch uses match statements across ~18+ methods (22-arm matches)
 - TUI uses ratatui 0.30 + crossterm 0.28 with immediate-mode rendering
 - 22 tab variants exist; all 22 are fully functional (wired in Wave 3)
-- `tui/app/mod.rs` is 2087 lines with ~30 methods containing 22-arm matches — needs macro-based dispatch refactor (see plan.md Wave 4)
+- `tui/app/mod.rs` is 1387 lines with ~30 methods containing 22-arm matches — needs macro-based dispatch refactor (see plan.md Wave 4)
 - Tab cfg attributes: `Nse` and `Plugin` variants are always present in the Tab enum; use both `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]` arms for feature-gated dispatch
 
 ### Output Module
@@ -296,21 +295,6 @@ Use the appropriate output method based on the context:
 
 The TUI has its own rendering layer; use `tracing` for logging from background workers.
 
-### Plan Consolidation
-
-When consolidating multiple plan files, verify each item against the actual codebase before including. Plans may describe issues from an earlier code state that have since been resolved. Use `rg` to confirm file paths, line numbers, and patterns still exist.
-
-### Clippy Zero Warnings
-
-Achieved 0 warnings by:
-- Auto-fixing 25 warnings with `cargo clippy --fix --lib -p slapper --allow-dirty`
-- Adding `#[allow(deprecated)]` on structs/impls using deprecated `Finding` types
-- Adding `#[allow(dead_code)]` to public APIs (traits, structs) not currently called
-- Adding `#[allow(clippy::too_many_arguments)]` on internal functions with 9+ args
-- Renaming `TimingPreset::from_str` to `parse` to avoid `should_implement_trait` lint
-- Adding `#[allow(clippy::derivable_impls)]` where manual impl matches derived behavior
-- Adding `#[allow(clippy::large_enum_variant)]` on large enums
-
 ### TUI Feature-Gated Dispatch
 
 When writing match arms for feature-gated tab variants (`Nse`, `Plugin`), always provide BOTH arms:
@@ -375,28 +359,11 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 
 - `output/ai_schema.rs` — `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` types
 
-### Severity Ordering
+### Verification Best Practices
 
-`Severity` now has correct semantic ordering via custom `Ord` implementation:
-- Critical > High > Medium > Low > Info
-- Manual implementations of `PartialOrd` and `Ord` using `as_int()` method
-- Removed from derive macro to avoid declaration-order footgun
-
-### strip_controls Fix
-
-The `strip_controls` function in `utils/formatting.rs` now uses `!c.is_control()` filter instead of `is_ascii_graphic()`, preserving Unicode characters while still removing control characters.
-
-### Deprecated Aliases Removed
-
-`truncate` and `truncate_simple` functions have been removed from `utils/formatting.rs`. Use `strip_controls` and `preserve_all` directly.
-
-### Dead Code Removal
-
-Unused code in `waf/bypass/evasion.rs` has been removed:
-- `EvasionTechnique` enum (never matched)
-- `HomoglyphMap` struct (never used)
-- `apply_hex_encoding()` and `apply_null_byte()` functions (never called)
-
-### Property-Based Tests
-
-Proptest assertions should use `chars().count()` instead of `len()` when checking character-based truncation, as Unicode characters have variable byte lengths.
+When working with improvement plans or code reviews:
+- Verify every item against the actual codebase before assuming it still applies
+- Use `rg` to confirm file paths, line numbers, and patterns exist
+- Plans may describe issues from earlier code states that have since been resolved
+- Run `cargo test --lib -p slapper` after each change to catch regressions
+- Use `cargo clippy --lib -p slapper` to verify no new warnings
