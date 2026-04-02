@@ -48,8 +48,19 @@ impl Scope {
         Ok(scope)
     }
 
+    fn has_ip_based_rules(&self) -> bool {
+        self.allowed_targets
+            .iter()
+            .chain(self.excluded_targets.iter())
+            .any(|rule| rule.cidr.is_some())
+    }
+
     pub fn is_target_allowed(&self, target: &str) -> Result<bool, ScopeError> {
-        let target_scope = TargetScope::parse(target)?;
+        let target_scope = if self.has_ip_based_rules() {
+            TargetScope::parse(target)?
+        } else {
+            TargetScope::parse_hostname_only(target)?
+        };
 
         if self.is_explicitly_excluded(&target_scope) {
             tracing::warn!(
@@ -218,6 +229,42 @@ impl TargetScope {
         let ip = Self::resolve_host(&host).ok();
 
         Ok(Self { host, ip })
+    }
+
+    pub fn parse_hostname_only(target: &str) -> Result<Self, ScopeError> {
+        let target = target.trim();
+
+        if target.is_empty() {
+            return Err(ScopeError::InvalidTarget(target.to_string()));
+        }
+
+        if let Ok(ip) = IpAddr::from_str(target) {
+            return Ok(Self {
+                host: target.to_string(),
+                ip: Some(ip),
+            });
+        }
+
+        if let Ok(url) = Url::parse(target) {
+            let host = url
+                .host_str()
+                .ok_or_else(|| ScopeError::InvalidTarget(target.to_string()))?
+                .to_string();
+
+            return Ok(Self { host, ip: None });
+        }
+
+        if target.contains('/') || target.contains(' ') {
+            return Err(ScopeError::InvalidTarget(target.to_string()));
+        }
+
+        let host = target.split(':').next().unwrap_or(target).to_string();
+
+        if host.is_empty() {
+            return Err(ScopeError::InvalidTarget(target.to_string()));
+        }
+
+        Ok(Self { host, ip: None })
     }
 
     fn resolve_host(host: &str) -> Result<IpAddr, ScopeError> {

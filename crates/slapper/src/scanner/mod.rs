@@ -59,6 +59,7 @@
 //!     false,  // include_404
 //!     false,  // tui_mode
 //!     SpoofConfig::default(),
+//!     true,  // verify_tls
 //! ).await?;
 //!
 //! println!("Found {} endpoints", results.results.len());

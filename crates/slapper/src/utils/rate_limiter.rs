@@ -1,6 +1,4 @@
 
-#![allow(dead_code)]
-
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -51,6 +49,7 @@ impl RateLimiter {
 }
 
 pub struct AdaptiveRateLimiter {
+    #[allow(dead_code)]
     base_rate: u32,
     current_rate: f64,
     min_rate: u32,

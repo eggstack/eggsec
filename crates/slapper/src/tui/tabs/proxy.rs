@@ -387,6 +387,14 @@ impl TabState for ProxyTab {
             field.clear();
         }
     }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.results_view.add_line(Line::from(Span::styled(
+            format!("Error: {}", msg),
+            Style::default().fg(Color::Red),
+        )));
+    }
 }
 
 impl TabRender for ProxyTab {

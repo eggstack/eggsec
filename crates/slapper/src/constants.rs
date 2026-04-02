@@ -61,24 +61,6 @@ pub mod ui {
     pub const WIDTH_DEFAULT: usize = 58;
 }
 
-pub mod errors {
-    pub const FAILED_TO_CREATE_CLIENT: &str = "Failed to create HTTP client";
-    pub const TARGET_NOT_IN_SCOPE: &str = "Target is not in allowed scope";
-    pub const FAILED_TO_CONNECT: &str = "Failed to connect";
-    pub const FAILED_TO_RESOLVE: &str = "Failed to resolve host";
-    pub const FAILED_TO_SEND_REQUEST: &str = "Failed to send request";
-    pub const TIMEOUT_EXCEEDED: &str = "Request timed out";
-    pub const INVALID_URL: &str = "Invalid URL";
-    pub const INVALID_TARGET: &str = "Invalid target";
-    pub const FILE_NOT_FOUND: &str = "File not found";
-    pub const PARSE_ERROR: &str = "Failed to parse";
-    pub const SERIALIZE_ERROR: &str = "Failed to serialize";
-    pub const CONFIG_ERROR: &str = "Configuration error";
-    pub const SCAN_FAILED: &str = "Scan failed";
-    pub const AUTH_REQUIRED: &str = "Authentication required";
-    pub const RATE_LIMITED: &str = "Rate limited";
-}
-
 pub mod waf {
     pub const HEADER_MATCH_SCORE: u8 = 25;
     pub const COOKIE_MATCH_SCORE: u8 = 20;

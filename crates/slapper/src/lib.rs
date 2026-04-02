@@ -62,6 +62,7 @@ pub mod pipeline;
 pub mod proxy;
 pub mod recon;
 pub mod scanner;
+#[cfg(feature = "stress-testing")]
 pub mod stress;
 pub mod tui;
 pub mod types;

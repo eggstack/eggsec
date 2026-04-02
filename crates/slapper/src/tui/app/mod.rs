@@ -832,7 +832,7 @@ impl App {
         let path = format!("./exports/{}", filename);
         let dir = std::path::Path::new("./exports");
         if !dir.exists() {
-            let _ = std::fs::create_dir(dir);
+            let _ = std::fs::create_dir_all(dir);
         }
         
         let mut file = match std::fs::File::create(&path) {

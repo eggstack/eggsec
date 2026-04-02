@@ -293,6 +293,11 @@ impl Pipeline {
             );
         }
 
+        let verify_tls = self.config
+            .as_ref()
+            .map(|c| c.http.verify_tls)
+            .unwrap_or(true);
+
         let results = crate::scanner::endpoints::scan_endpoints(
             &base_url,
             get_default_endpoints(),
@@ -301,6 +306,7 @@ impl Pipeline {
             false,
             self.tui_mode,
             self.spoof_config.clone(),
+            verify_tls,
         )
         .await?;
 

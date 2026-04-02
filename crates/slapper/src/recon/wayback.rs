@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use crate::error::Result;
+use crate::types::SensitiveString;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -44,7 +45,7 @@ struct WaybackApiItem {
 
 pub struct WaybackClient {
     client: Client,
-    api_key: Option<String>,
+    api_key: Option<SensitiveString>,
 }
 
 impl WaybackClient {
@@ -53,14 +54,14 @@ impl WaybackClient {
             builder.user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         })?;
 
-        Ok(Self { client, api_key })
+        Ok(Self { client, api_key: api_key.map(SensitiveString::new) })
     }
 
     pub async fn get_snapshots(&self, domain: &str, limit: usize) -> Result<WaybackResult> {
         let url = if let Some(ref key) = self.api_key {
             format!(
                 "https://web.archive.org/cdx/search/cdx?url={}&output=json&fl=timestamp,original,mimetype,statuscode&filter=statuscode:200&limit={}&api_key={}",
-                domain, limit, key
+                domain, limit, key.expose_secret()
             )
         } else {
             format!(
@@ -158,9 +159,9 @@ impl WaybackClient {
 
 pub async fn get_wayback_snapshots(
     domain: &str,
-    api_key: Option<String>,
+    api_key: Option<&SensitiveString>,
     limit: usize,
 ) -> Result<WaybackResult> {
-    let client = WaybackClient::new(api_key)?;
+    let client = WaybackClient::new(api_key.map(|s| s.expose_secret().to_string()))?;
     client.get_snapshots(domain, limit).await
 }

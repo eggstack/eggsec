@@ -136,6 +136,38 @@ impl SlapperError {
             _ => None,
         }
     }
+
+    /// Sets the timeout_ms value for Timeout errors, preserving the operation name.
+    /// Returns self for chaining. For non-Timeout errors, returns self unchanged.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use slapper::error::{SlapperError, Result};
+    ///
+    /// fn make_request_with_timeout(timeout_ms: u64) -> Result<()> {
+    ///     Err(SlapperError::Timeout {
+    ///         timeout_ms: 0,
+    ///         operation: "scan".into(),
+    ///     })
+    ///     .map_err(|e| e.with_timeout(timeout_ms))
+    /// }
+    ///
+    /// let result = make_request_with_timeout(5000);
+    /// assert!(result.is_err());
+    /// let err = result.unwrap_err();
+    /// assert!(err.is_timeout());
+    /// ```
+    pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
+        if let SlapperError::Timeout { operation, .. } = &mut self {
+            let op = std::mem::take(operation);
+            self = SlapperError::Timeout {
+                timeout_ms,
+                operation: op,
+            };
+        }
+        self
+    }
 }
 
 pub type Result<T> = std::result::Result<T, SlapperError>;

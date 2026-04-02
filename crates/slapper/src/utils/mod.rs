@@ -15,15 +15,14 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use slapper::utils::{check_scope, create_http_client, truncate};
+//! use slapper::utils::{check_scope, create_http_client, strip_controls};
 //!
 //! # fn example() -> slapper::error::Result<()> {
 //! // Create HTTP client
 //! let client = create_http_client(30)?;
 //!
-//! // Truncate long strings
-//! let truncated = truncate("Very long string...", 10);
-//! assert_eq!(truncated, "Very lon...");
+//! // Strip control characters
+//! let cleaned = strip_controls("Some text with \x00 control chars", 100);
 //! # Ok(())
 //! # }
 //! ```

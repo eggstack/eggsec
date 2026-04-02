@@ -1,3 +1,5 @@
+use crate::error::{Result, SlapperError};
+
 pub fn encode(s: &str) -> String {
     let mut encoded = String::new();
     for c in s.chars() {
@@ -15,7 +17,7 @@ pub fn encode(s: &str) -> String {
     encoded
 }
 
-pub fn decode(s: &str) -> Result<String, String> {
+pub fn decode(s: &str) -> Result<String> {
     let mut decoded = String::new();
     let mut chars = s.chars().peekable();
 
@@ -23,11 +25,18 @@ pub fn decode(s: &str) -> Result<String, String> {
         if c == '%' {
             let hex: String = chars.by_ref().take(2).collect();
             if hex.len() != 2 {
-                return Err("Invalid percent encoding".to_string());
+                return Err(SlapperError::Parse(
+                    "Invalid URL encoding: incomplete hex sequence".to_string(),
+                ));
             }
             match u8::from_str_radix(&hex, 16) {
                 Ok(byte) => decoded.push(byte as char),
-                Err(_) => return Err(format!("Invalid hex: {}", hex)),
+                Err(_) => {
+                    return Err(SlapperError::Parse(format!(
+                        "Invalid hex in URL encoding: {}",
+                        hex
+                    )))
+                }
             }
         } else if c == '+' {
             decoded.push(' ');

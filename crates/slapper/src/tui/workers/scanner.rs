@@ -55,6 +55,7 @@ pub async fn run_endpoint_scan(
         false,
         true,
         SpoofConfig::default(),
+        true,
     )
     .await?;
 

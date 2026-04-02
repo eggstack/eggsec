@@ -1,6 +1,4 @@
 
-#![allow(dead_code)]
-
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -49,6 +47,7 @@ pub struct SslIssue {
 }
 
 pub struct SslAnalyzer {
+    #[allow(dead_code)]
     timeout: Duration,
     client: reqwest::Client,
 }

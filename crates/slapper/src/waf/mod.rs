@@ -139,7 +139,6 @@ impl WafEngine {
                             || waf_lower.starts_with(&sig_lower)
                             || waf_lower.ends_with(&sig_lower)
                             || waf_lower.contains(&format!(" {}", &sig_lower))
-                            || waf_lower.contains(&sig_lower.to_string())
                         {
                             self.selected_profile = Some(profile.name.clone());
                             return Some(profile);
@@ -196,7 +195,7 @@ impl WafEngine {
             .args
             .test_type
             .as_ref()
-            .map(|t| TestType::from_string(t))
+            .map(|t| TestType::parse(t))
             .unwrap_or(TestType::All);
         self.bypass_engine = Some(BypassEngine::new(&self.args, profile, test_type)?);
 
@@ -255,7 +254,7 @@ impl WafEngine {
         let output = if self.args.json {
             serde_json::to_string_pretty(&scan_results)?
         } else {
-            String::new()
+            output::format_results(&detection, &bypass_results, self.selected_profile.as_ref())
         };
 
         if let Some(ref output_file) = self.args.output {

@@ -66,11 +66,10 @@ impl CircuitBreaker {
 
     pub async fn record_success(&self) {
         self.total_calls.fetch_add(1, Ordering::Relaxed);
-        self.success_count.fetch_add(1, Ordering::Relaxed);
+        let successes = self.success_count.fetch_add(1, Ordering::Relaxed) + 1;
 
         let mut state = self.state.lock().await;
         if state.state == CircuitState::HalfOpen {
-            let successes = self.success_count.load(Ordering::Relaxed);
             if successes >= self.success_threshold {
                 state.state = CircuitState::Closed;
                 self.failure_count.store(0, Ordering::Relaxed);
@@ -84,18 +83,15 @@ impl CircuitBreaker {
     pub async fn record_failure(&self) {
         self.total_calls.fetch_add(1, Ordering::Relaxed);
         self.total_failures.fetch_add(1, Ordering::Relaxed);
-        self.failure_count.fetch_add(1, Ordering::Relaxed);
+        let failures = self.failure_count.fetch_add(1, Ordering::Relaxed) + 1;
 
         let mut state = self.state.lock().await;
         state.last_failure = Some(tokio::time::Instant::now());
 
-        if state.state == CircuitState::HalfOpen {
+        if state.state == CircuitState::HalfOpen
+            || (state.state == CircuitState::Closed && failures >= self.failure_threshold)
+        {
             state.state = CircuitState::Open;
-        } else if state.state == CircuitState::Closed {
-            let failures = self.failure_count.load(Ordering::Relaxed);
-            if failures >= self.failure_threshold {
-                state.state = CircuitState::Open;
-            }
         }
     }
 

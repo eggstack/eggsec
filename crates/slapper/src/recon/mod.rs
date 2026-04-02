@@ -226,11 +226,11 @@ pub async fn run_full_recon(
     // Each module runs only if its --no_* flag is not set.
     set_stage(&stage, "recon (parallel)");
 
-    let ipapi_key = config.recon.apis.ipapi.api_key.as_ref().map(|s| s.expose_secret().to_string());
+    let ipapi_key = config.recon.apis.ipapi.api_key.as_ref();
     let maxmind_settings = if config.recon.apis.maxmind.enabled {
         Some(geolocation::MaxMindSettings {
             account_id: config.recon.apis.maxmind.account_id,
-            license_key: config.recon.apis.maxmind.license_key.as_ref().map(|s| s.expose_secret().to_string()),
+            license_key: config.recon.apis.maxmind.license_key.clone(),
             edition_ids: config.recon.apis.maxmind.edition_ids.clone(),
             data_dir: shellexpand::tilde(&config.recon.apis.maxmind.data_dir)
                 .into_owned()
@@ -240,10 +240,10 @@ pub async fn run_full_recon(
     } else {
         None
     };
-    let virustotal_key = config.recon.apis.virustotal.api_key.as_ref().map(|s| s.expose_secret().to_string());
-    let alienvault_key = config.recon.apis.alienvault.api_key.as_ref().map(|s| s.expose_secret().to_string());
-    let shodan_key = config.recon.apis.shodan.api_key.as_ref().map(|s| s.expose_secret().to_string());
-    let wayback_key = config.recon.apis.wayback_machine.api_key.as_ref().map(|s| s.expose_secret().to_string());
+    let virustotal_key = config.recon.apis.virustotal.api_key.as_ref();
+    let alienvault_key = config.recon.apis.alienvault.api_key.as_ref();
+    let shodan_key = config.recon.apis.shodan.api_key.as_ref();
+    let wayback_key = config.recon.apis.wayback_machine.api_key.as_ref();
     let ip_for_threat = resolved_ip.clone();
     let ip_for_ssl = resolved_ip.clone();
     let ip_for_geo = resolved_ip.clone();

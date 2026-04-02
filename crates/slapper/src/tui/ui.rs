@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::App;
-use crate::tui::components::{confirm_popup, help_popup_for_tab};
+use crate::tui::components::{centered_rect, confirm_popup, help_popup_for_tab};
 
 pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -236,26 +236,6 @@ fn draw_search_popup(f: &mut Frame, app: &App) {
 
     let paragraph = Paragraph::new(search_content).style(Style::default().fg(Color::White));
     f.render_widget(paragraph, inner);
-}
-
-fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(r.height.saturating_sub(height) / 2),
-            Constraint::Length(height),
-            Constraint::Min(0),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(r.width.saturating_sub(width) / 2),
-            Constraint::Length(width),
-            Constraint::Min(0),
-        ])
-        .split(popup_layout[1])[1]
 }
 
 fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
@@ -571,7 +551,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(10),  // [MODE][HELP]
+            Constraint::Length(10), // [MODE][HELP]
             Constraint::Percentage(55),
             Constraint::Percentage(40),
         ])
@@ -586,8 +566,12 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         super::InputMode::Normal => Color::Green,
         super::InputMode::Insert => Color::Yellow,
     };
-    let mode_indicator_widget = ratatui::widgets::Paragraph::new(format!(" {} ", mode_text))
-        .style(Style::default().fg(Color::Black).bg(mode_color).add_modifier(Modifier::BOLD));
+    let mode_indicator_widget = ratatui::widgets::Paragraph::new(format!(" {} ", mode_text)).style(
+        Style::default()
+            .fg(Color::Black)
+            .bg(mode_color)
+            .add_modifier(Modifier::BOLD),
+    );
     f.render_widget(mode_indicator_widget, chunks[0]);
 
     let status =

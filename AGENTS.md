@@ -162,8 +162,8 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 |--------|-------|
 | Tests | 363 passing |
 | Build | Clean compilation |
-| Clippy | 0 warnings (114 → 0, waves 1-2) |
-| Doctests | 14 pass, 1 ignored, 0 fail |
+| Clippy | 2 warnings (packet module - unused imports/vars) |
+| Doctests | 17 pass, 1 ignored, 0 fail |
 | `SlapperError` variants | 23 |
 | `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
 | MSRV | 1.80 |
@@ -367,3 +367,41 @@ When working with improvement plans or code reviews:
 - Plans may describe issues from earlier code states that have since been resolved
 - Run `cargo test --lib -p slapper` after each change to catch regressions
 - Use `cargo clippy --lib -p slapper` to verify no new warnings
+
+### Lessons Learned (Session 2026-04-02)
+
+#### Clippy warnings can be auto-fixed
+
+Many clippy warnings can be automatically fixed with:
+```bash
+cargo clippy --fix --lib -p slapper --allow-dirty
+```
+
+#### Doc tests must compile as standalone examples
+
+Doc test examples in `error/mod.rs` and similar files:
+- Must use actual types and values that compile
+- Cannot use `reqwest::Error::from(std::io::Error::new(...))` because `reqwest::Error` doesn't have such a constructor
+- Use direct `SlapperError::Timeout {...}` construction instead
+
+#### TUI imports matter
+
+When adding `set_error()` implementations to tabs:
+- `ratatui::text::Line` and `ratatui::style::Style` may need to be imported
+- Use `#[allow(unused_imports)]` temporarily if unsure, then run clippy to identify what's actually needed
+- For `set_error()` in tabs like ResumeTab, only `Line` was needed (not `Span` and `Style` which were already in scope)
+
+#### Dead code removal impact
+
+- Removing a private helper function used by multiple callers in the same module: add the import first, then remove the duplicate
+- When removing duplicate `centered_rect()` from `tui/ui.rs`, needed to:
+  1. Add import: `use crate::tui::components::popup::centered_rect;`
+  2. Export it from `tui/components/mod.rs`: `pub use popup::centered_rect;`
+  3. Update import in `tui/ui.rs` to use the re-export path
+
+#### Function signature changes
+
+When adding a new parameter to a public async function like `scan_endpoints()`:
+- All callers must be updated (TUI, CLI, tests, benchmarks)
+- The new parameter should default to a safe value to minimize breaking changes
+- The `verify_tls` parameter was already properly implemented and used

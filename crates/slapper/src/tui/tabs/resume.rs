@@ -3,6 +3,7 @@ use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Color,
+    text::Line,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
@@ -26,7 +27,8 @@ impl ResumeTab {
 
     pub fn session_file(&self) -> &str {
         self.inputs
-            .fields.first()
+            .fields
+            .first()
             .map(|f| f.value.as_str())
             .unwrap_or("")
     }
@@ -86,6 +88,16 @@ impl TabState for ResumeTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+    }
+
+    fn set_error(&mut self, msg: String) {
+        use ratatui::style::Style;
+        use ratatui::text::Span;
+        self.state = AppState::Error(msg.clone());
+        self.results_view.add_line(Line::from(Span::styled(
+            format!("Error: {}", msg),
+            Style::default().fg(Color::Red),
+        )));
     }
 }
 

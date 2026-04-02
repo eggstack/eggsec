@@ -1,19 +1,35 @@
 use crate::waf::{BypassResult, WafDetectionResult};
 
-pub fn print_detection(detection: &WafDetectionResult) {
-    println!("WAF Detection Results");
+pub fn format_detection(detection: &WafDetectionResult) -> String {
+    let mut output = String::new();
+    output.push_str("WAF Detection Results\n");
 
     if let Some(ref waf_name) = detection.waf_name {
-        println!("waf: {} ({}% confidence)", waf_name, detection.confidence);
+        output.push_str(&format!(
+            "waf: {} ({}% confidence)",
+            waf_name, detection.confidence
+        ));
         if !detection.matched_headers.is_empty() {
-            println!("matched headers: {}", detection.matched_headers.join(", "));
+            output.push_str(&format!(
+                "matched headers: {}",
+                detection.matched_headers.join(", ")
+            ));
         }
         if !detection.matched_cookies.is_empty() {
-            println!("matched cookies: {}", detection.matched_cookies.join(", "));
+            output.push_str(&format!(
+                "matched cookies: {}",
+                detection.matched_cookies.join(", ")
+            ));
         }
     } else {
-        println!("waf: none detected");
+        output.push_str("waf: none detected");
     }
+
+    output
+}
+
+pub fn print_detection(detection: &WafDetectionResult) {
+    println!("{}", format_detection(detection));
 }
 
 pub fn print_detection_json(detection: &WafDetectionResult) {
@@ -23,30 +39,48 @@ pub fn print_detection_json(detection: &WafDetectionResult) {
     }
 }
 
-pub fn print_results(
+pub fn format_results(
     detection: &WafDetectionResult,
     bypass_results: &[BypassResult],
     _selected_profile: Option<&String>,
-) {
-    print_detection(detection);
-
-    println!();
+) -> String {
+    let mut output = format_detection(detection);
+    output.push_str("\n\n");
 
     let successful: Vec<_> = bypass_results.iter().filter(|r| r.success).collect();
     let failed: Vec<_> = bypass_results.iter().filter(|r| !r.success).collect();
 
     for result in &successful {
-        println!("[+] {:?}: {}", result.technique, result.description);
+        output.push_str(&format!(
+            "[+] {:?}: {}\n",
+            result.technique, result.description
+        ));
     }
 
     for result in &failed {
-        println!("[-] {:?}: {}", result.technique, result.description);
+        output.push_str(&format!(
+            "[-] {:?}: {}\n",
+            result.technique, result.description
+        ));
     }
 
-    println!(
+    output.push_str(&format!(
         "\nbypasses: {} / {} successful",
         successful.len(),
         bypass_results.len()
+    ));
+
+    output
+}
+
+pub fn print_results(
+    detection: &WafDetectionResult,
+    bypass_results: &[BypassResult],
+    selected_profile: Option<&String>,
+) {
+    println!(
+        "{}",
+        format_results(detection, bypass_results, selected_profile)
     );
 }
 

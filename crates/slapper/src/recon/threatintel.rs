@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use crate::error::{Result, SlapperError};
+use crate::types::SensitiveString;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -50,10 +51,10 @@ pub struct PassiveDnsRecord {
 
 pub struct ThreatIntelClient {
     client: Client,
-    virustotal_key: Option<String>,
-    alienvault_key: Option<String>,
-    shodan_key: Option<String>,
-    threatstream_key: Option<String>,
+    virustotal_key: Option<SensitiveString>,
+    alienvault_key: Option<SensitiveString>,
+    shodan_key: Option<SensitiveString>,
+    threatstream_key: Option<SensitiveString>,
 }
 
 impl ThreatIntelClient {
@@ -67,10 +68,10 @@ impl ThreatIntelClient {
 
         Ok(Self {
             client,
-            virustotal_key,
-            alienvault_key,
-            shodan_key,
-            threatstream_key,
+            virustotal_key: virustotal_key.map(SensitiveString::new),
+            alienvault_key: alienvault_key.map(SensitiveString::new),
+            shodan_key: shodan_key.map(SensitiveString::new),
+            threatstream_key: threatstream_key.map(SensitiveString::new),
         })
     }
 
@@ -81,13 +82,13 @@ impl ThreatIntelClient {
         };
 
         if let Some(ref key) = self.virustotal_key {
-            if let Ok(reputation) = self.check_virustotal_ip(ip, key).await {
+            if let Ok(reputation) = self.check_virustotal_ip(ip, key.expose_secret()).await {
                 intel.ip_reputation = Some(reputation);
             }
         }
 
         if let Some(ref key) = self.shodan_key {
-            if let Ok(reputation) = self.check_shodan_ip(ip, key).await {
+            if let Ok(reputation) = self.check_shodan_ip(ip, key.expose_secret()).await {
                 if intel.ip_reputation.is_none() {
                     intel.ip_reputation = Some(reputation);
                 }
@@ -95,7 +96,7 @@ impl ThreatIntelClient {
         }
 
         if let Some(ref key) = self.alienvault_key {
-            if let Ok(pdns) = self.check_alienvault_pdns(ip, key).await {
+            if let Ok(pdns) = self.check_alienvault_pdns(ip, key.expose_secret()).await {
                 intel.passive_dns = pdns;
             }
         }
@@ -110,13 +111,13 @@ impl ThreatIntelClient {
         };
 
         if let Some(ref key) = self.virustotal_key {
-            if let Ok(reputation) = self.check_virustotal_domain(domain, key).await {
+            if let Ok(reputation) = self.check_virustotal_domain(domain, key.expose_secret()).await {
                 intel.domain_reputation = Some(reputation);
             }
         }
 
         if let Some(ref key) = self.alienvault_key {
-            if let Ok(pdns) = self.check_alienvault_domain_pdns(domain, key).await {
+            if let Ok(pdns) = self.check_alienvault_domain_pdns(domain, key.expose_secret()).await {
                 intel.passive_dns = pdns;
             }
         }
@@ -417,11 +418,16 @@ impl ThreatIntelClient {
 pub async fn check_threat_intel(
     target: &str,
     is_ip: bool,
-    virustotal_key: Option<String>,
-    alienvault_key: Option<String>,
-    shodan_key: Option<String>,
+    virustotal_key: Option<&SensitiveString>,
+    alienvault_key: Option<&SensitiveString>,
+    shodan_key: Option<&SensitiveString>,
 ) -> Result<ThreatIntel> {
-    let client = ThreatIntelClient::new(virustotal_key, alienvault_key, shodan_key, None)?;
+    let client = ThreatIntelClient::new(
+        virustotal_key.map(|s| s.expose_secret().to_string()),
+        alienvault_key.map(|s| s.expose_secret().to_string()),
+        shodan_key.map(|s| s.expose_secret().to_string()),
+        None,
+    )?;
 
     if is_ip {
         client.check_ip(target).await

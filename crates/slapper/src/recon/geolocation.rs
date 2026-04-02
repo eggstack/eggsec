@@ -1,5 +1,6 @@
 
 use crate::error::{Result, SlapperError};
+use crate::types::SensitiveString;
 use crate::utils::create_http_client_with_options;
 use maxminddb::geoip2;
 use maxminddb::Reader;
@@ -71,7 +72,7 @@ static LOCAL_IP_DATA: LazyLock<HashMap<String, (String, String, String)>> = Lazy
 #[derive(Debug, Clone, Default)]
 pub struct MaxMindSettings {
     pub account_id: Option<u32>,
-    pub license_key: Option<String>,
+    pub license_key: Option<SensitiveString>,
     pub edition_ids: Vec<String>,
     pub data_dir: PathBuf,
     pub auto_update: bool,
@@ -211,7 +212,7 @@ impl GeoLocator {
 
         let url = format!(
             "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key={}&suffix=mmdb",
-            license_key
+            license_key.expose_secret()
         );
 
         tracing::info!("Downloading MaxMind GeoLite2-City database...");
@@ -219,7 +220,7 @@ impl GeoLocator {
         let response = self
             .client
             .get(&url)
-            .basic_auth(account_id.to_string(), Some(license_key))
+            .basic_auth(account_id.to_string(), Some(license_key.expose_secret()))
             .send()
             .await?;
 
@@ -617,13 +618,13 @@ pub async fn geolocation_lookup(ip: &str) -> Result<GeoLocation> {
 
 pub async fn geolocation_lookup_with_config(
     ip: &str,
-    ipapi_key: Option<String>,
+    ipapi_key: Option<&SensitiveString>,
     maxmind_settings: Option<MaxMindSettings>,
 ) -> Result<GeoLocation> {
     let mut locator = GeoLocator::new()?;
 
-    if let Some(key) = ipapi_key {
-        locator.set_ipapi_key(Some(key));
+        if let Some(key) = ipapi_key {
+        locator.set_ipapi_key(Some(key.expose_secret().to_string()));
     }
 
     if let Some(settings) = maxmind_settings.clone() {

@@ -30,17 +30,17 @@ fn test_waf_severity() {
 
 #[test]
 fn test_test_type_from_string() {
-    assert_eq!(TestType::from_string("sqli"), TestType::Sql);
-    assert_eq!(TestType::from_string("SQL"), TestType::Sql);
-    assert_eq!(TestType::from_string("xss"), TestType::Xss);
-    assert_eq!(TestType::from_string("XSS"), TestType::Xss);
-    assert_eq!(TestType::from_string("ssrf"), TestType::Ssrf);
-    assert_eq!(TestType::from_string("cmd"), TestType::Cmd);
-    assert_eq!(TestType::from_string("command"), TestType::Cmd);
-    assert_eq!(TestType::from_string("traversal"), TestType::Traversal);
-    assert_eq!(TestType::from_string("lfi"), TestType::Traversal);
-    assert_eq!(TestType::from_string("unknown"), TestType::All);
-    assert_eq!(TestType::from_string("all"), TestType::All);
+    assert_eq!(TestType::parse("sqli"), TestType::Sql);
+    assert_eq!(TestType::parse("SQL"), TestType::Sql);
+    assert_eq!(TestType::parse("xss"), TestType::Xss);
+    assert_eq!(TestType::parse("XSS"), TestType::Xss);
+    assert_eq!(TestType::parse("ssrf"), TestType::Ssrf);
+    assert_eq!(TestType::parse("cmd"), TestType::Cmd);
+    assert_eq!(TestType::parse("command"), TestType::Cmd);
+    assert_eq!(TestType::parse("traversal"), TestType::Traversal);
+    assert_eq!(TestType::parse("lfi"), TestType::Traversal);
+    assert_eq!(TestType::parse("unknown"), TestType::All);
+    assert_eq!(TestType::parse("all"), TestType::All);
 }
 
 #[test]

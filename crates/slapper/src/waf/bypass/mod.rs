@@ -29,7 +29,7 @@ pub enum TestType {
 }
 
 impl TestType {
-    pub fn from_string(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "sqli" | "sql" => TestType::Sql,
             "xss" => TestType::Xss,

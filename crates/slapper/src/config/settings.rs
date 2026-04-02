@@ -495,6 +495,8 @@ pub enum ConfigValidationError {
     InvalidConcurrency(usize),
     #[error("Invalid rate limit value {0}: must be at least 1")]
     InvalidRateLimit(u32),
+    #[error("{0}")]
+    Validation(String),
 }
 
 impl SlapperConfig {
@@ -514,9 +516,10 @@ impl SlapperConfig {
             ));
         }
         if self.http.max_retries > 10 {
-            return Err(ConfigValidationError::InvalidTimeout(
-                self.http.max_retries as u64,
-            ));
+            return Err(ConfigValidationError::Validation(format!(
+                "max_retries ({}) exceeds maximum allowed value (10)",
+                self.http.max_retries
+            )));
         }
 
         if self.scan.default_concurrency == 0 {
@@ -533,9 +536,10 @@ impl SlapperConfig {
 
         for proxy in &self.proxies {
             if proxy.weight == 0 {
-                return Err(ConfigValidationError::InvalidConcurrency(
-                    proxy.weight as usize,
-                ));
+                return Err(ConfigValidationError::Validation(format!(
+                    "proxy weight must be positive, got {}",
+                    proxy.weight
+                )));
             }
         }
 

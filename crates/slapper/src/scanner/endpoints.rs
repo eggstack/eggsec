@@ -391,6 +391,7 @@ pub async fn run_cli(args: EndpointScanArgs, config: &SlapperConfig) -> Result<(
         args.include_404,
         false,
         spoof_config,
+        config.http.verify_tls,
     )
     .await?;
 
@@ -576,10 +577,11 @@ pub async fn scan_endpoints(
     include_404: bool,
     tui_mode: bool,
     spoof_config: SpoofConfig,
+    verify_tls: bool,
 ) -> Result<EndpointScanResults> {
     let client = Client::builder()
         .timeout(timeout_duration)
-        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_certs(!verify_tls)
         .redirect(reqwest::redirect::Policy::limited(5))
         .build()?;
 

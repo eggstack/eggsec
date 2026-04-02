@@ -22,10 +22,11 @@ pub struct FuzzResult {
 
 impl FuzzResult {
     pub fn is_vulnerable(&self) -> bool {
-        !self.leaks_found.is_empty()
-            || self.is_waf_blocked
-            || self.is_anomaly
-            || self.is_redos_suspected
+        !self.leaks_found.is_empty() || self.is_anomaly || self.is_redos_suspected
+    }
+
+    pub fn is_true_positive(&self) -> bool {
+        self.is_vulnerable() || self.is_waf_blocked
     }
 }
 

@@ -286,6 +286,7 @@ async fn process_endpoints(task: Task) -> Result<serde_json::Value> {
         false,
         false,
         crate::scanner::spoof::SpoofConfig::default(),
+        true,
     )
     .await?;
 
