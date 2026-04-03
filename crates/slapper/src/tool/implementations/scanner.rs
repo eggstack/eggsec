@@ -132,6 +132,7 @@ impl SecurityTool for ScannerTool {
                     udp: false,
                     verbose: false,
                     output: None,
+                    concurrency: 20,
                 };
                 let config = crate::config::load_config(None::<&str>).unwrap_or_default();
                 crate::scanner::fingerprint::run_cli(args, &config).await

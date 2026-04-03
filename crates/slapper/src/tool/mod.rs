@@ -14,11 +14,13 @@ pub mod implementations;
 
 #[cfg(feature = "rest-api")]
 pub mod agents;
+pub mod orchestrator;
 pub mod protocol;
 
 pub use dispatcher::ToolDispatcher;
 pub use history::{ExecutionEntry, ExecutionHistory};
 pub use openapi::OpenApiGenerator;
+pub use orchestrator::{ExecutionResult, Orchestrator, StageProgress, StageResult, StageToolResult};
 pub use planner::{ChainPlanner, ExecutionPlan, PlanRequest, PlanValidation};
 pub use ratelimit::{RateLimitConfig, RateLimiter, RateLimitStatus};
 pub use registry::{ToolInfo, ToolRegistry};

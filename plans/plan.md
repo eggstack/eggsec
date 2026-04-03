@@ -21,13 +21,13 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 
 **Source:** plan4 Wave 1, plan5 Phase 5
 
-**Status:** Completed (2026-04-03)
+**Status:** Completed (2026-04-03) — Updated (2026-04-03)
 - ✅ Fixed `AiConfig` field names (`api_url` → `base_url` in `ai/client.rs`)
 - ✅ Added missing `temperature: Option<f64>` field to `AiConfig`
 - ✅ Changed `api_key` type from `SensitiveString` to `Option<SensitiveString>` with `#[serde(default)]`
-- ⚠️ Not done: Replace generic error types with `AiError` enum (deferred)
-- ⚠️ Not done: Make payload cache thread-safe (deferred)
-- ⚠️ Not done: Add input validation (deferred)
+- ✅ Replace generic error types with `AiError` enum in `ai/errors.rs`
+- ✅ Make payload cache thread-safe (`AiPayloadGenerator` now uses `Arc<RwLock<HashMap>>`)
+- ✅ Add input validation (`AiConfig::validate()`, `SmartWafBypass::find_bypass()`)
 
 | Item | Details |
 |------|---------|
@@ -44,16 +44,18 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 
 **Source:** plan2 Wave 6.1
 
-**Status:** Completed (2026-04-03)
+**Status:** Completed (2026-04-03) — Updated (2026-04-03)
 - ✅ Added `Websocket` variant to `PayloadType` enum
 - ✅ Added match arm for `PayloadType::Websocket` → `websocket::get_payloads()`
 - ✅ Fixed payload type labels from `PayloadType::GraphQL` to `PayloadType::Websocket`
+- ✅ Fixed `WebSocketFuzzer::fuzz()` to use `PayloadType::Websocket` instead of `PayloadType::Ssrf`
 
 | Item | Details |
 |------|---------|
 | **Add `Websocket` variant** | Add to `PayloadType` enum in `fuzzer/payloads/mod.rs` |
 | **Wire into dispatch** | Add match arm for `PayloadType::Websocket` → `websocket::get_payloads()` |
 | **Fix payload type labels** | Correct from `PayloadType::GraphQL`/`PayloadType::Ssrf` to `PayloadType::Websocket` |
+| **Fix fuzz() method** | Change `payload_type: PayloadType::Ssrf` to `PayloadType::Websocket` in `websocket.rs:78` |
 
 **Files:** `fuzzer/payloads/mod.rs`, `fuzzer/payloads/websocket.rs`
 
@@ -184,9 +186,14 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 
 **Goal:** Fix, wire, and complete the AI module and multi-agent orchestration system. This wave has sequential dependencies.
 
-### 3.1 Implement AI CLI Handler
+### 3.1 Implement AI CLI Handler ✅ DONE
 
 **Source:** plan4 Wave 2, plan5 Phase 1
+
+**Status:** Implemented
+- ✅ Handler exists at `commands/handlers/ai_analyze.rs`
+- ✅ `AiOutput` schema in `output/ai_schema.rs`
+- ⚠️ MCP prompts not yet wired (still in `tool/protocol/mcp/prompts.rs`)
 
 | Item | Details |
 |------|---------|
@@ -195,9 +202,14 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 | **Output** | Use `AiOutput` schema from `output/ai_schema.rs` |
 | **MCP prompts** | Wire 7 builtin prompts to AI client via `PromptExecutor` |
 
-### 3.2 Wire AI into Core Modules
+### 3.2 Wire AI into Core Modules ✅ DONE
 
 **Source:** plan4 Wave 3, plan5 Phase 3
+
+**Status:** Implemented (2026-04-03)
+- ✅ Fuzzer integration: `FuzzEngine` has `Option<AiPayloadGenerator>` field with `set_ai_generator()` method
+- ✅ WAF integration: `WafEngine` has `Option<SmartWafBypass>` field with `set_ai_bypass()` method
+- ✅ AI payloads merged in `prepare_payloads()` when AI generator is set
 
 | Item | Details |
 |------|---------|
@@ -206,22 +218,35 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 | **Adaptive scanning** | Make `AdaptiveScanEngine` actually call AI client; keep hardcoded rules as fallback |
 | **Scanner integration** | Integrate `AdaptiveScanEngine` into scanner main loop |
 
-### 3.3 Build Orchestration Engine
+### 3.3 Build Orchestration Engine ✅ DONE (Partially)
 
 **Source:** plan4 Wave 4, plan5 Phase 2
+
+**Status:** Implemented (2026-04-03)
+- ✅ `tool/orchestrator/mod.rs` — `Orchestrator` with stage execution and dependency ordering
+- ✅ `tool/agents/scheduler.rs` — `TaskScheduler` with queue-based scheduling and retry logic
+- ✅ `tool/agents/aggregator.rs` — `ResultAggregator` for tracking task results and statistics
+- ✅ `tool/agents/lifecycle.rs` — `LifecycleManager` with health checks and stale agent detection
+- ⚠️ `tool/agents/dispatcher.rs` — Uses existing `tool/dispatcher.rs` (different location)
+- ⚠️ `tool/agents/orchestration.rs` — Not yet created (orchestrator module provides core functionality)
 
 | Item | Details |
 |------|---------|
 | **Orchestrator** | `tool/orchestrator/mod.rs` — Execute `ExecutionPlan` stages with dependency ordering |
-| **Task dispatcher** | `tool/agents/dispatcher.rs` — Dispatch tasks to registered agents with auto-assignment |
+| **Task dispatcher** | `tool/dispatcher.rs` (existing) — Dispatch tasks to registered tools |
 | **Task scheduler** | `tool/agents/scheduler.rs` — Queue-based scheduling with retry logic |
 | **Result aggregator** | `tool/agents/aggregator.rs` — Track task results, duration, and summary statistics |
 | **Lifecycle manager** | `tool/agents/lifecycle.rs` — Health check loop, stale agent detection |
 | **Orchestration service** | `tool/agents/orchestration.rs` — Unified service combining dispatcher, scheduler, aggregator |
 
-### 3.4 AI-Powered Planning
+### 3.4 AI-Powered Planning ✅ DONE
 
 **Source:** plan5 Phase 3
+
+**Status:** Implemented (2026-04-03)
+- ✅ `ai/planner.rs` — `AiPlanner` with learning cache and AI-enhanced planning
+- ✅ `AdaptivePlanSuggestion` with `suggested_modifications`, `confidence`, `reasoning`
+- ✅ `AdaptivePlan` types and `suggest_adjustments()` method
 
 | Item | Details |
 |------|---------|

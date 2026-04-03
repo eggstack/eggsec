@@ -108,6 +108,8 @@ pub struct WafEngine {
     detector: WafDetector,
     bypass_engine: Option<BypassEngine>,
     selected_profile: Option<String>,
+    #[cfg(feature = "ai-integration")]
+    ai_bypass: Option<crate::ai::SmartWafBypass>,
 }
 
 impl WafEngine {
@@ -118,7 +120,19 @@ impl WafEngine {
             detector,
             bypass_engine: None,
             selected_profile: None,
+            #[cfg(feature = "ai-integration")]
+            ai_bypass: None,
         })
+    }
+
+    #[cfg(feature = "ai-integration")]
+    pub fn set_ai_bypass(&mut self, bypass: crate::ai::SmartWafBypass) {
+        self.ai_bypass = Some(bypass);
+    }
+
+    #[cfg(feature = "ai-integration")]
+    pub fn ai_bypass(&self) -> Option<&crate::ai::SmartWafBypass> {
+        self.ai_bypass.as_ref()
     }
 
     fn select_profile(&mut self, detection: &WafDetectionResult) -> Option<WafProfile> {

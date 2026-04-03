@@ -27,6 +27,8 @@ pub struct FuzzEngine {
     pub(crate) http_session: Option<HttpSession>,
     pub(crate) differ: Option<ResponseDiffer>,
     pub(crate) baseline_captured: bool,
+    #[cfg(feature = "ai-integration")]
+    pub(crate) ai_generator: Option<crate::ai::AiPayloadGenerator>,
 }
 
 impl FuzzEngine {
@@ -80,6 +82,8 @@ impl FuzzEngine {
             http_session,
             differ,
             baseline_captured: false,
+            #[cfg(feature = "ai-integration")]
+            ai_generator: None,
         })
     }
 
@@ -115,6 +119,16 @@ impl FuzzEngine {
         Self::new(FuzzArgs::from(args))
     }
 
+    #[cfg(feature = "ai-integration")]
+    pub fn set_ai_generator(&mut self, generator: crate::ai::AiPayloadGenerator) {
+        self.ai_generator = Some(generator);
+    }
+
+    #[cfg(feature = "ai-integration")]
+    pub fn ai_generator(&self) -> Option<&crate::ai::AiPayloadGenerator> {
+        self.ai_generator.as_ref()
+    }
+
     pub async fn run(&mut self) -> Result<()> {
         if self.args.verbose {
             eprintln!("Starting fuzz against {}", self.args.url);
@@ -147,7 +161,7 @@ impl FuzzEngine {
         Ok(())
     }
 
-    fn prepare_payloads(&mut self, pt: PayloadType) -> Result<Vec<Payload>> {
+    async fn prepare_payloads(&mut self, pt: PayloadType) -> Result<Vec<Payload>> {
         let mut payloads = if self.args.mutate {
             self.mutate_payloads(get_payloads(pt))
         } else {
@@ -164,6 +178,21 @@ impl FuzzEngine {
                     description: "Grammar-generated payload".to_string(),
                     severity: Severity::Medium,
                     tags: vec!["grammar".to_string()],
+                }));
+            }
+        }
+
+        #[cfg(feature = "ai-integration")]
+        if let Some(ref ai_gen) = self.ai_generator {
+            let vuln_type = format!("{:?}", pt);
+            let context = format!("target={}", self.args.url);
+            if let Ok(ai_payloads) = ai_gen.generate_payloads(&vuln_type, &context).await {
+                payloads.extend(ai_payloads.into_iter().map(|p| super::super::payloads::Payload {
+                    payload_type: pt,
+                    payload: p,
+                    description: "AI-generated payload".to_string(),
+                    severity: Severity::Medium,
+                    tags: vec!["ai-generated".to_string()],
                 }));
             }
         }
@@ -200,7 +229,7 @@ impl FuzzEngine {
                 let pt_str = format!("{:?}", pt).to_lowercase();
                 all_results.extend(self.run_advanced_fuzzer(&pt_str).await?);
             } else {
-                let payloads = self.prepare_payloads(pt)?;
+                let payloads = self.prepare_payloads(pt).await?;
                 all_results.extend(self.run_payload_batch(payloads).await?);
             }
         }

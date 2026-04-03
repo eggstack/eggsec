@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use crate::ai::client::AiClient;
+use crate::ai::errors::{AiError, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WafBypassEntry {
@@ -43,7 +44,14 @@ impl SmartWafBypass {
         &mut self,
         waf: &str,
         blocked_payload: &str,
-    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<String>> {
+        if waf.is_empty() {
+            return Err(AiError::invalid_config("waf name cannot be empty"));
+        }
+        if blocked_payload.is_empty() {
+            return Err(AiError::invalid_config("blocked_payload cannot be empty"));
+        }
+
         for entry in &self.knowledge_base {
             if entry.waf_name == waf && entry.original_payload == blocked_payload && entry.success {
                 return Ok(Some(entry.bypass_payload.clone()));
@@ -59,7 +67,11 @@ impl SmartWafBypass {
         waf: &str,
         mut payload: String,
         max_iterations: usize,
-    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<String>> {
+        if waf.is_empty() {
+            return Err(AiError::invalid_config("waf name cannot be empty"));
+        }
+
         for _ in 0..max_iterations.min(10) {
             let suggestions = self.client.suggest_waf_bypass(waf, &payload).await?;
             if let Some(new_payload) = suggestions.first() {
@@ -88,6 +100,16 @@ impl SmartWafBypass {
         }
         if let Ok(json) = serde_json::to_string_pretty(&self.knowledge_base) {
             let _ = std::fs::write(&self.persist_path, json);
+        }
+    }
+}
+
+impl Clone for SmartWafBypass {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            knowledge_base: self.knowledge_base.clone(),
+            persist_path: self.persist_path.clone(),
         }
     }
 }

@@ -147,6 +147,48 @@ pub struct AiConfig {
     pub temperature: Option<f64>,
 }
 
+impl AiConfig {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.provider.is_empty() {
+            return Err(ConfigError::Validation(
+                "ai.provider cannot be empty".to_string(),
+            ));
+        }
+        if let Some(url) = &self.base_url {
+            if url.is_empty() {
+                return Err(ConfigError::Validation(
+                    "ai.base_url cannot be empty when specified".to_string(),
+                ));
+            }
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                return Err(ConfigError::Validation(
+                    "ai.base_url must start with http:// or https://".to_string(),
+                ));
+            }
+        }
+        if let Some(tokens) = self.max_tokens {
+            if tokens == 0 {
+                return Err(ConfigError::Validation(
+                    "ai.max_tokens cannot be 0 when specified".to_string(),
+                ));
+            }
+            if tokens > 128000 {
+                return Err(ConfigError::Validation(
+                    "ai.max_tokens cannot exceed 128000".to_string(),
+                ));
+            }
+        }
+        if let Some(temp) = self.temperature {
+            if !(0.0..=2.0).contains(&temp) {
+                return Err(ConfigError::Validation(
+                    "ai.temperature must be between 0.0 and 2.0".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Default for ReconConfig {
     fn default() -> Self {
         Self {
@@ -196,6 +238,9 @@ impl SlapperConfig {
             return Err(ConfigError::Validation(
                 "default_concurrency cannot exceed 1000".to_string(),
             ));
+        }
+        if let Some(ref ai) = self.ai {
+            ai.validate()?;
         }
         Ok(())
     }

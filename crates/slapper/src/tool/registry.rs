@@ -130,9 +130,3 @@ impl ToolInfo {
         self.capabilities.iter().find(|c| c.name == name)
     }
 }
-
-impl Default for ToolRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}

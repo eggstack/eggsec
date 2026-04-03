@@ -75,7 +75,7 @@ impl WebSocketFuzzer {
         for test in tests {
             results.push(crate::fuzzer::engine::FuzzResult {
                 payload: Payload {
-                    payload_type: PayloadType::Ssrf,
+                    payload_type: PayloadType::Websocket,
                     payload: test.message.clone(),
                     description: test.description.clone(),
                     severity: test.severity,
