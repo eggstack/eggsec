@@ -47,22 +47,24 @@
 //! ### Endpoint Discovery
 //!
 //! ```rust,no_run
-//! use slapper::scanner::{scan_endpoints, SpoofConfig};
+//! use slapper::scanner::{endpoints::{scan_endpoints, EndpointScanConfig}, SpoofConfig};
 //! use std::time::Duration;
 //!
 //! # async fn example() -> slapper::error::Result<()> {
-//! let results = scan_endpoints(
-//!     "https://example.com",
-//!     vec!["admin".to_string(), "login".to_string()],
-//!     20,  // concurrency
-//!     Duration::from_secs(30),
-//!     false,  // include_404
-//!     false,  // tui_mode
-//!     SpoofConfig::default(),
-//!     true,  // verify_tls
-//! ).await?;
+//! let config = EndpointScanConfig {
+//!     base_url: "https://example.com".to_string(),
+//!     endpoints: vec!["admin".to_string(), "login".to_string()],
+//!     concurrency: 20,
+//!     timeout_duration: Duration::from_secs(30),
+//!     include_404: false,
+//!     tui_mode: false,
+//!     spoof_config: SpoofConfig::default(),
+//!     verify_tls: true,
+//! };
 //!
-//! println!("Found {} endpoints", results.results.len());
+//! let results = scan_endpoints(config).await?;
+//!
+//! println!("Found {} endpoints", results.endpoints_found);
 //! # Ok(())
 //! # }
 //! ```

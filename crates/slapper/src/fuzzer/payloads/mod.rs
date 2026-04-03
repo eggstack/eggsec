@@ -26,8 +26,9 @@ pub mod xxe;
 
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
+use strum::{EnumIter};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
 pub enum PayloadType {
     Sqli,
     Xss,

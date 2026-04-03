@@ -505,7 +505,7 @@ impl Default for HelpContent {
                     command: "quit".to_string(),
                     description: "Exit the application".to_string(),
                     category: "System".to_string(),
-                    shortcut: Some("Ctrl+Q".to_string()),
+                    shortcut: Some("q".to_string()),
                 },
                 CommandPaletteResult {
                     command: "stop".to_string(),
@@ -517,13 +517,13 @@ impl Default for HelpContent {
                     command: "reset".to_string(),
                     description: "Reset current tab".to_string(),
                     category: "Navigation".to_string(),
-                    shortcut: Some("Ctrl+R".to_string()),
+                    shortcut: Some("r".to_string()),
                 },
                 CommandPaletteResult {
                     command: "save".to_string(),
                     description: "Save settings".to_string(),
                     category: "Settings".to_string(),
-                    shortcut: Some("Ctrl+S".to_string()),
+                    shortcut: Some("s".to_string()),
                 },
                 CommandPaletteResult {
                     command: "help".to_string(),
@@ -535,7 +535,7 @@ impl Default for HelpContent {
                     command: "search".to_string(),
                     description: "Toggle search".to_string(),
                     category: "Navigation".to_string(),
-                    shortcut: Some("Ctrl+F".to_string()),
+                    shortcut: Some("/".to_string()),
                 },
                 CommandPaletteResult {
                     command: "palette".to_string(),

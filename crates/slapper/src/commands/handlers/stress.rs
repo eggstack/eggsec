@@ -74,9 +74,10 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                     port: p.port,
                     username: p.username.clone(),
                     password: p.password.clone().map(crate::types::SensitiveString::from),
-                    weight: p.weight,
-                    priority: p.priority,
+                    weight: Some(p.weight),
+                    priority: Some(p.priority as u32),
                     enabled: p.enabled,
+                    local_addr: None,
                 }
             }).collect();
 
@@ -115,7 +116,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                         proxy.port,
                         if proxy.enabled { "enabled" } else { "disabled" });
                     if list_args.verbose {
-                        println!("      type: {}, priority: {}, weight: {}",
+                        println!("      type: {}, priority: {:?}, weight: {:?}",
                             proxy.proxy_type, proxy.priority, proxy.weight);
                     }
                 }
@@ -134,8 +135,8 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
                 let mut entry = ProxyEntry::new(p.proxy_type, p.address.clone(), p.port);
                 entry.username = p.username.clone();
                 entry.password = p.password.clone();
-                entry.weight = p.weight;
-                entry.priority = p.priority;
+                entry.weight = p.weight.unwrap_or(1);
+                entry.priority = p.priority.unwrap_or(0) as u8;
                 entry.enabled = p.enabled;
                 entry
             }).collect();

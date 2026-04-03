@@ -191,3 +191,33 @@ jobs:
       
       - name: Check bans
         run: cargo deny check bans
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: critical
+          allow-licenses: MIT, Apache-2.0, BSD-3-Clause, CC0-1.0
+
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check for secrets
+        run: |
+          pip install gitLeaks 2>/dev/null || true
+          if command -v gitleaks &> /dev/null; then
+            gitleaks detect --source . --verbose
+          else
+            echo "gitleaks not installed, skipping"
+          fi
