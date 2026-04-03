@@ -17,9 +17,17 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 
 **Goal:** Fix compilation errors, resolve known bugs, and establish foundation features. All items in this wave are independent and can be parallelized.
 
-### 1.1 Fix AI Compilation Errors
+### 1.1 Fix AI Compilation Errors ✅ DONE
 
 **Source:** plan4 Wave 1, plan5 Phase 5
+
+**Status:** Completed (2026-04-03)
+- ✅ Fixed `AiConfig` field names (`api_url` → `base_url` in `ai/client.rs`)
+- ✅ Added missing `temperature: Option<f64>` field to `AiConfig`
+- ✅ Changed `api_key` type from `SensitiveString` to `Option<SensitiveString>` with `#[serde(default)]`
+- ⚠️ Not done: Replace generic error types with `AiError` enum (deferred)
+- ⚠️ Not done: Make payload cache thread-safe (deferred)
+- ⚠️ Not done: Add input validation (deferred)
 
 | Item | Details |
 |------|---------|
@@ -32,9 +40,14 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 
 **Files:** `config/settings.rs`, `ai/client.rs`, `ai/payloads.rs`, `ai/waf_bypass.rs`, `ai/errors.rs` (new)
 
-### 1.2 Fix WebSocket Payload Wiring
+### 1.2 Fix WebSocket Payload Wiring ✅ DONE
 
 **Source:** plan2 Wave 6.1
+
+**Status:** Completed (2026-04-03)
+- ✅ Added `Websocket` variant to `PayloadType` enum
+- ✅ Added match arm for `PayloadType::Websocket` → `websocket::get_payloads()`
+- ✅ Fixed payload type labels from `PayloadType::GraphQL` to `PayloadType::Websocket`
 
 | Item | Details |
 |------|---------|
@@ -44,7 +57,7 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 
 **Files:** `fuzzer/payloads/mod.rs`, `fuzzer/payloads/websocket.rs`
 
-### 1.3 Subdomain Takeover Detection
+### 1.3 Subdomain Takeover Detection ⏳ PENDING
 
 **Source:** plan2 Wave 1
 
@@ -56,7 +69,7 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 | **Detection logic** | DNS CNAME/NS resolution → HTTP probe for "not found" / "claim this" responses |
 | **Dependencies** | None new (reuse `hickory-resolver`, `reqwest`) |
 
-### 1.4 Email Security Testing
+### 1.4 Email Security Testing ⏳ PENDING
 
 **Source:** plan2 Wave 8
 
@@ -66,7 +79,7 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 | **Checks** | SPF record validation, DKIM record check, DMARC policy analysis, MX record security, STARTTLS enforcement, BIMI record check |
 | **Dependencies** | None new (reuse `hickory-resolver`, `tokio`) |
 
-### 1.5 Git Secrets Scanning
+### 1.5 Git Secrets Scanning ⏳ PENDING
 
 **Source:** plan2 Wave 7
 
@@ -77,7 +90,7 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 | **Dependencies** | `gix = "0.70"` (optional, feature-gated) |
 | **Feature flag** | `git-secrets` |
 
-### 1.6 Dependency / SCA Scanning
+### 1.6 Dependency / SCA Scanning ⏳ PENDING
 
 **Source:** plan2 Wave 9
 

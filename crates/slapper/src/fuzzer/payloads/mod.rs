@@ -26,7 +26,7 @@ pub mod xxe;
 
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
-use strum::{EnumIter};
+use strum::{EnumIter, IntoEnumIterator};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
 pub enum PayloadType {
@@ -52,6 +52,7 @@ pub enum PayloadType {
     Cache,
     Csv,
     Soap,
+    Websocket,
 }
 
 impl std::fmt::Display for PayloadType {
@@ -79,6 +80,7 @@ impl std::fmt::Display for PayloadType {
             PayloadType::Cache => write!(f, "Cache Poisoning"),
             PayloadType::Csv => write!(f, "CSV Injection"),
             PayloadType::Soap => write!(f, "SOAP/XML"),
+            PayloadType::Websocket => write!(f, "WebSocket"),
         }
     }
 }
@@ -97,30 +99,9 @@ impl PayloadType {
     }
 
     pub fn all_variants() -> &'static [PayloadType] {
-        &[
-            PayloadType::Sqli,
-            PayloadType::Xss,
-            PayloadType::Traversal,
-            PayloadType::Ssrf,
-            PayloadType::Redirect,
-            PayloadType::Redos,
-            PayloadType::Headers,
-            PayloadType::Compression,
-            PayloadType::GraphQL,
-            PayloadType::OAuth,
-            PayloadType::Jwt,
-            PayloadType::Idor,
-            PayloadType::Ssti,
-            PayloadType::Grpc,
-            PayloadType::Xxe,
-            PayloadType::Ldap,
-            PayloadType::Cmd,
-            PayloadType::Deser,
-            PayloadType::Host,
-            PayloadType::Cache,
-            PayloadType::Csv,
-            PayloadType::Soap,
-        ]
+        use std::sync::LazyLock;
+        static VARIANTS: LazyLock<Vec<PayloadType>> = LazyLock::new(|| PayloadType::iter().collect());
+        &VARIANTS
     }
 }
 
@@ -168,6 +149,7 @@ pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
         PayloadType::Cache => cache::get_payloads(),
         PayloadType::Csv => csv::get_payloads(),
         PayloadType::Soap => soap::get_payloads(),
+        PayloadType::Websocket => websocket::get_payloads(),
     }
 }
 

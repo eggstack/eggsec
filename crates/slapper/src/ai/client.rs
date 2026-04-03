@@ -28,7 +28,7 @@ impl AiClient {
     ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let api_url = self
             .config
-            .api_url
+            .base_url
             .as_deref()
             .unwrap_or("https://api.openai.com/v1/chat/completions");
         let model = self.config.model.as_deref().unwrap_or("gpt-4");
@@ -58,7 +58,7 @@ impl AiClient {
     ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
         let api_url = self
             .config
-            .api_url
+            .base_url
             .as_deref()
             .unwrap_or("https://api.openai.com/v1/chat/completions");
         let model = self.config.model.as_deref().unwrap_or("gpt-4");
@@ -105,7 +105,7 @@ impl AiClient {
     ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
         let api_url = self
             .config
-            .api_url
+            .base_url
             .as_deref()
             .unwrap_or("https://api.openai.com/v1/chat/completions");
         let model = self.config.model.as_deref().unwrap_or("gpt-4");

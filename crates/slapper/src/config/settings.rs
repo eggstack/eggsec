@@ -139,9 +139,12 @@ pub struct ReconConfig {
 pub struct AiConfig {
     pub provider: String,
     pub model: Option<String>,
-    pub api_key: SensitiveString,
+    #[serde(default)]
+    pub api_key: Option<SensitiveString>,
     pub base_url: Option<String>,
     pub max_tokens: Option<usize>,
+    #[serde(default)]
+    pub temperature: Option<f64>,
 }
 
 impl Default for ReconConfig {

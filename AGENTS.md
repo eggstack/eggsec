@@ -62,7 +62,7 @@ crates/slapper/
 - `PathsConfig` - Directory paths (flattened into SlapperConfig)
 - `SpoofConfig` - IP spoofing settings
 - `FuzzEngine` - Main fuzzing engine (returns `Result`)
-- `PayloadType` - Enum of 22+ payload categories
+- `PayloadType` - Enum of 23 payload categories
 - `Severity` - Canonical severity rating (in `types.rs`, re-exported everywhere)
 - `SensitiveString` - Zeroized credential wrapper (in `types.rs`)
 
@@ -366,13 +366,13 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 - Multiple plan files should be consolidated into a single `plan.md` in the `plans/` directory
 - Waves should be organized into parallelizable blocks (A, B, C, etc.) where items within each block are independent
 - Before implementing any plan item, verify file paths exist using `glob` or `rg`
-- Known bugs identified: WebSocket payloads mislabeled as `PayloadType::GraphQL` in `fuzzer/payloads/websocket.rs`
 
-#### AI module compilation issues
+#### Known bugs FIXED (2026-04-03)
 
-- `AiConfig` field is `base_url`, not `api_url` — `ai/client.rs` must use `self.config.base_url`
-- `AiConfig` is missing `temperature` field — must be added to `config/settings.rs`
-- `AiConfig.api_key` should be `Option<SensitiveString>` with `#[serde(default)]` for optional usage
+- ✅ WebSocket payloads mislabeled as `PayloadType::GraphQL` in `fuzzer/payloads/websocket.rs` — Fixed by adding `PayloadType::Websocket` variant and updating `websocket::get_payloads()` to use correct type
+- ✅ `AiConfig` field is `base_url`, not `api_url` — Fixed `ai/client.rs` to use `self.config.base_url`
+- ✅ `AiConfig` missing `temperature` field — Added `pub temperature: Option<f64>` to `config/settings.rs`
+- ✅ `AiConfig.api_key` should be `Option<SensitiveString>` — Changed from `SensitiveString` to `Option<SensitiveString>` with `#[serde(default)]`
 
 #### Feature flag patterns
 

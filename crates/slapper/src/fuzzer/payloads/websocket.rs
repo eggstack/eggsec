@@ -264,7 +264,7 @@ pub fn get_payloads() -> Vec<Payload> {
     let mut payloads = Vec::new();
 
     payloads.push(Payload {
-        payload_type: PayloadType::GraphQL,
+        payload_type: PayloadType::Websocket,
         payload: "'; DROP TABLE users--".to_string(),
         description: "WebSocket SQL injection".to_string(),
         severity: Severity::Critical,
@@ -272,7 +272,7 @@ pub fn get_payloads() -> Vec<Payload> {
     });
 
     payloads.push(Payload {
-        payload_type: PayloadType::GraphQL,
+        payload_type: PayloadType::Websocket,
         payload: "<script>alert(1)</script>".to_string(),
         description: "WebSocket XSS attempt".to_string(),
         severity: Severity::High,
@@ -280,7 +280,7 @@ pub fn get_payloads() -> Vec<Payload> {
     });
 
     payloads.push(Payload {
-        payload_type: PayloadType::GraphQL,
+        payload_type: PayloadType::Websocket,
         payload: "{{7*7}}".to_string(),
         description: "Template injection via WebSocket".to_string(),
         severity: Severity::High,
