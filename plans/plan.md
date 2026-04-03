@@ -59,21 +59,25 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 
 **Files:** `fuzzer/payloads/mod.rs`, `fuzzer/payloads/websocket.rs`
 
-### 1.3 Subdomain Takeover Detection ⏳ PENDING
+### 1.3 Subdomain Takeover Detection ✅ DONE
 
 **Source:** plan2 Wave 1
+
+**Status:** Completed — 30+ service fingerprints, DNS + HTTP detection, 7 unit tests.
 
 | Item | Details |
 |------|---------|
 | **Module** | `recon/takeover.rs` |
 | **Types** | `TakeoverDetector`, `TakeoverTarget`, `TakeoverResult` (enum: `Vulnerable`, `Safe`, `Unknown`) |
-| **Cloud fingerprints** | Map of 20+ services (AWS S3, GitHub Pages, Heroku, Azure Web Apps, GCP Storage, Shopify, etc.) |
+| **Cloud fingerprints** | Map of 30+ services (AWS S3, GitHub Pages, Heroku, Azure Web Apps, GCP Storage, Shopify, etc.) |
 | **Detection logic** | DNS CNAME/NS resolution → HTTP probe for "not found" / "claim this" responses |
 | **Dependencies** | None new (reuse `hickory-resolver`, `reqwest`) |
 
-### 1.4 Email Security Testing ⏳ PENDING
+### 1.4 Email Security Testing ✅ DONE
 
 **Source:** plan2 Wave 8
+
+**Status:** Completed — SPF, DKIM, DMARC, MX, STARTTLS, BIMI checks with scoring, 6 unit tests.
 
 | Item | Details |
 |------|---------|
@@ -81,20 +85,23 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 | **Checks** | SPF record validation, DKIM record check, DMARC policy analysis, MX record security, STARTTLS enforcement, BIMI record check |
 | **Dependencies** | None new (reuse `hickory-resolver`, `tokio`) |
 
-### 1.5 Git Secrets Scanning ⏳ PENDING
+### 1.5 Git Secrets Scanning ✅ DONE
 
 **Source:** plan2 Wave 7
+
+**Status:** Completed — git log + diff scanning, directory fallback, integrates with SecretScanner, 8 unit tests.
 
 | Item | Details |
 |------|---------|
 | **Module** | `recon/git_secrets.rs` |
 | **Integration** | Feed extracted content into existing `recon/secrets.rs::SecretScanner` |
-| **Dependencies** | `gix = "0.70"` (optional, feature-gated) |
-| **Feature flag** | `git-secrets` |
+| **Dependencies** | Uses `git` CLI (no `gix` dependency needed — falls back to directory scan if git unavailable) |
 
-### 1.6 Dependency / SCA Scanning ⏳ PENDING
+### 1.6 Dependency / SCA Scanning ✅ DONE
 
 **Source:** plan2 Wave 9
+
+**Status:** Completed — 12 manifest formats parsed, RustSec/npm/PyPI vulnerability checks, 12 unit tests.
 
 | Item | Details |
 |------|---------|
