@@ -173,7 +173,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plan.md` — Consolidated improvement plan (8 waves, parallelizable in 3 blocks)
+- `plan.md` — Consolidated improvement plan (7 waves, parallelizable in blocks A-G)
 
 ## Lessons Learned
 
@@ -358,6 +358,27 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 #### AI Output Schema
 
 - `output/ai_schema.rs` — `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` types
+
+### Lessons Learned (Session 2026-04-03)
+
+#### Plan consolidation
+
+- Multiple plan files should be consolidated into a single `plan.md` in the `plans/` directory
+- Waves should be organized into parallelizable blocks (A, B, C, etc.) where items within each block are independent
+- Before implementing any plan item, verify file paths exist using `glob` or `rg`
+- Known bugs identified: WebSocket payloads mislabeled as `PayloadType::GraphQL` in `fuzzer/payloads/websocket.rs`
+
+#### AI module compilation issues
+
+- `AiConfig` field is `base_url`, not `api_url` — `ai/client.rs` must use `self.config.base_url`
+- `AiConfig` is missing `temperature` field — must be added to `config/settings.rs`
+- `AiConfig.api_key` should be `Option<SensitiveString>` with `#[serde(default)]` for optional usage
+
+#### Feature flag patterns
+
+- New feature flags follow the pattern: optional dep in `Cargo.toml` + `#[cfg(feature = "...")]` in code
+- The `full` feature should include all new optional flags
+- `grpc-api` and `nse-sandbox` are intentionally excluded from `full`
 
 ### Verification Best Practices
 
