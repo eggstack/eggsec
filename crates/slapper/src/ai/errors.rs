@@ -3,7 +3,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum AiError {
     #[error("API request failed: {0}")]
-    RequestFailed(#[from] reqwest::Error),
+    RequestFailed(String),
 
     #[error("Authentication failed: missing API key")]
     MissingApiKey,
@@ -26,8 +26,8 @@ pub enum AiError {
     #[error("Invalid response format from API")]
     InvalidResponse,
 
-    #[error("Circuit breaker open for endpoint: {0}")]
-    CircuitBreakerOpen(String),
+    #[error("Circuit breaker open")]
+    CircuitBreakerOpen,
 }
 
 impl AiError {

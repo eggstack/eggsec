@@ -1,5 +1,7 @@
+use chrono::{Datelike, Timelike};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -193,5 +195,171 @@ impl RateLimiter {
 impl Default for ScanQueue {
     fn default() -> Self {
         Self::new(100)
+    }
+}
+
+pub struct CronScheduler {
+    expressions: Vec<CronExpression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CronExpression {
+    pub second: u8,
+    pub minute: u8,
+    pub hour: u8,
+    pub day_of_month: u8,
+    pub month: u8,
+    pub day_of_week: u8,
+}
+
+impl CronExpression {
+    pub fn parse(expression: &str) -> Result<Self, String> {
+        let parts: Vec<&str> = expression.split_whitespace().collect();
+        if parts.len() != 5 && parts.len() != 6 {
+            return Err("Cron expression must have 5 or 6 fields".to_string());
+        }
+
+        let second: u8;
+        let minute_idx: usize;
+        if parts.len() == 6 {
+            second = parse_field(parts[0], 0, 59)?;
+            minute_idx = 1;
+        } else {
+            second = 0;
+            minute_idx = 0;
+        };
+
+        let minute = parse_field(parts[minute_idx], 0, 59)?;
+        let hour = parse_field(parts[minute_idx + 1], 0, 23)?;
+        let day_of_month = parse_field(parts[minute_idx + 2], 1, 31)?;
+        let month = parse_field(parts[minute_idx + 3], 1, 12)?;
+        let day_of_week = parse_field(parts[minute_idx + 4], 0, 6)?;
+
+        Ok(CronExpression {
+            second,
+            minute,
+            hour,
+            day_of_month,
+            month,
+            day_of_week,
+        })
+    }
+
+    pub fn matches(&self, t: &chrono::DateTime<chrono::Utc>) -> bool {
+        let s = t.second() as u8;
+        let m = t.minute() as u8;
+        let h = t.hour() as u8;
+        let d = t.day() as u8;
+        let mo = t.month() as u8;
+        let dow = t.weekday().num_days_from_sunday() as u8;
+
+        field_matches(self.second, s)
+            && field_matches(self.minute, m)
+            && field_matches(self.hour, h)
+            && field_matches(self.day_of_month, d)
+            && field_matches(self.month, mo)
+            && field_matches(self.day_of_week, dow)
+    }
+}
+
+fn parse_field(field: &str, min: u8, max: u8) -> Result<u8, String> {
+    if field == "*" {
+        return Ok(min);
+    }
+
+    if let Ok(num) = field.parse::<u8>() {
+        if num >= min && num <= max {
+            return Ok(num);
+        }
+    }
+
+    if field.contains('/') {
+        let parts: Vec<&str> = field.split('/').collect();
+        if parts.len() == 2 {
+            let base = if parts[0] == "*" {
+                min
+            } else {
+                parts[0].parse::<u8>().unwrap_or(min)
+            };
+            let step: u8 = parts[1].parse().unwrap_or(1);
+            return Ok(base + step);
+        }
+    }
+
+    Err(format!("Invalid cron field: {}", field))
+}
+
+fn field_matches(pattern: u8, value: u8) -> bool {
+    pattern == 0 || pattern == value
+}
+
+impl CronScheduler {
+    pub fn new() -> Self {
+        Self {
+            expressions: Vec::new(),
+        }
+    }
+
+    pub fn add_schedule(&mut self, expression: &str) -> Result<(), String> {
+        let cron = CronExpression::parse(expression)?;
+        self.expressions.push(cron);
+        Ok(())
+    }
+
+    pub fn should_run(&self, t: &chrono::DateTime<chrono::Utc>) -> bool {
+        self.expressions.iter().any(|e| e.matches(t))
+    }
+
+    pub fn next_run(
+        &self,
+        after: &chrono::DateTime<chrono::Utc>,
+    ) -> Option<chrono::DateTime<chrono::Utc>> {
+        let mut next = *after + chrono::Duration::hours(1);
+
+        for _ in 0..24 {
+            if self.should_run(&next) {
+                return Some(next);
+            }
+            next += chrono::Duration::hours(1);
+        }
+
+        None
+    }
+}
+
+impl Default for CronScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FromStr for CronExpression {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        CronExpression::parse(s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cron_parse() {
+        let expr = CronExpression::parse("0 9 * * *").unwrap();
+        assert_eq!(expr.minute, 0);
+        assert_eq!(expr.hour, 9);
+    }
+
+    #[test]
+    fn test_cron_with_seconds() {
+        let expr = CronExpression::parse("30 0 9 * * *").unwrap();
+        assert_eq!(expr.second, 30);
+    }
+
+    #[test]
+    fn test_cron_invalid() {
+        assert!(CronExpression::parse("invalid").is_err());
     }
 }

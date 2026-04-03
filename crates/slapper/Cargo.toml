@@ -131,6 +131,15 @@ optional = true
 version = "0.13"
 optional = true
 
+[dependencies.headless_chrome]
+version = "1"
+optional = true
+
+[dependencies.sqlx]
+version = "0.8"
+optional = true
+features = ["runtime-tokio", "postgres", "macros"]
+
 [build-dependencies.prost-build]
 version = "0.13"
 optional = true
@@ -169,13 +178,19 @@ nse = ["tool-api", "dep:slapper-nse", "slapper-nse/nse"]
 nse-sandbox = ["nse", "slapper-nse/sandbox"]
 
 # Full build with all features
-full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration"]
+full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream"]
 
 # WebSocket security testing with real connections
 websocket = ["tokio-tungstenite"]
+
+# Headless browser testing for DOM XSS and SPA crawling
+headless-browser = ["headless_chrome"]
+
+# Database storage for findings and scan history
+database = ["sqlx"]
 
 [[bin]]
 name = "slapper"

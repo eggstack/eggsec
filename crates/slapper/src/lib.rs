@@ -65,8 +65,15 @@ pub mod scanner;
 pub mod auth;
 pub mod container;
 pub mod supply_chain;
+pub mod hunt;
+pub mod compliance;
+pub mod integrations;
+pub mod workflow;
+pub mod vuln;
 #[cfg(feature = "websocket")]
 pub mod websocket;
+#[cfg(feature = "headless-browser")]
+pub mod browser;
 #[cfg(feature = "stress-testing")]
 pub mod stress;
 pub mod tui;

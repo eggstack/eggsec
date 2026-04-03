@@ -1,0 +1,69 @@
+//! Issue tracker integration module
+//!
+//! Provides integration with external issue trackers like Jira, GitHub, and GitLab.
+//!
+//! ## Modules
+//!
+//! - [`common`] - Common traits and types for all issue trackers
+//! - [`jira`] - Jira issue creation and management
+//! - [`github`] - GitHub Issues integration
+//! - [`gitlab`] - GitLab Issues integration
+
+pub mod common;
+pub mod github;
+pub mod gitlab;
+pub mod jira;
+
+use crate::error::Result;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
+pub struct IntegrationConfig {
+    pub jira: Option<jira::JiraConfig>,
+    pub github: Option<github::GitHubConfig>,
+    pub gitlab: Option<gitlab::GitLabConfig>,
+}
+
+
+pub trait IssueTracker {
+    fn create_issue(&self, issue: &Issue) -> Result<String>;
+    fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()>;
+    fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()>;
+    fn get_issue(&self, id: &str) -> Result<Issue>;
+    fn search_issues(&self, query: &str) -> Result<Vec<Issue>>;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Issue {
+    pub title: String,
+    pub description: String,
+    pub labels: Vec<String>,
+    pub severity: Option<crate::types::Severity>,
+    pub assignees: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueUpdate {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub labels: Option<Vec<String>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_issue_creation() {
+        let issue = Issue {
+            title: "Test Issue".to_string(),
+            description: "Test description".to_string(),
+            labels: vec!["security".to_string()],
+            severity: Some(crate::types::Severity::High),
+            assignees: vec![],
+        };
+        assert_eq!(issue.title, "Test Issue");
+    }
+}

@@ -1,13 +1,16 @@
 pub mod agent;
 pub mod ai_schema;
+pub mod attack_graph;
 pub mod baseline;
 pub mod convert;
 pub mod csv;
 pub mod dedup;
+pub mod diff;
 pub mod escape;
 pub mod html;
 pub mod junit;
 pub mod markdown;
+pub mod pdf;
 pub mod report;
 pub mod sarif;
 pub mod schedule;
@@ -20,15 +23,20 @@ pub use agent::{
     AgentFinding, Confidence, Evidence, FindingStatus, FindingSummary, Remediation,
     RemediationEffort,
 };
+pub use attack_graph::{
+    AttackGraph, AttackGraphBuilder, EdgeType, GraphCluster, GraphEdge, GraphNode, NodeType,
+};
 pub use convert::{
     convert_to_csv, convert_to_html, convert_to_junit, convert_to_markdown, convert_to_sarif,
     load_scan_report, FindingData, PortData, ScanReportData, ServiceData,
 };
 pub use csv::{CsvExporter, EndpointCsv, FindingCsv, OutputFormat as ExportFormat, PortCsv};
+pub use diff::{DiffEngine, DiffFinding, DiffResult, DiffSummary};
 pub use junit::{JUnitBuilder, JUnitReport, JUnitTestResult};
+pub use pdf::{PdfConfig, PdfGenerator};
 pub use report::{Report, ReportMetadata, ReportTemplate, SeverityCounts};
 pub use sarif::{SarifBuilder, SarifReport};
-pub use schedule::{Priority, ScanOptions, ScanQueue, ScanType};
+pub use schedule::{CronExpression, CronScheduler, Priority, ScanOptions, ScanQueue, ScanType};
 pub use session::{ScanSession, SessionInfo};
 pub use trend::{
     ComparisonResult, Finding as TrendFinding, ResultComparator, ResultSummary, ScanResult,

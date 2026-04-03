@@ -1,3 +1,4 @@
+mod cache;
 mod client;
 mod errors;
 mod types;
@@ -7,6 +8,7 @@ mod adaptive;
 #[cfg(feature = "ai-integration")]
 mod planner;
 
+pub use cache::{AiCache, CacheKeyBuilder, CacheStats};
 pub use client::AiClient;
 pub use errors::{AiError, Result};
 pub use types::*;
