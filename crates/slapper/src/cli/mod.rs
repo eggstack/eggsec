@@ -22,9 +22,11 @@ pub use scan::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
+pub mod auth;
 
 #[cfg(feature = "ai-integration")]
 pub use ai_analyze::*;
+pub use auth::*;
 #[cfg(feature = "stress-testing")]
 pub use stress::*;
 
@@ -79,6 +81,8 @@ pub enum Commands {
     Graphql(GraphQlArgs),
     #[command(about = "Test OAuth/OIDC endpoints for vulnerabilities", long_about = OAUTH_ABOUT)]
     OAuth(OAuthArgs),
+    #[command(about = "Test authentication security (brute force, credential stuffing, MFA)", long_about = AUTH_TEST_ABOUT)]
+    AuthTest(AuthTestArgs),
 
     // --- Recon operations ---
     #[command(about = "Gather reconnaissance information", long_about = RECON_ABOUT)]
@@ -89,6 +93,8 @@ pub enum Commands {
     Plan(PlanArgs),
     #[command(about = "Run security checks in CI/CD mode")]
     Ci(CiArgs),
+    #[command(about = "Generate SBOM and check supply chain security")]
+    Sbom(SbomArgs),
 
     // --- Load testing ---
     #[command(about = "Run HTTP load test against target URL", long_about = LOAD_ABOUT)]

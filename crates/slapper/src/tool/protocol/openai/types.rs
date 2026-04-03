@@ -21,6 +21,25 @@ pub struct ToolDefinition {
     #[serde(rename = "type")]
     pub tool_type: String,
     pub function: FunctionDefinition,
+    #[serde(skip)]
+    pub name: String,
+    #[serde(skip)]
+    pub description: String,
+}
+
+impl ToolDefinition {
+    pub fn new(name: String, description: String, parameters: serde_json::Value) -> Self {
+        Self {
+            tool_type: "function".to_string(),
+            function: FunctionDefinition {
+                name: name.clone(),
+                description: description.clone(),
+                parameters,
+            },
+            name,
+            description,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,4 +85,20 @@ pub struct Usage {
     pub prompt_tokens: usize,
     pub completion_tokens: usize,
     pub total_tokens: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamChunk {
+    pub id: String,
+    pub object: String,
+    pub created: u64,
+    pub model: String,
+    pub choices: Vec<StreamChoice>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamChoice {
+    pub index: usize,
+    pub delta: ChatMessage,
+    pub finish_reason: Option<String>,
 }

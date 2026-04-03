@@ -12,7 +12,7 @@ impl ToolResponse {
                 let remediation_text = f.remediation.as_deref().unwrap_or("See documentation");
 
                 AgentFinding::new(
-                    &format!("{:?}", f.finding_type).to_lowercase(),
+                    format!("{:?}", f.finding_type).to_lowercase(),
                     severity_from_response(&f.severity),
                     &f.title,
                     &self.request_id,

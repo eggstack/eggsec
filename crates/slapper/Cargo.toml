@@ -118,6 +118,11 @@ optional = true
 version = "0.4"
 optional = true
 
+[dependencies.tokio-tungstenite]
+version = "0.26"
+features = ["rustls-tls-webpki-roots"]
+optional = true
+
 [dependencies.tonic]
 version = "0.12"
 optional = true
@@ -168,6 +173,9 @@ full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection",
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream"]
+
+# WebSocket security testing with real connections
+websocket = ["tokio-tungstenite"]
 
 [[bin]]
 name = "slapper"

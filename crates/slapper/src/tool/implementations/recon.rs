@@ -119,6 +119,10 @@ impl SecurityTool for ReconTool {
                 .get("no_email")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
+            no_takeover: params
+                .get("no_takeover")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
             concurrency: request.options.concurrency,
             json: true,
             quiet: true,

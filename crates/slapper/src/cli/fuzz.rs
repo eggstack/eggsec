@@ -187,6 +187,12 @@ pub struct FuzzArgs {
         help = "Enable OAuth grant type testing: tests for insecure grant type mixing"
     )]
     pub oauth_grant: bool,
+    #[arg(long, help = "OpenAPI/Swagger schema URL for schema-aware fuzzing")]
+    pub schema: Option<String>,
+    #[arg(long, help = "Only discover API schema, do not fuzz")]
+    pub discover_only: bool,
+    #[arg(long, help = "Auto-discover API schema from common paths")]
+    pub auto_discover_schema: bool,
     #[command(flatten)]
     pub common: CommonHttpArgs,
 }
@@ -250,6 +256,9 @@ impl From<WafStressArgs> for FuzzArgs {
             oauth_scope: true,
             oauth_state: true,
             oauth_grant: true,
+            schema: None,
+            discover_only: false,
+            auto_discover_schema: false,
             common: args.common,
         }
     }

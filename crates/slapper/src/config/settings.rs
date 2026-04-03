@@ -147,6 +147,19 @@ pub struct AiConfig {
     pub temperature: Option<f64>,
 }
 
+impl Default for AiConfig {
+    fn default() -> Self {
+        Self {
+            provider: "openai".to_string(),
+            model: Some("gpt-4".to_string()),
+            api_key: None,
+            base_url: None,
+            max_tokens: Some(4096),
+            temperature: Some(0.7),
+        }
+    }
+}
+
 impl AiConfig {
     pub fn validate(&self) -> Result<(), ConfigError> {
         if self.provider.is_empty() {

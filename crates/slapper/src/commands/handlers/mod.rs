@@ -10,6 +10,8 @@ pub mod plugin;
 pub mod report;
 pub mod stress;
 pub mod notify;
+pub mod auth_test;
+pub mod sbom;
 
 pub use ci::*;
 pub use scan::*;
@@ -26,6 +28,8 @@ pub use report::*;
 #[cfg(feature = "stress-testing")]
 pub use stress::*;
 pub use notify::*;
+pub use auth_test::*;
+pub use sbom::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -92,6 +96,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Ci(args)) => handle_ci(ctx, args).await,
         Some(Commands::Graphql(args)) => handle_graphql(ctx, args).await,
         Some(Commands::OAuth(args)) => handle_oauth(ctx, args).await,
+        Some(Commands::AuthTest(args)) => handle_auth_test(ctx, args).await,
+        Some(Commands::Sbom(args)) => handle_sbom(ctx, args).await,
         Some(Commands::Packet(args)) => handle_packet(ctx, args).await,
         #[cfg(feature = "stress-testing")]
         Some(Commands::Icmp(args)) => handle_icmp(ctx, args).await,

@@ -91,6 +91,7 @@ pub async fn run_recon(
         no_threat: options.no_threat,
         no_cve: options.no_cve,
         no_email: options.no_email,
+        no_takeover: options.no_takeover,
         json: false,
         quiet: false,
         verbose: false,

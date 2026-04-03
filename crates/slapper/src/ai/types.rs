@@ -24,9 +24,10 @@ pub struct AiWafBypassSuggestion {
     pub explanation: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanFinding {
+    pub id: String,
     pub title: String,
     pub severity: Severity,
-    pub target: String,
+    pub description: String,
 }

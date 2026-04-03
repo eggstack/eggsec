@@ -229,8 +229,7 @@ fn glob_match(pattern: &str, target: &str) -> bool {
     if pattern == "*" {
         return true;
     }
-    if pattern.starts_with("*.") {
-        let suffix = &pattern[2..];
+    if let Some(suffix) = pattern.strip_prefix("*.") {
         return target.ends_with(suffix) || target == suffix;
     }
     pattern == target

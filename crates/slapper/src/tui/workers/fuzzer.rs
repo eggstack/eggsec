@@ -71,6 +71,9 @@ pub async fn run_fuzz(
         oauth_scope: oauth_scope_test,
         oauth_state: oauth_state_test,
         oauth_grant: oauth_grant_test,
+        schema: None,
+        discover_only: false,
+        auto_discover_schema: false,
         common: CommonHttpArgs::default(),
     };
 

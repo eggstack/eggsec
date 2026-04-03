@@ -1,3 +1,8 @@
+pub mod iam;
+pub mod metadata;
+pub mod services;
+pub mod storage_test;
+
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

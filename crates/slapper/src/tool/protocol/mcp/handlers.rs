@@ -203,7 +203,7 @@ impl McpServer {
             };
             
             let category = format!("{:?}", info.category).to_lowercase();
-            categorized.entry(category).or_insert_with(Vec::new).push(mcp_tool);
+            categorized.entry(category).or_default().push(mcp_tool);
         }
 
         let result = serde_json::json!({
@@ -367,7 +367,7 @@ impl McpServer {
                         }
                     ]
                 });
-                return req.success_response(result);
+                req.success_response(result)
             }
             "slapper://manifest" => {
                 let manifest = self.build_manifest();
@@ -380,7 +380,7 @@ impl McpServer {
                         }
                     ]
                 });
-                return req.success_response(result);
+                req.success_response(result)
             }
             "slapper://vulnerabilities" => {
                 let vulns = self.build_vulnerability_catalog();
@@ -393,7 +393,7 @@ impl McpServer {
                         }
                     ]
                 });
-                return req.success_response(result);
+                req.success_response(result)
             }
             _ => req.error_response(McpError::invalid_params("Unknown resource uri")),
         }
@@ -410,7 +410,7 @@ impl McpServer {
                     let surface_name = format!("{:?}", surface).to_lowercase();
                     attack_surfaces
                         .entry(surface_name)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(tool.id.clone());
                 }
             }
@@ -590,7 +590,7 @@ impl McpServer {
                     });
                     let error_response = ToolResponse {
                         request_id: request_id_for_result.clone(),
-                        tool_id: tool_id,
+                        tool_id,
                         status: crate::tool::ResponseStatus::Failed,
                         results: serde_json::json!({}),
                         metadata: crate::tool::ResponseMetadata {

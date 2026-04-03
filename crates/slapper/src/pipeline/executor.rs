@@ -378,6 +378,9 @@ impl Pipeline {
             oauth_scope: true,
             oauth_state: true,
             oauth_grant: true,
+            schema: None,
+            discover_only: false,
+            auto_discover_schema: false,
             common: crate::cli::CommonHttpArgs {
                 stealth,
                 ..self.common.clone()
@@ -473,6 +476,7 @@ impl Pipeline {
             no_threat: false,
             no_cve: false,
             no_email: false,
+            no_takeover: false,
             concurrency: Some(self.concurrency),
             json: false,
             quiet: false,

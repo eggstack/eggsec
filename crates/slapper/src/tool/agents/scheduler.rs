@@ -190,7 +190,7 @@ impl TaskQueue {
         let (tx, rx) = mpsc::channel::<ScheduledTask>(capacity);
         (
             Self {
-                sender: tx,
+                sender: tx.clone(),
                 receiver: Arc::new(RwLock::new(Some(rx))),
             },
             tx,

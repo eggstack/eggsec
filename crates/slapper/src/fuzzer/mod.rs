@@ -85,6 +85,7 @@
 //! - Invalid payload type is specified
 
 pub mod advanced;
+pub mod api_schema;
 pub mod chain;
 pub mod detection;
 pub mod diff;

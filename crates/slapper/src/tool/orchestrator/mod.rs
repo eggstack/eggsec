@@ -59,7 +59,7 @@ impl Orchestrator {
         target: &str,
         progress_tx: Option<mpsc::Sender<StageProgress>>,
     ) -> Result<ExecutionResult, SlapperError> {
-        let mut execution_order = self.resolve_stage_order(plan);
+        let execution_order = self.resolve_stage_order(plan);
         let overall_start = std::time::Instant::now();
 
         for stage in &execution_order {

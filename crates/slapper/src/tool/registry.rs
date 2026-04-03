@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use crate::error::SlapperError;
 use crate::tool::traits::{SecurityTool, ToolCapability, ToolCategory};
-use crate::tool::{ToolRequest, ToolResponse};
 
 pub struct ToolRegistry {
     tools: Arc<RwLock<HashMap<String, Arc<dyn SecurityTool>>>>,
@@ -73,7 +72,7 @@ impl ToolRegistry {
     pub fn categories(&self) -> Vec<ToolCategory> {
         let mut categories: Vec<ToolCategory> =
             self.tools.read().values().map(|t| t.category()).collect();
-        categories.sort_by(|a, b| a.cmp(b));
+        categories.sort();
         categories.dedup();
         categories
     }

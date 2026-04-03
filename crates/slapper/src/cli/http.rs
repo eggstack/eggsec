@@ -129,6 +129,8 @@ pub struct ReconArgs {
     pub no_cve: bool,
     #[arg(long, help = "Skip email/contact discovery")]
     pub no_email: bool,
+    #[arg(long, help = "Skip subdomain takeover detection")]
+    pub no_takeover: bool,
     #[arg(long, help = "Concurrency for parallel scans (default: 10)")]
     pub concurrency: Option<usize>,
     pub json: bool,

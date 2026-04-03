@@ -262,3 +262,39 @@ pub struct McpServeArgs {
     #[arg(long, help = "Enable stdio mode for AI assistant integration")]
     pub stdio: bool,
 }
+
+#[derive(clap::Args)]
+pub struct SbomArgs {
+    #[command(subcommand)]
+    pub command: SbomCommand,
+}
+
+#[derive(clap::Subcommand)]
+pub enum SbomCommand {
+    #[command(about = "Generate SBOM from project")]
+    Generate(SbomGenerateArgs),
+    #[command(about = "Check for typosquatting risks")]
+    CheckTyposquat(SbomTyposquatArgs),
+}
+
+#[derive(clap::Args)]
+pub struct SbomGenerateArgs {
+    #[arg(help = "Project directory path")]
+    pub project: String,
+    #[arg(
+        long,
+        default_value = "cyclonedx",
+        help = "Output format: cyclonedx, spdx, json"
+    )]
+    pub format: String,
+    #[arg(long, short = 'o', help = "Output file path")]
+    pub output: Option<String>,
+}
+
+#[derive(clap::Args)]
+pub struct SbomTyposquatArgs {
+    #[arg(help = "Project directory path")]
+    pub project: String,
+    #[arg(long, default_value = "0.7", help = "Similarity threshold (0.0-1.0)")]
+    pub threshold: f64,
+}

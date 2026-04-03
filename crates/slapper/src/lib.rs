@@ -62,6 +62,11 @@ pub mod pipeline;
 pub mod proxy;
 pub mod recon;
 pub mod scanner;
+pub mod auth;
+pub mod container;
+pub mod supply_chain;
+#[cfg(feature = "websocket")]
+pub mod websocket;
 #[cfg(feature = "stress-testing")]
 pub mod stress;
 pub mod tui;

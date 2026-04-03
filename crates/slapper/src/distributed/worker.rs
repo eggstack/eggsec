@@ -349,6 +349,9 @@ async fn process_fuzz(task: Task) -> Result<serde_json::Value> {
         oauth_scope: true,
         oauth_state: true,
         oauth_grant: true,
+        schema: None,
+        discover_only: false,
+        auto_discover_schema: false,
         common: crate::cli::CommonHttpArgs::default(),
     };
 
@@ -479,6 +482,7 @@ async fn process_recon(task: Task) -> Result<serde_json::Value> {
         no_threat: false,
         no_cve: false,
         no_email: false,
+        no_takeover: false,
         concurrency: Some(10),
         json: false,
         quiet: false,

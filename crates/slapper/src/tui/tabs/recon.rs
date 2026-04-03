@@ -44,6 +44,7 @@ pub struct ReconOptions {
     pub no_threat: bool,
     pub no_cve: bool,
     pub no_email: bool,
+    pub no_takeover: bool,
 }
 
 impl ReconTab {
@@ -68,6 +69,7 @@ impl ReconTab {
             Checkbox::new("Skip Threat Intel").checked(false),
             Checkbox::new("Skip CVE Mapping").checked(false),
             Checkbox::new("Skip Email Discovery").checked(false),
+            Checkbox::new("Skip Takeover Detection").checked(false),
         ];
 
         Self {
@@ -116,6 +118,7 @@ impl ReconTab {
             no_threat: self.option_checkboxes[12].checked,
             no_cve: self.option_checkboxes[13].checked,
             no_email: self.option_checkboxes[14].checked,
+            no_takeover: self.option_checkboxes[15].checked,
         }
     }
 

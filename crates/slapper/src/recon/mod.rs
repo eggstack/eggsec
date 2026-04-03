@@ -28,9 +28,13 @@ pub mod cloud;
 pub mod content;
 pub mod cors;
 pub mod cve;
+pub mod dependency_scan;
 pub mod dns_records;
 pub mod email;
+pub mod email_security;
 pub mod geolocation;
+pub mod git_secrets;
+pub mod api_schema;
 pub mod js;
 pub mod reverse_dns;
 pub mod runner;
@@ -38,6 +42,7 @@ pub mod secrets;
 pub mod spinner;
 pub mod ssl;
 pub mod subdomain;
+pub mod takeover;
 pub mod techdetect;
 pub mod threatintel;
 pub mod wayback;
@@ -73,6 +78,7 @@ pub struct FullReconResult {
     pub email_discovery: Option<email::EmailDiscovery>,
     pub threat_intel: Option<threatintel::ThreatIntel>,
     pub cve_mapping: Option<cve::CveMapping>,
+    pub takeover: Option<Vec<takeover::TakeoverResult>>,
 }
 
 impl FullReconResult {

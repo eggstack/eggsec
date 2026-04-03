@@ -164,7 +164,7 @@ impl SessionManager {
         
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "json") {
+            if path.extension().is_some_and(|ext| ext == "json") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(session) = serde_json::from_str::<AgentSession>(&content) {
                         if !session.is_expired(self.default_ttl_seconds) {

@@ -59,7 +59,7 @@ impl ExecutionHistory {
             duration_ms: response.metadata.duration_ms,
             findings_count: response.metadata.findings_count,
             errors_count: response.errors.len(),
-            summary: generate_summary(&response),
+            summary: generate_summary(response),
         };
 
         entries.push(entry);

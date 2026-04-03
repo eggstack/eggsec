@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::interval;
 use uuid::Uuid;
-use crate::tool::agents::registry::{AgentRegistry, AgentInfo, AgentStatus};
+use crate::tool::agents::registry::{AgentRegistry, AgentStatus};
 
 #[derive(Debug, Clone)]
 pub struct LifecycleConfig {
@@ -50,7 +50,7 @@ pub struct LifecycleEvent {
     pub details: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LifecycleEventType {
     AgentRegistered,

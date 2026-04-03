@@ -13,4 +13,8 @@ pub struct AiAnalyzeArgs {
     /// Analysis type (severity, exploitability, attack-chain, remediation)
     #[arg(short, long, default_value = "full")]
     pub analysis_type: String,
+
+    /// Output as JSON
+    #[arg(long)]
+    pub json: bool,
 }

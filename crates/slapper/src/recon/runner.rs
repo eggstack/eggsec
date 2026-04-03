@@ -1,7 +1,7 @@
 use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
 use crate::error::Result;
-use crate::recon::{cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, ssl, subdomain, techdetect, threatintel, wayback, whois, FullReconResult};
+use crate::recon::{cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, ssl, subdomain, takeover, techdetect, threatintel, wayback, whois, FullReconResult};
 use std::sync::{Arc, Mutex};
 
 pub async fn run_full_recon(
@@ -109,6 +109,7 @@ pub async fn run_full_recon(
         content_result,
         cors_result,
         email_result,
+        takeover_result,
     ) = tokio::join!(
         async {
             if !args.no_dns {
@@ -284,6 +285,34 @@ pub async fn run_full_recon(
                 }
             } else { None }
         },
+        async {
+            if !args.no_takeover {
+                if let Some(ref d) = domain_for_sub {
+                    match subdomain::enumerate_subdomains(d, concurrency).await {
+                        Ok(ref sub_result) if !sub_result.subdomains.is_empty() => {
+                            let subdomains: Vec<String> = sub_result.subdomains.iter()
+                                .map(|s| s.subdomain.clone())
+                                .collect();
+                            match takeover::detect_takeovers(&subdomains, None, 10).await {
+                                Ok(results) if !results.is_empty() => {
+                                    let vulnerable: Vec<_> = results.iter()
+                                        .filter(|r| r.status == takeover::TakeoverStatus::Vulnerable)
+                                        .cloned()
+                                        .collect();
+                                    if !vulnerable.is_empty() {
+                                        Some(vulnerable)
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    }
+                } else { None }
+            } else { None }
+        },
     );
 
     recon.reverse_dns = reverse_dns_result;
@@ -299,6 +328,7 @@ pub async fn run_full_recon(
     recon.content = content_result;
     recon.cors = cors_result;
     recon.email_discovery = email_result;
+    recon.takeover = takeover_result;
 
     if !args.no_cve {
         if let Some(ref tech) = techdetect_result {
@@ -462,6 +492,19 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
                 "\tdomain-reputation: {} ({})\n",
                 dom_rep.score, dom_rep.category
             ));
+        }
+    }
+    if let Some(ref takeovers) = recon.takeover {
+        if !takeovers.is_empty() {
+            s.push_str("takeover\n");
+            for t in takeovers {
+                s.push_str(&format!(
+                    "\t[{}] {} ({})\n",
+                    t.severity.as_str().to_uppercase(),
+                    t.target.subdomain,
+                    t.service.as_deref().unwrap_or("unknown")
+                ));
+            }
         }
     }
 

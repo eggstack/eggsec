@@ -41,6 +41,9 @@ fn base_fuzz_args(url: String, concurrency: usize, timeout: u64, json: bool, out
         oauth_scope: true,
         oauth_state: true,
         oauth_grant: true,
+        schema: None,
+        discover_only: false,
+        auto_discover_schema: false,
         common,
     }
 }

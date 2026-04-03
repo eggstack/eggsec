@@ -83,7 +83,7 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
 }
 
 #[cfg(feature = "rest-api")]
-pub async fn handle_serve(ctx: &CommandContext, args: crate::cli::ServeArgs) -> Result<()> {
+pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) -> Result<()> {
     eprintln!("[STUB] REST API server is not yet implemented.");
     eprintln!("  Bind: {}", args.bind);
     eprintln!("  Port: {}", args.port);
@@ -91,7 +91,7 @@ pub async fn handle_serve(ctx: &CommandContext, args: crate::cli::ServeArgs) -> 
 }
 
 #[cfg(feature = "rest-api")]
-pub async fn handle_mcp_serve(ctx: &CommandContext, args: crate::cli::McpServeArgs) -> Result<()> {
+pub async fn handle_mcp_serve(_ctx: &CommandContext, args: crate::cli::McpServeArgs) -> Result<()> {
     eprintln!("[STUB] MCP server is not yet implemented.");
     eprintln!("  Bind: {}", args.bind);
     eprintln!("  Port: {}", args.port);

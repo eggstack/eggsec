@@ -149,6 +149,9 @@ impl SecurityTool for FuzzerTool {
             oauth_scope: true,
             oauth_state: true,
             oauth_grant: true,
+            schema: None,
+            discover_only: false,
+            auto_discover_schema: false,
             common: crate::cli::CommonHttpArgs::default(),
         };
 

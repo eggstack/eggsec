@@ -225,6 +225,9 @@ impl WafEngine {
             }
         };
 
+        #[cfg(feature = "ai-integration")]
+        let bypass_results = self.run_ai_bypasses(&detection, bypass_results).await?;
+
         let findings = bypass_results
             .iter()
             .map(|br| {
@@ -306,5 +309,30 @@ impl WafEngine {
         }
 
         output::print_results(detection, bypass_results, self.selected_profile.as_ref());
+    }
+
+    #[cfg(feature = "ai-integration")]
+    async fn run_ai_bypasses(
+        &mut self,
+        detection: &WafDetectionResult,
+        bypass_results: Vec<BypassResult>,
+    ) -> Result<Vec<BypassResult>> {
+        if let Some(ref mut ai_bypass_engine) = self.ai_bypass {
+            let waf_name = detection.waf_name.as_deref().unwrap_or("unknown");
+
+            for br in &bypass_results {
+                if !br.success {
+                    if let Ok(suggestion) = ai_bypass_engine
+                        .find_bypass(waf_name, &br.description)
+                        .await
+                    {
+                        if let Some(suggestion) = suggestion {
+                            eprintln!("[AI] Suggested bypass for {:?}: {}", br.technique, suggestion);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(bypass_results)
     }
 }
