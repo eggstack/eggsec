@@ -17,14 +17,12 @@ impl Default for HtmlConfig {
     }
 }
 
-#[allow(deprecated)]
 pub struct HtmlReport {
     findings: Vec<super::markdown::Finding>,
     summary: super::markdown::ScanSummary,
     config: HtmlConfig,
 }
 
-#[allow(deprecated)]
 impl HtmlReport {
     pub fn new(
         summary: super::markdown::ScanSummary,
@@ -312,7 +310,6 @@ impl HtmlReport {
     }
 }
 
-#[allow(deprecated)]
 pub fn generate_html_report(
     summary: super::markdown::ScanSummary,
     findings: Vec<super::markdown::Finding>,

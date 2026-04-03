@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use crate::output::agent::AgentFinding;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[deprecated(since = "0.1.0", note = "Use AgentFinding from output::agent instead")]
 pub struct Finding {
     pub title: String,
     pub severity: String,
@@ -16,7 +15,6 @@ pub struct Finding {
     pub cve_ids: Vec<String>,
 }
 
-#[allow(deprecated)]
 impl From<&AgentFinding> for Finding {
     fn from(f: &AgentFinding) -> Self {
         Self {
@@ -48,13 +46,11 @@ pub struct ScanSummary {
     pub info_count: u32,
 }
 
-#[allow(deprecated)]
 pub struct MarkdownReport {
     findings: Vec<Finding>,
     summary: ScanSummary,
 }
 
-#[allow(deprecated)]
 impl MarkdownReport {
     pub fn new(summary: ScanSummary, findings: Vec<Finding>) -> Self {
         Self { summary, findings }
@@ -140,7 +136,6 @@ impl MarkdownReport {
     }
 }
 
-#[allow(deprecated)]
 pub fn generate_markdown_report(summary: ScanSummary, findings: Vec<Finding>) -> String {
     let report = MarkdownReport::new(summary, findings);
     report.generate()

@@ -1,6 +1,5 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
-use serde::{Deserialize, Serialize};
 
 pub mod ci;
 pub mod cluster;
@@ -228,28 +227,4 @@ impl std::fmt::Display for ScanProfile {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize, Default)]
-pub enum OutputFormat {
-    #[default]
-    Pretty,
-    Json,
-    Compact,
-    Html,
-    Csv,
-    Sarif,
-    Junit,
-}
-
-impl std::fmt::Display for OutputFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            OutputFormat::Pretty => write!(f, "pretty"),
-            OutputFormat::Json => write!(f, "json"),
-            OutputFormat::Compact => write!(f, "compact"),
-            OutputFormat::Html => write!(f, "html"),
-            OutputFormat::Csv => write!(f, "csv"),
-            OutputFormat::Sarif => write!(f, "sarif"),
-            OutputFormat::Junit => write!(f, "junit"),
-        }
-    }
-}
+pub use crate::types::OutputFormat;

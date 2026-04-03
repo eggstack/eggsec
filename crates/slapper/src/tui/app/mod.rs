@@ -21,7 +21,7 @@ use crate::tui::state::SharedHistory;
 use crate::tui::tabs;
 use crate::tui::tabs::{Tab, TabInput, TabState};
 use crate::tui::workers;
-use crate::output::ExportFormat;
+use crate::types::OutputFormat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PendingAction {
@@ -111,7 +111,7 @@ pub struct App {
     pub search_backup: Option<std::collections::VecDeque<crate::tui::tabs::history::HistoryEntry>>,
     pub pending_key: Option<KeyCode>,
     pub dashboard: tabs::DashboardTab,
-    pub export_format: ExportFormat,
+    pub export_format: OutputFormat,
     pub task_handle: Option<tokio::task::JoinHandle<()>>,
     pub progress_rx: Option<tokio::sync::mpsc::Receiver<(u64, u64)>>,
     pub result_rx: Option<tokio::sync::mpsc::Receiver<workers::TaskResult>>,
@@ -160,7 +160,7 @@ impl App {
             search_query: String::new(),
             search_backup: None,
             pending_key: None,
-            export_format: ExportFormat::Json,
+            export_format: OutputFormat::Json,
             task_handle: None,
             progress_rx: None,
             result_rx: None,
@@ -174,23 +174,25 @@ impl App {
 
     pub fn cycle_export_format(&mut self) {
         self.export_format = match self.export_format {
-            ExportFormat::Json => ExportFormat::Csv,
-            ExportFormat::Csv => ExportFormat::Html,
-            ExportFormat::Html => ExportFormat::Markdown,
-            ExportFormat::Markdown => ExportFormat::Sarif,
-            ExportFormat::Sarif => ExportFormat::Junit,
-            ExportFormat::Junit => ExportFormat::Json,
+            OutputFormat::Json => OutputFormat::Csv,
+            OutputFormat::Csv => OutputFormat::Html,
+            OutputFormat::Html => OutputFormat::Markdown,
+            OutputFormat::Markdown => OutputFormat::Sarif,
+            OutputFormat::Sarif => OutputFormat::Junit,
+            OutputFormat::Junit => OutputFormat::Json,
+            _ => OutputFormat::Json,
         };
     }
 
     pub fn get_export_extension(&self) -> &str {
         match self.export_format {
-            ExportFormat::Json => "json",
-            ExportFormat::Csv => "csv",
-            ExportFormat::Html => "html",
-            ExportFormat::Markdown => "md",
-            ExportFormat::Sarif => "sarif",
-            ExportFormat::Junit => "xml",
+            OutputFormat::Json => "json",
+            OutputFormat::Csv => "csv",
+            OutputFormat::Html => "html",
+            OutputFormat::Markdown => "md",
+            OutputFormat::Sarif => "sarif",
+            OutputFormat::Junit => "xml",
+            _ => "json",
         }
     }
 

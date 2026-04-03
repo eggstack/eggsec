@@ -48,7 +48,7 @@ mod scope;
 mod settings;
 
 pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, WaybackConfig};
-pub use http::{HttpConfig, OutputFormat, Verbosity};
+pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope};
 pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,

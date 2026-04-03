@@ -98,6 +98,7 @@ pub async fn run_cli(args: ScanArgs, config: &SlapperConfig) -> Result<()> {
             Some(crate::cli::OutputFormat::Html)
             | Some(crate::cli::OutputFormat::Pretty)
             | Some(crate::cli::OutputFormat::Compact)
+            | Some(crate::cli::OutputFormat::Markdown)
             | None => {
                 let html = report::generate_html(&report)?;
                 tokio::fs::write(&output_path, html).await?;

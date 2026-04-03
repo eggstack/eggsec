@@ -1,39 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ExportFormat {
-    Json,
-    Csv,
-    Html,
-    Markdown,
-    Sarif,
-    Junit,
-}
-
-impl ExportFormat {
-    pub fn from_string(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "json" => Some(Self::Json),
-            "csv" => Some(Self::Csv),
-            "html" => Some(Self::Html),
-            "md" | "markdown" => Some(Self::Markdown),
-            "sarif" => Some(Self::Sarif),
-            "junit" | "xml" => Some(Self::Junit),
-            _ => None,
-        }
-    }
-
-    pub fn all() -> Vec<(&'static str, &'static str)> {
-        vec![
-            ("json", "JSON - Full data export"),
-            ("csv", "CSV - Spreadsheet compatible"),
-            ("html", "HTML - Web report"),
-            ("md", "Markdown - Documentation"),
-            ("sarif", "SARIF - Dev integration"),
-            ("junit", "JUnit - CI/CD integration"),
-        ]
-    }
-}
+pub use crate::types::OutputFormat;
 
 pub struct CsvExporter;
 

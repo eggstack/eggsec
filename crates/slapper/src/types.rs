@@ -1,5 +1,6 @@
 //! Shared types used across the crate.
 
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -218,6 +219,38 @@ impl From<String> for SensitiveString {
 impl From<&str> for SensitiveString {
     fn from(s: &str) -> Self {
         Self(s.to_string())
+    }
+}
+
+/// Canonical output format for reports and CLI output.
+///
+/// Used by both CLI argument parsing and configuration deserialization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputFormat {
+    #[default]
+    Pretty,
+    Json,
+    Compact,
+    Html,
+    Csv,
+    Sarif,
+    Junit,
+    Markdown,
+}
+
+impl std::fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OutputFormat::Pretty => write!(f, "pretty"),
+            OutputFormat::Json => write!(f, "json"),
+            OutputFormat::Compact => write!(f, "compact"),
+            OutputFormat::Html => write!(f, "html"),
+            OutputFormat::Csv => write!(f, "csv"),
+            OutputFormat::Sarif => write!(f, "sarif"),
+            OutputFormat::Junit => write!(f, "junit"),
+            OutputFormat::Markdown => write!(f, "markdown"),
+        }
     }
 }
 

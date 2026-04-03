@@ -66,16 +66,6 @@ impl Default for HttpConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub enum OutputFormat {
-    #[default]
-    Pretty,
-    Json,
-    Csv,
-    Sarif,
-    Junit,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum Verbosity {
     #[default]
     Normal,

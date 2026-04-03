@@ -114,7 +114,6 @@ pub fn convert_to_html(report: &ScanReportData) -> String {
     use super::markdown::ScanSummary;
 
     let summary = ScanSummary::from(report);
-    #[allow(deprecated)]
     let findings: Vec<super::markdown::Finding> =
         report.findings.iter().map(|f| f.into()).collect();
 
@@ -125,7 +124,6 @@ pub fn convert_to_markdown(report: &ScanReportData) -> String {
     use super::markdown::{generate_markdown_report, ScanSummary};
 
     let summary = ScanSummary::from(report);
-    #[allow(deprecated)]
     let findings: Vec<super::markdown::Finding> =
         report.findings.iter().map(|f| f.into()).collect();
 
@@ -172,10 +170,8 @@ impl From<&ScanReportData> for super::markdown::ScanSummary {
     }
 }
 
-#[allow(deprecated)]
 impl From<&FindingData> for super::markdown::Finding {
     fn from(f: &FindingData) -> Self {
-        #[allow(deprecated)]
         super::markdown::Finding {
             title: f.title.clone(),
             severity: f.severity.clone(),

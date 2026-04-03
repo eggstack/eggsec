@@ -29,6 +29,7 @@
 
 pub mod cache;
 pub mod circuit_breaker;
+pub mod client_pool;
 pub mod formatting;
 pub mod http;
 pub mod output;
@@ -45,6 +46,7 @@ pub mod privilege;
 
 pub use formatting::{preserve_all, strip_controls};
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerRegistry, CircuitState};
+pub use client_pool::{ClientPool, OptimizedClientPool};
 pub use http::{
     create_http_client, create_http_client_with_options, create_http_client_with_proxy,
     create_insecure_client_with_options, create_insecure_http_client,

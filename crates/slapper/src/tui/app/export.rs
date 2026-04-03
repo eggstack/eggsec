@@ -1,4 +1,4 @@
-use crate::output::ExportFormat;
+use crate::types::OutputFormat;
 
 impl super::App {
     pub(super) fn export_results(&mut self) {
@@ -31,15 +31,16 @@ impl super::App {
         let filename = format!("{}.{}", base_name, ext);
 
         match self.export_format {
-            ExportFormat::Json => self.export_json(),
-            ExportFormat::Csv => self.export_csv(&filename),
-            ExportFormat::Html
-            | ExportFormat::Markdown
-            | ExportFormat::Sarif
-            | ExportFormat::Junit => {
+            OutputFormat::Json => self.export_json(),
+            OutputFormat::Csv => self.export_csv(&filename),
+            OutputFormat::Html
+            | OutputFormat::Markdown
+            | OutputFormat::Sarif
+            | OutputFormat::Junit => {
                 self.export_json();
                 self.export_converted(&filename);
             }
+            _ => self.export_json(),
         }
     }
 
@@ -201,10 +202,10 @@ impl super::App {
 
         if let Ok(report) = load_scan_report(&json_path) {
             let converted = match self.export_format {
-                ExportFormat::Html => crate::output::convert::convert_to_html(&report),
-                ExportFormat::Markdown => crate::output::convert::convert_to_markdown(&report),
-                ExportFormat::Sarif => crate::output::convert::convert_to_sarif(&report),
-                ExportFormat::Junit => crate::output::convert::convert_to_junit(&report),
+                OutputFormat::Html => crate::output::convert::convert_to_html(&report),
+                OutputFormat::Markdown => crate::output::convert::convert_to_markdown(&report),
+                OutputFormat::Sarif => crate::output::convert::convert_to_sarif(&report),
+                OutputFormat::Junit => crate::output::convert::convert_to_junit(&report),
                 _ => return,
             };
             self.save_export(filename, converted);

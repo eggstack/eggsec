@@ -60,7 +60,7 @@ impl Default for ScanConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputConfig {
     #[serde(default)]
-    pub format: super::http::OutputFormat,
+    pub format: crate::types::OutputFormat,
 
     #[serde(default)]
     pub verbosity: super::http::Verbosity,
@@ -84,7 +84,7 @@ pub struct OutputConfig {
 impl Default for OutputConfig {
     fn default() -> Self {
         Self {
-            format: super::http::OutputFormat::Pretty,
+            format: crate::types::OutputFormat::Pretty,
             verbosity: super::http::Verbosity::Normal,
             color: true,
             progress_bars: true,

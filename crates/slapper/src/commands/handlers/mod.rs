@@ -116,3 +116,20 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(args).await,
     }
 }
+
+async fn handle_no_command(cli: &Cli) -> Result<()> {
+    if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        crate::tui::run(cli.config.clone())?;
+    } else {
+        println!("No command specified and not running in interactive terminal.");
+        println!("Available commands:");
+        println!("  slapper load <url>          - Run HTTP load test");
+        println!("  slapper scan-ports <host>   - Scan ports");
+        println!("  slapper scan-endpoints <url> - Discover endpoints");
+        println!("  slapper fuzz <url>          - Fuzz target");
+        println!("  slapper recon <target>      - Reconnaissance");
+        println!("  slapper --help             - Show all commands");
+        println!("\nTo launch TUI, run from an interactive terminal.");
+    }
+    Ok(())
+}

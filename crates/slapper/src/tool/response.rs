@@ -305,15 +305,19 @@ impl ResponseSeverity {
             ResponseSeverity::None => "none",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Self {
+impl std::str::FromStr for ResponseSeverity {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "critical" => ResponseSeverity::Critical,
-            "high" => ResponseSeverity::High,
-            "medium" | "moderate" => ResponseSeverity::Medium,
-            "low" => ResponseSeverity::Low,
-            "info" | "informational" => ResponseSeverity::Info,
-            _ => ResponseSeverity::None,
+            "critical" => Ok(ResponseSeverity::Critical),
+            "high" => Ok(ResponseSeverity::High),
+            "medium" | "moderate" => Ok(ResponseSeverity::Medium),
+            "low" => Ok(ResponseSeverity::Low),
+            "info" | "informational" => Ok(ResponseSeverity::Info),
+            _ => Ok(ResponseSeverity::None),
         }
     }
 }
