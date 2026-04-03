@@ -10,6 +10,8 @@ use ratatui::{
 use serde::Serialize;
 use std::collections::VecDeque;
 
+const DEFAULT_HISTORY_LIMIT: usize = 100;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct HistoryEntry {
     pub id: usize,
@@ -71,7 +73,7 @@ impl HistoryTab {
         };
         self.next_id += 1;
         self.entries.push_front(entry);
-        if self.entries.len() > 100 {
+        if self.entries.len() > DEFAULT_HISTORY_LIMIT {
             self.entries.pop_back();
         }
         if self.selected.is_none() {

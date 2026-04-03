@@ -18,6 +18,7 @@ pub struct GraphQlTab {
     pub state: AppState,
     pub results_view: ScrollableText,
     pub focus_area: GraphQlFocusArea,
+    pub checkbox_focus_index: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -49,6 +50,7 @@ impl GraphQlTab {
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
             focus_area: GraphQlFocusArea::Inputs,
+            checkbox_focus_index: 0,
         }
     }
 
@@ -348,7 +350,14 @@ impl TabInput for GraphQlTab {
                 self.inputs.blur();
             }
             GraphQlFocusArea::Options => {
-                // Toggle focused checkbox
+                let checkboxes = [
+                    &mut self.introspection_checkbox,
+                    &mut self.inject_checkbox,
+                    &mut self.depth_bypass_checkbox,
+                    &mut self.alias_overload_checkbox,
+                ];
+                let idx = self.checkbox_focus_index % checkboxes.len();
+                checkboxes[idx].toggle();
             }
             GraphQlFocusArea::Results => {}
         }
@@ -385,6 +394,12 @@ impl TabInput for GraphQlTab {
     fn handle_left(&mut self) -> bool {
         match self.focus_area {
             GraphQlFocusArea::Inputs => self.inputs.move_left(),
+            GraphQlFocusArea::Options => {
+                if self.checkbox_focus_index > 0 {
+                    self.checkbox_focus_index -= 1;
+                }
+                true
+            }
             _ => false,
         }
     }
@@ -392,6 +407,10 @@ impl TabInput for GraphQlTab {
     fn handle_right(&mut self) -> bool {
         match self.focus_area {
             GraphQlFocusArea::Inputs => self.inputs.move_right(),
+            GraphQlFocusArea::Options => {
+                self.checkbox_focus_index = (self.checkbox_focus_index + 1).min(3);
+                true
+            }
             _ => false,
         }
     }

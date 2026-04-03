@@ -81,7 +81,7 @@ pub struct MaxMindSettings {
 pub struct GeoLocator {
     client: reqwest::Client,
     use_online: bool,
-    ipapi_key: Option<String>,
+    ipapi_key: Option<SensitiveString>,
     maxmind_settings: Option<MaxMindSettings>,
     maxmind_db_path: Option<PathBuf>,
     maxmind_reader: Option<Reader<Vec<u8>>>,
@@ -119,7 +119,7 @@ impl GeoLocator {
         self.use_online = enabled;
     }
 
-    pub fn set_ipapi_key(&mut self, key: Option<String>) {
+    pub fn set_ipapi_key(&mut self, key: Option<SensitiveString>) {
         self.ipapi_key = key;
     }
 
@@ -423,7 +423,7 @@ impl GeoLocator {
 
     async fn lookup_ipapi(&self, ip: &str) -> Result<GeoLocation> {
         let url = if let Some(ref key) = self.ipapi_key {
-            format!("https://ipapi.co/{}/json/?key={}", ip, key)
+            format!("https://ipapi.co/{}/json/?key={}", ip, key.expose_secret())
         } else {
             format!("https://ipapi.co/{}/json/", ip)
         };
@@ -623,8 +623,8 @@ pub async fn geolocation_lookup_with_config(
 ) -> Result<GeoLocation> {
     let mut locator = GeoLocator::new()?;
 
-        if let Some(key) = ipapi_key {
-        locator.set_ipapi_key(Some(key.expose_secret().to_string()));
+    if let Some(key) = ipapi_key {
+        locator.set_ipapi_key(Some(key.clone()));
     }
 
     if let Some(settings) = maxmind_settings.clone() {

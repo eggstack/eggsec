@@ -49,12 +49,12 @@ pub struct WaybackClient {
 }
 
 impl WaybackClient {
-    pub fn new(api_key: Option<String>) -> Result<Self> {
+    pub fn new(api_key: Option<SensitiveString>) -> Result<Self> {
         let client = create_http_client_with_options(30, |builder| {
             builder.user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         })?;
 
-        Ok(Self { client, api_key: api_key.map(SensitiveString::new) })
+        Ok(Self { client, api_key })
     }
 
     pub async fn get_snapshots(&self, domain: &str, limit: usize) -> Result<WaybackResult> {
@@ -162,6 +162,6 @@ pub async fn get_wayback_snapshots(
     api_key: Option<&SensitiveString>,
     limit: usize,
 ) -> Result<WaybackResult> {
-    let client = WaybackClient::new(api_key.map(|s| s.expose_secret().to_string()))?;
+    let client = WaybackClient::new(api_key.cloned())?;
     client.get_snapshots(domain, limit).await
 }

@@ -242,7 +242,9 @@ impl LoadTestRunner {
             client_builder = client_builder.proxy(proxy);
         }
 
-        let client = client_builder.build()?;
+        let client = client_builder.build().map_err(|e| {
+            crate::error::SlapperError::from(e).with_timeout(self.timeout.as_millis() as u64)
+        })?;
 
         let metrics = Arc::new(Mutex::new(Metrics::new(self.url.clone())));
 

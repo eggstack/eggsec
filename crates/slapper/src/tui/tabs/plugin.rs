@@ -391,15 +391,19 @@ impl PluginTab {
         }
     }
 
+    pub fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    pub fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
+    }
+
     pub fn handle_top(&mut self) {
-        for _ in 0..100 {
-            self.results_view.scroll_up(1);
-        }
+        self.results_view.scroll_to_top();
     }
 
     pub fn handle_bottom(&mut self) {
-        for _ in 0..100 {
-            self.results_view.scroll_down(1);
-        }
+        self.results_view.scroll_to_bottom();
     }
 }

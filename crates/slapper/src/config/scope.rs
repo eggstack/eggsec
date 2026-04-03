@@ -300,9 +300,6 @@ pub enum ScopeError {
 
     #[error("DNS resolution failed for '{0}': {1}")]
     DnsResolution(String, String),
-
-    #[error("Target out of scope: {0}")]
-    OutOfScope(String),
 }
 
 #[cfg(test)]

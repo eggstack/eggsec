@@ -72,6 +72,10 @@ impl ClientPool {
     pub fn pool_size(&self) -> usize {
         self.clients.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.clients.is_empty()
+    }
 }
 
 impl Default for ClientPool {

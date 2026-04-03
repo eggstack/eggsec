@@ -640,8 +640,6 @@ impl ProxyTab {
             self.results_view.scroll_down(1);
         }
     }
-
-    pub fn render_overlays(&mut self, _f: &mut Frame, _area: Rect) {}
 }
 
 fn parse_proxy_url(

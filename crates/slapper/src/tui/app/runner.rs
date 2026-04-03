@@ -49,6 +49,34 @@ pub fn run(config_path: Option<String>) -> Result<()> {
 
 fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
     let MouseEventKind::Down(button) = mouse_event.kind else {
+        if let MouseEventKind::ScrollUp = mouse_event.kind {
+            if !app.show_help && !app.show_search && !app.show_http_options {
+                if app
+                    .command_palette
+                    .as_ref()
+                    .map(|p| p.visible)
+                    .unwrap_or(false)
+                {
+                    return;
+                }
+                app.page_up();
+            }
+            return;
+        }
+        if let MouseEventKind::ScrollDown = mouse_event.kind {
+            if !app.show_help && !app.show_search && !app.show_http_options {
+                if app
+                    .command_palette
+                    .as_ref()
+                    .map(|p| p.visible)
+                    .unwrap_or(false)
+                {
+                    return;
+                }
+                app.page_down();
+            }
+            return;
+        }
         return;
     };
 
@@ -310,6 +338,17 @@ where
                             } else {
                                 app.request_confirmation(PendingAction::ResetTab);
                             }
+                        }
+                    }
+                    (KeyModifiers::NONE, KeyCode::Char('0')) if app.mode == InputMode::Normal => {
+                        app.select_tab(9);
+                    }
+                    (KeyModifiers::NONE, KeyCode::Char(c))
+                        if app.mode == InputMode::Normal && ('1'..='9').contains(&c) =>
+                    {
+                        let idx = c.to_digit(10).unwrap() as usize - 1;
+                        if idx < Tab::all().len() {
+                            app.select_tab(idx);
                         }
                     }
                     (KeyModifiers::NONE, KeyCode::Char('s')) if app.mode == InputMode::Normal => {

@@ -1,3 +1,4 @@
+use crate::scanner::endpoints::EndpointScanConfig;
 use crate::scanner::spoof::SpoofConfig;
 use crate::tui::workers::TaskResult;
 
@@ -47,16 +48,16 @@ pub async fn run_endpoint_scan(
     } else {
         DEFAULT_ENDPOINTS.iter().map(|s| s.to_string()).collect()
     };
-    let results = scan_endpoints(
-        &target,
+    let results = scan_endpoints(EndpointScanConfig {
+        base_url: target,
         endpoints,
         concurrency,
-        timeout,
-        false,
-        true,
-        SpoofConfig::default(),
-        true,
-    )
+        timeout_duration: timeout,
+        include_404: false,
+        tui_mode: true,
+        spoof_config: SpoofConfig::default(),
+        verify_tls: true,
+    })
     .await?;
 
     let total = results.endpoints_scanned as u64;

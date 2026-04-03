@@ -460,17 +460,17 @@ impl Default for HelpContent {
                     category: "Control".to_string(),
                 },
                 HelpCommand {
-                    key: "Ctrl+Q".to_string(),
-                    description: "Quit application".to_string(),
+                    key: "q".to_string(),
+                    description: "Quit application (when idle)".to_string(),
                     category: "Control".to_string(),
                 },
                 HelpCommand {
-                    key: "Ctrl+S".to_string(),
-                    description: "Save settings".to_string(),
+                    key: "s".to_string(),
+                    description: "Save settings (Settings tab)".to_string(),
                     category: "Settings".to_string(),
                 },
                 HelpCommand {
-                    key: "Ctrl+R".to_string(),
+                    key: "r".to_string(),
                     description: "Reset current tab".to_string(),
                     category: "Navigation".to_string(),
                 },
@@ -485,7 +485,7 @@ impl Default for HelpContent {
                     category: "Navigation".to_string(),
                 },
                 HelpCommand {
-                    key: "Ctrl+F".to_string(),
+                    key: "/".to_string(),
                     description: "Toggle search".to_string(),
                     category: "Navigation".to_string(),
                 },
@@ -495,7 +495,7 @@ impl Default for HelpContent {
                     category: "Navigation".to_string(),
                 },
                 HelpCommand {
-                    key: "Ctrl+G".to_string(),
+                    key: "gg/G".to_string(),
                     description: "Go to top/bottom".to_string(),
                     category: "Navigation".to_string(),
                 },

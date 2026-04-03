@@ -59,19 +59,19 @@ pub struct ThreatIntelClient {
 
 impl ThreatIntelClient {
     pub fn new(
-        virustotal_key: Option<String>,
-        alienvault_key: Option<String>,
-        shodan_key: Option<String>,
-        threatstream_key: Option<String>,
+        virustotal_key: Option<SensitiveString>,
+        alienvault_key: Option<SensitiveString>,
+        shodan_key: Option<SensitiveString>,
+        threatstream_key: Option<SensitiveString>,
     ) -> Result<Self> {
         let client = create_http_client(30)?;
 
         Ok(Self {
             client,
-            virustotal_key: virustotal_key.map(SensitiveString::new),
-            alienvault_key: alienvault_key.map(SensitiveString::new),
-            shodan_key: shodan_key.map(SensitiveString::new),
-            threatstream_key: threatstream_key.map(SensitiveString::new),
+            virustotal_key,
+            alienvault_key,
+            shodan_key,
+            threatstream_key,
         })
     }
 
@@ -423,9 +423,9 @@ pub async fn check_threat_intel(
     shodan_key: Option<&SensitiveString>,
 ) -> Result<ThreatIntel> {
     let client = ThreatIntelClient::new(
-        virustotal_key.map(|s| s.expose_secret().to_string()),
-        alienvault_key.map(|s| s.expose_secret().to_string()),
-        shodan_key.map(|s| s.expose_secret().to_string()),
+        virustotal_key.cloned(),
+        alienvault_key.cloned(),
+        shodan_key.cloned(),
         None,
     )?;
 

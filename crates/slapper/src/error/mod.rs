@@ -252,7 +252,7 @@ impl From<hickory_resolver::error::ResolveError> for SlapperError {
 
 impl From<anyhow::Error> for SlapperError {
     fn from(e: anyhow::Error) -> Self {
-        SlapperError::Runtime(e.to_string())
+        SlapperError::Runtime(format!("{:#}", e))
     }
 }
 

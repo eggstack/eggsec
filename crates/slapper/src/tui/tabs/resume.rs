@@ -65,6 +65,14 @@ impl ResumeTab {
     pub fn page_down(&mut self, page_size: usize) {
         self.results_view.page_down(page_size);
     }
+
+    pub fn handle_top(&mut self) {
+        self.results_view.scroll_to_top();
+    }
+
+    pub fn handle_bottom(&mut self) {
+        self.results_view.scroll_to_bottom();
+    }
 }
 
 impl Default for ResumeTab {

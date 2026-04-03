@@ -140,40 +140,15 @@ pub fn convert_to_csv(report: &ScanReportData) -> String {
         csv.push_str(&format!(
             "{},{},{},{},{},{}\n",
             finding.severity,
-            escape_csv(&finding.category),
-            escape_csv(&finding.title),
-            escape_csv(&finding.location),
-            escape_csv(&finding.description),
+            super::escape::escape_csv(&finding.category),
+            super::escape::escape_csv(&finding.title),
+            super::escape::escape_csv(&finding.location),
+            super::escape::escape_csv(&finding.description),
             finding.cve_ids.join(";")
         ));
     }
 
     csv
-}
-
-#[allow(dead_code)]
-fn escape_xml(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
-}
-
-#[allow(dead_code)]
-fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
-fn escape_csv(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
-        format!("\"{}\"", s.replace('"', "\"\""))
-    } else {
-        s.to_string()
-    }
 }
 
 impl From<&ScanReportData> for super::markdown::ScanSummary {

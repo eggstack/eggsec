@@ -1,5 +1,6 @@
 use crate::distributed::{Heartbeat, Task, TaskResult, TaskType, WorkerRegistration, WorkerStatus};
 use crate::error::Result;
+use crate::scanner::endpoints::EndpointScanConfig;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -278,16 +279,16 @@ async fn process_endpoints(task: Task) -> Result<serde_json::Value> {
         .and_then(|v| v.as_u64())
         .unwrap_or(20) as usize;
 
-    let results = crate::scanner::endpoints::scan_endpoints(
-        target,
-        wordlist,
+    let results = crate::scanner::endpoints::scan_endpoints(EndpointScanConfig {
+        base_url: target.to_string(),
+        endpoints: wordlist,
         concurrency,
-        std::time::Duration::from_secs(10),
-        false,
-        false,
-        crate::scanner::spoof::SpoofConfig::default(),
-        true,
-    )
+        timeout_duration: std::time::Duration::from_secs(10),
+        include_404: false,
+        tui_mode: false,
+        spoof_config: crate::scanner::spoof::SpoofConfig::default(),
+        verify_tls: true,
+    })
     .await?;
 
     Ok(serde_json::json!({

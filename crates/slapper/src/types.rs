@@ -114,6 +114,12 @@ impl Ord for Severity {
 /// Use for passwords, API keys, tokens, and other sensitive credentials.
 /// Serializes/deserializes transparently as a plain string.
 /// Comparison is constant-time to prevent timing attacks.
+///
+/// # Intentionally Not Implemented
+///
+/// `Hash` is intentionally **not** implemented. Hashing a secret would expose
+/// a stable fingerprint that could be used for correlation attacks. If you need
+/// to use a credential as a map key, derive a non-secret identifier instead.
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct SensitiveString(String);
 

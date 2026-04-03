@@ -12,6 +12,7 @@ use super::session::{save, PipelineSession};
 use super::stage::{parse_stages, Stage};
 use crate::cli::{CommonHttpArgs, ScanArgs, ScanProfile};
 use crate::config::SlapperConfig;
+use crate::scanner::endpoints::EndpointScanConfig;
 use crate::scanner::spoof::SpoofConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -298,16 +299,16 @@ impl Pipeline {
             .map(|c| c.http.verify_tls)
             .unwrap_or(true);
 
-        let results = crate::scanner::endpoints::scan_endpoints(
-            &base_url,
-            get_default_endpoints(),
-            self.concurrency,
-            std::time::Duration::from_secs(10),
-            false,
-            self.tui_mode,
-            self.spoof_config.clone(),
+        let results = crate::scanner::endpoints::scan_endpoints(EndpointScanConfig {
+            base_url: base_url.clone(),
+            endpoints: get_default_endpoints(),
+            concurrency: self.concurrency,
+            timeout_duration: std::time::Duration::from_secs(10),
+            include_404: false,
+            tui_mode: self.tui_mode,
+            spoof_config: self.spoof_config.clone(),
             verify_tls,
-        )
+        })
         .await?;
 
         let mut context = self.context.lock().await;

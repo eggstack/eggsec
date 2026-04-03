@@ -106,7 +106,9 @@ impl FuzzEngine {
             }
         }
 
-        Ok(client_builder.build()?)
+        client_builder.build().map_err(|e| {
+            crate::error::SlapperError::from(e).with_timeout(args.timeout * 1000)
+        })
     }
 
     pub fn new_from_waf_args(args: WafStressArgs) -> Result<Self> {

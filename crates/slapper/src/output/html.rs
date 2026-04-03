@@ -176,7 +176,7 @@ impl HtmlReport {
             .map(|e| {
                 format!(
                     r#"<div class="evidence"><pre>{}</pre></div>"#,
-                    escape_html(e)
+                    super::escape::escape_html(e)
                 )
             })
             .unwrap_or_default();
@@ -207,12 +207,12 @@ impl HtmlReport {
                 {}
             </div>"#,
             severity_class,
-            escape_html(&finding.title),
+            super::escape::escape_html(&finding.title),
             severity_class,
             finding.severity,
-            escape_html(&finding.category),
-            escape_html(&finding.location),
-            escape_html(&finding.description),
+            super::escape::escape_html(&finding.category),
+            super::escape::escape_html(&finding.location),
+            super::escape::escape_html(&finding.description),
             evidence_block,
             cve_block,
         )
@@ -307,16 +307,9 @@ impl HtmlReport {
                 .container { padding: 1rem; }
                 .severity-summary { flex-direction: column; }
             }
+        }
         "#.to_string()
     }
-}
-
-fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
 }
 
 #[allow(deprecated)]

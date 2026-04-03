@@ -13,6 +13,18 @@ use tokio::sync::Mutex;
 use crate::cli::EndpointScanArgs;
 use crate::config::SlapperConfig;
 
+#[derive(Clone)]
+pub struct EndpointScanConfig {
+    pub base_url: String,
+    pub endpoints: Vec<String>,
+    pub concurrency: usize,
+    pub timeout_duration: Duration,
+    pub include_404: bool,
+    pub tui_mode: bool,
+    pub spoof_config: SpoofConfig,
+    pub verify_tls: bool,
+}
+
 pub static DEFAULT_ENDPOINTS: &[&str] = &[
     "/admin",
     "/admin/login",
@@ -383,16 +395,16 @@ pub async fn run_cli(args: EndpointScanArgs, config: &SlapperConfig) -> Result<(
         eprintln!("{}", format_spoof_warning(&spoof_config));
     }
 
-    let results = scan_endpoints(
-        &args.url,
+    let results = scan_endpoints(EndpointScanConfig {
+        base_url: args.url.clone(),
         endpoints,
-        args.concurrency,
-        Duration::from_secs(timeout_secs),
-        args.include_404,
-        false,
+        concurrency: args.concurrency,
+        timeout_duration: Duration::from_secs(timeout_secs),
+        include_404: args.include_404,
+        tui_mode: false,
         spoof_config,
-        config.http.verify_tls,
-    )
+        verify_tls: config.http.verify_tls,
+    })
     .await?;
 
     if args.verbose {
@@ -569,28 +581,19 @@ mod tests {
     }
 }
 
-pub async fn scan_endpoints(
-    base_url: &str,
-    endpoints: Vec<String>,
-    concurrency: usize,
-    timeout_duration: Duration,
-    include_404: bool,
-    tui_mode: bool,
-    spoof_config: SpoofConfig,
-    verify_tls: bool,
-) -> Result<EndpointScanResults> {
+pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanResults> {
     let client = Client::builder()
-        .timeout(timeout_duration)
-        .danger_accept_invalid_certs(!verify_tls)
+        .timeout(config.timeout_duration)
+        .danger_accept_invalid_certs(!config.verify_tls)
         .redirect(reqwest::redirect::Policy::limited(5))
-        .build()?;
+        .build().map_err(|e| crate::error::SlapperError::from(e).with_timeout(config.timeout_duration.as_millis() as u64))?;
 
     let results: Arc<Mutex<Vec<EndpointResult>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let progress = if tui_mode {
+    let progress = if config.tui_mode {
         None
     } else {
-        let pb = Arc::new(ProgressBar::new(endpoints.len() as u64));
+        let pb = Arc::new(ProgressBar::new(config.endpoints.len() as u64));
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} endpoints ({eta})")
@@ -600,20 +603,20 @@ pub async fn scan_endpoints(
         Some(pb)
     };
 
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(config.concurrency));
     let mut handles = Vec::new();
     let start = std::time::Instant::now();
-    let base = base_url.trim_end_matches('/');
-    let endpoints_count = endpoints.len();
+    let base = config.base_url.trim_end_matches('/');
+    let endpoints_count = config.endpoints.len();
 
-    for endpoint in endpoints {
+    for endpoint in config.endpoints {
         let permit = semaphore.clone().acquire_owned().await?;
         let client = client.clone();
         let results = results.clone();
         let progress = progress.clone();
         let url = format!("{}{}", base, endpoint);
         let endpoint_path = endpoint;
-        let spoof_config = spoof_config.clone();
+        let spoof_config = config.spoof_config.clone();
 
         let handle = tokio::spawn(async move {
             let request_start = std::time::Instant::now();
@@ -633,7 +636,7 @@ pub async fn scan_endpoints(
                 let status = response.status();
                 let status_code = status.as_u16();
 
-                if include_404 || status_code != 404 {
+                if config.include_404 || status_code != 404 {
                     let content_length = response.content_length();
                     let redirect = if status.is_redirection() {
                         response
@@ -686,7 +689,7 @@ pub async fn scan_endpoints(
     let interesting = results.iter().filter(|r| r.interesting).count();
 
     Ok(EndpointScanResults {
-        base_url: base_url.to_string(),
+        base_url: config.base_url.clone(),
         endpoints_scanned: endpoints_count,
         endpoints_found,
         interesting_findings: interesting,

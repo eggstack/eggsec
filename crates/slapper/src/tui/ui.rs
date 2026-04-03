@@ -518,15 +518,6 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         crate::tui::tabs::Tab::Plugin => ("Plugins not available".to_string(), Color::Gray),
     };
 
-    let _mode_style = match app.mode {
-        super::InputMode::Normal => Style::default()
-            .fg(Color::Green)
-            .add_modifier(Modifier::BOLD),
-        super::InputMode::Insert => Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
-    };
-
     let help_text = if app.is_help_visible() {
         " [Esc] Close | [Space] Help | [Enter] Confirm | [h/l] Tab | [j/k] Nav | [w/b] Word | [gg/Top] [G/Bot] | [n/p] Tab | [q] Quit ".to_string()
     } else {

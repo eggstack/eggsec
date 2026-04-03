@@ -481,8 +481,6 @@ impl PacketTab {
         }
     }
 
-    pub fn render_overlays(&mut self, _f: &mut Frame, _area: Rect) {}
-
     fn update_results_view(&mut self) {
         self.results_view.clear();
         let lines: Vec<Line> = self.results.iter().map(|s| Line::from(s.clone())).collect();

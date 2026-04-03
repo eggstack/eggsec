@@ -17,7 +17,7 @@ impl FuzzEngine {
             .timeout(Duration::from_secs(self.args.timeout))
             .danger_accept_invalid_certs(insecure)
             .redirect(reqwest::redirect::Policy::limited(5))
-            .build()?;
+            .build().map_err(|e| crate::error::SlapperError::from(e).with_timeout(self.args.timeout * 1000))?;
 
         match fuzzer_type {
             "graphql" => {

@@ -183,27 +183,6 @@ pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-#[allow(dead_code)]
-pub fn help_popup() -> Popup {
-    Popup::new("Help - Keyboard Shortcuts", PopupKind::Help)
-        .content(vec![
-            "General:".to_string(),
-            "  Tab/Shift+Tab    - Next/Previous tab".to_string(),
-            "  h/l              - Previous/Next tab".to_string(),
-            "  j/k              - Navigate down/up".to_string(),
-            "  1-9              - Jump to tab by index".to_string(),
-            "  Enter            - Edit field / Start task / Confirm".to_string(),
-            "  Esc              - Blur input / Close popup".to_string(),
-            "  Ctrl+C           - Stop running task".to_string(),
-            "  q                - Quit (when idle)".to_string(),
-            "  Space            - Show this help".to_string(),
-            "  r                - Reset form to defaults".to_string(),
-        ])
-        .with_width(55)
-        .with_height(18)
-        .buttons(vec!["Close"])
-}
-
 pub fn help_popup_for_tab(tab: crate::tui::tabs::Tab) -> Popup {
     let title = format!("Help - {}", tab.title());
     let cli_cmd = tab.cli_command();

@@ -4,6 +4,7 @@ pub mod baseline;
 pub mod convert;
 pub mod csv;
 pub mod dedup;
+pub mod escape;
 pub mod html;
 pub mod junit;
 pub mod markdown;

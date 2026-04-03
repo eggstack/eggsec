@@ -179,7 +179,7 @@ mod tests {
         assert_eq!(config.http.timeout_secs, 30);
         assert_eq!(config.scan.default_concurrency, 10);
         assert_eq!(config.scan.port_timeout_secs, 2);
-        assert!(!config.http.verify_tls || config.http.verify_tls);
+        assert!(config.http.verify_tls);
     }
 
     #[test]

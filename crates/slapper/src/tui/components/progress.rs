@@ -1,15 +1,19 @@
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
-    widgets::{Block, Borders, Gauge},
+    text::{Line, Span},
+    widgets::{Block, Borders, Gauge, Paragraph},
     Frame,
 };
+
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 pub struct ProgressGauge {
     pub label: String,
     pub current: u64,
     pub total: u64,
     pub color: Color,
+    pub spinner_frame: usize,
 }
 
 impl ProgressGauge {
@@ -19,6 +23,7 @@ impl ProgressGauge {
             current: 0,
             total: 100,
             color: Color::Blue,
+            spinner_frame: 0,
         }
     }
 
@@ -39,6 +44,11 @@ impl ProgressGauge {
 
     pub fn update(&mut self, current: u64) {
         self.current = current;
+        self.spinner_frame = (self.spinner_frame + 1) % SPINNER_FRAMES.len();
+    }
+
+    pub fn tick_spinner(&mut self) {
+        self.spinner_frame = (self.spinner_frame + 1) % SPINNER_FRAMES.len();
     }
 
     pub fn percent(&self) -> u16 {
@@ -80,56 +90,45 @@ impl ProgressGauge {
 
         f.render_widget(gauge, area);
     }
-}
 
-#[allow(dead_code)]
-pub struct StatusBar {
-    pub status: String,
-    pub status_color: Color,
-    pub help_text: String,
-}
-
-#[allow(dead_code)]
-impl StatusBar {
-    pub fn new() -> Self {
-        Self {
-            status: String::new(),
-            status_color: Color::Gray,
-            help_text: " [Tab] Next tab | [?] Help | [q] Quit ".to_string(),
+    pub fn render_indeterminate(&self, f: &mut Frame, area: Rect) {
+        if area.width < 5 || area.height < 3 {
+            return;
         }
+        let spinner = SPINNER_FRAMES[self.spinner_frame % SPINNER_FRAMES.len()];
+        let label = format!("{} {} - running...", spinner, self.label);
+
+        let gauge = Gauge::default()
+            .block(Block::default().borders(Borders::ALL).title("Progress"))
+            .gauge_style(Style::default().fg(self.color))
+            .percent(0)
+            .label(label);
+
+        f.render_widget(gauge, area);
     }
 
-    pub fn status(mut self, status: impl Into<String>) -> Self {
-        self.status = status.into();
-        self
-    }
+    pub fn render_status_line(&self, f: &mut Frame, area: Rect) {
+        if area.width < 5 || area.height < 1 {
+            return;
+        }
+        let spinner = SPINNER_FRAMES[self.spinner_frame % SPINNER_FRAMES.len()];
+        let text = if self.total > 0 && self.current <= self.total {
+            format!(
+                "{} {} - {}/{} ({}%)",
+                spinner,
+                self.label,
+                self.current,
+                self.total,
+                self.percent()
+            )
+        } else {
+            format!("{} {} - running...", spinner, self.label)
+        };
 
-    pub fn color(mut self, color: Color) -> Self {
-        self.status_color = color;
-        self
-    }
-
-    pub fn render(&self, f: &mut Frame, area: Rect) {
-        let chunks = ratatui::layout::Layout::default()
-            .direction(ratatui::layout::Direction::Horizontal)
-            .constraints([
-                ratatui::layout::Constraint::Percentage(50),
-                ratatui::layout::Constraint::Percentage(50),
-            ])
-            .split(area);
-
-        let status = ratatui::widgets::Paragraph::new(self.status.as_str())
-            .style(Style::default().fg(self.status_color));
-        f.render_widget(status, chunks[0]);
-
-        let help = ratatui::widgets::Paragraph::new(self.help_text.as_str())
-            .style(Style::default().fg(Color::DarkGray));
-        f.render_widget(help, chunks[1]);
-    }
-}
-
-impl Default for StatusBar {
-    fn default() -> Self {
-        Self::new()
+        let paragraph = Paragraph::new(Line::from(Span::styled(
+            text,
+            Style::default().fg(self.color),
+        )));
+        f.render_widget(paragraph, area);
     }
 }

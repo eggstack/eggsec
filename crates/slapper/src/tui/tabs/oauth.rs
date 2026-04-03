@@ -18,6 +18,7 @@ pub struct OAuthTab {
     pub state: AppState,
     pub results_view: ScrollableText,
     pub focus_area: OAuthFocusArea,
+    pub checkbox_focus_index: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -51,6 +52,7 @@ impl OAuthTab {
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
             focus_area: OAuthFocusArea::Inputs,
+            checkbox_focus_index: 0,
         }
     }
 
@@ -385,7 +387,14 @@ impl TabInput for OAuthTab {
                 self.inputs.blur();
             }
             OAuthFocusArea::Options => {
-                // Toggle focused checkbox
+                let checkboxes = [
+                    &mut self.redirect_test_checkbox,
+                    &mut self.scope_test_checkbox,
+                    &mut self.state_test_checkbox,
+                    &mut self.grant_test_checkbox,
+                ];
+                let idx = self.checkbox_focus_index % checkboxes.len();
+                checkboxes[idx].toggle();
             }
             OAuthFocusArea::Results => {}
         }
@@ -422,6 +431,12 @@ impl TabInput for OAuthTab {
     fn handle_left(&mut self) -> bool {
         match self.focus_area {
             OAuthFocusArea::Inputs => self.inputs.move_left(),
+            OAuthFocusArea::Options => {
+                if self.checkbox_focus_index > 0 {
+                    self.checkbox_focus_index -= 1;
+                }
+                true
+            }
             _ => false,
         }
     }
@@ -429,6 +444,10 @@ impl TabInput for OAuthTab {
     fn handle_right(&mut self) -> bool {
         match self.focus_area {
             OAuthFocusArea::Inputs => self.inputs.move_right(),
+            OAuthFocusArea::Options => {
+                self.checkbox_focus_index = (self.checkbox_focus_index + 1).min(3);
+                true
+            }
             _ => false,
         }
     }

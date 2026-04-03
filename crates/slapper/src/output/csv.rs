@@ -49,12 +49,12 @@ impl CsvExporter {
         for f in findings {
             output.push_str(&format!(
                 "{},{},{},{},{},{}\n",
-                escape_csv(&f.severity),
-                escape_csv(&f.target),
-                escape_csv(&f.path),
-                escape_csv(&f.description),
-                escape_csv(f.cve.as_deref().unwrap_or("")),
-                escape_csv(f.remediation.as_deref().unwrap_or("")),
+                super::escape::escape_csv(&f.severity),
+                super::escape::escape_csv(&f.target),
+                super::escape::escape_csv(&f.path),
+                super::escape::escape_csv(&f.description),
+                super::escape::escape_csv(f.cve.as_deref().unwrap_or("")),
+                super::escape::escape_csv(f.remediation.as_deref().unwrap_or("")),
             ));
         }
 
@@ -72,12 +72,12 @@ impl CsvExporter {
         for p in ports {
             output.push_str(&format!(
                 "{},{},{},{},{},{}\n",
-                escape_csv(&p.host),
+                super::escape::escape_csv(&p.host),
                 p.port,
-                escape_csv(&p.protocol),
-                escape_csv(p.service.as_deref().unwrap_or("")),
-                escape_csv(p.version.as_deref().unwrap_or("")),
-                escape_csv(&p.state),
+                super::escape::escape_csv(&p.protocol),
+                super::escape::escape_csv(p.service.as_deref().unwrap_or("")),
+                super::escape::escape_csv(p.version.as_deref().unwrap_or("")),
+                super::escape::escape_csv(&p.state),
             ));
         }
 
@@ -95,23 +95,15 @@ impl CsvExporter {
         for e in endpoints {
             output.push_str(&format!(
                 "{},{},{},{},{}\n",
-                escape_csv(&e.url),
-                escape_csv(&e.method),
+                super::escape::escape_csv(&e.url),
+                super::escape::escape_csv(&e.method),
                 e.status,
-                escape_csv(e.content_type.as_deref().unwrap_or("")),
+                super::escape::escape_csv(e.content_type.as_deref().unwrap_or("")),
                 e.content_length,
             ));
         }
 
         output
-    }
-}
-
-fn escape_csv(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
-        format!("\"{}\"", s.replace('"', "\"\""))
-    } else {
-        s.to_string()
     }
 }
 
