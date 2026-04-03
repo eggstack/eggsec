@@ -169,7 +169,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (1415 lines — dispatch macros in dispatch.rs) |
+| Largest file | `tui/app/mod.rs` (591 lines — split into submodules) |
 
 ## Planning
 
@@ -217,12 +217,12 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ### TUI-Specific Patterns
 
 - `tui/app/runner.rs` contains the main event loop (`run_app`)
-- `tui/app/mod.rs` contains the `App` struct and all delegation methods
+- `tui/app/mod.rs` contains the `App` struct (591 lines); split into submodules: `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
 - `tui/workers/` directory contains 6 files: `runner.rs`, `scanner.rs`, `fuzzer.rs`, `network.rs`, `api.rs`, `recon.rs`
 - Tab dispatch uses match statements across ~18+ methods (22-arm matches)
 - TUI uses ratatui 0.30 + crossterm 0.28 with immediate-mode rendering
 - 22 tab variants exist; all 22 are fully functional (wired in Wave 3)
-- `tui/app/mod.rs` contains ~1400 lines - uses dispatch macros in `dispatch.rs` for tab delegation
+- `tui/app/mod.rs` contains ~590 lines - uses dispatch macros in `dispatch.rs` for tab delegation
 - Tab cfg attributes: `Nse` and `Plugin` variants are always present in the Tab enum; use both `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]` arms for feature-gated dispatch
 
 ### Output Module

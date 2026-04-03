@@ -105,10 +105,10 @@ Already implemented with AiClient, SmartWafBypass, AdaptiveScanEngine, AiPayload
 
 ## Remaining Work
 
-### Wave 4: TUI Architecture
+### Wave 4: TUI Architecture ✅ (2/3 items done)
 
-- **4.11 Enum-dispatch trait pattern**: Replace match blocks with trait objects
-- **4.12 Extract `app/mod.rs` into submodules**: Target < 600 lines (currently 1415)
+- **4.11 Enum-dispatch trait pattern**: The existing `dispatch!` macros already implement enum-dispatch. The explicit match blocks in `handle_enter` handle non-uniform behavior (tabs have different spawning logic - PacketTab has conditional `current_view`, some tabs don't spawn). Current architecture is appropriate.
+- **4.12 Extract `app/mod.rs` into submodules**: ✅ Done - mod.rs is now 591 lines (< 600 target). Split into: `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
 
 ---
 
@@ -121,7 +121,7 @@ Already implemented with AiClient, SmartWafBypass, AdaptiveScanEngine, AiPayload
 | **2B** Dead code/dedup | 8 items | Yes | 8/8 DONE |
 | **2C** Minor fixes | 7 items | Yes | 7/7 DONE |
 | **3** TUI quick wins | 12 items | Yes | 12/12 DONE |
-| **4** TUI architecture | 3 items | Partially | 1/3 DONE |
+| **4** TUI architecture | 3 items | Partially | 2/3 DONE |
 | **5** Large file refactoring | 5 items | Yes | 5/5 DONE |
 | **6** AI multi-provider | 13 items | Mostly sequential | ✅ DONE |
 | **7** CI/CD & tooling | 5 items | Yes | 5/5 DONE |
@@ -159,7 +159,7 @@ cargo check --lib -p slapper --features full
 | `SensitiveString` API keys | No plain String clones in recon | ✅ |
 | Escape functions | Single canonical location | ✅ (output/escape.rs) |
 | Dead code | Removed | ✅ |
-| `tui/app/mod.rs` | < 600 lines | ⚠️ 1415 (dispatch done) |
+| `tui/app/mod.rs` | < 600 lines | ✅ 591 (split into submodules) |
 | `recon/mod.rs` | < 150 lines | ✅ 137 |
 | TUI tab exports | All 22 tabs export results | ✅ (WafStress fixed) |
 | AI providers | 4+ providers working | ✅ |

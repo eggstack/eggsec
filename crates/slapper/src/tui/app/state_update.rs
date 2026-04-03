@@ -1,0 +1,220 @@
+use crate::tui::tabs::TabState;
+use crate::tui::workers::TaskResult;
+
+impl super::App {
+    pub(super) fn update(&mut self) {
+        if let Some(ref mut rx) = self.progress_rx {
+            use tokio::sync::mpsc;
+            match rx.try_recv() {
+                Ok((completed, total)) => {
+                    self.update_progress(completed, total);
+                }
+                Err(mpsc::error::TryRecvError::Empty) => {}
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    self.progress_rx = None;
+                }
+            }
+        }
+
+        if let Some(ref mut rx) = self.result_rx {
+            use tokio::sync::mpsc;
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.handle_result(result);
+                }
+                Err(mpsc::error::TryRecvError::Empty) => {}
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    self.result_rx = None;
+                }
+            }
+        }
+    }
+
+    fn update_progress(&mut self, completed: u64, total: u64) {
+        use super::tabs::Tab;
+        match self.current_tab {
+            Tab::Recon => self.recon.update_progress(completed, total),
+            Tab::Load => self.load.update_progress(completed, total),
+            Tab::ScanPorts => self.scan_ports.update_progress(completed, total),
+            Tab::ScanEndpoints => self.scan_endpoints.update_progress(completed, total),
+            Tab::Fingerprint => self.fingerprint.update_progress(completed, total),
+            Tab::Fuzz => self.fuzz.update_progress(completed, total),
+            Tab::Waf => self.waf.update_progress(completed, total),
+            Tab::WafStress => self.waf_stress.update_progress(completed, total),
+            Tab::Scan => self.scan.update_progress(
+                self.scan
+                    .stages
+                    .iter()
+                    .filter(|s| matches!(s.status, super::tabs::StageStatus::Completed))
+                    .count() as u64,
+                self.scan.stages.len() as u64,
+            ),
+            _ => {}
+        }
+    }
+
+    pub(super) fn handle_result(&mut self, result: TaskResult) {
+        match result {
+            TaskResult::LoadTest(r) => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.add_load_test_result(
+                        &r.target_url,
+                        r.total_requests,
+                        r.successful_requests,
+                        r.failed_requests,
+                        r.requests_per_second,
+                        r.latency_mean_ms,
+                    );
+                }
+                self.load.set_results(r);
+            }
+            #[cfg(feature = "stress-testing")]
+            TaskResult::StressTest { target, stats } => {
+                let pps = if stats.duration_ms > 0 {
+                    (stats.packets_sent * 1000) / stats.duration_ms
+                } else {
+                    0
+                };
+                if let Ok(mut h) = self.history.lock() {
+                    h.add_load_test_result(
+                        "stress-test",
+                        stats.packets_sent,
+                        stats.packets_sent.saturating_sub(stats.errors),
+                        stats.errors,
+                        pps as f64,
+                        0.0,
+                    );
+                }
+                self.load.set_stress_results(target.clone(), stats);
+            }
+            TaskResult::PortScan(r) => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.add_port_scan_result(
+                        &r.host,
+                        r.ports_scanned as usize,
+                        r.open_ports.iter().map(|p| p.port).collect(),
+                    );
+                }
+                self.scan_ports.set_results(r);
+            }
+            TaskResult::EndpointScan(r) => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.add_endpoint_scan_result(
+                        &r.base_url,
+                        r.endpoints_found,
+                        r.interesting_findings,
+                    );
+                }
+                self.scan_endpoints.set_results(r);
+            }
+            TaskResult::Fingerprint(r) => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.add_fingerprint_result(
+                        &r.host,
+                        r.services_identified,
+                        r.results
+                            .iter()
+                            .map(|fp| format!("{}: {}", fp.port, fp.service))
+                            .collect(),
+                    );
+                }
+                self.fingerprint.set_results(r);
+            }
+            TaskResult::WafDetection(r) => {
+                let waf_name = r.waf_name.clone().unwrap_or_default();
+                if let Ok(mut h) = self.history.lock() {
+                    h.add_waf_result("<target>", r.waf_name.is_some(), &waf_name, 0);
+                }
+                self.waf.set_detection_result(r);
+            }
+            TaskResult::WafBypass {
+                detection,
+                bypasses,
+            } => {
+                let success_count = bypasses.iter().filter(|b| b.success).count();
+                let waf_name = detection.waf_name.clone().unwrap_or_default();
+                if let Ok(mut h) = self.history.lock() {
+                    h.add_waf_result(
+                        "<target>",
+                        detection.waf_name.is_some(),
+                        &waf_name,
+                        success_count,
+                    );
+                }
+                self.waf.set_detection_result(detection);
+                self.waf.set_bypass_results(bypasses);
+            }
+            TaskResult::Pipeline(r) => {
+                let completed = r.stage_results.iter().filter(|s| s.success).count();
+                if let Ok(mut h) = self.history.lock() {
+                    h.add_pipeline_result(
+                        &r.target,
+                        completed,
+                        r.stage_results.len(),
+                        r.total_duration_ms,
+                    );
+                }
+                self.scan.set_report(r);
+            }
+            TaskResult::Fuzz(session) => {
+                self.fuzz.set_results(session);
+            }
+            TaskResult::Recon(r) => {
+                if let Ok(mut h) = self.history.lock() {
+                    h.add_recon_result(
+                        &r.target,
+                        r.domain.clone().unwrap_or_default(),
+                        r.ip_address.clone().unwrap_or_default(),
+                    );
+                }
+                self.recon.set_results(r);
+            }
+            TaskResult::PacketCapture {
+                packets_captured,
+                output_file,
+            } => {
+                self.packet
+                    .set_capture_results(packets_captured, output_file);
+            }
+            TaskResult::PacketTraceroute { hops } => {
+                self.packet.set_traceroute_results(hops);
+            }
+            TaskResult::PacketSend {
+                packets_sent,
+                bytes_sent,
+            } => {
+                self.packet.set_send_results(packets_sent, bytes_sent);
+            }
+            TaskResult::GraphQl(r) => {
+                self.graphql.set_results(r);
+            }
+            TaskResult::OAuth(r) => {
+                self.oauth.set_results(r);
+            }
+            #[cfg(feature = "nse")]
+            TaskResult::Nse(r) => {
+                self.nse.set_results(r);
+            }
+            TaskResult::Error(msg) => {
+                self.set_error_for_current_tab(msg);
+            }
+        }
+    }
+
+    fn set_error_for_current_tab(&mut self, msg: String) {
+        use super::tabs::Tab;
+        match self.current_tab {
+            Tab::Recon => self.recon.set_error(msg),
+            Tab::Load => self.load.set_error(msg),
+            Tab::ScanPorts => self.scan_ports.set_error(msg),
+            Tab::ScanEndpoints => self.scan_endpoints.set_error(msg),
+            Tab::Fingerprint => self.fingerprint.set_error(msg),
+            Tab::Fuzz => self.fuzz.set_error(msg),
+            Tab::Waf => self.waf.set_error(msg),
+            Tab::WafStress => self.waf_stress.set_error(msg),
+            Tab::Scan => self.scan.set_error(msg),
+            Tab::Packet => self.packet.set_error(msg),
+            _ => {}
+        }
+    }
+}
