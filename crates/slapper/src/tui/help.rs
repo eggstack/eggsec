@@ -550,18 +550,6 @@ impl Default for HelpContent {
                     shortcut: None,
                 },
                 CommandPaletteResult {
-                    command: "history".to_string(),
-                    description: "View scan history".to_string(),
-                    category: "Data".to_string(),
-                    shortcut: None,
-                },
-                CommandPaletteResult {
-                    command: "settings".to_string(),
-                    description: "Configure settings".to_string(),
-                    category: "Settings".to_string(),
-                    shortcut: None,
-                },
-                CommandPaletteResult {
                     command: "recon".to_string(),
                     description: "Go to Reconnaissance".to_string(),
                     category: "Tabs".to_string(),
@@ -692,12 +680,6 @@ impl Default for HelpContent {
                     description: "Go to Dashboard".to_string(),
                     category: "Tabs".to_string(),
                     shortcut: Some("21".to_string()),
-                },
-                CommandPaletteResult {
-                    command: "resume".to_string(),
-                    description: "Go to Session Resume".to_string(),
-                    category: "Tabs".to_string(),
-                    shortcut: None,
                 },
                 CommandPaletteResult {
                     command: "next-tab".to_string(),
