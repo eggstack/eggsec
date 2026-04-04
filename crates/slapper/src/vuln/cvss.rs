@@ -31,6 +31,7 @@ impl CvssScore {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn calculate_base(
         attack_vector: &str,
         attack_complexity: &str,

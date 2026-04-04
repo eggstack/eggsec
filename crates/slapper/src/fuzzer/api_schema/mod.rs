@@ -445,41 +445,36 @@ impl ApiSchemaFuzzer {
     }
 
     fn numeric_payload(param: &ApiParameter) -> Vec<Payload> {
-        let mut payloads = Vec::new();
-
-        payloads.push(Payload {
-            payload_type: PayloadType::Sqli,
-            payload: "0 OR 1=1".to_string(),
-            description: "SQL injection in numeric parameter".to_string(),
-            severity: Severity::High,
-            tags: vec![param.name.clone()],
-        });
-
-        payloads.push(Payload {
-            payload_type: PayloadType::Sqli,
-            payload: "99999999999999999999".to_string(),
-            description: "Integer overflow attempt".to_string(),
-            severity: Severity::Medium,
-            tags: vec![param.name.clone()],
-        });
-
-        payloads.push(Payload {
-            payload_type: PayloadType::Sqli,
-            payload: "-1".to_string(),
-            description: "Negative value injection".to_string(),
-            severity: Severity::Medium,
-            tags: vec![param.name.clone()],
-        });
-
-        payloads.push(Payload {
-            payload_type: PayloadType::Sqli,
-            payload: "1e308".to_string(),
-            description: "Float overflow attempt".to_string(),
-            severity: Severity::Medium,
-            tags: vec![param.name.clone()],
-        });
-
-        payloads
+        vec![
+            Payload {
+                payload_type: PayloadType::Sqli,
+                payload: "0 OR 1=1".to_string(),
+                description: "SQL injection in numeric parameter".to_string(),
+                severity: Severity::High,
+                tags: vec![param.name.clone()],
+            },
+            Payload {
+                payload_type: PayloadType::Sqli,
+                payload: "99999999999999999999".to_string(),
+                description: "Integer overflow attempt".to_string(),
+                severity: Severity::Medium,
+                tags: vec![param.name.clone()],
+            },
+            Payload {
+                payload_type: PayloadType::Sqli,
+                payload: "-1".to_string(),
+                description: "Negative value injection".to_string(),
+                severity: Severity::Medium,
+                tags: vec![param.name.clone()],
+            },
+            Payload {
+                payload_type: PayloadType::Sqli,
+                payload: "1e308".to_string(),
+                description: "Float overflow attempt".to_string(),
+                severity: Severity::Medium,
+                tags: vec![param.name.clone()],
+            },
+        ]
     }
 
     fn boolean_payload(param: &ApiParameter) -> Vec<Payload> {

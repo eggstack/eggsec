@@ -11,6 +11,7 @@ pub struct GitLabConfig {
 }
 
 pub struct GitLabClient {
+    #[allow(dead_code)]
     config: GitLabConfig,
 }
 

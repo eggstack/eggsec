@@ -11,6 +11,7 @@ pub struct GitHubConfig {
 }
 
 pub struct GitHubClient {
+    #[allow(dead_code)]
     config: GitHubConfig,
 }
 

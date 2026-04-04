@@ -262,9 +262,16 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 | **Learning cache** | Cache successful plans for reuse |
 | **Real-time adjustment** | `suggest_adjustments()` based on live findings during scan |
 
-### 3.5 Complete OpenAI Protocol Layer
+### 3.5 Complete OpenAI Protocol Layer ✅ DONE
 
 **Source:** plan4 Wave 5
+
+**Status:** Implemented (2026-04-04)
+- ✅ Real handler at `/v1/chat/completions` with tool calling support
+- ✅ `extract_user_query()`, `extract_system_prompt()`, `extract_target_from_query()` helpers
+- ✅ Tool execution via `ToolRegistry.execute()` with async support
+- ✅ SSE streaming when `stream: true`
+- ✅ `find_matching_tools()` matches by name, description, and capabilities
 
 | Item | Details |
 |------|---------|
@@ -450,11 +457,16 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 | **Unit tests** | All new modules have unit tests; 553 tests passing |
 | **Test fixes** | Fixed `AssetCriticality`, `RiskScore`, and SLA tests |
 
-### 6.4 Cleanup & Documentation ⚠️ PARTIAL
+### 6.4 Cleanup & Documentation ✅ DONE
 
 **Source:** plan4 Wave 9
 
-**Status:** Documentation updated; cleanup ongoing
+**Status:** Completed (2026-04-04)
+- ✅ Fixed clippy warnings in `typosquat.rs` (needless_range_loop x2)
+- ✅ Fixed clippy warning in `cvss.rs` (too_many_arguments)
+- ✅ Fixed clippy warnings in `github.rs` and `gitlab.rs` (dead_code)
+- ✅ Fixed clippy warning in `api_schema/mod.rs` (vec_init_then_push)
+- ✅ 0 clippy warnings, 553 tests passing
 
 | Item | Details |
 |------|---------|
