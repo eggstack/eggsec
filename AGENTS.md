@@ -160,20 +160,23 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value |
 |--------|-------|
-| Tests | 363 passing |
+| Tests | ~560 passing, 2 failing (`negative_tests.rs`) |
 | Build | Clean compilation |
-| Clippy | 2 warnings (packet module - unused imports/vars) |
+| Clippy | 0 warnings (default features) |
 | Doctests | 17 pass, 1 ignored, 0 fail |
 | `SlapperError` variants | 23 |
 | `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (591 lines — split into submodules) |
+| Largest file | `tui/app/mod.rs` (664 lines — split into submodules) |
+| Source files | 400 `.rs` files |
+| TUI files | 60 `.rs` files |
+| Tab variants | 29 |
 
 ## Planning
 
-- `plan.md` — Consolidated improvement plan (7 waves, parallelizable in blocks A-G)
+- `plan.md` — Consolidated improvement plan (10 waves, parallelizable in blocks)
 
 ## Lessons Learned
 
@@ -217,12 +220,13 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ### TUI-Specific Patterns
 
 - `tui/app/runner.rs` contains the main event loop (`run_app`)
-- `tui/app/mod.rs` contains the `App` struct (591 lines); split into submodules: `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
-- `tui/workers/` directory contains 6 files: `runner.rs`, `scanner.rs`, `fuzzer.rs`, `network.rs`, `api.rs`, `recon.rs`
-- Tab dispatch uses match statements across ~18+ methods (22-arm matches)
+- `tui/app/mod.rs` contains the `App` struct (664 lines); split into submodules: `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
+- `tui/workers/` directory contains 8 files: `runner.rs`, `scanner.rs`, `fuzzer.rs`, `network.rs`, `api.rs`, `recon.rs`, `security.rs`, `pipeline.rs`
+- Tab dispatch uses match statements across ~18+ methods (29-arm matches)
 - TUI uses ratatui 0.30 + crossterm 0.28 with immediate-mode rendering
-- 22 tab variants exist; all 22 are fully functional (wired in Wave 3)
-- `tui/app/mod.rs` contains ~590 lines - uses dispatch macros in `dispatch.rs` for tab delegation
+- 29 tab variants exist (Recon=0 through Vuln=28); all 29 are fully functional
+- `tui/app/mod.rs` contains ~664 lines - uses dispatch macros in `dispatch.rs` for tab delegation
+- 6 dispatch macros exist: `dispatch!`, `dispatch_void!`, `dispatch_bool!`, `dispatch_page!`, `dispatch_is_at_edge!`, `dispatch_reset!`
 - Tab cfg attributes: `Nse` and `Plugin` variants are always present in the Tab enum; use both `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]` arms for feature-gated dispatch
 
 ### Output Module
@@ -358,6 +362,37 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 #### AI Output Schema
 
 - `output/ai_schema.rs` — `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` types
+
+### Lessons Learned (Session 2026-04-04)
+
+#### Plan consolidation
+
+- All plan files should be consolidated into a single `plans/plan.md`
+- Waves should be organized into parallelizable blocks where items within each block are independent
+- Before implementing any plan item, verify file paths exist using `glob` or `rg`
+- Verify codebase metrics (test counts, file sizes, line counts) against actual code before referencing in plans
+- The plan uses 10 waves organized into 3 execution phases (Stabilize → Harden → Refactor → Enhance → Integrate → Test → Document → Polish)
+
+#### Known bugs identified (not yet fixed)
+
+- UTF-8 panic in `InputField::delete()` and `backspace()` — uses byte indices instead of char boundaries
+- Grammar fuzzer payloads all tagged as `PayloadType::Xss` regardless of actual grammar type
+- CSV export doesn't escape `severity` and `cve_ids` fields
+- `PortScanResults::ports_scanned` is `u16` — overflows at 65,536
+- `ConfigError::Io(String)` wraps string instead of `std::io::Error` — loses error chain
+- `SlapperConfig::load`/`save` take `&PathBuf` instead of `impl AsRef<Path>`
+- `ResponseSeverity` lacks `Ord`/`PartialOrd` implementations
+- 8 stub modules (`container`, `storage`, `supply_chain`, `hunt`, `compliance`, `integrations`, `workflow`, `vuln`) are unconditionally compiled
+- 2 failing negative tests (`test_scope_empty_target`, `test_scope_invalid_target`) assert `Ok` but should assert `Err`
+
+#### Verification best practices
+
+- Always verify plan items against actual codebase before assuming they still apply
+- Use `rg` to confirm file paths, line numbers, and patterns exist
+- Run `cargo test --lib -p slapper` after each change to catch regressions
+- Use `cargo clippy --lib -p slapper` to verify no new warnings
+- Check test counts with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`
+- Count source files with `find crates/slapper/src -name '*.rs' | wc -l`
 
 ### Lessons Learned (Session 2026-04-03)
 
