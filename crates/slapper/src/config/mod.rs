@@ -54,7 +54,7 @@ pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,
     WebhookEvent,
 };
-pub use scope::{Scope, ScopeRule, TargetScope};
+pub use scope::{Scope, ScopeError, ScopeRule, TargetScope};
 pub use settings::{
     AiConfig, AllowedWorker, CacheConfig, ConfigError, PathsConfig, ProxyConfigEntry, ReconConfig,
     RemoteConfig, ScheduledScan, SlapperConfig,

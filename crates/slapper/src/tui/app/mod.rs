@@ -190,25 +190,27 @@ impl App {
 
     pub fn cycle_export_format(&mut self) {
         self.export_format = match self.export_format {
-            OutputFormat::Json => OutputFormat::Csv,
+            OutputFormat::Pretty => OutputFormat::Json,
+            OutputFormat::Json => OutputFormat::Compact,
+            OutputFormat::Compact => OutputFormat::Csv,
             OutputFormat::Csv => OutputFormat::Html,
             OutputFormat::Html => OutputFormat::Markdown,
             OutputFormat::Markdown => OutputFormat::Sarif,
             OutputFormat::Sarif => OutputFormat::Junit,
-            OutputFormat::Junit => OutputFormat::Json,
-            _ => OutputFormat::Json,
+            OutputFormat::Junit => OutputFormat::Pretty,
         };
     }
 
     pub fn get_export_extension(&self) -> &str {
         match self.export_format {
+            OutputFormat::Pretty => "txt",
             OutputFormat::Json => "json",
+            OutputFormat::Compact => "json",
             OutputFormat::Csv => "csv",
             OutputFormat::Html => "html",
             OutputFormat::Markdown => "md",
             OutputFormat::Sarif => "sarif",
             OutputFormat::Junit => "xml",
-            _ => "json",
         }
     }
 

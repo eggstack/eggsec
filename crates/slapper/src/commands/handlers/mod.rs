@@ -41,6 +41,7 @@ use anyhow::Result;
 use crate::cli::Cli;
 use crate::cli::Commands;
 use crate::config::{SlapperConfig, Scope};
+use crate::error::Result as ErrorResult;
 
 pub struct CommandContext {
     pub config: SlapperConfig,
@@ -68,11 +69,11 @@ impl CommandContext {
         self.config_path.as_deref()
     }
 
-    pub fn ensure_scope_url(&self, url: &str) -> Result<()> {
+    pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()> {
         crate::utils::check_scope_from_url(&self.scope, url)
     }
 
-    pub fn ensure_scope(&self, target: &str) -> Result<()> {
+    pub fn ensure_scope(&self, target: &str) -> ErrorResult<()> {
         crate::utils::check_scope(&self.scope, target)
     }
 }

@@ -158,15 +158,15 @@ impl SlapperError {
     /// let err = result.unwrap_err();
     /// assert!(err.is_timeout());
     /// ```
-    pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
-        if let SlapperError::Timeout { operation, .. } = &mut self {
-            let op = std::mem::take(operation);
-            self = SlapperError::Timeout {
+    pub fn with_timeout(self, timeout_ms: u64) -> Self {
+        if let SlapperError::Timeout { operation, .. } = self {
+            SlapperError::Timeout {
                 timeout_ms,
-                operation: op,
-            };
+                operation,
+            }
+        } else {
+            self
         }
-        self
     }
 }
 
@@ -241,6 +241,21 @@ impl From<toml::ser::Error> for SlapperError {
 impl From<std::string::FromUtf8Error> for SlapperError {
     fn from(e: std::string::FromUtf8Error) -> Self {
         SlapperError::Parse(format!("UTF-8 error: {}", e))
+    }
+}
+
+impl From<tokio::time::error::Elapsed> for SlapperError {
+    fn from(_e: tokio::time::error::Elapsed) -> Self {
+        SlapperError::Timeout {
+            timeout_ms: 0,
+            operation: "async operation".to_string(),
+        }
+    }
+}
+
+impl From<crate::config::ScopeError> for SlapperError {
+    fn from(e: crate::config::ScopeError) -> Self {
+        SlapperError::ScopeViolation(e.to_string())
     }
 }
 

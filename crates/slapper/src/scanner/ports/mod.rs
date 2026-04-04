@@ -66,7 +66,7 @@ pub struct PortResult {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PortScanResults {
     pub host: String,
-    pub ports_scanned: u16,
+    pub ports_scanned: u32,
     pub open_ports: Vec<PortResult>,
     pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -346,7 +346,7 @@ pub async fn scan_ports(
 
     Ok(PortScanResults {
         host: host.to_string(),
-        ports_scanned: ports_count as u16,
+        ports_scanned: ports_count as u32,
         open_ports: results,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats: None,

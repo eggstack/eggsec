@@ -429,16 +429,6 @@ impl StreamEvent {
         }
     }
 
-    pub fn error(request_id: &str, _error: &str) -> Self {
-        Self {
-            event_type: StreamEventType::Error,
-            request_id: Some(request_id.to_string()),
-            progress: None,
-            finding: None,
-            result: None,
-        }
-    }
-
     pub fn to_json_line(&self) -> String {
         serde_json::to_string(self).unwrap_or_default() + "\n"
     }

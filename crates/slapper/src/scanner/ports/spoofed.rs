@@ -455,7 +455,7 @@ pub(crate) async fn scan_ports_spoofed(
 
     Ok(PortScanResults {
         host: host.to_string(),
-        ports_scanned: ports_count as u16,
+        ports_scanned: ports_count as u32,
         open_ports: results,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats,

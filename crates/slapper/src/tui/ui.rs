@@ -86,6 +86,13 @@ fn draw_http_options_popup(f: &mut Frame, app: &App) {
     f.render_widget(block, popup_area);
 
     let opts = &app.http_options;
+    let redacted = |v: Option<&str>| {
+        if v.is_some() {
+            "********".to_string()
+        } else {
+            "(not set)".to_string()
+        }
+    };
     let content = vec![
         format!(
             "  --insecure: {}",
@@ -95,23 +102,11 @@ fn draw_http_options_popup(f: &mut Frame, app: &App) {
             "  --proxy: {}",
             opts.proxy.as_deref().unwrap_or("(not set)")
         ),
-        format!(
-            "  --proxy-auth: {}",
-            opts.proxy_auth.as_deref().unwrap_or("(not set)")
-        ),
-        format!("  --auth: {}", opts.auth.as_deref().unwrap_or("(not set)")),
-        format!(
-            "  --bearer: {}",
-            opts.bearer.as_deref().unwrap_or("(not set)")
-        ),
-        format!(
-            "  --cookie: {}",
-            opts.cookie.as_deref().unwrap_or("(not set)")
-        ),
-        format!(
-            "  --api-key: {}",
-            opts.api_key.as_deref().unwrap_or("(not set)")
-        ),
+        format!("  --proxy-auth: {}", redacted(opts.proxy_auth.as_deref())),
+        format!("  --auth: {}", redacted(opts.auth.as_deref())),
+        format!("  --bearer: {}", redacted(opts.bearer.as_deref())),
+        format!("  --cookie: {}", redacted(opts.cookie.as_deref())),
+        format!("  --api-key: {}", redacted(opts.api_key.as_deref())),
         format!(
             "  --user-agent: {}",
             opts.user_agent.as_deref().unwrap_or("(not set)")
@@ -544,8 +539,6 @@ fn get_tab_status(
 }
 
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
-    use crate::tui::tabs::AppState;
-
     let (status_text, status_color) = match app.current_tab {
         crate::tui::tabs::Tab::Recon => get_tab_status(app.current_tab, &app.recon.state),
         crate::tui::tabs::Tab::Load => get_tab_status(app.current_tab, &app.load.state),
@@ -560,18 +553,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         crate::tui::tabs::Tab::Waf => get_tab_status(app.current_tab, &app.waf.state),
         crate::tui::tabs::Tab::WafStress => get_tab_status(app.current_tab, &app.waf_stress.state),
         crate::tui::tabs::Tab::Scan => get_tab_status(app.current_tab, &app.scan.state),
-        crate::tui::tabs::Tab::Resume => match &app.resume.state {
-            AppState::Idle => (
-                "Ready - Enter session file and press Enter".to_string(),
-                Color::Gray,
-            ),
-            AppState::Running => (
-                "Loading session - Ctrl+C to stop".to_string(),
-                Color::Yellow,
-            ),
-            AppState::Completed => ("Session loaded".to_string(), Color::Green),
-            AppState::Error(e) => (e.to_string(), Color::Red),
-        },
+        crate::tui::tabs::Tab::Resume => get_tab_status(app.current_tab, &app.resume.state),
         crate::tui::tabs::Tab::Proxy => get_tab_status(app.current_tab, &app.proxy.state),
         crate::tui::tabs::Tab::Packet => get_tab_status(app.current_tab, &app.packet.state),
         crate::tui::tabs::Tab::Settings => (

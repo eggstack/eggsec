@@ -129,15 +129,31 @@ pub async fn run_packet_capture(
         capture.start(pkt_tx).await
     });
 
-    while let Some(_packet) = pkt_rx.recv().await {
-        captured += 1;
-        let _ = progress_tx
-            .send((captured as u64, max_packets as u64))
-            .await;
-        if captured >= max_packets {
-            break;
+    let timeout_duration = Duration::from_secs(5);
+    loop {
+        tokio::select! {
+            packet = pkt_rx.recv() => {
+                match packet {
+                    Some(_packet) => {
+                        captured += 1;
+                        let _ = progress_tx
+                            .send((captured as u64, max_packets as u64))
+                            .await;
+                        if captured >= max_packets {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
+            _ = tokio::time::sleep(timeout_duration) => {
+                tracing::warn!("Packet capture timeout - no packets received for {} seconds", timeout_duration.as_secs());
+                break;
+            }
         }
     }
+
+    let _ = handle.await;
 
     let _ = result_tx
         .send(TaskResult::PacketCapture {

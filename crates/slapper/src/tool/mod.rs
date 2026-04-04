@@ -40,36 +40,36 @@ pub use traits::{
 pub fn create_default_registry() -> ToolRegistry {
     let registry = ToolRegistry::new();
 
-    registry
-        .register(crate::tool::implementations::recon::ReconTool::new())
-        .ok();
-    registry
-        .register(crate::tool::implementations::scanner::ScannerTool::ports())
-        .ok();
-    registry
-        .register(crate::tool::implementations::scanner::ScannerTool::fingerprint())
-        .ok();
-    registry
-        .register(crate::tool::implementations::scanner::ScannerTool::endpoints())
-        .ok();
-    registry
-        .register(crate::tool::implementations::fuzzer::FuzzerTool::new())
-        .ok();
-    registry
-        .register(crate::tool::implementations::loadtest::LoadTestTool::new())
-        .ok();
-    registry
-        .register(crate::tool::implementations::waf::WafTool::detect())
-        .ok();
-    registry
-        .register(crate::tool::implementations::waf::WafTool::bypass())
-        .ok();
-    registry
-        .register(crate::tool::implementations::waf::WafTool::stress())
-        .ok();
-    registry
-        .register(crate::tool::implementations::pipeline::PipelineTool::new())
-        .ok();
+    if let Err(e) = registry.register(crate::tool::implementations::recon::ReconTool::new()) {
+        tracing::warn!("Failed to register tool: recon: {}", e);
+    }
+    if let Err(e) = registry.register(crate::tool::implementations::scanner::ScannerTool::ports()) {
+        tracing::warn!("Failed to register tool: ports: {}", e);
+    }
+    if let Err(e) = registry.register(crate::tool::implementations::scanner::ScannerTool::fingerprint()) {
+        tracing::warn!("Failed to register tool: fingerprint: {}", e);
+    }
+    if let Err(e) = registry.register(crate::tool::implementations::scanner::ScannerTool::endpoints()) {
+        tracing::warn!("Failed to register tool: endpoints: {}", e);
+    }
+    if let Err(e) = registry.register(crate::tool::implementations::fuzzer::FuzzerTool::new()) {
+        tracing::warn!("Failed to register tool: fuzzer: {}", e);
+    }
+    if let Err(e) = registry.register(crate::tool::implementations::loadtest::LoadTestTool::new()) {
+        tracing::warn!("Failed to register tool: loadtest: {}", e);
+    }
+    if let Err(e) = registry.register(crate::tool::implementations::waf::WafTool::detect()) {
+        tracing::warn!("Failed to register tool: waf_detect: {}", e);
+    }
+    if let Err(e) = registry.register(crate::tool::implementations::waf::WafTool::bypass()) {
+        tracing::warn!("Failed to register tool: waf_bypass: {}", e);
+    }
+    if let Err(e) = registry.register(crate::tool::implementations::waf::WafTool::stress()) {
+        tracing::warn!("Failed to register tool: waf_stress: {}", e);
+    }
+    if let Err(e) = registry.register(crate::tool::implementations::pipeline::PipelineTool::new()) {
+        tracing::warn!("Failed to register tool: pipeline: {}", e);
+    }
 
     registry
 }

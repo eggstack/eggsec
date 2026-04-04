@@ -217,13 +217,11 @@ impl WafEngine {
             eprintln!("Attempting WAF bypasses...");
         }
 
-        let bypass_results = match &self.bypass_engine {
-            Some(engine) => engine.run_bypasses(&detection).await?,
-            None => {
-                eprintln!("[ERROR] Failed to initialize bypass engine");
-                return Ok(());
-            }
-        };
+        let bypass_results = self.bypass_engine
+            .as_ref()
+            .expect("bypass engine must be initialized")
+            .run_bypasses(&detection)
+            .await?;
 
         #[cfg(feature = "ai-integration")]
         let bypass_results = self.run_ai_bypasses(&detection, bypass_results).await?;

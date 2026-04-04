@@ -9,7 +9,7 @@ use crate::types::SensitiveString;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use crate::constants;
@@ -212,17 +212,17 @@ impl Default for ReconConfig {
 }
 
 impl SlapperConfig {
-    pub fn load(path: &PathBuf) -> Result<Self, ConfigError> {
-        let contents = std::fs::read_to_string(path).map_err(|e| ConfigError::Io(e.to_string()))?;
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
+        let contents = std::fs::read_to_string(path).map_err(ConfigError::Io)?;
         let config: SlapperConfig =
             toml::from_str(&contents).map_err(|e| ConfigError::Parse(e.to_string()))?;
         Ok(config)
     }
 
-    pub fn save(&self, path: &PathBuf) -> Result<(), ConfigError> {
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), ConfigError> {
         let contents =
             toml::to_string_pretty(self).map_err(|e| ConfigError::Serialize(e.to_string()))?;
-        std::fs::write(path, contents).map_err(|e| ConfigError::Io(e.to_string()))?;
+        std::fs::write(path, contents).map_err(ConfigError::Io)?;
         Ok(())
     }
 
@@ -262,7 +262,7 @@ impl SlapperConfig {
 #[derive(Debug, Error)]
 pub enum ConfigError {
     #[error("IO error: {0}")]
-    Io(String),
+    Io(#[source] std::io::Error),
 
     #[error("Parse error: {0}")]
     Parse(String),

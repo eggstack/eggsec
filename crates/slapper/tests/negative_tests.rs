@@ -185,15 +185,14 @@ fn test_scope_rule_empty_pattern() {
 fn test_scope_empty_target() {
     let scope = Scope::default();
     let result = scope.is_target_allowed("");
-    // Empty target should either be rejected or allowed based on scope rules
-    assert!(result.is_ok());
+    assert!(result.is_err());
 }
 
 #[test]
 fn test_scope_invalid_target() {
     let scope = Scope::default();
     let result = scope.is_target_allowed("not a valid target");
-    assert!(result.is_ok(), "Should handle gracefully");
+    assert!(result.is_err());
 }
 
 #[test]

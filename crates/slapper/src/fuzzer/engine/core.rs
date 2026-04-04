@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 use super::super::diff::ResponseDiffer;
-use super::super::grammar::{Grammar, GrammarFuzzer};
+use super::super::grammar::{Grammar, GrammarFuzzer, GrammarKind};
 use super::super::payloads::{get_all_payloads_cached, get_payloads, Payload, PayloadType};
 use super::super::state::HttpSession;
 use super::super::targets::get_target_payloads;
@@ -46,15 +46,15 @@ impl FuzzEngine {
         let client = Self::build_client(&args)?;
 
         let grammar_fuzzer = if args.grammar_fuzz {
-            let grammar = match args.grammar_type.as_deref() {
-                Some("json") => Grammar::json(),
-                Some("graphql") => Grammar::graphql(),
-                Some("xml") => Grammar::xml(),
-                Some("jwt") => Grammar::jwt(),
-                Some("ssti") => Grammar::ssti(),
-                _ => Grammar::json(),
+            let (grammar, kind) = match args.grammar_type.as_deref() {
+                Some("json") => (Grammar::json(), GrammarKind::Json),
+                Some("graphql") => (Grammar::graphql(), GrammarKind::GraphQL),
+                Some("xml") => (Grammar::xml(), GrammarKind::Xml),
+                Some("jwt") => (Grammar::jwt(), GrammarKind::Jwt),
+                Some("ssti") => (Grammar::ssti(), GrammarKind::Ssti),
+                _ => (Grammar::json(), GrammarKind::Json),
             };
-            Some(GrammarFuzzer::new(grammar))
+            Some(GrammarFuzzer::new(grammar, kind))
         } else {
             None
         };
@@ -172,8 +172,9 @@ impl FuzzEngine {
             if let Some(ref mut grammar_fuzzer) = self.grammar_fuzzer {
                 let grammar_payloads =
                     grammar_fuzzer.generate_batch(self.args.mutation_count.max(10));
+                let payload_type = grammar_fuzzer.kind().payload_type();
                 payloads.extend(grammar_payloads.into_iter().map(|p| super::super::payloads::Payload {
-                    payload_type: PayloadType::Xss,
+                    payload_type,
                     payload: p,
                     description: "Grammar-generated payload".to_string(),
                     severity: Severity::Medium,

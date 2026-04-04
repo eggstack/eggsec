@@ -1,5 +1,25 @@
-
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GrammarKind {
+    Json,
+    GraphQL,
+    Xml,
+    Jwt,
+    Ssti,
+}
+
+impl GrammarKind {
+    pub fn payload_type(&self) -> super::payloads::PayloadType {
+        match self {
+            GrammarKind::Json => super::payloads::PayloadType::Deser,
+            GrammarKind::GraphQL => super::payloads::PayloadType::GraphQL,
+            GrammarKind::Xml => super::payloads::PayloadType::Xxe,
+            GrammarKind::Jwt => super::payloads::PayloadType::Jwt,
+            GrammarKind::Ssti => super::payloads::PayloadType::Ssti,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GrammarRule {
@@ -163,25 +183,32 @@ pub struct GrammarFuzzer {
     grammar: Grammar,
     rng: rand::rngs::SmallRng,
     max_depth: usize,
+    kind: GrammarKind,
 }
 
 impl GrammarFuzzer {
-    pub fn new(grammar: Grammar) -> Self {
+    pub fn new(grammar: Grammar, kind: GrammarKind) -> Self {
         use rand::SeedableRng;
         Self {
             grammar,
             rng: rand::rngs::SmallRng::from_entropy(),
             max_depth: 10,
+            kind,
         }
     }
 
-    pub fn with_seed(grammar: Grammar, seed: u64) -> Self {
+    pub fn with_seed(grammar: Grammar, kind: GrammarKind, seed: u64) -> Self {
         use rand::SeedableRng;
         Self {
             grammar,
             rng: rand::rngs::SmallRng::seed_from_u64(seed),
             max_depth: 10,
+            kind,
         }
+    }
+
+    pub fn kind(&self) -> GrammarKind {
+        self.kind
     }
 
     pub fn generate(&mut self) -> String {
@@ -223,7 +250,7 @@ mod tests {
     #[test]
     fn test_grammar_fuzzer_json() {
         let grammar = Grammar::json();
-        let mut fuzzer = GrammarFuzzer::new(grammar);
+        let mut fuzzer = GrammarFuzzer::new(grammar, GrammarKind::Json);
         let result = fuzzer.generate();
         assert!(!result.is_empty());
     }
@@ -231,7 +258,7 @@ mod tests {
     #[test]
     fn test_grammar_fuzzer_ssti() {
         let grammar = Grammar::ssti();
-        let mut fuzzer = GrammarFuzzer::new(grammar);
+        let mut fuzzer = GrammarFuzzer::new(grammar, GrammarKind::Ssti);
         let result = fuzzer.generate();
         assert!(!result.is_empty());
     }

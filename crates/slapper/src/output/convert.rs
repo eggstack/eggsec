@@ -137,12 +137,12 @@ pub fn convert_to_csv(report: &ScanReportData) -> String {
     for finding in &report.findings {
         csv.push_str(&format!(
             "{},{},{},{},{},{}\n",
-            finding.severity,
+            super::escape::escape_csv(&finding.severity),
             super::escape::escape_csv(&finding.category),
             super::escape::escape_csv(&finding.title),
             super::escape::escape_csv(&finding.location),
             super::escape::escape_csv(&finding.description),
-            finding.cve_ids.join(";")
+            super::escape::escape_csv(&finding.cve_ids.join(";"))
         ));
     }
 

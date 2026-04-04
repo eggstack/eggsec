@@ -78,20 +78,28 @@ impl InputField {
 
     pub fn backspace(&mut self) {
         if self.focused && self.cursor_pos > 0 {
-            self.cursor_pos -= 1;
-            self.value.remove(self.cursor_pos);
+            if let Some(prev) = self.value[..self.cursor_pos].chars().next_back() {
+                self.cursor_pos -= prev.len_utf8();
+                self.value
+                    .drain(self.cursor_pos..self.cursor_pos + prev.len_utf8());
+            }
         }
     }
 
     pub fn delete(&mut self) {
         if self.focused && self.cursor_pos < self.value.len() {
-            self.value.remove(self.cursor_pos);
+            if let Some(next) = self.value[self.cursor_pos..].chars().next() {
+                let end = self.cursor_pos + next.len_utf8();
+                self.value.drain(self.cursor_pos..end);
+            }
         }
     }
 
     pub fn move_left(&mut self) -> bool {
         if self.cursor_pos > 0 {
-            self.cursor_pos -= 1;
+            if let Some(prev) = self.value[..self.cursor_pos].chars().next_back() {
+                self.cursor_pos -= prev.len_utf8();
+            }
             true
         } else {
             false
@@ -100,7 +108,9 @@ impl InputField {
 
     pub fn move_right(&mut self) -> bool {
         if self.cursor_pos < self.value.len() {
-            self.cursor_pos += 1;
+            if let Some(next) = self.value[self.cursor_pos..].chars().next() {
+                self.cursor_pos += next.len_utf8();
+            }
             true
         } else {
             false

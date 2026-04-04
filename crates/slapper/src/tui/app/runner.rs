@@ -153,6 +153,7 @@ where
                         app.page_down();
                     }
                     (KeyModifiers::NONE, KeyCode::Esc) => {
+                        app.pending_key = None;
                         if app.show_search {
                             app.toggle_search();
                         } else if app.is_confirm_popup_visible() {
@@ -163,6 +164,7 @@ where
                         }
                     }
                     (KeyModifiers::NONE, KeyCode::Char('i')) if app.mode == InputMode::Normal => {
+                        app.pending_key = None;
                         app.mode = InputMode::Insert;
                     }
                     (KeyModifiers::NONE, KeyCode::Char('q')) if app.mode == InputMode::Normal => {
@@ -177,9 +179,6 @@ where
                         app.toggle_help();
                     }
                     (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
-                        app.toggle_command_palette();
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char('/')) if app.mode == InputMode::Normal => {
                         app.toggle_command_palette();
                     }
                     _ if app
