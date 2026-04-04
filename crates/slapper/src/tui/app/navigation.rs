@@ -127,6 +127,23 @@ impl super::App {
             super::tabs::Tab::Settings => "Settings - Configure application options.".to_string(),
             super::tabs::Tab::History => "History - View previous scan results.".to_string(),
             super::tabs::Tab::Dashboard => "Dashboard - View scan results at a glance.".to_string(),
+            super::tabs::Tab::Hunt => {
+                "Vulnerability Hunting - Intelligent vulnerability discovery.".to_string()
+            }
+            super::tabs::Tab::Browser => {
+                "Browser Testing - Headless browser security testing.".to_string()
+            }
+            super::tabs::Tab::Compliance => "Compliance - Generate compliance reports.".to_string(),
+            super::tabs::Tab::Storage => "Storage - Database integration.".to_string(),
+            super::tabs::Tab::Integrations => {
+                "Integrations - Issue tracker integration.".to_string()
+            }
+            super::tabs::Tab::Workflow => {
+                "Workflow - Finding management and SLA tracking.".to_string()
+            }
+            super::tabs::Tab::Vuln => {
+                "Vuln - Vulnerability prioritization and risk scoring.".to_string()
+            }
         }
     }
 }

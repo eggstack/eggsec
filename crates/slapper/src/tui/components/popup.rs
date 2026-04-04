@@ -270,6 +270,25 @@ pub fn help_popup_for_tab(tab: crate::tui::tabs::Tab) -> Popup {
             crate::tui::tabs::Tab::Settings => "  s               - Save settings".to_string(),
             crate::tui::tabs::Tab::History => "  Up/Down         - Navigate entries".to_string(),
             crate::tui::tabs::Tab::Dashboard => "  j/k             - Scroll dashboard".to_string(),
+            crate::tui::tabs::Tab::Hunt => {
+                "  Enter            - Start vulnerability hunt".to_string()
+            }
+            crate::tui::tabs::Tab::Browser => "  Enter            - Start browser scan".to_string(),
+            crate::tui::tabs::Tab::Compliance => {
+                "  Enter            - Generate compliance report".to_string()
+            }
+            crate::tui::tabs::Tab::Storage => {
+                "  Enter            - Execute database operation".to_string()
+            }
+            crate::tui::tabs::Tab::Integrations => {
+                "  Enter            - Execute integration action".to_string()
+            }
+            crate::tui::tabs::Tab::Workflow => {
+                "  Enter            - Execute workflow action".to_string()
+            }
+            crate::tui::tabs::Tab::Vuln => {
+                "  Enter            - Run vulnerability analysis".to_string()
+            }
         },
         "".to_string(),
         "=== INPUT MODES ===".to_string(),

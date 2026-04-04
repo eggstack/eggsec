@@ -317,6 +317,58 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
         crate::tui::tabs::Tab::Settings => vec!["Settings"],
         crate::tui::tabs::Tab::History => vec!["History"],
         crate::tui::tabs::Tab::Dashboard => vec!["Dashboard"],
+        crate::tui::tabs::Tab::Hunt => {
+            if let Some(parts) = app.hunt.breadcrumb() {
+                parts
+            } else {
+                vec!["Hunt"]
+            }
+        }
+        #[cfg(feature = "headless-browser")]
+        crate::tui::tabs::Tab::Browser => {
+            if let Some(parts) = app.browser.breadcrumb() {
+                parts
+            } else {
+                vec!["Browser"]
+            }
+        }
+        #[cfg(not(feature = "headless-browser"))]
+        crate::tui::tabs::Tab::Browser => vec!["Browser"],
+        crate::tui::tabs::Tab::Compliance => {
+            if let Some(parts) = app.compliance.breadcrumb() {
+                parts
+            } else {
+                vec!["Compliance"]
+            }
+        }
+        crate::tui::tabs::Tab::Storage => {
+            if let Some(parts) = app.storage.breadcrumb() {
+                parts
+            } else {
+                vec!["Storage"]
+            }
+        }
+        crate::tui::tabs::Tab::Integrations => {
+            if let Some(parts) = app.integrations.breadcrumb() {
+                parts
+            } else {
+                vec!["Integrations"]
+            }
+        }
+        crate::tui::tabs::Tab::Workflow => {
+            if let Some(parts) = app.workflow.breadcrumb() {
+                parts
+            } else {
+                vec!["Workflow"]
+            }
+        }
+        crate::tui::tabs::Tab::Vuln => {
+            if let Some(parts) = app.vuln.breadcrumb() {
+                parts
+            } else {
+                vec!["Vuln"]
+            }
+        }
     }
     .iter()
     .enumerate()
@@ -444,6 +496,37 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
             app.dashboard.render(f, area, insert_mode);
             app.dashboard.render_overlays(f, area);
         }
+        crate::tui::tabs::Tab::Hunt => {
+            app.hunt.render(f, area, insert_mode);
+            app.hunt.render_overlays(f, area);
+        }
+        #[cfg(feature = "headless-browser")]
+        crate::tui::tabs::Tab::Browser => {
+            app.browser.render(f, area, insert_mode);
+            app.browser.render_overlays(f, area);
+        }
+        #[cfg(not(feature = "headless-browser"))]
+        crate::tui::tabs::Tab::Browser => {}
+        crate::tui::tabs::Tab::Compliance => {
+            app.compliance.render(f, area, insert_mode);
+            app.compliance.render_overlays(f, area);
+        }
+        crate::tui::tabs::Tab::Storage => {
+            app.storage.render(f, area, insert_mode);
+            app.storage.render_overlays(f, area);
+        }
+        crate::tui::tabs::Tab::Integrations => {
+            app.integrations.render(f, area, insert_mode);
+            app.integrations.render_overlays(f, area);
+        }
+        crate::tui::tabs::Tab::Workflow => {
+            app.workflow.render(f, area, insert_mode);
+            app.workflow.render_overlays(f, area);
+        }
+        crate::tui::tabs::Tab::Vuln => {
+            app.vuln.render(f, area, insert_mode);
+            app.vuln.render_overlays(f, area);
+        }
     }
 }
 
@@ -516,6 +599,18 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         crate::tui::tabs::Tab::Plugin => get_tab_status(app.current_tab, &app.plugin.state),
         #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
         crate::tui::tabs::Tab::Plugin => ("Plugins not available".to_string(), Color::Gray),
+        crate::tui::tabs::Tab::Hunt => get_tab_status(app.current_tab, &app.hunt.state),
+        #[cfg(feature = "headless-browser")]
+        crate::tui::tabs::Tab::Browser => get_tab_status(app.current_tab, &app.browser.state),
+        #[cfg(not(feature = "headless-browser"))]
+        crate::tui::tabs::Tab::Browser => ("Browser feature not enabled".to_string(), Color::Gray),
+        crate::tui::tabs::Tab::Compliance => get_tab_status(app.current_tab, &app.compliance.state),
+        crate::tui::tabs::Tab::Storage => get_tab_status(app.current_tab, &app.storage.state),
+        crate::tui::tabs::Tab::Integrations => {
+            get_tab_status(app.current_tab, &app.integrations.state)
+        }
+        crate::tui::tabs::Tab::Workflow => get_tab_status(app.current_tab, &app.workflow.state),
+        crate::tui::tabs::Tab::Vuln => get_tab_status(app.current_tab, &app.vuln.state),
     };
 
     let help_text = if app.is_help_visible() {

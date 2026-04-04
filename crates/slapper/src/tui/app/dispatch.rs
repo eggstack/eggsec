@@ -29,6 +29,16 @@ macro_rules! dispatch {
             Tab::Settings => $self.settings.$method($($arg),*),
             Tab::History => $special,
             Tab::Dashboard => $self.dashboard.$method($($arg),*),
+            Tab::Hunt => $self.hunt.$method($($arg),*),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => $self.browser.$method($($arg),*),
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => $default,
+            Tab::Compliance => $self.compliance.$method($($arg),*),
+            Tab::Storage => $self.storage.$method($($arg),*),
+            Tab::Integrations => $self.integrations.$method($($arg),*),
+            Tab::Workflow => $self.workflow.$method($($arg),*),
+            Tab::Vuln => $self.vuln.$method($($arg),*),
         }
     };
 }
@@ -64,6 +74,16 @@ macro_rules! dispatch_void {
             Tab::Settings => {},
             Tab::History => {},
             Tab::Dashboard => {},
+            Tab::Hunt => $self.hunt.$method($($arg),*),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => $self.browser.$method($($arg),*),
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => {},
+            Tab::Compliance => $self.compliance.$method($($arg),*),
+            Tab::Storage => $self.storage.$method($($arg),*),
+            Tab::Integrations => $self.integrations.$method($($arg),*),
+            Tab::Workflow => $self.workflow.$method($($arg),*),
+            Tab::Vuln => $self.vuln.$method($($arg),*),
         }
     };
 }
@@ -99,6 +119,16 @@ macro_rules! dispatch_bool {
             Tab::Settings => false,
             Tab::History => false,
             Tab::Dashboard => false,
+            Tab::Hunt => $self.hunt.$method($($arg),*),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => $self.browser.$method($($arg),*),
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => false,
+            Tab::Compliance => $self.compliance.$method($($arg),*),
+            Tab::Storage => $self.storage.$method($($arg),*),
+            Tab::Integrations => $self.integrations.$method($($arg),*),
+            Tab::Workflow => $self.workflow.$method($($arg),*),
+            Tab::Vuln => $self.vuln.$method($($arg),*),
         }
     };
 }
@@ -138,6 +168,16 @@ macro_rules! dispatch_page {
                 }
             }
             Tab::Dashboard => $self.dashboard.$method($page_size),
+            Tab::Hunt => $self.hunt.$method($page_size),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => $self.browser.$method($page_size),
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => {}
+            Tab::Compliance => $self.compliance.$method($page_size),
+            Tab::Storage => $self.storage.$method($page_size),
+            Tab::Integrations => $self.integrations.$method($page_size),
+            Tab::Workflow => $self.workflow.$method($page_size),
+            Tab::Vuln => $self.vuln.$method($page_size),
         }
     };
 }
@@ -173,6 +213,16 @@ macro_rules! dispatch_is_at_edge {
             Tab::Settings => $default,
             Tab::History => true,
             Tab::Dashboard => true,
+            Tab::Hunt => $self.hunt.$method(),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => $self.browser.$method(),
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => $default,
+            Tab::Compliance => $self.compliance.$method(),
+            Tab::Storage => $self.storage.$method(),
+            Tab::Integrations => $self.integrations.$method(),
+            Tab::Workflow => $self.workflow.$method(),
+            Tab::Vuln => $self.vuln.$method(),
         }
     };
 }
@@ -212,6 +262,16 @@ macro_rules! dispatch_reset {
                 }
             }
             Tab::Dashboard => $self.dashboard.reset(),
+            Tab::Hunt => $self.hunt.reset(),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => $self.browser.reset(),
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => {}
+            Tab::Compliance => $self.compliance.reset(),
+            Tab::Storage => $self.storage.reset(),
+            Tab::Integrations => $self.integrations.reset(),
+            Tab::Workflow => $self.workflow.reset(),
+            Tab::Vuln => $self.vuln.reset(),
         }
     };
 }

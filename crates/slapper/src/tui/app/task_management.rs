@@ -225,4 +225,54 @@ impl super::App {
             packet_size: 64,
         })
     }
+
+    pub(crate) fn build_hunt_task(&self) -> Option<workers::TaskConfig> {
+        let target = self.hunt.target();
+        if target.is_empty() {
+            return None;
+        }
+        Some(workers::TaskConfig::Hunt {
+            target: target.to_string(),
+            config: self.hunt.get_config(),
+        })
+    }
+
+    #[cfg(feature = "headless-browser")]
+    pub(crate) fn build_browser_task(&self) -> Option<workers::TaskConfig> {
+        let target = self.browser.target();
+        if target.is_empty() {
+            return None;
+        }
+        Some(workers::TaskConfig::Browser {
+            target: target.to_string(),
+            config: self.browser.get_config(),
+        })
+    }
+
+    pub(crate) fn build_compliance_task(&self) -> Option<workers::TaskConfig> {
+        let target = self.compliance.target();
+        if target.is_empty() {
+            return None;
+        }
+        Some(workers::TaskConfig::Compliance {
+            target: target.to_string(),
+            framework: self.compliance.selected_framework(),
+        })
+    }
+
+    pub(crate) fn build_storage_task(&self) -> Option<workers::TaskConfig> {
+        Some(workers::TaskConfig::Storage)
+    }
+
+    pub(crate) fn build_integrations_task(&self) -> Option<workers::TaskConfig> {
+        Some(workers::TaskConfig::Integrations)
+    }
+
+    pub(crate) fn build_workflow_task(&self) -> Option<workers::TaskConfig> {
+        Some(workers::TaskConfig::Workflow)
+    }
+
+    pub(crate) fn build_vuln_task(&self) -> Option<workers::TaskConfig> {
+        Some(workers::TaskConfig::Vuln)
+    }
 }

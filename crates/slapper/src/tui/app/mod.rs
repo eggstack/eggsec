@@ -111,6 +111,14 @@ pub struct App {
     pub search_backup: Option<std::collections::VecDeque<crate::tui::tabs::history::HistoryEntry>>,
     pub pending_key: Option<KeyCode>,
     pub dashboard: tabs::DashboardTab,
+    pub hunt: tabs::HuntTab,
+    #[cfg(feature = "headless-browser")]
+    pub browser: tabs::BrowserTab,
+    pub compliance: tabs::ComplianceTab,
+    pub storage: tabs::StorageTab,
+    pub integrations: tabs::IntegrationsTab,
+    pub workflow: tabs::WorkflowTab,
+    pub vuln: tabs::VulnTab,
     pub export_format: OutputFormat,
     pub task_handle: Option<tokio::task::JoinHandle<()>>,
     pub progress_rx: Option<tokio::sync::mpsc::Receiver<(u64, u64)>>,
@@ -151,6 +159,14 @@ impl App {
             plugin: tabs::PluginTab::new(),
             settings: tabs::SettingsTab::new(),
             dashboard: tabs::DashboardTab::new(),
+            hunt: tabs::HuntTab::new(),
+            #[cfg(feature = "headless-browser")]
+            browser: tabs::BrowserTab::new(),
+            compliance: tabs::ComplianceTab::new(),
+            storage: tabs::StorageTab::new(),
+            integrations: tabs::IntegrationsTab::new(),
+            workflow: tabs::WorkflowTab::new(),
+            vuln: tabs::VulnTab::new(),
             http_options: GlobalHttpOptions::default(),
             history,
             show_help: false,
@@ -303,6 +319,51 @@ impl App {
             Tab::Settings => self.settings.handle_enter(),
             Tab::History => {}
             Tab::Dashboard => self.dashboard.handle_enter(),
+            Tab::Hunt => {
+                self.hunt.handle_enter();
+                if self.hunt.is_running() {
+                    self.spawn_task(self.build_hunt_task());
+                }
+            }
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => {
+                self.browser.handle_enter();
+                if self.browser.is_running() {
+                    self.spawn_task(self.build_browser_task());
+                }
+            }
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => {},
+            Tab::Compliance => {
+                self.compliance.handle_enter();
+                if self.compliance.is_running() {
+                    self.spawn_task(self.build_compliance_task());
+                }
+            }
+            Tab::Storage => {
+                self.storage.handle_enter();
+                if self.storage.is_running() {
+                    self.spawn_task(self.build_storage_task());
+                }
+            }
+            Tab::Integrations => {
+                self.integrations.handle_enter();
+                if self.integrations.is_running() {
+                    self.spawn_task(self.build_integrations_task());
+                }
+            }
+            Tab::Workflow => {
+                self.workflow.handle_enter();
+                if self.workflow.is_running() {
+                    self.spawn_task(self.build_workflow_task());
+                }
+            }
+            Tab::Vuln => {
+                self.vuln.handle_enter();
+                if self.vuln.is_running() {
+                    self.spawn_task(self.build_vuln_task());
+                }
+            }
         }
     }
 
@@ -362,6 +423,16 @@ impl App {
             Tab::Settings => self.settings.handle_tab(),
             Tab::History => {}
             Tab::Dashboard => {}
+            Tab::Hunt => self.hunt.handle_tab(),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => self.browser.handle_tab(),
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => {}
+            Tab::Compliance => self.compliance.handle_tab(),
+            Tab::Storage => self.storage.handle_tab(),
+            Tab::Integrations => self.integrations.handle_tab(),
+            Tab::Workflow => self.workflow.handle_tab(),
+            Tab::Vuln => self.vuln.handle_tab(),
         }
     }
 

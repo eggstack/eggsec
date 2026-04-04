@@ -195,6 +195,20 @@ impl super::App {
             TaskResult::Nse(r) => {
                 self.nse.set_results(r);
             }
+            TaskResult::Hunt(r) => {
+                self.hunt.set_report(r);
+            }
+            #[cfg(feature = "headless-browser")]
+            TaskResult::Browser(r) => {
+                self.browser.set_report(r);
+            }
+            TaskResult::Compliance(r) => {
+                self.compliance.set_report(r);
+            }
+            TaskResult::Storage => {}
+            TaskResult::Integrations => {}
+            TaskResult::Workflow => {}
+            TaskResult::Vuln => {}
             TaskResult::Error(msg) => {
                 self.set_error_for_current_tab(msg);
             }
@@ -214,6 +228,16 @@ impl super::App {
             Tab::WafStress => self.waf_stress.set_error(msg),
             Tab::Scan => self.scan.set_error(msg),
             Tab::Packet => self.packet.set_error(msg),
+            Tab::Hunt => self.hunt.set_error(msg),
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => self.browser.set_error(msg),
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => {}
+            Tab::Compliance => self.compliance.set_error(msg),
+            Tab::Storage => self.storage.set_error(msg),
+            Tab::Integrations => self.integrations.set_error(msg),
+            Tab::Workflow => self.workflow.set_error(msg),
+            Tab::Vuln => self.vuln.set_error(msg),
             _ => {}
         }
     }

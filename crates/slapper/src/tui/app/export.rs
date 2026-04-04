@@ -26,6 +26,13 @@ impl super::App {
             super::tabs::Tab::Settings => "settings",
             super::tabs::Tab::History => "history",
             super::tabs::Tab::Dashboard => "dashboard",
+            super::tabs::Tab::Hunt => "hunt_results",
+            super::tabs::Tab::Browser => "browser_results",
+            super::tabs::Tab::Compliance => "compliance_results",
+            super::tabs::Tab::Storage => "storage_results",
+            super::tabs::Tab::Integrations => "integration_results",
+            super::tabs::Tab::Workflow => "workflow_results",
+            super::tabs::Tab::Vuln => "vuln_results",
         };
 
         let filename = format!("{}.{}", base_name, ext);
@@ -139,6 +146,13 @@ impl super::App {
             super::tabs::Tab::Dashboard => {}
             super::tabs::Tab::Proxy => {}
             super::tabs::Tab::Packet => {}
+            super::tabs::Tab::Hunt => {}
+            super::tabs::Tab::Browser => {}
+            super::tabs::Tab::Compliance => {}
+            super::tabs::Tab::Storage => {}
+            super::tabs::Tab::Integrations => {}
+            super::tabs::Tab::Workflow => {}
+            super::tabs::Tab::Vuln => {}
         }
     }
 

@@ -5,6 +5,7 @@ mod fingerprint;
 mod fuzz;
 pub mod graphql;
 pub mod history;
+pub mod hunt;
 mod load;
 #[cfg(feature = "nse")]
 pub mod nse;
@@ -20,7 +21,14 @@ mod scan;
 mod scan_endpoints;
 mod scan_ports;
 mod settings;
+pub mod storage;
 mod stress;
+pub mod compliance;
+pub mod integrations;
+pub mod workflow;
+pub mod vuln;
+#[cfg(feature = "headless-browser")]
+pub mod browser;
 mod waf;
 mod waf_stress;
 
@@ -30,6 +38,7 @@ pub use fingerprint::FingerprintTab;
 pub use fuzz::FuzzTab;
 pub use graphql::GraphQlTab;
 pub use history::HistoryTab;
+pub use hunt::HuntTab;
 pub use load::LoadTab;
 #[cfg(feature = "nse")]
 pub use nse::NseTab;
@@ -45,7 +54,14 @@ pub use scan::{ScanTab, StageStatus};
 pub use scan_endpoints::ScanEndpointsTab;
 pub use scan_ports::ScanPortsTab;
 pub use settings::SettingsTab;
+pub use storage::StorageTab;
 pub use stress::StressTab;
+pub use compliance::ComplianceTab;
+pub use integrations::IntegrationsTab;
+pub use workflow::WorkflowTab;
+pub use vuln::VulnTab;
+#[cfg(feature = "headless-browser")]
+pub use browser::BrowserTab;
 pub use waf::WafTab;
 pub use waf_stress::WafStressTab;
 
@@ -75,6 +91,13 @@ pub enum Tab {
     Settings = 19,
     History = 20,
     Dashboard = 21,
+    Hunt = 22,
+    Browser = 23,
+    Compliance = 24,
+    Storage = 25,
+    Integrations = 26,
+    Workflow = 27,
+    Vuln = 28,
 }
 
 impl Tab {
@@ -102,6 +125,16 @@ impl Tab {
             Tab::Settings => "[20] Settings",
             Tab::History => "[21] History",
             Tab::Dashboard => "[22] Dashboard",
+            Tab::Hunt => "[23] Hunt",
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => "[24] Browser",
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => "[24] Browser",
+            Tab::Compliance => "[25] Compliance",
+            Tab::Storage => "[26] Storage",
+            Tab::Integrations => "[27] Integrations",
+            Tab::Workflow => "[28] Workflow",
+            Tab::Vuln => "[29] Vuln",
         }
     }
 
@@ -129,6 +162,13 @@ impl Tab {
             Tab::Settings => "Settings",
             Tab::History => "History",
             Tab::Dashboard => "Dashboard",
+            Tab::Hunt => "slapper hunt",
+            Tab::Browser => "slapper browser",
+            Tab::Compliance => "slapper compliance",
+            Tab::Storage => "slapper storage",
+            Tab::Integrations => "slapper integrations",
+            Tab::Workflow => "slapper workflow",
+            Tab::Vuln => "slapper vuln",
         }
     }
 
@@ -156,6 +196,13 @@ impl Tab {
             Tab::Settings => "Application settings",
             Tab::History => "View scan history",
             Tab::Dashboard => "View scan results dashboard",
+            Tab::Hunt => "Intelligent vulnerability hunting",
+            Tab::Browser => "Headless browser security testing",
+            Tab::Compliance => "Generate compliance reports (OWASP, PCI, HIPAA, SOC2)",
+            Tab::Storage => "Database storage and query management",
+            Tab::Integrations => "Issue tracker integration (Jira, GitHub, GitLab)",
+            Tab::Workflow => "Finding management and SLA tracking",
+            Tab::Vuln => "Vulnerability prioritization and risk scoring",
         }
     }
 
@@ -183,6 +230,13 @@ impl Tab {
             Tab::Settings,
             Tab::History,
             Tab::Dashboard,
+            Tab::Hunt,
+            Tab::Browser,
+            Tab::Compliance,
+            Tab::Storage,
+            Tab::Integrations,
+            Tab::Workflow,
+            Tab::Vuln,
         ]
     }
 

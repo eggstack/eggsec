@@ -449,24 +449,35 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 
 **Goal:** Surface all new capabilities in the terminal UI and complete resilience/testing.
 
-### 6.1 TUI Integration ❌ NOT STARTED
+### 6.1 TUI Integration ✅ DONE
 
 **Source:** plan4 Wave 6, plan5 Phase 4
 
-**Status:** Backend modules exist; zero TUI surface area has been added.
-- ✅ All 7 modules registered in `lib.rs` (hunt, compliance, integrations, workflow, vuln, browser, container, supply_chain)
-- ❌ No TUI tabs for any new module — `Tab` enum in `tui/tabs/mod.rs` has 22 variants, none reference new modules
-- ❌ No tab state structs in `tui/tabs/` for hunt, browser, compliance, storage, integrations, workflow, vuln
-- ❌ No dispatch macro arms in `tui/app/dispatch.rs` for new modules
-- ❌ No App fields in `tui/app/mod.rs` for new modules
-- ❌ No `handle_enter` arms for new modules
+**Status:** Completed (2026-04-04) — All 7 new tabs wired into TUI.
+- ✅ `HuntTab` — Vulnerability hunting with attack chains, business logic, race conditions, authz, session checks
+- ✅ `BrowserTab` — Headless browser testing (feature-gated on `headless-browser`)
+- ✅ `ComplianceTab` — Compliance reporting with framework selector (OWASP, PCI, HIPAA, SOC2)
+- ✅ `StorageTab` — Database storage management with connect/query modes (feature-gated on `database`)
+- ✅ `IntegrationsTab` — Issue tracker integration (Jira, GitHub, GitLab)
+- ✅ `WorkflowTab` — Finding management with status workflow, SLA tracking
+- ✅ `VulnTab` — Vulnerability prioritization with CVSS calculator, exploit check, asset assessment, triage, remediation
+- ✅ All 7 tabs registered in `Tab` enum (variants 22-28)
+- ✅ All dispatch macros updated (dispatch, dispatch_void, dispatch_bool, dispatch_page, dispatch_is_at_edge, dispatch_reset)
+- ✅ App struct extended with new fields
+- ✅ handle_enter arms with task spawning for all new tabs
+- ✅ TaskConfig/TaskResult variants added in workers/runner.rs
+- ✅ Worker functions in workers/security.rs
+- ✅ build_*_task methods in task_management.rs
+- ✅ state_update.rs updated with handle_result and set_error_for_current_tab arms
+- ✅ export.rs, navigation.rs, popup.rs, ui.rs match arms updated
+- ✅ 559 tests passing, 0 clippy warnings
 
 | Item | Details |
 |------|---------|
-| **Backend modules** | All registered in `lib.rs` and functional |
-| **Feature-gated** | `browser` module gated on `headless-browser`, `websocket` on `websocket` feature |
-| **❌ TUI tabs** | Not created — requires new Tab variants, state structs, dispatch macros, App fields |
-| **❌ TUI workers** | Not created — requires new worker implementations in `tui/workers/` |
+| **Tab files** | `hunt.rs`, `browser.rs`, `compliance.rs`, `storage.rs`, `integrations.rs`, `workflow.rs`, `vuln.rs` |
+| **Worker module** | `workers/security.rs` — Task runners for hunt, browser, compliance, storage, integrations, workflow, vuln |
+| **Feature gates** | `browser` gated on `headless-browser`, `storage` gated on `database` |
+| **Tab enum** | Extended from 22 to 29 variants (0-28) |
 
 ### 6.2 Resilience & Error Handling ✅ DONE (Partially)
 
@@ -504,7 +515,7 @@ Master plan consolidating all feature additions, AI enhancements, and infrastruc
 - ✅ Fixed clippy warning in `cvss.rs` (too_many_arguments)
 - ✅ Fixed clippy warnings in `github.rs` and `gitlab.rs` (dead_code)
 - ✅ Fixed clippy warning in `api_schema/mod.rs` (vec_init_then_push)
-- ✅ 0 clippy warnings, 553 tests passing
+- ✅ 0 clippy warnings, 559 tests passing
 
 | Item | Details |
 |------|---------|
@@ -578,8 +589,8 @@ Block E (parallel — independent of Blocks C/D):
     └── 5.6 Enhanced Reporting & Visualization ✅ (PDF is HTML-only)
 
 Block F (depends on Blocks C, D, E):
-  Wave 6: TUI Integration & Polish ⚠️ PARTIAL
-    ├── 6.1 TUI Integration ❌ (NOT STARTED — biggest gap)
+  Wave 6: TUI Integration & Polish ✅ ALL DONE
+    ├── 6.1 TUI Integration ✅ (DONE — 7 new tabs: hunt, browser, compliance, storage, integrations, workflow, vuln)
     ├── 6.2 Resilience & Error Handling ✅ (⚠️ cache in-memory only)
     ├── 6.3 Testing ✅
     └── 6.4 Cleanup & Documentation ✅
@@ -626,7 +637,7 @@ Note: `grpc-api` and `nse-sandbox` are intentionally excluded from `full`.
 
 | Gap | Severity | Details |
 |-----|----------|---------|
-| TUI Integration (6.1) | High | No tabs/dispatch/App fields for hunt, browser, compliance, storage, integrations, workflow, vuln |
+| TUI Integration (6.1) | ~~High~~ | ✅ FIXED (2026-04-04) — All 7 tabs wired: hunt, browser, compliance, storage, integrations, workflow, vuln |
 | MCP Prompts Wiring | ~~Medium~~ | ✅ FIXED (2026-04-04) — `prompts/list` and `prompts/read` handlers wired |
 | Database Stubs (5.1) | ~~Medium~~ | ✅ FIXED (2026-04-04) — `storage/` registered in `lib.rs` |
 | Issue Tracker Stubs (5.2) | ~~Medium~~ | ✅ FIXED (2026-04-04) — Real HTTP calls for Jira/GitHub/GitLab |
@@ -640,7 +651,7 @@ Note: `grpc-api` and `nse-sandbox` are intentionally excluded from `full`.
 - [x] All tests pass: `cargo test --lib -p slapper --features full`
 - [x] No new clippy warnings: `cargo clippy --lib -p slapper --features full`
 - [x] Each feature has unit tests
-- [ ] TUI tabs fully functional with feature-gated dispatch (6.1 — NOT STARTED)
+- [x] TUI tabs fully functional with feature-gated dispatch (6.1 — DONE)
 - [x] MCP prompts wired into handlers (3.1 — DONE)
 - [x] `storage/` module registered in `lib.rs` (5.1 — DONE)
 - [x] Issue tracker integration has real HTTP calls (5.2 — DONE)

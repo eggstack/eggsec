@@ -112,6 +112,23 @@ pub enum TaskConfig {
         script_args: Option<String>,
         custom_script: Option<String>,
     },
+    Hunt {
+        target: String,
+        config: crate::hunt::HuntConfig,
+    },
+    #[cfg(feature = "headless-browser")]
+    Browser {
+        target: String,
+        config: crate::browser::BrowserConfig,
+    },
+    Compliance {
+        target: String,
+        framework: crate::compliance::ComplianceFramework,
+    },
+    Storage,
+    Integrations,
+    Workflow,
+    Vuln,
 }
 
 #[derive(Debug)]
@@ -149,6 +166,14 @@ pub enum TaskResult {
     OAuth(crate::tui::tabs::oauth::OAuthResults),
     #[cfg(feature = "nse")]
     Nse(crate::tui::tabs::nse::NseResults),
+    Hunt(crate::hunt::HuntReport),
+    #[cfg(feature = "headless-browser")]
+    Browser(crate::browser::BrowserReport),
+    Compliance(crate::compliance::ComplianceReport),
+    Storage,
+    Integrations,
+    Workflow,
+    Vuln,
     Error(String),
 }
 
@@ -404,6 +429,28 @@ impl TaskRunner {
                     result_tx,
                 )
                 .await
+            }
+            TaskConfig::Hunt { target, config } => {
+                super::security::run_hunt_task(target, config, progress_tx, result_tx).await
+            }
+            #[cfg(feature = "headless-browser")]
+            TaskConfig::Browser { target, config } => {
+                super::security::run_browser_task(target, config, progress_tx, result_tx).await
+            }
+            TaskConfig::Compliance { target, framework } => {
+                super::security::run_compliance_task(target, framework, progress_tx, result_tx).await
+            }
+            TaskConfig::Storage => {
+                super::security::run_storage_task(progress_tx, result_tx).await
+            }
+            TaskConfig::Integrations => {
+                super::security::run_integrations_task(progress_tx, result_tx).await
+            }
+            TaskConfig::Workflow => {
+                super::security::run_workflow_task(progress_tx, result_tx).await
+            }
+            TaskConfig::Vuln => {
+                super::security::run_vuln_task(progress_tx, result_tx).await
             }
         };
         result
