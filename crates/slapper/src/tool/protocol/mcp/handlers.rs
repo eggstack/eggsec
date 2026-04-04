@@ -10,6 +10,7 @@ use crate::tool::{
 };
 
 use super::auth::{validate_auth, validate_auth_params};
+use super::prompts::{get_builtin_prompts, McpPrompt};
 use super::types::{CapabilitySummary, McpError, McpRequest, McpResource, McpResponse, McpTool};
 use super::streaming::StreamEvent;
 
@@ -134,6 +135,8 @@ impl McpServer {
             "rate-limit/status" => self.handle_rate_limit_status(req).await,
             "resources/list" => self.handle_resources_list(req).await,
             "resources/read" => self.handle_resources_read(req).await,
+            "prompts/list" => self.handle_prompts_list(req).await,
+            "prompts/read" => self.handle_prompts_read(req).await,
             "ping" => self.handle_ping(req).await,
             _ => req.not_found_method(),
         }
@@ -396,6 +399,40 @@ impl McpServer {
                 req.success_response(result)
             }
             _ => req.error_response(McpError::invalid_params("Unknown resource uri")),
+        }
+    }
+
+    async fn handle_prompts_list(&self, req: McpRequest) -> McpResponse {
+        let prompts = get_builtin_prompts();
+        
+        let result = serde_json::json!({
+            "prompts": prompts,
+            "count": prompts.len()
+        });
+        
+        req.success_response(result)
+    }
+
+    async fn handle_prompts_read(&self, req: McpRequest) -> McpResponse {
+        let params = match &req.params {
+            Some(p) => p,
+            None => return req.error_response(McpError::invalid_params("Missing params")),
+        };
+        
+        let name = match params.get("name").and_then(|v| v.as_str()) {
+            Some(name) => name,
+            None => return req.error_response(McpError::invalid_params("Missing prompt name")),
+        };
+        
+        let prompts = get_builtin_prompts();
+        
+        if let Some(prompt) = prompts.into_iter().find(|p| p.name == name) {
+            let result = serde_json::json!({
+                "prompt": prompt
+            });
+            req.success_response(result)
+        } else {
+            req.error_response(McpError::invalid_params(&format!("Unknown prompt: {}", name)))
         }
     }
 

@@ -140,6 +140,31 @@ version = "0.8"
 optional = true
 features = ["runtime-tokio", "postgres", "macros"]
 
+[dependencies.kube]
+version = "0.92"
+optional = true
+features = ["client", "runtime"]
+
+[dependencies.k8s-openapi]
+version = "0.22"
+optional = true
+
+[dependencies.printpdf]
+version = "0.7"
+optional = true
+
+[dependencies.openapiv3]
+version = "2"
+optional = true
+
+[dependencies.cyclonedx-bom]
+version = "0.8"
+optional = true
+
+[dependencies.spdx]
+version = "0.10"
+optional = true
+
 [build-dependencies.prost-build]
 version = "0.13"
 optional = true
@@ -191,6 +216,24 @@ headless-browser = ["headless_chrome"]
 
 # Database storage for findings and scan history
 database = ["sqlx"]
+
+# Kubernetes container security scanning
+container = ["kube", "k8s-openapi"]
+
+# Cloud security scanning (AWS, GCP, Azure)
+cloud = []
+
+# API schema-based fuzzing
+api-schema = ["openapiv3"]
+
+# SBOM generation and vulnerability checking
+sbom = ["cyclonedx-bom", "spdx"]
+
+# Git secrets scanning
+git-secrets = []
+
+# PDF report generation
+pdf = ["printpdf"]
 
 [[bin]]
 name = "slapper"

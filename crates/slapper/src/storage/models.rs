@@ -1,8 +1,5 @@
-use crate::error::Result;
-use crate::storage::models::*;
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,5 +1,3 @@
-use crate::error::Result;
-use crate::storage::models::*;
 use crate::types::Severity;
 
 pub struct QueryBuilder;
@@ -42,6 +40,6 @@ mod tests {
     #[test]
     fn test_query_builder() {
         let query = QueryBuilder::find_open_findings_by_severity(Severity::Critical);
-        assert!(query.contains("Critical"));
+        assert!(query.contains("critical"));
     }
 }

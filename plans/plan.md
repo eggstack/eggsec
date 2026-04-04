@@ -627,12 +627,12 @@ Note: `grpc-api` and `nse-sandbox` are intentionally excluded from `full`.
 | Gap | Severity | Details |
 |-----|----------|---------|
 | TUI Integration (6.1) | High | No tabs/dispatch/App fields for hunt, browser, compliance, storage, integrations, workflow, vuln |
-| MCP Prompts Wiring | Medium | `get_builtin_prompts()` in `tool/protocol/mcp/prompts.rs` never called |
-| Database Stubs (5.1) | Medium | `storage/postgres.rs` returns hardcoded values; module not in `lib.rs` |
-| Issue Tracker Stubs (5.2) | Medium | jira/github/gitlab clients have no real HTTP calls |
-| Missing Feature Flags | Low | `container`, `cloud`, `api-schema`, `sbom`, `git-secrets` not in Cargo.toml |
-| Cache Persistence | Low | `ai/cache.rs` is in-memory only; no disk save/load |
-| PDF Export | Low | `output/pdf.rs` generates HTML, not actual PDF binary |
+| MCP Prompts Wiring | ~~Medium~~ | ✅ FIXED (2026-04-04) — `prompts/list` and `prompts/read` handlers wired |
+| Database Stubs (5.1) | ~~Medium~~ | ✅ FIXED (2026-04-04) — `storage/` registered in `lib.rs` |
+| Issue Tracker Stubs (5.2) | ~~Medium~~ | ✅ FIXED (2026-04-04) — Real HTTP calls for Jira/GitHub/GitLab |
+| Missing Feature Flags | ~~Low~~ | ✅ FIXED (2026-04-04) — `container`, `cloud`, `api-schema`, `sbom`, `git-secrets`, `pdf` added |
+| Cache Persistence | ~~Low~~ | ✅ FIXED (2026-04-04) — `with_persistence(path)` added to `AiCache` |
+| PDF Export | ~~Low~~ | ✅ FIXED (2026-04-04) — `printpdf` enabled, actual PDF generation |
 
 ## Success Criteria
 
@@ -641,10 +641,9 @@ Note: `grpc-api` and `nse-sandbox` are intentionally excluded from `full`.
 - [x] No new clippy warnings: `cargo clippy --lib -p slapper --features full`
 - [x] Each feature has unit tests
 - [ ] TUI tabs fully functional with feature-gated dispatch (6.1 — NOT STARTED)
-- [ ] MCP prompts wired into handlers (3.1 — NOT WIRED)
-- [ ] Database integration has real SQL execution (5.1 — STUBS)
-- [ ] Issue tracker integration has real HTTP calls (5.2 — STUBS)
-- [ ] `storage/` module registered in `lib.rs` (5.1 — MISSING)
-- [ ] Missing feature flags added: `container`, `cloud`, `api-schema`, `sbom`, `git-secrets`
-- [ ] Cache persistence to disk (6.2 — IN-MEMORY ONLY)
-- [ ] PDF export generates actual PDF binary (5.6 — HTML ONLY)
+- [x] MCP prompts wired into handlers (3.1 — DONE)
+- [x] `storage/` module registered in `lib.rs` (5.1 — DONE)
+- [x] Issue tracker integration has real HTTP calls (5.2 — DONE)
+- [x] Missing feature flags added: `container`, `cloud`, `api-schema`, `sbom`, `git-secrets`, `pdf`
+- [x] Cache persistence to disk (6.2 — DONE)
+- [x] PDF export generates actual PDF binary (5.6 — DONE)

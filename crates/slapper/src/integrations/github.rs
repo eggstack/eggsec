@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Result, SlapperError};
 use crate::integrations::{Issue, IssueTracker, IssueUpdate};
 use crate::types::SensitiveString;
 use serde::{Deserialize, Serialize};
@@ -11,41 +11,265 @@ pub struct GitHubConfig {
 }
 
 pub struct GitHubClient {
-    #[allow(dead_code)]
     config: GitHubConfig,
+    client: reqwest::blocking::Client,
 }
 
 impl GitHubClient {
     pub fn new(config: GitHubConfig) -> Self {
-        Self { config }
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap_or_else(|_| reqwest::blocking::Client::new());
+        Self { config, client }
+    }
+
+    fn api_url(&self, path: &str) -> String {
+        format!(
+            "https://api.github.com/repos/{}/{}{}",
+            self.config.owner, self.config.repo, path
+        )
     }
 }
 
 impl IssueTracker for GitHubClient {
-    fn create_issue(&self, _issue: &Issue) -> Result<String> {
-        Ok(format!("#{}", 1))
+    fn create_issue(&self, issue: &Issue) -> Result<String> {
+        let url = self.api_url("/issues");
+
+        let labels = if issue.labels.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::json!(issue.labels)
+        };
+
+        let body = serde_json::json!({
+            "title": issue.title,
+            "body": issue.description,
+            "labels": labels
+        });
+
+        let response = self
+            .client
+            .post(&url)
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.api_token.expose_secret()),
+            )
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
+
+        if response.status().is_success() {
+            let json: serde_json::Value = response
+                .json()
+                .map_err(|e| SlapperError::Network(e.to_string()))?;
+            let number = json["number"].as_i64().unwrap_or(1);
+            Ok(format!("#{}", number))
+        } else {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            Err(SlapperError::Network(format!(
+                "GitHub API error {}: {}",
+                status, body
+            )))
+        }
     }
 
-    fn update_issue(&self, _id: &str, _update: &IssueUpdate) -> Result<()> {
-        Ok(())
+    fn update_issue(&self, id: &str, update: &IssueUpdate) -> Result<()> {
+        let issue_number = id.trim_start_matches('#');
+        let url = self.api_url(&format!("/issues/{}", issue_number));
+
+        let mut body = serde_json::Map::new();
+
+        if let Some(title) = &update.title {
+            body.insert("title".to_string(), serde_json::json!(title));
+        }
+        if let Some(description) = &update.description {
+            body.insert("body".to_string(), serde_json::json!(description));
+        }
+        if let Some(labels) = &update.labels {
+            body.insert("labels".to_string(), serde_json::json!(labels));
+        }
+        if let Some(state) = &update.status {
+            body.insert("state".to_string(), serde_json::json!(state));
+        }
+
+        let response = self
+            .client
+            .patch(&url)
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.api_token.expose_secret()),
+            )
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            Err(SlapperError::Network(format!(
+                "GitHub API error {}: {}",
+                status, body
+            )))
+        }
     }
 
-    fn add_comment(&self, _issue_id: &str, _comment: &str) -> Result<()> {
-        Ok(())
+    fn add_comment(&self, issue_id: &str, comment: &str) -> Result<()> {
+        let issue_number = issue_id.trim_start_matches('#');
+        let url = self.api_url(&format!("/issues/{}/comments", issue_number));
+
+        let body = serde_json::json!({
+            "body": comment
+        });
+
+        let response = self
+            .client
+            .post(&url)
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.api_token.expose_secret()),
+            )
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            Err(SlapperError::Network(format!(
+                "GitHub API error {}: {}",
+                status, body
+            )))
+        }
     }
 
-    fn get_issue(&self, _id: &str) -> Result<Issue> {
-        Ok(Issue {
-            title: "GitHub Issue".to_string(),
-            description: "Description".to_string(),
-            labels: vec![],
-            severity: None,
-            assignees: vec![],
-        })
+    fn get_issue(&self, id: &str) -> Result<Issue> {
+        let issue_number = id.trim_start_matches('#');
+        let url = self.api_url(&format!("/issues/{}", issue_number));
+
+        let response = self
+            .client
+            .get(&url)
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.api_token.expose_secret()),
+            )
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
+
+        if response.status().is_success() {
+            let json: serde_json::Value = response
+                .json()
+                .map_err(|e| SlapperError::Network(e.to_string()))?;
+
+            let labels: Vec<String> = json["labels"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v["name"].as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            Ok(Issue {
+                title: json["title"].as_str().unwrap_or("").to_string(),
+                description: json["body"].as_str().unwrap_or("").to_string(),
+                labels,
+                severity: None,
+                assignees: json["assignees"]
+                    .as_array()
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v["login"].as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            })
+        } else {
+            let status = response.status();
+            Err(SlapperError::Network(format!(
+                "GitHub API error: {}",
+                status
+            )))
+        }
     }
 
-    fn search_issues(&self, _query: &str) -> Result<Vec<Issue>> {
-        Ok(vec![])
+    fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
+        let url = format!("https://api.github.com/search/issues?q={}", query);
+
+        let response = self
+            .client
+            .get(&url)
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.api_token.expose_secret()),
+            )
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .map_err(|e| SlapperError::Network(e.to_string()))?;
+
+        if response.status().is_success() {
+            let json: serde_json::Value = response
+                .json()
+                .map_err(|e| SlapperError::Network(e.to_string()))?;
+
+            let issues: Vec<Issue> = json["items"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .map(|item| {
+                            let labels: Vec<String> = item["labels"]
+                                .as_array()
+                                .map(|a| {
+                                    a.iter()
+                                        .filter_map(|v| v["name"].as_str().map(String::from))
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            Issue {
+                                title: item["title"].as_str().unwrap_or("").to_string(),
+                                description: item["body"].as_str().unwrap_or("").to_string(),
+                                labels,
+                                severity: None,
+                                assignees: item["assignees"]
+                                    .as_array()
+                                    .map(|a| {
+                                        a.iter()
+                                            .filter_map(|v| v["login"].as_str().map(String::from))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default(),
+                            }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            Ok(issues)
+        } else {
+            let status = response.status();
+            Err(SlapperError::Network(format!(
+                "GitHub API error: {}",
+                status
+            )))
+        }
     }
 }
 
@@ -60,6 +284,20 @@ mod tests {
             repo: "repo".to_string(),
             api_token: SensitiveString::new("ghp_token".to_string()),
         };
-        assert_eq!(config.owner, "owner");
+        let client = GitHubClient::new(config.clone());
+        assert_eq!(client.config.owner, "owner");
+    }
+
+    #[test]
+    fn test_api_url() {
+        let config = GitHubConfig {
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+            api_token: SensitiveString::new("ghp_token".to_string()),
+        };
+        let client = GitHubClient::new(config);
+        let url = client.api_url("/issues");
+        assert!(url.contains("github.com"));
+        assert!(url.contains("owner/repo"));
     }
 }

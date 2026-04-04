@@ -64,6 +64,7 @@ pub mod recon;
 pub mod scanner;
 pub mod auth;
 pub mod container;
+pub mod storage;
 pub mod supply_chain;
 pub mod hunt;
 pub mod compliance;
