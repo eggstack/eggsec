@@ -305,6 +305,29 @@ impl ResponseSeverity {
             ResponseSeverity::None => "none",
         }
     }
+
+    fn as_int(&self) -> u8 {
+        match self {
+            ResponseSeverity::Critical => 5,
+            ResponseSeverity::High => 4,
+            ResponseSeverity::Medium => 3,
+            ResponseSeverity::Low => 2,
+            ResponseSeverity::Info => 1,
+            ResponseSeverity::None => 0,
+        }
+    }
+}
+
+impl Ord for ResponseSeverity {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_int().cmp(&other.as_int())
+    }
+}
+
+impl PartialOrd for ResponseSeverity {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl std::str::FromStr for ResponseSeverity {
