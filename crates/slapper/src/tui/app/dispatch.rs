@@ -71,7 +71,7 @@ macro_rules! dispatch_void {
             Tab::Plugin => $self.plugin.$method($($arg),*),
             #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => {},
-            Tab::Settings => {},
+            Tab::Settings => {}, // Settings tab doesn't respond to these commands
             Tab::History => {},
             Tab::Dashboard => {},
             Tab::Hunt => $self.hunt.$method($($arg),*),

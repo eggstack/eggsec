@@ -29,11 +29,11 @@ impl FuzzEngine {
             Some(pb)
         };
 
-        let results = Arc::new(Mutex::new(Vec::new()));
+        let mut results = Vec::new();
 
         for payload in payloads {
             let result = self.send_payload(&payload).await?;
-            results.lock().await.push(result);
+            results.push(result);
             if let Some(ref pb) = progress {
                 pb.inc(1);
             }
@@ -42,7 +42,6 @@ impl FuzzEngine {
         if let Some(ref pb) = progress {
             pb.finish_and_clear();
         }
-        let results = results.lock().await.clone();
         Ok(results)
     }
 

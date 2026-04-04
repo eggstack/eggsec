@@ -18,6 +18,10 @@ pub fn preserve_all(s: &str, max_len: usize) -> String {
     }
 }
 
+pub fn truncate_only(s: &str, max_len: usize) -> String {
+    s.chars().take(max_len).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
