@@ -309,24 +309,19 @@ pub async fn run_nse(
 
     let _ = progress_tx.send((0, 100)).await;
 
-    let target_clone = target.clone();
-    let script_clone = script.clone();
-    let script_args_clone = script_args.clone();
-    let custom_script_clone = custom_script.clone();
-
     let (output, errors, success) = tokio::task::spawn_blocking(move || {
-        let mut executor = NseExecutor::with_target(&target_clone)
+        let mut executor = NseExecutor::with_target(&target)
             .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
 
-        if let Some(ref args) = script_args_clone {
+        if let Some(ref args) = script_args {
             let _ = executor.set_script_args(args);
         }
 
-        let script_content = if let Some(ref script_path) = custom_script_clone {
+        let script_content = if let Some(ref script_path) = custom_script {
             std::fs::read_to_string(script_path)
                 .map_err(|e| anyhow::anyhow!("Failed to read custom script '{}': {}", script_path, e))?
         } else {
-            slapper_nse::get_builtin_script(&script_clone)
+            slapper_nse::get_builtin_script(&script)
         };
 
         let output = executor
