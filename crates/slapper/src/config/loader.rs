@@ -5,11 +5,10 @@ use std::path::PathBuf;
 
 use super::scope::Scope;
 use super::settings::SlapperConfig;
+use crate::constants::{PROJECT_NAME, PROJECT_QUALIFIER};
 
 pub const DEFAULT_CONFIG_NAME: &str = "slapper.toml";
 pub const SCOPE_FILE_NAME: &str = "scope.toml";
-const PROJECT_NAME: &str = "slapper";
-const PROJECT_QUALIFIER: &str = "tools";
 
 pub fn load_config(config_path: Option<&str>) -> Result<SlapperConfig> {
     let path = config_path

@@ -4,6 +4,9 @@
 //! used throughout the codebase. Using constants improves maintainability
 //! by making it easy to find and update hardcoded values.
 
+pub const PROJECT_QUALIFIER: &str = "tools";
+pub const PROJECT_NAME: &str = "slapper";
+
 pub const DEFAULT_REMOTE_PORT: u16 = 7890;
 pub const DEFAULT_TRACEROUTE_PORT: u16 = 33434;
 pub const DEFAULT_PROXY_TIMEOUT_MS: u64 = 10000;
