@@ -105,3 +105,95 @@ impl Default for OptimizedClientPool {
         Self::new(10)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_client_pool_new_creates_clients() {
+        let pool = ClientPool::new(3, Duration::from_secs(10), false, None, None);
+        assert_eq!(pool.len(), 3);
+        assert_eq!(pool.pool_size(), 3);
+        assert!(!pool.is_empty());
+    }
+
+    #[test]
+    fn test_client_pool_default() {
+        let pool = ClientPool::default();
+        assert_eq!(pool.len(), 10);
+        assert!(!pool.is_empty());
+    }
+
+    #[test]
+    fn test_client_pool_get_returns_client() {
+        let pool = ClientPool::new(2, Duration::from_secs(5), false, None, None);
+        let client = pool.get();
+        assert!(client.is_some());
+    }
+
+    #[test]
+    fn test_client_pool_round_robin() {
+        let pool = ClientPool::new(2, Duration::from_secs(5), false, None, None);
+        let client1 = pool.get();
+        let client2 = pool.get();
+        let client3 = pool.get();
+
+        assert!(client1.is_some());
+        assert!(client2.is_some());
+        assert!(client3.is_some());
+    }
+
+    #[test]
+    fn test_client_pool_from_config() {
+        let pool = ClientPool::from_config(5, Duration::from_secs(15), true, None, None);
+        assert_eq!(pool.len(), 5);
+    }
+
+    #[test]
+    fn test_client_pool_custom_user_agent() {
+        let pool = ClientPool::new(
+            1,
+            Duration::from_secs(5),
+            false,
+            Some("CustomAgent/1.0".to_string()),
+            None,
+        );
+        assert_eq!(pool.len(), 1);
+    }
+
+    #[test]
+    fn test_client_pool_insecure_mode() {
+        let pool = ClientPool::new(1, Duration::from_secs(5), true, None, None);
+        assert!(!pool.is_empty());
+    }
+
+    #[test]
+    fn test_optimized_client_pool_new() {
+        let pool = OptimizedClientPool::new(3);
+        let client = pool.get();
+        assert!(client.is_some());
+    }
+
+    #[test]
+    fn test_optimized_client_pool_default() {
+        let pool = OptimizedClientPool::default();
+        let client = pool.get();
+        assert!(client.is_some());
+    }
+
+    #[test]
+    fn test_client_pool_single_client_reuse() {
+        let pool = ClientPool::new(1, Duration::from_secs(5), false, None, None);
+        let c1 = pool.get();
+        let c2 = pool.get();
+        assert!(c1.is_some());
+        assert!(c2.is_some());
+    }
+
+    #[test]
+    fn test_client_pool_len_matches_pool_size() {
+        let pool = ClientPool::new(7, Duration::from_secs(10), false, None, None);
+        assert_eq!(pool.len(), pool.pool_size());
+    }
+}

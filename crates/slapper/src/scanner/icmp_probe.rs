@@ -116,3 +116,174 @@ async fn resolve_hostname(hostname: &str) -> Result<IpAddr> {
         .map(|s| s.ip())
         .ok_or_else(|| SlapperError::Network("No addresses found for hostname".to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_stats_empty_results() {
+        let results: Vec<PingResult> = vec![];
+        let stats = calculate_stats(&results, 3);
+
+        assert_eq!(stats.sent, 3);
+        assert_eq!(stats.received, 0);
+        assert_eq!(stats.lost, 3);
+        assert!(stats.min_rtt.is_none());
+        assert!(stats.max_rtt.is_none());
+        assert!(stats.avg_rtt.is_none());
+    }
+
+    #[test]
+    fn test_calculate_stats_single_result() {
+        let results = vec![PingResult {
+            target: IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+            rtt: Duration::from_millis(10),
+            ttl: 64,
+            sequence: 1,
+            identifier: 1234,
+            payload_size: 56,
+        }];
+        let stats = calculate_stats(&results, 1);
+
+        assert_eq!(stats.sent, 1);
+        assert_eq!(stats.received, 1);
+        assert_eq!(stats.lost, 0);
+        assert_eq!(stats.min_rtt, Some(Duration::from_millis(10)));
+        assert_eq!(stats.max_rtt, Some(Duration::from_millis(10)));
+        assert_eq!(stats.avg_rtt, Some(Duration::from_millis(10)));
+    }
+
+    #[test]
+    fn test_calculate_stats_multiple_results() {
+        let results = vec![
+            PingResult {
+                target: IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+                rtt: Duration::from_millis(10),
+                ttl: 64,
+                sequence: 1,
+                identifier: 1234,
+                payload_size: 56,
+            },
+            PingResult {
+                target: IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+                rtt: Duration::from_millis(20),
+                ttl: 64,
+                sequence: 2,
+                identifier: 1234,
+                payload_size: 56,
+            },
+            PingResult {
+                target: IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+                rtt: Duration::from_millis(30),
+                ttl: 64,
+                sequence: 3,
+                identifier: 1234,
+                payload_size: 56,
+            },
+        ];
+        let stats = calculate_stats(&results, 5);
+
+        assert_eq!(stats.sent, 5);
+        assert_eq!(stats.received, 3);
+        assert_eq!(stats.lost, 2);
+        assert_eq!(stats.min_rtt, Some(Duration::from_millis(10)));
+        assert_eq!(stats.max_rtt, Some(Duration::from_millis(30)));
+        assert_eq!(stats.avg_rtt, Some(Duration::from_millis(20)));
+    }
+
+    #[test]
+    fn test_calculate_stats_partial_responses() {
+        let results = vec![PingResult {
+            target: IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+            rtt: Duration::from_millis(50),
+            ttl: 128,
+            sequence: 1,
+            identifier: 4321,
+            payload_size: 64,
+        }];
+        let stats = calculate_stats(&results, 10);
+
+        assert_eq!(stats.sent, 10);
+        assert_eq!(stats.received, 1);
+        assert_eq!(stats.lost, 9);
+    }
+
+    #[test]
+    fn test_ping_result_fields() {
+        let result = PingResult {
+            target: IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1)),
+            rtt: Duration::from_millis(5),
+            ttl: 255,
+            sequence: 42,
+            identifier: 9999,
+            payload_size: 128,
+        };
+        assert_eq!(result.ttl, 255);
+        assert_eq!(result.sequence, 42);
+        assert_eq!(result.identifier, 9999);
+        assert_eq!(result.payload_size, 128);
+    }
+
+    #[test]
+    fn test_ping_stats_clone() {
+        let stats = PingStats {
+            sent: 5,
+            received: 3,
+            lost: 2,
+            min_rtt: Some(Duration::from_millis(10)),
+            max_rtt: Some(Duration::from_millis(50)),
+            avg_rtt: Some(Duration::from_millis(30)),
+        };
+        let cloned = stats.clone();
+        assert_eq!(cloned.sent, stats.sent);
+        assert_eq!(cloned.received, stats.received);
+    }
+
+    #[test]
+    fn test_ping_result_serialize() {
+        let result = PingResult {
+            target: IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+            rtt: Duration::from_millis(10),
+            ttl: 64,
+            sequence: 1,
+            identifier: 1234,
+            payload_size: 56,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("127.0.0.1"));
+        assert!(json.contains("ttl"));
+    }
+
+    #[test]
+    fn test_resolve_target_ip() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(resolve_target("127.0.0.1"));
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
+        );
+    }
+
+    #[test]
+    fn test_resolve_target_ipv6() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(resolve_target("::1"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_target_invalid_ip() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(resolve_target("999.999.999.999"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_target_localhost_hostname() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(resolve_target("localhost"));
+        assert!(result.is_ok());
+    }
+}

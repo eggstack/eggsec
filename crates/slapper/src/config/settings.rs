@@ -42,6 +42,9 @@ pub struct PathsConfig {
 
     #[serde(default)]
     pub wordlists_dir: Option<PathBuf>,
+
+    #[serde(default)]
+    pub export_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

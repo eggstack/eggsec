@@ -2,7 +2,393 @@ use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
 use crate::error::Result;
 use crate::recon::{cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, ssl, subdomain, takeover, techdetect, threatintel, wayback, whois, FullReconResult};
+use crate::types::SensitiveString;
 use std::sync::{Arc, Mutex};
+
+/// Resolves the target domain to an IP address.
+///
+/// Strips protocol prefixes, extracts the domain, and performs DNS resolution
+/// if the target is not already an IP address.
+async fn resolve_target(target: &str, verbose: bool) -> (String, Option<String>, Option<String>) {
+    let target_clean = if target.starts_with("http://") {
+        target.strip_prefix("http://").unwrap_or(target)
+    } else if target.starts_with("https://") {
+        target.strip_prefix("https://").unwrap_or(target)
+    } else {
+        target
+    };
+
+    let domain = target_clean.split('/').next().map(|s| s.to_string());
+    let url = if target.starts_with("http://") || target.starts_with("https://") {
+        target.to_string()
+    } else {
+        format!("https://{}", target)
+    };
+
+    let resolved_ip = if let Some(ref d) = domain {
+        if d.parse::<std::net::IpAddr>().is_ok() {
+            Some(d.clone())
+        } else {
+            match reverse_dns::resolve_domain(d).await {
+                Ok(ips) if !ips.is_empty() => {
+                    if verbose {
+                        eprintln!("Resolved to {}", ips[0]);
+                    }
+                    Some(ips[0].clone())
+                }
+                _ => None,
+            }
+        }
+    } else {
+        None
+    };
+
+    (url, domain, resolved_ip)
+}
+
+/// Performs reverse DNS lookup for the given IP address.
+///
+/// Returns `None` if `no_dns` is true, no IP is provided, or the lookup fails.
+async fn run_reverse_dns(
+    ip: Option<&String>,
+    no_dns: bool,
+) -> Option<reverse_dns::ReverseDnsResult> {
+    if no_dns {
+        return None;
+    }
+    let ip = ip?;
+    match reverse_dns::reverse_dns_lookup(ip).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("reverse DNS lookup failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Performs IP geolocation lookup.
+///
+/// Returns `None` if `no_geo` is true, no IP is provided, or the lookup fails.
+async fn run_geo_lookup(
+    ip: Option<&String>,
+    no_geo: bool,
+    ipapi_key: Option<&SensitiveString>,
+    maxmind_settings: Option<geolocation::MaxMindSettings>,
+) -> Option<geolocation::GeoLocation> {
+    if no_geo {
+        return None;
+    }
+    let ip = ip?;
+    match geolocation::geolocation_lookup_with_config(ip, ipapi_key, maxmind_settings).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("geolocation lookup failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Performs threat intelligence lookup for an IP address.
+///
+/// Returns `None` if `no_threat` is true, no IP is provided, or the lookup fails.
+async fn run_threat_intel(
+    ip: Option<&String>,
+    no_threat: bool,
+    virustotal_key: Option<&SensitiveString>,
+    alienvault_key: Option<&SensitiveString>,
+    shodan_key: Option<&SensitiveString>,
+) -> Option<threatintel::ThreatIntel> {
+    if no_threat {
+        return None;
+    }
+    let ip = ip?;
+    let is_ip = ip.parse::<std::net::IpAddr>().is_ok();
+    match threatintel::check_threat_intel(ip, is_ip, virustotal_key, alienvault_key, shodan_key).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("threat intel lookup failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Performs SSL/TLS certificate analysis.
+///
+/// Returns `None` if `no_ssl` is true, no host is provided, or the analysis fails.
+async fn run_ssl_recon(
+    host: Option<&String>,
+    url: &str,
+    no_ssl: bool,
+) -> Option<ssl::SslAnalysis> {
+    if no_ssl {
+        return None;
+    }
+    let host = host?;
+    let port = if url.contains("https://") { 443 } else { 80 };
+    match ssl::analyze_ssl(host, port).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("SSL analysis failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Performs WHOIS lookup for a domain.
+///
+/// Returns `None` if `no_whois` is true, no domain is provided, or the lookup fails.
+async fn run_whois_lookup(
+    domain: Option<&String>,
+    no_whois: bool,
+) -> Option<whois::WhoisResult> {
+    if no_whois {
+        return None;
+    }
+    let domain = domain?;
+    match whois::whois_lookup(domain).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("whois lookup failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Performs subdomain enumeration.
+///
+/// Returns `None` if `no_subdomains` is true, no domain is provided, or enumeration fails.
+async fn run_subdomain_enum(
+    domain: Option<&String>,
+    concurrency: usize,
+    no_subdomains: bool,
+) -> Option<subdomain::SubdomainResult> {
+    if no_subdomains {
+        return None;
+    }
+    let domain = domain?;
+    match subdomain::enumerate_subdomains(domain, concurrency).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("subdomain enumeration failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Enumerates DNS records for a domain.
+///
+/// Returns `None` if `no_dns_records` is true, no domain is provided, or enumeration fails.
+async fn run_dns_records(
+    domain: Option<&String>,
+    no_dns_records: bool,
+) -> Option<dns_records::DnsRecords> {
+    if no_dns_records {
+        return None;
+    }
+    let domain = domain?;
+    match dns_records::enumerate_dns_records(domain).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("DNS records enumeration failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Detects the technology stack used by a web application.
+///
+/// Returns `None` if `no_tech` is true or detection fails.
+async fn run_tech_detection(
+    url: &str,
+    no_tech: bool,
+) -> Option<techdetect::TechDetectionResult> {
+    if no_tech {
+        return None;
+    }
+    match techdetect::detect_tech_stack(url).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("tech detection failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Analyzes JavaScript files for endpoints and secrets.
+///
+/// Returns `None` if `no_js` is true or analysis fails.
+async fn run_js_analysis(
+    url: &str,
+    no_js: bool,
+) -> Option<js::JsAnalysis> {
+    if no_js {
+        return None;
+    }
+    match js::analyze_js(url).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("JS analysis failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Queries the Wayback Machine for historical snapshots.
+///
+/// Returns `None` if `no_wayback` is true, no domain is provided, or the lookup fails.
+async fn run_wayback_check(
+    domain: Option<&String>,
+    no_wayback: bool,
+    wayback_key: Option<&SensitiveString>,
+) -> Option<wayback::WaybackResult> {
+    if no_wayback {
+        return None;
+    }
+    let domain = domain?;
+    match wayback::get_wayback_snapshots(domain, wayback_key, 100).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("wayback lookup failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Scans for cloud infrastructure misconfigurations.
+///
+/// Returns `None` if `no_cloud` is true, no domain is provided, or the scan fails.
+async fn run_cloud_detection(
+    domain: Option<&String>,
+    concurrency: usize,
+    no_cloud: bool,
+) -> Option<cloud::CloudDiscovery> {
+    if no_cloud {
+        return None;
+    }
+    let domain = domain?;
+    match cloud::scan_cloud(domain, concurrency).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("cloud scan failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Scans web content for sensitive files and directories.
+///
+/// Returns `None` if `no_content` is true or the scan fails.
+async fn run_content_analysis(
+    url: &str,
+    concurrency: usize,
+    no_content: bool,
+) -> Option<content::ContentDiscovery> {
+    if no_content {
+        return None;
+    }
+    match content::scan_content(url, concurrency).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("content scan failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Analyzes CORS configuration for misconfigurations.
+///
+/// Returns `None` if `no_cors` is true or the analysis fails.
+async fn run_cors_check(
+    url: &str,
+    no_cors: bool,
+) -> Option<cors::CorsAnalysis> {
+    if no_cors {
+        return None;
+    }
+    match cors::analyze_cors(url).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("CORS analysis failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Discovers email addresses associated with a target.
+///
+/// Returns `None` if `no_email` is true or discovery fails.
+async fn run_email_security(
+    url: &str,
+    no_email: bool,
+) -> Option<email::EmailDiscovery> {
+    if no_email {
+        return None;
+    }
+    match email::discover_contacts(url).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("email discovery failed: {}", e);
+            None
+        }
+    }
+}
+
+/// Checks for subdomain takeover vulnerabilities.
+///
+/// This runs sequentially after subdomain enumeration since it depends on those results.
+/// Returns `None` if `no_takeover` is true, no subdomains were found, or no vulnerabilities detected.
+async fn run_takeover_check(
+    subdomain_result: Option<&subdomain::SubdomainResult>,
+    no_takeover: bool,
+) -> Option<Vec<takeover::TakeoverResult>> {
+    if no_takeover {
+        return None;
+    }
+    let sub_result = subdomain_result?;
+    if sub_result.subdomains.is_empty() {
+        return None;
+    }
+    let subdomains: Vec<String> = sub_result
+        .subdomains
+        .iter()
+        .map(|s| s.subdomain.clone())
+        .collect();
+    match takeover::detect_takeovers(&subdomains, None, 10).await {
+        Ok(results) if !results.is_empty() => {
+            let vulnerable: Vec<_> = results
+                .iter()
+                .filter(|r| r.status == takeover::TakeoverStatus::Vulnerable)
+                .cloned()
+                .collect();
+            if vulnerable.is_empty() {
+                None
+            } else {
+                Some(vulnerable)
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Maps detected technologies to known CVEs.
+///
+/// Returns `None` if `no_cve` is true, no tech stack was detected, or mapping fails.
+async fn run_cve_check(
+    tech_result: Option<&techdetect::TechDetectionResult>,
+    no_cve: bool,
+) -> Option<cve::CveMapping> {
+    if no_cve {
+        return None;
+    }
+    let tech = tech_result?;
+    match cve::map_cves(&tech.tech_stack, None).await {
+        Ok(v) => Some(v),
+        Err(e) => {
+            tracing::warn!("CVE mapping failed: {}", e);
+            None
+        }
+    }
+}
 
 pub async fn run_full_recon(
     args: &ReconArgs,
@@ -21,46 +407,13 @@ pub async fn run_full_recon(
 
     set_stage(&stage, "resolving");
 
-    let target_clean = if target.starts_with("http://") {
-        target.strip_prefix("http://").unwrap_or(target)
-    } else if target.starts_with("https://") {
-        target.strip_prefix("https://").unwrap_or(target)
-    } else {
-        target
-    };
-
-    let domain = target_clean.split('/').next().map(|s| s.to_string());
-    let url = if target.starts_with("http://") || target.starts_with("https://") {
-        target.clone()
-    } else {
-        format!("https://{}", target)
-    };
+    let (url, domain, resolved_ip) = resolve_target(target, verbose).await;
 
     let mut recon = FullReconResult::new(target);
 
     if let Some(ref d) = domain {
         recon.domain = Some(d.clone());
     }
-
-    set_stage(&stage, "resolving");
-
-    let resolved_ip: Option<String> = if let Some(ref d) = domain {
-        if d.parse::<std::net::IpAddr>().is_ok() {
-            Some(d.clone())
-        } else {
-            match reverse_dns::resolve_domain(d).await {
-                Ok(ips) if !ips.is_empty() => {
-                    if verbose {
-                        eprintln!("Resolved to {}", ips[0]);
-                    }
-                    Some(ips[0].clone())
-                }
-                _ => None,
-            }
-        }
-    } else {
-        None
-    };
 
     if let Some(ref ip) = resolved_ip {
         recon.ip_address = Some(ip.clone());
@@ -84,15 +437,6 @@ pub async fn run_full_recon(
     let alienvault_key = config.recon.apis.alienvault.api_key.as_ref();
     let shodan_key = config.recon.apis.shodan.api_key.as_ref();
     let wayback_key = config.recon.apis.wayback_machine.api_key.as_ref();
-    let ip_for_threat = resolved_ip.clone();
-    let ip_for_ssl = resolved_ip.clone();
-    let ip_for_geo = resolved_ip.clone();
-    let ip_for_rdns = resolved_ip.clone();
-    let domain_for_whois = domain.clone();
-    let domain_for_sub = domain.clone();
-    let domain_for_dns = domain.clone();
-    let domain_for_wayback = domain.clone();
-    let domain_for_cloud = domain.clone();
 
     let (
         reverse_dns_result,
@@ -110,211 +454,23 @@ pub async fn run_full_recon(
         cors_result,
         email_result,
     ) = tokio::join!(
-        async {
-            if !args.no_dns {
-                if let Some(ref ip) = ip_for_rdns {
-                    match reverse_dns::reverse_dns_lookup(ip).await {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            tracing::warn!("reverse DNS lookup failed: {}", e);
-                            None
-                        }
-                    }
-                } else { None }
-            } else { None }
-        },
-        async {
-            if !args.no_geo {
-                if let Some(ref ip) = ip_for_geo {
-                    match geolocation::geolocation_lookup_with_config(ip, ipapi_key, maxmind_settings).await {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            tracing::warn!("geolocation lookup failed: {}", e);
-                            None
-                        }
-                    }
-                } else { None }
-            } else { None }
-        },
-        async {
-            if !args.no_threat {
-                if let Some(ref ip) = ip_for_threat {
-                    let is_ip = ip.parse::<std::net::IpAddr>().is_ok();
-                    match threatintel::check_threat_intel(ip, is_ip, virustotal_key, alienvault_key, shodan_key).await {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            tracing::warn!("threat intel lookup failed: {}", e);
-                            None
-                        }
-                    }
-                } else { None }
-            } else { None }
-        },
-        async {
-            if !args.no_ssl {
-                if let Some(ref host) = ip_for_ssl {
-                    let port = if url.contains("https://") { 443 } else { 80 };
-                    match ssl::analyze_ssl(host, port).await {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            tracing::warn!("SSL analysis failed: {}", e);
-                            None
-                        }
-                    }
-                } else { None }
-            } else { None }
-        },
-        async {
-            if !args.no_whois {
-                if let Some(ref d) = domain_for_whois {
-                    match whois::whois_lookup(d).await {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            tracing::warn!("whois lookup failed: {}", e);
-                            None
-                        }
-                    }
-                } else { None }
-            } else { None }
-        },
-        async {
-            if !args.no_subdomains {
-                if let Some(ref d) = domain_for_sub {
-                    match subdomain::enumerate_subdomains(d, concurrency).await {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            tracing::warn!("subdomain enumeration failed: {}", e);
-                            None
-                        }
-                    }
-                } else { None }
-            } else { None }
-        },
-        async {
-            if !args.no_dns_records {
-                if let Some(ref d) = domain_for_dns {
-                    match dns_records::enumerate_dns_records(d).await {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            tracing::warn!("DNS records enumeration failed: {}", e);
-                            None
-                        }
-                    }
-                } else { None }
-            } else { None }
-        },
-        async {
-            if !args.no_tech {
-                match techdetect::detect_tech_stack(&url).await {
-                    Ok(v) => Some(v),
-                    Err(e) => {
-                        tracing::warn!("tech detection failed: {}", e);
-                        None
-                    }
-                }
-            } else { None }
-        },
-        async {
-            if !args.no_js {
-                match js::analyze_js(&url).await {
-                    Ok(v) => Some(v),
-                    Err(e) => {
-                        tracing::warn!("JS analysis failed: {}", e);
-                        None
-                    }
-                }
-            } else { None }
-        },
-        async {
-            if !args.no_wayback {
-                if let Some(ref d) = domain_for_wayback {
-                    match wayback::get_wayback_snapshots(d, wayback_key, 100).await {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            tracing::warn!("wayback lookup failed: {}", e);
-                            None
-                        }
-                    }
-                } else { None }
-            } else { None }
-        },
-        async {
-            if !args.no_cloud {
-                if let Some(ref d) = domain_for_cloud {
-                    match cloud::scan_cloud(d, concurrency).await {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            tracing::warn!("cloud scan failed: {}", e);
-                            None
-                        }
-                    }
-                } else { None }
-            } else { None }
-        },
-        async {
-            if !args.no_content {
-                match content::scan_content(&url, concurrency).await {
-                    Ok(v) => Some(v),
-                    Err(e) => {
-                        tracing::warn!("content scan failed: {}", e);
-                        None
-                    }
-                }
-            } else { None }
-        },
-        async {
-            if !args.no_cors {
-                match cors::analyze_cors(&url).await {
-                    Ok(v) => Some(v),
-                    Err(e) => {
-                        tracing::warn!("CORS analysis failed: {}", e);
-                        None
-                    }
-                }
-            } else { None }
-        },
-        async {
-            if !args.no_email {
-                match email::discover_contacts(&url).await {
-                    Ok(v) => Some(v),
-                    Err(e) => {
-                        tracing::warn!("email discovery failed: {}", e);
-                        None
-                    }
-                }
-            } else { None }
-        },
+        run_reverse_dns(resolved_ip.as_ref(), args.no_dns),
+        run_geo_lookup(resolved_ip.as_ref(), args.no_geo, ipapi_key, maxmind_settings),
+        run_threat_intel(resolved_ip.as_ref(), args.no_threat, virustotal_key, alienvault_key, shodan_key),
+        run_ssl_recon(resolved_ip.as_ref(), &url, args.no_ssl),
+        run_whois_lookup(domain.as_ref(), args.no_whois),
+        run_subdomain_enum(domain.as_ref(), concurrency, args.no_subdomains),
+        run_dns_records(domain.as_ref(), args.no_dns_records),
+        run_tech_detection(&url, args.no_tech),
+        run_js_analysis(&url, args.no_js),
+        run_wayback_check(domain.as_ref(), args.no_wayback, wayback_key),
+        run_cloud_detection(domain.as_ref(), concurrency, args.no_cloud),
+        run_content_analysis(&url, concurrency, args.no_content),
+        run_cors_check(&url, args.no_cors),
+        run_email_security(&url, args.no_email),
     );
 
-    let takeover_result = if !args.no_takeover {
-        if let Some(ref sub_result) = subdomain_result {
-            if !sub_result.subdomains.is_empty() {
-                let subdomains: Vec<String> = sub_result.subdomains.iter()
-                    .map(|s| s.subdomain.clone())
-                    .collect();
-                match takeover::detect_takeovers(&subdomains, None, 10).await {
-                    Ok(results) if !results.is_empty() => {
-                        let vulnerable: Vec<_> = results.iter()
-                            .filter(|r| r.status == takeover::TakeoverStatus::Vulnerable)
-                            .cloned()
-                            .collect();
-                        if !vulnerable.is_empty() {
-                            Some(vulnerable)
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let takeover_result = run_takeover_check(subdomain_result.as_ref(), args.no_takeover).await;
 
     recon.reverse_dns = reverse_dns_result;
     recon.geolocation = geolocation_result;
@@ -331,13 +487,7 @@ pub async fn run_full_recon(
     recon.email_discovery = email_result;
     recon.takeover = takeover_result;
 
-    if !args.no_cve {
-        if let Some(ref tech) = techdetect_result {
-            if let Ok(cve) = cve::map_cves(&tech.tech_stack, None).await {
-                recon.cve_mapping = Some(cve);
-            }
-        }
-    }
+    recon.cve_mapping = run_cve_check(techdetect_result.as_ref(), args.no_cve).await;
     recon.tech_stack = techdetect_result.map(|t| t.tech_stack);
 
     if verbose {

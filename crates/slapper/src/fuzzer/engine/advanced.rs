@@ -166,3 +166,169 @@ impl FuzzEngine {
         Ok(types)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::{CommonHttpArgs, FuzzArgs};
+    use crate::error::SlapperError;
+
+    fn make_engine_with_payload_type(payload_type: &str) -> FuzzEngine {
+        let args = FuzzArgs {
+            url: "http://example.com".to_string(),
+            payload_type: payload_type.to_string(),
+            common: CommonHttpArgs::default(),
+            method: "GET".to_string(),
+            param: None,
+            concurrency: 10,
+            timeout: 5,
+            verbose: false,
+            json: false,
+            output: None,
+            mutate: false,
+            mutation_count: 5,
+            grammar_fuzz: false,
+            grammar_type: None,
+            session: false,
+            diffing: false,
+            capture_baseline: false,
+            mode: crate::cli::FuzzMode::Sequential,
+            target: None,
+            graphql_introspection: false,
+            graphql_depth_bypass: false,
+            graphql_alias_overload: false,
+            jwt_token: None,
+            oauth_client_id: None,
+            oauth_client_secret: None,
+            oauth_redirect: false,
+            oauth_scope: false,
+            oauth_state: false,
+            oauth_grant: false,
+            oauth_issuer: None,
+            idor_base_id: None,
+            idor_user_ids: None,
+            ssti_param: None,
+            adaptive_rate: false,
+            enhanced_redos: false,
+            waf_fingerprint: false,
+            chaining: false,
+            chain_file: None,
+            format: None,
+            schema: None,
+            discover_only: false,
+            auto_discover_schema: false,
+        };
+        FuzzEngine::new(args).unwrap()
+    }
+
+    #[test]
+    fn test_parse_payload_types_all() {
+        let engine = make_engine_with_payload_type("all");
+        let types = engine.parse_payload_types().unwrap();
+        assert!(!types.is_empty());
+        assert!(types.contains(&PayloadType::Sqli));
+        assert!(types.contains(&PayloadType::Xss));
+        assert!(types.contains(&PayloadType::Ssrf));
+        assert!(types.contains(&PayloadType::Jwt));
+    }
+
+    #[test]
+    fn test_parse_payload_types_single() {
+        let engine = make_engine_with_payload_type("sqli");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types.len(), 1);
+        assert_eq!(types[0], PayloadType::Sqli);
+    }
+
+    #[test]
+    fn test_parse_payload_types_multiple() {
+        let engine = make_engine_with_payload_type("sqli,xss,ssrf");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types.len(), 3);
+        assert_eq!(types[0], PayloadType::Sqli);
+        assert_eq!(types[1], PayloadType::Xss);
+        assert_eq!(types[2], PayloadType::Ssrf);
+    }
+
+    #[test]
+    fn test_parse_payload_types_with_aliases() {
+        let engine = make_engine_with_payload_type("sql,lfi,rce");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types[0], PayloadType::Sqli);
+        assert_eq!(types[1], PayloadType::Traversal);
+        assert_eq!(types[2], PayloadType::Cmd);
+    }
+
+    #[test]
+    fn test_parse_payload_types_with_whitespace() {
+        let engine = make_engine_with_payload_type(" sqli , xss ");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_payload_types_case_insensitive() {
+        let engine = make_engine_with_payload_type("SQLI,XSS");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types.len(), 2);
+        assert_eq!(types[0], PayloadType::Sqli);
+        assert_eq!(types[1], PayloadType::Xss);
+    }
+
+    #[test]
+    fn test_parse_payload_types_invalid_returns_error() {
+        let engine = make_engine_with_payload_type("invalid_type");
+        let result = engine.parse_payload_types();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SlapperError::Payload(msg) => {
+                assert!(msg.contains("No valid payload types"));
+            }
+            _ => panic!("Expected Payload error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_payload_types_mixed_valid_invalid() {
+        let engine = make_engine_with_payload_type("sqli,invalid,xss");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types.len(), 2);
+        assert_eq!(types[0], PayloadType::Sqli);
+        assert_eq!(types[1], PayloadType::Xss);
+    }
+
+    #[test]
+    fn test_parse_payload_types_graphql_alias() {
+        let engine = make_engine_with_payload_type("gql");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types[0], PayloadType::GraphQL);
+    }
+
+    #[test]
+    fn test_parse_payload_types_redirect_alias() {
+        let engine = make_engine_with_payload_type("open-redirect");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types[0], PayloadType::Redirect);
+    }
+
+    #[test]
+    fn test_parse_payload_types_redos_alias() {
+        let engine = make_engine_with_payload_type("regex");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types[0], PayloadType::Redos);
+    }
+
+    #[test]
+    fn test_parse_payload_types_compression_aliases() {
+        let engine = make_engine_with_payload_type("gzip");
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types[0], PayloadType::Compression);
+    }
+
+    #[test]
+    fn test_parse_payload_types_empty_string_returns_error() {
+        let engine = make_engine_with_payload_type("");
+        let result = engine.parse_payload_types();
+        assert!(result.is_err());
+    }
+}

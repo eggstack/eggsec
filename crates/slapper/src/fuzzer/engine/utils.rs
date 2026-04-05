@@ -302,3 +302,125 @@ fn compute_severity(
         *base_severity
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_method_get() {
+        assert_eq!(parse_method("GET"), Method::GET);
+        assert_eq!(parse_method("get"), Method::GET);
+    }
+
+    #[test]
+    fn test_parse_method_post() {
+        assert_eq!(parse_method("POST"), Method::POST);
+        assert_eq!(parse_method("post"), Method::POST);
+    }
+
+    #[test]
+    fn test_parse_method_put() {
+        assert_eq!(parse_method("PUT"), Method::PUT);
+    }
+
+    #[test]
+    fn test_parse_method_delete() {
+        assert_eq!(parse_method("DELETE"), Method::DELETE);
+    }
+
+    #[test]
+    fn test_parse_method_patch() {
+        assert_eq!(parse_method("PATCH"), Method::PATCH);
+    }
+
+    #[test]
+    fn test_parse_method_head() {
+        assert_eq!(parse_method("HEAD"), Method::HEAD);
+    }
+
+    #[test]
+    fn test_parse_method_options() {
+        assert_eq!(parse_method("OPTIONS"), Method::OPTIONS);
+    }
+
+    #[test]
+    fn test_parse_method_unknown_defaults_to_get() {
+        assert_eq!(parse_method("UNKNOWN"), Method::GET);
+        assert_eq!(parse_method(""), Method::GET);
+    }
+
+    #[test]
+    fn test_compute_severity_redos_is_critical() {
+        assert_eq!(
+            compute_severity(&Severity::Info, false, true, false),
+            Severity::Critical
+        );
+    }
+
+    #[test]
+    fn test_compute_severity_waf_and_leak_is_critical() {
+        assert_eq!(
+            compute_severity(&Severity::Low, true, false, true),
+            Severity::Critical
+        );
+    }
+
+    #[test]
+    fn test_compute_severity_leak_only_is_high() {
+        assert_eq!(
+            compute_severity(&Severity::Info, false, false, true),
+            Severity::High
+        );
+    }
+
+    #[test]
+    fn test_compute_severity_waf_only_is_medium() {
+        assert_eq!(
+            compute_severity(&Severity::Low, true, false, false),
+            Severity::Medium
+        );
+    }
+
+    #[test]
+    fn test_compute_severity_no_flags_returns_base() {
+        assert_eq!(
+            compute_severity(&Severity::Low, false, false, false),
+            Severity::Low
+        );
+        assert_eq!(
+            compute_severity(&Severity::High, false, false, false),
+            Severity::High
+        );
+    }
+
+    #[test]
+    fn test_build_url_with_param() {
+        let result = build_url("http://example.com", Some("q"), "test' OR 1=1--");
+        assert!(result.is_ok());
+        let url = result.unwrap();
+        assert!(url.to_string().contains("q="));
+    }
+
+    #[test]
+    fn test_build_url_without_param_appends_to_path() {
+        let result = build_url("http://example.com/api", None, "test");
+        assert!(result.is_ok());
+        let url = result.unwrap();
+        assert!(url.path().contains("/api/"));
+    }
+
+    #[test]
+    fn test_build_url_with_trailing_slash() {
+        let result = build_url("http://example.com/api/", None, "test");
+        assert!(result.is_ok());
+        let url = result.unwrap();
+        assert!(url.path().ends_with("/test"));
+    }
+
+    #[test]
+    fn test_build_url_invalid_base() {
+        let result = build_url("not-a-url", None, "test");
+        assert!(result.is_err());
+    }
+}

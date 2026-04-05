@@ -6,8 +6,7 @@ use std::path::Path;
 
 use crate::types::SensitiveString;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ProxyType {
     #[serde(rename = "socks4")]
     Socks4,
@@ -21,7 +20,6 @@ pub enum ProxyType {
     #[serde(rename = "tor")]
     Tor,
 }
-
 
 impl std::fmt::Display for ProxyType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -308,7 +306,7 @@ fn default_max_failures() -> u32 {
     3
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
 pub enum RotationStrategy {
     #[default]
     #[serde(rename = "round_robin")]
@@ -356,5 +354,202 @@ impl From<&ProxyConfig> for HealthCheckConfig {
                 .unwrap_or_else(|| "https://api.ipify.org".to_string()),
             max_failures: config.max_failures_before_disable,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_proxy_type_display() {
+        assert_eq!(ProxyType::Socks4.to_string(), "socks4");
+        assert_eq!(ProxyType::Socks5.to_string(), "socks5");
+        assert_eq!(ProxyType::Http.to_string(), "http");
+        assert_eq!(ProxyType::Https.to_string(), "https");
+        assert_eq!(ProxyType::Tor.to_string(), "tor");
+    }
+
+    #[test]
+    fn test_proxy_type_from_str() {
+        assert_eq!("socks4".parse::<ProxyType>().unwrap(), ProxyType::Socks4);
+        assert_eq!("socks4a".parse::<ProxyType>().unwrap(), ProxyType::Socks4);
+        assert_eq!("socks5".parse::<ProxyType>().unwrap(), ProxyType::Socks5);
+        assert_eq!("socks".parse::<ProxyType>().unwrap(), ProxyType::Socks5);
+        assert_eq!("http".parse::<ProxyType>().unwrap(), ProxyType::Http);
+        assert_eq!("https".parse::<ProxyType>().unwrap(), ProxyType::Https);
+        assert_eq!("tor".parse::<ProxyType>().unwrap(), ProxyType::Tor);
+        assert!("unknown".parse::<ProxyType>().is_err());
+    }
+
+    #[test]
+    fn test_proxy_type_from_str_case_insensitive() {
+        assert_eq!("SOCKS5".parse::<ProxyType>().unwrap(), ProxyType::Socks5);
+        assert_eq!("Http".parse::<ProxyType>().unwrap(), ProxyType::Http);
+    }
+
+    #[test]
+    fn test_proxy_entry_new() {
+        let entry = ProxyEntry::new(ProxyType::Socks5, "127.0.0.1".to_string(), 1080);
+        assert_eq!(entry.proxy_type, ProxyType::Socks5);
+        assert_eq!(entry.address, "127.0.0.1");
+        assert_eq!(entry.port, 1080);
+        assert!(entry.enabled);
+        assert_eq!(entry.weight, 1);
+        assert_eq!(entry.priority, 0);
+        assert_eq!(entry.timeout_ms, 10000);
+        assert!(entry.username.is_none());
+        assert!(entry.password.is_none());
+        assert!(entry.tags.is_empty());
+    }
+
+    #[test]
+    fn test_proxy_entry_with_auth() {
+        let entry = ProxyEntry::new(ProxyType::Socks5, "127.0.0.1".to_string(), 1080)
+            .with_auth("user".to_string(), "pass".to_string());
+        assert_eq!(entry.username, Some("user".to_string()));
+        assert!(entry.password.is_some());
+    }
+
+    #[test]
+    fn test_proxy_entry_with_weight() {
+        let entry =
+            ProxyEntry::new(ProxyType::Socks5, "127.0.0.1".to_string(), 1080).with_weight(10);
+        assert_eq!(entry.weight, 10);
+    }
+
+    #[test]
+    fn test_proxy_entry_socket_addr_valid() {
+        let entry = ProxyEntry::new(ProxyType::Socks5, "127.0.0.1".to_string(), 1080);
+        let addr = entry.socket_addr().unwrap();
+        assert_eq!(addr.to_string(), "127.0.0.1:1080");
+    }
+
+    #[test]
+    fn test_proxy_entry_socket_addr_invalid() {
+        let entry = ProxyEntry::new(ProxyType::Socks5, "not-an-ip".to_string(), 1080);
+        assert!(entry.socket_addr().is_err());
+    }
+
+    #[test]
+    fn test_proxy_entry_to_url_no_auth() {
+        let entry = ProxyEntry::new(ProxyType::Http, "proxy.example.com".to_string(), 8080);
+        assert_eq!(entry.to_url(), "http://proxy.example.com:8080");
+    }
+
+    #[test]
+    fn test_proxy_entry_to_url_with_auth() {
+        let entry = ProxyEntry::new(ProxyType::Socks5, "10.0.0.1".to_string(), 9050)
+            .with_auth("user".to_string(), "secret".to_string());
+        assert_eq!(entry.to_url(), "socks5://user:secret@10.0.0.1:9050");
+    }
+
+    #[test]
+    fn test_proxy_entry_parse_line_basic() {
+        let entry = ProxyEntry::parse_line("socks5://192.168.1.1:1080").unwrap();
+        assert_eq!(entry.proxy_type, ProxyType::Socks5);
+        assert_eq!(entry.address, "192.168.1.1");
+        assert_eq!(entry.port, 1080);
+    }
+
+    #[test]
+    fn test_proxy_entry_parse_line_with_auth() {
+        let entry = ProxyEntry::parse_line("http://user:pass@proxy.com:3128").unwrap();
+        assert_eq!(entry.proxy_type, ProxyType::Http);
+        assert_eq!(entry.address, "proxy.com");
+        assert_eq!(entry.port, 3128);
+        assert_eq!(entry.username, Some("user".to_string()));
+        assert!(entry.password.is_some());
+    }
+
+    #[test]
+    fn test_proxy_entry_parse_line_no_scheme() {
+        let entry = ProxyEntry::parse_line("10.0.0.1:9050").unwrap();
+        assert_eq!(entry.proxy_type, ProxyType::Socks5);
+        assert_eq!(entry.address, "10.0.0.1");
+        assert_eq!(entry.port, 9050);
+    }
+
+    #[test]
+    fn test_proxy_entry_parse_line_invalid() {
+        assert!(ProxyEntry::parse_line("not-valid").is_err());
+    }
+
+    #[test]
+    fn test_proxy_entry_parse_proxy_list() {
+        let content = "# comment\nsocks5://1.1.1.1:1080\n\nhttp://2.2.2.2:8080\n";
+        let proxies = ProxyEntry::parse_proxy_list(content).unwrap();
+        assert_eq!(proxies.len(), 2);
+        assert_eq!(proxies[0].address, "1.1.1.1");
+        assert_eq!(proxies[1].address, "2.2.2.2");
+    }
+
+    #[test]
+    fn test_proxy_config_default() {
+        let config = ProxyConfig::default();
+        assert_eq!(config.health_check_enabled, true);
+        assert_eq!(config.health_check_interval_secs, 60);
+        assert_eq!(config.health_check_timeout_ms, 5000);
+        assert_eq!(config.max_failures_before_disable, 3);
+        assert_eq!(config.max_chain_length, 3);
+        assert!(!config.chain_proxies);
+    }
+
+    #[test]
+    fn test_rotation_strategy_display() {
+        assert_eq!(RotationStrategy::RoundRobin.to_string(), "round_robin");
+        assert_eq!(RotationStrategy::Random.to_string(), "random");
+        assert_eq!(RotationStrategy::Weighted.to_string(), "weighted");
+        assert_eq!(RotationStrategy::LeastUsed.to_string(), "least_used");
+        assert_eq!(
+            RotationStrategy::LowestLatency.to_string(),
+            "lowest_latency"
+        );
+    }
+
+    #[test]
+    fn test_health_check_config_from_proxy_config() {
+        let config = ProxyConfig::default();
+        let hc: HealthCheckConfig = (&config).into();
+        assert!(hc.enabled);
+        assert_eq!(hc.interval_secs, 60);
+        assert_eq!(hc.timeout_ms, 5000);
+        assert_eq!(hc.max_failures, 3);
+    }
+
+    #[test]
+    fn test_health_check_config_from_proxy_config_no_test_url() {
+        let mut config = ProxyConfig::default();
+        config.test_url = None;
+        let hc: HealthCheckConfig = (&config).into();
+        assert_eq!(hc.test_url, "https://api.ipify.org");
+    }
+
+    #[test]
+    fn test_proxy_config_json_roundtrip() {
+        let config = ProxyConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: ProxyConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(config.rotation_strategy, parsed.rotation_strategy);
+        assert_eq!(config.health_check_enabled, parsed.health_check_enabled);
+    }
+
+    #[test]
+    fn test_proxy_entry_json_roundtrip() {
+        let entry = ProxyEntry::new(ProxyType::Http, "proxy.com".to_string(), 3128).with_weight(5);
+        let json = serde_json::to_string(&entry).unwrap();
+        let parsed: ProxyEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.address, "proxy.com");
+        assert_eq!(parsed.port, 3128);
+        assert_eq!(parsed.weight, 5);
+    }
+
+    #[test]
+    fn test_proxy_entry_yaml_roundtrip() {
+        let entry = ProxyEntry::new(ProxyType::Socks5, "10.0.0.1".to_string(), 9050);
+        let yaml = serde_yaml::to_string(&entry).unwrap();
+        let parsed: ProxyEntry = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(parsed.address, "10.0.0.1");
+        assert_eq!(parsed.port, 9050);
     }
 }

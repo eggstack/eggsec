@@ -36,6 +36,7 @@ pub mod output;
 pub mod parsing;
 pub mod rate_limiter;
 pub mod scope;
+pub mod service_detection;
 pub mod stealth;
 pub mod target;
 pub mod urlencoding;

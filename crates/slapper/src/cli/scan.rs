@@ -22,7 +22,6 @@ Examples:
   slapper scan-endpoints https://example.com --include-404
   slapper scan-endpoints https://example.com -c 50 --json";
 
-#[cfg(feature = "nse")]
 pub(crate) const NSE_ABOUT: &str = "Run Nmap NSE (Scripting Engine) scripts
 
 Executes Lua-based NSE scripts for security scanning.

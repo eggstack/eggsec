@@ -77,3 +77,46 @@ pub fn get_payloads() -> Vec<Payload> {
         ];
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_payloads_returns_non_empty() {
+        let payloads = get_payloads();
+        assert!(!payloads.is_empty());
+    }
+
+    #[test]
+    fn test_get_payloads_count_reasonable() {
+        let payloads = get_payloads();
+        assert!(payloads.len() > 0);
+        assert!(payloads.len() < 10000);
+    }
+
+    #[test]
+    fn test_payloads_are_non_empty_strings() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert!(
+                !p.payload.is_empty(),
+                "Payload is empty: {:?}",
+                p.description
+            );
+        }
+    }
+
+    #[test]
+    fn test_payloads_contain_expected_patterns() {
+        let payloads = get_payloads();
+        let has_double_slash = payloads.iter().any(|p| p.payload.contains("//evil.com"));
+        let has_javascript = payloads.iter().any(|p| p.payload.contains("javascript:"));
+        let has_data_uri = payloads.iter().any(|p| p.payload.contains("data:"));
+        let has_param = payloads.iter().any(|p| p.payload.contains("url="));
+        assert!(has_double_slash, "Missing double slash redirect payload");
+        assert!(has_javascript, "Missing javascript: protocol payload");
+        assert!(has_data_uri, "Missing data URI payload");
+        assert!(has_param, "Missing url parameter payload");
+    }
+}

@@ -40,6 +40,7 @@ pub struct CommandPalette {
     pub query: String,
     pub results: Arc<Vec<CommandPaletteResult>>,
     pub selected_index: usize,
+    pub scroll_offset: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +56,41 @@ pub struct HelpContent {
     pub sections: HashMap<Tab, HelpSection>,
     pub global_commands: Vec<HelpCommand>,
     pub command_palette_entries: Arc<Vec<CommandPaletteResult>>,
+}
+
+fn fuzzy_score(text: &str, query: &str) -> u32 {
+    let mut query_chars = query.chars().peekable();
+    let mut score: u32 = 0;
+    let mut last_match_idx: Option<usize> = None;
+    let mut consecutive_bonus: u32 = 0;
+
+    for (i, c) in text.chars().enumerate() {
+        if let Some(&qc) = query_chars.peek() {
+            if c == qc {
+                query_chars.next();
+                score += 1;
+                if let Some(last) = last_match_idx {
+                    if i == last + 1 {
+                        consecutive_bonus += 2;
+                    } else {
+                        consecutive_bonus = 0;
+                    }
+                } else {
+                    if i == 0 {
+                        score += 3;
+                    }
+                }
+                last_match_idx = Some(i);
+            }
+        }
+    }
+
+    if query_chars.peek().is_none() {
+        score += consecutive_bonus;
+        score
+    } else {
+        0
+    }
 }
 
 pub struct HelpManager {
@@ -83,17 +119,35 @@ impl HelpManager {
     }
 
     pub fn search_commands(&self, query: &str) -> Vec<CommandPaletteResult> {
+        if query.is_empty() {
+            return self
+                .content
+                .command_palette_entries
+                .iter()
+                .cloned()
+                .collect();
+        }
         let query_lower = query.to_lowercase();
-        self.content
+        let mut scored: Vec<(u32, CommandPaletteResult)> = self
+            .content
             .command_palette_entries
             .iter()
-            .filter(|cmd| {
-                cmd.command.to_lowercase().contains(&query_lower)
-                    || cmd.description.to_lowercase().contains(&query_lower)
-                    || cmd.category.to_lowercase().contains(&query_lower)
+            .filter_map(|cmd| {
+                let command_lower = cmd.command.to_lowercase();
+                let description_lower = cmd.description.to_lowercase();
+                let category_lower = cmd.category.to_lowercase();
+                let score = fuzzy_score(&command_lower, &query_lower)
+                    .max(fuzzy_score(&description_lower, &query_lower))
+                    .max(fuzzy_score(&category_lower, &query_lower));
+                if score > 0 {
+                    Some((score, cmd.clone()))
+                } else {
+                    None
+                }
             })
-            .cloned()
-            .collect()
+            .collect();
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.into_iter().map(|(_, cmd)| cmd).collect()
     }
 }
 

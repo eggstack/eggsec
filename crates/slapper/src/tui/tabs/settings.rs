@@ -66,7 +66,8 @@ impl SettingsTab {
         let report_inputs = InputGroup::new()
             .add(InputField::new("Input File"))
             .add(InputField::new("Output File"))
-            .add(InputField::new("Format (json/csv/html/sarif/junit)").with_value("html"));
+            .add(InputField::new("Format (json/csv/html/sarif/junit)").with_value("html"))
+            .add(InputField::new("Export Directory").with_value("./exports"));
 
         let schedule_inputs = InputGroup::new()
             .add(InputField::new("Cron Expression (e.g., 0 */6 * * *)"))
@@ -135,6 +136,10 @@ impl SettingsTab {
             self.proxy_inputs.fields[0].value = proxy_url.clone();
         }
 
+        if let Some(ref export_dir) = config.paths.export_dir {
+            self.report_inputs.fields[3].value = export_dir.clone();
+        }
+
         self.config = Some(config.clone());
     }
 
@@ -184,6 +189,13 @@ impl SettingsTab {
                 custom_payloads_dir: None,
                 plugins_dir: None,
                 wordlists_dir: None,
+                export_dir: if self.report_inputs.fields[3].value.is_empty()
+                    || self.report_inputs.fields[3].value == "./exports"
+                {
+                    None
+                } else {
+                    Some(self.report_inputs.fields[3].value.clone())
+                },
             },
             profiles: std::collections::HashMap::new(),
             recon: crate::config::ReconConfig::default(),
@@ -528,6 +540,7 @@ impl TabRender for SettingsTab {
                 let input_chunks = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([
+                        Constraint::Length(3),
                         Constraint::Length(3),
                         Constraint::Length(3),
                         Constraint::Length(3),

@@ -3,6 +3,19 @@ use crate::tui::workers;
 impl super::App {
     pub(crate) fn spawn_task(&mut self, config: Option<workers::TaskConfig>) {
         if let Some(config) = config {
+            if self.task_handle.is_some() {
+                tracing::warn!("A task is already running. Aborting previous task before starting new one.");
+                if let Some(handle) = self.task_handle.take() {
+                    handle.abort();
+                }
+                if let Some(rx) = self.progress_rx.take() {
+                    drop(rx);
+                }
+                if let Some(rx) = self.result_rx.take() {
+                    drop(rx);
+                }
+            }
+
             let (progress_tx, progress_rx) = tokio::sync::mpsc::channel(100);
             let (result_tx, result_rx) = tokio::sync::mpsc::channel(1);
 

@@ -122,3 +122,48 @@ pub fn generate_deflate_payload(size_multiplier: usize) -> Vec<u8> {
     encoder.write_all(&uncompressed_data).ok();
     encoder.finish().unwrap_or_default()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_payloads_returns_non_empty() {
+        let payloads = get_payloads();
+        assert!(!payloads.is_empty());
+    }
+
+    #[test]
+    fn test_get_payloads_count_reasonable() {
+        let payloads = get_payloads();
+        assert!(payloads.len() > 0);
+        assert!(payloads.len() < 10000);
+    }
+
+    #[test]
+    fn test_payloads_are_non_empty_strings() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert!(
+                !p.payload.is_empty(),
+                "Payload is empty: {:?}",
+                p.description
+            );
+        }
+    }
+
+    #[test]
+    fn test_payloads_contain_expected_patterns() {
+        let payloads = get_payloads();
+        let has_gzip = payloads
+            .iter()
+            .any(|p| p.payload.to_uppercase().contains("GZIP"));
+        let has_deflate = payloads.iter().any(|p| p.payload.contains("deflate"));
+        let has_zip = payloads
+            .iter()
+            .any(|p| p.payload.to_lowercase().contains("zip"));
+        assert!(has_gzip, "Missing gzip payload");
+        assert!(has_deflate, "Missing deflate payload");
+        assert!(has_zip, "Missing zip bomb payload");
+    }
+}

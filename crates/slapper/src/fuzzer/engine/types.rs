@@ -233,3 +233,209 @@ impl std::fmt::Display for FuzzSession {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fuzzer::payloads::{Payload, PayloadType};
+
+    fn make_payload(pt: PayloadType) -> Payload {
+        Payload {
+            payload_type: pt,
+            payload: "test".to_string(),
+            description: "test payload".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["test".to_string()],
+        }
+    }
+
+    fn make_result(leaks: Vec<String>, anomaly: bool, redos: bool, waf: bool) -> FuzzResult {
+        FuzzResult {
+            payload: make_payload(PayloadType::Sqli),
+            status_code: 200,
+            response_time_ms: 100,
+            response_length: Some(500),
+            is_waf_blocked: waf,
+            is_anomaly: anomaly,
+            is_redos_suspected: redos,
+            leaks_found: leaks,
+            error: None,
+            owasp_category: None,
+            detected_severity: Severity::Medium,
+        }
+    }
+
+    #[test]
+    fn test_fuzz_result_is_vulnerable_with_leaks() {
+        let r = make_result(vec!["leak".to_string()], false, false, false);
+        assert!(r.is_vulnerable());
+    }
+
+    #[test]
+    fn test_fuzz_result_is_vulnerable_with_anomaly() {
+        let r = make_result(vec![], true, false, false);
+        assert!(r.is_vulnerable());
+    }
+
+    #[test]
+    fn test_fuzz_result_is_vulnerable_with_redos() {
+        let r = make_result(vec![], false, true, false);
+        assert!(r.is_vulnerable());
+    }
+
+    #[test]
+    fn test_fuzz_result_not_vulnerable() {
+        let r = make_result(vec![], false, false, false);
+        assert!(!r.is_vulnerable());
+    }
+
+    #[test]
+    fn test_fuzz_result_is_true_positive_with_vulnerability() {
+        let r = make_result(vec!["leak".to_string()], false, false, false);
+        assert!(r.is_true_positive());
+    }
+
+    #[test]
+    fn test_fuzz_result_is_true_positive_with_waf() {
+        let r = make_result(vec![], false, false, true);
+        assert!(r.is_true_positive());
+    }
+
+    #[test]
+    fn test_fuzz_result_not_true_positive() {
+        let r = make_result(vec![], false, false, false);
+        assert!(!r.is_true_positive());
+    }
+
+    #[test]
+    fn test_owasp_summary_from_empty_results() {
+        let summary = OwaspSummary::from_results(&[]);
+        assert_eq!(summary.a01_broken_access_control, 0);
+        assert_eq!(summary.a03_injection, 0);
+        assert_eq!(summary.a10_ssrf, 0);
+    }
+
+    #[test]
+    fn test_owasp_summary_from_sqli_results() {
+        let results = vec![make_result(vec![], false, false, false)];
+        let summary = OwaspSummary::from_results(&results);
+        assert!(summary.a03_injection > 0);
+    }
+
+    #[test]
+    fn test_owasp_summary_display() {
+        let summary = OwaspSummary::from_results(&[]);
+        let output = format!("{}", summary);
+        assert!(output.contains("OWASP Top 10"));
+        assert!(output.contains("A01-BrokenAccessControl"));
+        assert!(output.contains("A10-SSRF"));
+    }
+
+    #[test]
+    fn test_fuzz_session_display() {
+        let session = FuzzSession {
+            target_url: "http://example.com".to_string(),
+            mode: "Sequential".to_string(),
+            payload_type: "sqli".to_string(),
+            total_payloads: 10,
+            successful_requests: 8,
+            failed_requests: 2,
+            waf_bypasses: 1,
+            potential_leaks: 3,
+            time_anomalies: 0,
+            redos_suspected: 0,
+            duration_ms: 5000,
+            total_requests: 10,
+            findings: 3,
+            results: vec![],
+            owasp_summary: OwaspSummary::from_results(&[]),
+            baseline: None,
+        };
+        let output = format!("{}", session);
+        assert!(output.contains("Fuzz Results"));
+        assert!(output.contains("http://example.com"));
+        assert!(output.contains("Sequential"));
+        assert!(output.contains("5000ms"));
+    }
+
+    #[test]
+    fn test_fuzz_session_display_with_findings() {
+        let result = make_result(vec!["secret_key".to_string()], false, false, false);
+        let session = FuzzSession {
+            target_url: "http://example.com".to_string(),
+            mode: "Burst".to_string(),
+            payload_type: "sqli".to_string(),
+            total_payloads: 1,
+            successful_requests: 1,
+            failed_requests: 0,
+            waf_bypasses: 0,
+            potential_leaks: 1,
+            time_anomalies: 0,
+            redos_suspected: 0,
+            duration_ms: 100,
+            total_requests: 1,
+            findings: 1,
+            results: vec![result],
+            owasp_summary: OwaspSummary::from_results(&[]),
+            baseline: None,
+        };
+        let output = format!("{}", session);
+        assert!(output.contains("findings"));
+        assert!(output.contains("HIGH"));
+        assert!(output.contains("leak:"));
+    }
+
+    #[test]
+    fn test_baseline_response_construction() {
+        let baseline = BaselineResponse {
+            status_code: 200,
+            response_time_ms: 50,
+            content_length: Some(1024),
+            headers: std::collections::HashMap::new(),
+        };
+        assert_eq!(baseline.status_code, 200);
+        assert_eq!(baseline.response_time_ms, 50);
+        assert_eq!(baseline.content_length, Some(1024));
+    }
+
+    #[test]
+    fn test_fuzz_result_serialization() {
+        let result = make_result(vec![], false, false, false);
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("status_code"));
+        assert!(json.contains("response_time_ms"));
+    }
+
+    #[test]
+    fn test_fuzz_result_deserialization() {
+        let result = make_result(vec![], false, false, false);
+        let json = serde_json::to_string(&result).unwrap();
+        let deserialized: FuzzResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.status_code, 200);
+    }
+
+    #[test]
+    fn test_fuzz_session_serialization() {
+        let session = FuzzSession {
+            target_url: "http://test.com".to_string(),
+            mode: "Sequential".to_string(),
+            payload_type: "all".to_string(),
+            total_payloads: 0,
+            successful_requests: 0,
+            failed_requests: 0,
+            waf_bypasses: 0,
+            potential_leaks: 0,
+            time_anomalies: 0,
+            redos_suspected: 0,
+            duration_ms: 0,
+            total_requests: 0,
+            findings: 0,
+            results: vec![],
+            owasp_summary: OwaspSummary::from_results(&[]),
+            baseline: None,
+        };
+        let json = serde_json::to_string(&session).unwrap();
+        assert!(json.contains("target_url"));
+        assert!(json.contains("owasp_summary"));
+    }
+}

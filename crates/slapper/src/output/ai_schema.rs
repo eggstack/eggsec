@@ -89,3 +89,122 @@ pub struct AiSummary {
     pub risk_score: f32,
     pub executive_summary: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_finding(title: &str, severity: Severity, confidence: f32) -> AiFinding {
+        AiFinding {
+            title: title.to_string(),
+            severity,
+            description: "test".to_string(),
+            evidence: vec![AiEvidence {
+                source: "test".to_string(),
+                content: "test".to_string(),
+                relevance: 1.0,
+            }],
+            remediation: vec![AiRemediation {
+                priority: 1,
+                action: "fix".to_string(),
+                effort: "low".to_string(),
+            }],
+            confidence,
+        }
+    }
+
+    #[test]
+    fn test_from_findings_empty() {
+        let output = AiOutput::from_findings(vec![]);
+        assert_eq!(output.summary.total_findings, 0);
+        assert_eq!(output.summary.critical_count, 0);
+        assert_eq!(output.summary.high_count, 0);
+        assert_eq!(output.summary.risk_score, 0.0);
+        assert!(output.summary.executive_summary.contains("No findings"));
+    }
+
+    #[test]
+    fn test_from_findings_critical() {
+        let findings = vec![make_finding("RCE", Severity::Critical, 0.9)];
+        let output = AiOutput::from_findings(findings);
+        assert_eq!(output.summary.total_findings, 1);
+        assert_eq!(output.summary.critical_count, 1);
+        assert!(output.summary.executive_summary.contains("critical"));
+    }
+
+    #[test]
+    fn test_from_findings_high_no_critical() {
+        let findings = vec![
+            make_finding("XSS", Severity::High, 0.8),
+            make_finding("SQLi", Severity::High, 0.7),
+        ];
+        let output = AiOutput::from_findings(findings);
+        assert_eq!(output.summary.total_findings, 2);
+        assert_eq!(output.summary.critical_count, 0);
+        assert_eq!(output.summary.high_count, 2);
+        assert!(output.summary.executive_summary.contains("high"));
+    }
+
+    #[test]
+    fn test_from_findings_mixed_severities() {
+        let findings = vec![
+            make_finding("RCE", Severity::Critical, 0.9),
+            make_finding("XSS", Severity::High, 0.8),
+            make_finding("Info Leak", Severity::Medium, 0.6),
+            make_finding("Header", Severity::Low, 0.5),
+            make_finding("Version", Severity::Info, 0.4),
+        ];
+        let output = AiOutput::from_findings(findings);
+        assert_eq!(output.summary.total_findings, 5);
+        assert_eq!(output.summary.critical_count, 1);
+        assert_eq!(output.summary.high_count, 1);
+    }
+
+    #[test]
+    fn test_risk_score_capped_at_10() {
+        let findings = vec![
+            make_finding("RCE", Severity::Critical, 1.0),
+            make_finding("RCE2", Severity::Critical, 1.0),
+            make_finding("RCE3", Severity::Critical, 1.0),
+        ];
+        let output = AiOutput::from_findings(findings);
+        assert!(output.summary.risk_score <= 10.0);
+    }
+
+    #[test]
+    fn test_from_findings_low_severity_only() {
+        let findings = vec![make_finding("Info", Severity::Info, 0.5)];
+        let output = AiOutput::from_findings(findings);
+        assert_eq!(output.summary.critical_count, 0);
+        assert_eq!(output.summary.high_count, 0);
+        assert!(output.summary.executive_summary.contains("no critical"));
+    }
+
+    #[test]
+    fn test_ai_finding_serialization() {
+        let finding = make_finding("Test", Severity::High, 0.8);
+        let json = serde_json::to_string(&finding).unwrap();
+        let deserialized: AiFinding = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.title, "Test");
+        assert_eq!(deserialized.severity, Severity::High);
+        assert_eq!(deserialized.confidence, 0.8);
+    }
+
+    #[test]
+    fn test_ai_output_serialization() {
+        let findings = vec![make_finding("Test", Severity::Medium, 0.7)];
+        let output = AiOutput::from_findings(findings);
+        let json = serde_json::to_string(&output).unwrap();
+        let deserialized: AiOutput = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.summary.total_findings, 1);
+    }
+
+    #[test]
+    fn test_risk_score_calculation() {
+        let findings = vec![make_finding("A", Severity::Critical, 1.0)];
+        let output = AiOutput::from_findings(findings);
+        let expected = (Severity::Critical.as_int() as f32 * 1.0) / 1.0 * 2.0;
+        let expected = expected.min(10.0);
+        assert!((output.summary.risk_score - expected).abs() < f32::EPSILON);
+    }
+}

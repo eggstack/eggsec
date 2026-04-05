@@ -286,3 +286,168 @@ impl FuzzEngine {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::{CommonHttpArgs, FuzzMode};
+
+    fn make_fuzz_args(url: &str) -> FuzzArgs {
+        FuzzArgs {
+            url: url.to_string(),
+            payload_type: "sqli".to_string(),
+            common: CommonHttpArgs::default(),
+            method: "GET".to_string(),
+            param: None,
+            concurrency: 10,
+            timeout: 5,
+            verbose: false,
+            json: false,
+            output: None,
+            mutate: false,
+            mutation_count: 5,
+            grammar_fuzz: false,
+            grammar_type: None,
+            session: false,
+            diffing: false,
+            capture_baseline: false,
+            mode: FuzzMode::Sequential,
+            target: None,
+            graphql_introspection: false,
+            graphql_depth_bypass: false,
+            graphql_alias_overload: false,
+            jwt_token: None,
+            oauth_client_id: None,
+            oauth_client_secret: None,
+            oauth_redirect: false,
+            oauth_scope: false,
+            oauth_state: false,
+            oauth_grant: false,
+            oauth_issuer: None,
+            idor_base_id: None,
+            idor_user_ids: None,
+            ssti_param: None,
+            adaptive_rate: false,
+            enhanced_redos: false,
+            waf_fingerprint: false,
+            chaining: false,
+            chain_file: None,
+            format: None,
+            schema: None,
+            discover_only: false,
+            auto_discover_schema: false,
+        }
+    }
+
+    #[test]
+    fn test_fuzz_engine_new() {
+        let args = make_fuzz_args("http://example.com");
+        let engine = FuzzEngine::new(args);
+        assert!(engine.is_ok());
+        let engine = engine.unwrap();
+        assert_eq!(engine.args.url, "http://example.com");
+        assert_eq!(engine.tui_mode, false);
+        assert!(engine.grammar_fuzzer.is_none());
+        assert!(engine.http_session.is_none());
+        assert!(engine.differ.is_none());
+        assert!(!engine.baseline_captured);
+    }
+
+    #[test]
+    fn test_fuzz_engine_new_with_tui_mode() {
+        let args = make_fuzz_args("http://example.com");
+        let engine = FuzzEngine::new_with_tui_mode(args, true);
+        assert!(engine.is_ok());
+        let engine = engine.unwrap();
+        assert_eq!(engine.tui_mode, true);
+    }
+
+    #[test]
+    fn test_fuzz_engine_with_grammar_fuzz() {
+        let mut args = make_fuzz_args("http://example.com");
+        args.grammar_fuzz = true;
+        args.grammar_type = Some("json".to_string());
+        let engine = FuzzEngine::new(args);
+        assert!(engine.is_ok());
+        let engine = engine.unwrap();
+        assert!(engine.grammar_fuzzer.is_some());
+    }
+
+    #[test]
+    fn test_fuzz_engine_with_session() {
+        let mut args = make_fuzz_args("http://example.com");
+        args.session = true;
+        let engine = FuzzEngine::new(args);
+        assert!(engine.is_ok());
+        let engine = engine.unwrap();
+        assert!(engine.http_session.is_some());
+    }
+
+    #[test]
+    fn test_fuzz_engine_with_diffing() {
+        let mut args = make_fuzz_args("http://example.com");
+        args.diffing = true;
+        let engine = FuzzEngine::new(args);
+        assert!(engine.is_ok());
+        let engine = engine.unwrap();
+        assert!(engine.differ.is_some());
+    }
+
+    #[test]
+    fn test_fuzz_engine_concurrency_clamped() {
+        let mut args = make_fuzz_args("http://example.com");
+        args.concurrency = 1000;
+        let engine = FuzzEngine::new(args);
+        assert!(engine.is_ok());
+    }
+
+    #[test]
+    fn test_fuzz_engine_concurrency_minimum() {
+        let mut args = make_fuzz_args("http://example.com");
+        args.concurrency = 0;
+        let engine = FuzzEngine::new(args);
+        assert!(engine.is_ok());
+    }
+
+    #[test]
+    fn test_fuzz_engine_user_agent_default() {
+        let args = make_fuzz_args("http://example.com");
+        let engine = FuzzEngine::new(args).unwrap();
+        assert!(!engine.user_agent.is_empty());
+    }
+
+    #[test]
+    fn test_fuzz_engine_user_agent_custom() {
+        let mut args = make_fuzz_args("http://example.com");
+        args.common.user_agent = Some("CustomAgent/1.0".to_string());
+        let engine = FuzzEngine::new(args).unwrap();
+        assert_eq!(engine.user_agent, "CustomAgent/1.0");
+    }
+
+    #[test]
+    fn test_fuzz_engine_from_waf_args() {
+        use crate::cli::WafStressArgs;
+        let waf_args = WafStressArgs {
+            url: "http://example.com".to_string(),
+            concurrency: 20,
+            timeout: 10,
+            json: false,
+            verbose: false,
+            output: None,
+            common: CommonHttpArgs::default(),
+        };
+        let engine = FuzzEngine::new_from_waf_args(waf_args);
+        assert!(engine.is_ok());
+        let engine = engine.unwrap();
+        assert_eq!(engine.args.url, "http://example.com");
+        assert_eq!(engine.args.concurrency, 20);
+    }
+
+    #[tokio::test]
+    async fn test_fuzz_engine_build_client_with_invalid_proxy() {
+        let mut args = make_fuzz_args("http://example.com");
+        args.common.proxy = Some("not-a-valid-proxy".to_string());
+        let engine = FuzzEngine::new(args);
+        assert!(engine.is_ok());
+    }
+}

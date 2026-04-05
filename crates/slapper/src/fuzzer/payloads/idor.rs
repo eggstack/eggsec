@@ -244,3 +244,40 @@ pub fn get_payloads() -> Vec<Payload> {
 
     payloads
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_payloads_returns_non_empty() {
+        let payloads = get_payloads();
+        assert!(!payloads.is_empty());
+    }
+
+    #[test]
+    fn test_get_payloads_count_reasonable() {
+        let payloads = get_payloads();
+        assert!(payloads.len() > 0);
+        assert!(payloads.len() < 10000);
+    }
+
+    #[test]
+    fn test_payloads_are_non_empty_strings() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert!(!p.payload.is_empty(), "Payload is empty: {:?}", p.description);
+        }
+    }
+
+    #[test]
+    fn test_payloads_contain_expected_patterns() {
+        let payloads = get_payloads();
+        let has_id_param = payloads.iter().any(|p| p.payload.contains("id="));
+        let has_user_id = payloads.iter().any(|p| p.payload.contains("user_id="));
+        let has_admin = payloads.iter().any(|p| p.payload.contains("admin"));
+        assert!(has_id_param, "Missing id= parameter payload");
+        assert!(has_user_id, "Missing user_id= parameter payload");
+        assert!(has_admin, "Missing admin ID payload");
+    }
+}

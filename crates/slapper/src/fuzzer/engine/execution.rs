@@ -287,3 +287,110 @@ impl FuzzEngine {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::{CommonHttpArgs, FuzzArgs, FuzzMode};
+    use crate::fuzzer::payloads::{Payload, PayloadType};
+    use crate::waf::types::Severity;
+
+    fn make_fuzz_args(url: &str) -> FuzzArgs {
+        FuzzArgs {
+            url: url.to_string(),
+            payload_type: "sqli".to_string(),
+            common: CommonHttpArgs::default(),
+            method: "GET".to_string(),
+            param: None,
+            concurrency: 10,
+            timeout: 5,
+            verbose: false,
+            json: false,
+            output: None,
+            mutate: false,
+            mutation_count: 5,
+            grammar_fuzz: false,
+            grammar_type: None,
+            session: false,
+            diffing: false,
+            capture_baseline: false,
+            mode: FuzzMode::Sequential,
+            target: None,
+            graphql_introspection: false,
+            graphql_depth_bypass: false,
+            graphql_alias_overload: false,
+            jwt_token: None,
+            oauth_client_id: None,
+            oauth_client_secret: None,
+            oauth_redirect: false,
+            oauth_scope: false,
+            oauth_state: false,
+            oauth_grant: false,
+            oauth_issuer: None,
+            idor_base_id: None,
+            idor_user_ids: None,
+            ssti_param: None,
+            adaptive_rate: false,
+            enhanced_redos: false,
+            waf_fingerprint: false,
+            chaining: false,
+            chain_file: None,
+            format: None,
+            schema: None,
+            discover_only: false,
+            auto_discover_schema: false,
+        }
+    }
+
+    fn make_test_payload() -> Payload {
+        Payload {
+            payload_type: PayloadType::Sqli,
+            payload: "test_payload".to_string(),
+            description: "test".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["test".to_string()],
+        }
+    }
+
+    #[test]
+    fn test_fuzz_engine_execution_construction() {
+        let args = make_fuzz_args("http://example.com");
+        let engine = super::super::core::FuzzEngine::new(args);
+        assert!(engine.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_send_fuzz_request_engine_construction() {
+        let args = make_fuzz_args("http://localhost:1");
+        let engine = super::super::core::FuzzEngine::new(args);
+        assert!(engine.is_ok());
+    }
+
+    #[test]
+    fn test_build_fuzz_url_with_param() {
+        let mut args = make_fuzz_args("http://example.com");
+        args.param = Some("q".to_string());
+        let engine = super::super::core::FuzzEngine::new(args).unwrap();
+        let url = engine.build_fuzz_url("test' OR 1=1--");
+        assert!(url.contains("q="));
+        assert!(url.contains("test"));
+    }
+
+    #[test]
+    fn test_build_fuzz_url_without_param() {
+        let args = make_fuzz_args("http://example.com/api");
+        let engine = super::super::core::FuzzEngine::new(args).unwrap();
+        let url = engine.build_fuzz_url("test");
+        assert_eq!(url, "http://example.com/api");
+    }
+
+    #[test]
+    fn test_build_fuzz_url_with_existing_query() {
+        let mut args = make_fuzz_args("http://example.com/api?foo=bar");
+        args.param = Some("q".to_string());
+        let engine = super::super::core::FuzzEngine::new(args).unwrap();
+        let url = engine.build_fuzz_url("test");
+        assert!(url.contains("foo=bar"));
+        assert!(url.contains("q=test"));
+    }
+}

@@ -200,3 +200,50 @@ pub fn get_payloads() -> Vec<Payload> {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_payloads_returns_non_empty() {
+        let payloads = get_payloads();
+        assert!(!payloads.is_empty());
+    }
+
+    #[test]
+    fn test_get_payloads_count_reasonable() {
+        let payloads = get_payloads();
+        assert!(payloads.len() > 0);
+        assert!(payloads.len() < 10000);
+    }
+
+    #[test]
+    fn test_payloads_are_non_empty_strings() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert!(
+                !p.payload.is_empty(),
+                "Payload is empty: {:?}",
+                p.description
+            );
+        }
+    }
+
+    #[test]
+    fn test_payloads_contain_expected_patterns() {
+        let payloads = get_payloads();
+        let has_java = payloads
+            .iter()
+            .any(|p| p.tags.contains(&"java".to_string()));
+        let has_python = payloads
+            .iter()
+            .any(|p| p.tags.contains(&"python".to_string()));
+        let has_php = payloads.iter().any(|p| p.tags.contains(&"php".to_string()));
+        let has_prototype = payloads.iter().any(|p| p.payload.contains("__proto__"));
+        assert!(has_java, "Missing Java deserialization payload");
+        assert!(has_python, "Missing Python deserialization payload");
+        assert!(has_php, "Missing PHP deserialization payload");
+        assert!(has_prototype, "Missing prototype pollution payload");
+    }
+}

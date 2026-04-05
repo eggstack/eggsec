@@ -53,10 +53,13 @@ pub async fn run_pipeline(
 
     let pipeline = Pipeline::from_args_with_tui_mode(args, None, true);
     let stages_count = pipeline.get_stages().len() as u64;
+
+    let _ = progress_tx.send((0, stages_count.max(1))).await;
+
     let report = pipeline.run().await?;
 
     let _ = result_tx.send(TaskResult::Pipeline(report)).await;
-    let _ = progress_tx.send((stages_count, stages_count)).await;
+    let _ = progress_tx.send((stages_count, stages_count.max(1))).await;
     Ok(())
 }
 
@@ -100,15 +103,12 @@ pub async fn run_recon(
 
     let config = SlapperConfig::default();
 
-    let _ = progress_tx.send((0, 100)).await;
+    let _ = progress_tx.send((5, 100)).await;
 
-    let mut last_error = None;
     let max_retries = 3;
     let base_delay_secs = 2u64;
 
     for attempt in 1..=max_retries {
-        let _ = progress_tx.send((5, 100)).await;
-
         let stage = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
         match run_full_recon(&args, &config, stage, false).await {
             Ok(r) => {
@@ -118,7 +118,6 @@ pub async fn run_recon(
             }
             Err(e) => {
                 let error_str = e.to_string().to_lowercase();
-                last_error = Some(e);
 
                 let is_retryable = error_str.contains("timeout")
                     || error_str.contains("connection")
@@ -136,16 +135,16 @@ pub async fn run_recon(
                     let _ = progress_tx.send(((attempt as u64) * 20, 100)).await;
                     tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
                 } else {
-                    break;
+                    tracing::error!(
+                        "Recon failed after {} attempts: {:?}",
+                        max_retries,
+                        e
+                    );
+                    return Err(e.into());
                 }
             }
         }
     }
 
-    tracing::error!(
-        "Recon failed after {} attempts: {:?}",
-        max_retries,
-        last_error
-    );
-    Err(last_error.unwrap_or_else(|| crate::error::SlapperError::Runtime("Unknown error".to_string())).into())
+    unreachable!()
 }

@@ -115,14 +115,12 @@ pub struct ExecArgs {
     pub command: Vec<String>,
 }
 
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 #[derive(clap::Args)]
 pub struct PluginArgs {
     #[command(subcommand)]
     pub command: PluginCommand,
 }
 
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 #[derive(clap::Subcommand)]
 pub enum PluginCommand {
     #[command(about = "List available plugins")]
@@ -131,14 +129,12 @@ pub enum PluginCommand {
     Run(PluginRunArgs),
 }
 
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 #[derive(clap::Args)]
 pub struct PluginListArgs {
     #[arg(short = 'v', long, help = "Show verbose plugin information")]
     pub verbose: bool,
 }
 
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 #[derive(clap::Args)]
 pub struct PluginRunArgs {
     #[arg(help = "Plugin name to run")]

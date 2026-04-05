@@ -230,3 +230,211 @@ pub fn get_default_udp_ports() -> Vec<u16> {
         11211, 6379, 9010, 47808, 502, 102, 20000, 27960, 27961, 50030,
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_udp_probes_not_empty() {
+        assert!(!UDP_PROBES.is_empty());
+    }
+
+    #[test]
+    fn test_udp_probes_have_valid_ports() {
+        for (_service, port, _probe, _response) in UDP_PROBES {
+            assert!(*port > 0);
+        }
+    }
+
+    #[test]
+    fn test_udp_probes_have_non_empty_probes() {
+        for (_service, _port, probe, _response) in UDP_PROBES {
+            assert!(!probe.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_udp_probes_have_non_empty_response_patterns() {
+        for (_service, _port, _probe, response) in UDP_PROBES {
+            assert!(!response.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_hex_contains_basic() {
+        let data = b"\x30\x0c\x02\x01\x01\x60\x07\x02";
+        assert!(hex_contains(data, "\\x30"));
+    }
+
+    #[test]
+    fn test_hex_contains_multi_byte() {
+        let data = b"\x12\x34\x56\x78";
+        assert!(hex_contains(data, "\\x34\\x56"));
+    }
+
+    #[test]
+    fn test_hex_contains_not_found() {
+        let data = b"\x00\x01\x02\x03";
+        assert!(!hex_contains(data, "\\xff"));
+    }
+
+    #[test]
+    fn test_hex_contains_empty_pattern() {
+        let data = b"\x00\x01\x02";
+        assert!(!hex_contains(data, ""));
+    }
+
+    #[test]
+    fn test_hex_contains_invalid_hex() {
+        let data = b"\x00\x01\x02";
+        assert!(!hex_contains(data, "\\xZZ"));
+    }
+
+    #[test]
+    fn test_hex_contains_partial_match() {
+        let data = b"hello\x30world";
+        assert!(hex_contains(data, "\\x30"));
+    }
+
+    #[test]
+    fn test_get_default_udp_ports_not_empty() {
+        let ports = get_default_udp_ports();
+        assert!(!ports.is_empty());
+    }
+
+    #[test]
+    fn test_get_default_udp_ports_contains_common_ports() {
+        let ports = get_default_udp_ports();
+        assert!(ports.contains(&53));
+        assert!(ports.contains(&123));
+        assert!(ports.contains(&161));
+    }
+
+    #[test]
+    fn test_udp_fingerprint_struct_default_values() {
+        let fp = UdpServiceFingerprint {
+            port: 53,
+            service: "DNS".to_string(),
+            response: Some("response".to_string()),
+            banner: Some("banner".to_string()),
+            confidence: 80,
+        };
+        assert_eq!(fp.port, 53);
+        assert_eq!(fp.service, "DNS");
+        assert_eq!(fp.confidence, 80);
+    }
+
+    #[test]
+    fn test_udp_fingerprint_results_display_empty() {
+        let results = UdpFingerprintResults {
+            host: "127.0.0.1".to_string(),
+            ports_scanned: 10,
+            services_identified: 0,
+            duration_ms: 100,
+            results: vec![],
+        };
+        let display = format!("{}", results);
+        assert!(display.contains("UDP Service Fingerprint Results"));
+        assert!(display.contains("No UDP services identified"));
+    }
+
+    #[test]
+    fn test_udp_fingerprint_results_display_with_results() {
+        let results = UdpFingerprintResults {
+            host: "127.0.0.1".to_string(),
+            ports_scanned: 1,
+            services_identified: 1,
+            duration_ms: 50,
+            results: vec![UdpServiceFingerprint {
+                port: 53,
+                service: "DNS".to_string(),
+                response: Some("dns response".to_string()),
+                banner: Some("dns banner".to_string()),
+                confidence: 80,
+            }],
+        };
+        let display = format!("{}", results);
+        assert!(display.contains("DNS"));
+        assert!(display.contains("Ports Scanned: 1"));
+    }
+
+    #[test]
+    fn test_udp_fingerprint_results_display_strips_controls() {
+        let results = UdpFingerprintResults {
+            host: "host\x01with\x02controls".to_string(),
+            ports_scanned: 1,
+            services_identified: 1,
+            duration_ms: 10,
+            results: vec![UdpServiceFingerprint {
+                port: 53,
+                service: "DNS\x03".to_string(),
+                response: Some("resp\x04".to_string()),
+                banner: None,
+                confidence: 80,
+            }],
+        };
+        let display = format!("{}", results);
+        assert!(!display.contains('\x01'));
+    }
+
+    #[test]
+    fn test_fingerprint_udp_port_invalid_host() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(fingerprint_udp_port(
+            "invalid-host-that-does-not-exist.local",
+            53,
+            Duration::from_millis(10),
+        ));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_fingerprint_udp_services_empty_ports() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(fingerprint_udp_services(
+            "127.0.0.1",
+            vec![],
+            Duration::from_millis(10),
+        ));
+        assert!(result.is_ok());
+        let results = result.unwrap();
+        assert_eq!(results.ports_scanned, 0);
+        assert_eq!(results.services_identified, 0);
+    }
+
+    #[test]
+    fn test_fingerprint_udp_services_unreachable_host() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(fingerprint_udp_services(
+            "192.0.2.1",
+            vec![53],
+            Duration::from_millis(10),
+        ));
+        assert!(result.is_ok());
+        let results = result.unwrap();
+        assert_eq!(results.ports_scanned, 1);
+        assert_eq!(results.services_identified, 0);
+    }
+
+    #[test]
+    fn test_udp_fingerprint_results_serde() {
+        let results = UdpFingerprintResults {
+            host: "127.0.0.1".to_string(),
+            ports_scanned: 5,
+            services_identified: 2,
+            duration_ms: 200,
+            results: vec![UdpServiceFingerprint {
+                port: 53,
+                service: "DNS".to_string(),
+                response: None,
+                banner: None,
+                confidence: 80,
+            }],
+        };
+        let json = serde_json::to_string(&results).unwrap();
+        let parsed: UdpFingerprintResults = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.host, "127.0.0.1");
+        assert_eq!(parsed.ports_scanned, 5);
+    }
+}

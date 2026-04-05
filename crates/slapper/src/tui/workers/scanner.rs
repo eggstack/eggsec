@@ -12,7 +12,12 @@ pub async fn run_port_scan(
 ) -> anyhow::Result<()> {
     use crate::scanner::ports::scan_ports;
 
+    let _ = progress_tx.send((0, 100)).await;
+
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
+
+    let _ = progress_tx.send((10, 100)).await;
+
     let results = scan_ports(
         &target,
         port_list,
@@ -24,8 +29,9 @@ pub async fn run_port_scan(
     .await?;
 
     let total = results.ports_scanned as u64;
+    let _ = progress_tx.send((90, 100)).await;
     let _ = result_tx.send(TaskResult::PortScan(results)).await;
-    let _ = progress_tx.send((total, total)).await;
+    let _ = progress_tx.send((total.max(1), total.max(1))).await;
     Ok(())
 }
 
@@ -39,6 +45,8 @@ pub async fn run_endpoint_scan(
 ) -> anyhow::Result<()> {
     use crate::scanner::endpoints::{scan_endpoints, DEFAULT_ENDPOINTS};
 
+    let _ = progress_tx.send((0, 100)).await;
+
     let endpoints: Vec<String> = if let Some(ref wl) = wordlist {
         tokio::fs::read_to_string(wl).await?
             .lines()
@@ -48,6 +56,10 @@ pub async fn run_endpoint_scan(
     } else {
         DEFAULT_ENDPOINTS.iter().map(|s| s.to_string()).collect()
     };
+    let total_endpoints = endpoints.len() as u64;
+
+    let _ = progress_tx.send((10, 100)).await;
+
     let results = scan_endpoints(EndpointScanConfig {
         base_url: target,
         endpoints,
@@ -61,8 +73,9 @@ pub async fn run_endpoint_scan(
     .await?;
 
     let total = results.endpoints_scanned as u64;
+    let _ = progress_tx.send((90, 100)).await;
     let _ = result_tx.send(TaskResult::EndpointScan(results)).await;
-    let _ = progress_tx.send((total, total)).await;
+    let _ = progress_tx.send((total.max(1), total_endpoints.max(1))).await;
     Ok(())
 }
 
@@ -75,11 +88,18 @@ pub async fn run_fingerprint(
 ) -> anyhow::Result<()> {
     use crate::scanner::fingerprint::fingerprint_services;
 
+    let _ = progress_tx.send((0, 100)).await;
+
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
+    let total_ports = port_list.len() as u64;
+
+    let _ = progress_tx.send((10, 100)).await;
+
     let results = fingerprint_services(&target, port_list, timeout, true, 20).await?;
 
     let total = results.ports_scanned as u64;
+    let _ = progress_tx.send((90, 100)).await;
     let _ = result_tx.send(TaskResult::Fingerprint(results)).await;
-    let _ = progress_tx.send((total, total)).await;
+    let _ = progress_tx.send((total.max(1), total_ports.max(1))).await;
     Ok(())
 }

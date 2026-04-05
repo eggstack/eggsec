@@ -89,6 +89,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Fingerprint(args)) => handle_fingerprint(ctx, args).await,
         #[cfg(feature = "nse")]
         Some(Commands::Nse(args)) => handle_nse(ctx, args).await,
+        #[cfg(not(feature = "nse"))]
+        Some(Commands::Nse(_)) => anyhow::bail!("NSE support requires the 'nse' feature"),
         Some(Commands::Fuzz(args)) => handle_fuzz(ctx, args).await,
         Some(Commands::WafStress(args)) => handle_waf_stress(ctx, args).await,
         Some(Commands::Waf(args)) => handle_waf(ctx, args).await,
@@ -109,6 +111,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Traceroute(args)) => handle_traceroute(ctx, args).await,
         #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
         Some(Commands::Plugin(args)) => handle_plugin(ctx, args).await,
+        #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+        Some(Commands::Plugin(_)) => anyhow::bail!("Plugin support requires the 'python-plugins' or 'ruby-plugins' feature"),
         Some(Commands::Report(args)) => handle_report(ctx, args).await,
         #[cfg(feature = "stress-testing")]
         Some(Commands::Stress(args)) => handle_stress(ctx, args).await,

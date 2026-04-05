@@ -173,3 +173,46 @@ pub fn get_payloads() -> Vec<Payload> {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_payloads_returns_non_empty() {
+        let payloads = get_payloads();
+        assert!(!payloads.is_empty());
+    }
+
+    #[test]
+    fn test_get_payloads_count_reasonable() {
+        let payloads = get_payloads();
+        assert!(payloads.len() > 0);
+        assert!(payloads.len() < 10000);
+    }
+
+    #[test]
+    fn test_payloads_are_non_empty_strings() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert!(
+                !p.payload.is_empty(),
+                "Payload is empty: {:?}",
+                p.description
+            );
+        }
+    }
+
+    #[test]
+    fn test_payloads_contain_expected_patterns() {
+        let payloads = get_payloads();
+        let has_xff = payloads
+            .iter()
+            .any(|p| p.payload.contains("X-Forwarded-Host"));
+        let has_xss = payloads.iter().any(|p| p.payload.contains("<script>"));
+        let has_cache_control = payloads.iter().any(|p| p.payload.contains("Cache-Control"));
+        assert!(has_xff, "Missing X-Forwarded-Host payload");
+        assert!(has_xss, "Missing XSS cache poisoning payload");
+        assert!(has_cache_control, "Missing Cache-Control payload");
+    }
+}

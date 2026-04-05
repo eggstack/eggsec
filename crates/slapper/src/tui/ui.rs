@@ -169,10 +169,25 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
         .style(Style::default().fg(Color::White).bg(Color::DarkGray));
     f.render_widget(query_paragraph, chunks[0]);
 
-    // Results
+    // Pagination
+    let visible_height = 14usize;
+    let total = palette.results.len();
+    let start = palette.scroll_offset;
+    let end = (start + visible_height).min(total);
+    let status_text = if total > 0 {
+        format!("{}/{}", end.min(total), total)
+    } else {
+        "0/0".to_string()
+    };
+    let status_paragraph =
+        Paragraph::new(status_text.as_str()).style(Style::default().fg(Color::Gray));
+    f.render_widget(status_paragraph, chunks[1]);
+
+    // Results (only visible items)
     let mut items: Vec<ListItem> = Vec::new();
-    for (i, result) in palette.results.iter().enumerate() {
-        let style = if i == palette.selected_index {
+    for global_idx in start..end {
+        let result = &palette.results[global_idx];
+        let style = if global_idx == palette.selected_index {
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Cyan)

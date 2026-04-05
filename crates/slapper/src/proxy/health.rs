@@ -180,3 +180,191 @@ impl Clone for HealthChecker {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proxy::config::{ProxyEntry, ProxyType};
+
+    fn make_proxy(addr: &str, port: u16) -> ProxyEntry {
+        ProxyEntry::new(ProxyType::Socks5, addr.to_string(), port)
+    }
+
+    #[test]
+    fn test_health_check_result_fields() {
+        let result = HealthCheckResult {
+            proxy_url: "socks5://1.1.1.1:1080".to_string(),
+            is_healthy: true,
+            latency_ms: Some(42),
+            error: None,
+            checked_at: Instant::now(),
+        };
+        assert!(result.is_healthy);
+        assert_eq!(result.latency_ms, Some(42));
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_health_check_result_unhealthy() {
+        let result = HealthCheckResult {
+            proxy_url: "socks5://1.1.1.1:1080".to_string(),
+            is_healthy: false,
+            latency_ms: None,
+            error: Some("timeout".to_string()),
+            checked_at: Instant::now(),
+        };
+        assert!(!result.is_healthy);
+        assert_eq!(result.error, Some("timeout".to_string()));
+    }
+
+    #[test]
+    fn test_proxy_health_healthy_percentage() {
+        let health = ProxyHealth {
+            total: 10,
+            healthy: 7,
+            unhealthy: 3,
+            results: vec![],
+        };
+        assert!((health.healthy_percentage() - 70.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_proxy_health_healthy_percentage_zero_total() {
+        let health = ProxyHealth {
+            total: 0,
+            healthy: 0,
+            unhealthy: 0,
+            results: vec![],
+        };
+        assert_eq!(health.healthy_percentage(), 0.0);
+    }
+
+    #[test]
+    fn test_proxy_health_all_healthy() {
+        let health = ProxyHealth {
+            total: 5,
+            healthy: 5,
+            unhealthy: 0,
+            results: vec![],
+        };
+        assert!((health.healthy_percentage() - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_proxy_health_none_healthy() {
+        let health = ProxyHealth {
+            total: 3,
+            healthy: 0,
+            unhealthy: 3,
+            results: vec![],
+        };
+        assert!((health.healthy_percentage() - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_health_checker_new() {
+        let config = HealthCheckConfig {
+            enabled: true,
+            interval_secs: 30,
+            timeout_ms: 5000,
+            test_url: "https://example.com".to_string(),
+            max_failures: 3,
+        };
+        let checker = HealthChecker::new(config);
+        assert!(checker.is_ok());
+    }
+
+    #[test]
+    fn test_health_checker_new_min_timeout() {
+        let config = HealthCheckConfig {
+            enabled: true,
+            interval_secs: 30,
+            timeout_ms: 100,
+            test_url: "https://example.com".to_string(),
+            max_failures: 3,
+        };
+        let checker = HealthChecker::new(config);
+        assert!(checker.is_ok());
+    }
+
+    #[test]
+    fn test_health_check_config_defaults_from_proxy_config() {
+        let proxy_config = super::super::config::ProxyConfig::default();
+        let hc: HealthCheckConfig = (&proxy_config).into();
+        assert_eq!(hc.timeout_ms, 5000);
+        assert_eq!(hc.interval_secs, 60);
+    }
+
+    #[tokio::test]
+    async fn test_check_all_skips_disabled_proxies() {
+        let config = HealthCheckConfig {
+            enabled: true,
+            interval_secs: 60,
+            timeout_ms: 1000,
+            test_url: "https://api.ipify.org".to_string(),
+            max_failures: 3,
+        };
+        let checker = HealthChecker::new(config).unwrap();
+
+        let mut disabled = make_proxy("127.0.0.1", 1080);
+        disabled.enabled = false;
+
+        let proxies = vec![disabled];
+        let health = checker.check_all(&proxies).await.unwrap();
+        assert_eq!(health.total, 1);
+        assert_eq!(health.healthy, 0);
+        assert_eq!(health.results.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_check_all_empty_proxies() {
+        let config = HealthCheckConfig {
+            enabled: true,
+            interval_secs: 60,
+            timeout_ms: 1000,
+            test_url: "https://api.ipify.org".to_string(),
+            max_failures: 3,
+        };
+        let checker = HealthChecker::new(config).unwrap();
+
+        let health = checker.check_all(&[]).await.unwrap();
+        assert_eq!(health.total, 0);
+        assert_eq!(health.healthy, 0);
+        assert_eq!(health.unhealthy, 0);
+    }
+
+    #[tokio::test]
+    async fn test_check_concurrent_empty_proxies() {
+        let config = HealthCheckConfig {
+            enabled: true,
+            interval_secs: 60,
+            timeout_ms: 1000,
+            test_url: "https://api.ipify.org".to_string(),
+            max_failures: 3,
+        };
+        let checker = HealthChecker::new(config).unwrap();
+
+        let health = checker.check_concurrent(&[], 5).await.unwrap();
+        assert_eq!(health.total, 0);
+        assert_eq!(health.results.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_check_concurrent_skips_disabled() {
+        let config = HealthCheckConfig {
+            enabled: true,
+            interval_secs: 60,
+            timeout_ms: 1000,
+            test_url: "https://api.ipify.org".to_string(),
+            max_failures: 3,
+        };
+        let checker = HealthChecker::new(config).unwrap();
+
+        let mut disabled = make_proxy("127.0.0.1", 1080);
+        disabled.enabled = false;
+
+        let health = checker.check_concurrent(&[disabled], 5).await.unwrap();
+        assert_eq!(health.total, 1);
+        assert_eq!(health.results.len(), 0);
+    }
+}

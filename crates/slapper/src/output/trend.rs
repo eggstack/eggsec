@@ -238,3 +238,258 @@ impl Default for TrendAnalyzer {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_scan_result(
+        id: &str,
+        timestamp: &str,
+        critical: usize,
+        high: usize,
+        medium: usize,
+    ) -> ScanResult {
+        ScanResult {
+            id: id.to_string(),
+            target: "example.com".to_string(),
+            scan_type: "full".to_string(),
+            timestamp: timestamp.to_string(),
+            summary: ResultSummary {
+                total_findings: critical + high + medium,
+                critical,
+                high,
+                medium,
+                low: 0,
+                info: 0,
+                scan_duration_ms: 1000,
+            },
+            details: vec![],
+        }
+    }
+
+    #[test]
+    fn test_result_comparator_no_changes() {
+        let old = make_scan_result("1", "2024-01-01", 1, 2, 3);
+        let new = make_scan_result("2", "2024-01-02", 1, 2, 3);
+        let result = ResultComparator::compare(&old, &new);
+        assert!(result.added.is_empty());
+        assert!(result.removed.is_empty());
+    }
+
+    #[test]
+    fn test_result_comparator_added_finding() {
+        let mut old = make_scan_result("1", "2024-01-01", 1, 2, 3);
+        old.details.push(Finding {
+            severity: Severity::High,
+            category: "XSS".to_string(),
+            title: "Old Finding".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+
+        let mut new = make_scan_result("2", "2024-01-02", 1, 2, 3);
+        new.details.push(Finding {
+            severity: Severity::High,
+            category: "XSS".to_string(),
+            title: "Old Finding".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+        new.details.push(Finding {
+            severity: Severity::Critical,
+            category: "SQLi".to_string(),
+            title: "New Finding".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+
+        let result = ResultComparator::compare(&old, &new);
+        assert_eq!(result.added.len(), 1);
+        assert_eq!(result.added[0].title, "New Finding");
+        assert_eq!(result.unchanged.len(), 1);
+    }
+
+    #[test]
+    fn test_result_comparator_removed_finding() {
+        let mut old = make_scan_result("1", "2024-01-01", 1, 2, 3);
+        old.details.push(Finding {
+            severity: Severity::High,
+            category: "XSS".to_string(),
+            title: "Gone Finding".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+
+        let new = make_scan_result("2", "2024-01-02", 1, 2, 3);
+
+        let result = ResultComparator::compare(&old, &new);
+        assert_eq!(result.removed.len(), 1);
+        assert_eq!(result.removed[0].title, "Gone Finding");
+    }
+
+    #[test]
+    fn test_risk_trend_worsening() {
+        let changes = vec![1, 2, -1, 3];
+        assert!(matches!(
+            ResultComparator::risk_trend(&changes),
+            TrendDirection::Worsening
+        ));
+    }
+
+    #[test]
+    fn test_risk_trend_improving() {
+        let changes = vec![-1, -2, 1, -3];
+        assert!(matches!(
+            ResultComparator::risk_trend(&changes),
+            TrendDirection::Improving
+        ));
+    }
+
+    #[test]
+    fn test_risk_trend_stable() {
+        let changes = vec![1, -1, 2, -2];
+        assert!(matches!(
+            ResultComparator::risk_trend(&changes),
+            TrendDirection::Stable
+        ));
+    }
+
+    #[test]
+    fn test_risk_trend_empty() {
+        assert!(matches!(
+            ResultComparator::risk_trend(&[]),
+            TrendDirection::Stable
+        ));
+    }
+
+    #[test]
+    fn test_trend_analyzer_single_result() {
+        let mut analyzer = TrendAnalyzer::new();
+        analyzer.add_result(make_scan_result("1", "2024-01-01", 1, 2, 3));
+        let trend = analyzer.get_trend();
+        assert!(matches!(trend.direction, TrendDirection::Stable));
+        assert!(trend.critical_trend.is_empty());
+    }
+
+    #[test]
+    fn test_trend_analyzer_worsening() {
+        let mut analyzer = TrendAnalyzer::new();
+        analyzer.add_result(make_scan_result("1", "2024-01-01", 1, 0, 0));
+        analyzer.add_result(make_scan_result("2", "2024-01-02", 3, 0, 0));
+        let trend = analyzer.get_trend();
+        assert!(matches!(trend.direction, TrendDirection::Worsening));
+        assert_eq!(trend.critical_trend, vec![2]);
+    }
+
+    #[test]
+    fn test_trend_analyzer_improving() {
+        let mut analyzer = TrendAnalyzer::new();
+        analyzer.add_result(make_scan_result("1", "2024-01-01", 5, 0, 0));
+        analyzer.add_result(make_scan_result("2", "2024-01-02", 2, 0, 0));
+        let trend = analyzer.get_trend();
+        assert!(matches!(trend.direction, TrendDirection::Improving));
+        assert_eq!(trend.critical_trend, vec![-3]);
+    }
+
+    #[test]
+    fn test_trend_analyzer_average_scan_time() {
+        let mut analyzer = TrendAnalyzer::new();
+        let mut r1 = make_scan_result("1", "2024-01-01", 0, 0, 0);
+        r1.summary.scan_duration_ms = 1000;
+        let mut r2 = make_scan_result("2", "2024-01-02", 0, 0, 0);
+        r2.summary.scan_duration_ms = 2000;
+        analyzer.add_result(r1);
+        analyzer.add_result(r2);
+        let trend = analyzer.get_trend();
+        assert_eq!(trend.average_scan_time_ms, 1500);
+    }
+
+    #[test]
+    fn test_trend_analyzer_category_counts() {
+        let mut analyzer = TrendAnalyzer::new();
+        let mut r = make_scan_result("1", "2024-01-01", 0, 0, 0);
+        r.details.push(Finding {
+            severity: Severity::High,
+            category: "XSS".to_string(),
+            title: "A".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+        r.details.push(Finding {
+            severity: Severity::Medium,
+            category: "XSS".to_string(),
+            title: "B".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+        r.details.push(Finding {
+            severity: Severity::Low,
+            category: "CSRF".to_string(),
+            title: "C".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+        analyzer.add_result(r);
+        let cats = analyzer.get_findings_by_category();
+        assert_eq!(cats["XSS"], 2);
+        assert_eq!(cats["CSRF"], 1);
+    }
+
+    #[test]
+    fn test_trend_analyzer_most_common() {
+        let mut analyzer = TrendAnalyzer::new();
+        let mut r = make_scan_result("1", "2024-01-01", 0, 0, 0);
+        r.details.push(Finding {
+            severity: Severity::High,
+            category: "XSS".to_string(),
+            title: "Common".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+        r.details.push(Finding {
+            severity: Severity::High,
+            category: "XSS".to_string(),
+            title: "Common".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+        r.details.push(Finding {
+            severity: Severity::Medium,
+            category: "CSRF".to_string(),
+            title: "Rare".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: None,
+        });
+        analyzer.add_result(r);
+        let top = analyzer.get_most_common_findings(1);
+        assert_eq!(top[0].0, "Common");
+        assert_eq!(top[0].1, 2);
+    }
+
+    #[test]
+    fn test_trend_analyzer_default() {
+        let analyzer = TrendAnalyzer::default();
+        assert!(analyzer.results.is_empty());
+    }
+}

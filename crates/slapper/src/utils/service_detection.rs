@@ -138,3 +138,159 @@ pub fn is_database(port: u16) -> bool {
 pub fn is_mail_service(port: u16) -> bool {
     matches!(port, 25 | 110 | 143 | 465 | 587 | 993 | 995)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_service_name_known_port() {
+        assert_eq!(get_service_name(80), "HTTP");
+        assert_eq!(get_service_name(443), "HTTPS");
+        assert_eq!(get_service_name(22), "SSH");
+        assert_eq!(get_service_name(3306), "MySQL");
+    }
+
+    #[test]
+    fn test_get_service_name_unknown_port() {
+        assert_eq!(get_service_name(12345), "unknown");
+        assert_eq!(get_service_name(0), "unknown");
+    }
+
+    #[test]
+    fn test_get_service_by_port_some() {
+        assert_eq!(get_service_by_port(21), Some("FTP"));
+        assert_eq!(get_service_by_port(53), Some("DNS"));
+    }
+
+    #[test]
+    fn test_get_service_by_port_none() {
+        assert_eq!(get_service_by_port(12345), None);
+    }
+
+    #[test]
+    fn test_guess_service_from_banner_ssh() {
+        assert_eq!(
+            guess_service_from_banner("SSH-2.0-OpenSSH_8.9 version 8.9"),
+            Some("SSH")
+        );
+    }
+
+    #[test]
+    fn test_guess_service_from_banner_mysql() {
+        assert_eq!(
+            guess_service_from_banner("5.7.35 MySQL Community Server"),
+            Some("MySQL")
+        );
+        assert_eq!(guess_service_from_banner("MariaDB-10.5"), Some("MySQL"));
+    }
+
+    #[test]
+    fn test_guess_service_from_banner_redis() {
+        assert_eq!(
+            guess_service_from_banner("Redis server v=6.2.6"),
+            Some("Redis")
+        );
+    }
+
+    #[test]
+    fn test_guess_service_from_banner_postgresql() {
+        assert_eq!(
+            guess_service_from_banner("PostgreSQL 14.1"),
+            Some("PostgreSQL")
+        );
+    }
+
+    #[test]
+    fn test_guess_service_from_banner_mongodb() {
+        assert_eq!(guess_service_from_banner("MongoDB 5.0"), Some("MongoDB"));
+    }
+
+    #[test]
+    fn test_guess_service_from_banner_http() {
+        assert_eq!(guess_service_from_banner("HTTP/1.1 200 OK"), Some("HTTP"));
+        assert_eq!(guess_service_from_banner("nginx/1.21.0"), Some("HTTP"));
+        assert_eq!(guess_service_from_banner("Apache/2.4.51"), Some("HTTP"));
+        assert_eq!(
+            guess_service_from_banner("Microsoft-IIS/10.0"),
+            Some("HTTP")
+        );
+    }
+
+    #[test]
+    fn test_guess_service_from_banner_smb() {
+        assert_eq!(guess_service_from_banner("Samba 4.15"), Some("SMB"));
+        assert_eq!(guess_service_from_banner("microsoft-ds"), Some("SMB"));
+    }
+
+    #[test]
+    fn test_guess_service_from_banner_none() {
+        assert_eq!(guess_service_from_banner("random garbage xyz"), None);
+        assert_eq!(guess_service_from_banner(""), None);
+    }
+
+    #[test]
+    fn test_guess_service_from_banner_case_insensitive() {
+        assert_eq!(
+            guess_service_from_banner("ssh-2.0-openssh version 8.9"),
+            Some("SSH")
+        );
+        assert_eq!(guess_service_from_banner("REDIS SERVER"), Some("Redis"));
+    }
+
+    #[test]
+    fn test_guess_service_with_banner_match() {
+        assert_eq!(guess_service(22, Some("SSH-2.0-OpenSSH")), "SSH");
+    }
+
+    #[test]
+    fn test_guess_service_with_banner_no_match_fallback_to_port() {
+        assert_eq!(guess_service(80, Some("unknown banner")), "HTTP");
+    }
+
+    #[test]
+    fn test_guess_service_no_banner() {
+        assert_eq!(guess_service(443, None), "HTTPS");
+        assert_eq!(guess_service(9999, None), "unknown");
+    }
+
+    #[test]
+    fn test_is_web_service() {
+        assert!(is_web_service(80));
+        assert!(is_web_service(443));
+        assert!(is_web_service(8080));
+        assert!(is_web_service(3000));
+        assert!(!is_web_service(22));
+        assert!(!is_web_service(3306));
+    }
+
+    #[test]
+    fn test_is_database() {
+        assert!(is_database(3306));
+        assert!(is_database(5432));
+        assert!(is_database(6379));
+        assert!(is_database(27017));
+        assert!(!is_database(80));
+        assert!(!is_database(22));
+    }
+
+    #[test]
+    fn test_is_mail_service() {
+        assert!(is_mail_service(25));
+        assert!(is_mail_service(587));
+        assert!(is_mail_service(993));
+        assert!(!is_mail_service(80));
+        assert!(!is_mail_service(443));
+    }
+
+    #[test]
+    fn test_common_ports_not_empty() {
+        assert!(!COMMON_PORTS.is_empty());
+    }
+
+    #[test]
+    fn test_port_service_map_populated() {
+        assert!(!PORT_SERVICE_MAP.is_empty());
+        assert_eq!(PORT_SERVICE_MAP.get(&80), Some(&"HTTP"));
+    }
+}

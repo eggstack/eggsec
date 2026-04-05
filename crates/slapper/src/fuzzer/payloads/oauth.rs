@@ -631,3 +631,40 @@ pub fn get_payloads() -> Vec<Payload> {
 
     payloads
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_payloads_returns_non_empty() {
+        let payloads = get_payloads();
+        assert!(!payloads.is_empty());
+    }
+
+    #[test]
+    fn test_get_payloads_count_reasonable() {
+        let payloads = get_payloads();
+        assert!(payloads.len() > 0);
+        assert!(payloads.len() < 10000);
+    }
+
+    #[test]
+    fn test_payloads_are_non_empty_strings() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert!(!p.payload.is_empty(), "Payload is empty: {:?}", p.description);
+        }
+    }
+
+    #[test]
+    fn test_payloads_contain_expected_patterns() {
+        let payloads = get_payloads();
+        let has_redirect = payloads.iter().any(|p| p.payload.contains("redirect_uri"));
+        let has_scope = payloads.iter().any(|p| p.payload.contains("scope"));
+        let has_grant = payloads.iter().any(|p| p.payload.contains("grant_type"));
+        assert!(has_redirect, "Missing redirect_uri payload");
+        assert!(has_scope, "Missing scope payload");
+        assert!(has_grant, "Missing grant_type payload");
+    }
+}

@@ -10,6 +10,7 @@ impl super::App {
                 palette.query.clear();
                 palette.results = self.help_manager.get_command_palette_entries().clone();
                 palette.selected_index = 0;
+                palette.scroll_offset = 0;
             }
         } else {
             let palette = CommandPalette {
@@ -17,6 +18,7 @@ impl super::App {
                 query: String::new(),
                 results: self.help_manager.get_command_palette_entries().clone(),
                 selected_index: 0,
+                scroll_offset: 0,
             };
             self.command_palette = Some(palette);
         }
@@ -27,6 +29,7 @@ impl super::App {
             palette.query = query.to_string();
             palette.results = Arc::new(self.help_manager.search_commands(query));
             palette.selected_index = 0;
+            palette.scroll_offset = 0;
         }
     }
 

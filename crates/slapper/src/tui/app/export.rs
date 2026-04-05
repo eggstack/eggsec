@@ -73,64 +73,68 @@ impl super::App {
         match self.current_tab {
             super::tabs::Tab::Recon => {
                 if let Some(results) = self.recon.get_results() {
-                    self.save_export(
-                        "recon_results.json",
-                        serde_json::to_string_pretty(results).unwrap_or_default(),
-                    );
+                    match serde_json::to_string_pretty(results) {
+                        Ok(json) => self.save_export("recon_results.json", json),
+                        Err(e) => tracing::error!("Failed to serialize recon results: {}", e),
+                    }
                 }
             }
             super::tabs::Tab::Load => {
                 if let Some(results) = self.load.get_results() {
-                    self.save_export(
-                        "load_results.json",
-                        serde_json::to_string_pretty(results).unwrap_or_default(),
-                    );
+                    match serde_json::to_string_pretty(results) {
+                        Ok(json) => self.save_export("load_results.json", json),
+                        Err(e) => tracing::error!("Failed to serialize load results: {}", e),
+                    }
                 }
             }
             super::tabs::Tab::ScanPorts => {
                 if let Some(results) = self.scan_ports.get_results() {
-                    self.save_export(
-                        "port_scan_results.json",
-                        serde_json::to_string_pretty(results).unwrap_or_default(),
-                    );
+                    match serde_json::to_string_pretty(results) {
+                        Ok(json) => self.save_export("port_scan_results.json", json),
+                        Err(e) => tracing::error!("Failed to serialize port scan results: {}", e),
+                    }
                 }
             }
             super::tabs::Tab::ScanEndpoints => {
                 if let Some(results) = self.scan_endpoints.get_results() {
-                    self.save_export(
-                        "endpoint_scan_results.json",
-                        serde_json::to_string_pretty(results).unwrap_or_default(),
-                    );
+                    match serde_json::to_string_pretty(results) {
+                        Ok(json) => self.save_export("endpoint_scan_results.json", json),
+                        Err(e) => {
+                            tracing::error!("Failed to serialize endpoint scan results: {}", e)
+                        }
+                    }
                 }
             }
             super::tabs::Tab::Fingerprint => {
                 if let Some(results) = self.fingerprint.get_results() {
-                    self.save_export(
-                        "fingerprint_results.json",
-                        serde_json::to_string_pretty(results).unwrap_or_default(),
-                    );
+                    match serde_json::to_string_pretty(results) {
+                        Ok(json) => self.save_export("fingerprint_results.json", json),
+                        Err(e) => tracing::error!("Failed to serialize fingerprint results: {}", e),
+                    }
                 }
             }
             super::tabs::Tab::Fuzz => {
                 if let Some(results) = self.fuzz.get_results() {
-                    self.save_export(
-                        "fuzz_results.json",
-                        serde_json::to_string_pretty(results).unwrap_or_default(),
-                    );
+                    match serde_json::to_string_pretty(results) {
+                        Ok(json) => self.save_export("fuzz_results.json", json),
+                        Err(e) => tracing::error!("Failed to serialize fuzz results: {}", e),
+                    }
                 }
             }
             super::tabs::Tab::Waf => {
                 if let Some(results) = self.waf.get_detection_result() {
-                    self.save_export(
-                        "waf_detection_results.json",
-                        serde_json::to_string_pretty(results).unwrap_or_default(),
-                    );
+                    match serde_json::to_string_pretty(results) {
+                        Ok(json) => self.save_export("waf_detection_results.json", json),
+                        Err(e) => {
+                            tracing::error!("Failed to serialize WAF detection results: {}", e)
+                        }
+                    }
                 }
                 if let Some(results) = self.waf.get_bypass_results() {
-                    self.save_export(
-                        "waf_bypass_results.json",
-                        serde_json::to_string_pretty(results).unwrap_or_default(),
-                    );
+                    match serde_json::to_string_pretty(results) {
+                        Ok(json) => self.save_export("waf_bypass_results.json", json),
+                        Err(e) => tracing::error!("Failed to serialize WAF bypass results: {}", e),
+                    }
                 }
             }
             super::tabs::Tab::WafStress => {
@@ -140,37 +144,79 @@ impl super::App {
             }
             super::tabs::Tab::Scan => {
                 if let Some(report) = self.scan.get_report() {
-                    self.save_export(
-                        "pipeline_scan_report.json",
-                        serde_json::to_string_pretty(report).unwrap_or_default(),
-                    );
+                    match serde_json::to_string_pretty(report) {
+                        Ok(json) => self.save_export("pipeline_scan_report.json", json),
+                        Err(e) => {
+                            tracing::error!("Failed to serialize pipeline scan report: {}", e)
+                        }
+                    }
                 }
             }
-            super::tabs::Tab::Resume => {}
-            super::tabs::Tab::GraphQl => {}
-            super::tabs::Tab::OAuth => {}
-            super::tabs::Tab::Cluster => {}
-            super::tabs::Tab::Stress => {}
-            super::tabs::Tab::Report => {}
-            super::tabs::Tab::Nse => {}
-            super::tabs::Tab::Plugin => {}
-            super::tabs::Tab::Settings => {}
+            super::tabs::Tab::Resume => {
+                tracing::warn!("Resume tab: no exportable data (use original scan results)");
+            }
+            super::tabs::Tab::GraphQl => {
+                tracing::warn!("GraphQL tab: no exportable data available");
+            }
+            super::tabs::Tab::OAuth => {
+                tracing::warn!("OAuth tab: no exportable data available");
+            }
+            super::tabs::Tab::Cluster => {
+                tracing::warn!("Cluster tab: no exportable data available");
+            }
+            super::tabs::Tab::Stress => {
+                tracing::warn!("Stress tab: no exportable data available");
+            }
+            super::tabs::Tab::Report => {
+                tracing::warn!(
+                    "Report tab: use conversion endpoints (HTML/Markdown/SARIF) instead"
+                );
+            }
+            super::tabs::Tab::Nse => {
+                tracing::warn!("NSE tab: no exportable data available");
+            }
+            super::tabs::Tab::Plugin => {
+                tracing::warn!("Plugin tab: no exportable data available");
+            }
+            super::tabs::Tab::Settings => {
+                tracing::warn!("Settings tab: no exportable data available");
+            }
             super::tabs::Tab::History => {
                 if let Ok(h) = self.history.lock() {
                     let history_data = h.export();
                     self.save_export("history.json", history_data);
                 }
             }
-            super::tabs::Tab::Dashboard => {}
-            super::tabs::Tab::Proxy => {}
-            super::tabs::Tab::Packet => {}
-            super::tabs::Tab::Hunt => {}
-            super::tabs::Tab::Browser => {}
-            super::tabs::Tab::Compliance => {}
-            super::tabs::Tab::Storage => {}
-            super::tabs::Tab::Integrations => {}
-            super::tabs::Tab::Workflow => {}
-            super::tabs::Tab::Vuln => {}
+            super::tabs::Tab::Dashboard => {
+                tracing::warn!("Dashboard tab: no exportable data available");
+            }
+            super::tabs::Tab::Proxy => {
+                tracing::warn!("Proxy tab: no exportable data available");
+            }
+            super::tabs::Tab::Packet => {
+                tracing::warn!("Packet tab: no exportable data available");
+            }
+            super::tabs::Tab::Hunt => {
+                tracing::warn!("Hunt tab: no exportable data available");
+            }
+            super::tabs::Tab::Browser => {
+                tracing::warn!("Browser tab: no exportable data available");
+            }
+            super::tabs::Tab::Compliance => {
+                tracing::warn!("Compliance tab: no exportable data available");
+            }
+            super::tabs::Tab::Storage => {
+                tracing::warn!("Storage tab: no exportable data available");
+            }
+            super::tabs::Tab::Integrations => {
+                tracing::warn!("Integrations tab: no exportable data available");
+            }
+            super::tabs::Tab::Workflow => {
+                tracing::warn!("Workflow tab: no exportable data available");
+            }
+            super::tabs::Tab::Vuln => {
+                tracing::warn!("Vuln tab: no exportable data available");
+            }
         }
     }
 
@@ -230,24 +276,47 @@ impl super::App {
             .trim_end_matches(".json");
 
         let json_filename = format!("{}.json", base_name);
-        let json_path = format!("{}/{}", crate::constants::DEFAULT_EXPORT_DIR, json_filename);
+        let export_dir = self
+            .settings
+            .config
+            .as_ref()
+            .and_then(|c| c.paths.export_dir.as_deref())
+            .unwrap_or(crate::constants::DEFAULT_EXPORT_DIR);
+        let json_path = format!("{}/{}", export_dir, json_filename);
 
-        if let Ok(report) = load_scan_report(&json_path) {
-            let converted = match self.export_format {
-                OutputFormat::Html => crate::output::convert::convert_to_html(&report),
-                OutputFormat::Markdown => crate::output::convert::convert_to_markdown(&report),
-                OutputFormat::Sarif => crate::output::convert::convert_to_sarif(&report),
-                OutputFormat::Junit => crate::output::convert::convert_to_junit(&report),
-                _ => return,
-            };
-            self.save_export(filename, converted);
+        match load_scan_report(&json_path) {
+            Ok(report) => {
+                let converted = match self.export_format {
+                    OutputFormat::Html => crate::output::convert::convert_to_html(&report),
+                    OutputFormat::Markdown => crate::output::convert::convert_to_markdown(&report),
+                    OutputFormat::Sarif => crate::output::convert::convert_to_sarif(&report),
+                    OutputFormat::Junit => crate::output::convert::convert_to_junit(&report),
+                    _ => {
+                        tracing::warn!("Unsupported export format: {:?}", self.export_format);
+                        return;
+                    }
+                };
+                self.save_export(filename, converted);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Could not load JSON report for conversion ({}): {}",
+                    json_path,
+                    e
+                );
+            }
         }
     }
 
     fn save_export(&self, filename: &str, data: String) {
         use std::io::Write;
 
-        let export_dir = crate::constants::DEFAULT_EXPORT_DIR;
+        let export_dir = self
+            .settings
+            .config
+            .as_ref()
+            .and_then(|c| c.paths.export_dir.as_deref())
+            .unwrap_or(crate::constants::DEFAULT_EXPORT_DIR);
         let path = format!("{}/{}", export_dir, filename);
         let dir = std::path::Path::new(export_dir);
         if !dir.exists() {

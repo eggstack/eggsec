@@ -81,10 +81,11 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
     };
 
     if button == crossterm::event::MouseButton::Left {
+        let (term_width, _term_height) = crossterm::terminal::size().unwrap_or((80, 24));
         let tab_area = ratatui::layout::Rect {
-            x: 0,
+            x: 1,
             y: 1,
-            width: u16::MAX,
+            width: term_width.saturating_sub(2),
             height: 3,
         };
 
@@ -200,18 +201,29 @@ where
                             }
                             (KeyModifiers::NONE, KeyCode::Up) => {
                                 if let Some(ref mut palette) = app.command_palette {
-                                    palette.selected_index =
-                                        palette.selected_index.saturating_sub(1);
-                                    if palette.selected_index >= palette.results.len() {
-                                        palette.selected_index =
-                                            palette.results.len().saturating_sub(1);
+                                    if palette.selected_index > 0 {
+                                        palette.selected_index -= 1;
+                                    }
+                                    if palette.selected_index < palette.scroll_offset {
+                                        palette.scroll_offset = palette.selected_index;
                                     }
                                 }
                             }
                             (KeyModifiers::NONE, KeyCode::Down) => {
                                 if let Some(ref mut palette) = app.command_palette {
-                                    palette.selected_index = (palette.selected_index + 1)
-                                        .min(palette.results.len().saturating_sub(1));
+                                    let max_idx = palette.results.len().saturating_sub(1);
+                                    if palette.selected_index < max_idx {
+                                        palette.selected_index += 1;
+                                    }
+                                    let visible_height = 14usize;
+                                    let max_scroll =
+                                        palette.results.len().saturating_sub(visible_height);
+                                    if palette.selected_index
+                                        >= palette.scroll_offset + visible_height
+                                    {
+                                        palette.scroll_offset =
+                                            palette.scroll_offset.min(max_scroll) + 1;
+                                    }
                                 }
                             }
                             (KeyModifiers::NONE, KeyCode::Backspace) => {
@@ -237,14 +249,29 @@ where
                             }
                             (KeyModifiers::NONE, KeyCode::Tab) => {
                                 if let Some(ref mut palette) = app.command_palette {
-                                    palette.selected_index = (palette.selected_index + 1)
-                                        .min(palette.results.len().saturating_sub(1));
+                                    let max_idx = palette.results.len().saturating_sub(1);
+                                    if palette.selected_index < max_idx {
+                                        palette.selected_index += 1;
+                                    }
+                                    let visible_height = 14usize;
+                                    let max_scroll =
+                                        palette.results.len().saturating_sub(visible_height);
+                                    if palette.selected_index
+                                        >= palette.scroll_offset + visible_height
+                                    {
+                                        palette.scroll_offset =
+                                            palette.scroll_offset.min(max_scroll) + 1;
+                                    }
                                 }
                             }
                             (KeyModifiers::SHIFT, KeyCode::BackTab) => {
                                 if let Some(ref mut palette) = app.command_palette {
-                                    palette.selected_index =
-                                        palette.selected_index.saturating_sub(1);
+                                    if palette.selected_index > 0 {
+                                        palette.selected_index -= 1;
+                                    }
+                                    if palette.selected_index < palette.scroll_offset {
+                                        palette.scroll_offset = palette.selected_index;
+                                    }
                                 }
                             }
                             _ => {}

@@ -12,12 +12,12 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 | Metric | Value |
 |--------|-------|
 | Source files | 400 |
-| Library tests | ~560 passing, 2 failing |
+| Library tests | ~851 passing, 0 failing |
 | TUI files | 60 |
 | Tab variants | 29 |
 | Dispatch macros | 6 |
 | Doc coverage | ~8% |
-| Failing tests | 2 (`negative_tests.rs`) |
+| Failing tests | 0 |
 
 ### Key Gaps
 
@@ -800,27 +800,27 @@ Within each wave, blocks marked as parallel can be assigned to separate sub-agen
 
 | Wave | Focus | Items | Est. Effort | Dependencies | Status |
 |------|-------|-------|-------------|--------------|--------|
-| 1 | Critical Bug Fixes | 15 | ~4.5 hours | None | ✅ 97% complete |
-| 2 | Security & Error Handling | 10 | ~3 hours | None | ✅ 70% complete |
-| 3 | Code Quality | 15 | ~5.5 hours | Wave 1 recommended | ✅ 87% complete |
+| 1 | Critical Bug Fixes | 15 | ~4.5 hours | None | ✅ 100% complete |
+| 2 | Security & Error Handling | 10 | ~3 hours | None | ✅ 100% complete |
+| 3 | Code Quality | 15 | ~5.5 hours | Wave 1 recommended | ✅ 100% complete |
 | 4 | Architecture | 9 | ~12 hours | Wave 1 recommended | ⚠️ 4A done, 4B pending |
-| 5 | Recon/Fuzzer | 1 | ~3 hours | Wave 1 recommended | ❌ Not started |
-| 6 | Feature Completeness | 9 | ~6+ hours (excl. TBD) | None | ⚠️ 50% complete |
+| 5 | Recon/Fuzzer | 1 | ~3 hours | Wave 1 recommended | ✅ 100% complete |
+| 6 | Feature Completeness | 9 | ~6+ hours (excl. TBD) | None | ⚠️ 67% complete |
 | 7 | OpenClaw Integration | ~17 | ~20 hours | None | ✅ Complete |
-| 8 | Test Coverage | 7 | ~15.5 hours | Waves 1, 3 recommended | ⚠️ 50% complete |
+| 8 | Test Coverage | 7 | ~15.5 hours | Waves 1, 3 recommended | ✅ 86% complete |
 | 9 | Documentation | 4 | ~18.5 hours | None (benefits from all) | ⚠️ 67% complete |
-| 10 | Performance & Polish | 4 | ~1.75 hours | None | ✅ Complete |
+| 10 | Performance & Polish | 4 | ~1.75 hours | None | ✅ 100% complete |
 
 **Total estimated effort:** ~89.75+ hours (excluding Wave 6 stub tabs which need requirements)
-**Completed to date:** ~52% of all plan items
+**Completed to date:** ~82% of all plan items
 
 ## Success Metrics
 
 | Metric | Current | Target |
 |--------|---------|--------|
 | Failing tests | 0 | 0 |
-| Library tests | 609 (rest-api) / 557 (default) | 609+ |
-| Files with inline tests | 132/400 (33%) | 200/400 (50%) |
+| Library tests | 851 (default) | 851+ |
+| Files with inline tests | ~200/400 (50%) | 200/400 (50%) |
 | Doc coverage | ~8% | ~40% |
 | Unconditionally compiled stub modules | 0 | 0 |
 | Clippy warnings (default) | 0 | 0 |
