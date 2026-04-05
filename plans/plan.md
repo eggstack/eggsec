@@ -1,7 +1,8 @@
 # Consolidated Improvement Plan
 
-> Last updated: 2026-04-05 | Based on comprehensive codebase review
-> 400 source files | ~609 library tests | 29 tab variants | 60 TUI files
+> Last updated: 2026-04-05 | Based on comprehensive codebase review and verification
+> 400 source files | ~851 library tests | 29 tab variants | 60 TUI files
+> **Verification completed 2026-04-05** — all items audited against actual codebase
 
 ## Overview
 
@@ -28,15 +29,18 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 5. ~~Silent error swallowing in tool registry and TUI~~ ✅ Fixed
 6. ~~Type-level bugs (`u16` overflow, `&PathBuf` vs `&Path`)~~ ✅ Fixed
 7. ~~`ResponseSeverity` lacks `Ord`/`PartialOrd`~~ ✅ Fixed
-8. 67% of source files lack inline tests
-9. 8% documentation coverage
+8. ~~67% of source files lack inline tests~~ Partially addressed — recon (15 modules), 3 payload modules, 1 proxy module still lack tests
+9. ~~8% documentation coverage~~ Partially addressed — module docs done for fuzzer/scanner/recon/output; function docs still sparse
 10. ~~Unconditionally compiled stub modules (no CLI/TUI wiring)~~ ✅ Feature-gated (Wave 4A)
-11. ~~No OpenResponses API for OpenClaw integration~~ ✅ Implemented (Wave 7A)
-12. ~~OpenAI handler uses keyword matching; `FunctionCall.arguments` is always `{}`~~ ✅ Improved (Wave 7B)
-13. TUI dispatch uses 6 near-identical macros instead of trait-based dispatch
+11. ~~No OpenResponses API for OpenClaw integration~~ ✅ Implemented with unit tests; integration tests pending
+12. ~~OpenAI handler uses keyword matching; `FunctionCall.arguments` is always `{}`~~ ⚠️ Partially improved — structured results work but parameter extraction still stubbed
+13. TUI dispatch uses match-on-Tab instead of trait-based dispatch ⚠️ Macros removed but not replaced with trait dispatch (Wave 4B deferred)
 14. ~~Secret exposure in HTTP options popup~~ ✅ Fixed
 15. ~~Infinite hang in `run_packet_capture()`~~ ✅ Fixed
 16. ~~Duplicate subdomain enumeration in recon takeover check~~ ✅ Fixed
+17. `ai_routes.rs` and `agent_routes.rs` exist on disk but NOT wired into app (dead code)
+18. 4 stub tab workers (Storage, Integrations, Workflow, Vuln) still no-ops despite full UI implementation
+19. `run_compliance_task()` still uses hardcoded findings
 
 ---
 
@@ -233,9 +237,10 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 - **Fix:** Check if a task is already running before replacing channels. Abort old task or reject new spawn.
 - **Estimated effort:** 30 min
 
-#### C4. Fix mouse click tab area fragility
+#### C4. Fix mouse click tab area fragility ⚠️ NOT COMPLETED
 - **File:** `crates/slapper/src/tui/app/runner.rs:84-89`
 - **Problem:** Hardcoded `tab_area` rect (`y: 1, height: 3`) may not match actual rendered tab bar.
+- **Status:** Still uses hardcoded `y: 1, height: 3` magic numbers. `width` is derived from `term_width` but `y` and `height` remain constants.
 - **Fix:** Derive tab area from actual terminal dimensions or add a constant computed from layout constraints.
 - **Estimated effort:** 30 min
 
@@ -293,11 +298,11 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 - **Fix:** Either implement actual packet sending using raw sockets, or clearly mark as stub with user-facing message.
 - **Estimated effort:** 2 hours (if implementing) or 15 min (if marking as stub)
 
-#### B4. Add incremental progress to scanner and recon workers
+#### B4. Add incremental progress to scanner and recon workers ⚠️ PARTIALLY COMPLETED
 - **Files:** `crates/slapper/src/tui/workers/scanner.rs`, `crates/slapper/src/tui/workers/recon.rs`
 - **Problem:** Progress is only sent at completion (0% → 100% jump).
-- **Fix:** Send progress updates at meaningful intervals (per batch of ports, per recon stage).
-- **Estimated effort:** 1 hour
+- **Status:** Progress now sent at milestones (0%, 10%, 90%, 100%) — no longer a single jump. However, not truly per-item incremental (no per-batch-of-ports or per-recon-stage updates).
+- **Estimated effort remaining:** 30 min for full per-item progress
 
 #### B5. Fix `build_waf_stress_task()` reusing `TaskConfig::Fuzz`
 - **File:** `crates/slapper/src/tui/app/task_management.rs:145-169`
@@ -403,35 +408,38 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 
 ### Block B: Dispatch & Tab Abstraction
 
-#### B1. Consolidate 6 dispatch macros into trait-based dispatch
+#### B1. Consolidate 6 dispatch macros into trait-based dispatch ⚠️ PARTIALLY COMPLETED
 - **File:** `crates/slapper/src/tui/app/dispatch.rs`
 - **Problem:** 6 macros (`dispatch!`, `dispatch_void!`, `dispatch_bool!`, `dispatch_page!`, `dispatch_is_at_edge!`, `dispatch_reset!`) are near-identical ~40-line match expansions.
-- **Fix:** Replace with trait-based dispatch. Add methods on the `Tab` enum that delegate to the correct tab struct. This eliminates macros entirely and gives compile-time exhaustiveness checking.
-- **Estimated effort:** 4 hours
+- **Status:** All 6 macros have been removed. `dispatch.rs` is now a 3-line comment. However, dispatch is still done via inline `match self.current_tab` statements on `App`, not via trait-based polymorphism. The `TabState` and `TabRender` traits exist but are not used for dispatch.
+- **Estimated effort remaining:** 3 hours for full trait-based dispatch
 
-#### B2. Replace match-on-Tab in `handle_enter()` with trait dispatch
-- **File:** `crates/slapper/src/tui/app/mod.rs:226-368`
-- **Problem:** 142-line match statement. Each arm follows the same pattern.
+#### B2. Replace match-on-Tab in `handle_enter()` with trait dispatch ❌ NOT COMPLETED
+- **File:** `crates/slapper/src/tui/app/mod.rs:353-513`
+- **Problem:** 160-line `match self.current_tab` statement. Each arm follows the same pattern.
+- **Status:** Still a 160-line match statement. Same pattern applies to all handler methods (handle_escape, handle_char, handle_backspace, handle_up, handle_down, etc.).
 - **Fix:** After B1, this becomes a single method call on the current tab.
 - **Estimated effort:** 2 hours (depends on B1)
 
-#### B3. Replace match-on-Tab in `ui.rs` draw functions
-- **Files:** `crates/slapper/src/tui/ui.rs:260-403`, `ui.rs:405-531`, `ui.rs:546-670`
-- **Problem:** Three 100+ line match statements for rendering.
+#### B3. Replace match-on-Tab in `ui.rs` draw functions ❌ NOT COMPLETED
+- **Files:** `crates/slapper/src/tui/ui.rs:274-400`, `ui.rs:437-576`, `ui.rs:590-680+`
+- **Problem:** Three large match statements: `breadcrumb()` (~125 lines), `draw_content()` (~140 lines), status text (~60+ lines).
+- **Status:** All three match blocks remain. `TabRender` and `TabState` traits exist but are not wired into `ui.rs`.
 - **Fix:** Add `render_content()`, `breadcrumb()`, and `status_text()` methods to the `Tab` enum or a rendering trait.
 - **Estimated effort:** 3 hours (depends on B1)
 
-#### B4. Add `Tab` enum method for tab state access
+#### B4. Add `Tab` enum method for tab state access ❌ NOT COMPLETED
 - **File:** `crates/slapper/src/tui/app/mod.rs`
 - **Problem:** To access a tab's state, you need a match on `Tab` to get the right field from `App`.
+- **Status:** No `as_tab_state()` method exists. The `TabState` trait exists in `tabs/mod.rs` but is not wired up for state access.
 - **Fix:** Add a method like `fn as_tab_state(&self, app: &App) -> &dyn TabState` on the `Tab` enum.
 - **Estimated effort:** 2 hours
 
-#### B5. Replace `#[macro_use]` with modern macro system
+#### B5. Replace `#[macro_use]` with modern macro system ⚠️ PARTIALLY COMPLETED
 - **File:** `crates/slapper/src/tui/app/mod.rs:1`
 - **Problem:** Uses old-style `#[macro_use]` for macros.
-- **Fix:** After B1 (consolidating/removing macros), this becomes moot. If any macros remain, move them to a `macros` submodule.
-- **Estimated effort:** 15 min
+- **Status:** Dispatch macros removed. `#[macro_use]` still present in `fuzzer/payloads/mod.rs` for `payload_vec!` macro — this is intentional and unrelated to dispatch.
+- **Estimated effort:** Done for dispatch; remaining `#[macro_use]` is acceptable
 
 ---
 
@@ -459,33 +467,26 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 
 ### Block A: Stub Tab Implementation
 
-#### A1. Implement Storage tab functionality
+#### A1. Implement Storage tab functionality ⚠️ PARTIALLY COMPLETED
 - **Files:** `crates/slapper/src/tui/tabs/storage.rs`, `crates/slapper/src/tui/workers/security.rs:51-57`
-- **Problem:** Tab, task config, and worker are all stubs.
-- **Fix:** Define what "Storage" means (likely scan result storage/caching) and implement, or remove the tab.
-- **Estimated effort:** TBD
+- **Status:** Tab UI is fully implemented (521 lines, all traits, config/query inputs, mode selector, results view). Worker `run_storage_task` remains a stub — sends `TaskResult::Storage` without actual database operations.
 
-#### A2. Implement Integrations tab functionality
+#### A2. Implement Integrations tab functionality ⚠️ PARTIALLY COMPLETED
 - **Files:** `crates/slapper/src/tui/tabs/integrations.rs`, `crates/slapper/src/tui/workers/security.rs:59-65`
-- **Problem:** Stub implementation.
-- **Fix:** Define requirements or remove tab.
-- **Estimated effort:** TBD
+- **Status:** Tab UI is fully implemented (456 lines, tracker selector, 3 modes). Worker `run_integrations_task` remains a stub.
 
-#### A3. Implement Workflow tab functionality
+#### A3. Implement Workflow tab functionality ⚠️ PARTIALLY COMPLETED
 - **Files:** `crates/slapper/src/tui/tabs/workflow.rs`, `crates/slapper/src/tui/workers/security.rs:67-73`
-- **Problem:** Stub implementation.
-- **Fix:** Define requirements or remove tab.
-- **Estimated effort:** TBD
+- **Status:** Tab UI is fully implemented (477 lines, 5 modes, SLA calculation, real `WorkflowReport` generation). Worker `run_workflow_task` remains a stub.
 
-#### A4. Implement Vuln tab functionality
+#### A4. Implement Vuln tab functionality ⚠️ PARTIALLY COMPLETED
 - **Files:** `crates/slapper/src/tui/tabs/vuln.rs`, `crates/slapper/src/tui/workers/security.rs:75-81`
-- **Problem:** Stub implementation.
-- **Fix:** Define requirements or remove tab.
-- **Estimated effort:** TBD
+- **Status:** Tab UI is fully implemented (564 lines, 6 modes: CvssCalc, ExploitCheck, AssetAssess, Prioritize, Triage, Remediation). Uses real types from `crate::vuln`. Worker `run_vuln_task` remains a stub.
 
-#### A5. Implement real `run_compliance_task()`
+#### A5. Implement real `run_compliance_task()` ❌ NOT COMPLETED
 - **File:** `crates/slapper/src/tui/workers/security.rs:34-49`
 - **Problem:** Uses hardcoded `vec![Severity::High, Severity::Medium, Severity::Low]` for findings.
+- **Status:** Still hardcoded. Not derived from actual scan results or target analysis.
 - **Fix:** Generate findings from actual scan results or target analysis.
 - **Estimated effort:** 2 hours
 
@@ -509,9 +510,10 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 - **Fix:** Implement fuzzy matching (subsequence matching) and sort results by relevance.
 - **Estimated effort:** 1 hour
 
-#### B4. Fix `InputGroup::handle_tab()` conflicts with global Tab key
-- **File:** `crates/slapper/src/tui/components/input.rs:420-427`
+#### B4. Fix `InputGroup::handle_tab()` conflicts with global Tab key ❌ NOT COMPLETED
+- **File:** `crates/slapper/src/tui/components/input.rs:430-439`
 - **Problem:** Tab key is used for both autocomplete (in InputGroup) and focus navigation (global).
+- **Status:** `handle_tab()` still uses Tab for autocomplete. Returns `false` when no suggestions exist (could allow fallthrough), but no alternative key binding introduced.
 - **Fix:** Use a different key for autocomplete (e.g., `Ctrl+Space` or `Down` arrow). Or make Tab do autocomplete when suggestions exist, focus navigation otherwise.
 - **Estimated effort:** 30 min
 
@@ -556,49 +558,46 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 - Return structured JSON results (findings count, target info, evidence, remediation)
 - **Estimated effort:** 2 hours
 
-#### A6. Tests
-- 15+ integration tests covering: non-streaming/streaming requests, tool matching, target extraction, auth rejection, rate limiting, error responses, body wrapper normalization, `previous_response_id`, `tool_choice` modes, extensible item types
+#### A6. Tests ⚠️ NOT COMPLETED
+- **Status:** Unit tests exist in `handlers.rs` (6 tests: input_to_string, extract_target, severity_to_string, constant_time_eq). **No integration tests** in `crates/slapper/tests/` for OpenResponses.
+- **Fix needed:** 15+ integration tests covering: non-streaming/streaming requests, tool matching, target extraction, auth rejection, rate limiting, error responses, body wrapper normalization, `previous_response_id`, `tool_choice` modes, extensible item types
 - **Estimated effort:** 2 hours
 
 ### Block B: Fix OpenAI Chat Completions & Add Model Discovery
 
-#### B1. Improve OpenAI tool calling
+#### B1. Improve OpenAI tool calling ⚠️ PARTIALLY COMPLETED
 - **File:** `crates/slapper/src/tool/protocol/openai/handlers.rs`
-- **Problems:** Naive keyword matching, `FunctionCall.arguments` always `{}`, plain text results, no parameter extraction
-- **Fix:** Parameter extraction from queries, structured JSON results, smarter matching using capability descriptions, multi-step execution support
-- **Estimated effort:** 3 hours
+- **Status:** Tool matching via `find_matching_tools()` works. Tool execution with structured results works. Tool calls returned in response. **However**, parameter extraction is stubbed — `FunctionCall.arguments` is always `serde_json::json!({}).to_string()` (empty JSON object). No actual parameter extraction from user query.
+- **Fix needed:** Extract parameters from queries, populate `FunctionCall.arguments` with real JSON.
+- **Estimated effort remaining:** 2 hours
 
 #### B2. Add `/v1/models` and `/v1/models/{model_id}` endpoints
 - **New file:** `tool/protocol/openai/models.rs`
 - **Modify:** `tool/protocol/openai/mod.rs` to add routes
 - **Estimated effort:** 1 hour
 
-#### B3. Tests
-- Parameter extraction, structured result serialization, model endpoint responses
+#### B3. Tests ❌ NOT COMPLETED
+- **Status:** Zero tests in `openai/handlers.rs` (315 lines, no `#[cfg(test)]`). Zero tests in `openai/models.rs` (110 lines). No integration tests reference OpenAI handlers or models.
+- **Fix needed:** Tests for parameter extraction, structured result serialization, model endpoint responses
 - **Estimated effort:** 1 hour
 
 ### Block C: Expose AI Features via HTTP
 
 **Feature gate:** `rest-api` + `ai-integration`
 
-#### C1. AI analysis endpoints
-- **New file:** `tool/protocol/ai_routes.rs`
-- **Endpoints:**
-  | Method | Path | Maps To |
-  |---|---|---|
-  | POST | `/api/v1/ai/analyze` | `AiClient::analyze_findings()` |
-  | POST | `/api/v1/ai/suggest-payloads` | `AiClient::suggest_payloads()` |
-  | POST | `/api/v1/ai/waf-bypass` | `AiClient::suggest_waf_bypass()` |
-  | POST | `/api/v1/ai/scan-strategy` | `AdaptiveScanEngine::adjust_strategy()` |
-  | GET | `/api/v1/ai/circuit-breaker` | `AiClient::circuit_breaker_state()` |
-- **Estimated effort:** 2 hours
+#### C1. AI analysis endpoints ⚠️ FILE EXISTS BUT NOT WIRED
+- **New file:** `tool/protocol/ai_routes.rs` (185 lines, 6 endpoints defined)
+- **CRITICAL ISSUE:** The file is **NOT declared as a module** in `tool/protocol/mod.rs`. `grep` for `ai_routes` across `src/` returns zero results. Dead code — never compiled or mounted.
+- **Fix needed:** Add `pub mod ai_routes;` (with `#[cfg(feature = "rest-api")]`) in `tool/protocol/mod.rs` and merge router into main application.
 
-#### C2. AI config validation endpoint
-- `POST /api/v1/ai/validate-config`
-- **Estimated effort:** 30 min
+#### C2. AI config validation endpoint ⚠️ IMPLEMENTED IN FILE BUT NOT WIRED
+- `POST /api/v1/ai/validate-config` implemented in `ai_routes.rs` (lines 134-175)
+- **Same wiring issue as C1** — file is not declared as module, so this endpoint is unreachable.
+- **Fix needed:** Wire module declaration and mount router (done as part of C1 fix).
 
-#### C3. Tests
-- Each endpoint with valid/invalid inputs, circuit breaker state transitions, graceful degradation
+#### C3. Tests ❌ NOT COMPLETED
+- **Status:** Zero tests in `ai_routes.rs`. No integration tests reference AI routes.
+- **Fix needed:** Tests for each endpoint with valid/invalid inputs, circuit breaker state transitions, graceful degradation
 - **Estimated effort:** 1.5 hours
 
 ### Block D: OpenClaw SKILL.md
@@ -614,17 +613,19 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 
 ### Block E: Agent Registry HTTP Endpoints (Optional)
 
-#### E1. Agent management endpoints
-- **New file:** `tool/protocol/agent_routes.rs`
-- CRUD for agents: POST/GET/DELETE `/api/v1/agents`, heartbeat, delegation
-- **Estimated effort:** 2 hours
+#### E1. Agent management endpoints ⚠️ FILE EXISTS BUT NOT WIRED
+- **New file:** `tool/protocol/agent_routes.rs` (252 lines, 5 agent endpoints + 4 task endpoints)
+- **CRITICAL ISSUE:** The file is **NOT declared as a module** in `tool/protocol/mod.rs`. `grep` for `agent_routes` across `src/` returns zero results. Dead code — never compiled or mounted.
+- **Fix needed:** Add `pub mod agent_routes;` (with `#[cfg(feature = "rest-api")]`) in `tool/protocol/mod.rs` and merge router into main application.
 
-#### E2. Task management endpoints
-- Task lifecycle: POST/GET `/api/v1/tasks`, cancel, get result
-- **Estimated effort:** 1.5 hours
+#### E2. Task management endpoints ⚠️ IMPLEMENTED IN FILE BUT NOT WIRED
+- Task lifecycle: POST/GET `/api/v1/tasks`, cancel, get result — defined in `agent_routes.rs`
+- **Same wiring issue as E1** — file is not declared as module.
+- **Fix needed:** Wire module declaration and mount router (done as part of E1 fix).
 
-#### E3. Tests
-- Full CRUD, task lifecycle, delegation flow
+#### E3. Tests ❌ NOT COMPLETED
+- **Status:** Zero tests in `agent_routes.rs`. No integration tests reference agent/task routes.
+- **Fix needed:** Full CRUD, task lifecycle, delegation flow tests
 - **Estimated effort:** 1.5 hours
 
 ---
@@ -637,10 +638,11 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 
 ### Block A: Fuzzer Tests
 
-#### A1. Add tests for fuzzer payload modules (14 files)
-- **Files:** `crates/slapper/src/fuzzer/payloads/` — headers, compression, redos, websocket, macros, deser, oauth, soap, redirect, cache, idor, gRPC
+#### A1. Add tests for fuzzer payload modules ❌ NOT COMPLETED
+- **Files:** `crates/slapper/src/fuzzer/payloads/` — 23 payload modules + `mod.rs`
+- **Status:** 21 of 23 payload modules have `#[cfg(test)]`. **3 modules lack tests:** `csv.rs`, `grpc.rs`, `host.rs`.
 - **Fix:** Add `#[cfg(test)]` modules with payload count checks, content validation, macro expansion tests
-- **Estimated effort:** 3 hours
+- **Estimated effort:** 30 min
 
 #### A2. Add tests for fuzzer engine modules (6 files)
 - **Files:** `crates/slapper/src/fuzzer/engine/` — core, utils, advanced, execution, types
@@ -649,10 +651,11 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 
 ### Block B: Infrastructure Tests
 
-#### B1. Add tests for proxy modules (6 files)
+#### B1. Add tests for proxy modules ⚠️ NOT COMPLETED
 - **Files:** `crates/slapper/src/proxy/` — http_connect, pool, config, health, rotator, socks
-- **Fix:** Add tests for pool management, health checking, rotation strategies, SOCKS parsing, config serialization
-- **Estimated effort:** 2 hours
+- **Status:** 6 of 7 files have `#[cfg(test)]`. **`http_connect.rs` lacks tests.**
+- **Fix:** Add tests for HTTP CONNECT handling, tunnel establishment, error cases
+- **Estimated effort:** 30 min
 
 #### B2. Add tests for scanner modules (3 files)
 - **Files:** `crates/slapper/src/scanner/` — udp_fingerprint, icmp_probe, mod
@@ -666,9 +669,10 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 
 ### Block C: Recon & Output Tests
 
-#### C1. Add tests for recon modules
-- **Files:** `crates/slapper/src/recon/` — runner.rs (~340-line function), various submodules
-- **Fix:** Add tests for `run_full_recon()` stage ordering, subdomain merging, tech detection, CORS, email security
+#### C1. Add tests for recon modules ❌ NOT COMPLETED
+- **Files:** `crates/slapper/src/recon/` — 28 files total
+- **Status:** 12 files have `#[cfg(test)]`. **15 implementation modules lack tests:** `asn.rs`, `content.rs`, `cors.rs`, `cve.rs`, `cve_lookup.rs`, `dns_enhanced.rs`, `dns_records.rs`, `email.rs`, `js.rs`, `reverse_dns.rs`, `runner.rs`, `ssl.rs`, `subdomain.rs`, `techdetect.rs`, `threatintel.rs`, `wayback.rs`. (`mod.rs`, `spinner.rs` are infrastructure.)
+- **Fix:** Add tests for each recon stage: subdomain merging, tech detection, CORS, email security, SSL cert parsing, CVE lookups, etc.
 - **Estimated effort:** 3 hours
 
 #### C2. Add tests for output modules
@@ -686,16 +690,18 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 
 ### Block A: Module Documentation
 
-#### A1. Add module-level documentation
+#### A1. Add module-level documentation ⚠️ NOT COMPLETED
 - **Scope:** All 39+ top-level modules
-- **Fix:** Add `//!` module docs with purpose, public API, and examples
+- **Status:** Module docs done for fuzzer, scanner, recon, output. **`tool/mod.rs` has zero `//!` module docs** — it's a major public API module that starts directly with `pub mod` declarations.
+- **Fix:** Add `//!` module docs with purpose, public API, and examples to remaining modules.
 - **Priority order:** Public API modules → Infrastructure → Feature-gated → Internal
-- **Estimated effort:** 6 hours
+- **Estimated effort remaining:** 4 hours
 
 ### Block B: Function Documentation
 
-#### B1. Add doc comments to public functions
+#### B1. Add doc comments to public functions ❌ NOT COMPLETED
 - **Scope:** 3,226+ public items, ~8% documented
+- **Status:** Core public APIs remain undocumented: `FuzzEngine` struct and all its methods (core.rs), `run_full_recon()` and public functions (runner.rs), `McpServer` struct and all methods (handlers.rs). Private helpers in runner.rs have docs, but public entry points do not.
 - **Fix strategy:** Prioritize public API (full docs with `# Examples` and `# Errors`), then `pub(crate)` (brief one-liners)
 - **Target:** Raise doc coverage from 8% to 40%
 - **Estimated effort:** 12 hours
@@ -723,15 +729,17 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 
 ### Block A: Performance Optimizations
 
-#### A1. Avoid cloning `command_palette_entries` on every open
+#### A1. Avoid cloning `command_palette_entries` on every open ❌ NOT COMPLETED
 - **File:** `crates/slapper/src/tui/app/command.rs:4-21`
 - **Problem:** Clones `Vec<CommandPaletteResult>` with 37 items on every open.
-- **Fix:** Store entries as `&'static` references or use `Arc`. Keep single copy in `HelpManager`.
+- **Status:** `command.rs` lines 11 and 19 still call `.clone()` on the full `Vec`. `HelpManager` stores entries as `Arc<Vec<...>>` and returns `&Arc`, but `CommandPalette.results` expects `Vec`, forcing a clone of the underlying data.
+- **Fix:** Make `CommandPalette.results` hold an `Arc<Vec<...>>` or use `&'static` references.
 - **Estimated effort:** 20 min
 
-#### A2. Optimize `ScrollableText` render allocation
+#### A2. Optimize `ScrollableText` render allocation ❌ NOT COMPLETED
 - **File:** `crates/slapper/src/tui/components/scrollable.rs:108-114`
 - **Problem:** `.cloned().collect()` allocates a new `Vec<Line>` on every render frame.
+- **Status:** Still allocates a new `Vec<Line>` with `.clone()` per frame (lines 113-116). `with_capacity` avoids reallocation during growth, but the Vec and Line clones are fresh every frame.
 - **Fix:** Use pre-allocated buffer or render directly from iterator.
 - **Estimated effort:** 30 min
 
@@ -798,40 +806,70 @@ Within each wave, blocks marked as parallel can be assigned to separate sub-agen
 
 ## Summary
 
+> **Verification completed 2026-04-05** — every item audited against actual codebase.
+> The previous "~95% complete" claim was inaccurate. Actual completion is ~67% fully done, ~8% partial, ~25% not done.
+
 | Wave | Focus | Items | Est. Effort | Dependencies | Status |
 |------|-------|-------|-------------|--------------|--------|
-| 1 | Critical Bug Fixes | 15 | ~4.5 hours | None | ✅ 100% complete |
-| 2 | Security & Error Handling | 10 | ~3 hours | None | ✅ 100% complete |
-| 3 | Code Quality | 15 | ~5.5 hours | Wave 1 recommended | ✅ 100% complete |
-| 4 | Architecture | 9 | ~12 hours | Wave 1 recommended | ⚠️ 4A done, 4B pending |
-| 5 | Recon/Fuzzer | 1 | ~3 hours | Wave 1 recommended | ✅ 100% complete |
-| 6 | Feature Completeness | 9 | ~6+ hours (excl. TBD) | None | ⚠️ 67% complete |
-| 7 | OpenClaw Integration | ~17 | ~20 hours | None | ✅ Complete |
-| 8 | Test Coverage | 7 | ~15.5 hours | Waves 1, 3 recommended | ✅ 86% complete |
-| 9 | Documentation | 4 | ~18.5 hours | None (benefits from all) | ⚠️ 67% complete |
-| 10 | Performance & Polish | 4 | ~1.75 hours | None | ✅ 100% complete |
+| 1 | Critical Bug Fixes | 15 | ~4.5 hours | None | ✅ 100% complete (15/15) |
+| 2 | Security & Error Handling | 10 | ~3 hours | None | ⚠️ 90% complete (9/10, C4 deferred) |
+| 3 | Code Quality | 15 | ~5.5 hours | Wave 1 recommended | ⚠️ 93% complete (14/100%, B4 partial) |
+| 4 | Architecture | 9 | ~12 hours | Wave 1 recommended | ⚠️ 56% complete (4A done, 4B deferred) |
+| 5 | Recon/Fuzzer | 1 | ~3 hours | Wave 1 recommended | ✅ 100% complete (1/1) |
+| 6 | Feature Completeness | 9 | ~6+ hours (excl. TBD) | None | ⚠️ 44% complete (3 done, 4 partial UI-only, 2 not done) |
+| 7 | OpenClaw Integration | 17 | ~20 hours | None | ⚠️ 41% complete (7 done, 1 partial, 9 not done) |
+| 8 | Test Coverage | 7 | ~15.5 hours | Waves 1, 3 recommended | ⚠️ 57% complete (4 done, 3 not done) |
+| 9 | Documentation | 4 | ~18.5 hours | None (benefits from all) | ⚠️ 50% complete (2 done, 2 not done) |
+| 10 | Performance & Polish | 4 | ~1.75 hours | None | ⚠️ 50% complete (2 done, 2 not done) |
 
-**Total estimated effort:** ~89.75+ hours (excluding Wave 6 stub tabs which need requirements)
-**Completed to date:** ~82% of all plan items
+**Total items:** 91 | **Fully complete:** 61 (67%) | **Partial:** 8 (9%) | **Not done:** 22 (24%)
+
+### Remaining work by priority
+
+**Critical (should be done next):**
+1. **Wave 7C/E:** Wire `ai_routes.rs` and `agent_routes.rs` into `tool/protocol/mod.rs` — currently dead code
+2. **Wave 7A6/B3/C3/E3:** Add integration tests for all new API modules (OpenResponses, OpenAI, AI routes, agent routes)
+3. **Wave 7B1:** Implement OpenAI parameter extraction (currently always `{}`)
+
+**High priority:**
+4. **Wave 4B:** Complete dispatch refactor — macros removed but match-on-Tab remains in `handle_enter()`, `ui.rs` draw functions
+5. **Wave 6A5:** Fix `run_compliance_task()` hardcoded findings
+6. **Wave 8C1:** Add tests for 15 recon modules (largest test gap)
+
+**Medium priority:**
+7. **Wave 6A1–A4:** Implement stub workers for Storage, Integrations, Workflow, Vuln tabs (UIs complete)
+8. **Wave 8A1/B1:** Add tests for 3 payload modules + `http_connect.rs`
+9. **Wave 9B1:** Add doc comments to core public functions (`FuzzEngine`, `run_full_recon`, `McpServer`)
+
+**Low priority (polish):**
+10. **Wave 2C4:** Derive mouse click tab area from layout instead of hardcoded constants
+11. **Wave 3B4:** Add per-item incremental progress to scanner/recon workers (currently milestone-based)
+12. **Wave 6B4:** Resolve Tab key conflict in `InputGroup`
+13. **Wave 9A1:** Add module-level docs to `tool/mod.rs` and remaining modules
+14. **Wave 10A1:** Avoid cloning `command_palette_entries` on every open
+15. **Wave 10A2:** Optimize `ScrollableText` render allocation
 
 ## Success Metrics
 
-| Metric | Current | Target |
-|--------|---------|--------|
-| Failing tests | 0 | 0 |
-| Library tests | 851 (default) | 851+ |
-| Files with inline tests | ~200/400 (50%) | 200/400 (50%) |
-| Doc coverage | ~8% | ~40% |
-| Unconditionally compiled stub modules | 0 | 0 |
-| Clippy warnings (default) | 0 | 0 |
-| Clippy warnings (rest-api) | 12 (pre-existing) | 0 |
-| Silent error swallowing sites | 0 | 0 |
-| Type-level bugs (overflow, wrong types) | 0 | 0 |
-| OpenResponses API | Implemented with 6 tests | Implemented with tests |
-| `/v1/models` endpoint | Implemented | Implemented |
-| AI routes (`/api/v1/ai/*`) | Implemented | Implemented |
-| Agent/task routes | Implemented | Implemented |
-| SKILL.md for OpenClaw | Created | Created |
+| Metric | Current | Target | Status |
+|--------|---------|--------|--------|
+| Failing tests | 0 | 0 | ✅ |
+| Library tests | ~851 (default) | 851+ | ✅ |
+| Files with inline tests | ~350/400 (87%) | 400/400 (100%) | ⚠️ 19 modules lack tests (3 payload, 1 proxy, 15 recon) |
+| Doc coverage | ~8% | ~40% | ⚠️ Module docs done for key modules; function docs still sparse |
+| Unconditionally compiled stub modules | 0 | 0 | ✅ |
+| Clippy warnings (default) | 0 | 0 | ✅ |
+| Clippy warnings (rest-api) | 12 (pre-existing) | 0 | ❌ Still 12 pre-existing warnings |
+| Silent error swallowing sites | 0 | 0 | ✅ |
+| Type-level bugs (overflow, wrong types) | 0 | 0 | ✅ |
+| OpenResponses API | Unit tests only | Integration tests | ⚠️ 6 unit tests, 0 integration tests |
+| `/v1/models` endpoint | Implemented | Implemented | ✅ |
+| AI routes (`/api/v1/ai/*`) | File exists, NOT wired | Implemented | ❌ Dead code — not declared as module |
+| Agent/task routes | File exists, NOT wired | Implemented | ❌ Dead code — not declared as module |
+| SKILL.md for OpenClaw | Created | Created | ✅ |
+| OpenAI parameter extraction | Stubbed (`{}`) | Real extraction | ⚠️ Always returns empty JSON |
+| Dispatch macros | Removed | Trait-based dispatch | ⚠️ Macros gone, but match-on-Tab remains |
+| Stub tab workers | 4 stubs | Real implementations | ⚠️ UIs complete, workers still no-ops |
 
 ## Risks & Mitigations
 
@@ -868,18 +906,21 @@ The `full` feature should include all new flags.
 
 ## File Change Summary
 
+### Completed changes
+
 | Action | File | Wave |
 |--------|------|------|
 | **Modify** | `crates/slapper/tests/negative_tests.rs` | 1A |
-| **Modify** | `crates/slapper/src/tui/components/input.rs` | 1B, 6B |
-| **Modify** | `crates/slapper/src/tui/app/runner.rs` | 1B, 1D, 2C |
+| **Modify** | `crates/slapper/src/tui/components/input.rs` | 1B |
+| **Modify** | `crates/slapper/src/tui/app/runner.rs` | 1B, 1D |
 | **Modify** | `crates/slapper/src/scanner/ports/mod.rs` | 1C |
 | **Modify** | `crates/slapper/src/fuzzer/engine/core.rs` | 1C |
+| **Modify** | `crates/slapper/src/fuzzer/grammar.rs` | 1C (new file) |
 | **Modify** | `crates/slapper/src/output/convert.rs` | 1C |
 | **Modify** | `crates/slapper/src/config/settings.rs` | 1C |
 | **Modify** | `crates/slapper/src/tui/workers/network.rs` | 1D, 3B |
-| **Modify** | `crates/slapper/src/tui/app/mod.rs` | 1D, 3B, 4B |
-| **Modify** | `crates/slapper/src/tui/ui.rs` | 1D, 2A, 3B, 4B, 6B |
+| **Modify** | `crates/slapper/src/tui/app/mod.rs` | 1D, 3B |
+| **Modify** | `crates/slapper/src/tui/ui.rs` | 1D, 2A, 3B |
 | **Modify** | `crates/slapper/src/recon/runner.rs` | 1E, 5A |
 | **Modify** | `crates/slapper/src/waf/mod.rs` | 1E |
 | **Modify** | `crates/slapper/src/tui/app/export.rs` | 2C, 10A |
@@ -889,7 +930,7 @@ The `full` feature should include all new flags.
 | **Modify** | `crates/slapper/src/utils/scope.rs` | 2B |
 | **Modify** | `crates/slapper/src/tool/response.rs` | 2B, 3C |
 | **Modify** | `crates/slapper/src/tool/mod.rs` | 2B |
-| **Modify** | `crates/slapper/src/tui/components/scrollable.rs` | 3A, 10A |
+| **Modify** | `crates/slapper/src/tui/components/scrollable.rs` | 3A |
 | **Modify** | `crates/slapper/src/tui/components/selector.rs` | 3A |
 | **Modify** | `crates/slapper/src/tui/workers/api.rs` | 3B |
 | **Modify** | `crates/slapper/src/tui/workers/fuzzer.rs` | 3B |
@@ -900,16 +941,14 @@ The `full` feature should include all new flags.
 | **Modify** | `crates/slapper/src/lib.rs` | 4A |
 | **Modify** | `crates/slapper/src/cli/mod.rs` | 4A |
 | **Modify** | `crates/slapper/src/tui/tabs/mod.rs` | 4A |
-| **Create** | `crates/slapper/src/constants.rs` entries | 4A |
+| **Modify** | `crates/slapper/src/constants.rs` | 4A |
 | **Modify** | `crates/slapper/src/tui/workers/security.rs` | 6A |
 | **Modify** | `crates/slapper/src/tui/help.rs` | 6B |
 | **Modify** | `crates/slapper/src/tui/app/navigation.rs` | 10A |
-| **Modify** | `crates/slapper/src/tui/app/command.rs` | 10A |
 | **Create** | `crates/slapper/src/tool/protocol/openresponses/mod.rs` | 7A |
 | **Create** | `crates/slapper/src/tool/protocol/openresponses/types.rs` | 7A |
 | **Create** | `crates/slapper/src/tool/protocol/openresponses/handlers.rs` | 7A |
 | **Modify** | `crates/slapper/src/tool/protocol/mod.rs` | 7A |
-| **Modify** | `crates/slapper/src/tool/protocol/mcp/routes.rs` | 7A |
 | **Modify** | `crates/slapper/src/tool/protocol/openai/handlers.rs` | 7B |
 | **Create** | `crates/slapper/src/tool/protocol/openai/models.rs` | 7B |
 | **Modify** | `crates/slapper/src/tool/protocol/openai/mod.rs` | 7B |
@@ -917,3 +956,32 @@ The `full` feature should include all new flags.
 | **Create** | `skills/slapper-security/SKILL.md` | 7D |
 | **Create** | `skills/slapper-security/INSTALL.md` | 7D |
 | **Create** | `crates/slapper/src/tool/protocol/agent_routes.rs` | 7E |
+
+### Remaining changes needed
+
+| Action | File | Wave | Item |
+|--------|------|------|------|
+| **Modify** | `crates/slapper/src/tui/app/runner.rs` | 2C | C4 — derive tab area from layout |
+| **Modify** | `crates/slapper/src/tui/workers/scanner.rs` | 3B | B4 — per-item incremental progress |
+| **Modify** | `crates/slapper/src/tui/workers/recon.rs` | 3B | B4 — per-item incremental progress |
+| **Modify** | `crates/slapper/src/tui/app/mod.rs` | 4B | B1–B4 — trait-based dispatch |
+| **Modify** | `crates/slapper/src/tui/ui.rs` | 4B | B3 — trait-based draw functions |
+| **Modify** | `crates/slapper/src/tui/workers/security.rs` | 6A | A5 — real compliance findings |
+| **Modify** | `crates/slapper/src/tui/components/input.rs` | 6B | B4 — Tab key conflict |
+| **Modify** | `crates/slapper/src/tool/protocol/mod.rs` | 7C/E | C1/E1 — wire ai_routes and agent_routes |
+| **Modify** | `crates/slapper/src/tool/protocol/openai/handlers.rs` | 7B | B1 — parameter extraction |
+| **Create** | `crates/slapper/tests/openresponses_tests.rs` | 7A | A6 — integration tests |
+| **Create** | `crates/slapper/tests/openai_tests.rs` | 7B | B3 — tests |
+| **Create** | `crates/slapper/tests/ai_routes_tests.rs` | 7C | C3 — tests |
+| **Create** | `crates/slapper/tests/agent_routes_tests.rs` | 7E | E3 — tests |
+| **Modify** | `crates/slapper/src/fuzzer/payloads/csv.rs` | 8A | A1 — add tests |
+| **Modify** | `crates/slapper/src/fuzzer/payloads/grpc.rs` | 8A | A1 — add tests |
+| **Modify** | `crates/slapper/src/fuzzer/payloads/host.rs` | 8A | A1 — add tests |
+| **Modify** | `crates/slapper/src/proxy/http_connect.rs` | 8B | B1 — add tests |
+| **Modify** | `crates/slapper/src/recon/*.rs` (15 files) | 8C | C1 — add tests |
+| **Modify** | `crates/slapper/src/tool/mod.rs` | 9A | A1 — add module-level docs |
+| **Modify** | `crates/slapper/src/fuzzer/engine/core.rs` | 9B | B1 — add function docs |
+| **Modify** | `crates/slapper/src/recon/runner.rs` | 9B | B1 — add function docs |
+| **Modify** | `crates/slapper/src/tool/protocol/mcp/handlers.rs` | 9B | B1 — add function docs |
+| **Modify** | `crates/slapper/src/tui/app/command.rs` | 10A | A1 — avoid Vec clone |
+| **Modify** | `crates/slapper/src/tui/components/scrollable.rs` | 10A | A2 — optimize render allocation |
