@@ -1,7 +1,7 @@
 //! Web Application Firewall (WAF) detection and bypass
 //!
 //! This module provides comprehensive WAF testing capabilities including:
-//! - Detection of 30+ WAF products (Cloudflare, AWS WAF, ModSecurity, etc.)
+//! - Detection of 26 WAF products (Cloudflare, AWS WAF, ModSecurity, etc.)
 //! - Bypass techniques (header manipulation, encoding, smuggling)
 //! - WAF stress testing with multiple attack vectors
 //! - Profile-based testing for specific WAF products

@@ -427,13 +427,15 @@ impl InputGroup {
         }
     }
 
-    pub fn handle_tab(&mut self) {
+    pub fn handle_tab(&mut self) -> bool {
         if let Some(idx) = self.focused {
             let suggestions = self.fields[idx].get_autocomplete_suggestions();
             if let Some(first) = suggestions.first() {
                 self.fields[idx].apply_autocomplete(first);
+                return true;
             }
         }
+        false
     }
 
     pub fn move_left(&mut self) -> bool {

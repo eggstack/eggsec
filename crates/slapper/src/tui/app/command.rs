@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::tui::help::CommandPalette;
 
 impl super::App {
@@ -23,7 +25,7 @@ impl super::App {
     pub(super) fn update_command_palette_query(&mut self, query: &str) {
         if let Some(ref mut palette) = self.command_palette {
             palette.query = query.to_string();
-            palette.results = self.help_manager.search_commands(query);
+            palette.results = Arc::new(self.help_manager.search_commands(query));
             palette.selected_index = 0;
         }
     }

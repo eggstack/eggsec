@@ -7,6 +7,8 @@
 pub const PROJECT_QUALIFIER: &str = "tools";
 pub const PROJECT_NAME: &str = "slapper";
 
+pub const DEFAULT_EXPORT_DIR: &str = "./exports";
+
 pub const DEFAULT_REMOTE_PORT: u16 = 7890;
 pub const DEFAULT_TRACEROUTE_PORT: u16 = 33434;
 pub const DEFAULT_PROXY_TIMEOUT_MS: u64 = 10000;

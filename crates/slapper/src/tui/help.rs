@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::tui::Tab;
 
@@ -37,7 +38,7 @@ pub struct HelpCommand {
 pub struct CommandPalette {
     pub visible: bool,
     pub query: String,
-    pub results: Vec<CommandPaletteResult>,
+    pub results: Arc<Vec<CommandPaletteResult>>,
     pub selected_index: usize,
 }
 
@@ -53,7 +54,7 @@ pub struct CommandPaletteResult {
 pub struct HelpContent {
     pub sections: HashMap<Tab, HelpSection>,
     pub global_commands: Vec<HelpCommand>,
-    pub command_palette_entries: Vec<CommandPaletteResult>,
+    pub command_palette_entries: Arc<Vec<CommandPaletteResult>>,
 }
 
 pub struct HelpManager {
@@ -77,7 +78,7 @@ impl HelpManager {
         &self.content.global_commands
     }
 
-    pub fn get_command_palette_entries(&self) -> &Vec<CommandPaletteResult> {
+    pub fn get_command_palette_entries(&self) -> &Arc<Vec<CommandPaletteResult>> {
         &self.content.command_palette_entries
     }
 
@@ -500,7 +501,7 @@ impl Default for HelpContent {
                     category: "Navigation".to_string(),
                 },
             ],
-            command_palette_entries: vec![
+            command_palette_entries: Arc::new(vec![
                 CommandPaletteResult {
                     command: "quit".to_string(),
                     description: "Exit the application".to_string(),
@@ -711,7 +712,7 @@ impl Default for HelpContent {
                     category: "Settings".to_string(),
                     shortcut: None,
                 },
-            ],
+            ]),
         }
     }
 }

@@ -29,11 +29,14 @@
 //! ## Feature Flags
 //!
 //! - `default` - Core scanning, fuzzing, WAF, load testing
-//! - `stress-testing` - DoS tools, proxy management
+//! - `tool-api` - Tool abstraction layer (always enabled internally)
+//! - `stress-testing` - DoS tools, proxy management, raw sockets
 //! - `packet-inspection` - Live packet capture, traceroute
 //! - `python-plugins` / `ruby-plugins` - Plugin language support
+//! - `all-plugins` - All plugin languages combined
 //! - `rest-api` / `grpc-api` - API server integration
 //! - `nse` - Nmap NSE script support
+//! - `nse-sandbox` - NSE sandbox mode (restricts dangerous operations)
 //! - `ai-integration` - AI/LLM analysis and WAF bypass suggestions
 //! - `websocket` - WebSocket security testing
 //! - `headless-browser` - DOM XSS and SPA crawling
@@ -45,6 +48,10 @@
 //! - `external-integrations` - Jira, GitHub, GitLab integrations
 //! - `finding-workflow` - Finding lifecycle management
 //! - `vuln-management` - Vulnerability triage and prioritization
+//! - `cloud` - Cloud security scanning (AWS, GCP, Azure)
+//! - `api-schema` - API schema-based fuzzing (OpenAPI v3)
+//! - `git-secrets` - Git secrets scanning
+//! - `pdf` - PDF report generation
 //! - `full` - All features combined
 //!
 //! ## Error Handling

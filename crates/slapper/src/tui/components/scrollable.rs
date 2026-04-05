@@ -110,13 +110,10 @@ impl ScrollableText {
 
         let visible_height = area.height.saturating_sub(2) as usize;
         let scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1));
-        let visible_lines: Vec<Line<'static>> = self
-            .lines
-            .iter()
-            .skip(scroll_offset)
-            .take(visible_height)
-            .cloned()
-            .collect();
+        let mut visible_lines = Vec::with_capacity(visible_height);
+        for line in self.lines.iter().skip(scroll_offset).take(visible_height) {
+            visible_lines.push(line.clone());
+        }
 
         let paragraph = Paragraph::new(visible_lines).block(block);
         f.render_widget(paragraph, area);

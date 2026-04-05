@@ -412,7 +412,9 @@ pub trait TabInput {
         // Default: go to last item - single step should suffice
         self.handle_down();
     }
-    fn handle_tab(&mut self) {}
+    fn handle_tab(&mut self) -> bool {
+        false
+    }
     fn handle_search(&mut self, _query: &str) {}
     fn is_input_focused(&self) -> bool;
     fn is_at_left_edge(&self) -> bool {

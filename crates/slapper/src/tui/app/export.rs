@@ -230,7 +230,7 @@ impl super::App {
             .trim_end_matches(".json");
 
         let json_filename = format!("{}.json", base_name);
-        let json_path = format!("./exports/{}", json_filename);
+        let json_path = format!("{}/{}", crate::constants::DEFAULT_EXPORT_DIR, json_filename);
 
         if let Ok(report) = load_scan_report(&json_path) {
             let converted = match self.export_format {
@@ -247,8 +247,9 @@ impl super::App {
     fn save_export(&self, filename: &str, data: String) {
         use std::io::Write;
 
-        let path = format!("./exports/{}", filename);
-        let dir = std::path::Path::new("./exports");
+        let export_dir = crate::constants::DEFAULT_EXPORT_DIR;
+        let path = format!("{}/{}", export_dir, filename);
+        let dir = std::path::Path::new(export_dir);
         if !dir.exists() {
             let _ = std::fs::create_dir_all(dir);
         }

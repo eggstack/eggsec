@@ -1,15 +1,26 @@
 impl super::App {
     pub(super) fn next_tab(&mut self) {
+        self.clear_search_on_tab_switch();
         self.current_tab = self.current_tab.next();
     }
 
     pub(super) fn prev_tab(&mut self) {
+        self.clear_search_on_tab_switch();
         self.current_tab = self.current_tab.prev();
     }
 
     pub(super) fn select_tab(&mut self, index: usize) {
+        self.clear_search_on_tab_switch();
         if let Some(tab) = super::tabs::Tab::from_index(index) {
             self.current_tab = tab;
+        }
+    }
+
+    fn clear_search_on_tab_switch(&mut self) {
+        if self.show_search {
+            self.restore_search();
+            self.show_search = false;
+            self.search_query.clear();
         }
     }
 

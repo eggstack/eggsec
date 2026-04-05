@@ -421,9 +421,9 @@ impl App {
         dispatch_void!(self, handle_backspace())
     }
 
-    pub fn handle_tab(&mut self) {
+    pub fn handle_tab(&mut self) -> bool {
         if self.show_help || self.mode != InputMode::Insert {
-            return;
+            return false;
         }
 
         match self.current_tab {
@@ -439,50 +439,50 @@ impl App {
             Tab::Resume => self.resume.handle_tab(),
             Tab::Proxy => self.proxy.handle_tab(),
             Tab::Packet => self.packet.handle_tab(),
-            Tab::GraphQl => self.graphql.handle_focus_next(),
-            Tab::OAuth => self.oauth.handle_focus_next(),
-            Tab::Cluster => self.cluster.handle_focus_next(),
-            Tab::Stress => self.stress.handle_focus_next(),
-            Tab::Report => self.report.handle_focus_next(),
+            Tab::GraphQl => { self.graphql.handle_focus_next(); true }
+            Tab::OAuth => { self.oauth.handle_focus_next(); true }
+            Tab::Cluster => { self.cluster.handle_focus_next(); true }
+            Tab::Stress => { self.stress.handle_focus_next(); true }
+            Tab::Report => { self.report.handle_focus_next(); true }
             #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_focus_next(),
+            Tab::Nse => { self.nse.handle_focus_next(); true }
             #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
+            Tab::Nse => false,
             #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_focus_next(),
+            Tab::Plugin => { self.plugin.handle_focus_next(); true }
             #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
+            Tab::Plugin => false,
             Tab::Settings => self.settings.handle_tab(),
-            Tab::History => {}
-            Tab::Dashboard => {}
+            Tab::History => false,
+            Tab::Dashboard => false,
             #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => self.hunt.handle_tab(),
             #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {}
+            Tab::Hunt => false,
             #[cfg(feature = "headless-browser")]
             Tab::Browser => self.browser.handle_tab(),
             #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {}
+            Tab::Browser => false,
             #[cfg(feature = "compliance")]
             Tab::Compliance => self.compliance.handle_tab(),
             #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {}
+            Tab::Compliance => false,
             #[cfg(feature = "database")]
             Tab::Storage => self.storage.handle_tab(),
             #[cfg(not(feature = "database"))]
-            Tab::Storage => {}
+            Tab::Storage => false,
             #[cfg(feature = "external-integrations")]
             Tab::Integrations => self.integrations.handle_tab(),
             #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {}
+            Tab::Integrations => false,
             #[cfg(feature = "finding-workflow")]
             Tab::Workflow => self.workflow.handle_tab(),
             #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {}
+            Tab::Workflow => false,
             #[cfg(feature = "vuln-management")]
             Tab::Vuln => self.vuln.handle_tab(),
             #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {}
+            Tab::Vuln => false,
         }
     }
 

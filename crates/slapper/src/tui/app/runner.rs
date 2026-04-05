@@ -252,7 +252,9 @@ where
                     }
                     (KeyModifiers::NONE, KeyCode::Tab) => {
                         if app.mode == InputMode::Insert {
-                            app.handle_tab();
+                            if !app.handle_tab() {
+                                app.handle_focus_next();
+                            }
                         } else {
                             app.handle_focus_next();
                         }
