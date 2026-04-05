@@ -16,6 +16,38 @@ use crate::waf::types::Severity;
 use super::super::detection::{PatternMatcher, TimingAnalyzer};
 use super::types::{FuzzResult, FuzzSession};
 
+/// The main fuzzing engine that orchestrates payload generation, HTTP request
+/// execution, and vulnerability detection.
+///
+/// `FuzzEngine` supports multiple fuzzing modes:
+/// - **Payload-based**: Uses predefined payloads from the payload library
+/// - **Grammar-based**: Generates payloads from formal grammars (JSON, GraphQL, XML, JWT, SSTI)
+/// - **Mutation-based**: Mutates existing payloads to discover edge cases
+///
+/// # Examples
+///
+/// ```no_run
+/// use slapper::cli::{FuzzArgs, CommonHttpArgs};
+/// use slapper::fuzzer::engine::FuzzEngine;
+///
+/// # fn main() -> slapper::error::Result<()> {
+/// let args = FuzzArgs {
+///     target: "http://example.com".to_string(),
+///     payload_type: "sqli".to_string(),
+///     concurrency: 10,
+///     timeout: 30,
+///     // ... other fields
+///     ..Default::default()
+/// };
+/// let engine = FuzzEngine::new(args)?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Errors
+///
+/// Returns [`SlapperError`](crate::error::SlapperError) if the HTTP client
+/// cannot be built (e.g., invalid proxy configuration).
 pub struct FuzzEngine {
     pub(crate) args: FuzzArgs,
     pub(crate) client: Client,
@@ -32,10 +64,23 @@ pub struct FuzzEngine {
 }
 
 impl FuzzEngine {
+    /// Creates a new `FuzzEngine` with the given arguments.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client cannot be built.
     pub fn new(args: FuzzArgs) -> Result<Self> {
         Self::new_with_tui_mode(args, false)
     }
 
+    /// Creates a new `FuzzEngine` with explicit TUI mode control.
+    ///
+    /// When `tui_mode` is true, progress indicators use the TUI-compatible
+    /// format instead of terminal progress bars.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client cannot be built.
     pub fn new_with_tui_mode(args: FuzzArgs, tui_mode: bool) -> Result<Self> {
         let user_agent = args
             .common
@@ -129,6 +174,15 @@ impl FuzzEngine {
         self.ai_generator.as_ref()
     }
 
+    /// Executes the fuzzing session and prints results.
+    ///
+    /// This is the main entry point for CLI-based fuzzing. It runs the
+    /// configured payload types against the target URL and outputs results
+    /// in the requested format (JSON, pretty-printed, or compact).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if HTTP requests fail or results cannot be serialized.
     pub async fn run(&mut self) -> Result<()> {
         if self.args.verbose {
             eprintln!("Starting fuzz against {}", self.args.url);
@@ -261,6 +315,16 @@ impl FuzzEngine {
         Ok(self.build_session(all_results, start.elapsed(), None))
     }
 
+    /// Runs fuzzing against all payload types sequentially.
+    ///
+    /// This method iterates through every available [`PayloadType`] and
+    /// sends all payloads for each type to the target. Use this for
+    /// comprehensive coverage when you don't know which vulnerability
+    /// class might be present.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any HTTP request fails critically.
     pub async fn run_all_types(&mut self) -> Result<()> {
         let payloads = if self.args.mutate {
             self.mutate_payloads(get_all_payloads_cached())
