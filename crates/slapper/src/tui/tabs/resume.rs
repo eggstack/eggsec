@@ -129,8 +129,7 @@ impl TabRender for ResumeTab {
         }
 
         if !self.results_view.is_empty() {
-            self.results_view
-                .render_with_style(f, results_area, Color::Cyan);
+            self.results_view.render(f, results_area, Some(Color::Cyan));
         } else {
             let placeholder = Paragraph::new(
                 "Enter session file path and press Enter to resume a previous scan.\n\n\

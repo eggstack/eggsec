@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::scope::Scope;
 use super::settings::SlapperConfig;
@@ -13,7 +13,7 @@ pub const SCOPE_FILE_NAME: &str = "scope.toml";
 pub fn load_config(config_path: Option<&str>) -> Result<SlapperConfig> {
     let path = config_path
         .map(PathBuf::from)
-        .or_else(find_config_file)
+        .or_else(|| find_config_file(None))
         .unwrap_or_else(default_config_path);
 
     if !path.exists() {
@@ -46,7 +46,7 @@ pub fn load_config(config_path: Option<&str>) -> Result<SlapperConfig> {
 pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
     let path = scope_path
         .map(PathBuf::from)
-        .or_else(find_scope_file)
+        .or_else(|| find_scope_file(None))
         .unwrap_or_else(default_scope_path);
 
     if !path.exists() {
@@ -62,11 +62,12 @@ pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
     Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))
 }
 
-pub fn find_config_file() -> Option<PathBuf> {
-    let candidates = vec![
-        PathBuf::from(DEFAULT_CONFIG_NAME),
-        PathBuf::from(".slapper").join(DEFAULT_CONFIG_NAME),
-        PathBuf::from("config").join(DEFAULT_CONFIG_NAME),
+pub fn find_config_file(base_dir: Option<&Path>) -> Option<PathBuf> {
+    let base: &Path = base_dir.unwrap_or_else(|| Path::new("."));
+    let candidates: Vec<PathBuf> = vec![
+        base.join(DEFAULT_CONFIG_NAME),
+        base.join(".slapper").join(DEFAULT_CONFIG_NAME),
+        base.join("config").join(DEFAULT_CONFIG_NAME),
     ];
 
     for candidate in candidates {
@@ -85,10 +86,11 @@ pub fn find_config_file() -> Option<PathBuf> {
     None
 }
 
-pub fn find_scope_file() -> Option<PathBuf> {
-    let candidates = vec![
-        PathBuf::from(SCOPE_FILE_NAME),
-        PathBuf::from(".slapper").join(SCOPE_FILE_NAME),
+pub fn find_scope_file(base_dir: Option<&Path>) -> Option<PathBuf> {
+    let base: &Path = base_dir.unwrap_or_else(|| Path::new("."));
+    let candidates: Vec<PathBuf> = vec![
+        base.join(SCOPE_FILE_NAME),
+        base.join(".slapper").join(SCOPE_FILE_NAME),
     ];
 
     candidates.into_iter().find(|candidate| candidate.exists())
@@ -299,7 +301,7 @@ scan:
         let _ = std::fs::create_dir_all(&temp_dir);
         let _ = std::env::set_current_dir(&temp_dir);
 
-        let result = find_config_file();
+        let result = find_config_file(None);
         let _ = std::env::set_current_dir(original_dir);
         let _ = std::fs::remove_dir_all(&temp_dir);
 
@@ -313,7 +315,7 @@ scan:
         let _ = std::fs::create_dir_all(&temp_dir);
         let _ = std::env::set_current_dir(&temp_dir);
 
-        let result = find_scope_file();
+        let result = find_scope_file(None);
         let _ = std::env::set_current_dir(original_dir);
         let _ = std::fs::remove_dir_all(&temp_dir);
 

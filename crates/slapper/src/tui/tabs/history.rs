@@ -346,7 +346,7 @@ impl TabRender for HistoryTab {
         f.render_widget(list, list_area);
 
         if !self.details_view.is_empty() {
-            self.details_view.render(f, details_area);
+            self.details_view.render(f, details_area, None);
         } else {
             let placeholder = Paragraph::new("Select an entry to view details")
                 .block(Block::default().borders(Borders::ALL).title("Details"))

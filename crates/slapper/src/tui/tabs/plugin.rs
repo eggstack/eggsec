@@ -227,7 +227,7 @@ impl TabRender for PluginTab {
         selector.render(f, chunks[1]);
 
         // Results
-        self.results_view.render(f, chunks[2]);
+        self.results_view.render(f, chunks[2], None);
     }
 }
 

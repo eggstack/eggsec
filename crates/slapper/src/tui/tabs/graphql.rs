@@ -288,7 +288,7 @@ impl TabRender for GraphQlTab {
         self.alias_overload_checkbox.render(f, options_chunks[3]);
 
         // Results
-        self.results_view.render(f, chunks[2]);
+        self.results_view.render(f, chunks[2], None);
 
         // Progress bar if running
         if self.state == AppState::Running {

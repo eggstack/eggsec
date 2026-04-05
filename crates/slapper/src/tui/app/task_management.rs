@@ -148,23 +148,10 @@ impl super::App {
             return None;
         }
 
-        Some(workers::TaskConfig::Fuzz {
+        Some(workers::TaskConfig::WafStress {
             target: target.to_string(),
-            payload_type: "all".to_string(),
-            mode: "Burst".to_string(),
-            mutations: false,
-            mutation_count: 0,
-            method: "GET".to_string(),
-            param: None,
             concurrency: self.waf_stress.concurrency(),
             timeout: self.waf_stress.timeout(),
-            graphql_introspection: false,
-            graphql_depth_bypass: false,
-            graphql_alias_overload: false,
-            oauth_redirect_test: false,
-            oauth_scope_test: false,
-            oauth_state_test: false,
-            oauth_grant_test: false,
         })
     }
 
@@ -215,7 +202,13 @@ impl super::App {
             return None;
         }
 
-        let port = self.packet.filter().parse().unwrap_or(80);
+        let port: u16 = match self.packet.filter().parse() {
+            Ok(p) => p,
+            Err(_) => {
+                tracing::warn!("Invalid port specified: {:?}", self.packet.filter());
+                return None;
+            }
+        };
         let count = self.packet.max_packets() as u32;
 
         Some(workers::TaskConfig::PacketSend {

@@ -39,9 +39,9 @@ impl ScanPortsTab {
     }
 
     pub fn target(&self) -> &str {
-        self
-            .inputs
-            .fields.first()
+        self.inputs
+            .fields
+            .first()
             .map(|f| f.value.as_str())
             .unwrap_or("")
     }
@@ -63,8 +63,7 @@ impl ScanPortsTab {
     }
 
     pub fn ports(&self) -> &str {
-        self
-            .inputs
+        self.inputs
             .fields
             .get(1)
             .map(|f| f.value.as_str())
@@ -264,7 +263,7 @@ impl TabRender for ScanPortsTab {
             self.progress.render(f, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render_with_style(f, results_area, Color::Green);
+                .render(f, results_area, Some(Color::Green));
         } else {
             use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};

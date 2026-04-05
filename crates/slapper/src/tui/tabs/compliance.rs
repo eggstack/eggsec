@@ -225,7 +225,7 @@ impl TabRender for ComplianceTab {
             f.render_widget(gauge, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render_with_style(f, results_area, Color::Green);
+                .render(f, results_area, Some(Color::Green));
         } else {
             let placeholder =
                 ratatui::widgets::Paragraph::new("Enter target, select framework, and press Enter")

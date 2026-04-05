@@ -482,8 +482,7 @@ impl TabRender for FuzzTab {
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
         } else if !self.results_view.is_empty() {
-            self.results_view
-                .render_with_style(f, results_area, Color::Cyan);
+            self.results_view.render(f, results_area, Some(Color::Cyan));
         } else {
             let info_text = vec![
                 Line::from(""),

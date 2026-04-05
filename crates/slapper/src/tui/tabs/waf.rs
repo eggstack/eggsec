@@ -74,9 +74,9 @@ impl WafTab {
     }
 
     pub fn target(&self) -> &str {
-        self
-            .inputs
-            .fields.first()
+        self.inputs
+            .fields
+            .first()
             .map(|f| f.value.as_str())
             .unwrap_or("")
     }
@@ -189,14 +189,7 @@ impl WafTab {
 
         let bypass_data: Vec<_> = results
             .iter()
-            .map(|r| {
-                (
-                    r.success,
-                    r.technique,
-                    r.description.clone(),
-                    r.status_code,
-                )
-            })
+            .map(|r| (r.success, r.technique, r.description.clone(), r.status_code))
             .collect();
 
         self.bypass_view.add_line(Line::from(vec![
@@ -370,7 +363,7 @@ impl TabRender for WafTab {
                 .split(results_area);
 
             if !self.detection_view.is_empty() {
-                self.detection_view.render(f, results_chunks[0]);
+                self.detection_view.render(f, results_chunks[0], None);
             } else {
                 let placeholder = Paragraph::new("Detection results will appear here")
                     .block(
@@ -383,7 +376,7 @@ impl TabRender for WafTab {
             }
 
             if !self.bypass_view.is_empty() {
-                self.bypass_view.render(f, results_chunks[1]);
+                self.bypass_view.render(f, results_chunks[1], None);
             } else {
                 let placeholder = Paragraph::new("Bypass results will appear here")
                     .block(

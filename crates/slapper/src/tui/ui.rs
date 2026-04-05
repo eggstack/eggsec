@@ -525,10 +525,7 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-fn get_tab_status(
-    _tab: crate::tui::tabs::Tab,
-    state: &crate::tui::tabs::AppState,
-) -> (String, Color) {
+fn get_tab_status(state: &crate::tui::tabs::AppState) -> (String, Color) {
     use crate::tui::tabs::AppState;
     match state {
         AppState::Idle => ("Ready - Press Enter to start".to_string(), Color::Gray),
@@ -540,22 +537,18 @@ fn get_tab_status(
 
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let (status_text, status_color) = match app.current_tab {
-        crate::tui::tabs::Tab::Recon => get_tab_status(app.current_tab, &app.recon.state),
-        crate::tui::tabs::Tab::Load => get_tab_status(app.current_tab, &app.load.state),
-        crate::tui::tabs::Tab::ScanPorts => get_tab_status(app.current_tab, &app.scan_ports.state),
-        crate::tui::tabs::Tab::ScanEndpoints => {
-            get_tab_status(app.current_tab, &app.scan_endpoints.state)
-        }
-        crate::tui::tabs::Tab::Fingerprint => {
-            get_tab_status(app.current_tab, &app.fingerprint.state)
-        }
-        crate::tui::tabs::Tab::Fuzz => get_tab_status(app.current_tab, &app.fuzz.state),
-        crate::tui::tabs::Tab::Waf => get_tab_status(app.current_tab, &app.waf.state),
-        crate::tui::tabs::Tab::WafStress => get_tab_status(app.current_tab, &app.waf_stress.state),
-        crate::tui::tabs::Tab::Scan => get_tab_status(app.current_tab, &app.scan.state),
-        crate::tui::tabs::Tab::Resume => get_tab_status(app.current_tab, &app.resume.state),
-        crate::tui::tabs::Tab::Proxy => get_tab_status(app.current_tab, &app.proxy.state),
-        crate::tui::tabs::Tab::Packet => get_tab_status(app.current_tab, &app.packet.state),
+        crate::tui::tabs::Tab::Recon => get_tab_status(&app.recon.state),
+        crate::tui::tabs::Tab::Load => get_tab_status(&app.load.state),
+        crate::tui::tabs::Tab::ScanPorts => get_tab_status(&app.scan_ports.state),
+        crate::tui::tabs::Tab::ScanEndpoints => get_tab_status(&app.scan_endpoints.state),
+        crate::tui::tabs::Tab::Fingerprint => get_tab_status(&app.fingerprint.state),
+        crate::tui::tabs::Tab::Fuzz => get_tab_status(&app.fuzz.state),
+        crate::tui::tabs::Tab::Waf => get_tab_status(&app.waf.state),
+        crate::tui::tabs::Tab::WafStress => get_tab_status(&app.waf_stress.state),
+        crate::tui::tabs::Tab::Scan => get_tab_status(&app.scan.state),
+        crate::tui::tabs::Tab::Resume => get_tab_status(&app.resume.state),
+        crate::tui::tabs::Tab::Proxy => get_tab_status(&app.proxy.state),
+        crate::tui::tabs::Tab::Packet => get_tab_status(&app.packet.state),
         crate::tui::tabs::Tab::Settings => (
             "Press 's' to save settings, 'r' to reset".to_string(),
             Color::Gray,
@@ -568,31 +561,29 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
             "Dashboard - View scan results overview".to_string(),
             Color::Gray,
         ),
-        crate::tui::tabs::Tab::GraphQl => get_tab_status(app.current_tab, &app.graphql.state),
-        crate::tui::tabs::Tab::OAuth => get_tab_status(app.current_tab, &app.oauth.state),
-        crate::tui::tabs::Tab::Cluster => get_tab_status(app.current_tab, &app.cluster.state),
-        crate::tui::tabs::Tab::Stress => get_tab_status(app.current_tab, &app.stress.state),
-        crate::tui::tabs::Tab::Report => get_tab_status(app.current_tab, &app.report.state),
+        crate::tui::tabs::Tab::GraphQl => get_tab_status(&app.graphql.state),
+        crate::tui::tabs::Tab::OAuth => get_tab_status(&app.oauth.state),
+        crate::tui::tabs::Tab::Cluster => get_tab_status(&app.cluster.state),
+        crate::tui::tabs::Tab::Stress => get_tab_status(&app.stress.state),
+        crate::tui::tabs::Tab::Report => get_tab_status(&app.report.state),
         #[cfg(feature = "nse")]
-        crate::tui::tabs::Tab::Nse => get_tab_status(app.current_tab, &app.nse.state),
+        crate::tui::tabs::Tab::Nse => get_tab_status(&app.nse.state),
         #[cfg(not(feature = "nse"))]
         crate::tui::tabs::Tab::Nse => ("NSE not available".to_string(), Color::Gray),
         #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-        crate::tui::tabs::Tab::Plugin => get_tab_status(app.current_tab, &app.plugin.state),
+        crate::tui::tabs::Tab::Plugin => get_tab_status(&app.plugin.state),
         #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
         crate::tui::tabs::Tab::Plugin => ("Plugins not available".to_string(), Color::Gray),
-        crate::tui::tabs::Tab::Hunt => get_tab_status(app.current_tab, &app.hunt.state),
+        crate::tui::tabs::Tab::Hunt => get_tab_status(&app.hunt.state),
         #[cfg(feature = "headless-browser")]
-        crate::tui::tabs::Tab::Browser => get_tab_status(app.current_tab, &app.browser.state),
+        crate::tui::tabs::Tab::Browser => get_tab_status(&app.browser.state),
         #[cfg(not(feature = "headless-browser"))]
         crate::tui::tabs::Tab::Browser => ("Browser feature not enabled".to_string(), Color::Gray),
-        crate::tui::tabs::Tab::Compliance => get_tab_status(app.current_tab, &app.compliance.state),
-        crate::tui::tabs::Tab::Storage => get_tab_status(app.current_tab, &app.storage.state),
-        crate::tui::tabs::Tab::Integrations => {
-            get_tab_status(app.current_tab, &app.integrations.state)
-        }
-        crate::tui::tabs::Tab::Workflow => get_tab_status(app.current_tab, &app.workflow.state),
-        crate::tui::tabs::Tab::Vuln => get_tab_status(app.current_tab, &app.vuln.state),
+        crate::tui::tabs::Tab::Compliance => get_tab_status(&app.compliance.state),
+        crate::tui::tabs::Tab::Storage => get_tab_status(&app.storage.state),
+        crate::tui::tabs::Tab::Integrations => get_tab_status(&app.integrations.state),
+        crate::tui::tabs::Tab::Workflow => get_tab_status(&app.workflow.state),
+        crate::tui::tabs::Tab::Vuln => get_tab_status(&app.vuln.state),
     };
 
     let help_text = if app.is_help_visible() {

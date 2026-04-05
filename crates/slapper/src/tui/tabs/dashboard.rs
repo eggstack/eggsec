@@ -225,7 +225,7 @@ impl TabState for DashboardTab {
 
 impl TabRender for DashboardTab {
     fn render(&self, f: &mut Frame, area: ratatui::layout::Rect, _insert_mode: bool) {
-        self.view.render(f, area);
+        self.view.render(f, area, None);
     }
 }
 

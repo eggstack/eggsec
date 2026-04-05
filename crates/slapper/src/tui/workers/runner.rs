@@ -58,6 +58,11 @@ pub enum TaskConfig {
         bypass_mode: bool,
         techniques: Vec<String>,
     },
+    WafStress {
+        target: String,
+        concurrency: usize,
+        timeout: u64,
+    },
     Pipeline {
         target: String,
         profile: ScanProfile,
@@ -316,6 +321,20 @@ impl TaskRunner {
                 bypass_mode,
                 techniques,
             } => super::fuzzer::run_waf(target, bypass_mode, techniques, progress_tx, result_tx).await,
+            TaskConfig::WafStress {
+                target,
+                concurrency: _,
+                timeout: _,
+            } => {
+                super::fuzzer::run_waf(
+                    target,
+                    true,
+                    vec!["all".to_string()],
+                    progress_tx,
+                    result_tx,
+                )
+                .await
+            }
             TaskConfig::Pipeline {
                 target,
                 profile,

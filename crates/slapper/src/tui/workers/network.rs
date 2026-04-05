@@ -250,15 +250,21 @@ pub async fn run_packet_send(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
+    use std::time::Duration;
+
+    tracing::warn!("Packet sending is a stub - raw socket implementation required for actual packet transmission");
+
     let _ = progress_tx.send((0, count as u64)).await;
 
     let mut sent = 0u32;
     let mut bytes = 0u64;
 
-    for _ in 0..count {
+    for i in 0..count {
+        tokio::time::sleep(Duration::from_millis(10)).await;
         sent += 1;
         bytes += packet_size as u64;
         let _ = progress_tx.send((sent as u64, count as u64)).await;
+        tracing::trace!("[STUB] Would send packet {} to {}:{}", i + 1, target, port);
     }
 
     let _ = result_tx

@@ -235,7 +235,7 @@ impl TabRender for StressTab {
         selector.render(f, chunks[1]);
 
         // Results
-        self.results_view.render(f, chunks[2]);
+        self.results_view.render(f, chunks[2], None);
 
         // Progress bar if running
         if self.state == AppState::Running {

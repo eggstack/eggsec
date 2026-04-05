@@ -6,6 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
+use std::cell::RefCell;
 
 #[derive(Clone, Debug)]
 pub struct DropdownInfo {
@@ -13,6 +14,7 @@ pub struct DropdownInfo {
     pub items: Vec<(usize, String, bool)>,
     pub selected: usize,
     pub label: String,
+    pub state: Option<ListState>,
 }
 
 impl DropdownInfo {
@@ -49,7 +51,7 @@ impl DropdownInfo {
                 .title(self.label.as_str()),
         );
 
-        let mut state = ListState::default();
+        let mut state = self.state.unwrap_or_default();
         state.select(Some(self.selected));
         f.render_stateful_widget(list, self.area, &mut state);
     }
@@ -85,6 +87,7 @@ pub struct Selector {
     pub selected: usize,
     pub expanded: bool,
     pub focused: bool,
+    pub dropdown_state: RefCell<Option<ListState>>,
 }
 
 impl Selector {
@@ -95,6 +98,7 @@ impl Selector {
             selected: 0,
             expanded: false,
             focused: false,
+            dropdown_state: RefCell::new(None),
         }
     }
 
@@ -142,11 +146,16 @@ impl Selector {
 
     pub fn collapse(&mut self) {
         self.expanded = false;
+        *self.dropdown_state.borrow_mut() = None;
     }
 
     pub fn dropdown_info(&self, anchor_area: Rect) -> Option<DropdownInfo> {
         if !self.expanded {
             return None;
+        }
+
+        if self.dropdown_state.borrow().is_none() {
+            *self.dropdown_state.borrow_mut() = Some(ListState::default());
         }
 
         let dropdown_area = Rect {
@@ -168,6 +177,7 @@ impl Selector {
             items,
             selected: self.selected,
             label: self.label.clone(),
+            state: *self.dropdown_state.borrow(),
         })
     }
 
@@ -198,7 +208,7 @@ impl Selector {
 
     pub fn blur(&mut self) {
         self.focused = false;
-        self.expanded = false;
+        self.collapse();
     }
 
     pub fn focus_last(&mut self) {
@@ -343,24 +353,49 @@ impl RadioGroup {
             Style::default().fg(Color::Gray)
         };
 
-        let spans: Vec<Span> = self
-            .options
-            .iter()
-            .enumerate()
-            .map(|(i, opt)| {
-                let is_selected = Some(i) == self.selected;
-                let radio = if is_selected { "◉" } else { "○" };
-                Span::styled(format!(" {} {}", radio, opt), style)
-            })
-            .collect();
+        let label_width = self.label.len() + 2;
+        let options_per_line = ((area.width as usize).saturating_sub(label_width)) / 12;
 
-        let line = Line::from(
-            std::iter::once(Span::styled(format!("{}: ", self.label), style))
-                .chain(spans)
-                .collect::<Vec<_>>(),
-        );
+        if options_per_line >= self.options.len() || options_per_line == 0 {
+            let spans: Vec<Span> = self
+                .options
+                .iter()
+                .enumerate()
+                .map(|(i, opt)| {
+                    let is_selected = Some(i) == self.selected;
+                    let radio = if is_selected { "◉" } else { "○" };
+                    Span::styled(format!(" {} {}", radio, opt), style)
+                })
+                .collect();
 
-        let paragraph = Paragraph::new(line);
-        f.render_widget(paragraph, area);
+            let line = Line::from(
+                std::iter::once(Span::styled(format!("{}: ", self.label), style))
+                    .chain(spans)
+                    .collect::<Vec<_>>(),
+            );
+
+            let paragraph = Paragraph::new(line);
+            f.render_widget(paragraph, area);
+        } else {
+            let mut lines = Vec::new();
+            lines.push(Line::from(Span::styled(format!("{}: ", self.label), style)));
+
+            for (chunk_idx, chunk) in self.options.chunks(options_per_line).enumerate() {
+                let base_idx = chunk_idx * options_per_line;
+                let spans: Vec<Span> = chunk
+                    .iter()
+                    .enumerate()
+                    .map(|(j, opt)| {
+                        let is_selected = Some(base_idx + j) == self.selected;
+                        let radio = if is_selected { "◉" } else { "○" };
+                        Span::styled(format!(" {} {}", radio, opt), style)
+                    })
+                    .collect();
+                lines.push(Line::from(spans));
+            }
+
+            let paragraph = Paragraph::new(lines);
+            f.render_widget(paragraph, area);
+        }
     }
 }

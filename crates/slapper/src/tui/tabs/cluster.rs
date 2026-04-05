@@ -263,7 +263,7 @@ impl TabRender for ClusterTab {
         }
 
         // Results
-        self.results_view.render(f, chunks[2]);
+        self.results_view.render(f, chunks[2], None);
     }
 }
 

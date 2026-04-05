@@ -88,7 +88,7 @@ pub async fn run_fuzz(
 pub async fn run_waf(
     target: String,
     bypass_mode: bool,
-    _techniques: Vec<String>,
+    techniques: Vec<String>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
@@ -101,13 +101,23 @@ pub async fn run_waf(
         use crate::cli::WafArgs;
         use crate::waf::{get_auto_profile, BypassEngine, TestType};
 
+        let header_bypass = techniques
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case("header") || t.eq_ignore_ascii_case("all"));
+        let evasion = techniques
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case("evasion") || t.eq_ignore_ascii_case("all"));
+        let smuggling = techniques
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case("smuggling") || t.eq_ignore_ascii_case("all"));
+
         let args = WafArgs {
             url: target.clone(),
             detect_only: false,
             bypass: true,
-            header_bypass: true,
-            evasion: false,
-            smuggling: false,
+            header_bypass,
+            evasion,
+            smuggling,
             profile: "auto".to_string(),
             test_type: None,
             concurrency: 10,

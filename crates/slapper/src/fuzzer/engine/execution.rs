@@ -98,7 +98,7 @@ impl FuzzEngine {
         let mut handles = Vec::new();
 
         for payload in payloads {
-            let permit = semaphore.clone().acquire_owned().await?;
+            let semaphore = semaphore.clone();
             let client = self.client.clone();
             let url = self.args.url.clone();
             let method = self.args.method.clone();
@@ -111,6 +111,7 @@ impl FuzzEngine {
             let user_agent = self.user_agent.clone();
 
             let handle = tokio::spawn(async move {
+                let _permit = semaphore.acquire_owned().await;
                 let result = send_payload_async(
                     client,
                     &url,
@@ -131,7 +132,6 @@ impl FuzzEngine {
                 if let Some(ref pb) = progress {
                     pb.inc(1);
                 }
-                drop(permit);
             });
 
             handles.push(handle);

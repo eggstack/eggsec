@@ -87,16 +87,15 @@ impl ScanTab {
     }
 
     pub fn target(&self) -> &str {
-        self
-            .inputs
-            .fields.first()
+        self.inputs
+            .fields
+            .first()
             .map(|f| f.value.as_str())
             .unwrap_or("")
     }
 
     pub fn output_file(&self) -> &str {
-        self
-            .inputs
+        self.inputs
             .fields
             .get(1)
             .map(|f| f.value.as_str())
@@ -347,7 +346,7 @@ impl TabRender for ScanTab {
         f.render_widget(stages_block, stages_area);
 
         if !self.current_stage_output.is_empty() {
-            self.current_stage_output.render(f, output_area);
+            self.current_stage_output.render(f, output_area, None);
         } else {
             let placeholder = Paragraph::new("Stage output will appear here")
                 .block(

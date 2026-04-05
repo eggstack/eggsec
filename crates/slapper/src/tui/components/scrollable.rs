@@ -1,7 +1,9 @@
+use ratatui::style::Style;
+use ratatui::text::Span;
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
-    text::{Line, Span},
+    style::Color,
+    text::Line,
     widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
@@ -61,7 +63,8 @@ impl ScrollableText {
     }
 
     pub fn scroll_right(&mut self, amount: usize) {
-        self.horizontal_offset += amount;
+        let max_offset = self.lines.iter().map(|l| l.width()).max().unwrap_or(0);
+        self.horizontal_offset = (self.horizontal_offset + amount).min(max_offset);
     }
 
     pub fn scroll_to_top(&mut self) {
@@ -93,55 +96,12 @@ impl ScrollableText {
         self.lines.is_empty()
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect) {
+    pub fn render(&self, f: &mut Frame, area: Rect, border_color: Option<Color>) {
         if area.width < 3 || area.height < 3 {
             return;
         }
 
-        let block = Block::default()
-            .title(self.title.as_str())
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Gray));
-
-        let visible_height = area.height.saturating_sub(2) as usize;
-        let scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1));
-        let visible_lines: Vec<Line<'static>> = self
-            .lines
-            .iter()
-            .skip(scroll_offset)
-            .take(visible_height)
-            .cloned()
-            .collect();
-
-        let paragraph = Paragraph::new(visible_lines).block(block);
-        f.render_widget(paragraph, area);
-
-        if self.lines.len() > visible_height {
-            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("↑"))
-                .end_symbol(Some("↓"))
-                .track_symbol(Some("│"))
-                .thumb_symbol("█");
-
-            let mut scrollbar_state = ScrollbarState::new(self.lines.len())
-                .position(scroll_offset)
-                .viewport_content_length(visible_height);
-
-            let scrollbar_area = Rect {
-                x: area.x + area.width - 1,
-                y: area.y + 1,
-                width: 1,
-                height: area.height - 2,
-            };
-
-            f.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
-        }
-    }
-
-    pub fn render_with_style(&self, f: &mut Frame, area: Rect, border_color: Color) {
-        if area.width < 3 || area.height < 3 {
-            return;
-        }
+        let border_color = border_color.unwrap_or(Color::Gray);
 
         let block = Block::default()
             .title(self.title.as_str())

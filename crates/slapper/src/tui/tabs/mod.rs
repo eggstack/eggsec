@@ -207,37 +207,45 @@ impl Tab {
     }
 
     pub fn all() -> &'static [Tab] {
-        &[
-            Tab::Recon,
-            Tab::Load,
-            Tab::ScanPorts,
-            Tab::ScanEndpoints,
-            Tab::Fingerprint,
-            Tab::Fuzz,
-            Tab::Waf,
-            Tab::WafStress,
-            Tab::Scan,
-            Tab::Resume,
-            Tab::Proxy,
-            Tab::Packet,
-            Tab::GraphQl,
-            Tab::OAuth,
-            Tab::Cluster,
-            Tab::Stress,
-            Tab::Report,
-            Tab::Nse,
-            Tab::Plugin,
-            Tab::Settings,
-            Tab::History,
-            Tab::Dashboard,
-            Tab::Hunt,
-            Tab::Browser,
-            Tab::Compliance,
-            Tab::Storage,
-            Tab::Integrations,
-            Tab::Workflow,
-            Tab::Vuln,
-        ]
+        use std::sync::LazyLock;
+        static TABS: LazyLock<Vec<Tab>> = LazyLock::new(|| {
+            let tabs = vec![
+                Tab::Recon,
+                Tab::Load,
+                Tab::ScanPorts,
+                Tab::ScanEndpoints,
+                Tab::Fingerprint,
+                Tab::Fuzz,
+                Tab::Waf,
+                Tab::WafStress,
+                Tab::Scan,
+                Tab::Resume,
+                Tab::Proxy,
+                Tab::Packet,
+                Tab::GraphQl,
+                Tab::OAuth,
+                Tab::Cluster,
+                Tab::Stress,
+                Tab::Report,
+                Tab::Settings,
+                Tab::History,
+                Tab::Dashboard,
+                Tab::Hunt,
+                Tab::Compliance,
+                Tab::Storage,
+                Tab::Integrations,
+                Tab::Workflow,
+                Tab::Vuln,
+            ];
+            #[cfg(feature = "nse")]
+            tabs.push(Tab::Nse);
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            tabs.push(Tab::Plugin);
+            #[cfg(feature = "headless-browser")]
+            tabs.push(Tab::Browser);
+            tabs
+        });
+        &TABS
     }
 
     pub fn from_index(index: usize) -> Option<Tab> {

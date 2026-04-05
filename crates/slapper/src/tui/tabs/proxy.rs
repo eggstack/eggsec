@@ -439,7 +439,7 @@ impl TabRender for ProxyTab {
 
         if !self.results_view.is_empty() {
             self.results_view
-                .render_with_style(f, results_area, Color::Green);
+                .render(f, results_area, Some(Color::Green));
         } else {
             let placeholder = Paragraph::new("Results will appear here")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
