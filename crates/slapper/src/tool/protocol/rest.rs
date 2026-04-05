@@ -155,13 +155,27 @@ pub struct ToolDetailResponse {
 pub fn create_router(registry: ToolRegistry, api_key: Option<String>) -> Router {
     let state = Arc::new(RestState::new(registry, api_key));
 
-    Router::new()
+    let mut router = Router::new()
         .route("/health", get(health_check))
         .route("/openapi.json", get(openapi_spec))
         .route("/api/v1/tools", get(list_tools))
         .route("/api/v1/tools/:tool_id", get(get_tool))
         .route("/api/v1/tools/:tool_id/execute", post(execute_tool))
-        .with_state(state)
+        .with_state(state);
+
+    #[cfg(feature = "ai-integration")]
+    {
+        router = router.merge(super::ai_routes::router());
+    }
+
+    {
+        use crate::tool::agents::{AgentRegistry, TaskScheduler};
+        let agent_registry = AgentRegistry::new();
+        let scheduler = TaskScheduler::new();
+        router = router.merge(super::agent_routes::router(agent_registry, scheduler));
+    }
+
+    router
 }
 
 fn check_rate_limit(state: &Arc<RestState>, client_id: &str) -> Result<(), SlapperError> {

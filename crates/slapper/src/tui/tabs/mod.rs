@@ -412,7 +412,7 @@ pub trait TabInput {
         // Default: go to last item - single step should suffice
         self.handle_down();
     }
-    fn handle_tab(&mut self) -> bool {
+    fn handle_autocomplete(&mut self) -> bool {
         false
     }
     fn handle_search(&mut self, _query: &str) {}

@@ -1,3 +1,41 @@
+//! Tool abstraction layer for Slapper.
+//!
+//! This module provides a unified tool registry and execution framework that
+//! enables programmatic access to Slapper's security testing capabilities.
+//! Tools are registered with metadata (name, description, capabilities, parameters)
+//! and can be executed via the [`ToolRegistry`] or through protocol adapters
+//! (MCP, OpenAI, REST API).
+//!
+//! # Key Types
+//!
+//! - [`ToolRegistry`] — Central registry for all security tools
+//! - [`SecurityTool`] — Trait that all tools must implement
+//! - [`ToolRequest`] — Request structure for tool execution
+//! - [`ToolResponse`] — Response structure with findings and metadata
+//! - [`ToolDispatcher`] — Dispatches requests to registered tools
+//! - [`Target`] — Target specification (URL, IP, domain, CIDR)
+//!
+//! # Protocol Adapters
+//!
+//! Tools can be exposed through multiple protocols:
+//! - **MCP** (`tool::protocol::mcp`) — Model Context Protocol for AI agents
+//! - **OpenAI** (`tool::protocol::openai`) — OpenAI-compatible chat completions
+//! - **REST** (`tool::protocol::rest`) — HTTP REST API
+//! - **OpenResponses** (`tool::protocol::openresponses`) — OpenClaw responses API
+//!
+//! # Example
+//!
+//! ```no_run
+//! use slapper::tool::{create_default_registry, ToolRequest, Target};
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let registry = create_default_registry();
+//! let tools = registry.list();
+//! println!("Available tools: {:?}", tools.iter().map(|t| &t.name).collect::<Vec<_>>());
+//! # Ok(())
+//! # }
+//! ```
+
 pub mod convert;
 pub mod dispatcher;
 pub mod history;

@@ -240,6 +240,7 @@ impl Pipeline {
             std::time::Duration::from_secs(2),
             self.tui_mode,
             self.spoof_config.clone(),
+            None,
         )
         .await?;
 
@@ -267,6 +268,7 @@ impl Pipeline {
             std::time::Duration::from_secs(5),
             self.tui_mode,
             20,
+            None,
         )
         .await?;
 
@@ -308,6 +310,7 @@ impl Pipeline {
             tui_mode: self.tui_mode,
             spoof_config: self.spoof_config.clone(),
             verify_tls,
+            progress_tx: None,
         })
         .await?;
 

@@ -1,3 +1,51 @@
+//! Output and report generation module
+//!
+//! Provides report generation, format conversion, trend analysis, and scan session management.
+//!
+//! ## Key Components
+//!
+//! - [`convert`] - Format conversion (CSV, HTML, JUnit, Markdown, SARIF)
+//! - [`report`] - Report generation with metadata and templates
+//! - [`dedup`] - Finding deduplication engine
+//! - [`trend`] - Trend analysis across multiple scans
+//! - [`baseline`] - Baseline comparison for regression detection
+//! - [`session`] - Scan session persistence
+//! - [`schedule`] - Scheduled scan management
+//! - [`ai_schema`] - AI-compatible output schema
+//! - [`pdf`] - PDF report generation (feature-gated)
+//!
+//! ## Supported Output Formats
+//!
+//! | Format | Module | Description |
+//! |--------|--------|-------------|
+//! | JSON | [`convert`] | Pretty-printed and compact JSON |
+//! | CSV | [`csv`] | Tabular data export |
+//! | HTML | [`html`] | Styled HTML reports |
+//! | Markdown | [`markdown`] | Markdown-formatted reports |
+//! | SARIF | [`sarif`] | Static Analysis Results Format |
+//! | JUnit | [`junit`] | JUnit XML for CI/CD integration |
+//! | PDF | [`pdf`] | PDF reports (requires `pdf` feature) |
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use slapper::output::{convert_to_csv, load_scan_report};
+//!
+//! # async fn example() -> slapper::error::Result<()> {
+//! let report = load_scan_report("scan.json").await?;
+//! let csv = convert_to_csv(&report)?;
+//! println!("{}", csv);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Errors
+//!
+//! Output operations may fail with [`SlapperError`](crate::error::SlapperError) for:
+//! - File I/O errors (reading reports, writing output)
+//! - Serialization errors (invalid JSON, CSV escaping)
+//! - Template errors (invalid report templates)
+
 pub mod agent;
 pub mod ai_schema;
 #[cfg(feature = "advanced-hunting")]

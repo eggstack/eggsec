@@ -9,12 +9,16 @@ use ratatui::{
 use super::App;
 use crate::tui::components::{centered_rect, confirm_popup, help_popup_for_tab};
 
+/// Layout constants — shared with `runner.rs` for mouse hit-testing.
+const LAYOUT_MARGIN: u16 = 1;
+const TAB_BAR_HEIGHT: u16 = 3;
+
 pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(1)
+        .margin(LAYOUT_MARGIN)
         .constraints([
-            Constraint::Length(3),
+            Constraint::Length(TAB_BAR_HEIGHT),
             Constraint::Length(1),
             Constraint::Min(0),
             Constraint::Length(1),

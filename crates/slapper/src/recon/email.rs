@@ -189,3 +189,56 @@ pub async fn discover_contacts(url: &str) -> Result<EmailDiscovery> {
     let client = EmailDiscoveryClient::new()?;
     client.discover(url).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_emails_basic() {
+        let client = EmailDiscoveryClient::new().unwrap();
+        let content = "Contact us at admin@company.com or support@business.org";
+        let emails = client.extract_emails(content);
+        assert!(!emails.is_empty());
+    }
+
+    #[test]
+    fn test_extract_emails_filters_examples() {
+        let client = EmailDiscoveryClient::new().unwrap();
+        let content = "Email: user@example.com and test@test.com";
+        let emails = client.extract_emails(content);
+        assert!(emails.is_empty(), "Should filter out example.com and test.com");
+    }
+
+    #[test]
+    fn test_extract_emails_deduplicates() {
+        let client = EmailDiscoveryClient::new().unwrap();
+        let content = "admin@company.com admin@company.com admin@company.com";
+        let emails = client.extract_emails(content);
+        assert_eq!(emails.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_phones_basic() {
+        let client = EmailDiscoveryClient::new().unwrap();
+        let content = "Call us at +1-555-123-4567 or (555) 987-6543";
+        let phones = client.extract_phones(content);
+        assert!(!phones.is_empty());
+    }
+
+    #[test]
+    fn test_extract_social_media_links() {
+        let client = EmailDiscoveryClient::new().unwrap();
+        let content = r#"<a href="https://github.com/slapper">GitHub</a>"#;
+        let socials = client.extract_social_media(content);
+        assert!(socials.iter().any(|s| s.platform == "GitHub"));
+    }
+
+    #[test]
+    fn test_extract_social_media_twitter() {
+        let client = EmailDiscoveryClient::new().unwrap();
+        let content = r#"<a href="https://twitter.com/slapper_sec">Twitter</a>"#;
+        let socials = client.extract_social_media(content);
+        assert!(socials.iter().any(|s| s.platform == "Twitter" || s.platform == "X"));
+    }
+}

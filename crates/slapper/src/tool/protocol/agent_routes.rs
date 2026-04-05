@@ -250,3 +250,89 @@ pub fn router(registry: AgentRegistry, scheduler: TaskScheduler) -> Router {
         .route("/api/v1/tasks/{id}/cancel", post(cancel_task))
         .with_state(state)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_agent(name: &str, caps: Vec<String>) -> AgentInfo {
+        AgentInfo {
+            id: Uuid::new_v4(),
+            name: name.to_string(),
+            capabilities: caps,
+            status: AgentStatus::Active,
+            last_heartbeat: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            callback_url: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_register_agent_in_registry() {
+        let registry = AgentRegistry::new();
+        let agent = make_agent("test-agent", vec!["scan".to_string()]);
+        registry.register(agent.clone()).await;
+        let found = registry.get(agent.id).await;
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "test-agent");
+    }
+
+    #[tokio::test]
+    async fn test_list_agents_empty() {
+        let registry = AgentRegistry::new();
+        let agents = registry.list().await;
+        assert!(agents.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_agents_after_register() {
+        let registry = AgentRegistry::new();
+        registry.register(make_agent("agent1", vec!["scan".to_string()])).await;
+        registry.register(make_agent("agent2", vec!["fuzz".to_string()])).await;
+        let agents = registry.list().await;
+        assert_eq!(agents.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_unregister_agent() {
+        let registry = AgentRegistry::new();
+        let agent = make_agent("test-agent", vec!["scan".to_string()]);
+        let id = agent.id;
+        registry.register(agent).await;
+        registry.unregister(id).await;
+        assert!(registry.get(id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_heartbeat_updates_agent() {
+        let registry = AgentRegistry::new();
+        let agent = make_agent("test-agent", vec!["scan".to_string()]);
+        let id = agent.id;
+        registry.register(agent).await;
+        let before = registry.get(id).await.unwrap().last_heartbeat;
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        registry.heartbeat(id).await;
+        let after = registry.get(id).await.unwrap().last_heartbeat;
+        assert!(after > before);
+    }
+
+    #[tokio::test]
+    async fn test_scheduler_create_task() {
+        let scheduler = TaskScheduler::new();
+        let task = scheduler.create_task(
+            "scan",
+            serde_json::json!({"target": "http://example.com"}),
+        );
+        scheduler.schedule(task).await;
+        assert!(scheduler.pending_count().await > 0);
+    }
+
+    #[test]
+    fn test_router_creation() {
+        let registry = AgentRegistry::new();
+        let scheduler = TaskScheduler::new();
+        let _router = router(registry, scheduler);
+    }
+}

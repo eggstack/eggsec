@@ -152,7 +152,7 @@ impl CorsAnalyzer {
         })
     }
 
-    fn check_vulnerability(
+    pub(crate) fn check_vulnerability(
         &self,
         test_origin: &str,
         acao: &Option<String>,
@@ -179,4 +179,79 @@ impl CorsAnalyzer {
 pub async fn analyze_cors(url: &str) -> Result<CorsAnalysis> {
     let analyzer = CorsAnalyzer::new()?;
     analyzer.analyze(url).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_vulnerability_wildcard_with_credentials() {
+        let analyzer = CorsAnalyzer::new().unwrap();
+        let (vulnerable, vuln_type) = analyzer.check_vulnerability(
+            "https://evil.com",
+            &Some("*".to_string()),
+            true,
+        );
+        assert!(vulnerable);
+        assert_eq!(vuln_type, Some("Wildcard with credentials".to_string()));
+    }
+
+    #[test]
+    fn test_check_vulnerability_null_origin_allowed() {
+        let analyzer = CorsAnalyzer::new().unwrap();
+        let (vulnerable, vuln_type) = analyzer.check_vulnerability(
+            "https://evil.com",
+            &Some("null".to_string()),
+            false,
+        );
+        assert!(vulnerable);
+        assert_eq!(vuln_type, Some("Null origin allowed".to_string()));
+    }
+
+    #[test]
+    fn test_check_vulnerability_null_reflection() {
+        let analyzer = CorsAnalyzer::new().unwrap();
+        let (vulnerable, vuln_type) = analyzer.check_vulnerability(
+            "null",
+            &Some("https://evil.com".to_string()),
+            false,
+        );
+        assert!(vulnerable);
+        assert_eq!(vuln_type, Some("Null origin reflection".to_string()));
+    }
+
+    #[test]
+    fn test_check_vulnerability_not_vulnerable() {
+        let analyzer = CorsAnalyzer::new().unwrap();
+        let (vulnerable, vuln_type) = analyzer.check_vulnerability(
+            "https://example.com",
+            &Some("https://example.com".to_string()),
+            false,
+        );
+        assert!(!vulnerable);
+        assert!(vuln_type.is_none());
+    }
+
+    #[test]
+    fn test_check_vulnerability_no_acao_header() {
+        let analyzer = CorsAnalyzer::new().unwrap();
+        let (vulnerable, vuln_type) = analyzer.check_vulnerability(
+            "https://evil.com",
+            &None,
+            false,
+        );
+        assert!(!vulnerable);
+        assert!(vuln_type.is_none());
+    }
+
+    #[test]
+    fn test_generate_test_origins_count() {
+        let analyzer = CorsAnalyzer::new().unwrap();
+        let origins = analyzer.generate_test_origins();
+        assert_eq!(origins.len(), 9);
+        assert!(origins.contains(&"https://evil.com".to_string()));
+        assert!(origins.contains(&"null".to_string()));
+        assert!(origins.contains(&"*".to_string()));
+    }
 }

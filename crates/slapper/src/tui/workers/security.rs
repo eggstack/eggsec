@@ -43,10 +43,63 @@ pub async fn run_compliance_task(
     use crate::compliance::generate_compliance_report;
     use crate::types::Severity;
 
-    let _ = progress_tx.send((0, 1)).await;
-    let findings = vec![Severity::High, Severity::Medium, Severity::Low];
+    let _ = progress_tx.send((0, 3)).await;
+
+    let mut findings = Vec::new();
+
+    if let Ok(resp) = reqwest::Client::new()
+        .get(&target)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+    {
+        let headers = resp.headers();
+        let status = resp.status();
+
+        if !target.starts_with("https://") {
+            findings.push(Severity::High);
+        }
+
+        if !headers.contains_key("strict-transport-security") {
+            findings.push(Severity::Medium);
+        }
+
+        if !headers.contains_key("x-content-type-options") {
+            findings.push(Severity::Low);
+        }
+
+        if !headers.contains_key("x-frame-options")
+            && !headers
+                .get("content-security-policy")
+                .map(|v| v.to_str().map(|s| s.contains("frame-ancestors")).unwrap_or(false))
+                .unwrap_or(false)
+        {
+            findings.push(Severity::Medium);
+        }
+
+        if headers.contains_key("server") || headers.contains_key("x-powered-by") {
+            findings.push(Severity::Low);
+        }
+
+        if status.is_server_error() {
+            findings.push(Severity::High);
+        }
+
+        if status.is_client_error() && status.as_u16() != 404 {
+            findings.push(Severity::Medium);
+        }
+    } else {
+        findings.push(Severity::High);
+    }
+
+    if findings.is_empty() {
+        findings.push(Severity::Info);
+    }
+
+    let _ = progress_tx.send((2, 3)).await;
+
     let report = generate_compliance_report(&target, framework, &findings).await?;
-    let _ = progress_tx.send((1, 1)).await;
+    let _ = progress_tx.send((3, 3)).await;
     let _ = result_tx.send(TaskResult::Compliance(report)).await;
     Ok(())
 }

@@ -75,3 +75,62 @@ pub async fn enumerate_dns_records(domain: &str) -> Result<DnsRecords> {
 
     Ok(records)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dns_records_default() {
+        let records = DnsRecords::default();
+        assert!(records.a.is_empty());
+        assert!(records.mx.is_empty());
+        assert!(records.soa.is_none());
+    }
+
+    #[test]
+    fn test_dns_records_serialization() {
+        let records = DnsRecords {
+            domain: "example.com".to_string(),
+            a: vec!["93.184.216.34".to_string()],
+            aaaa: vec![],
+            cname: vec![],
+            mx: vec![MxRecord {
+                preference: 10,
+                exchange: "mail.example.com".to_string(),
+            }],
+            txt: vec!["v=spf1 include:example.com ~all".to_string()],
+            ns: vec!["ns1.example.com".to_string()],
+            soa: Some(SoaRecord {
+                mname: "ns1.example.com".to_string(),
+                rname: "admin.example.com".to_string(),
+                serial: 2024010101,
+                refresh: 3600,
+                retry: 900,
+                expire: 604800,
+                minimum: 86400,
+            }),
+            caa: vec![],
+        };
+
+        let json = serde_json::to_string(&records).unwrap();
+        assert!(json.contains("example.com"));
+        assert!(json.contains("mail.example.com"));
+
+        let deserialized: DnsRecords = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.domain, "example.com");
+        assert_eq!(deserialized.a.len(), 1);
+        assert_eq!(deserialized.mx.len(), 1);
+    }
+
+    #[test]
+    fn test_mx_record_serialization() {
+        let mx = MxRecord {
+            preference: 20,
+            exchange: "backup.example.com".to_string(),
+        };
+        let json = serde_json::to_string(&mx).unwrap();
+        let parsed: MxRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.preference, 20);
+    }
+}

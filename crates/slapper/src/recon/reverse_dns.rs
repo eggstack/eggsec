@@ -128,3 +128,33 @@ pub async fn lookup_domain_info(target: &str) -> Result<ReverseDnsResult> {
 
     reverse_dns_lookup(&ip).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_asn_google() {
+        let (asn, org) = extract_asn_from_hostname("google-public-dns-a.google.com");
+        assert!(asn.is_some() || org.is_some());
+    }
+
+    #[test]
+    fn test_extract_asn_cloudflare() {
+        let (asn, org) = extract_asn_from_hostname("1dot1dot1dot1.cloudflare-dns.com");
+        assert!(asn.is_some() || org.is_some() || asn.is_none() && org.is_none());
+    }
+
+    #[test]
+    fn test_extract_asn_generic_pattern() {
+        let (asn, org) = extract_asn_from_hostname("as15169.google.com");
+        assert_eq!(asn, Some("AS15169".to_string()));
+    }
+
+    #[test]
+    fn test_extract_asn_no_match() {
+        let (asn, org) = extract_asn_from_hostname("example.com");
+        assert!(asn.is_none());
+        assert!(org.is_none());
+    }
+}

@@ -206,6 +206,7 @@ async fn process_port_scan(task: Task) -> Result<serde_json::Value> {
         std::time::Duration::from_secs(timeout),
         false,
         crate::scanner::spoof::SpoofConfig::default(),
+        None,
     )
     .await?;
 
@@ -246,6 +247,7 @@ async fn process_fingerprint(task: Task) -> Result<serde_json::Value> {
         std::time::Duration::from_secs(timeout),
         false,
         20,
+        None,
     )
     .await?;
 
@@ -288,6 +290,7 @@ async fn process_endpoints(task: Task) -> Result<serde_json::Value> {
         tui_mode: false,
         spoof_config: crate::scanner::spoof::SpoofConfig::default(),
         verify_tls: true,
+        progress_tx: None,
     })
     .await?;
 

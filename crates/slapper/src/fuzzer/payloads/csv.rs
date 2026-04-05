@@ -172,3 +172,57 @@ pub fn get_payloads() -> Vec<Payload> {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_csv_payloads_count() {
+        let payloads = get_payloads();
+        assert!(
+            payloads.len() >= 20,
+            "Expected at least 20 CSV payloads, got {}",
+            payloads.len()
+        );
+    }
+
+    #[test]
+    fn test_csv_payloads_correct_type() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert_eq!(p.payload_type, PayloadType::Csv);
+        }
+    }
+
+    #[test]
+    fn test_csv_payloads_non_empty() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert!(!p.payload.is_empty());
+            assert!(!p.description.is_empty());
+            assert!(!p.tags.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_csv_payloads_contain_cmd_injection() {
+        let payloads = get_payloads();
+        let has_cmd = payloads.iter().any(|p| p.payload.contains("=cmd|"));
+        assert!(
+            has_cmd,
+            "CSV payloads should contain cmd injection patterns"
+        );
+    }
+
+    #[test]
+    fn test_csv_payloads_have_varied_severities() {
+        let payloads = get_payloads();
+        let severities: std::collections::HashSet<_> =
+            payloads.iter().map(|p| p.severity).collect();
+        assert!(
+            severities.len() >= 2,
+            "CSV payloads should have varied severities"
+        );
+    }
+}

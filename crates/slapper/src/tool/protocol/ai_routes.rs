@@ -183,3 +183,101 @@ pub fn router() -> Router {
         .route("/api/v1/ai/circuit-breaker", get(circuit_breaker_status))
         .route("/api/v1/ai/validate-config", post(validate_config))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_analyze_findings_counts() {
+        let req = AnalyzeRequest {
+            findings: vec![serde_json::json!({"sev": "high"}), serde_json::json!({"sev": "low"})],
+        };
+        let resp = analyze_findings(Json(req)).await;
+        assert_eq!(resp.findings_count, 2);
+        assert_eq!(resp.status, "placeholder");
+    }
+
+    #[tokio::test]
+    async fn test_suggest_payloads_returns_vuln_type() {
+        let req = SuggestPayloadsRequest {
+            target: "http://example.com".to_string(),
+            vuln_type: "sqli".to_string(),
+            context: None,
+        };
+        let resp = suggest_payloads(Json(req)).await;
+        assert_eq!(resp.vuln_type, "sqli");
+        assert_eq!(resp.payloads.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_waf_bypass_returns_suggestions() {
+        let req = WafBypassRequest {
+            waf_name: "Cloudflare".to_string(),
+            blocked_payload: "' OR 1=1".to_string(),
+        };
+        let resp = waf_bypass(Json(req)).await;
+        assert_eq!(resp.waf_name, "Cloudflare");
+        assert!(!resp.bypass_suggestions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_scan_strategy_deep_for_many_findings() {
+        let req = ScanStrategyRequest {
+            target: "http://example.com".to_string(),
+            current_findings: Some(vec![serde_json::json!({}); 6]),
+            scan_depth: Some("light".to_string()),
+        };
+        let resp = scan_strategy(Json(req)).await;
+        assert_eq!(resp.recommended_strategy, "deep");
+    }
+
+    #[tokio::test]
+    async fn test_scan_strategy_standard_for_no_findings() {
+        let req = ScanStrategyRequest {
+            target: "http://example.com".to_string(),
+            current_findings: Some(vec![]),
+            scan_depth: Some("standard".to_string()),
+        };
+        let resp = scan_strategy(Json(req)).await;
+        assert_eq!(resp.recommended_strategy, "standard");
+    }
+
+    #[tokio::test]
+    async fn test_validate_config_missing_base_url() {
+        let req = ValidateConfigRequest {
+            base_url: None,
+            model: None,
+        };
+        let resp = validate_config(Json(req)).await;
+        assert!(!resp.valid);
+        assert!(resp.issues.iter().any(|i| i.contains("base_url")));
+    }
+
+    #[tokio::test]
+    async fn test_validate_config_valid() {
+        let req = ValidateConfigRequest {
+            base_url: Some("https://api.openai.com".to_string()),
+            model: Some("gpt-4".to_string()),
+        };
+        let resp = validate_config(Json(req)).await;
+        assert!(resp.valid);
+        assert!(resp.issues.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_validate_config_bad_url() {
+        let req = ValidateConfigRequest {
+            base_url: Some("not-a-url".to_string()),
+            model: None,
+        };
+        let resp = validate_config(Json(req)).await;
+        assert!(!resp.valid);
+        assert!(resp.issues.iter().any(|i| i.contains("http")));
+    }
+
+    #[test]
+    fn test_router_has_routes() {
+        let _router = router();
+    }
+}

@@ -65,7 +65,7 @@ async fn streaming_response(
             tool_type: "function".to_string(),
             function: FunctionCall {
                 name: t.name.clone(),
-                arguments: serde_json::json!({}).to_string(),
+                arguments: serde_json::to_string(&extract_tool_arguments(t, &user_query)).unwrap_or_else(|_| "{}".to_string()),
             },
         }).collect();
 
@@ -152,7 +152,7 @@ async fn non_streaming_response(
             tool_type: "function".to_string(),
             function: FunctionCall {
                 name: t.name.clone(),
-                arguments: serde_json::json!({}).to_string(),
+                arguments: serde_json::to_string(&extract_tool_arguments(t, &user_query)).unwrap_or_else(|_| "{}".to_string()),
             },
         }).collect();
         tool_calls = Some(calls);
@@ -312,4 +312,193 @@ fn find_matching_tools(
         .take(3)
         .cloned()
         .collect()
+}
+
+fn extract_tool_arguments(
+    tool: &crate::tool::registry::ToolInfo,
+    query: &str,
+) -> serde_json::Value {
+    use crate::tool::request::TargetType;
+
+    let mut args = serde_json::Map::new();
+    let target = extract_target_from_query(query);
+
+    for cap in &tool.capabilities {
+        for param in &cap.parameters {
+            match param.name.to_lowercase().as_str() {
+                "target" | "host" | "url" | "domain" => {
+                    args.insert(param.name.clone(), serde_json::json!(target.value));
+                }
+                "port" | "ports" => {
+                    if let Some(port_str) = extract_port_from_query(query) {
+                        if let Ok(port) = port_str.parse::<u16>() {
+                            args.insert(param.name.clone(), serde_json::json!(port));
+                        }
+                    }
+                }
+                "concurrency" | "threads" => {
+                    if let Some(val) = extract_number_from_query(query, &["concurrency", "threads", "parallel"]) {
+                        args.insert(param.name.clone(), serde_json::json!(val));
+                    } else if let Some(default) = &param.default {
+                        args.insert(param.name.clone(), default.clone());
+                    }
+                }
+                "timeout" | "duration" => {
+                    if let Some(val) = extract_number_from_query(query, &["timeout", "duration", "seconds"]) {
+                        args.insert(param.name.clone(), serde_json::json!(val));
+                    } else if let Some(default) = &param.default {
+                        args.insert(param.name.clone(), default.clone());
+                    }
+                }
+                "verbose" | "debug" => {
+                    let query_lower = query.to_lowercase();
+                    let val = query_lower.contains("verbose") || query_lower.contains("debug") || query_lower.contains("-v");
+                    args.insert(param.name.clone(), serde_json::json!(val));
+                }
+                _ => {
+                    if let Some(default) = &param.default {
+                        args.insert(param.name.clone(), default.clone());
+                    }
+                }
+            }
+        }
+        if !args.is_empty() {
+            break;
+        }
+    }
+
+    if args.is_empty() {
+        args.insert("target".to_string(), serde_json::json!(target.value));
+    }
+
+    serde_json::Value::Object(args)
+}
+
+fn extract_port_from_query(query: &str) -> Option<String> {
+    let words: Vec<&str> = query.split_whitespace().collect();
+    for (i, word) in words.iter().enumerate() {
+        if word.to_lowercase() == "port" && i + 1 < words.len() {
+            let next = words[i + 1].trim_end_matches(|c: char| !c.is_ascii_digit());
+            if next.parse::<u16>().is_ok() {
+                return Some(next.to_string());
+            }
+        }
+        if let Some(stripped) = word.strip_prefix("--port=") {
+            if stripped.parse::<u16>().is_ok() {
+                return Some(stripped.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn extract_number_from_query(query: &str, keywords: &[&str]) -> Option<u64> {
+    let words: Vec<&str> = query.split_whitespace().collect();
+    for (i, word) in words.iter().enumerate() {
+        for keyword in keywords {
+            if word.to_lowercase().contains(keyword) && i + 1 < words.len() {
+                if let Ok(val) = words[i + 1].parse::<u64>() {
+                    return Some(val);
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_user_query_from_messages() {
+        let messages = vec![
+            ChatMessage { role: "system".to_string(), content: Some("You are helpful".to_string()), tool_calls: None },
+            ChatMessage { role: "user".to_string(), content: Some("Scan example.com".to_string()), tool_calls: None },
+        ];
+        let query = extract_user_query(&messages);
+        assert_eq!(query, "Scan example.com");
+    }
+
+    #[test]
+    fn test_extract_user_query_multiple_user_messages() {
+        let messages = vec![
+            ChatMessage { role: "user".to_string(), content: Some("First".to_string()), tool_calls: None },
+            ChatMessage { role: "assistant".to_string(), content: Some("OK".to_string()), tool_calls: None },
+            ChatMessage { role: "user".to_string(), content: Some("Second".to_string()), tool_calls: None },
+        ];
+        let query = extract_user_query(&messages);
+        assert_eq!(query, "First\nSecond");
+    }
+
+    #[test]
+    fn test_extract_system_prompt_default() {
+        let messages = vec![
+            ChatMessage { role: "user".to_string(), content: Some("Hello".to_string()), tool_calls: None },
+        ];
+        let prompt = extract_system_prompt(&messages);
+        assert!(prompt.contains("Slapper"));
+    }
+
+    #[test]
+    fn test_extract_system_prompt_custom() {
+        let messages = vec![
+            ChatMessage { role: "system".to_string(), content: Some("Custom prompt".to_string()), tool_calls: None },
+        ];
+        let prompt = extract_system_prompt(&messages);
+        assert_eq!(prompt, "Custom prompt");
+    }
+
+    #[test]
+    fn test_extract_target_url() {
+        let target = extract_target_from_query("Please scan https://example.com/api");
+        assert_eq!(target.value, "https://example.com/api");
+    }
+
+    #[test]
+    fn test_extract_target_domain() {
+        let target = extract_target_from_query("Check vulnerabilities on test-server.example.com please");
+        assert_eq!(target.value, "test-server.example.com");
+    }
+
+    #[test]
+    fn test_extract_target_ip() {
+        let target = extract_target_from_query("Scan port 80 on 192.168.1.1");
+        assert_eq!(target.value, "192.168.1.1");
+    }
+
+    #[test]
+    fn test_extract_port_from_query() {
+        assert_eq!(extract_port_from_query("Scan port 8080"), Some("8080".to_string()));
+        assert_eq!(extract_port_from_query("--port=443"), Some("443".to_string()));
+        assert_eq!(extract_port_from_query("no port mentioned"), None);
+    }
+
+    #[test]
+    fn test_extract_number_from_query() {
+        assert_eq!(extract_number_from_query("use concurrency 10", &["concurrency"]), Some(10));
+        assert_eq!(extract_number_from_query("timeout 30 seconds", &["timeout"]), Some(30));
+        assert_eq!(extract_number_from_query("no numbers here", &["concurrency"]), None);
+    }
+
+    #[test]
+    fn test_generate_response_with_matched_tools() {
+        let tools = vec![crate::tool::registry::ToolInfo {
+            id: "scan".to_string(),
+            name: "scan".to_string(),
+            category: crate::tool::traits::ToolCategory::Scanning,
+            description: "Port scanner".to_string(),
+            capabilities: vec![],
+            protocols: vec![],
+        }];
+        let response = generate_response("system", "scan example.com", &tools);
+        assert!(response.contains("1 matching"));
+        assert!(response.contains("scan"));
+    }
+
+    #[test]
+    fn test_generate_response_no_tools() {
+        let response = generate_response("system", "hello", &[]);
+        assert!(response.contains("system"));
+    }
 }

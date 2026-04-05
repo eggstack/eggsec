@@ -110,13 +110,45 @@ pub async fn run_recon(
 
     for attempt in 1..=max_retries {
         let stage = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let stage_clone = stage.clone();
+        let ptx = progress_tx.clone();
+
+        let progress_handle = tokio::spawn(async move {
+            let mut last_stage = String::new();
+            let stages = [
+                "resolving", "recon (parallel)", "takeover", "cve", "done",
+            ];
+            let total_stages = stages.len() as u64;
+            loop {
+                let current = stage_clone.lock().map(|s| s.clone()).unwrap_or_default();
+                if current.is_empty() && last_stage.is_empty() {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                    continue;
+                }
+                if current != last_stage {
+                    last_stage.clone_from(&current);
+                    let completed = stages.iter().take_while(|&&s| {
+                        current.contains(s) || (s == "done" && current.is_empty())
+                    }).count() as u64;
+                    let pct = (completed.min(total_stages) * 90) / total_stages + 5;
+                    let _ = ptx.send((pct, 100)).await;
+                }
+                if current.is_empty() && !last_stage.is_empty() {
+                    break;
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            }
+        });
+
         match run_full_recon(&args, &config, stage, false).await {
             Ok(r) => {
+                progress_handle.abort();
                 let _ = progress_tx.send((100, 100)).await;
                 let _ = result_tx.send(TaskResult::Recon(r)).await;
                 return Ok(());
             }
             Err(e) => {
+                progress_handle.abort();
                 let error_str = e.to_string().to_lowercase();
 
                 let is_retryable = error_str.contains("timeout")

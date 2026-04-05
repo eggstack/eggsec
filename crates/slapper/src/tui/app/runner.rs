@@ -18,6 +18,19 @@ use crate::tui::state;
 use crate::tui::tabs::Tab;
 use crate::tui::ui;
 
+/// Layout constants matching `ui::draw()` — change these if the layout changes.
+const LAYOUT_MARGIN: u16 = 1;
+const TAB_BAR_HEIGHT: u16 = 3;
+
+fn compute_tab_area(term_width: u16) -> ratatui::layout::Rect {
+    ratatui::layout::Rect {
+        x: LAYOUT_MARGIN,
+        y: LAYOUT_MARGIN,
+        width: term_width.saturating_sub(LAYOUT_MARGIN * 2),
+        height: TAB_BAR_HEIGHT,
+    }
+}
+
 pub fn run(config_path: Option<String>) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -82,12 +95,7 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
 
     if button == crossterm::event::MouseButton::Left {
         let (term_width, _term_height) = crossterm::terminal::size().unwrap_or((80, 24));
-        let tab_area = ratatui::layout::Rect {
-            x: 1,
-            y: 1,
-            width: term_width.saturating_sub(2),
-            height: 3,
-        };
+        let tab_area = compute_tab_area(term_width);
 
         if app.show_help || app.show_search || app.show_http_options {
             return;
@@ -278,12 +286,11 @@ where
                         }
                     }
                     (KeyModifiers::NONE, KeyCode::Tab) => {
+                        app.handle_focus_next();
+                    }
+                    (KeyModifiers::CONTROL, KeyCode::Char(' ')) => {
                         if app.mode == InputMode::Insert {
-                            if !app.handle_tab() {
-                                app.handle_focus_next();
-                            }
-                        } else {
-                            app.handle_focus_next();
+                            app.handle_autocomplete();
                         }
                     }
                     (KeyModifiers::SHIFT, KeyCode::BackTab) => {

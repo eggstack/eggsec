@@ -198,3 +198,108 @@ pub async fn connect_through(proxy: ProxyEntry, target: SocketAddr) -> Result<Pr
         target_addr: target,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_connect_request_without_auth() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap());
+        let target: SocketAddr = "10.0.0.1:443".parse().unwrap();
+        let request = proxy.build_connect_request(target);
+
+        assert!(request.starts_with("CONNECT 10.0.0.1:443 HTTP/1.1\r\n"));
+        assert!(request.contains("Host: 10.0.0.1:443\r\n"));
+        assert!(request.contains("Proxy-Connection: Keep-Alive\r\n"));
+        assert!(!request.contains("Proxy-Authorization"));
+    }
+
+    #[test]
+    fn test_build_connect_request_with_auth() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap())
+            .with_auth("user".to_string(), "pass".to_string());
+        let target: SocketAddr = "10.0.0.1:443".parse().unwrap();
+        let request = proxy.build_connect_request(target);
+
+        assert!(request.contains("Proxy-Authorization: Basic "));
+        let expected_creds = general_purpose::STANDARD.encode("user:pass");
+        assert!(request.contains(&expected_creds));
+    }
+
+    #[test]
+    fn test_build_connect_request_with_host() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap());
+        let request = proxy.build_connect_request_with_host("example.com", 443);
+
+        assert!(request.starts_with("CONNECT example.com:443 HTTP/1.1\r\n"));
+        assert!(request.contains("Host: example.com:443\r\n"));
+    }
+
+    #[test]
+    fn test_parse_response_success() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap());
+        let response = "HTTP/1.1 200 Connection Established\r\n\r\n";
+        assert!(proxy.parse_response(response).is_ok());
+    }
+
+    #[test]
+    fn test_parse_response_201() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap());
+        let response = "HTTP/1.1 201 Created\r\n\r\n";
+        assert!(proxy.parse_response(response).is_ok());
+    }
+
+    #[test]
+    fn test_parse_response_403() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap());
+        let response = "HTTP/1.1 403 Forbidden\r\n\r\n";
+        let result = proxy.parse_response(response);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("403"));
+    }
+
+    #[test]
+    fn test_parse_response_500() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap());
+        let response = "HTTP/1.1 500 Internal Server Error\r\n\r\n";
+        let result = proxy.parse_response(response);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_response_empty() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap());
+        let result = proxy.parse_response("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Empty response"));
+    }
+
+    #[test]
+    fn test_parse_response_invalid_format() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap());
+        let result = proxy.parse_response("INVALID");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_response_invalid_status_code() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:8080".parse().unwrap());
+        let result = proxy.parse_response("HTTP/1.1 abc Bad\r\n\r\n");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_builder_pattern() {
+        let proxy = HttpConnectProxy::new("127.0.0.1:3128".parse().unwrap())
+            .with_auth("admin".to_string(), "secret".to_string())
+            .with_ssl(true)
+            .with_timeout(Duration::from_secs(10));
+
+        assert_eq!(proxy.use_ssl, true);
+        assert_eq!(proxy.timeout, Duration::from_secs(10));
+        assert_eq!(proxy.username, Some("admin".to_string()));
+        assert_eq!(proxy.password, Some("secret".to_string()));
+    }
+}

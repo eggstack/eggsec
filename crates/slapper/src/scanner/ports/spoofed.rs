@@ -94,6 +94,7 @@ pub(crate) async fn scan_ports_spoofed(
     timeout_duration: Duration,
     tui_mode: bool,
     spoof_config: SpoofConfig,
+    progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
 ) -> Result<PortScanResults> {
     use crate::scanner::spoof::{
         build_fragmented_packets, build_tcp_packet, get_local_ip,
@@ -133,6 +134,8 @@ pub(crate) async fn scan_ports_spoofed(
     let responses: Arc<parking_lot::Mutex<HashMap<u16, String>>> = Arc::new(parking_lot::Mutex::new(HashMap::new()));
     let stop_receiver = Arc::new(AtomicBool::new(false));
     let results = Arc::new(Mutex::new(Vec::new()));
+    let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
+    let total_ports = ports.len() as u64;
     let progress = if tui_mode {
         None
     } else {
@@ -205,6 +208,8 @@ pub(crate) async fn scan_ports_spoofed(
         let spoof_config = spoof_config.clone();
         let interface = interface.clone();
         let tx = tx.clone();
+        let scanned_count = scanned_count.clone();
+        let progress_tx = progress_tx.clone();
 
         let src_ip: Ipv4Addr = if let Some(ref ip) = spoof_config.source_ip {
             *ip
@@ -413,6 +418,14 @@ pub(crate) async fn scan_ports_spoofed(
             if let Some(ref pb) = progress {
                 pb.inc(1);
             }
+            if let Some(ref tx) = progress_tx {
+                let count = {
+                    let mut c = scanned_count.lock().await;
+                    *c += 1;
+                    *c
+                };
+                let _ = tx.send((count, total_ports)).await;
+            }
             drop(permit);
         });
 
@@ -470,6 +483,7 @@ pub(crate) async fn scan_ports_spoofed(
     _timeout_duration: Duration,
     _tui_mode: bool,
     _spoof_config: SpoofConfig,
+    _progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
 ) -> Result<PortScanResults> {
     Err(SlapperError::Runtime("IP spoofing requires 'stress-testing' feature and Unix system".to_string()))
 }

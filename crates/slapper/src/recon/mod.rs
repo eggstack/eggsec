@@ -6,11 +6,12 @@
 //! ## Key Components
 //!
 //! - [`FullReconResult`] - Aggregated results from all recon modules
-//! - [`techdetect::TechDetector`] - Technology stack detection
-//! - [`subdomain::SubdomainEnumerator`] - Subdomain enumeration
-//! - [`ssl::SslAnalyzer`] - SSL/TLS certificate analysis
-//! - [`cors::CorsAnalyzer`] - CORS misconfiguration detection
-//! - [`cve::CveMapper`] - CVE mapping for detected technologies
+//! - [`run_full_recon`] - Main entry point for full recon execution
+//! - [`TechDetector`](techdetect::TechDetector) - Technology stack detection
+//! - [`SubdomainEnumerator`](subdomain::SubdomainEnumerator) - Subdomain enumeration
+//! - [`SslAnalyzer`](ssl::SslAnalyzer) - SSL/TLS certificate analysis
+//! - [`CorsAnalyzer`](cors::CorsAnalyzer) - CORS misconfiguration detection
+//! - [`CveMapper`](cve::CveMapper) - CVE mapping for detected technologies
 //!
 //! ## Modules
 //!
@@ -23,6 +24,55 @@
 //! - `whois` - WHOIS information gathering
 //! - `geolocation` - IP geolocation lookup
 //! - `secrets` - Secret detection in responses (API keys, tokens)
+//! - `cloud` - Cloud service discovery (AWS, GCP, Azure)
+//! - `content` - Content and directory discovery
+//! - `js` - JavaScript file analysis for endpoints and secrets
+//! - `wayback` - Wayback Machine historical URL discovery
+//! - `takeover` - Subdomain takeover detection
+//! - `threatintel` - Threat intelligence lookup
+//! - `email` / `email_security` - Email discovery and security analysis
+//! - `dependency_scan` - Dependency vulnerability scanning
+//! - `git_secrets` - Git repository secret detection
+//! - `api_schema` - API schema discovery
+//!
+//! ## Feature Flags
+//!
+//! | Feature | Modules Enabled |
+//! |---------|----------------|
+//! | `git-secrets` | `git_secrets` |
+//! | `api-schema` | `api_schema` |
+//! | `cloud` | `cloud` |
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use slapper::recon::{run_full_recon, ReconArgs};
+//! use slapper::config::SlapperConfig;
+//!
+//! # async fn example() -> slapper::error::Result<()> {
+//! let args = ReconArgs {
+//!     target: "example.com".to_string(),
+//!     output: None,
+//!     json: false,
+//!     quiet: true,
+//!     verbose: false,
+//! };
+//! let config = SlapperConfig::default();
+//! let result = run_full_recon(&args, &config, Default::default(), false).await?;
+//! println!("Found {} subdomains",
+//!     result.subdomains.as_ref().map(|s| s.subdomains.len()).unwrap_or(0));
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Errors
+//!
+//! Recon operations may fail with [`SlapperError`](crate::error::SlapperError) for:
+//! - Invalid target domains or IPs
+//! - Network connectivity issues
+//! - DNS resolution failures
+//! - External API rate limiting (crt.sh, Shodan, etc.)
+//! - Timeout during long-running enumeration
 
 pub mod cloud;
 pub mod content;

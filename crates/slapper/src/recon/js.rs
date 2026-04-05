@@ -266,3 +266,55 @@ pub async fn analyze_js(url: &str) -> Result<JsAnalysis> {
     let analyzer = JsAnalyzer::new()?;
     analyzer.analyze(url).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_url_absolute() {
+        let analyzer = JsAnalyzer::new().unwrap();
+        let result = analyzer.resolve_url("https://example.com", "https://other.com/path");
+        assert_eq!(result, "https://other.com/path");
+    }
+
+    #[test]
+    fn test_resolve_url_relative() {
+        let analyzer = JsAnalyzer::new().unwrap();
+        let result = analyzer.resolve_url("https://example.com", "/api/v1/users");
+        assert_eq!(result, "https://example.com/api/v1/users");
+    }
+
+    #[test]
+    fn test_extract_api_keys_openai() {
+        let analyzer = JsAnalyzer::new().unwrap();
+        let content = r#"apiKey: "sk-abcdefghijklmnopqrstuvwx""#;
+        let keys = analyzer.extract_api_keys(content);
+        assert!(!keys.is_empty(), "Should detect OpenAI API key pattern");
+    }
+
+    #[test]
+    fn test_extract_api_keys_google() {
+        let analyzer = JsAnalyzer::new().unwrap();
+        let content = r#"key: "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q""#;
+        let keys = analyzer.extract_api_keys(content);
+        assert!(!keys.is_empty(), "Should detect Google API key pattern");
+    }
+
+    #[test]
+    fn test_extract_urls_from_content() {
+        let analyzer = JsAnalyzer::new().unwrap();
+        let content = r#"fetch("https://api.example.com/v1/data")"#;
+        let urls = analyzer.extract_urls(content);
+        assert!(!urls.is_empty());
+        assert!(urls.iter().any(|u| u.contains("api.example.com")));
+    }
+
+    #[test]
+    fn test_extract_urls_filters_short() {
+        let analyzer = JsAnalyzer::new().unwrap();
+        let content = r#"url: "http://x""#;
+        let urls = analyzer.extract_urls(content);
+        assert!(urls.is_empty());
+    }
+}

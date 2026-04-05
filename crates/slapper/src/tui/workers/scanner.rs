@@ -1,4 +1,3 @@
-use crate::scanner::endpoints::EndpointScanConfig;
 use crate::scanner::spoof::SpoofConfig;
 use crate::tui::workers::TaskResult;
 
@@ -15,6 +14,7 @@ pub async fn run_port_scan(
     let _ = progress_tx.send((0, 100)).await;
 
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
+    let total_ports = port_list.len() as u64;
 
     let _ = progress_tx.send((10, 100)).await;
 
@@ -25,13 +25,13 @@ pub async fn run_port_scan(
         timeout,
         true,
         SpoofConfig::default(),
+        Some(progress_tx.clone()),
     )
     .await?;
 
     let total = results.ports_scanned as u64;
-    let _ = progress_tx.send((90, 100)).await;
     let _ = result_tx.send(TaskResult::PortScan(results)).await;
-    let _ = progress_tx.send((total.max(1), total.max(1))).await;
+    let _ = progress_tx.send((total.max(1), total_ports.max(1))).await;
     Ok(())
 }
 
@@ -43,7 +43,7 @@ pub async fn run_endpoint_scan(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use crate::scanner::endpoints::{scan_endpoints, DEFAULT_ENDPOINTS};
+    use crate::scanner::endpoints::{scan_endpoints, DEFAULT_ENDPOINTS, EndpointScanConfig};
 
     let _ = progress_tx.send((0, 100)).await;
 
@@ -58,8 +58,6 @@ pub async fn run_endpoint_scan(
     };
     let total_endpoints = endpoints.len() as u64;
 
-    let _ = progress_tx.send((10, 100)).await;
-
     let results = scan_endpoints(EndpointScanConfig {
         base_url: target,
         endpoints,
@@ -69,11 +67,11 @@ pub async fn run_endpoint_scan(
         tui_mode: true,
         spoof_config: SpoofConfig::default(),
         verify_tls: true,
+        progress_tx: Some(progress_tx.clone()),
     })
     .await?;
 
     let total = results.endpoints_scanned as u64;
-    let _ = progress_tx.send((90, 100)).await;
     let _ = result_tx.send(TaskResult::EndpointScan(results)).await;
     let _ = progress_tx.send((total.max(1), total_endpoints.max(1))).await;
     Ok(())
@@ -93,12 +91,17 @@ pub async fn run_fingerprint(
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
 
-    let _ = progress_tx.send((10, 100)).await;
-
-    let results = fingerprint_services(&target, port_list, timeout, true, 20).await?;
+    let results = fingerprint_services(
+        &target,
+        port_list,
+        timeout,
+        true,
+        20,
+        Some(progress_tx.clone()),
+    )
+    .await?;
 
     let total = results.ports_scanned as u64;
-    let _ = progress_tx.send((90, 100)).await;
     let _ = result_tx.send(TaskResult::Fingerprint(results)).await;
     let _ = progress_tx.send((total.max(1), total_ports.max(1))).await;
     Ok(())

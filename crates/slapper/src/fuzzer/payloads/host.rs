@@ -179,3 +179,70 @@ pub fn get_payloads() -> Vec<Payload> {
         },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_host_payloads_count() {
+        let payloads = get_payloads();
+        assert!(
+            payloads.len() >= 20,
+            "Expected at least 20 Host payloads, got {}",
+            payloads.len()
+        );
+    }
+
+    #[test]
+    fn test_host_payloads_correct_type() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert_eq!(p.payload_type, PayloadType::Host);
+        }
+    }
+
+    #[test]
+    fn test_host_payloads_non_empty() {
+        let payloads = get_payloads();
+        for p in &payloads {
+            assert!(!p.description.is_empty());
+            assert!(!p.tags.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_host_payloads_contains_localhost_variants() {
+        let payloads = get_payloads();
+        let has_localhost = payloads
+            .iter()
+            .any(|p| p.payload == "127.0.0.1" || p.payload == "localhost");
+        assert!(
+            has_localhost,
+            "Host payloads should contain localhost variants"
+        );
+    }
+
+    #[test]
+    fn test_host_payloads_contains_cloud_metadata() {
+        let payloads = get_payloads();
+        let has_aws = payloads.iter().any(|p| p.payload == "169.254.169.254");
+        let has_gcp = payloads
+            .iter()
+            .any(|p| p.payload == "metadata.google.internal");
+        assert!(has_aws, "Host payloads should contain AWS metadata");
+        assert!(has_gcp, "Host payloads should contain GCP metadata");
+    }
+
+    #[test]
+    fn test_host_payloads_have_crlf_injection() {
+        let payloads = get_payloads();
+        let has_crlf = payloads
+            .iter()
+            .any(|p| p.tags.contains(&"crlf".to_string()));
+        assert!(
+            has_crlf,
+            "Host payloads should contain CRLF injection tests"
+        );
+    }
+}

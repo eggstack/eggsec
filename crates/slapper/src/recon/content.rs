@@ -304,3 +304,52 @@ pub async fn scan_content(base_url: &str, concurrency: usize) -> Result<ContentD
     let scanner = ContentScanner::new(concurrency)?;
     scanner.scan(base_url).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_sensitive_paths_contains_common_files() {
+        let scanner = ContentScanner::new(10).unwrap();
+        let paths = scanner.get_sensitive_paths();
+        assert!(paths.contains(&"/.env"));
+        assert!(paths.contains(&"/.git/config"));
+        assert!(paths.contains(&"/wp-config.php"));
+        assert!(paths.contains(&"/.aws/credentials"));
+    }
+
+    #[test]
+    fn test_categorize_path_env_file() {
+        let (category, severity) = ContentScanner::categorize_path("/.env");
+        assert_eq!(category, "credentials");
+        assert_eq!(severity, "critical");
+    }
+
+    #[test]
+    fn test_categorize_path_git() {
+        let (category, severity) = ContentScanner::categorize_path("/.git/config");
+        assert_eq!(category, "source_control");
+        assert_eq!(severity, "high");
+    }
+
+    #[test]
+    fn test_categorize_path_admin() {
+        let (category, severity) = ContentScanner::categorize_path("/admin/dashboard");
+        assert_eq!(category, "admin_interface");
+        assert_eq!(severity, "high");
+    }
+
+    #[test]
+    fn test_get_file_type() {
+        assert_eq!(ContentScanner::get_file_type("/.env"), "Environment File");
+        assert_eq!(ContentScanner::get_file_type("/.git/config"), "Git Repository");
+        assert_eq!(ContentScanner::get_file_type("/config.json"), "JSON File");
+    }
+
+    #[test]
+    fn test_get_description_env() {
+        let desc = ContentScanner::get_description("/.env");
+        assert!(desc.contains("credentials") || desc.contains("sensitive"));
+    }
+}

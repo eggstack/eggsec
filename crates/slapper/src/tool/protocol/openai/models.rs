@@ -108,3 +108,45 @@ pub fn router(registry: ToolRegistry) -> Router<ToolRegistry> {
         .route("/v1/models/{model_id}", get(get_model))
         .with_state(registry)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_slapper_models_count() {
+        let models = slapper_models();
+        assert_eq!(models.len(), 6);
+    }
+
+    #[test]
+    fn test_slapper_models_owned_by() {
+        let models = slapper_models();
+        for model in models {
+            assert_eq!(model.owned_by, "slapper");
+        }
+    }
+
+    #[test]
+    fn test_slapper_models_expected_ids() {
+        let models = slapper_models();
+        let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
+        assert!(ids.contains(&"slapper-recon"));
+        assert!(ids.contains(&"slapper-fuzzer"));
+        assert!(ids.contains(&"slapper-waf"));
+        assert!(ids.contains(&"slapper-scanner"));
+        assert!(ids.contains(&"slapper-loadtest"));
+        assert!(ids.contains(&"slapper-pipeline"));
+    }
+
+    #[test]
+    fn test_model_list_serialization() {
+        let list = ModelList {
+            object: "list".to_string(),
+            data: slapper_models(),
+        };
+        let json = serde_json::to_string(&list).unwrap();
+        assert!(json.contains("\"object\":\"list\""));
+        assert!(json.contains("\"data\":["));
+    }
+}

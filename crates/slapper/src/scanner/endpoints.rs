@@ -23,6 +23,7 @@ pub struct EndpointScanConfig {
     pub tui_mode: bool,
     pub spoof_config: SpoofConfig,
     pub verify_tls: bool,
+    pub progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
 }
 
 pub static DEFAULT_ENDPOINTS: &[&str] = &[
@@ -404,6 +405,7 @@ pub async fn run_cli(args: EndpointScanArgs, config: &SlapperConfig) -> Result<(
         tui_mode: false,
         spoof_config,
         verify_tls: config.http.verify_tls,
+        progress_tx: None,
     })
     .await?;
 
@@ -589,6 +591,8 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         .build().map_err(|e| crate::error::SlapperError::from(e).with_timeout(config.timeout_duration.as_millis() as u64))?;
 
     let results: Arc<Mutex<Vec<EndpointResult>>> = Arc::new(Mutex::new(Vec::new()));
+    let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
+    let total_endpoints = config.endpoints.len() as u64;
 
     let progress = if config.tui_mode {
         None
@@ -617,6 +621,8 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         let url = format!("{}{}", base, endpoint);
         let endpoint_path = endpoint;
         let spoof_config = config.spoof_config.clone();
+        let scanned_count = scanned_count.clone();
+        let progress_tx = config.progress_tx.clone();
 
         let handle = tokio::spawn(async move {
             let request_start = std::time::Instant::now();
@@ -665,6 +671,14 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
 
             if let Some(ref pb) = progress {
                 pb.inc(1);
+            }
+            if let Some(ref tx) = progress_tx {
+                let count = {
+                    let mut c = scanned_count.lock().await;
+                    *c += 1;
+                    *c
+                };
+                let _ = tx.send((count, total_endpoints)).await;
             }
             drop(permit);
         });

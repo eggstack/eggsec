@@ -153,7 +153,7 @@ pub async fn run_cli(args: FingerprintArgs, config: &SlapperConfig) -> Result<()
     } else {
         let ports = parse_ports(&args.ports)?;
         let results =
-            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency)
+            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency, None)
                 .await?;
 
         if args.json {
@@ -172,8 +172,11 @@ pub async fn fingerprint_services(
     timeout_duration: Duration,
     tui_mode: bool,
     concurrency: usize,
+    progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
 ) -> Result<FingerprintResults> {
     let results: Arc<Mutex<Vec<ServiceFingerprint>>> = Arc::new(Mutex::new(Vec::new()));
+    let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
+    let total_ports = ports.len() as u64;
 
     let progress = if tui_mode {
         None
@@ -199,6 +202,8 @@ pub async fn fingerprint_services(
         let results = results.clone();
         let progress = progress.clone();
         let timeout_dur = timeout_duration;
+        let scanned_count = scanned_count.clone();
+        let progress_tx = progress_tx.clone();
 
         let handle = tokio::spawn(async move {
             if let Some(fp) = fingerprint_port(&host, port, timeout_dur).await {
@@ -207,6 +212,14 @@ pub async fn fingerprint_services(
             }
             if let Some(ref pb) = progress {
                 pb.inc(1);
+            }
+            if let Some(ref tx) = progress_tx {
+                let count = {
+                    let mut c = scanned_count.lock().await;
+                    *c += 1;
+                    *c
+                };
+                let _ = tx.send((count, total_ports)).await;
             }
             drop(permit);
         });

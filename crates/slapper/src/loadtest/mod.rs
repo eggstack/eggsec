@@ -46,6 +46,7 @@ use crate::error::Result;
 use crate::cli::LoadArgs;
 use crate::config::SlapperConfig;
 
+pub use metrics::{LoadTestResults, Metrics};
 pub use runner::LoadTestRunner;
 
 /// Run load test from CLI
