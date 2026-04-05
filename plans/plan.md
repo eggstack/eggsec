@@ -1,7 +1,7 @@
 # Consolidated Improvement Plan
 
-> Last updated: 2026-04-04 | Based on comprehensive codebase review
-> 400 source files | ~560 library tests | 29 tab variants | 60 TUI files
+> Last updated: 2026-04-05 | Based on comprehensive codebase review
+> 400 source files | ~609 library tests | 29 tab variants | 60 TUI files
 
 ## Overview
 
@@ -21,22 +21,22 @@ This plan consolidates all improvement items from three source plans (OpenClaw i
 
 ### Key Gaps
 
-1. 2 failing integration tests with incorrect assertions
-2. UTF-8 panic in `InputField` (multi-byte character handling)
-3. Grammar fuzzer mislabels all payloads as `PayloadType::Xss`
-4. CSV export doesn't escape all fields
-5. Silent error swallowing in tool registry and TUI
-6. Type-level bugs (`u16` overflow, `&PathBuf` vs `&Path`)
-7. `ResponseSeverity` lacks `Ord`/`PartialOrd`
+1. ~~2 failing integration tests with incorrect assertions~~ ✅ Fixed
+2. ~~UTF-8 panic in `InputField` (multi-byte character handling)~~ ✅ Fixed
+3. ~~Grammar fuzzer mislabels all payloads as `PayloadType::Xss`~~ ✅ Fixed
+4. ~~CSV export doesn't escape all fields~~ ✅ Fixed
+5. ~~Silent error swallowing in tool registry and TUI~~ ✅ Fixed
+6. ~~Type-level bugs (`u16` overflow, `&PathBuf` vs `&Path`)~~ ✅ Fixed
+7. ~~`ResponseSeverity` lacks `Ord`/`PartialOrd`~~ ✅ Fixed
 8. 67% of source files lack inline tests
 9. 8% documentation coverage
-10. Unconditionally compiled stub modules (no CLI/TUI wiring)
-11. No OpenResponses API for OpenClaw integration
-12. OpenAI handler uses keyword matching; `FunctionCall.arguments` is always `{}`
+10. ~~Unconditionally compiled stub modules (no CLI/TUI wiring)~~ ✅ Feature-gated (Wave 4A)
+11. ~~No OpenResponses API for OpenClaw integration~~ ✅ Implemented (Wave 7A)
+12. ~~OpenAI handler uses keyword matching; `FunctionCall.arguments` is always `{}`~~ ✅ Improved (Wave 7B)
 13. TUI dispatch uses 6 near-identical macros instead of trait-based dispatch
-14. Secret exposure in HTTP options popup
-15. Infinite hang in `run_packet_capture()`
-16. Duplicate subdomain enumeration in recon takeover check
+14. ~~Secret exposure in HTTP options popup~~ ✅ Fixed
+15. ~~Infinite hang in `run_packet_capture()`~~ ✅ Fixed
+16. ~~Duplicate subdomain enumeration in recon takeover check~~ ✅ Fixed
 
 ---
 
@@ -798,35 +798,40 @@ Within each wave, blocks marked as parallel can be assigned to separate sub-agen
 
 ## Summary
 
-| Wave | Focus | Items | Est. Effort | Dependencies |
-|------|-------|-------|-------------|--------------|
-| 1 | Critical Bug Fixes | 14 | ~4.5 hours | None |
-| 2 | Security & Error Handling | 8 | ~3 hours | None |
-| 3 | Code Quality | 16 | ~5.5 hours | Wave 1 recommended |
-| 4 | Architecture | 9 | ~12 hours | Wave 1 recommended |
-| 5 | Recon/Fuzzer | 1 | ~3 hours | Wave 1 recommended |
-| 6 | Feature Completeness | 9 | ~6+ hours (excl. TBD) | None |
-| 7 | OpenClaw Integration | ~15 | ~20 hours | None |
-| 8 | Test Coverage | 7 | ~15.5 hours | Waves 1, 3 recommended |
-| 9 | Documentation | 4 | ~18.5 hours | None (benefits from all) |
-| 10 | Performance & Polish | 4 | ~1.75 hours | None |
+| Wave | Focus | Items | Est. Effort | Dependencies | Status |
+|------|-------|-------|-------------|--------------|--------|
+| 1 | Critical Bug Fixes | 15 | ~4.5 hours | None | ✅ 97% complete |
+| 2 | Security & Error Handling | 10 | ~3 hours | None | ✅ 70% complete |
+| 3 | Code Quality | 15 | ~5.5 hours | Wave 1 recommended | ✅ 87% complete |
+| 4 | Architecture | 9 | ~12 hours | Wave 1 recommended | ⚠️ 4A done, 4B pending |
+| 5 | Recon/Fuzzer | 1 | ~3 hours | Wave 1 recommended | ❌ Not started |
+| 6 | Feature Completeness | 9 | ~6+ hours (excl. TBD) | None | ⚠️ 33% complete |
+| 7 | OpenClaw Integration | ~17 | ~20 hours | None | ✅ Complete |
+| 8 | Test Coverage | 7 | ~15.5 hours | Waves 1, 3 recommended | ⚠️ 50% complete |
+| 9 | Documentation | 4 | ~18.5 hours | None (benefits from all) | ⚠️ 63% complete |
+| 10 | Performance & Polish | 4 | ~1.75 hours | None | ❌ Not started |
 
 **Total estimated effort:** ~89.75+ hours (excluding Wave 6 stub tabs which need requirements)
+**Completed to date:** ~52% of all plan items
 
 ## Success Metrics
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Failing tests | 2 | 0 |
+| Failing tests | 0 | 0 |
+| Library tests | 609 (rest-api) / 557 (default) | 609+ |
 | Files with inline tests | 132/400 (33%) | 200/400 (50%) |
 | Doc coverage | ~8% | ~40% |
-| Unconditionally compiled stub modules | 8 | 0 |
+| Unconditionally compiled stub modules | 0 | 0 |
 | Clippy warnings (default) | 0 | 0 |
-| Silent error swallowing sites | 4+ | 0 |
-| Type-level bugs (overflow, wrong types) | 3+ | 0 |
-| OpenResponses API | Missing | Implemented with tests |
-| `/v1/models` endpoint | Missing | Implemented |
-| SKILL.md for OpenClaw | Missing | Created |
+| Clippy warnings (rest-api) | 12 (pre-existing) | 0 |
+| Silent error swallowing sites | 0 | 0 |
+| Type-level bugs (overflow, wrong types) | 0 | 0 |
+| OpenResponses API | Implemented with 6 tests | Implemented with tests |
+| `/v1/models` endpoint | Implemented | Implemented |
+| AI routes (`/api/v1/ai/*`) | Implemented | Implemented |
+| Agent/task routes | Implemented | Implemented |
+| SKILL.md for OpenClaw | Created | Created |
 
 ## Risks & Mitigations
 

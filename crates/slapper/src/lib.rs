@@ -34,6 +34,17 @@
 //! - `python-plugins` / `ruby-plugins` - Plugin language support
 //! - `rest-api` / `grpc-api` - API server integration
 //! - `nse` - Nmap NSE script support
+//! - `ai-integration` - AI/LLM analysis and WAF bypass suggestions
+//! - `websocket` - WebSocket security testing
+//! - `headless-browser` - DOM XSS and SPA crawling
+//! - `database` - SQLx-based storage for findings and history
+//! - `container` - Kubernetes container security scanning
+//! - `sbom` - SBOM generation and vulnerability checking
+//! - `advanced-hunting` - Advanced threat hunting techniques
+//! - `compliance` - Compliance scanning and reporting
+//! - `external-integrations` - Jira, GitHub, GitLab integrations
+//! - `finding-workflow` - Finding lifecycle management
+//! - `vuln-management` - Vulnerability triage and prioritization
 //! - `full` - All features combined
 //!
 //! ## Error Handling
@@ -63,14 +74,46 @@ pub mod proxy;
 pub mod recon;
 pub mod scanner;
 pub mod auth;
+#[cfg(feature = "container")]
 pub mod container;
+#[cfg(not(feature = "container"))]
+#[allow(dead_code)]
+mod container;
+#[cfg(feature = "database")]
 pub mod storage;
+#[cfg(not(feature = "database"))]
+#[allow(dead_code)]
+mod storage;
+#[cfg(feature = "sbom")]
 pub mod supply_chain;
+#[cfg(not(feature = "sbom"))]
+#[allow(dead_code)]
+mod supply_chain;
+#[cfg(feature = "advanced-hunting")]
 pub mod hunt;
+#[cfg(not(feature = "advanced-hunting"))]
+#[allow(dead_code)]
+mod hunt;
+#[cfg(feature = "compliance")]
 pub mod compliance;
+#[cfg(not(feature = "compliance"))]
+#[allow(dead_code)]
+mod compliance;
+#[cfg(feature = "external-integrations")]
 pub mod integrations;
+#[cfg(not(feature = "external-integrations"))]
+#[allow(dead_code)]
+mod integrations;
+#[cfg(feature = "finding-workflow")]
 pub mod workflow;
+#[cfg(not(feature = "finding-workflow"))]
+#[allow(dead_code)]
+mod workflow;
+#[cfg(feature = "vuln-management")]
 pub mod vuln;
+#[cfg(not(feature = "vuln-management"))]
+#[allow(dead_code)]
+mod vuln;
 #[cfg(feature = "websocket")]
 pub mod websocket;
 #[cfg(feature = "headless-browser")]

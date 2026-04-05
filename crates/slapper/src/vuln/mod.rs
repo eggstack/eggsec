@@ -18,9 +18,15 @@ pub mod prioritizer;
 pub mod remediation;
 pub mod triage;
 
+#[allow(unused_imports)]
 pub use asset::AssetCriticality;
+#[allow(unused_imports)]
 pub use cvss::CvssScore;
+#[allow(unused_imports)]
 pub use exploit::ExploitInfo;
+#[allow(unused_imports)]
 pub use prioritizer::{PrioritizedFinding, PriorityLevel, RiskScore};
+#[allow(unused_imports)]
 pub use remediation::Remediation;
+#[allow(unused_imports)]
 pub use triage::{TriageResult, TriageStatus};

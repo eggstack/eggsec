@@ -1,5 +1,7 @@
+#[cfg(any(feature = "advanced-hunting", feature = "compliance", feature = "database", feature = "external-integrations", feature = "finding-workflow", feature = "vuln-management"))]
 use crate::tui::workers::TaskResult;
 
+#[cfg(feature = "advanced-hunting")]
 pub async fn run_hunt_task(
     target: String,
     config: crate::hunt::HuntConfig,
@@ -31,6 +33,7 @@ pub async fn run_browser_task(
     Ok(())
 }
 
+#[cfg(feature = "compliance")]
 pub async fn run_compliance_task(
     target: String,
     framework: crate::compliance::ComplianceFramework,
@@ -48,6 +51,7 @@ pub async fn run_compliance_task(
     Ok(())
 }
 
+#[cfg(feature = "database")]
 pub async fn run_storage_task(
     _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
@@ -56,6 +60,7 @@ pub async fn run_storage_task(
     Ok(())
 }
 
+#[cfg(feature = "external-integrations")]
 pub async fn run_integrations_task(
     _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
@@ -64,6 +69,7 @@ pub async fn run_integrations_task(
     Ok(())
 }
 
+#[cfg(feature = "finding-workflow")]
 pub async fn run_workflow_task(
     _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
@@ -72,6 +78,7 @@ pub async fn run_workflow_task(
     Ok(())
 }
 
+#[cfg(feature = "vuln-management")]
 pub async fn run_vuln_task(
     _progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,

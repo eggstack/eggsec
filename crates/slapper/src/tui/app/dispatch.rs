@@ -29,16 +29,34 @@ macro_rules! dispatch {
             Tab::Settings => $self.settings.$method($($arg),*),
             Tab::History => $special,
             Tab::Dashboard => $self.dashboard.$method($($arg),*),
+            #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => $self.hunt.$method($($arg),*),
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => $default,
             #[cfg(feature = "headless-browser")]
             Tab::Browser => $self.browser.$method($($arg),*),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => $default,
+            #[cfg(feature = "compliance")]
             Tab::Compliance => $self.compliance.$method($($arg),*),
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => $default,
+            #[cfg(feature = "database")]
             Tab::Storage => $self.storage.$method($($arg),*),
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => $default,
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => $self.integrations.$method($($arg),*),
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => $default,
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => $self.workflow.$method($($arg),*),
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => $default,
+            #[cfg(feature = "vuln-management")]
             Tab::Vuln => $self.vuln.$method($($arg),*),
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => $default,
         }
     };
 }
@@ -71,19 +89,37 @@ macro_rules! dispatch_void {
             Tab::Plugin => $self.plugin.$method($($arg),*),
             #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => {},
-            Tab::Settings => {}, // Settings tab doesn't respond to these commands
+            Tab::Settings => {},
             Tab::History => {},
             Tab::Dashboard => {},
+            #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => $self.hunt.$method($($arg),*),
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => {},
             #[cfg(feature = "headless-browser")]
             Tab::Browser => $self.browser.$method($($arg),*),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => {},
+            #[cfg(feature = "compliance")]
             Tab::Compliance => $self.compliance.$method($($arg),*),
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => {},
+            #[cfg(feature = "database")]
             Tab::Storage => $self.storage.$method($($arg),*),
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => {},
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => $self.integrations.$method($($arg),*),
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => {},
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => $self.workflow.$method($($arg),*),
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => {},
+            #[cfg(feature = "vuln-management")]
             Tab::Vuln => $self.vuln.$method($($arg),*),
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => {},
         }
     };
 }
@@ -119,16 +155,34 @@ macro_rules! dispatch_bool {
             Tab::Settings => false,
             Tab::History => false,
             Tab::Dashboard => false,
+            #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => $self.hunt.$method($($arg),*),
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => false,
             #[cfg(feature = "headless-browser")]
             Tab::Browser => $self.browser.$method($($arg),*),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => false,
+            #[cfg(feature = "compliance")]
             Tab::Compliance => $self.compliance.$method($($arg),*),
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => false,
+            #[cfg(feature = "database")]
             Tab::Storage => $self.storage.$method($($arg),*),
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => false,
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => $self.integrations.$method($($arg),*),
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => false,
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => $self.workflow.$method($($arg),*),
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => false,
+            #[cfg(feature = "vuln-management")]
             Tab::Vuln => $self.vuln.$method($($arg),*),
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => false,
         }
     };
 }
@@ -168,16 +222,34 @@ macro_rules! dispatch_page {
                 }
             }
             Tab::Dashboard => $self.dashboard.$method($page_size),
+            #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => $self.hunt.$method($page_size),
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => {}
             #[cfg(feature = "headless-browser")]
             Tab::Browser => $self.browser.$method($page_size),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => {}
+            #[cfg(feature = "compliance")]
             Tab::Compliance => $self.compliance.$method($page_size),
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => {}
+            #[cfg(feature = "database")]
             Tab::Storage => $self.storage.$method($page_size),
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => {}
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => $self.integrations.$method($page_size),
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => {}
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => $self.workflow.$method($page_size),
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => {}
+            #[cfg(feature = "vuln-management")]
             Tab::Vuln => $self.vuln.$method($page_size),
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => {}
         }
     };
 }
@@ -213,16 +285,34 @@ macro_rules! dispatch_is_at_edge {
             Tab::Settings => $default,
             Tab::History => true,
             Tab::Dashboard => true,
+            #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => $self.hunt.$method(),
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => $default,
             #[cfg(feature = "headless-browser")]
             Tab::Browser => $self.browser.$method(),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => $default,
+            #[cfg(feature = "compliance")]
             Tab::Compliance => $self.compliance.$method(),
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => $default,
+            #[cfg(feature = "database")]
             Tab::Storage => $self.storage.$method(),
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => $default,
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => $self.integrations.$method(),
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => $default,
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => $self.workflow.$method(),
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => $default,
+            #[cfg(feature = "vuln-management")]
             Tab::Vuln => $self.vuln.$method(),
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => $default,
         }
     };
 }
@@ -262,16 +352,34 @@ macro_rules! dispatch_reset {
                 }
             }
             Tab::Dashboard => $self.dashboard.reset(),
+            #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => $self.hunt.reset(),
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => {}
             #[cfg(feature = "headless-browser")]
             Tab::Browser => $self.browser.reset(),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => {}
+            #[cfg(feature = "compliance")]
             Tab::Compliance => $self.compliance.reset(),
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => {}
+            #[cfg(feature = "database")]
             Tab::Storage => $self.storage.reset(),
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => {}
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => $self.integrations.reset(),
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => {}
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => $self.workflow.reset(),
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => {}
+            #[cfg(feature = "vuln-management")]
             Tab::Vuln => $self.vuln.reset(),
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => {}
         }
     };
 }

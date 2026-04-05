@@ -1,7 +1,7 @@
 use crate::output::agent::{
     AgentFinding, AttackSurface, Confidence, Evidence, Remediation, Severity as AgentSeverity,
 };
-use crate::tool::response::{Finding as ResponseFinding, ResponseSeverity, ToolResponse};
+use crate::tool::response::{ResponseSeverity, ToolResponse};
 
 impl ToolResponse {
     pub fn to_findings(&self) -> Vec<AgentFinding> {
@@ -202,7 +202,7 @@ impl AgentFinding {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tool::response::FindingType;
+    use crate::tool::response::{Finding as ResponseFinding, FindingType};
     use crate::tool::ResponseStatus;
 
     #[test]

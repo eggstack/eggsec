@@ -1,3 +1,4 @@
+#[cfg(feature = "advanced-hunting")]
 use crate::hunt::chain::AttackChain;
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod ai_schema;
+#[cfg(feature = "advanced-hunting")]
 pub mod attack_graph;
 pub mod baseline;
 pub mod convert;
@@ -23,6 +24,7 @@ pub use agent::{
     AgentFinding, Confidence, Evidence, FindingStatus, FindingSummary, Remediation,
     RemediationEffort,
 };
+#[cfg(feature = "advanced-hunting")]
 pub use attack_graph::{
     AttackGraph, AttackGraphBuilder, EdgeType, GraphCluster, GraphEdge, GraphNode, NodeType,
 };

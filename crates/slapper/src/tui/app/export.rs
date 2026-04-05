@@ -26,12 +26,30 @@ impl super::App {
             super::tabs::Tab::Settings => "settings",
             super::tabs::Tab::History => "history",
             super::tabs::Tab::Dashboard => "dashboard",
+            #[cfg(feature = "advanced-hunting")]
+            super::tabs::Tab::Hunt => "hunt_results",
+            #[cfg(not(feature = "advanced-hunting"))]
             super::tabs::Tab::Hunt => "hunt_results",
             super::tabs::Tab::Browser => "browser_results",
+            #[cfg(feature = "compliance")]
             super::tabs::Tab::Compliance => "compliance_results",
+            #[cfg(not(feature = "compliance"))]
+            super::tabs::Tab::Compliance => "compliance_results",
+            #[cfg(feature = "database")]
             super::tabs::Tab::Storage => "storage_results",
+            #[cfg(not(feature = "database"))]
+            super::tabs::Tab::Storage => "storage_results",
+            #[cfg(feature = "external-integrations")]
             super::tabs::Tab::Integrations => "integration_results",
+            #[cfg(not(feature = "external-integrations"))]
+            super::tabs::Tab::Integrations => "integration_results",
+            #[cfg(feature = "finding-workflow")]
             super::tabs::Tab::Workflow => "workflow_results",
+            #[cfg(not(feature = "finding-workflow"))]
+            super::tabs::Tab::Workflow => "workflow_results",
+            #[cfg(feature = "vuln-management")]
+            super::tabs::Tab::Vuln => "vuln_results",
+            #[cfg(not(feature = "vuln-management"))]
             super::tabs::Tab::Vuln => "vuln_results",
         };
 

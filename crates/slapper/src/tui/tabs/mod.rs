@@ -5,6 +5,7 @@ mod fingerprint;
 mod fuzz;
 pub mod graphql;
 pub mod history;
+#[cfg(feature = "advanced-hunting")]
 pub mod hunt;
 mod load;
 #[cfg(feature = "nse")]
@@ -21,11 +22,16 @@ mod scan;
 mod scan_endpoints;
 mod scan_ports;
 mod settings;
+#[cfg(feature = "database")]
 pub mod storage;
 mod stress;
+#[cfg(feature = "compliance")]
 pub mod compliance;
+#[cfg(feature = "external-integrations")]
 pub mod integrations;
+#[cfg(feature = "finding-workflow")]
 pub mod workflow;
+#[cfg(feature = "vuln-management")]
 pub mod vuln;
 #[cfg(feature = "headless-browser")]
 pub mod browser;
@@ -38,6 +44,7 @@ pub use fingerprint::FingerprintTab;
 pub use fuzz::FuzzTab;
 pub use graphql::GraphQlTab;
 pub use history::HistoryTab;
+#[cfg(feature = "advanced-hunting")]
 pub use hunt::HuntTab;
 pub use load::LoadTab;
 #[cfg(feature = "nse")]
@@ -54,11 +61,16 @@ pub use scan::{ScanTab, StageStatus};
 pub use scan_endpoints::ScanEndpointsTab;
 pub use scan_ports::ScanPortsTab;
 pub use settings::SettingsTab;
+#[cfg(feature = "database")]
 pub use storage::StorageTab;
 pub use stress::StressTab;
+#[cfg(feature = "compliance")]
 pub use compliance::ComplianceTab;
+#[cfg(feature = "external-integrations")]
 pub use integrations::IntegrationsTab;
+#[cfg(feature = "finding-workflow")]
 pub use workflow::WorkflowTab;
+#[cfg(feature = "vuln-management")]
 pub use vuln::VulnTab;
 #[cfg(feature = "headless-browser")]
 pub use browser::BrowserTab;
@@ -125,15 +137,33 @@ impl Tab {
             Tab::Settings => "[20] Settings",
             Tab::History => "[21] History",
             Tab::Dashboard => "[22] Dashboard",
+            #[cfg(feature = "advanced-hunting")]
+            Tab::Hunt => "[23] Hunt",
+            #[cfg(not(feature = "advanced-hunting"))]
             Tab::Hunt => "[23] Hunt",
             #[cfg(feature = "headless-browser")]
             Tab::Browser => "[24] Browser",
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => "[24] Browser",
+            #[cfg(feature = "compliance")]
             Tab::Compliance => "[25] Compliance",
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => "[25] Compliance",
+            #[cfg(feature = "database")]
             Tab::Storage => "[26] Storage",
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => "[26] Storage",
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => "[27] Integrations",
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => "[27] Integrations",
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => "[28] Workflow",
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => "[28] Workflow",
+            #[cfg(feature = "vuln-management")]
+            Tab::Vuln => "[29] Vuln",
+            #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => "[29] Vuln",
         }
     }
@@ -230,19 +260,61 @@ impl Tab {
                 Tab::Settings,
                 Tab::History,
                 Tab::Dashboard,
-                Tab::Hunt,
-                Tab::Compliance,
-                Tab::Storage,
-                Tab::Integrations,
-                Tab::Workflow,
-                Tab::Vuln,
             ];
+            #[cfg(feature = "advanced-hunting")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Hunt);
+                t
+            };
+            #[cfg(feature = "compliance")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Compliance);
+                t
+            };
+            #[cfg(feature = "database")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Storage);
+                t
+            };
+            #[cfg(feature = "external-integrations")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Integrations);
+                t
+            };
+            #[cfg(feature = "finding-workflow")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Workflow);
+                t
+            };
+            #[cfg(feature = "vuln-management")]
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Vuln);
+                t
+            };
             #[cfg(feature = "nse")]
-            tabs.push(Tab::Nse);
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Nse);
+                t
+            };
             #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            tabs.push(Tab::Plugin);
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Plugin);
+                t
+            };
             #[cfg(feature = "headless-browser")]
-            tabs.push(Tab::Browser);
+            let tabs = {
+                let mut t = tabs;
+                t.push(Tab::Browser);
+                t
+            };
             tabs
         });
         &TABS

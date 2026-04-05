@@ -10,7 +10,7 @@ use crate::tool::{
 };
 
 use super::auth::{validate_auth, validate_auth_params};
-use super::prompts::{get_builtin_prompts, McpPrompt};
+use super::prompts::get_builtin_prompts;
 use super::types::{CapabilitySummary, McpError, McpRequest, McpResource, McpResponse, McpTool};
 use super::streaming::StreamEvent;
 

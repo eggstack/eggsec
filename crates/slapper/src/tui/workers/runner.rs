@@ -117,6 +117,7 @@ pub enum TaskConfig {
         script_args: Option<String>,
         custom_script: Option<String>,
     },
+    #[cfg(feature = "advanced-hunting")]
     Hunt {
         target: String,
         config: crate::hunt::HuntConfig,
@@ -126,13 +127,18 @@ pub enum TaskConfig {
         target: String,
         config: crate::browser::BrowserConfig,
     },
+    #[cfg(feature = "compliance")]
     Compliance {
         target: String,
         framework: crate::compliance::ComplianceFramework,
     },
+    #[cfg(feature = "database")]
     Storage,
+    #[cfg(feature = "external-integrations")]
     Integrations,
+    #[cfg(feature = "finding-workflow")]
     Workflow,
+    #[cfg(feature = "vuln-management")]
     Vuln,
 }
 
@@ -449,6 +455,7 @@ impl TaskRunner {
                 )
                 .await
             }
+            #[cfg(feature = "advanced-hunting")]
             TaskConfig::Hunt { target, config } => {
                 super::security::run_hunt_task(target, config, progress_tx, result_tx).await
             }
@@ -456,18 +463,23 @@ impl TaskRunner {
             TaskConfig::Browser { target, config } => {
                 super::security::run_browser_task(target, config, progress_tx, result_tx).await
             }
+            #[cfg(feature = "compliance")]
             TaskConfig::Compliance { target, framework } => {
                 super::security::run_compliance_task(target, framework, progress_tx, result_tx).await
             }
+            #[cfg(feature = "database")]
             TaskConfig::Storage => {
                 super::security::run_storage_task(progress_tx, result_tx).await
             }
+            #[cfg(feature = "external-integrations")]
             TaskConfig::Integrations => {
                 super::security::run_integrations_task(progress_tx, result_tx).await
             }
+            #[cfg(feature = "finding-workflow")]
             TaskConfig::Workflow => {
                 super::security::run_workflow_task(progress_tx, result_tx).await
             }
+            #[cfg(feature = "vuln-management")]
             TaskConfig::Vuln => {
                 super::security::run_vuln_task(progress_tx, result_tx).await
             }

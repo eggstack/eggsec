@@ -8,8 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::types::*;
 use crate::tool::registry::ToolRegistry;
-use crate::tool::request::ToolRequest;
-use crate::tool::response::Target;
+use crate::tool::request::{Target, ToolRequest};
 
 pub async fn chat_completions(
     axum::extract::State(registry): axum::extract::State<ToolRegistry>,
@@ -209,7 +208,7 @@ fn extract_target_from_query(query: &str) -> Target {
     for pattern in url_patterns {
         if let Some(idx) = query_lower.find(pattern) {
             let end = query[idx..]
-                .find_whitespace()
+                .find(|c: char| c.is_whitespace())
                 .map(|i| idx + i)
                 .unwrap_or(query.len());
             let value = query[idx..end].trim_end_matches(|c: char| c.is_ascii_punctuation() && c != '/' && c != ':').to_string();
@@ -219,7 +218,6 @@ fn extract_target_from_query(query: &str) -> Target {
         }
     }
 
-    let ip_pattern = std::net::IpAddr::from_str;
     let words: Vec<&str> = query.split_whitespace().collect();
     for word in &words {
         if word.contains('.') && word.split('.').count() == 4 {

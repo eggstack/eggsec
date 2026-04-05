@@ -202,8 +202,23 @@ nse = ["tool-api", "dep:slapper-nse", "slapper-nse/nse"]
 # NSE sandbox - restrict dangerous Lua operations
 nse-sandbox = ["nse", "slapper-nse/sandbox"]
 
+# Advanced threat hunting techniques
+advanced-hunting = []
+
+# Compliance scanning and reporting
+compliance = []
+
+# External integrations (Jira, GitHub, GitLab, etc.)
+external-integrations = []
+
+# Finding workflow management
+finding-workflow = []
+
+# Vulnerability management and triage
+vuln-management = []
+
 # Full build with all features
-full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database"]
+full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream"]

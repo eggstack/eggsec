@@ -312,6 +312,7 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
         crate::tui::tabs::Tab::Settings => vec!["Settings"],
         crate::tui::tabs::Tab::History => vec!["History"],
         crate::tui::tabs::Tab::Dashboard => vec!["Dashboard"],
+        #[cfg(feature = "advanced-hunting")]
         crate::tui::tabs::Tab::Hunt => {
             if let Some(parts) = app.hunt.breadcrumb() {
                 parts
@@ -319,6 +320,8 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
                 vec!["Hunt"]
             }
         }
+        #[cfg(not(feature = "advanced-hunting"))]
+        crate::tui::tabs::Tab::Hunt => vec!["Hunt"],
         #[cfg(feature = "headless-browser")]
         crate::tui::tabs::Tab::Browser => {
             if let Some(parts) = app.browser.breadcrumb() {
@@ -329,6 +332,7 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
         }
         #[cfg(not(feature = "headless-browser"))]
         crate::tui::tabs::Tab::Browser => vec!["Browser"],
+        #[cfg(feature = "compliance")]
         crate::tui::tabs::Tab::Compliance => {
             if let Some(parts) = app.compliance.breadcrumb() {
                 parts
@@ -336,6 +340,9 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
                 vec!["Compliance"]
             }
         }
+        #[cfg(not(feature = "compliance"))]
+        crate::tui::tabs::Tab::Compliance => vec!["Compliance"],
+        #[cfg(feature = "database")]
         crate::tui::tabs::Tab::Storage => {
             if let Some(parts) = app.storage.breadcrumb() {
                 parts
@@ -343,6 +350,9 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
                 vec!["Storage"]
             }
         }
+        #[cfg(not(feature = "database"))]
+        crate::tui::tabs::Tab::Storage => vec!["Storage"],
+        #[cfg(feature = "external-integrations")]
         crate::tui::tabs::Tab::Integrations => {
             if let Some(parts) = app.integrations.breadcrumb() {
                 parts
@@ -350,6 +360,9 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
                 vec!["Integrations"]
             }
         }
+        #[cfg(not(feature = "external-integrations"))]
+        crate::tui::tabs::Tab::Integrations => vec!["Integrations"],
+        #[cfg(feature = "finding-workflow")]
         crate::tui::tabs::Tab::Workflow => {
             if let Some(parts) = app.workflow.breadcrumb() {
                 parts
@@ -357,6 +370,9 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
                 vec!["Workflow"]
             }
         }
+        #[cfg(not(feature = "finding-workflow"))]
+        crate::tui::tabs::Tab::Workflow => vec!["Workflow"],
+        #[cfg(feature = "vuln-management")]
         crate::tui::tabs::Tab::Vuln => {
             if let Some(parts) = app.vuln.breadcrumb() {
                 parts
@@ -364,6 +380,8 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
                 vec!["Vuln"]
             }
         }
+        #[cfg(not(feature = "vuln-management"))]
+        crate::tui::tabs::Tab::Vuln => vec!["Vuln"],
     }
     .iter()
     .enumerate()
@@ -491,10 +509,13 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
             app.dashboard.render(f, area, insert_mode);
             app.dashboard.render_overlays(f, area);
         }
+        #[cfg(feature = "advanced-hunting")]
         crate::tui::tabs::Tab::Hunt => {
             app.hunt.render(f, area, insert_mode);
             app.hunt.render_overlays(f, area);
         }
+        #[cfg(not(feature = "advanced-hunting"))]
+        crate::tui::tabs::Tab::Hunt => {}
         #[cfg(feature = "headless-browser")]
         crate::tui::tabs::Tab::Browser => {
             app.browser.render(f, area, insert_mode);
@@ -502,26 +523,41 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
         }
         #[cfg(not(feature = "headless-browser"))]
         crate::tui::tabs::Tab::Browser => {}
+        #[cfg(feature = "compliance")]
         crate::tui::tabs::Tab::Compliance => {
             app.compliance.render(f, area, insert_mode);
             app.compliance.render_overlays(f, area);
         }
+        #[cfg(not(feature = "compliance"))]
+        crate::tui::tabs::Tab::Compliance => {}
+        #[cfg(feature = "database")]
         crate::tui::tabs::Tab::Storage => {
             app.storage.render(f, area, insert_mode);
             app.storage.render_overlays(f, area);
         }
+        #[cfg(not(feature = "database"))]
+        crate::tui::tabs::Tab::Storage => {}
+        #[cfg(feature = "external-integrations")]
         crate::tui::tabs::Tab::Integrations => {
             app.integrations.render(f, area, insert_mode);
             app.integrations.render_overlays(f, area);
         }
+        #[cfg(not(feature = "external-integrations"))]
+        crate::tui::tabs::Tab::Integrations => {}
+        #[cfg(feature = "finding-workflow")]
         crate::tui::tabs::Tab::Workflow => {
             app.workflow.render(f, area, insert_mode);
             app.workflow.render_overlays(f, area);
         }
+        #[cfg(not(feature = "finding-workflow"))]
+        crate::tui::tabs::Tab::Workflow => {}
+        #[cfg(feature = "vuln-management")]
         crate::tui::tabs::Tab::Vuln => {
             app.vuln.render(f, area, insert_mode);
             app.vuln.render_overlays(f, area);
         }
+        #[cfg(not(feature = "vuln-management"))]
+        crate::tui::tabs::Tab::Vuln => {}
     }
 }
 
@@ -574,16 +610,40 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         crate::tui::tabs::Tab::Plugin => get_tab_status(&app.plugin.state),
         #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
         crate::tui::tabs::Tab::Plugin => ("Plugins not available".to_string(), Color::Gray),
+        #[cfg(feature = "advanced-hunting")]
         crate::tui::tabs::Tab::Hunt => get_tab_status(&app.hunt.state),
+        #[cfg(not(feature = "advanced-hunting"))]
+        crate::tui::tabs::Tab::Hunt => ("Hunting feature not enabled".to_string(), Color::Gray),
         #[cfg(feature = "headless-browser")]
         crate::tui::tabs::Tab::Browser => get_tab_status(&app.browser.state),
         #[cfg(not(feature = "headless-browser"))]
         crate::tui::tabs::Tab::Browser => ("Browser feature not enabled".to_string(), Color::Gray),
+        #[cfg(feature = "compliance")]
         crate::tui::tabs::Tab::Compliance => get_tab_status(&app.compliance.state),
+        #[cfg(not(feature = "compliance"))]
+        crate::tui::tabs::Tab::Compliance => {
+            ("Compliance feature not enabled".to_string(), Color::Gray)
+        }
+        #[cfg(feature = "database")]
         crate::tui::tabs::Tab::Storage => get_tab_status(&app.storage.state),
+        #[cfg(not(feature = "database"))]
+        crate::tui::tabs::Tab::Storage => ("Storage feature not enabled".to_string(), Color::Gray),
+        #[cfg(feature = "external-integrations")]
         crate::tui::tabs::Tab::Integrations => get_tab_status(&app.integrations.state),
+        #[cfg(not(feature = "external-integrations"))]
+        crate::tui::tabs::Tab::Integrations => {
+            ("Integrations feature not enabled".to_string(), Color::Gray)
+        }
+        #[cfg(feature = "finding-workflow")]
         crate::tui::tabs::Tab::Workflow => get_tab_status(&app.workflow.state),
+        #[cfg(not(feature = "finding-workflow"))]
+        crate::tui::tabs::Tab::Workflow => {
+            ("Workflow feature not enabled".to_string(), Color::Gray)
+        }
+        #[cfg(feature = "vuln-management")]
         crate::tui::tabs::Tab::Vuln => get_tab_status(&app.vuln.state),
+        #[cfg(not(feature = "vuln-management"))]
+        crate::tui::tabs::Tab::Vuln => ("Vuln management not enabled".to_string(), Color::Gray),
     };
 
     let help_text = if app.is_help_visible() {

@@ -111,13 +111,19 @@ pub struct App {
     pub search_backup: Option<std::collections::VecDeque<crate::tui::tabs::history::HistoryEntry>>,
     pub pending_key: Option<KeyCode>,
     pub dashboard: tabs::DashboardTab,
+    #[cfg(feature = "advanced-hunting")]
     pub hunt: tabs::HuntTab,
     #[cfg(feature = "headless-browser")]
     pub browser: tabs::BrowserTab,
+    #[cfg(feature = "compliance")]
     pub compliance: tabs::ComplianceTab,
+    #[cfg(feature = "database")]
     pub storage: tabs::StorageTab,
+    #[cfg(feature = "external-integrations")]
     pub integrations: tabs::IntegrationsTab,
+    #[cfg(feature = "finding-workflow")]
     pub workflow: tabs::WorkflowTab,
+    #[cfg(feature = "vuln-management")]
     pub vuln: tabs::VulnTab,
     pub export_format: OutputFormat,
     pub task_handle: Option<tokio::task::JoinHandle<()>>,
@@ -159,13 +165,19 @@ impl App {
             plugin: tabs::PluginTab::new(),
             settings: tabs::SettingsTab::new(),
             dashboard: tabs::DashboardTab::new(),
+            #[cfg(feature = "advanced-hunting")]
             hunt: tabs::HuntTab::new(),
             #[cfg(feature = "headless-browser")]
             browser: tabs::BrowserTab::new(),
+            #[cfg(feature = "compliance")]
             compliance: tabs::ComplianceTab::new(),
+            #[cfg(feature = "database")]
             storage: tabs::StorageTab::new(),
+            #[cfg(feature = "external-integrations")]
             integrations: tabs::IntegrationsTab::new(),
+            #[cfg(feature = "finding-workflow")]
             workflow: tabs::WorkflowTab::new(),
+            #[cfg(feature = "vuln-management")]
             vuln: tabs::VulnTab::new(),
             http_options: GlobalHttpOptions::default(),
             history,
@@ -321,12 +333,15 @@ impl App {
             Tab::Settings => self.settings.handle_enter(),
             Tab::History => {}
             Tab::Dashboard => self.dashboard.handle_enter(),
+            #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => {
                 self.hunt.handle_enter();
                 if self.hunt.is_running() {
                     self.spawn_task(self.build_hunt_task());
                 }
             }
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => {}
             #[cfg(feature = "headless-browser")]
             Tab::Browser => {
                 self.browser.handle_enter();
@@ -336,36 +351,51 @@ impl App {
             }
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => {},
+            #[cfg(feature = "compliance")]
             Tab::Compliance => {
                 self.compliance.handle_enter();
                 if self.compliance.is_running() {
                     self.spawn_task(self.build_compliance_task());
                 }
             }
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => {}
+            #[cfg(feature = "database")]
             Tab::Storage => {
                 self.storage.handle_enter();
                 if self.storage.is_running() {
                     self.spawn_task(self.build_storage_task());
                 }
             }
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => {}
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => {
                 self.integrations.handle_enter();
                 if self.integrations.is_running() {
                     self.spawn_task(self.build_integrations_task());
                 }
             }
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => {}
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => {
                 self.workflow.handle_enter();
                 if self.workflow.is_running() {
                     self.spawn_task(self.build_workflow_task());
                 }
             }
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => {}
+            #[cfg(feature = "vuln-management")]
             Tab::Vuln => {
                 self.vuln.handle_enter();
                 if self.vuln.is_running() {
                     self.spawn_task(self.build_vuln_task());
                 }
             }
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => {}
         }
     }
 
@@ -425,16 +455,34 @@ impl App {
             Tab::Settings => self.settings.handle_tab(),
             Tab::History => {}
             Tab::Dashboard => {}
+            #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => self.hunt.handle_tab(),
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => {}
             #[cfg(feature = "headless-browser")]
             Tab::Browser => self.browser.handle_tab(),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => {}
+            #[cfg(feature = "compliance")]
             Tab::Compliance => self.compliance.handle_tab(),
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => {}
+            #[cfg(feature = "database")]
             Tab::Storage => self.storage.handle_tab(),
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => {}
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => self.integrations.handle_tab(),
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => {}
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => self.workflow.handle_tab(),
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => {}
+            #[cfg(feature = "vuln-management")]
             Tab::Vuln => self.vuln.handle_tab(),
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => {}
         }
     }
 

@@ -11,6 +11,7 @@ pub mod report;
 pub mod stress;
 pub mod notify;
 pub mod auth_test;
+#[cfg(feature = "sbom")]
 pub mod sbom;
 
 pub use ci::*;
@@ -28,8 +29,9 @@ pub use report::*;
 #[cfg(feature = "stress-testing")]
 pub use stress::*;
 pub use notify::*;
-pub use auth_test::*;
+#[cfg(feature = "sbom")]
 pub use sbom::*;
+pub use auth_test::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -98,6 +100,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Graphql(args)) => handle_graphql(ctx, args).await,
         Some(Commands::OAuth(args)) => handle_oauth(ctx, args).await,
         Some(Commands::AuthTest(args)) => handle_auth_test(ctx, args).await,
+        #[cfg(feature = "sbom")]
         Some(Commands::Sbom(args)) => handle_sbom(ctx, args).await,
         Some(Commands::Packet(args)) => handle_packet(ctx, args).await,
         #[cfg(feature = "stress-testing")]

@@ -219,6 +219,7 @@ impl super::App {
         })
     }
 
+    #[cfg(feature = "advanced-hunting")]
     pub(crate) fn build_hunt_task(&self) -> Option<workers::TaskConfig> {
         let target = self.hunt.target();
         if target.is_empty() {
@@ -228,6 +229,11 @@ impl super::App {
             target: target.to_string(),
             config: self.hunt.get_config(),
         })
+    }
+    #[cfg(not(feature = "advanced-hunting"))]
+    #[allow(dead_code)]
+    pub(crate) fn build_hunt_task(&self) -> Option<workers::TaskConfig> {
+        None
     }
 
     #[cfg(feature = "headless-browser")]
@@ -242,6 +248,7 @@ impl super::App {
         })
     }
 
+    #[cfg(feature = "compliance")]
     pub(crate) fn build_compliance_task(&self) -> Option<workers::TaskConfig> {
         let target = self.compliance.target();
         if target.is_empty() {
@@ -252,20 +259,49 @@ impl super::App {
             framework: self.compliance.selected_framework(),
         })
     }
+    #[cfg(not(feature = "compliance"))]
+    #[allow(dead_code)]
+    pub(crate) fn build_compliance_task(&self) -> Option<workers::TaskConfig> {
+        None
+    }
 
+    #[cfg(feature = "database")]
     pub(crate) fn build_storage_task(&self) -> Option<workers::TaskConfig> {
         Some(workers::TaskConfig::Storage)
     }
+    #[cfg(not(feature = "database"))]
+    #[allow(dead_code)]
+    pub(crate) fn build_storage_task(&self) -> Option<workers::TaskConfig> {
+        None
+    }
 
+    #[cfg(feature = "external-integrations")]
     pub(crate) fn build_integrations_task(&self) -> Option<workers::TaskConfig> {
         Some(workers::TaskConfig::Integrations)
     }
+    #[cfg(not(feature = "external-integrations"))]
+    #[allow(dead_code)]
+    pub(crate) fn build_integrations_task(&self) -> Option<workers::TaskConfig> {
+        None
+    }
 
+    #[cfg(feature = "finding-workflow")]
     pub(crate) fn build_workflow_task(&self) -> Option<workers::TaskConfig> {
         Some(workers::TaskConfig::Workflow)
     }
+    #[cfg(not(feature = "finding-workflow"))]
+    #[allow(dead_code)]
+    pub(crate) fn build_workflow_task(&self) -> Option<workers::TaskConfig> {
+        None
+    }
 
+    #[cfg(feature = "vuln-management")]
     pub(crate) fn build_vuln_task(&self) -> Option<workers::TaskConfig> {
         Some(workers::TaskConfig::Vuln)
+    }
+    #[cfg(not(feature = "vuln-management"))]
+    #[allow(dead_code)]
+    pub(crate) fn build_vuln_task(&self) -> Option<workers::TaskConfig> {
+        None
     }
 }

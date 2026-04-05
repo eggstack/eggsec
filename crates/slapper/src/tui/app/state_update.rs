@@ -195,16 +195,22 @@ impl super::App {
             TaskResult::Nse(r) => {
                 self.nse.set_results(r);
             }
+            #[cfg(feature = "advanced-hunting")]
             TaskResult::Hunt(r) => {
                 self.hunt.set_report(r);
             }
+            #[cfg(not(feature = "advanced-hunting"))]
+            TaskResult::Hunt(_) => {}
             #[cfg(feature = "headless-browser")]
             TaskResult::Browser(r) => {
                 self.browser.set_report(r);
             }
+            #[cfg(feature = "compliance")]
             TaskResult::Compliance(r) => {
                 self.compliance.set_report(r);
             }
+            #[cfg(not(feature = "compliance"))]
+            TaskResult::Compliance(_) => {}
             TaskResult::Storage => {}
             TaskResult::Integrations => {}
             TaskResult::Workflow => {}
@@ -247,16 +253,46 @@ impl super::App {
             Tab::Plugin => {
                 tracing::error!("Plugin tab is not available: {}", msg);
             }
+            #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => self.hunt.set_error(msg),
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => {
+                tracing::error!("Hunt feature not available: {}", msg);
+            }
             #[cfg(feature = "headless-browser")]
             Tab::Browser => self.browser.set_error(msg),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => {}
+            #[cfg(feature = "compliance")]
             Tab::Compliance => self.compliance.set_error(msg),
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => {
+                tracing::error!("Compliance feature not available: {}", msg);
+            }
+            #[cfg(feature = "database")]
             Tab::Storage => self.storage.set_error(msg),
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => {
+                tracing::error!("Storage feature not available: {}", msg);
+            }
+            #[cfg(feature = "external-integrations")]
             Tab::Integrations => self.integrations.set_error(msg),
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => {
+                tracing::error!("Integrations feature not available: {}", msg);
+            }
+            #[cfg(feature = "finding-workflow")]
             Tab::Workflow => self.workflow.set_error(msg),
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => {
+                tracing::error!("Workflow feature not available: {}", msg);
+            }
+            #[cfg(feature = "vuln-management")]
             Tab::Vuln => self.vuln.set_error(msg),
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => {
+                tracing::error!("Vuln management not available: {}", msg);
+            }
             Tab::Settings => {
                 tracing::error!("Settings tab does not support error state: {}", msg);
             }

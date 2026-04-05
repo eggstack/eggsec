@@ -227,8 +227,12 @@ impl SlapperConfig {
     }
 
     pub fn default_path() -> Option<PathBuf> {
-        ProjectDirs::from("tools", "slapper", "slapper")
-            .map(|p: ProjectDirs| p.config_dir().join("config.toml"))
+        ProjectDirs::from(
+            crate::constants::PROJECT_QUALIFIER,
+            crate::constants::PROJECT_NAME,
+            crate::constants::PROJECT_NAME,
+        )
+        .map(|p: ProjectDirs| p.config_dir().join("config.toml"))
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {

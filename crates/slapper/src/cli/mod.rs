@@ -93,6 +93,7 @@ pub enum Commands {
     Plan(PlanArgs),
     #[command(about = "Run security checks in CI/CD mode")]
     Ci(CiArgs),
+    #[cfg(feature = "sbom")]
     #[command(about = "Generate SBOM and check supply chain security")]
     Sbom(SbomArgs),
 
