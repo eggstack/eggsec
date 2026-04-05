@@ -227,7 +227,26 @@ impl super::App {
             Tab::Waf => self.waf.set_error(msg),
             Tab::WafStress => self.waf_stress.set_error(msg),
             Tab::Scan => self.scan.set_error(msg),
+            Tab::Resume => self.resume.set_error(msg),
+            Tab::Proxy => self.proxy.set_error(msg),
             Tab::Packet => self.packet.set_error(msg),
+            Tab::GraphQl => self.graphql.set_error(msg),
+            Tab::OAuth => self.oauth.set_error(msg),
+            Tab::Cluster => self.cluster.set_error(msg),
+            Tab::Stress => self.stress.set_error(msg),
+            Tab::Report => self.report.set_error(msg),
+            #[cfg(feature = "nse")]
+            Tab::Nse => self.nse.set_error(msg),
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => {
+                tracing::error!("NSE tab is not available: {}", msg);
+            }
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => self.plugin.set_error(msg),
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => {
+                tracing::error!("Plugin tab is not available: {}", msg);
+            }
             Tab::Hunt => self.hunt.set_error(msg),
             #[cfg(feature = "headless-browser")]
             Tab::Browser => self.browser.set_error(msg),
@@ -238,7 +257,15 @@ impl super::App {
             Tab::Integrations => self.integrations.set_error(msg),
             Tab::Workflow => self.workflow.set_error(msg),
             Tab::Vuln => self.vuln.set_error(msg),
-            _ => {}
+            Tab::Settings => {
+                tracing::error!("Settings tab does not support error state: {}", msg);
+            }
+            Tab::History => {
+                tracing::error!("History tab does not support error state: {}", msg);
+            }
+            Tab::Dashboard => {
+                tracing::error!("Dashboard tab does not support error state: {}", msg);
+            }
         }
     }
 }

@@ -109,7 +109,6 @@ pub async fn run_full_recon(
         content_result,
         cors_result,
         email_result,
-        takeover_result,
     ) = tokio::join!(
         async {
             if !args.no_dns {
@@ -285,35 +284,37 @@ pub async fn run_full_recon(
                 }
             } else { None }
         },
-        async {
-            if !args.no_takeover {
-                if let Some(ref d) = domain_for_sub {
-                    match subdomain::enumerate_subdomains(d, concurrency).await {
-                        Ok(ref sub_result) if !sub_result.subdomains.is_empty() => {
-                            let subdomains: Vec<String> = sub_result.subdomains.iter()
-                                .map(|s| s.subdomain.clone())
-                                .collect();
-                            match takeover::detect_takeovers(&subdomains, None, 10).await {
-                                Ok(results) if !results.is_empty() => {
-                                    let vulnerable: Vec<_> = results.iter()
-                                        .filter(|r| r.status == takeover::TakeoverStatus::Vulnerable)
-                                        .cloned()
-                                        .collect();
-                                    if !vulnerable.is_empty() {
-                                        Some(vulnerable)
-                                    } else {
-                                        None
-                                    }
-                                }
-                                _ => None,
-                            }
-                        }
-                        _ => None,
-                    }
-                } else { None }
-            } else { None }
-        },
     );
+
+    let takeover_result = if !args.no_takeover {
+        if let Some(ref sub_result) = subdomain_result {
+            if !sub_result.subdomains.is_empty() {
+                let subdomains: Vec<String> = sub_result.subdomains.iter()
+                    .map(|s| s.subdomain.clone())
+                    .collect();
+                match takeover::detect_takeovers(&subdomains, None, 10).await {
+                    Ok(results) if !results.is_empty() => {
+                        let vulnerable: Vec<_> = results.iter()
+                            .filter(|r| r.status == takeover::TakeoverStatus::Vulnerable)
+                            .cloned()
+                            .collect();
+                        if !vulnerable.is_empty() {
+                            Some(vulnerable)
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     recon.reverse_dns = reverse_dns_result;
     recon.geolocation = geolocation_result;
