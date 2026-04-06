@@ -435,3 +435,198 @@ pub async fn check_threat_intel(
         client.check_domain(target).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_threat_intel_default() {
+        let intel = ThreatIntel::default();
+        assert!(intel.target.is_empty());
+        assert!(intel.ip_reputation.is_none());
+        assert!(intel.domain_reputation.is_none());
+        assert!(intel.passive_dns.is_empty());
+    }
+
+    #[test]
+    fn test_ip_reputation_serialization() {
+        let rep = IpReputation {
+            ip: "8.8.8.8".to_string(),
+            score: 0,
+            category: "clean".to_string(),
+            threats: vec![],
+            asn: Some("AS15169".to_string()),
+            isp: Some("Google LLC".to_string()),
+            country: Some("US".to_string()),
+            source: "VirusTotal".to_string(),
+        };
+        let json = serde_json::to_string(&rep).unwrap();
+        assert!(json.contains("8.8.8.8"));
+        assert!(json.contains("Google"));
+        let decoded: IpReputation = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.ip, "8.8.8.8");
+        assert_eq!(decoded.score, 0);
+    }
+
+    #[test]
+    fn test_domain_reputation_serialization() {
+        let rep = DomainReputation {
+            domain: "evil.com".to_string(),
+            score: 85,
+            category: "malicious".to_string(),
+            threats: vec!["malware".to_string(), "phishing".to_string()],
+            registrar: Some("GoDaddy".to_string()),
+            created_date: Some("2020-01-01".to_string()),
+            nameservers: vec!["ns1.evil.com".to_string()],
+            source: "VirusTotal".to_string(),
+        };
+        let json = serde_json::to_string(&rep).unwrap();
+        let decoded: DomainReputation = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.domain, "evil.com");
+        assert_eq!(decoded.score, 85);
+        assert_eq!(decoded.threats.len(), 2);
+    }
+
+    #[test]
+    fn test_passive_dns_record_serialization() {
+        let record = PassiveDnsRecord {
+            record_type: "A".to_string(),
+            value: "1.2.3.4".to_string(),
+            first_seen: Some("2023-01-01".to_string()),
+            last_seen: Some("2024-01-01".to_string()),
+            source: "AlienVault OTX".to_string(),
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        let decoded: PassiveDnsRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.value, "1.2.3.4");
+        assert_eq!(decoded.source, "AlienVault OTX");
+    }
+
+    #[test]
+    fn test_threat_intel_client_new() {
+        let client = ThreatIntelClient::new(None, None, None, None);
+        assert!(client.is_ok());
+        let client = ThreatIntelClient::new(
+            Some(SensitiveString::new("vt-key".to_string())),
+            None,
+            None,
+            None,
+        );
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_ip_reputation_clone() {
+        let rep = IpReputation {
+            ip: "1.2.3.4".to_string(),
+            score: 50,
+            category: "suspicious".to_string(),
+            threats: vec!["spam".to_string()],
+            asn: None,
+            isp: None,
+            country: None,
+            source: "Shodan".to_string(),
+        };
+        let cloned = rep.clone();
+        assert_eq!(cloned.ip, "1.2.3.4");
+        assert_eq!(cloned.score, 50);
+    }
+
+    #[test]
+    fn test_domain_reputation_clone() {
+        let rep = DomainReputation {
+            domain: "test.com".to_string(),
+            score: 10,
+            category: "clean".to_string(),
+            threats: vec![],
+            registrar: None,
+            created_date: None,
+            nameservers: vec![],
+            source: "VirusTotal".to_string(),
+        };
+        let cloned = rep.clone();
+        assert_eq!(cloned.domain, "test.com");
+    }
+
+    #[test]
+    fn test_passive_dns_record_clone() {
+        let record = PassiveDnsRecord {
+            record_type: "A".to_string(),
+            value: "5.6.7.8".to_string(),
+            first_seen: None,
+            last_seen: None,
+            source: "AlienVault OTX".to_string(),
+        };
+        let cloned = record.clone();
+        assert_eq!(cloned.value, "5.6.7.8");
+    }
+
+    #[test]
+    fn test_threat_intel_serialization() {
+        let intel = ThreatIntel {
+            target: "8.8.8.8".to_string(),
+            ip_reputation: Some(IpReputation {
+                ip: "8.8.8.8".to_string(),
+                score: 0,
+                category: "clean".to_string(),
+                threats: vec![],
+                asn: Some("AS15169".to_string()),
+                isp: None,
+                country: None,
+                source: "VirusTotal".to_string(),
+            }),
+            domain_reputation: None,
+            passive_dns: vec![
+                PassiveDnsRecord {
+                    record_type: "A".to_string(),
+                    value: "8.8.8.8".to_string(),
+                    first_seen: None,
+                    last_seen: None,
+                    source: "AlienVault OTX".to_string(),
+                },
+            ],
+        };
+        let json = serde_json::to_string(&intel).unwrap();
+        let decoded: ThreatIntel = serde_json::from_str(&json).unwrap();
+        assert!(decoded.ip_reputation.is_some());
+        assert_eq!(decoded.passive_dns.len(), 1);
+    }
+
+    #[test]
+    fn test_ip_reputation_score_categories() {
+        let clean = IpReputation {
+            ip: "1.1.1.1".to_string(),
+            score: 0,
+            category: "clean".to_string(),
+            threats: vec![],
+            asn: None,
+            isp: None,
+            country: None,
+            source: "VT".to_string(),
+        };
+        let suspicious = IpReputation {
+            ip: "1.1.1.2".to_string(),
+            score: 30,
+            category: "suspicious".to_string(),
+            threats: vec!["spam".to_string()],
+            asn: None,
+            isp: None,
+            country: None,
+            source: "VT".to_string(),
+        };
+        let malicious = IpReputation {
+            ip: "1.1.1.3".to_string(),
+            score: 80,
+            category: "malicious".to_string(),
+            threats: vec!["malware".to_string(), "phishing".to_string()],
+            asn: None,
+            isp: None,
+            country: None,
+            source: "VT".to_string(),
+        };
+        assert_eq!(clean.category, "clean");
+        assert_eq!(suspicious.category, "suspicious");
+        assert_eq!(malicious.category, "malicious");
+    }
+}

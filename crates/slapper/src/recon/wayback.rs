@@ -165,3 +165,118 @@ pub async fn get_wayback_snapshots(
     let client = WaybackClient::new(api_key.cloned())?;
     client.get_snapshots(domain, limit).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_wayback_result_default() {
+        let result = WaybackResult::default();
+        assert!(result.domain.is_empty());
+        assert!(result.snapshots.is_empty());
+        assert_eq!(result.total_snapshots, 0);
+        assert!(result.endpoints_discovered.is_empty());
+    }
+
+    #[test]
+    fn test_wayback_snapshot_serialization() {
+        let snapshot = WaybackSnapshot {
+            url: "https://web.archive.org/web/20230101000000/https://example.com/page".to_string(),
+            timestamp: "20230101000000".to_string(),
+            original_url: "https://example.com/page".to_string(),
+            mimetype: Some("text/html".to_string()),
+            status_code: Some(200),
+        };
+        let json = serde_json::to_string(&snapshot).unwrap();
+        assert!(json.contains("20230101000000"));
+        assert!(json.contains("example.com"));
+        let decoded: WaybackSnapshot = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.timestamp, "20230101000000");
+        assert_eq!(decoded.status_code, Some(200));
+    }
+
+    #[test]
+    fn test_wayback_result_serialization() {
+        let result = WaybackResult {
+            domain: "example.com".to_string(),
+            snapshots: vec![
+                WaybackSnapshot {
+                    url: "https://web.archive.org/web/20230101/https://example.com".to_string(),
+                    timestamp: "20230101000000".to_string(),
+                    original_url: "https://example.com".to_string(),
+                    mimetype: Some("text/html".to_string()),
+                    status_code: Some(200),
+                },
+            ],
+            total_snapshots: 1,
+            endpoints_discovered: vec!["/".to_string(), "/page".to_string()],
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let decoded: WaybackResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.domain, "example.com");
+        assert_eq!(decoded.snapshots.len(), 1);
+        assert_eq!(decoded.total_snapshots, 1);
+        assert_eq!(decoded.endpoints_discovered.len(), 2);
+    }
+
+    #[test]
+    fn test_wayback_client_new() {
+        let client = WaybackClient::new(None);
+        assert!(client.is_ok());
+        let client = WaybackClient::new(Some(SensitiveString::new("test-key".to_string())));
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_wayback_snapshot_clone() {
+        let snapshot = WaybackSnapshot {
+            url: "https://web.archive.org/web/20230101/test".to_string(),
+            timestamp: "20230101".to_string(),
+            original_url: "https://example.com".to_string(),
+            mimetype: None,
+            status_code: None,
+        };
+        let cloned = snapshot.clone();
+        assert_eq!(cloned.timestamp, "20230101");
+    }
+
+    #[test]
+    fn test_wayback_api_response_deserialization() {
+        let json = r#"{"items":[{"timestamp":"20230101","original":"https://example.com","mimetype":"text/html","statuscode":"200"}]}"#;
+        let resp: WaybackApiResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.items.len(), 1);
+        assert_eq!(resp.items[0].timestamp.as_deref(), Some("20230101"));
+        assert_eq!(resp.items[0].statuscode.as_deref(), Some("200"));
+    }
+
+    #[test]
+    fn test_wayback_api_response_empty() {
+        let json = r#"{"items":[]}"#;
+        let resp: WaybackApiResponse = serde_json::from_str(json).unwrap();
+        assert!(resp.items.is_empty());
+    }
+
+    #[test]
+    fn test_wayback_api_item_optional_fields() {
+        let json = r#"{"timestamp":null,"original":null,"mimetype":null,"statuscode":null}"#;
+        let item: WaybackApiItem = serde_json::from_str(json).unwrap();
+        assert!(item.timestamp.is_none());
+        assert!(item.original.is_none());
+        assert!(item.mimetype.is_none());
+        assert!(item.statuscode.is_none());
+    }
+
+    #[test]
+    fn test_wayback_result_empty_snapshots() {
+        let result = WaybackResult {
+            domain: "nonexistent.example".to_string(),
+            snapshots: vec![],
+            total_snapshots: 0,
+            endpoints_discovered: vec![],
+        };
+        assert!(result.snapshots.is_empty());
+        assert_eq!(result.total_snapshots, 0);
+        assert!(result.endpoints_discovered.is_empty());
+    }
+}

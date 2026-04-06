@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -218,5 +217,102 @@ pub fn get_asn_info(target: &str) -> Result<AsnInfo, Box<dyn std::error::Error +
         AsnLookup::lookup_by_ip(target)
     } else {
         Err("Invalid target: must be ASN (AS12345) or IP address".into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_asn_info_serialization() {
+        let info = AsnInfo {
+            asn: "AS15169".to_string(),
+            prefix: "8.8.8.0/24".to_string(),
+            name: "Google".to_string(),
+            description: "Google LLC".to_string(),
+            country: "US".to_string(),
+            registry: "ARIN".to_string(),
+            allocated: "2014-01-01".to_string(),
+            updated: "2024-01-01".to_string(),
+            abuse_contacts: vec!["abuse@google.com".to_string()],
+            routing_policy: Some("GLOBAL".to_string()),
+            traffic_estimate: Some("10Tbps".to_string()),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("AS15169"));
+        assert!(json.contains("Google"));
+        let decoded: AsnInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.asn, "AS15169");
+    }
+
+    #[test]
+    fn test_ip_range_serialization() {
+        let range = IpRange {
+            prefix: "8.8.8.0/24".to_string(),
+            start_address: "8.8.8.0".to_string(),
+            end_address: "8.8.8.255".to_string(),
+            asn: "AS15169".to_string(),
+            name: "Google".to_string(),
+            country: "US".to_string(),
+        };
+        let json = serde_json::to_string(&range).unwrap();
+        assert!(json.contains("8.8.8.0"));
+        assert!(json.contains("AS15169"));
+    }
+
+    #[test]
+    fn test_get_asn_info_invalid_input() {
+        let result = get_asn_info("not-a-valid-input");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Invalid target"));
+    }
+
+    #[test]
+    fn test_get_asn_info_asn_prefix_stripping() {
+        let result = get_asn_info("AS12345");
+        assert!(result.is_err());
+        let err_str = result.unwrap_err().to_string();
+        assert!(err_str.contains("ASN lookup failed") || err_str.contains("Invalid target"));
+    }
+
+    #[test]
+    fn test_asn_info_clone() {
+        let info = AsnInfo {
+            asn: "AS1".to_string(),
+            prefix: String::new(),
+            name: "Test".to_string(),
+            description: String::new(),
+            country: String::new(),
+            registry: String::new(),
+            allocated: String::new(),
+            updated: String::new(),
+            abuse_contacts: vec![],
+            routing_policy: None,
+            traffic_estimate: None,
+        };
+        let cloned = info.clone();
+        assert_eq!(cloned.asn, "AS1");
+    }
+
+    #[test]
+    fn test_ip_range_clone() {
+        let range = IpRange {
+            prefix: "10.0.0.0/8".to_string(),
+            start_address: "10.0.0.0".to_string(),
+            end_address: "10.255.255.255".to_string(),
+            asn: "AS1".to_string(),
+            name: String::new(),
+            country: String::new(),
+        };
+        let cloned = range.clone();
+        assert_eq!(cloned.prefix, "10.0.0.0/8");
+    }
+
+    #[test]
+    fn test_get_asn_info_ipv6_rejected() {
+        let result = get_asn_info("::1");
+        assert!(result.is_err());
     }
 }

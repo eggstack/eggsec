@@ -301,3 +301,125 @@ pub fn lookup_cve(cve_id: &str) -> Result<CveEntry, Box<dyn std::error::Error + 
     let mut engine = CveEngine::new();
     engine.lookup_cve(cve_id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cvss_severity_parse() {
+        assert_eq!(
+            CveEngine::parse_severity("CRITICAL"),
+            CvssSeverity::Critical
+        );
+        assert_eq!(CveEngine::parse_severity("HIGH"), CvssSeverity::High);
+        assert_eq!(CveEngine::parse_severity("MEDIUM"), CvssSeverity::Medium);
+        assert_eq!(CveEngine::parse_severity("LOW"), CvssSeverity::Low);
+        assert_eq!(CveEngine::parse_severity("UNKNOWN"), CvssSeverity::None);
+        assert_eq!(CveEngine::parse_severity(""), CvssSeverity::None);
+    }
+
+    #[test]
+    fn test_cvss_severity_case_insensitive() {
+        assert_eq!(
+            CveEngine::parse_severity("critical"),
+            CvssSeverity::Critical
+        );
+        assert_eq!(CveEngine::parse_severity("High"), CvssSeverity::High);
+        assert_eq!(CveEngine::parse_severity("MeDiUm"), CvssSeverity::Medium);
+    }
+
+    #[test]
+    fn test_cve_entry_serialization() {
+        let entry = CveEntry {
+            id: "CVE-2021-41773".to_string(),
+            description: "Path traversal vulnerability".to_string(),
+            severity: CvssSeverity::Critical,
+            cvss_score: 10.0,
+            published: "2021-10-04T00:00:00Z".to_string(),
+            affected_products: vec!["Apache".to_string()],
+            references: vec!["https://nvd.nist.gov".to_string()],
+            cwe: Some("CWE-22".to_string()),
+            has_exploit: true,
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("CVE-2021-41773"));
+        assert!(json.contains("Critical"));
+        let decoded: CveEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.id, "CVE-2021-41773");
+        assert_eq!(decoded.cvss_score, 10.0);
+        assert!(decoded.has_exploit);
+    }
+
+    #[test]
+    fn test_technology_match_serialization() {
+        let tech = TechnologyMatch {
+            name: "nginx".to_string(),
+            version: Some("1.20.0".to_string()),
+            cves: vec![CveEntry {
+                id: "CVE-2021-23017".to_string(),
+                description: "Off-by-one error".to_string(),
+                severity: CvssSeverity::High,
+                cvss_score: 7.5,
+                published: "2021-06-01".to_string(),
+                affected_products: vec!["nginx".to_string()],
+                references: vec![],
+                cwe: None,
+                has_exploit: false,
+            }],
+        };
+        let json = serde_json::to_string(&tech).unwrap();
+        let decoded: TechnologyMatch = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.name, "nginx");
+        assert_eq!(decoded.version.as_deref(), Some("1.20.0"));
+        assert_eq!(decoded.cves.len(), 1);
+    }
+
+    #[test]
+    fn test_cve_engine_new() {
+        let engine = CveEngine::new();
+        assert!(engine.cve_cache.is_empty());
+    }
+
+    #[test]
+    fn test_cve_entry_clone() {
+        let entry = CveEntry {
+            id: "CVE-2023-0001".to_string(),
+            description: "Test".to_string(),
+            severity: CvssSeverity::High,
+            cvss_score: 7.5,
+            published: String::new(),
+            affected_products: vec![],
+            references: vec![],
+            cwe: None,
+            has_exploit: false,
+        };
+        let cloned = entry.clone();
+        assert_eq!(cloned.id, "CVE-2023-0001");
+        assert_eq!(cloned.severity, CvssSeverity::High);
+    }
+
+    #[test]
+    fn test_exploit_db_entry_serialization() {
+        let entry = ExploitDbEntry {
+            id: "EDB-12345".to_string(),
+            description: "Test exploit".to_string(),
+            exploit_type: "web".to_string(),
+            platform: "linux".to_string(),
+            author: "tester".to_string(),
+            date: "2023-01-01".to_string(),
+            url: "https://exploit-db.com/12345".to_string(),
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        let decoded: ExploitDbEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.id, "EDB-12345");
+        assert_eq!(decoded.platform, "linux");
+    }
+
+    #[test]
+    fn test_cve_engine_match_technology() {
+        let mut engine = CveEngine::new();
+        let matches = engine.match_technology_cves("apache", Some("2.4.49"));
+        assert!(matches.is_empty());
+    }
+}

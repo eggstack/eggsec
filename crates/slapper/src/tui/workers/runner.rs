@@ -133,13 +133,34 @@ pub enum TaskConfig {
         framework: crate::compliance::ComplianceFramework,
     },
     #[cfg(feature = "database")]
-    Storage,
+    Storage {
+        config: crate::storage::StorageConfig,
+        mode: String,
+        scan_id: Option<String>,
+        cve_id: Option<String>,
+        severity_filter: Option<String>,
+    },
     #[cfg(feature = "external-integrations")]
-    Integrations,
+    Integrations {
+        config: crate::integrations::IntegrationConfig,
+        mode: String,
+        title: Option<String>,
+        description: Option<String>,
+        labels: Vec<String>,
+        assignees: Vec<String>,
+    },
     #[cfg(feature = "finding-workflow")]
-    Workflow,
+    Workflow {
+        mode: String,
+        target: Option<String>,
+        finding_ids: Vec<String>,
+    },
     #[cfg(feature = "vuln-management")]
-    Vuln,
+    Vuln {
+        mode: String,
+        target: Option<String>,
+        cve_id: Option<String>,
+    },
 }
 
 #[derive(Debug)]
@@ -182,9 +203,21 @@ pub enum TaskResult {
     Browser(crate::browser::BrowserReport),
     Compliance(crate::compliance::ComplianceReport),
     Storage,
+    StorageListScans {
+        scans: Vec<crate::storage::models::StoredScan>,
+    },
+    StorageListFindings {
+        findings: Vec<crate::storage::models::StoredFinding>,
+    },
     Integrations,
-    Workflow,
-    Vuln,
+    IntegrationsCreateIssue {
+        issue: crate::integrations::Issue,
+    },
+    IntegrationsSearchIssues {
+        issues: Vec<crate::integrations::Issue>,
+    },
+    Workflow(crate::workflow::WorkflowReport),
+    Vuln(crate::vuln::VulnAssessment),
     Error(String),
 }
 
@@ -468,20 +501,20 @@ impl TaskRunner {
                 super::security::run_compliance_task(target, framework, progress_tx, result_tx).await
             }
             #[cfg(feature = "database")]
-            TaskConfig::Storage => {
-                super::security::run_storage_task(progress_tx, result_tx).await
+            TaskConfig::Storage { config, mode, scan_id, cve_id, severity_filter } => {
+                super::security::run_storage_task(config, mode, scan_id, cve_id, severity_filter, progress_tx, result_tx).await
             }
             #[cfg(feature = "external-integrations")]
-            TaskConfig::Integrations => {
-                super::security::run_integrations_task(progress_tx, result_tx).await
+            TaskConfig::Integrations { config, mode, title, description, labels, assignees } => {
+                super::security::run_integrations_task(config, mode, title, description, labels, assignees, progress_tx, result_tx).await
             }
             #[cfg(feature = "finding-workflow")]
-            TaskConfig::Workflow => {
-                super::security::run_workflow_task(progress_tx, result_tx).await
+            TaskConfig::Workflow { mode, target, finding_ids } => {
+                super::security::run_workflow_task(mode, target, finding_ids, progress_tx, result_tx).await
             }
             #[cfg(feature = "vuln-management")]
-            TaskConfig::Vuln => {
-                super::security::run_vuln_task(progress_tx, result_tx).await
+            TaskConfig::Vuln { mode, target, cve_id } => {
+                super::security::run_vuln_task(mode, target, cve_id, progress_tx, result_tx).await
             }
         };
         result

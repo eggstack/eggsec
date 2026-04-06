@@ -120,6 +120,17 @@ impl VulnTab {
             .unwrap_or("")
     }
 
+    pub fn get_mode(&self) -> &str {
+        match self.current_mode {
+            VulnMode::CvssCalc => "cvss_calc",
+            VulnMode::ExploitCheck => "exploit_check",
+            VulnMode::AssetAssess => "asset_assess",
+            VulnMode::Prioritize => "prioritize",
+            VulnMode::Triage => "triage",
+            VulnMode::Remediation => "remediation",
+        }
+    }
+
     pub fn start(&mut self) {
         self.state = AppState::Running;
         self.results_view.clear();

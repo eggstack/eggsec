@@ -402,3 +402,102 @@ pub async fn detect_tech_stack(url: &str) -> Result<TechDetectionResult> {
     let detector = TechDetector::new()?;
     detector.detect(url).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tech_stack_default() {
+        let stack = TechStack::default();
+        assert!(stack.servers.is_empty());
+        assert!(stack.frameworks.is_empty());
+        assert!(stack.languages.is_empty());
+        assert!(stack.databases.is_empty());
+        assert!(stack.cdns.is_empty());
+        assert!(stack.cms.is_empty());
+        assert!(stack.javascript.is_empty());
+        assert!(stack.other.is_empty());
+    }
+
+    #[test]
+    fn test_tech_stack_serialization() {
+        let mut stack = TechStack::default();
+        stack.servers.push("Nginx".to_string());
+        stack.frameworks.push("Express".to_string());
+        stack.languages.push("Node.js".to_string());
+        let json = serde_json::to_string(&stack).unwrap();
+        assert!(json.contains("Nginx"));
+        assert!(json.contains("Express"));
+        let decoded: TechStack = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.servers.len(), 1);
+        assert_eq!(decoded.servers[0], "Nginx");
+    }
+
+    #[test]
+    fn test_tech_detection_result_serialization() {
+        let result = TechDetectionResult {
+            url: "https://example.com".to_string(),
+            status_code: 200,
+            headers: std::collections::HashMap::from([
+                ("server".to_string(), "nginx".to_string()),
+                ("x-powered-by".to_string(), "Express".to_string()),
+            ]),
+            tech_stack: TechStack::default(),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("example.com"));
+        assert!(json.contains("200"));
+        let decoded: TechDetectionResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.url, "https://example.com");
+        assert_eq!(decoded.status_code, 200);
+    }
+
+    #[test]
+    fn test_tech_detector_new() {
+        let detector = TechDetector::new();
+        assert!(detector.is_ok());
+    }
+
+    #[test]
+    fn test_tech_stack_clone() {
+        let mut stack = TechStack::default();
+        stack.servers.push("Apache".to_string());
+        let cloned = stack.clone();
+        assert_eq!(cloned.servers.len(), 1);
+        assert_eq!(cloned.servers[0], "Apache");
+    }
+
+    #[test]
+    fn test_tech_detection_result_clone() {
+        let result = TechDetectionResult {
+            url: "https://example.com".to_string(),
+            status_code: 404,
+            headers: std::collections::HashMap::new(),
+            tech_stack: TechStack::default(),
+        };
+        let cloned = result.clone();
+        assert_eq!(cloned.url, "https://example.com");
+        assert_eq!(cloned.status_code, 404);
+    }
+
+    #[test]
+    fn test_tech_stack_multiple_categories() {
+        let mut stack = TechStack::default();
+        stack.servers.push("nginx".to_string());
+        stack.frameworks.push("django".to_string());
+        stack.languages.push("python".to_string());
+        stack.databases.push("postgresql".to_string());
+        stack.cdns.push("cloudflare".to_string());
+        stack.cms.push("wordpress".to_string());
+        stack.javascript.push("react".to_string());
+
+        assert_eq!(stack.servers.len(), 1);
+        assert_eq!(stack.frameworks.len(), 1);
+        assert_eq!(stack.languages.len(), 1);
+        assert_eq!(stack.databases.len(), 1);
+        assert_eq!(stack.cdns.len(), 1);
+        assert_eq!(stack.cms.len(), 1);
+        assert_eq!(stack.javascript.len(), 1);
+    }
+}

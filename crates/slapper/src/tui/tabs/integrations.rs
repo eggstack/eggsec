@@ -162,12 +162,31 @@ impl IntegrationsTab {
 
     pub fn build_issue(&self) -> Issue {
         Issue {
+            id: None,
             title: self.issue_title().to_string(),
             description: self.issue_description().to_string(),
             labels: self.issue_labels(),
             severity: None,
             assignees: self.issue_assignees(),
+            status: None,
+            url: None,
+            created_at: None,
         }
+    }
+
+    pub fn get_mode(&self) -> &str {
+        match self.current_mode {
+            IntegrationsMode::Configure => "configure",
+            IntegrationsMode::CreateIssue => "create_issue",
+            IntegrationsMode::SearchIssues => "search_issues",
+        }
+    }
+
+    pub fn get_issue_params(&self) -> (String, String) {
+        (
+            self.issue_title().to_string(),
+            self.issue_description().to_string(),
+        )
     }
 
     pub fn start(&mut self) {

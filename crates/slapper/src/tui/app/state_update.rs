@@ -1,4 +1,4 @@
-use crate::tui::tabs::TabState;
+use crate::tui::tabs::{AppState, TabState};
 use crate::tui::workers::TaskResult;
 
 impl super::App {
@@ -212,9 +212,67 @@ impl super::App {
             #[cfg(not(feature = "compliance"))]
             TaskResult::Compliance(_) => {}
             TaskResult::Storage => {}
+            #[cfg(feature = "database")]
+            TaskResult::StorageListScans { scans } => {
+                self.storage.scans = scans.clone();
+                self.storage.state = AppState::Completed;
+            }
+            #[cfg(feature = "database")]
+            TaskResult::StorageListFindings { findings } => {
+                self.storage.findings = findings.clone();
+                self.storage.state = AppState::Completed;
+            }
+            #[cfg(not(feature = "database"))]
+            TaskResult::StorageListScans { .. } => {}
+            #[cfg(not(feature = "database"))]
+            TaskResult::StorageListFindings { .. } => {}
             TaskResult::Integrations => {}
-            TaskResult::Workflow => {}
-            TaskResult::Vuln => {}
+            #[cfg(feature = "external-integrations")]
+            TaskResult::IntegrationsCreateIssue { ref issue } => {
+                self.integrations.state = AppState::Completed;
+                self.integrations.results_view.clear();
+                self.integrations
+                    .results_view
+                    .add_line(ratatui::text::Line::from(format!(
+                        "Created issue: {} ({})",
+                        issue.title,
+                        issue.id.as_deref().unwrap_or("no-id")
+                    )));
+            }
+            #[cfg(feature = "external-integrations")]
+            TaskResult::IntegrationsSearchIssues { issues } => {
+                self.integrations.state = AppState::Completed;
+                self.integrations.results_view.clear();
+                self.integrations
+                    .results_view
+                    .add_line(ratatui::text::Line::from(format!(
+                        "Found {} issues",
+                        issues.len()
+                    )));
+            }
+            #[cfg(not(feature = "external-integrations"))]
+            TaskResult::IntegrationsCreateIssue { .. } => {}
+            #[cfg(not(feature = "external-integrations"))]
+            TaskResult::IntegrationsSearchIssues { .. } => {}
+            #[cfg(feature = "finding-workflow")]
+            TaskResult::Workflow(ref report) => {
+                self.workflow.report = Some(report.clone());
+                self.workflow.state = AppState::Completed;
+            }
+            #[cfg(not(feature = "finding-workflow"))]
+            TaskResult::Workflow(_) => {}
+            #[cfg(feature = "vuln-management")]
+            TaskResult::Vuln(ref assessment) => {
+                self.vuln.state = AppState::Completed;
+                self.vuln.results_view.clear();
+                for line in &assessment.results {
+                    self.vuln
+                        .results_view
+                        .add_line(ratatui::text::Line::from(line.clone()));
+                }
+            }
+            #[cfg(not(feature = "vuln-management"))]
+            TaskResult::Vuln(_) => {}
             TaskResult::Error(msg) => {
                 self.set_error_for_current_tab(msg);
             }

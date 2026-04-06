@@ -661,3 +661,136 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
 
     s
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_resolve_target_http_prefix() {
+        let (url, domain, _) = resolve_target("http://example.com/path", false).await;
+        assert_eq!(url, "http://example.com/path");
+        assert_eq!(domain, Some("example.com".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_target_https_prefix() {
+        let (url, domain, _) = resolve_target("https://example.com/page?q=1", false).await;
+        assert_eq!(url, "https://example.com/page?q=1");
+        assert_eq!(domain, Some("example.com".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_target_no_prefix() {
+        let (url, domain, resolved_ip) = resolve_target("example.com", false).await;
+        assert_eq!(url, "https://example.com");
+        assert_eq!(domain, Some("example.com".to_string()));
+        let _ = resolved_ip;
+    }
+
+    #[tokio::test]
+    async fn test_resolve_target_ip_address() {
+        let (url, domain, resolved_ip) = resolve_target("8.8.8.8", false).await;
+        assert_eq!(url, "https://8.8.8.8");
+        assert_eq!(domain, Some("8.8.8.8".to_string()));
+        assert_eq!(resolved_ip, Some("8.8.8.8".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_target_ipv6() {
+        let (url, domain, resolved_ip) = resolve_target("::1", false).await;
+        assert_eq!(url, "https://::1");
+        assert_eq!(domain, Some("::1".to_string()));
+        assert_eq!(resolved_ip, Some("::1".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_target_with_port() {
+        let (url, domain, _) = resolve_target("http://example.com:8080/admin", false).await;
+        assert_eq!(url, "http://example.com:8080/admin");
+        assert_eq!(domain, Some("example.com:8080".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_target_strips_path_from_domain() {
+        let (url, domain, _) = resolve_target("https://example.com/a/b/c", false).await;
+        assert_eq!(url, "https://example.com/a/b/c");
+        assert_eq!(domain, Some("example.com".to_string()));
+    }
+
+    #[test]
+    fn test_full_recon_result_new() {
+        use crate::recon::FullReconResult;
+        let result = FullReconResult::new("example.com");
+        assert_eq!(result.target, "example.com");
+        assert!(result.domain.is_none());
+        assert!(result.ip_address.is_none());
+    }
+
+    #[test]
+    fn test_full_recon_result_default() {
+        use crate::recon::FullReconResult;
+        let result = FullReconResult::default();
+        assert!(result.target.is_empty());
+    }
+
+    #[test]
+    fn test_full_recon_result_serialization() {
+        use crate::recon::FullReconResult;
+        let result = FullReconResult {
+            target: "example.com".to_string(),
+            domain: Some("example.com".to_string()),
+            ip_address: Some("93.184.216.34".to_string()),
+            tech_stack: None,
+            reverse_dns: None,
+            geolocation: None,
+            geoip_error: None,
+            whois: None,
+            subdomains: None,
+            ssl_analysis: None,
+            dns_records: None,
+            js_analysis: None,
+            wayback: None,
+            cloud: None,
+            content: None,
+            cors: None,
+            email_discovery: None,
+            threat_intel: None,
+            cve_mapping: None,
+            takeover: None,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("example.com"));
+        assert!(json.contains("93.184.216.34"));
+        let decoded: FullReconResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.target, "example.com");
+    }
+
+    #[test]
+    fn test_full_recon_result_with_subdomains() {
+        use crate::recon::FullReconResult;
+        use crate::recon::subdomain::{SubdomainInfo, SubdomainResult};
+        let result = FullReconResult {
+            target: "example.com".to_string(),
+            domain: Some("example.com".to_string()),
+            subdomains: Some(SubdomainResult {
+                domain: "example.com".to_string(),
+                subdomains: vec![
+                    SubdomainInfo {
+                        subdomain: "www".to_string(),
+                        ip_addresses: vec!["93.184.216.34".to_string()],
+                        has_mx: false,
+                        has_cname: false,
+                        has_txt: false,
+                    },
+                ],
+                sources: vec!["crt.sh".to_string()],
+            }),
+            ..Default::default()
+        };
+        assert!(result.subdomains.is_some());
+        let subs = result.subdomains.unwrap();
+        assert_eq!(subs.subdomains.len(), 1);
+        assert_eq!(subs.subdomains[0].subdomain, "www");
+    }
+}

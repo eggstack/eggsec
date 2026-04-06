@@ -280,7 +280,15 @@ impl super::App {
 
     #[cfg(feature = "database")]
     pub(crate) fn build_storage_task(&self) -> Option<workers::TaskConfig> {
-        Some(workers::TaskConfig::Storage)
+        let config = self.storage.get_config();
+        let mode = self.storage.get_mode();
+        Some(workers::TaskConfig::Storage {
+            config,
+            mode: mode.to_string(),
+            scan_id: Some(self.storage.query_id().to_string()).filter(|s| !s.is_empty()),
+            cve_id: None,
+            severity_filter: self.storage.severity_filter().map(String::from),
+        })
     }
     #[cfg(not(feature = "database"))]
     #[allow(dead_code)]
@@ -290,7 +298,16 @@ impl super::App {
 
     #[cfg(feature = "external-integrations")]
     pub(crate) fn build_integrations_task(&self) -> Option<workers::TaskConfig> {
-        Some(workers::TaskConfig::Integrations)
+        let mode = self.integrations.get_mode();
+        let (title, description) = self.integrations.get_issue_params();
+        Some(workers::TaskConfig::Integrations {
+            config: self.integrations.get_config(),
+            mode: mode.to_string(),
+            title: Some(title).filter(|s| !s.is_empty()),
+            description: Some(description).filter(|s| !s.is_empty()),
+            labels: vec![],
+            assignees: vec![],
+        })
     }
     #[cfg(not(feature = "external-integrations"))]
     #[allow(dead_code)]
@@ -300,7 +317,11 @@ impl super::App {
 
     #[cfg(feature = "finding-workflow")]
     pub(crate) fn build_workflow_task(&self) -> Option<workers::TaskConfig> {
-        Some(workers::TaskConfig::Workflow)
+        Some(workers::TaskConfig::Workflow {
+            mode: self.workflow.get_mode().to_string(),
+            target: None,
+            finding_ids: vec![],
+        })
     }
     #[cfg(not(feature = "finding-workflow"))]
     #[allow(dead_code)]
@@ -310,7 +331,11 @@ impl super::App {
 
     #[cfg(feature = "vuln-management")]
     pub(crate) fn build_vuln_task(&self) -> Option<workers::TaskConfig> {
-        Some(workers::TaskConfig::Vuln)
+        Some(workers::TaskConfig::Vuln {
+            mode: self.vuln.get_mode().to_string(),
+            target: None,
+            cve_id: None,
+        })
     }
     #[cfg(not(feature = "vuln-management"))]
     #[allow(dead_code)]

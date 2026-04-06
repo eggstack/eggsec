@@ -188,6 +188,7 @@ impl IssueTracker for GitHubClient {
                 .unwrap_or_default();
 
             Ok(Issue {
+                id: json["number"].as_i64().map(|n| n.to_string()),
                 title: json["title"].as_str().unwrap_or("").to_string(),
                 description: json["body"].as_str().unwrap_or("").to_string(),
                 labels,
@@ -200,6 +201,13 @@ impl IssueTracker for GitHubClient {
                             .collect()
                     })
                     .unwrap_or_default(),
+                status: None,
+                url: json["html_url"].as_str().map(String::from),
+                created_at: json["created_at"].as_str().and_then(|s| {
+                    chrono::DateTime::parse_from_rfc3339(s)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                }),
             })
         } else {
             let status = response.status();
@@ -244,6 +252,7 @@ impl IssueTracker for GitHubClient {
                                 })
                                 .unwrap_or_default();
                             Issue {
+                                id: item["number"].as_i64().map(|n| n.to_string()),
                                 title: item["title"].as_str().unwrap_or("").to_string(),
                                 description: item["body"].as_str().unwrap_or("").to_string(),
                                 labels,
@@ -256,6 +265,13 @@ impl IssueTracker for GitHubClient {
                                             .collect()
                                     })
                                     .unwrap_or_default(),
+                                status: None,
+                                url: item["html_url"].as_str().map(String::from),
+                                created_at: item["created_at"].as_str().and_then(|s| {
+                                    chrono::DateTime::parse_from_rfc3339(s)
+                                        .ok()
+                                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                                }),
                             }
                         })
                         .collect()

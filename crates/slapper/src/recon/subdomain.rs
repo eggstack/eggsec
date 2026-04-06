@@ -276,3 +276,117 @@ pub async fn bruteforce_subdomains(
     let enumerator = SubdomainEnumerator::new(concurrency)?;
     enumerator.bruteforce(domain, wordlist).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_subdomain_result_serialization() {
+        let result = SubdomainResult {
+            domain: "example.com".to_string(),
+            subdomains: vec![
+                SubdomainInfo {
+                    subdomain: "www".to_string(),
+                    ip_addresses: vec!["93.184.216.34".to_string()],
+                    has_mx: false,
+                    has_cname: false,
+                    has_txt: true,
+                },
+            ],
+            sources: vec!["crt.sh".to_string()],
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("example.com"));
+        assert!(json.contains("crt.sh"));
+        let decoded: SubdomainResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.domain, "example.com");
+        assert_eq!(decoded.subdomains.len(), 1);
+    }
+
+    #[test]
+    fn test_subdomain_info_serialization() {
+        let info = SubdomainInfo {
+            subdomain: "api".to_string(),
+            ip_addresses: vec!["1.2.3.4".to_string(), "5.6.7.8".to_string()],
+            has_mx: true,
+            has_cname: true,
+            has_txt: false,
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let decoded: SubdomainInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.subdomain, "api");
+        assert_eq!(decoded.ip_addresses.len(), 2);
+        assert!(decoded.has_mx);
+    }
+
+    #[test]
+    fn test_subdomain_result_default() {
+        let result = SubdomainResult::default();
+        assert!(result.domain.is_empty());
+        assert!(result.subdomains.is_empty());
+        assert!(result.sources.is_empty());
+    }
+
+    #[test]
+    fn test_subdomain_enumerator_new() {
+        let result = SubdomainEnumerator::new(10);
+        assert!(result.is_ok());
+        let result = SubdomainEnumerator::new(0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_subdomain_info_clone() {
+        let info = SubdomainInfo {
+            subdomain: "www".to_string(),
+            ip_addresses: vec!["1.2.3.4".to_string()],
+            has_mx: false,
+            has_cname: false,
+            has_txt: false,
+        };
+        let cloned = info.clone();
+        assert_eq!(cloned.subdomain, "www");
+        assert_eq!(cloned.ip_addresses.len(), 1);
+    }
+
+    #[test]
+    fn test_crt_sh_entry_deserialization() {
+        let entry_json = r#"{"name_value":"www.example.com\napi.example.com"}"#;
+        let entry: CrtShEntry = serde_json::from_str(entry_json).unwrap();
+        assert!(entry.name_value.is_some());
+        let val = entry.name_value.unwrap();
+        assert!(val.contains("www.example.com"));
+    }
+
+    #[test]
+    fn test_crtsh_entry_empty() {
+        let entry_json = r#"{"name_value":null}"#;
+        let entry: CrtShEntry = serde_json::from_str(entry_json).unwrap();
+        assert!(entry.name_value.is_none());
+    }
+
+    #[test]
+    fn test_threatminer_response_default() {
+        let resp: ThreatMinerResponse = ThreatMinerResponse::default();
+        assert!(resp.results.is_empty());
+    }
+
+    #[test]
+    fn test_threatminer_response_deserialization() {
+        let json = r#"{"results":["sub1.example.com","sub2.example.com"]}"#;
+        let resp: ThreatMinerResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.results.len(), 2);
+        assert_eq!(resp.results[0], "sub1.example.com");
+    }
+
+    #[test]
+    fn test_subdomain_result_sources() {
+        let result = SubdomainResult {
+            domain: "example.com".to_string(),
+            subdomains: vec![],
+            sources: vec!["crt.sh".to_string(), "alexa".to_string(), "threatminer".to_string()],
+        };
+        assert_eq!(result.sources.len(), 3);
+    }
+}

@@ -372,3 +372,117 @@ pub async fn map_cves(tech_stack: &TechStack, nvd_api_key: Option<String>) -> Re
     let mut mapper = CveMapper::new(nvd_api_key)?;
     mapper.map_cves(tech_stack).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vulnerability_info_serialization() {
+        let vuln = VulnerabilityInfo {
+            cve_id: "CVE-2021-41773".to_string(),
+            description: "Path traversal in Apache".to_string(),
+            severity: "CRITICAL".to_string(),
+            cvss_score: 10.0,
+            affected_product: "Apache HTTP Server".to_string(),
+            references: vec!["https://nvd.nist.gov/vuln/detail/CVE-2021-41773".to_string()],
+            published_date: Some("2021-10-04".to_string()),
+        };
+        let json = serde_json::to_string(&vuln).unwrap();
+        assert!(json.contains("CVE-2021-41773"));
+        assert!(json.contains("CRITICAL"));
+        let decoded: VulnerabilityInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.cve_id, "CVE-2021-41773");
+        assert_eq!(decoded.cvss_score, 10.0);
+    }
+
+    #[test]
+    fn test_cve_mapping_serialization() {
+        let mapping = CveMapping {
+            tech_stack: TechStack::default(),
+            vulnerabilities: vec![],
+            total_critical: 0,
+            total_high: 0,
+            total_medium: 0,
+        };
+        let json = serde_json::to_string(&mapping).unwrap();
+        let decoded: CveMapping = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.total_critical, 0);
+    }
+
+    #[test]
+    fn test_cve_mapper_new() {
+        let mapper = CveMapper::new(None);
+        assert!(mapper.is_ok());
+        let mapper = CveMapper::new(Some("test-key".to_string()));
+        assert!(mapper.is_ok());
+    }
+
+    #[test]
+    fn test_vulnerability_info_clone() {
+        let vuln = VulnerabilityInfo {
+            cve_id: "CVE-2023-0001".to_string(),
+            description: "Test vulnerability".to_string(),
+            severity: "HIGH".to_string(),
+            cvss_score: 8.5,
+            affected_product: "TestProduct".to_string(),
+            references: vec![],
+            published_date: None,
+        };
+        let cloned = vuln.clone();
+        assert_eq!(cloned.cve_id, "CVE-2023-0001");
+        assert_eq!(cloned.cvss_score, 8.5);
+    }
+
+    #[test]
+    fn test_cve_mapping_totals() {
+        let mut mapping = CveMapping {
+            tech_stack: TechStack::default(),
+            vulnerabilities: vec![
+                VulnerabilityInfo {
+                    cve_id: "CVE-2021-1".to_string(),
+                    description: "".to_string(),
+                    severity: "CRITICAL".to_string(),
+                    cvss_score: 9.0,
+                    affected_product: "".to_string(),
+                    references: vec![],
+                    published_date: None,
+                },
+                VulnerabilityInfo {
+                    cve_id: "CVE-2021-2".to_string(),
+                    description: "".to_string(),
+                    severity: "HIGH".to_string(),
+                    cvss_score: 8.0,
+                    affected_product: "".to_string(),
+                    references: vec![],
+                    published_date: None,
+                },
+                VulnerabilityInfo {
+                    cve_id: "CVE-2021-3".to_string(),
+                    description: "".to_string(),
+                    severity: "MEDIUM".to_string(),
+                    cvss_score: 5.0,
+                    affected_product: "".to_string(),
+                    references: vec![],
+                    published_date: None,
+                },
+            ],
+            total_critical: 1,
+            total_high: 1,
+            total_medium: 1,
+        };
+        assert_eq!(mapping.total_critical, 1);
+        assert_eq!(mapping.total_high, 1);
+        assert_eq!(mapping.total_medium, 1);
+    }
+
+    #[tokio::test]
+    async fn test_map_cves_empty_stack() {
+        let stack = TechStack::default();
+        let result = map_cves(&stack, None).await;
+        assert!(result.is_ok());
+        let mapping = result.unwrap();
+        assert!(mapping.vulnerabilities.is_empty());
+        assert_eq!(mapping.total_critical, 0);
+    }
+}

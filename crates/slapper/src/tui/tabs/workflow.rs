@@ -141,6 +141,16 @@ impl WorkflowTab {
         }
     }
 
+    pub fn get_mode(&self) -> &str {
+        match self.current_mode {
+            WorkflowMode::ListFindings => "list",
+            WorkflowMode::CreateFinding => "create",
+            WorkflowMode::AssignFinding => "assign",
+            WorkflowMode::AddComment => "comment",
+            WorkflowMode::ChangeStatus => "status",
+        }
+    }
+
     pub fn start(&mut self) {
         self.state = AppState::Running;
         self.results_view.clear();

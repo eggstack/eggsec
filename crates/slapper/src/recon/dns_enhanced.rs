@@ -278,3 +278,183 @@ pub fn compare_dns_records(previous: &[DnsRecord], current: &[DnsRecord]) -> Dns
 pub fn resolve_domain(domain: &str) -> Option<Vec<IpAddr>> {
     dns_lookup::lookup_host(domain).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dns_record_serialization() {
+        let record = DnsRecord {
+            record_type: "A".to_string(),
+            name: "example.com".to_string(),
+            value: "93.184.216.34".to_string(),
+            ttl: Some(300),
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        assert!(json.contains("A"));
+        assert!(json.contains("93.184.216.34"));
+        let decoded: DnsRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.value, "93.184.216.34");
+    }
+
+    #[test]
+    fn test_dns_enum_result_serialization() {
+        let result = DnsEnumResult {
+            domain: "example.com".to_string(),
+            records: vec![DnsRecord {
+                record_type: "A".to_string(),
+                name: "example.com".to_string(),
+                value: "1.2.3.4".to_string(),
+                ttl: None,
+            }],
+            nameservers: vec!["ns1.example.com".to_string()],
+            mail_servers: vec!["mx.example.com".to_string()],
+            txt_records: vec!["v=spf1 include:_spf.example.com ~all".to_string()],
+            dmarc: Some("v=DMARC1; p=quarantine".to_string()),
+            spf: Some("v=SPFv1".to_string()),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let decoded: DnsEnumResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.domain, "example.com");
+        assert_eq!(decoded.records.len(), 1);
+        assert!(decoded.dmarc.is_some());
+    }
+
+    #[test]
+    fn test_subdomain_result_serialization() {
+        let result = SubdomainResult {
+            subdomain: "www.example.com".to_string(),
+            ips: vec!["93.184.216.34".to_string()],
+            has_http: true,
+            has_https: true,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let decoded: SubdomainResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.subdomain, "www.example.com");
+        assert!(decoded.has_https);
+    }
+
+    #[test]
+    fn test_dns_enumerator_default_wordlist() {
+        let enumerator = DnsEnumerator::new();
+        assert!(!enumerator.wordlist.is_empty());
+        assert!(enumerator.wordlist.contains(&"www".to_string()));
+        assert!(enumerator.wordlist.contains(&"mail".to_string()));
+        assert!(enumerator.wordlist.contains(&"api".to_string()));
+    }
+
+    #[test]
+    fn test_dns_enumerator_with_custom_wordlist() {
+        let enumerator =
+            DnsEnumerator::new().with_wordlist(vec!["custom1".to_string(), "custom2".to_string()]);
+        assert_eq!(enumerator.wordlist.len(), 2);
+        assert!(enumerator.wordlist.contains(&"custom1".to_string()));
+    }
+
+    #[test]
+    fn test_compare_dns_records_added() {
+        let previous = vec![DnsRecord {
+            record_type: "A".to_string(),
+            name: "example.com".to_string(),
+            value: "1.2.3.4".to_string(),
+            ttl: None,
+        }];
+        let current = vec![
+            DnsRecord {
+                record_type: "A".to_string(),
+                name: "example.com".to_string(),
+                value: "1.2.3.4".to_string(),
+                ttl: None,
+            },
+            DnsRecord {
+                record_type: "A".to_string(),
+                name: "example.com".to_string(),
+                value: "5.6.7.8".to_string(),
+                ttl: None,
+            },
+        ];
+        let comparison = compare_dns_records(&previous, &current);
+        assert_eq!(comparison.added.len(), 1);
+        assert!(comparison.added[0].value.contains("5.6.7.8"));
+    }
+
+    #[test]
+    fn test_compare_dns_records_removed() {
+        let previous = vec![
+            DnsRecord {
+                record_type: "A".to_string(),
+                name: "example.com".to_string(),
+                value: "1.2.3.4".to_string(),
+                ttl: None,
+            },
+            DnsRecord {
+                record_type: "A".to_string(),
+                name: "example.com".to_string(),
+                value: "5.6.7.8".to_string(),
+                ttl: None,
+            },
+        ];
+        let current = vec![DnsRecord {
+            record_type: "A".to_string(),
+            name: "example.com".to_string(),
+            value: "1.2.3.4".to_string(),
+            ttl: None,
+        }];
+        let comparison = compare_dns_records(&previous, &current);
+        assert_eq!(comparison.removed.len(), 1);
+        assert!(comparison.removed[0].value.contains("5.6.7.8"));
+    }
+
+    #[test]
+    fn test_compare_dns_records_no_changes() {
+        let records = vec![DnsRecord {
+            record_type: "A".to_string(),
+            name: "example.com".to_string(),
+            value: "1.2.3.4".to_string(),
+            ttl: None,
+        }];
+        let comparison = compare_dns_records(&records, &records);
+        assert!(comparison.added.is_empty());
+        assert!(comparison.removed.is_empty());
+    }
+
+    #[test]
+    fn test_dns_record_comparison_unchanged() {
+        let record = DnsRecord {
+            record_type: "A".to_string(),
+            name: "example.com".to_string(),
+            value: "1.2.3.4".to_string(),
+            ttl: Some(3600),
+        };
+        let comparison = compare_dns_records(&[record.clone()], &[record.clone()]);
+        assert!(comparison.added.is_empty());
+        assert!(comparison.removed.is_empty());
+    }
+
+    #[test]
+    fn test_dns_record_comparison_empty_previous() {
+        let current = vec![DnsRecord {
+            record_type: "A".to_string(),
+            name: "example.com".to_string(),
+            value: "1.2.3.4".to_string(),
+            ttl: None,
+        }];
+        let comparison = compare_dns_records(&[], &current);
+        assert_eq!(comparison.added.len(), 1);
+        assert!(comparison.removed.is_empty());
+    }
+
+    #[test]
+    fn test_dns_record_comparison_empty_current() {
+        let previous = vec![DnsRecord {
+            record_type: "A".to_string(),
+            name: "example.com".to_string(),
+            value: "1.2.3.4".to_string(),
+            ttl: None,
+        }];
+        let comparison = compare_dns_records(&previous, &[]);
+        assert!(comparison.added.is_empty());
+        assert_eq!(comparison.removed.len(), 1);
+    }
+}

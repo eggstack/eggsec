@@ -160,7 +160,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~560 passing, 2 failing (`negative_tests.rs`) |
+| Tests | ~974 passing, 2 failing (`negative_tests.rs`) |
 | Build | Clean compilation |
 | Clippy | 0 warnings (default features) |
 | Doctests | 17 pass, 1 ignored, 0 fail |
@@ -363,6 +363,35 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 
 - `output/ai_schema.rs` — `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` types
 
+### Lessons Learned (Session 2026-04-05)
+
+#### Test coverage improvements
+
+- Added `#[cfg(test)]` modules to 10 recon modules (asn, cve, cve_lookup, dns_enhanced, ssl, subdomain, techdetect, threatintel, wayback, runner) — added 77 new tests
+- Test count: 851 → 974 (verified with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`)
+
+#### Stub module implementation
+
+- All 8 stub modules (`container`, `storage`, `supply_chain`, `hunt`, `compliance`, `integrations`, `workflow`, `vuln`) are now implemented with real functionality:
+  - `TaskConfig` enum variants include config/mode parameters
+  - `TaskResult` enum variants use real result types (`StorageListScans`, `StorageListFindings`, `IntegrationsCreateIssue`, `IntegrationsSearchIssues`, `Workflow(WorkflowReport)`, `Vuln(VulnAssessment)`)
+  - `VulnAssessment` struct added to `vuln/mod.rs`
+  - `Issue` struct updated with `id`, `status`, `url`, `created_at` fields — required fixing all 6 construction sites in github.rs, gitlab.rs, jira.rs
+  - Tab `get_mode()` methods added for Storage, Integrations, Workflow, Vuln tabs
+  - `build_*_task()` methods pass config from tab state to worker
+
+#### Compliance checks expansion
+
+- `run_compliance_task()` expanded from ~7 to 15 checks:
+  - HTTPS enforcement, HSTS, X-Content-Type-Options, X-Frame-Options/CSP frame-ancestors
+  - server/X-Powered-by, status codes, CSP, Referrer-Policy, Permissions-Policy
+  - cache-control on sensitive pages, HttpOnly/Secure/SameSite cookies
+  - CORS wildcard, X-XSS-Protection
+
+#### Performance optimizations
+
+- `ScrollableText::render()` — replaced `Vec::with_capacity` + loop with `.cloned().collect()` iterator pattern
+
 ### Lessons Learned (Session 2026-04-04)
 
 #### Plan consolidation
@@ -382,7 +411,6 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 - `ConfigError::Io(String)` wraps string instead of `std::io::Error` — loses error chain
 - `SlapperConfig::load`/`save` take `&PathBuf` instead of `impl AsRef<Path>`
 - `ResponseSeverity` lacks `Ord`/`PartialOrd` implementations
-- 8 stub modules (`container`, `storage`, `supply_chain`, `hunt`, `compliance`, `integrations`, `workflow`, `vuln`) are unconditionally compiled
 - 2 failing negative tests (`test_scope_empty_target`, `test_scope_invalid_target`) assert `Ok` but should assert `Err`
 
 #### Verification best practices

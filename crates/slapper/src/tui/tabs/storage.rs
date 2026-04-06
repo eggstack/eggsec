@@ -141,6 +141,15 @@ impl StorageTab {
         }
     }
 
+    pub fn get_mode(&self) -> &str {
+        match self.current_mode {
+            StorageMode::Connect => "connect",
+            StorageMode::ListScans => "list_scans",
+            StorageMode::ListFindings => "list_findings",
+            StorageMode::SearchByCve => "search_cve",
+        }
+    }
+
     pub fn start(&mut self) {
         self.state = AppState::Running;
         self.results_view.clear();

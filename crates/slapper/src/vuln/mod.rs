@@ -30,3 +30,12 @@ pub use prioritizer::{PrioritizedFinding, PriorityLevel, RiskScore};
 pub use remediation::Remediation;
 #[allow(unused_imports)]
 pub use triage::{TriageResult, TriageStatus};
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VulnAssessment {
+    pub mode: String,
+    pub results: Vec<String>,
+    pub assessed_at: chrono::DateTime<chrono::Utc>,
+}

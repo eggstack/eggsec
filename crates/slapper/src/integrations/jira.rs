@@ -212,11 +212,15 @@ impl IssueTracker for JiraClient {
                 .unwrap_or_default();
 
             Ok(Issue {
+                id: json["key"].as_str().map(String::from),
                 title: fields["summary"].as_str().unwrap_or("").to_string(),
                 description,
                 labels,
                 severity: None,
                 assignees: vec![],
+                status: fields["status"].as_str().map(String::from),
+                url: None,
+                created_at: None,
             })
         } else {
             let status = response.status();
@@ -261,6 +265,7 @@ impl IssueTracker for JiraClient {
                                 .unwrap_or("")
                                 .to_string();
                             Some(Issue {
+                                id: item["key"].as_str().map(String::from),
                                 title: fields["summary"].as_str().unwrap_or("").to_string(),
                                 description,
                                 labels: fields["labels"]
@@ -273,6 +278,9 @@ impl IssueTracker for JiraClient {
                                     .unwrap_or_default(),
                                 severity: None,
                                 assignees: vec![],
+                                status: fields["status"]["name"].as_str().map(String::from),
+                                url: None,
+                                created_at: None,
                             })
                         })
                         .collect()
