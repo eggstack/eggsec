@@ -22,7 +22,7 @@ pub enum SessionIssueType {
     InsufficientEntropy,
     MissingHttpOnly,
     MissingSecure,
-    CSRF,
+    Csrf,
     ConcurrentSessions,
 }
 
@@ -123,7 +123,7 @@ async fn check_csrf(_target: &str, _config: &HuntConfig) -> Result<Vec<SessionIs
     let id = format!("ss-{}", &uuid::Uuid::new_v4().to_string()[..8]);
     issues.push(SessionIssue {
         id: id.clone(),
-        issue_type: SessionIssueType::CSRF,
+        issue_type: SessionIssueType::Csrf,
         severity: Severity::High,
         description: "CSRF token missing or invalid on state-changing operations".to_string(),
         evidence: "POST requests succeed without CSRF token".to_string(),
@@ -148,6 +148,6 @@ mod tests {
     #[test]
     fn test_session_issue_types() {
         assert_eq!(SessionIssueType::SessionFixation, SessionIssueType::SessionFixation);
-        assert_eq!(SessionIssueType::CSRF, SessionIssueType::CSRF);
+        assert_eq!(SessionIssueType::Csrf, SessionIssueType::Csrf);
     }
 }

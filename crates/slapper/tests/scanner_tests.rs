@@ -2,6 +2,7 @@ mod common;
 
 use common::{create_test_server, mock_json, mock_not_found, mock_ok, mock_waf_response};
 use slapper::scanner::spoof::SpoofConfig;
+use slapper::scanner::EndpointScanConfig;
 use std::time::Duration;
 
 #[tokio::test]
@@ -18,17 +19,19 @@ async fn test_endpoint_scan_basic() {
     ];
     let spoof_config = SpoofConfig::default();
 
-    let results = slapper::scanner::scan_endpoints(
-        &server.uri(),
+    let config = EndpointScanConfig {
+        base_url: server.uri(),
         endpoints,
-        5,
-        Duration::from_secs(5),
-        false,
-        false,
+        concurrency: 5,
+        timeout_duration: Duration::from_secs(5),
+        include_404: false,
+        tui_mode: false,
         spoof_config,
-    )
-    .await
-    .unwrap();
+        verify_tls: false,
+        progress_tx: None,
+    };
+
+    let results = slapper::scanner::scan_endpoints(config).await.unwrap();
 
     assert_eq!(results.endpoints_found, 2);
     assert!(results.endpoints_scanned == 3);
@@ -43,17 +46,19 @@ async fn test_endpoint_scan_include_404() {
     let endpoints = vec!["/api".to_string(), "/admin".to_string()];
     let spoof_config = SpoofConfig::default();
 
-    let results = slapper::scanner::scan_endpoints(
-        &server.uri(),
+    let config = EndpointScanConfig {
+        base_url: server.uri(),
         endpoints,
-        5,
-        Duration::from_secs(5),
-        true,
-        false,
+        concurrency: 5,
+        timeout_duration: Duration::from_secs(5),
+        include_404: true,
+        tui_mode: false,
         spoof_config,
-    )
-    .await
-    .unwrap();
+        verify_tls: false,
+        progress_tx: None,
+    };
+
+    let results = slapper::scanner::scan_endpoints(config).await.unwrap();
 
     assert_eq!(results.endpoints_found, 2);
 }
@@ -67,17 +72,19 @@ async fn test_endpoint_scan_interesting() {
     let endpoints = vec!["/.env".to_string(), "/api".to_string()];
     let spoof_config = SpoofConfig::default();
 
-    let results = slapper::scanner::scan_endpoints(
-        &server.uri(),
+    let config = EndpointScanConfig {
+        base_url: server.uri(),
         endpoints,
-        5,
-        Duration::from_secs(5),
-        false,
-        false,
+        concurrency: 5,
+        timeout_duration: Duration::from_secs(5),
+        include_404: false,
+        tui_mode: false,
         spoof_config,
-    )
-    .await
-    .unwrap();
+        verify_tls: false,
+        progress_tx: None,
+    };
+
+    let results = slapper::scanner::scan_endpoints(config).await.unwrap();
 
     let interesting = results.results.iter().filter(|e| e.interesting).count();
     assert!(interesting >= 1);
@@ -91,17 +98,19 @@ async fn test_endpoint_scan_json_response() {
     let endpoints = vec!["/api/data".to_string()];
     let spoof_config = SpoofConfig::default();
 
-    let results = slapper::scanner::scan_endpoints(
-        &server.uri(),
+    let config = EndpointScanConfig {
+        base_url: server.uri(),
         endpoints,
-        5,
-        Duration::from_secs(5),
-        false,
-        false,
+        concurrency: 5,
+        timeout_duration: Duration::from_secs(5),
+        include_404: false,
+        tui_mode: false,
         spoof_config,
-    )
-    .await
-    .unwrap();
+        verify_tls: false,
+        progress_tx: None,
+    };
+
+    let results = slapper::scanner::scan_endpoints(config).await.unwrap();
 
     assert_eq!(results.endpoints_found, 1);
 }
@@ -114,19 +123,20 @@ async fn test_endpoint_scan_waf_blocked() {
     let endpoints = vec!["/api".to_string()];
     let spoof_config = SpoofConfig::default();
 
-    let results = slapper::scanner::scan_endpoints(
-        &server.uri(),
+    let config = EndpointScanConfig {
+        base_url: server.uri(),
         endpoints,
-        5,
-        Duration::from_secs(5),
-        false,
-        false,
+        concurrency: 5,
+        timeout_duration: Duration::from_secs(5),
+        include_404: false,
+        tui_mode: false,
         spoof_config,
-    )
-    .await
-    .unwrap();
+        verify_tls: false,
+        progress_tx: None,
+    };
 
-    // WAF blocked endpoints should still be counted
+    let results = slapper::scanner::scan_endpoints(config).await.unwrap();
+
     assert_eq!(results.endpoints_scanned, 1);
 }
 
@@ -137,17 +147,19 @@ async fn test_endpoint_scan_empty_wordlist() {
     let endpoints: Vec<String> = vec![];
     let spoof_config = SpoofConfig::default();
 
-    let results = slapper::scanner::scan_endpoints(
-        &server.uri(),
+    let config = EndpointScanConfig {
+        base_url: server.uri(),
         endpoints,
-        5,
-        Duration::from_secs(5),
-        false,
-        false,
+        concurrency: 5,
+        timeout_duration: Duration::from_secs(5),
+        include_404: false,
+        tui_mode: false,
         spoof_config,
-    )
-    .await
-    .unwrap();
+        verify_tls: false,
+        progress_tx: None,
+    };
+
+    let results = slapper::scanner::scan_endpoints(config).await.unwrap();
 
     assert_eq!(results.endpoints_scanned, 0);
     assert_eq!(results.endpoints_found, 0);
@@ -173,9 +185,7 @@ async fn test_spoof_config_custom() {
 
 #[tokio::test]
 async fn test_port_scan_timeout() {
-    // Test that port scanning respects timeout
     let timeout = Duration::from_millis(100);
-    // This test verifies the timeout configuration is accepted
     assert!(timeout.as_millis() == 100);
 }
 
@@ -187,20 +197,19 @@ async fn test_timing_config_presets() {
     let normal = TimingPreset::Normal;
     let aggressive = TimingPreset::Aggressive;
 
-    // Verify timing presets are different
     assert_ne!(format!("{:?}", paranoid), format!("{:?}", normal));
     assert_ne!(format!("{:?}", normal), format!("{:?}", aggressive));
 }
 
 #[tokio::test]
-async fn test_timing_preset_from_str() {
+async fn test_timing_preset_parse() {
     use slapper::scanner::TimingPreset;
 
-    assert_eq!(TimingPreset::from_str("paranoid"), TimingPreset::Paranoid);
-    assert_eq!(TimingPreset::from_str("normal"), TimingPreset::Normal);
-    assert_eq!(TimingPreset::from_str("aggressive"), TimingPreset::Aggressive);
-    assert_eq!(TimingPreset::from_str("T0"), TimingPreset::Paranoid);
-    assert_eq!(TimingPreset::from_str("T3"), TimingPreset::Normal);
+    assert_eq!(TimingPreset::parse("paranoid"), TimingPreset::Paranoid);
+    assert_eq!(TimingPreset::parse("normal"), TimingPreset::Normal);
+    assert_eq!(TimingPreset::parse("aggressive"), TimingPreset::Aggressive);
+    assert_eq!(TimingPreset::parse("T0"), TimingPreset::Paranoid);
+    assert_eq!(TimingPreset::parse("T3"), TimingPreset::Normal);
 }
 
 #[tokio::test]
@@ -245,23 +254,22 @@ async fn test_port_scan_results_display() {
 
 #[tokio::test]
 async fn test_spoof_config_from_args_default() {
-    // Test that SpoofConfig::from_args with default values creates a valid config
     let config = SpoofConfig::from_args(
-        None,          // source_ip
-        None,          // spoof_range
-        false,         // stealth
-        None,          // decoy
-        None,          // decoy_range
-        None,          // decoy_count
-        None,          // decoy_mode
-        false,         // include_me
-        None,          // source_port
-        false,         // random_source_port
-        false,         // fragment
-        None,          // scan_type
-        None,          // packet_trace
-        None,          // max_rate
-        None,          // ttl
+        None,
+        None,
+        false,
+        None,
+        None,
+        None,
+        None,
+        false,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
     );
     assert!(config.is_ok());
     let config = config.unwrap();
@@ -270,23 +278,22 @@ async fn test_spoof_config_from_args_default() {
 
 #[tokio::test]
 async fn test_spoof_config_with_ip() {
-    // Test SpoofConfig with source IP
     let config = SpoofConfig::from_args(
-        Some("192.168.1.100".to_string()), // source_ip
-        None,                              // spoof_range
-        false,                             // stealth
-        None,                              // decoy
-        None,                              // decoy_range
-        None,                              // decoy_count
-        None,                              // decoy_mode
-        false,                             // include_me
-        None,                              // source_port
-        false,                             // random_source_port
-        false,                             // fragment
-        None,                              // scan_type
-        None,                              // packet_trace
-        None,                              // max_rate
-        None,                              // ttl
+        Some("192.168.1.100".to_string()),
+        None,
+        false,
+        None,
+        None,
+        None,
+        None,
+        false,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
     );
     assert!(config.is_ok());
     let config = config.unwrap();
@@ -296,23 +303,22 @@ async fn test_spoof_config_with_ip() {
 
 #[tokio::test]
 async fn test_spoof_config_with_range() {
-    // Test SpoofConfig with IP range
     let config = SpoofConfig::from_args(
-        None,                              // source_ip
-        Some("192.168.1.0/24".to_string()), // spoof_range
-        false,                             // stealth
-        None,                              // decoy
-        None,                              // decoy_range
-        None,                              // decoy_count
-        None,                              // decoy_mode
-        false,                             // include_me
-        None,                              // source_port
-        false,                             // random_source_port
-        false,                             // fragment
-        None,                              // scan_type
-        None,                              // packet_trace
-        None,                              // max_rate
-        None,                              // ttl
+        None,
+        Some("192.168.1.0/24".to_string()),
+        false,
+        None,
+        None,
+        None,
+        None,
+        false,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
     );
     assert!(config.is_ok());
     let config = config.unwrap();
@@ -322,23 +328,22 @@ async fn test_spoof_config_with_range() {
 
 #[tokio::test]
 async fn test_spoof_config_with_decoys() {
-    // Test SpoofConfig with decoy IPs
     let config = SpoofConfig::from_args(
-        None,                              // source_ip
-        None,                              // spoof_range
-        false,                             // stealth
-        Some("10.0.0.1,10.0.0.2".to_string()), // decoy
-        None,                              // decoy_range
-        Some(2),                           // decoy_count
-        None,                              // decoy_mode
-        true,                              // include_me
-        None,                              // source_port
-        false,                             // random_source_port
-        false,                             // fragment
-        None,                              // scan_type
-        None,                              // packet_trace
-        None,                              // max_rate
-        None,                              // ttl
+        None,
+        None,
+        false,
+        Some("10.0.0.1,10.0.0.2".to_string()),
+        None,
+        Some(2),
+        None,
+        true,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
     );
     assert!(config.is_ok());
     let config = config.unwrap();

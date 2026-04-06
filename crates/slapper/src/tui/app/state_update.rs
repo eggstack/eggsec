@@ -1,4 +1,4 @@
-use crate::tui::tabs::{AppState, TabState};
+use crate::tui::tabs::TabState;
 use crate::tui::workers::TaskResult;
 
 impl super::App {

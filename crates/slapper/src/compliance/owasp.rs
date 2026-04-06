@@ -13,10 +13,10 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         findings: Vec::new(),
     };
 
-    let has_critical = findings.iter().any(|s| *s == Severity::Critical);
-    let has_high = findings.iter().any(|s| *s == Severity::High);
-    let has_medium = findings.iter().any(|s| *s == Severity::Medium);
-    let has_low = findings.iter().any(|s| *s == Severity::Low);
+    let has_critical = findings.contains(&Severity::Critical);
+    let has_high = findings.contains(&Severity::High);
+    let has_medium = findings.contains(&Severity::Medium);
+    let has_low = findings.contains(&Severity::Low);
     let is_https = target.starts_with("https://");
 
     report.findings.push(ComplianceFinding {

@@ -17,7 +17,7 @@ pub struct AuthzBypass {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BypassType {
-    IDOR,
+    Idor,
     MissingAuthorization,
     PrivilegeEscalation,
     ForceBrowsing,
@@ -43,7 +43,7 @@ async fn check_idor(target: &str, _config: &HuntConfig) -> Result<Vec<AuthzBypas
     let id = format!("az-{}", &uuid::Uuid::new_v4().to_string()[..8]);
     bypasses.push(AuthzBypass {
         id: id.clone(),
-        bypass_type: BypassType::IDOR,
+        bypass_type: BypassType::Idor,
         severity: Severity::High,
         description: "Insecure Direct Object Reference - user can access other users' resources".to_string(),
         endpoint: format!("{}/api/users/{{user_id}}/profile", target),
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_bypass_types() {
-        assert_eq!(BypassType::IDOR, BypassType::IDOR);
+        assert_eq!(BypassType::Idor, BypassType::Idor);
         assert_eq!(BypassType::MissingAuthorization, BypassType::MissingAuthorization);
     }
 }

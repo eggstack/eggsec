@@ -396,32 +396,6 @@ pub async fn run_full_recon(
     stage: Arc<Mutex<String>>,
     verbose: bool,
 ) -> Result<FullReconResult> {
-    /// Runs a comprehensive reconnaissance scan on a target.
-    ///
-    /// This function orchestrates multiple reconnaissance stages in parallel:
-    /// - DNS resolution and geolocation
-    /// - Reverse DNS lookup
-    /// - SSL/TLS certificate analysis
-    /// - WHOIS information retrieval
-    /// - Subdomain enumeration
-    /// - Technology detection
-    /// - Threat intelligence lookup
-    /// - Wayback machine archival data
-    ///
-    /// # Arguments
-    ///
-    /// * `args` - Command-line arguments for recon (target, concurrency, etc.)
-    /// * `config` - Slapper configuration with API keys and settings
-    /// * `stage` - Shared mutex for tracking current recon stage (used by TUI)
-    /// * `verbose` - Enable verbose output
-    ///
-    /// # Returns
-    ///
-    /// Returns `FullReconResult` containing all discovered information.
-    ///
-    /// # Errors
-    ///
-    /// Returns `SlapperError` if any critical stage fails.
     let target = &args.target;
     let concurrency = args
         .concurrency

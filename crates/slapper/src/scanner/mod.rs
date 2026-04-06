@@ -87,7 +87,7 @@ pub mod udp_fingerprint;
 #[cfg(feature = "stress-testing")]
 pub mod icmp_probe;
 
-pub use endpoints::{scan_endpoints, EndpointResult, EndpointScanResults};
+pub use endpoints::{scan_endpoints, EndpointResult, EndpointScanConfig, EndpointScanResults};
 pub use fingerprint::{fingerprint_services, FingerprintResults, ServiceFingerprint};
 pub use ports::{scan_ports, PortResult, PortScanResults};
 pub use spoof::{format_spoof_warning, random_ip_from_cidr, SpoofConfig, SpoofStats};
