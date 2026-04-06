@@ -60,6 +60,7 @@ pub async fn generate_compliance_report(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum ComplianceFramework {
     OWASP,
     PCIDSS,
