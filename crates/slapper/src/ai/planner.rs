@@ -155,12 +155,7 @@ impl AiPlanner {
             "temperature": 0.7,
         });
 
-        let request_builder = client
-            .apply_auth(reqwest::Client::new().post(client.api_url()).json(&body));
-
-        let response = request_builder.send().await.map_err(AiError::from)?;
-
-        let result: serde_json::Value = response.json().await?;
+        let result = client.chat_completion_from_messages(&body).await?;
 
         if let Some(choices) = result.get("choices") {
             if let Some(choice) = choices.get(0) {
@@ -272,12 +267,7 @@ impl AiPlanner {
             "temperature": 0.7,
         });
 
-        let request_builder = client
-            .apply_auth(reqwest::Client::new().post(client.api_url()).json(&body));
-
-        let response = request_builder.send().await.map_err(AiError::from)?;
-
-        let result: serde_json::Value = response.json().await?;
+        let result = client.chat_completion_from_messages(&body).await?;
 
         if let Some(choices) = result.get("choices") {
             if let Some(choice) = choices.get(0) {

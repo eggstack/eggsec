@@ -84,6 +84,38 @@ impl AiClient {
         }
     }
 
+    pub async fn chat_completion_from_messages(&self, body: &serde_json::Value) -> Result<serde_json::Value> {
+        if !self.circuit_breaker.is_available().await {
+            return Err(AiError::CircuitBreakerOpen {});
+        }
+
+        let request = self.apply_auth(self.client.post(self.api_url()).json(body));
+
+        match request.send().await {
+            Ok(response) => {
+                if response.status().as_u16() == 429 {
+                    self.circuit_breaker.record_failure().await;
+                    return Err(AiError::RateLimited);
+                }
+                if response.status().is_server_error() {
+                    self.circuit_breaker.record_failure().await;
+                    return Err(AiError::ApiError(format!("Server error: {}", response.status())));
+                }
+                self.circuit_breaker.record_success().await;
+                let result: serde_json::Value = response.json().await?;
+                if let Some(error) = result.get("error") {
+                    let message = error.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
+                    return Err(AiError::ApiError(message.to_string()));
+                }
+                Ok(result)
+            }
+            Err(e) => {
+                self.circuit_breaker.record_failure().await;
+                Err(AiError::RequestFailed(e.to_string()))
+            }
+        }
+    }
+
     fn extract_content(&self, result: &serde_json::Value, filter_fn: fn(&str) -> bool) -> Vec<String> {
         if let Some(choices) = result.get("choices") {
             if let Some(choice) = choices.get(0) {
@@ -113,6 +145,41 @@ impl AiClient {
         );
 
         self.chat_completion(&prompt, self.config.max_tokens.map(|v| v as u32), self.config.temperature.unwrap_or(0.7)).await
+    }
+
+    pub async fn analyze_findings_typed(
+        &self,
+        findings: &[serde_json::Value],
+    ) -> Result<crate::ai::types::AiAnalysisResult> {
+        let prompt = format!(
+            "Analyze these security findings:\n{}",
+            serde_json::to_string_pretty(findings).map_err(|e| AiError::ParseError(e.to_string()))?
+        );
+
+        let result = self.chat_completion(&prompt, self.config.max_tokens.map(|v| v as u32), self.config.temperature.unwrap_or(0.7)).await?;
+        
+        if let Some(choices) = result.get("choices") {
+            if let Some(choice) = choices.get(0) {
+                if let Some(content) = choice
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(|c| c.as_str())
+                {
+                    if let Ok(parsed) = serde_json::from_str::<crate::ai::types::AiAnalysisResult>(content) {
+                        return Ok(parsed);
+                    }
+                    return Ok(crate::ai::types::AiAnalysisResult {
+                        reassessed_severity: "Unknown".to_string(),
+                        exploitability: "Unknown".to_string(),
+                        impact: content.to_string(),
+                        remediation: vec![],
+                        confidence: 0.5,
+                    });
+                }
+            }
+        }
+        
+        Err(AiError::InvalidResponse)
     }
 
     pub async fn suggest_payloads(

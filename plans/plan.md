@@ -246,7 +246,7 @@ cargo test --lib -p slapper --features full
 | Wave | Focus | Actual Status |
 |------|-------|----------------|
 | 1 | Critical Bug Fixes | DONE (all 3 items completed) |
-| 2 | AI Module Refactoring | Not verified |
+| 2 | AI Module Refactoring | DONE |
 | 3 | CLI Ergonomics | Incomplete (few flags standardized) |
 | 4 | TUI Architecture | Not started |
 | 5 | Compliance | Partially done (15+ checks, no classification) |
@@ -276,10 +276,12 @@ cargo test --lib -p slapper --features full
 - [x] Unused import removed from cache.rs
 - [x] Cache serialization fixed - now uses DateTime<Utc> instead of Instant
 
-### Wave 2 (AI Refactoring) - NOT VERIFIED
-- [ ] AiClient code duplication not verified
-- [ ] AiCache usage in payloads.rs/waf_bypass.rs not verified
-- [ ] Centralized API URL handling not verified
+### Wave 2 (AI Refactoring) - COMPLETED
+- [x] AiClient code duplication eliminated (chat_completion_from_messages added)
+- [x] AiCache already used in payloads.rs and waf_bypass.rs
+- [x] Centralized API URL handling (api_url(), model() methods)
+- [x] Typed result parsing (analyze_findings_typed added)
+- [x] Planner uses AiClient methods (query_ai_for_plan, query_ai_for_adjustments)
 
 ### Wave 3 (CLI) - INCOMPLETE
 - [x] All commands use `-c` for concurrency
@@ -326,10 +328,10 @@ All changes MUST maintain backward compatibility:
 ### Wave 2 (AI Refactor)
 | File | Changes | Status |
 |------|---------|--------|
-| `ai/client.rs` | Refactor duplication, typed results | NOT VERIFIED |
-| `ai/planner.rs` | Use AiClient | NOT VERIFIED |
-| `ai/payloads.rs` | Use AiCache | NOT VERIFIED |
-| `ai/waf_bypass.rs` | Use AiCache | NOT VERIFIED |
+| `ai/client.rs` | Refactor duplication, typed results | DONE (added chat_completion_from_messages, analyze_findings_typed) |
+| `ai/planner.rs` | Use AiClient | DONE |
+| `ai/payloads.rs` | Use AiCache | DONE (already using AiCache) |
+| `ai/waf_bypass.rs` | Use AiCache | DONE (already using AiCache) |
 
 ### Wave 3 (CLI)
 | File | Changes | Status |
