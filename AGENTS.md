@@ -170,7 +170,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
 | Largest file | `tui/app/mod.rs` (664 lines — split into submodules) |
-| Source files | 400 `.rs` files |
+| Source files | 406 `.rs` files |
 | TUI files | 60 `.rs` files |
 | Tab variants | 29 |
 
@@ -392,15 +392,18 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 
 - `ScrollableText::render()` — replaced `Vec::with_capacity` + loop with `.cloned().collect()` iterator pattern
 
-### Lessons Learned (Session 2026-04-04)
+### Lessons Learned (Session 2026-04-07)
 
 #### Plan consolidation
 
-- All plan files should be consolidated into a single `plans/plan.md`
-- Waves should be organized into parallelizable blocks where items within each block are independent
+- Consolidated 3 plan files (plan2.md, plan3.md, plan4.md) into single `plans/plan.md`
+- Organized into 6 waves with parallelizable blocks
+- Before implementing, verify file paths using `glob` or `rg` - some planned features already implemented (TabState, TabRender, TabInput traits exist)
+- Count actual source files with `find crates/slapper/src -name '*.rs' | wc -l` (406 files)
+- Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (976 tests)
 - Before implementing any plan item, verify file paths exist using `glob` or `rg`
 - Verify codebase metrics (test counts, file sizes, line counts) against actual code before referencing in plans
-- The plan uses 10 waves organized into 3 execution phases (Stabilize → Harden → Refactor → Enhance → Integrate → Test → Document → Polish)
+- The plan uses waves organized into parallelizable blocks where items within each block are independent
 
 #### Known bugs identified (not yet fixed)
 
@@ -411,7 +414,6 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 - `ConfigError::Io(String)` wraps string instead of `std::io::Error` — loses error chain
 - `SlapperConfig::load`/`save` take `&PathBuf` instead of `impl AsRef<Path>`
 - `ResponseSeverity` lacks `Ord`/`PartialOrd` implementations
-- 2 failing negative tests (`test_scope_empty_target`, `test_scope_invalid_target`) assert `Ok` but should assert `Err`
 
 #### Verification best practices
 
