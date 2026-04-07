@@ -12,6 +12,18 @@ Examples:
 pub struct ClusterArgs {
     #[command(subcommand)]
     pub command: ClusterCommand,
+
+    /// Output file
+    #[arg(short = 'o', long)]
+    pub output: Option<String>,
+
+    /// Enable verbose output
+    #[arg(short, long)]
+    pub verbose: bool,
+
+    /// Suppress non-essential output
+    #[arg(short, long)]
+    pub quiet: bool,
 }
 
 #[derive(clap::Subcommand)]

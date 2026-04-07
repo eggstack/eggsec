@@ -139,6 +139,12 @@ pub struct StressArgs {
     pub proxy_file: Option<String>,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,
+    #[arg(long, short = 'y', help = "Skip confirmation prompt")]
+    pub yes: bool,
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
+    #[arg(long, short = 'o', help = "Output file path")]
+    pub output: Option<String>,
 }
 
 #[cfg(feature = "stress-testing")]

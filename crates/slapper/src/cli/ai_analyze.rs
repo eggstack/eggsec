@@ -7,7 +7,7 @@ pub struct AiAnalyzeArgs {
     pub input: Option<String>,
 
     /// Output file
-    #[arg(short, long)]
+    #[arg(short = 'o', long)]
     pub output: Option<String>,
 
     /// Analysis type (severity, exploitability, attack-chain, remediation)
@@ -17,4 +17,12 @@ pub struct AiAnalyzeArgs {
     /// Output as JSON
     #[arg(long)]
     pub json: bool,
+
+    /// Enable verbose output
+    #[arg(short, long)]
+    pub verbose: bool,
+
+    /// Suppress non-essential output
+    #[arg(short, long)]
+    pub quiet: bool,
 }

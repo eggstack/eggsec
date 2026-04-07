@@ -13,6 +13,10 @@ Examples:
 pub struct NotifyArgs {
     #[command(subcommand)]
     pub command: NotifyCommand,
+
+    /// Suppress non-essential output
+    #[arg(long, short = 'q')]
+    pub quiet: bool,
 }
 
 #[derive(clap::Subcommand)]

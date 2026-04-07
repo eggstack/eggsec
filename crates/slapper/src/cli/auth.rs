@@ -73,4 +73,10 @@ pub struct AuthTestArgs {
 
     #[arg(long, short = 'o', help = "Output file path")]
     pub output: Option<String>,
+
+    #[arg(long, short = 'y', help = "Skip confirmation prompt")]
+    pub yes: bool,
+
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
 }

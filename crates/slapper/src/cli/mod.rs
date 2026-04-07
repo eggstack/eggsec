@@ -32,10 +32,21 @@ pub use stress::*;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+const HELP_AFTER: &str = r#"
+EXAMPLES:
+  Scan ports:        slapper scan-ports 192.168.1.1 -p 1-1000
+  Fuzz endpoints:    slapper fuzz https://example.com/api -t sqli
+  Detect WAF:        slapper waf https://example.com
+  Auth testing:      slapper auth-test https://example.com/login --brute-force
+
+See https://slapper.dev/docs for full documentation.
+"#;
+
 #[derive(Parser)]
 #[command(name = "slapper")]
 #[command(about = "High-performance security testing toolkit")]
 #[command(version = VERSION, long_about = None)]
+#[command(after_help = HELP_AFTER)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,

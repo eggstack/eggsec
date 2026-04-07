@@ -6,6 +6,10 @@ pub struct PlanArgs {
     #[arg(short, long)]
     pub target: Option<String>,
 
+    /// Output file
+    #[arg(short = 'o', long)]
+    pub output: Option<String>,
+
     /// Output format
     #[arg(short, long, default_value = "table")]
     pub format: String,
@@ -13,4 +17,12 @@ pub struct PlanArgs {
     /// Profile to use (quick, default, thorough)
     #[arg(short, long, default_value = "default")]
     pub profile: String,
+
+    /// Enable verbose output
+    #[arg(short, long)]
+    pub verbose: bool,
+
+    /// Suppress non-essential output
+    #[arg(short, long)]
+    pub quiet: bool,
 }

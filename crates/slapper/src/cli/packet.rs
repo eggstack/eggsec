@@ -17,6 +17,10 @@ Examples:
 pub struct PacketArgs {
     #[command(subcommand)]
     pub command: PacketSubcommand,
+
+    /// Suppress non-essential output
+    #[arg(long, short = 'q')]
+    pub quiet: bool,
 }
 
 #[derive(clap::Subcommand)]

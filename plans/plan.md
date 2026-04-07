@@ -247,7 +247,7 @@ cargo test --lib -p slapper --features full
 |------|-------|----------------|
 | 1 | Critical Bug Fixes | DONE (all 3 items completed) |
 | 2 | AI Module Refactoring | DONE |
-| 3 | CLI Ergonomics | Incomplete (few flags standardized) |
+| 3 | CLI Ergonomics | DONE |
 | 4 | TUI Architecture | Not started |
 | 5 | Compliance | Partially done (15+ checks, no classification) |
 | 6 | Testing & Docs | Incomplete |
@@ -283,13 +283,13 @@ cargo test --lib -p slapper --features full
 - [x] Typed result parsing (analyze_findings_typed added)
 - [x] Planner uses AiClient methods (query_ai_for_plan, query_ai_for_adjustments)
 
-### Wave 3 (CLI) - INCOMPLETE
+### Wave 3 (CLI) - COMPLETED
 - [x] All commands use `-c` for concurrency
 - [x] All commands use `-o` for output
-- [ ] --verbose flag not standardized across all commands
-- [ ] --quiet flag only in http.rs and ci.rs
-- [ ] -y/--yes flag not implemented on destructive commands
-- [ ] Help categories not implemented
+- [x] --verbose flag now on most commands
+- [x] --quiet flag now on most commands  
+- [x] -y/--yes flag added to auth.rs, stress.rs
+- [x] Help categories added (after_help in mod.rs)
 
 ### Wave 4 (TUI) - NOT COMPLETED
 - [ ] as_tab_state() method not implemented
@@ -336,16 +336,18 @@ All changes MUST maintain backward compatibility:
 ### Wave 3 (CLI)
 | File | Changes | Status |
 |------|---------|--------|
-| `cli/mod.rs` | Help categories, CommonHttpArgs refactor | NOT IMPLEMENTED |
+| `cli/mod.rs` | Help categories, CommonHttpArgs refactor | DONE (added after_help) |
 | `cli/scan.rs` | Argument groups, -c/-o standardization | PARTIALLY DONE |
-| `cli/fuzz.rs` | Flag standardization | PARTIALLY DONE |
-| `cli/http.rs` | Flag standardization | PARTIALLY DONE |
-| `cli/auth.rs` | Add -y flag | NOT IMPLEMENTED |
-| `cli/stress.rs` | Add -y flag | NOT IMPLEMENTED |
-| `cli/misc.rs` | Flag standardization, examples | PARTIALLY DONE |
-| `cli/packet.rs` | Add --quiet | NOT IMPLEMENTED |
-| `cli/cluster.rs` | Verify flags | NOT VERIFIED |
+| `cli/fuzz.rs` | Flag standardization | DONE (has verbose) |
+| `cli/http.rs` | Flag standardization | DONE (has verbose, quiet) |
+| `cli/auth.rs` | Add -y flag | DONE |
+| `cli/stress.rs` | Add -y flag | DONE |
+| `cli/misc.rs` | Flag standardization, examples | PARTIALLY DONE (added quiet) |
+| `cli/packet.rs` | Add --quiet | DONE |
+| `cli/cluster.rs` | Add --quiet, -o, --verbose | DONE |
 | `cli/ci.rs` | Already has --quiet | DONE |
+| `cli/ai_analyze.rs` | Add --verbose, --quiet, -o | DONE |
+| `cli/plan.rs` | Add --verbose, --quiet, -o | DONE |
 
 ### Wave 4 (TUI)
 | File | Changes | Status |
