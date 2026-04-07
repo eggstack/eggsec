@@ -3,6 +3,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use crate::ai::client::AiClient;
+use crate::ai::errors::{AiError, Result};
 use crate::tool::planner::{ExecutionPlan, PlanRequest, ChainPlanner};
 
 #[derive(Debug, Clone)]
@@ -105,7 +106,7 @@ impl AiPlanner {
         &self,
         client: &AiClient,
         request: &PlanRequest,
-    ) -> crate::ai::errors::Result<ExecutionPlan> {
+    ) -> Result<ExecutionPlan> {
         let cache_key = format!("{}:{}", request.goal, request.target);
 
         {
@@ -148,17 +149,16 @@ impl AiPlanner {
         ];
 
         let body = serde_json::json!({
-            "model": "gpt-4",
+            "model": client.model(),
             "messages": messages,
             "max_tokens": 4096,
             "temperature": 0.7,
         });
 
-        let api_url = "https://api.openai.com/v1/chat/completions";
-        let response = client
-            .apply_auth(reqwest::Client::new().post(api_url).json(&body))
-            .send()
-            .await?;
+        let request_builder = client
+            .apply_auth(reqwest::Client::new().post(client.api_url()).json(&body));
+
+        let response = request_builder.send().await.map_err(AiError::from)?;
 
         let result: serde_json::Value = response.json().await?;
 
@@ -176,7 +176,7 @@ impl AiPlanner {
             }
         }
 
-        Err(crate::ai::errors::AiError::InvalidResponse)
+        Err(AiError::InvalidResponse)
     }
 
     fn parse_ai_response(&self, content: &str, request: &PlanRequest) -> crate::ai::errors::Result<ExecutionPlan> {
@@ -238,7 +238,7 @@ impl AiPlanner {
         current_plan: &ExecutionPlan,
         findings: &[crate::ai::types::ScanFinding],
         target: &str,
-    ) -> crate::ai::errors::Result<AdaptivePlanSuggestion> {
+    ) -> Result<AdaptivePlanSuggestion> {
         let critical_count = findings.iter().filter(|f| f.severity.as_int() >= 4).count();
         let high_count = findings.iter().filter(|f| f.severity.as_int() >= 3).count();
 
@@ -266,17 +266,16 @@ impl AiPlanner {
         ];
 
         let body = serde_json::json!({
-            "model": "gpt-4",
+            "model": client.model(),
             "messages": messages,
             "max_tokens": 2048,
             "temperature": 0.7,
         });
 
-        let api_url = "https://api.openai.com/v1/chat/completions";
-        let response = client
-            .apply_auth(reqwest::Client::new().post(api_url).json(&body))
-            .send()
-            .await?;
+        let request_builder = client
+            .apply_auth(reqwest::Client::new().post(client.api_url()).json(&body));
+
+        let response = request_builder.send().await.map_err(AiError::from)?;
 
         let result: serde_json::Value = response.json().await?;
 

@@ -1,3 +1,4 @@
+use reqwest::Error as ReqwestError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -28,6 +29,20 @@ pub enum AiError {
 
     #[error("Circuit breaker open")]
     CircuitBreakerOpen,
+}
+
+impl From<ReqwestError> for AiError {
+    fn from(err: ReqwestError) -> Self {
+        if err.is_timeout() {
+            AiError::Timeout
+        } else if err.is_connect() {
+            AiError::RequestFailed(err.to_string())
+        } else if err.status().map(|s| s.as_u16() == 429).unwrap_or(false) {
+            AiError::RateLimited
+        } else {
+            AiError::RequestFailed(err.to_string())
+        }
+    }
 }
 
 impl AiError {

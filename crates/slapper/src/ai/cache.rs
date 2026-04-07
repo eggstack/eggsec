@@ -1,5 +1,4 @@
-use crate::ai::errors::Result;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -7,7 +6,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CacheEntry {
     pub value: String,
     #[serde(skip)]
@@ -17,6 +16,41 @@ pub struct CacheEntry {
     pub ttl: Duration,
     #[serde(default)]
     hit_count: u64,
+}
+
+impl<'de> Deserialize<'de> for CacheEntry {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct CacheEntrySer {
+            value: String,
+            created_at_ser: Option<DateTime<Utc>>,
+            ttl_nanos: Option<u64>,
+            hit_count: Option<u64>,
+        }
+        let ser = CacheEntrySer::deserialize(_deserializer)?;
+        Ok(Self {
+            value: ser.value,
+            created_at: Instant::now(),
+            created_at_ser: ser.created_at_ser,
+            ttl: Duration::from_nanos(ser.ttl_nanos.unwrap_or(0)),
+            hit_count: ser.hit_count.unwrap_or(0),
+        })
+    }
+}
+
+impl Default for CacheEntry {
+    fn default() -> Self {
+        Self {
+            value: String::new(),
+            created_at: Instant::now(),
+            created_at_ser: None,
+            ttl: Duration::default(),
+            hit_count: 0,
+        }
+    }
 }
 
 impl CacheEntry {
@@ -61,11 +95,14 @@ struct CacheEntrySer {
 
 impl From<AiCacheSerialized> for AiCache {
     fn from(serialized: AiCacheSerialized) -> Self {
+        let now = Utc::now();
         let entries: HashMap<String, CacheEntry> = serialized
             .entries
             .into_iter()
             .map(|(k, v)| {
-                let created_at = Instant::now() - Duration::from_nanos(v.created_at.signed_duration_since(Utc::now()).abs().num_nanoseconds() as u64);
+                let elapsed = now.signed_duration_since(v.created_at);
+                let nanos = elapsed.num_nanoseconds().unwrap_or(0).max(0) as u64;
+                let created_at = Instant::now() - Duration::from_nanos(nanos);
                 let ttl = Duration::from_nanos(v.ttl_nanos);
                 (k, CacheEntry {
                     value: v.value,

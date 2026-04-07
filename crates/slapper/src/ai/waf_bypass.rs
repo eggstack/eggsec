@@ -1,7 +1,11 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use serde::{Serialize, Deserialize};
+use crate::ai::cache::AiCache;
 use crate::ai::client::AiClient;
 use crate::ai::errors::{AiError, Result};
+use crate::ai::cache::CacheKeyBuilder;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WafBypassEntry {
@@ -14,6 +18,7 @@ pub struct WafBypassEntry {
 
 pub struct SmartWafBypass {
     client: AiClient,
+    cache: Arc<AiCache>,
     knowledge_base: Vec<WafBypassEntry>,
     persist_path: PathBuf,
 }
@@ -35,6 +40,7 @@ impl SmartWafBypass {
 
         Self {
             client,
+            cache: Arc::new(AiCache::new(50, Duration::from_secs(1800))),
             knowledge_base,
             persist_path,
         }
@@ -58,8 +64,18 @@ impl SmartWafBypass {
             }
         }
 
+        let cache_key = CacheKeyBuilder::for_waf_bypass(waf, blocked_payload);
+        if let Some(cached) = self.cache.get(&cache_key).await {
+            return Ok(Some(cached));
+        }
+
         let suggestions = self.client.suggest_waf_bypass(waf, blocked_payload).await?;
-        Ok(suggestions.first().cloned())
+        if let Some(bypass) = suggestions.first().cloned() {
+            self.cache.set(&cache_key, &bypass, Some(Duration::from_secs(1800))).await;
+            return Ok(Some(bypass));
+        }
+
+        Ok(None)
     }
 
     pub async fn iterative_bypass(
@@ -108,6 +124,7 @@ impl Clone for SmartWafBypass {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
+            cache: Arc::clone(&self.cache),
             knowledge_base: self.knowledge_base.clone(),
             persist_path: self.persist_path.clone(),
         }

@@ -1,19 +1,19 @@
-use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
+use std::time::Duration;
+use crate::ai::cache::AiCache;
 use crate::ai::client::AiClient;
 use crate::ai::errors::{AiError, Result};
 
 pub struct AiPayloadGenerator {
     client: AiClient,
-    cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    cache: Arc<AiCache>,
 }
 
 impl AiPayloadGenerator {
     pub fn new(client: AiClient) -> Self {
         Self {
             client,
-            cache: Arc::new(RwLock::new(HashMap::new())),
+            cache: Arc::new(AiCache::new(100, Duration::from_secs(3600))),
         }
     }
 
@@ -28,32 +28,23 @@ impl AiPayloadGenerator {
 
         let cache_key = format!("{}:{}", vuln_type, context);
 
-        {
-            let cache = self.cache.read();
-            if let Some(cached) = cache.get(&cache_key) {
-                return Ok(cached.clone());
-            }
+        if let Some(cached) = self.cache.get(&cache_key).await {
+            return Ok(cached.split('\n').map(String::from).collect());
         }
 
         let payloads = self.client.suggest_payloads(vuln_type, context).await?;
-        let payloads: Vec<String> = payloads.into_iter().take(50).collect();
-
-        {
-            let mut cache = self.cache.write();
-            cache.insert(cache_key, payloads.clone());
-        }
+        let payload_str = payloads.join("\n");
+        self.cache.set(&cache_key, &payload_str, Some(Duration::from_secs(3600))).await;
 
         Ok(payloads)
     }
 
-    pub fn clear_cache(&self) {
-        let mut cache = self.cache.write();
-        cache.clear();
+    pub async fn clear_cache(&self) {
+        self.cache.clear().await;
     }
 
-    pub fn cache_size(&self) -> usize {
-        let cache = self.cache.read();
-        cache.len()
+    pub async fn cache_size(&self) -> usize {
+        self.cache.len().await
     }
 }
 
