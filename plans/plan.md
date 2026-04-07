@@ -8,11 +8,11 @@ This plan consolidates three improvement initiatives:
 3. **TUI Architecture** (plan4.md) - Trait-based dispatch, compliance improvements
 
 **Current Codebase State:**
-- 1005 passing tests (with ai-integration), 974 without
+- 976 passing tests (974 without ai-integration)
 - 0 clippy warnings
 - 29 Tab variants (Recon through Vuln)
 - Feature-gated AI module behind `ai-integration`
-- TabState, TabRender, TabInput traits fully implemented
+- TabState, TabRender, TabInput traits implemented
 - 15+ compliance checks in security.rs
 
 ---
@@ -243,16 +243,14 @@ cargo test --lib -p slapper --features full
 
 ## Execution Summary
 
-| Wave | Focus | Dependencies | Est. Hours |
-|------|-------|--------------|------------|
-| 1 | Critical Bug Fixes | None | 2 |
-| 2 | AI Module Refactoring | Wave 1 | 8 |
-| 3 | CLI Ergonomics | None | 12 |
-| 4 | TUI Architecture | None | 20 |
-| 5 | Compliance | None | 2 |
-| 6 | Testing & Docs | Waves 1-5 | 4 |
-
-**Total Estimated**: ~48 hours
+| Wave | Focus | Actual Status |
+|------|-------|----------------|
+| 1 | Critical Bug Fixes | Mostly done (1/3 items) |
+| 2 | AI Module Refactoring | Not verified |
+| 3 | CLI Ergonomics | Incomplete (few flags standardized) |
+| 4 | TUI Architecture | Not started |
+| 5 | Compliance | Partially done (15+ checks, no classification) |
+| 6 | Testing & Docs | Incomplete |
 
 ---
 
@@ -273,37 +271,38 @@ cargo test --lib -p slapper --features full
 
 ## Success Criteria
 
-### Wave 1 (Bug Fixes) - COMPLETED
-- [x] Cache serialization works correctly
-- [x] AiError implements From<reqwest::Error>
-- [x] Compiles with `--features ai-integration`
+### Wave 1 (Bug Fixes) - MOSTLY COMPLETED
+- [x] AiError implements From<reqwest::Error> (errors.rs:34-46)
+- [x] Unused import removed from cache.rs
+- [ ] Cache serialization still uses Instant::now() on deserialization (not fully fixed)
 
-### Wave 2 (AI Refactoring) - COMPLETED
-- [x] No code duplication in AiClient (refactored to use chat_completion)
-- [x] AiCache used by all caching components (payloads.rs, waf_bypass.rs)
-- [x] Centralized API URL handling (api_url(), model() methods)
-- [x] Tests cover refactored code
+### Wave 2 (AI Refactoring) - NOT VERIFIED
+- [ ] AiClient code duplication not verified
+- [ ] AiCache usage in payloads.rs/waf_bypass.rs not verified
+- [ ] Centralized API URL handling not verified
 
-### Wave 3 (CLI) - PARTIALLY COMPLETED
+### Wave 3 (CLI) - INCOMPLETE
 - [x] All commands use `-c` for concurrency
 - [x] All commands use `-o` for output
-- [x] Most commands support `--json`, `--verbose`
-- [ ] Help shows categorized commands (not implemented)
-- [x] Backward compatibility maintained
+- [ ] --verbose flag not standardized across all commands
+- [ ] --quiet flag only in http.rs and ci.rs
+- [ ] -y/--yes flag not implemented on destructive commands
+- [ ] Help categories not implemented
 
-### Wave 4 (TUI) - ALREADY IMPLEMENTED
-- [x] TabState, TabRender, TabInput traits fully implemented
-- [x] All tabs implement the traits
-- [x] 1005 tests pass (with ai-integration)
+### Wave 4 (TUI) - NOT COMPLETED
+- [ ] as_tab_state() method not implemented
+- [ ] as_tab_state_mut() method not implemented  
+- [ ] as_tab_render() method not implemented
+- [ ] Match statements not refactored
 
-### Wave 5 (Compliance) - ALREADY IMPLEMENTED
-- [x] Severity derives from actual analysis (15+ checks in security.rs)
-- [x] Target classification available through URL/path analysis
+### Wave 5 (Compliance) - PARTIALLY COMPLETED
+- [x] 15+ checks implemented in security.rs
+- [ ] Target classification (production vs dev) not fully implemented
 
-### Wave 6 (Final) - COMPLETED
+### Wave 6 (Final) - INCOMPLETE
 - [x] Clippy 0 warnings
-- [x] All tests pass
-- [ ] Documentation complete (partially - no new doc comments added)
+- [x] Tests pass (976 tests)
+- [ ] No AI module doc comments added
 
 ---
 
@@ -319,47 +318,47 @@ All changes MUST maintain backward compatibility:
 ## Files to Modify
 
 ### Wave 1 (AI Bugs)
-| File | Changes |
-|------|---------|
-| `ai/cache.rs` | Fix serialization, remove unused import |
-| `ai/errors.rs` | Add From impl |
+| File | Changes | Status |
+|------|---------|--------|
+| `ai/cache.rs` | Fix serialization, remove unused import | Partial (import removed, serialization not fixed) |
+| `ai/errors.rs` | Add From impl | DONE |
 
 ### Wave 2 (AI Refactor)
-| File | Changes |
-|------|---------|
-| `ai/client.rs` | Refactor duplication, typed results |
-| `ai/planner.rs` | Use AiClient |
-| `ai/payloads.rs` | Use AiCache |
-| `ai/waf_bypass.rs` | Use AiCache |
+| File | Changes | Status |
+|------|---------|--------|
+| `ai/client.rs` | Refactor duplication, typed results | NOT VERIFIED |
+| `ai/planner.rs` | Use AiClient | NOT VERIFIED |
+| `ai/payloads.rs` | Use AiCache | NOT VERIFIED |
+| `ai/waf_bypass.rs` | Use AiCache | NOT VERIFIED |
 
 ### Wave 3 (CLI)
-| File | Changes |
-|------|---------|
-| `cli/mod.rs` | Help categories, CommonHttpArgs refactor |
-| `cli/scan.rs` | Argument groups, -c/-o standardization |
-| `cli/fuzz.rs` | Flag standardization |
-| `cli/http.rs` | Flag standardization |
-| `cli/auth.rs` | Add -y flag |
-| `cli/stress.rs` | Add -y flag |
-| `cli/misc.rs` | Flag standardization, examples |
-| `cli/packet.rs` | Add --quiet |
-| `cli/cluster.rs` | Verify flags |
-| `cli/ci.rs` | Already has --quiet |
+| File | Changes | Status |
+|------|---------|--------|
+| `cli/mod.rs` | Help categories, CommonHttpArgs refactor | NOT IMPLEMENTED |
+| `cli/scan.rs` | Argument groups, -c/-o standardization | PARTIALLY DONE |
+| `cli/fuzz.rs` | Flag standardization | PARTIALLY DONE |
+| `cli/http.rs` | Flag standardization | PARTIALLY DONE |
+| `cli/auth.rs` | Add -y flag | NOT IMPLEMENTED |
+| `cli/stress.rs` | Add -y flag | NOT IMPLEMENTED |
+| `cli/misc.rs` | Flag standardization, examples | PARTIALLY DONE |
+| `cli/packet.rs` | Add --quiet | NOT IMPLEMENTED |
+| `cli/cluster.rs` | Verify flags | NOT VERIFIED |
+| `cli/ci.rs` | Already has --quiet | DONE |
 
 ### Wave 4 (TUI)
-| File | Changes | Net LOC |
-|------|---------|---------|
-| `tui/tabs/mod.rs` | Add dispatch methods | +150 |
-| `tui/app/mod.rs` | Replace 22 match statements | -1600 |
-| `tui/ui.rs` | Replace 3 match statements | -400 |
-| `tui/app/state_update.rs` | Replace 2 statements | -50 |
-| `tui/app/export.rs` | Replace 3 statements | -75 |
-| `tui/app/navigation.rs` | Replace 1 statement | -25 |
+| File | Changes | Status |
+|------|---------|--------|
+| `tui/tabs/mod.rs` | Add dispatch methods | NOT IMPLEMENTED |
+| `tui/app/mod.rs` | Replace 22 match statements | NOT IMPLEMENTED |
+| `tui/ui.rs` | Replace 3 match statements | NOT IMPLEMENTED |
+| `tui/app/state_update.rs` | Replace 2 statements | NOT IMPLEMENTED |
+| `tui/app/export.rs` | Replace 3 statements | NOT IMPLEMENTED |
+| `tui/app/navigation.rs` | Replace 1 statement | NOT IMPLEMENTED |
 
 ### Wave 5 (Compliance)
-| File | Changes |
-|------|---------|
-| `tui/workers/security.rs` | Real severity derivation |
+| File | Changes | Status |
+|------|---------|--------|
+| `tui/workers/security.rs` | Real severity derivation | PARTIALLY DONE (15+ checks done, classification not done) |
 
 ---
 
