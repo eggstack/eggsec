@@ -339,6 +339,250 @@ impl Tab {
             all[idx - 1]
         }
     }
+
+    pub fn as_tab_state<'a>(&self, app: &'a super::App) -> &'a dyn TabState {
+        match self {
+            Tab::Recon => &app.recon,
+            Tab::Load => &app.load,
+            Tab::ScanPorts => &app.scan_ports,
+            Tab::ScanEndpoints => &app.scan_endpoints,
+            Tab::Fingerprint => &app.fingerprint,
+            Tab::Fuzz => &app.fuzz,
+            Tab::Waf => &app.waf,
+            Tab::WafStress => &app.waf_stress,
+            Tab::Scan => &app.scan,
+            Tab::Resume => &app.resume,
+            Tab::Proxy => &app.proxy,
+            Tab::Packet => &app.packet,
+            Tab::GraphQl => &app.graphql,
+            Tab::OAuth => &app.oauth,
+            Tab::Cluster => &app.cluster,
+            Tab::Stress => &app.stress,
+            Tab::Report => &app.report,
+            #[cfg(feature = "nse")]
+            Tab::Nse => &app.nse,
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => &app.dashboard,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => &app.plugin,
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => &app.dashboard,
+            Tab::Settings => &app.settings,
+            Tab::History => &app.dashboard,
+            Tab::Dashboard => &app.dashboard,
+            #[cfg(feature = "advanced-hunting")]
+            Tab::Hunt => &app.hunt,
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => &app.dashboard,
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => &app.browser,
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => &app.dashboard,
+            #[cfg(feature = "compliance")]
+            Tab::Compliance => &app.compliance,
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => &app.dashboard,
+            #[cfg(feature = "database")]
+            Tab::Storage => &app.storage,
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => &app.dashboard,
+            #[cfg(feature = "external-integrations")]
+            Tab::Integrations => &app.integrations,
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => &app.dashboard,
+            #[cfg(feature = "finding-workflow")]
+            Tab::Workflow => &app.workflow,
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => &app.dashboard,
+            #[cfg(feature = "vuln-management")]
+            Tab::Vuln => &app.vuln,
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => &app.dashboard,
+        }
+    }
+
+    pub fn as_tab_state_mut<'a>(&mut self, app: &'a mut super::App) -> &'a mut dyn TabState {
+        match self {
+            Tab::Recon => &mut app.recon,
+            Tab::Load => &mut app.load,
+            Tab::ScanPorts => &mut app.scan_ports,
+            Tab::ScanEndpoints => &mut app.scan_endpoints,
+            Tab::Fingerprint => &mut app.fingerprint,
+            Tab::Fuzz => &mut app.fuzz,
+            Tab::Waf => &mut app.waf,
+            Tab::WafStress => &mut app.waf_stress,
+            Tab::Scan => &mut app.scan,
+            Tab::Resume => &mut app.resume,
+            Tab::Proxy => &mut app.proxy,
+            Tab::Packet => &mut app.packet,
+            Tab::GraphQl => &mut app.graphql,
+            Tab::OAuth => &mut app.oauth,
+            Tab::Cluster => &mut app.cluster,
+            Tab::Stress => &mut app.stress,
+            Tab::Report => &mut app.report,
+            #[cfg(feature = "nse")]
+            Tab::Nse => &mut app.nse,
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => &mut app.dashboard,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => &mut app.plugin,
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => &mut app.dashboard,
+            Tab::Settings => &mut app.settings,
+            Tab::History => &mut app.dashboard,
+            Tab::Dashboard => &mut app.dashboard,
+            #[cfg(feature = "advanced-hunting")]
+            Tab::Hunt => &mut app.hunt,
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => &mut app.dashboard,
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => &mut app.browser,
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => &mut app.dashboard,
+            #[cfg(feature = "compliance")]
+            Tab::Compliance => &mut app.compliance,
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => &mut app.dashboard,
+            #[cfg(feature = "database")]
+            Tab::Storage => &mut app.storage,
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => &mut app.dashboard,
+            #[cfg(feature = "external-integrations")]
+            Tab::Integrations => &mut app.integrations,
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => &mut app.dashboard,
+            #[cfg(feature = "finding-workflow")]
+            Tab::Workflow => &mut app.workflow,
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => &mut app.dashboard,
+            #[cfg(feature = "vuln-management")]
+            Tab::Vuln => &mut app.vuln,
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => &mut app.dashboard,
+        }
+    }
+
+    pub fn as_tab_render<'a>(&self, app: &'a super::App) -> &'a dyn TabRender {
+        match self {
+            Tab::Recon => &app.recon,
+            Tab::Load => &app.load,
+            Tab::ScanPorts => &app.scan_ports,
+            Tab::ScanEndpoints => &app.scan_endpoints,
+            Tab::Fingerprint => &app.fingerprint,
+            Tab::Fuzz => &app.fuzz,
+            Tab::Waf => &app.waf,
+            Tab::WafStress => &app.waf_stress,
+            Tab::Scan => &app.scan,
+            Tab::Resume => &app.resume,
+            Tab::Proxy => &app.proxy,
+            Tab::Packet => &app.packet,
+            Tab::GraphQl => &app.graphql,
+            Tab::OAuth => &app.oauth,
+            Tab::Cluster => &app.cluster,
+            Tab::Stress => &app.stress,
+            Tab::Report => &app.report,
+            #[cfg(feature = "nse")]
+            Tab::Nse => &app.nse,
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => &app.dashboard,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => &app.plugin,
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => &app.dashboard,
+            Tab::Settings => &app.settings,
+            Tab::History => &app.dashboard,
+            Tab::Dashboard => &app.dashboard,
+            #[cfg(feature = "advanced-hunting")]
+            Tab::Hunt => &app.hunt,
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => &app.dashboard,
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => &app.browser,
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => &app.dashboard,
+            #[cfg(feature = "compliance")]
+            Tab::Compliance => &app.compliance,
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => &app.dashboard,
+            #[cfg(feature = "database")]
+            Tab::Storage => &app.storage,
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => &app.dashboard,
+            #[cfg(feature = "external-integrations")]
+            Tab::Integrations => &app.integrations,
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => &app.dashboard,
+            #[cfg(feature = "finding-workflow")]
+            Tab::Workflow => &app.workflow,
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => &app.dashboard,
+            #[cfg(feature = "vuln-management")]
+            Tab::Vuln => &app.vuln,
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => &app.dashboard,
+        }
+    }
+
+    pub fn as_tab_input<'a>(&mut self, app: &'a mut super::App) -> &'a mut dyn TabInput {
+        match self {
+            Tab::Recon => &mut app.recon,
+            Tab::Load => &mut app.load,
+            Tab::ScanPorts => &mut app.scan_ports,
+            Tab::ScanEndpoints => &mut app.scan_endpoints,
+            Tab::Fingerprint => &mut app.fingerprint,
+            Tab::Fuzz => &mut app.fuzz,
+            Tab::Waf => &mut app.waf,
+            Tab::WafStress => &mut app.waf_stress,
+            Tab::Scan => &mut app.scan,
+            Tab::Resume => &mut app.resume,
+            Tab::Proxy => &mut app.proxy,
+            Tab::Packet => &mut app.packet,
+            Tab::GraphQl => &mut app.graphql,
+            Tab::OAuth => &mut app.oauth,
+            Tab::Cluster => &mut app.cluster,
+            Tab::Stress => &mut app.stress,
+            Tab::Report => &mut app.report,
+            #[cfg(feature = "nse")]
+            Tab::Nse => &mut app.nse,
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => &mut app.dashboard,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => &mut app.plugin,
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => &mut app.dashboard,
+            Tab::Settings => &mut app.settings,
+            Tab::History => &mut app.dashboard,
+            Tab::Dashboard => &mut app.dashboard,
+            #[cfg(feature = "advanced-hunting")]
+            Tab::Hunt => &mut app.hunt,
+            #[cfg(not(feature = "advanced-hunting"))]
+            Tab::Hunt => &mut app.dashboard,
+            #[cfg(feature = "headless-browser")]
+            Tab::Browser => &mut app.browser,
+            #[cfg(not(feature = "headless-browser"))]
+            Tab::Browser => &mut app.dashboard,
+            #[cfg(feature = "compliance")]
+            Tab::Compliance => &mut app.compliance,
+            #[cfg(not(feature = "compliance"))]
+            Tab::Compliance => &mut app.dashboard,
+            #[cfg(feature = "database")]
+            Tab::Storage => &mut app.storage,
+            #[cfg(not(feature = "database"))]
+            Tab::Storage => &mut app.dashboard,
+            #[cfg(feature = "external-integrations")]
+            Tab::Integrations => &mut app.integrations,
+            #[cfg(not(feature = "external-integrations"))]
+            Tab::Integrations => &mut app.dashboard,
+            #[cfg(feature = "finding-workflow")]
+            Tab::Workflow => &mut app.workflow,
+            #[cfg(not(feature = "finding-workflow"))]
+            Tab::Workflow => &mut app.dashboard,
+            #[cfg(feature = "vuln-management")]
+            Tab::Vuln => &mut app.vuln,
+            #[cfg(not(feature = "vuln-management"))]
+            Tab::Vuln => &mut app.dashboard,
+        }
+    }
 }
 
 impl std::fmt::Display for Tab {

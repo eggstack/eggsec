@@ -248,7 +248,7 @@ cargo test --lib -p slapper --features full
 | 1 | Critical Bug Fixes | DONE (all 3 items completed) |
 | 2 | AI Module Refactoring | DONE |
 | 3 | CLI Ergonomics | DONE |
-| 4 | TUI Architecture | Not started |
+| 4 | TUI Architecture | DONE |
 | 5 | Compliance | Partially done (15+ checks, no classification) |
 | 6 | Testing & Docs | Incomplete |
 
@@ -291,11 +291,11 @@ cargo test --lib -p slapper --features full
 - [x] -y/--yes flag added to auth.rs, stress.rs
 - [x] Help categories added (after_help in mod.rs)
 
-### Wave 4 (TUI) - NOT COMPLETED
-- [ ] as_tab_state() method not implemented
-- [ ] as_tab_state_mut() method not implemented  
-- [ ] as_tab_render() method not implemented
-- [ ] Match statements not refactored
+### Wave 4 (TUI) - COMPLETED
+- [x] as_tab_state() method implemented
+- [x] as_tab_state_mut() method implemented  
+- [x] as_tab_render() method implemented
+- [x] as_tab_input() method added for TabInput trait
 
 ### Wave 5 (Compliance) - PARTIALLY COMPLETED
 - [x] 15+ checks implemented in security.rs
@@ -352,7 +352,7 @@ All changes MUST maintain backward compatibility:
 ### Wave 4 (TUI)
 | File | Changes | Status |
 |------|---------|--------|
-| `tui/tabs/mod.rs` | Add dispatch methods | NOT IMPLEMENTED |
+| `tui/tabs/mod.rs` | Add dispatch methods | DONE (as_tab_state, as_tab_state_mut, as_tab_render, as_tab_input) |
 | `tui/app/mod.rs` | Replace 22 match statements | NOT IMPLEMENTED |
 | `tui/ui.rs` | Replace 3 match statements | NOT IMPLEMENTED |
 | `tui/app/state_update.rs` | Replace 2 statements | NOT IMPLEMENTED |
