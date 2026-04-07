@@ -2,17 +2,14 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CacheEntry {
     pub value: String,
-    #[serde(skip)]
-    created_at: Instant,
-    #[serde(default)]
-    created_at_ser: Option<DateTime<Utc>>,
+    created_at: DateTime<Utc>,
     pub ttl: Duration,
     #[serde(default)]
     hit_count: u64,
@@ -26,15 +23,14 @@ impl<'de> Deserialize<'de> for CacheEntry {
         #[derive(Deserialize)]
         struct CacheEntrySer {
             value: String,
-            created_at_ser: Option<DateTime<Utc>>,
+            created_at: DateTime<Utc>,
             ttl_nanos: Option<u64>,
             hit_count: Option<u64>,
         }
         let ser = CacheEntrySer::deserialize(_deserializer)?;
         Ok(Self {
             value: ser.value,
-            created_at: Instant::now(),
-            created_at_ser: ser.created_at_ser,
+            created_at: ser.created_at,
             ttl: Duration::from_nanos(ser.ttl_nanos.unwrap_or(0)),
             hit_count: ser.hit_count.unwrap_or(0),
         })
@@ -45,8 +41,7 @@ impl Default for CacheEntry {
     fn default() -> Self {
         Self {
             value: String::new(),
-            created_at: Instant::now(),
-            created_at_ser: None,
+            created_at: Utc::now(),
             ttl: Duration::default(),
             hit_count: 0,
         }
@@ -55,14 +50,13 @@ impl Default for CacheEntry {
 
 impl CacheEntry {
     pub fn is_expired(&self) -> bool {
-        self.created_at.elapsed() > self.ttl
+        Utc::now().signed_duration_since(self.created_at).to_std().map(|d| d > self.ttl).unwrap_or(true)
     }
 
     fn new(value: String, ttl: Duration) -> Self {
         Self {
             value,
-            created_at: Instant::now(),
-            created_at_ser: None,
+            created_at: Utc::now(),
             ttl,
             hit_count: 0,
         }
@@ -95,19 +89,14 @@ struct CacheEntrySer {
 
 impl From<AiCacheSerialized> for AiCache {
     fn from(serialized: AiCacheSerialized) -> Self {
-        let now = Utc::now();
         let entries: HashMap<String, CacheEntry> = serialized
             .entries
             .into_iter()
             .map(|(k, v)| {
-                let elapsed = now.signed_duration_since(v.created_at);
-                let nanos = elapsed.num_nanoseconds().unwrap_or(0).max(0) as u64;
-                let created_at = Instant::now() - Duration::from_nanos(nanos);
                 let ttl = Duration::from_nanos(v.ttl_nanos);
                 (k, CacheEntry {
                     value: v.value,
-                    created_at,
-                    created_at_ser: Some(v.created_at),
+                    created_at: v.created_at,
                     ttl,
                     hit_count: v.hit_count,
                 })
@@ -125,9 +114,12 @@ impl From<AiCacheSerialized> for AiCache {
 
 impl From<AiCache> for AiCacheSerialized {
     fn from(cache: AiCache) -> Self {
-        let entries: HashMap<String, CacheEntrySer> = HashMap::new();
+        // Need to extract entries from the Arc<RwLock>
+        // This is a simplified version - for proper serialization we'd need to 
+        // access the inner HashMap. For now, just serialize metadata.
+        // The actual entries are serialized in the persist() method.
         AiCacheSerialized {
-            entries,
+            entries: HashMap::new(),
             max_entries: cache.max_entries,
             default_ttl_nanos: cache.default_ttl.as_nanos() as u64,
         }
@@ -243,12 +235,9 @@ impl AiCache {
             let serialized_entries: HashMap<String, CacheEntrySer> = entries
                 .iter()
                 .map(|(k, v)| {
-                    let created_at_ser = v.created_at_ser.unwrap_or_else(|| {
-                        Utc::now() - Duration::from_nanos(0)
-                    });
                     (k.clone(), CacheEntrySer {
                         value: v.value.clone(),
-                        created_at: created_at_ser,
+                        created_at: v.created_at,
                         ttl_nanos: v.ttl.as_nanos() as u64,
                         hit_count: v.hit_count,
                     })

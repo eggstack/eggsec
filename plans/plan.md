@@ -245,7 +245,7 @@ cargo test --lib -p slapper --features full
 
 | Wave | Focus | Actual Status |
 |------|-------|----------------|
-| 1 | Critical Bug Fixes | Mostly done (1/3 items) |
+| 1 | Critical Bug Fixes | DONE (all 3 items completed) |
 | 2 | AI Module Refactoring | Not verified |
 | 3 | CLI Ergonomics | Incomplete (few flags standardized) |
 | 4 | TUI Architecture | Not started |
@@ -271,10 +271,10 @@ cargo test --lib -p slapper --features full
 
 ## Success Criteria
 
-### Wave 1 (Bug Fixes) - MOSTLY COMPLETED
+### Wave 1 (Bug Fixes) - COMPLETED
 - [x] AiError implements From<reqwest::Error> (errors.rs:34-46)
 - [x] Unused import removed from cache.rs
-- [ ] Cache serialization still uses Instant::now() on deserialization (not fully fixed)
+- [x] Cache serialization fixed - now uses DateTime<Utc> instead of Instant
 
 ### Wave 2 (AI Refactoring) - NOT VERIFIED
 - [ ] AiClient code duplication not verified
@@ -320,7 +320,7 @@ All changes MUST maintain backward compatibility:
 ### Wave 1 (AI Bugs)
 | File | Changes | Status |
 |------|---------|--------|
-| `ai/cache.rs` | Fix serialization, remove unused import | Partial (import removed, serialization not fixed) |
+| `ai/cache.rs` | Fix serialization, remove unused import | DONE |
 | `ai/errors.rs` | Add From impl | DONE |
 
 ### Wave 2 (AI Refactor)
