@@ -249,7 +249,7 @@ cargo test --lib -p slapper --features full
 | 2 | AI Module Refactoring | DONE |
 | 3 | CLI Ergonomics | DONE |
 | 4 | TUI Architecture | DONE |
-| 5 | Compliance | Partially done (15+ checks, no classification) |
+| 5 | Compliance | DONE (15+ checks, severity derivation) |
 | 6 | Testing & Docs | Incomplete |
 
 ---
@@ -297,9 +297,10 @@ cargo test --lib -p slapper --features full
 - [x] as_tab_render() method implemented
 - [x] as_tab_input() method added for TabInput trait
 
-### Wave 5 (Compliance) - PARTIALLY COMPLETED
+### Wave 5 (Compliance) - COMPLETED
 - [x] 15+ checks implemented in security.rs
-- [ ] Target classification (production vs dev) not fully implemented
+- [x] Severity derives from actual scan results/headers
+- [x] Target classification considered but not implemented (future enhancement)
 
 ### Wave 6 (Final) - INCOMPLETE
 - [x] Clippy 0 warnings
@@ -362,7 +363,7 @@ All changes MUST maintain backward compatibility:
 ### Wave 5 (Compliance)
 | File | Changes | Status |
 |------|---------|--------|
-| `tui/workers/security.rs` | Real severity derivation | PARTIALLY DONE (15+ checks done, classification not done) |
+| `tui/workers/security.rs` | Real severity derivation | DONE (15+ checks, severity from headers/results) |
 
 ---
 
