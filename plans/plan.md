@@ -304,7 +304,7 @@ cargo test --lib -p slapper --features full
 
 ### Wave 6 (Final) - COMPLETED
 - [x] Clippy 0 warnings
-- [x] Tests pass (976 tests)
+- [x] Tests pass (974 tests)
 - [x] All verification tests pass
 - [ ] AI module doc comments (future enhancement, not blocking)
 
