@@ -55,6 +55,7 @@ pub async fn run_fuzz(
         json: false,
         output: None,
         verbose: false,
+        quiet: false,
         format: None,
         target: None,
         jwt_token: None,
@@ -124,6 +125,7 @@ pub async fn run_waf(
             timeout: 15,
             json: false,
             verbose: false,
+            quiet: false,
             output: None,
             common: crate::cli::CommonHttpArgs::default(),
         };

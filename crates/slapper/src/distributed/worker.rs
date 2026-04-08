@@ -336,6 +336,7 @@ async fn process_fuzz(task: Task) -> Result<serde_json::Value> {
         json: false,
         output: None,
         verbose: false,
+        quiet: false,
         format: None,
         target: None,
         jwt_token: None,
@@ -402,6 +403,7 @@ async fn process_waf(task: Task) -> Result<serde_json::Value> {
         timeout: 15,
         json: false,
         verbose: false,
+        quiet: false,
         output: None,
         common: crate::cli::CommonHttpArgs::default(),
     };
@@ -442,6 +444,7 @@ async fn process_load_test(task: Task) -> Result<serde_json::Value> {
         timeout: 30,
         json: false,
         verbose: false,
+        quiet: false,
         output: None,
         common: crate::cli::CommonHttpArgs::default(),
     };

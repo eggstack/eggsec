@@ -366,6 +366,7 @@ mod tests {
             concurrency: 10,
             timeout: 5,
             verbose: false,
+            quiet: false,
             json: false,
             output: None,
             mutate: false,
@@ -497,6 +498,7 @@ mod tests {
             timeout: 10,
             json: false,
             verbose: false,
+            quiet: false,
             output: None,
             common: CommonHttpArgs::default(),
         };

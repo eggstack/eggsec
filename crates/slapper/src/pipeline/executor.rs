@@ -365,6 +365,7 @@ impl Pipeline {
             json: false,
             output: None,
             verbose: false,
+            quiet: false,
             format: None,
             target: None,
             jwt_token: None,
@@ -417,6 +418,7 @@ impl Pipeline {
             timeout: 30,
             json: false,
             verbose: false,
+            quiet: false,
             output: None,
             common: self.common.clone(),
         };
@@ -452,6 +454,7 @@ impl Pipeline {
             timeout: 15,
             json: false,
             verbose: false,
+            quiet: false,
             output: None,
             common: self.common.clone(),
         };

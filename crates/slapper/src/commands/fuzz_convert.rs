@@ -1,7 +1,7 @@
 use crate::cli::{GraphQlArgs, OAuthArgs, FuzzArgs, FuzzMode, CommonHttpArgs};
 use anyhow::Result;
 
-fn base_fuzz_args(url: String, concurrency: usize, timeout: u64, json: bool, output: Option<String>, verbose: bool, common: CommonHttpArgs) -> FuzzArgs {
+fn base_fuzz_args(url: String, concurrency: usize, timeout: u64, json: bool, output: Option<String>, verbose: bool, quiet: bool, common: CommonHttpArgs) -> FuzzArgs {
     FuzzArgs {
         url,
         payload_type: String::new(),
@@ -25,6 +25,7 @@ fn base_fuzz_args(url: String, concurrency: usize, timeout: u64, json: bool, out
         json,
         output,
         verbose,
+        quiet,
         format: None,
         target: None,
         jwt_token: None,
@@ -57,6 +58,7 @@ impl From<GraphQlArgs> for FuzzArgs {
             args.json,
             args.output,
             args.verbose,
+            args.quiet,
             args.common,
         );
         fuzz_args.payload_type = "graphql".to_string();
@@ -74,6 +76,7 @@ impl From<OAuthArgs> for FuzzArgs {
             args.json,
             args.output,
             args.verbose,
+            args.quiet,
             args.common,
         );
         fuzz_args.payload_type = "oauth".to_string();

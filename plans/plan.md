@@ -247,8 +247,8 @@ cargo test --lib -p slapper --features full
 |------|-------|----------------|
 | 1 | Critical Bug Fixes | DONE (all 3 items completed) |
 | 2 | AI Module Refactoring | DONE |
-| 3 | CLI Ergonomics | DONE |
-| 4 | TUI Architecture | DONE |
+| 3 | CLI Ergonomics | DONE (all flag standardization complete) |
+| 4 | TUI Architecture | PARTIALLY DONE (trait methods added, match refactor deferred) |
 | 5 | Compliance | DONE |
 | 6 | Testing & Docs | DONE |
 
@@ -286,16 +286,18 @@ cargo test --lib -p slapper --features full
 ### Wave 3 (CLI) - COMPLETED
 - [x] All commands use `-c` for concurrency
 - [x] All commands use `-o` for output
-- [x] --verbose flag now on most commands
-- [x] --quiet flag now on most commands  
-- [x] -y/--yes flag added to auth.rs, stress.rs
-- [x] Help categories added (after_help in mod.rs)
+- [x] --verbose flag on all commands
+- [x] --quiet flag added to fuzz, scan-ports, scan-endpoints, fingerprint, recon, load, waf, graphql, oauth, auth-test
+- [x] -y/--yes flag added to auth.rs, stress.rs, misc.rs (RemoteStart, Exec)
 
-### Wave 4 (TUI) - COMPLETED
-- [x] as_tab_state() method implemented
-- [x] as_tab_state_mut() method implemented  
-- [x] as_tab_render() method implemented
-- [x] as_tab_input() method added for TabInput trait
+### Wave 4 (TUI) - PARTIALLY COMPLETED
+- [x] as_tab_state() method implemented (tabs/mod.rs:343)
+- [x] as_tab_state_mut() method implemented (tabs/mod.rs:404)
+- [x] as_tab_render() method implemented (tabs/mod.rs:465)
+- [x] as_tab_input() method added for TabInput trait (tabs/mod.rs:526)
+- [ ] Replace 22 match statements in App::handle_enter - NOT IMPLEMENTED (1105+ Tab:: arms remain)
+- [ ] Replace 3 match statements in ui.rs - NOT IMPLEMENTED
+- [ ] Replace match statements in state_update.rs, export.rs, navigation.rs - NOT IMPLEMENTED
 
 ### Wave 5 (Compliance) - COMPLETED
 - [x] 15+ checks implemented in security.rs
@@ -304,7 +306,7 @@ cargo test --lib -p slapper --features full
 
 ### Wave 6 (Final) - COMPLETED
 - [x] Clippy 0 warnings
-- [x] Tests pass (974 tests)
+- [x] Tests pass (976 tests)
 - [x] All verification tests pass
 - [ ] AI module doc comments (future enhancement, not blocking)
 
@@ -339,12 +341,12 @@ All changes MUST maintain backward compatibility:
 | File | Changes | Status |
 |------|---------|--------|
 | `cli/mod.rs` | Help categories, CommonHttpArgs refactor | DONE (added after_help) |
-| `cli/scan.rs` | Argument groups, -c/-o standardization | PARTIALLY DONE |
-| `cli/fuzz.rs` | Flag standardization | DONE (has verbose) |
-| `cli/http.rs` | Flag standardization | DONE (has verbose, quiet) |
+| `cli/scan.rs` | Argument groups, -c/-o standardization, --quiet | DONE |
+| `cli/fuzz.rs` | Flag standardization, --quiet | DONE |
+| `cli/http.rs` | Flag standardization, --quiet | DONE |
 | `cli/auth.rs` | Add -y flag | DONE |
 | `cli/stress.rs` | Add -y flag | DONE |
-| `cli/misc.rs` | Flag standardization, examples | PARTIALLY DONE (added quiet) |
+| `cli/misc.rs` | Flag standardization, -y flag | DONE |
 | `cli/packet.rs` | Add --quiet | DONE |
 | `cli/cluster.rs` | Add --quiet, -o, --verbose | DONE |
 | `cli/ci.rs` | Already has --quiet | DONE |
@@ -355,7 +357,7 @@ All changes MUST maintain backward compatibility:
 | File | Changes | Status |
 |------|---------|--------|
 | `tui/tabs/mod.rs` | Add dispatch methods | DONE (as_tab_state, as_tab_state_mut, as_tab_render, as_tab_input) |
-| `tui/app/mod.rs` | Replace 22 match statements | NOT IMPLEMENTED |
+| `tui/app/mod.rs` | Replace 22 match statements | NOT IMPLEMENTED (1105+ Tab:: arms remain) |
 | `tui/ui.rs` | Replace 3 match statements | NOT IMPLEMENTED |
 | `tui/app/state_update.rs` | Replace 2 statements | NOT IMPLEMENTED |
 | `tui/app/export.rs` | Replace 3 statements | NOT IMPLEMENTED |

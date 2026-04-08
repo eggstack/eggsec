@@ -115,6 +115,8 @@ pub struct FuzzArgs {
     pub output: Option<String>,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
     #[arg(long, help = "Output format: json, html, csv, markdown")]
     pub format: Option<OutputFormat>,
     #[arg(
@@ -209,6 +211,8 @@ pub struct WafStressArgs {
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
     #[arg(long, help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
@@ -240,6 +244,7 @@ impl From<WafStressArgs> for FuzzArgs {
             json: args.json,
             output: None,
             verbose: args.verbose,
+            quiet: args.quiet,
             format: None,
             target: None,
             jwt_token: None,
@@ -297,7 +302,9 @@ pub struct WafArgs {
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
-    #[arg(long, help = "Output to file")]
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
+    #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
     pub common: CommonHttpArgs,

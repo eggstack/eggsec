@@ -89,6 +89,8 @@ pub struct LoadArgs {
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
     #[arg(long, help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
@@ -161,6 +163,8 @@ pub struct GraphQlArgs {
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
     #[arg(long, help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
@@ -190,7 +194,9 @@ pub struct OAuthArgs {
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
-    #[arg(long, help = "Output to file")]
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
+    #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
     pub common: CommonHttpArgs,

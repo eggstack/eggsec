@@ -166,6 +166,8 @@ pub struct PortScanArgs {
     pub xml: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
     #[arg(long, help = "Output to file")]
     pub output: Option<String>,
 }
@@ -216,6 +218,8 @@ pub struct EndpointScanArgs {
     pub include_me: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
     #[arg(long, help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
@@ -241,6 +245,8 @@ pub struct FingerprintArgs {
     pub udp: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
+    #[arg(long, short = 'q', help = "Suppress non-essential output")]
+    pub quiet: bool,
     #[arg(long, help = "Output to file")]
     pub output: Option<String>,
     #[arg(

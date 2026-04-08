@@ -305,6 +305,7 @@ mod tests {
             concurrency: 10,
             timeout: 5,
             verbose: false,
+            quiet: false,
             json: false,
             output: None,
             mutate: false,

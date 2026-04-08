@@ -93,6 +93,8 @@ pub struct RemoteStartArgs {
     pub tls_cert: Option<String>,
     #[arg(long, help = "TLS private key file (PEM format)")]
     pub tls_key: Option<String>,
+    #[arg(long, short = 'y', help = "Skip confirmation prompt")]
+    pub yes: bool,
 }
 
 #[derive(clap::Args)]
@@ -115,6 +117,8 @@ pub struct ExecArgs {
         help = "TLS domain for certificate verification"
     )]
     pub tls_domain: Option<String>,
+    #[arg(long, short = 'y', help = "Skip confirmation prompt")]
+    pub yes: bool,
     #[arg(help = "The command to execute")]
     pub command: Vec<String>,
 }
