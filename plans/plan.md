@@ -295,11 +295,19 @@ cargo test --lib -p slapper --features full
 - [x] as_tab_state_mut() method implemented (tabs/mod.rs:404)
 - [x] as_tab_render() method implemented (tabs/mod.rs:465)
 - [x] as_tab_input() method added for TabInput trait (tabs/mod.rs:526)
-- [ ] Replace 22 match statements in App::handle_enter - DEFERRED (1105+ Tab:: arms, large refactor)
-- [ ] Replace 3 match statements in ui.rs - DEFERRED
-- [ ] Replace match statements in state_update.rs, export.rs, navigation.rs - DEFERRED
+- [ ] Replace match statements in mod.rs - DEFERRED (architectural issues)
+- [ ] Replace match statements in state_update.rs, export.rs, navigation.rs - DEFERRED (architectural issues)
 
-Note: Match statement replacement deferred to future iteration due to scope.
+Note: Match statement replacement requires architectural fixes first:
+1. `stop()` method on tabs is NOT part of `impl TabState` - tabs have separate `pub fn stop(&mut self)`
+2. `as_tab_state_mut()` for History tab incorrectly returns `&mut app.dashboard` instead of history data
+3. Feature-gated tabs have explicit fallback behavior that differs from dashboard implementation
+4. Some match statements have special per-tab handling (e.g., History uses `self.history.lock()` directly)
+
+Safe refactoring would require:
+- Adding `fn stop(&mut self)` to each tab's `impl TabState`
+- Fixing `as_tab_state_mut()` for History tab to return actual history reference
+- Standardizing special handling across tabs
 
 ### Wave 5 (Compliance) - COMPLETED
 - [x] 15+ checks implemented in security.rs
@@ -310,6 +318,7 @@ Note: Match statement replacement deferred to future iteration due to scope.
 - [x] Tests pass (974 tests)
 - [x] All verification tests pass
 - [x] Clippy warnings resolved (1 non-blocking warning on too_many_arguments)
+- [x] Plan reviewed and updated (2026-04-08): Wave 4 deferred items require architectural fixes before refactoring
 
 ---
 
@@ -358,11 +367,17 @@ All changes MUST maintain backward compatibility:
 | File | Changes | Status |
 |------|---------|--------|
 | `tui/tabs/mod.rs` | Add dispatch methods | DONE (as_tab_state, as_tab_state_mut, as_tab_render, as_tab_input) |
-| `tui/app/mod.rs` | Replace 22 match statements | NOT IMPLEMENTED (1105+ Tab:: arms remain) |
-| `tui/ui.rs` | Replace 3 match statements | NOT IMPLEMENTED |
-| `tui/app/state_update.rs` | Replace 2 statements | NOT IMPLEMENTED |
-| `tui/app/export.rs` | Replace 3 statements | NOT IMPLEMENTED |
-| `tui/app/navigation.rs` | Replace 1 statement | NOT IMPLEMENTED |
+| `tui/app/mod.rs` | Replace match statements | NOT IMPLEMENTED (requires architectural fixes first) |
+| `tui/app/state_update.rs` | Replace 2 statements | NOT IMPLEMENTED (requires architectural fixes first) |
+| `tui/app/export.rs` | Replace 3 statements | NOT IMPLEMENTED (requires architectural fixes first) |
+| `tui/app/navigation.rs` | Replace 1 statement | NOT IMPLEMENTED (requires architectural fixes first) |
+
+Note: ui.rs has 0 Tab match statements (plan incorrectly listed 3). Actual counts:
+- mod.rs: 24 `match self.current_tab` statements
+- state_update.rs: 2
+- export.rs: 3
+- navigation.rs: 1
+- Total: 30 match statements across TUI
 
 ### Wave 5 (Compliance)
 | File | Changes | Status |
