@@ -574,9 +574,11 @@ fn register_session_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), E
     Ok(())
 }
 
+#[cfg(feature = "ruby-plugins")]
 static MSF_CLIENT: std::sync::OnceLock<tokio::sync::Mutex<Option<MsfClientState>>> =
     std::sync::OnceLock::new();
 
+#[cfg(feature = "ruby-plugins")]
 struct MsfClientState {
     client: crate::msf::MsfClient,
     _url: String,
