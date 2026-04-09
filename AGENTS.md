@@ -33,6 +33,7 @@ cargo build --release -p slapper
 ```
 crates/slapper/
 ├── src/
+│   ├── agent/         # Autonomous agent (event loop, portfolio, memory, alerts, skills)
 │   ├── cli/           # Command-line argument parsing
 │   ├── commands/      # Command handlers
 │   ├── config/        # Configuration (SlapperConfig, PathsConfig, Scope)
@@ -47,6 +48,7 @@ crates/slapper/
 │   ├── recon/         # Reconnaissance modules
 │   ├── output/        # Report generation (JSON, HTML, SARIF, JUnit)
 │   ├── tool/          # Tool abstraction layer
+│   │   ├── implementations/  # Tool implementations (recon, scanner, fuzzer, waf, search, etc.)
 │   │   └── protocol/
 │   │       └── mcp/   # MCP server (mod.rs, handlers.rs, routes.rs, types.rs, auth.rs, streaming.rs)
 │   ├── tui/           # Terminal UI
@@ -55,6 +57,8 @@ crates/slapper/
 ├── tests/             # Integration tests
 └── Cargo.toml
 ```
+
+**Note:** The `slapper_skills/` directory in the project root contains skill files for use with the autonomous agent. This is distinct from the codebase itself which agents work on.
 
 ### Key Types
 
@@ -74,7 +78,7 @@ crates/slapper/
 - `rest-api` / `grpc-api` - API server integration
 - `nse` - Nmap NSE script support
 - `nse-sandbox` - NSE sandbox mode (restricts `io.popen`, `os.setenv`, filesystem access)
-- `ai-integration` - AI/LLM features (planned)
+- `ai-integration` - AI/LLM features (autonomous agent, skill system, payload generation)
 - `full` - All features combined
 
 Note: `mcp-server` feature has been removed. Use `rest-api` instead.
@@ -160,7 +164,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~974 passing, 2 failing (`negative_tests.rs`) |
+| Tests | ~976 passing, 2 failing (`negative_tests.rs`) |
 | Build | Clean compilation |
 | Clippy | 0 warnings (default features) |
 | Doctests | 17 pass, 1 ignored, 0 fail |
@@ -173,6 +177,8 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | Source files | 406 `.rs` files |
 | TUI files | 60 `.rs` files |
 | Tab variants | 29 |
+| Agent module files | 6 (`mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs`) |
+| Skill files | 16 (in `slapper_skills/`) |
 
 ## Planning
 
@@ -288,6 +294,51 @@ Always use `.unwrap_or_else(|_| ProgressStyle::default_bar())` instead of `.unwr
 use slapper_plugin::Plugin;
 ```
 
+### Skill System
+
+The skill system defines agent capabilities via YAML+Markdown files, enabling AI assistants to understand how to use Slapper for security workflows.
+
+**Skill Files Location:** `slapper_skills/` (root directory, NOT for working on the Slapper codebase)
+
+**Skill File Format:**
+```yaml
+---
+name: skill_name
+description: "Brief description"
+triggers:
+  - trigger1
+  - trigger2
+metadata:
+  category: category
+  tools: [tool1, tool2]
+  scope: targets
+---
+
+## Overview
+<detailed description>
+
+## Usage
+<code examples>
+
+## Triggers
+Keywords that activate this skill
+```
+
+**Key Types:**
+- `Skill` — Parsed skill with name, triggers, metadata, content
+- `SkillLoader` — Loads skills from directories
+- `SkillRegistry` — Indexes skills by trigger and tool
+
+**Usage:**
+```rust
+let loader = SkillLoader::new(vec![PathBuf::from("slapper_skills")]);
+let skills = loader.load_skills()?;
+let registry = SkillRegistry::new();
+registry.register(skill)?;
+
+let matching = registry.find_by_trigger("sql injection");
+```
+
 ### Output Patterns
 
 Use the appropriate output method based on the context:
@@ -336,6 +387,43 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/mod.rs`.
 - `tool/protocol/mcp/sampling.rs` — Request/response types for AI completions
 
 Feature gates: prompts always available, sampling gated on `ai-integration`.
+
+#### Autonomous Agent (`agent/`)
+
+The autonomous security agent provides continuous monitoring, scheduled scans, and AI-guided security testing:
+
+**Module Structure:**
+```
+crates/slapper/src/agent/
+├── mod.rs          # Agent core with event loop, CronScheduler
+├── portfolio.rs    # TargetPortfolio for multi-target management
+├── memory.rs       # LongitudinalMemory for file-based persistence
+├── events.rs       # Event system with EventHandler trait
+├── alerts.rs       # AlertRouter with webhook support and HMAC signing
+└── skills.rs       # SkillLoader and SkillRegistry (ai-integration)
+```
+
+**Key Types:**
+- `Agent` — Main orchestrator with `run()`, `stop()`, `execute_scan()`, `trigger_scan()`
+- `AgentConfig` — Configuration with `portfolio_path`, `memory_dir`, `poll_interval_secs`
+- `TargetPortfolio` — CRUD for monitored targets with scheduling support
+- `TargetConfig` — Per-target settings (schedule, priority, alert_channels, baseline)
+- `LongitudinalMemory` — File-based storage in `~/.config/slapper/memory/`
+- `AlertRouter` — Routes alerts via webhook with HMAC signing
+
+**CLI Commands:**
+```bash
+slapper agent run              # Run autonomous agent
+slapper agent run --once       # Run once and exit
+slapper agent targets list     # List monitored targets
+slapper agent targets add <id> --target https://example.com --schedule "0 0 * * *"
+slapper agent targets remove <id>
+slapper agent skills list      # List available skills
+slapper agent skills load /path/to/skills/
+slapper agent status           # Show agent status
+```
+
+Feature gate: `#[cfg(feature = "rest-api")]` for core agent, `#[cfg(feature = "ai-integration")]` for skills.
 
 #### OpenAI Protocol Module
 
