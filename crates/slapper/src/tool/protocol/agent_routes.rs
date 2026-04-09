@@ -1,4 +1,4 @@
-use axum::{routing::get, routing::post, routing::delete, Json, Router};
+use axum::{routing::get, routing::post, routing::delete, response::IntoResponse, Json, Router};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -61,41 +61,10 @@ async fn list_agents(
 async fn get_agent(
     axum::extract::State(state): axum::extract::State<AgentState>,
     axum::extract::Path(id): axum::extract::Path<Uuid>,
-) -> impl axum::response::IntoResponse {
+) -> Result<impl axum::response::IntoResponse, impl axum::response::IntoResponse> {
     match state.registry.get(id).await {
-        Some(agent) => {
-            let body = match serde_json::to_string(&agent) {
-                Ok(s) => s,
-                Err(e) => {
-                    return format!(r#"{{"error":"Serialization error: {}"}}"#, e).into_response();
-                }
-            };
-            axum::response::Response::builder()
-                .status(axum::http::StatusCode::OK)
-                .header("content-type", "application/json")
-                .body(body)
-                .unwrap_or_else(|_| {
-                    axum::response::Response::builder()
-                        .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
-                        .body("{\"error\":\"Internal error\"}".to_string())
-                        .unwrap()
-                })
-        }
-        None => {
-            let body = serde_json::to_string(&serde_json::json!({
-                "error": format!("Agent '{}' not found", id)
-            })).unwrap_or_else(|_| r#"{"error":"Internal error"}"#.to_string());
-            axum::response::Response::builder()
-                .status(axum::http::StatusCode::NOT_FOUND)
-                .header("content-type", "application/json")
-                .body(body)
-                .unwrap_or_else(|_| {
-                    axum::response::Response::builder()
-                        .status(axum::http::StatusCode::NOT_FOUND)
-                        .body("{\"error\":\"Agent not found\"}".to_string())
-                        .unwrap()
-                })
-        }
+        Some(agent) => Ok(axum::Json(agent)),
+        None => Err(axum::http::StatusCode::NOT_FOUND),
     }
 }
 

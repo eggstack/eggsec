@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 
+pub mod auth;
 pub mod ci;
 pub mod cluster;
 pub mod fuzz;
@@ -19,16 +20,18 @@ pub use misc::*;
 pub use packet::*;
 pub use plan::*;
 pub use scan::*;
+pub use stress::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
-pub mod auth;
-
 #[cfg(feature = "ai-integration")]
 pub use ai_analyze::*;
 pub use auth::*;
-#[cfg(feature = "stress-testing")]
-pub use stress::*;
+
+#[cfg(feature = "rest-api")]
+pub mod agent;
+#[cfg(feature = "rest-api")]
+pub use agent::*;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -154,6 +157,11 @@ pub enum Commands {
         alias = "mcp-serve"
     )]
     McpServe(McpServeArgs),
+
+    // --- Autonomous agent ---
+    #[cfg(feature = "rest-api")]
+    #[command(about = "Run autonomous security agent", alias = "agent")]
+    Agent(AgentArgs),
 
     // --- AI operations ---
     #[cfg(feature = "ai-integration")]

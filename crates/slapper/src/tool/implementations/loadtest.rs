@@ -67,6 +67,7 @@ impl SecurityTool for LoadTestTool {
             timeout: 30,
             json: true,
             verbose: false,
+            quiet: false,
             output: None,
             common: crate::cli::CommonHttpArgs::default(),
         };

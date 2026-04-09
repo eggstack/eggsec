@@ -1,0 +1,274 @@
+//! Autonomous security agent for Slapper.
+//!
+//! This module provides an event-driven agent that:
+//! - Monitors configured targets on schedules
+//! - Executes security scans based on events
+//! - Maintains longitudinal memory of scan results
+//! - Routes alerts to configured channels
+//! - Provides skills to guide AI assistants
+
+pub mod portfolio;
+pub mod memory;
+pub mod alerts;
+pub mod events;
+
+#[cfg(feature = "ai-integration")]
+pub mod skills;
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use tokio::sync::RwLock;
+use tokio::time::interval;
+
+use crate::output::schedule::CronScheduler;
+use crate::tool::{
+    create_default_registry, ToolDispatcher, ToolRegistry, ToolRequest,
+    ToolResponse,
+};
+
+#[cfg(feature = "ai-integration")]
+use crate::ai::AiClient;
+
+pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
+pub use memory::LongitudinalMemory;
+pub use alerts::{Alert, AlertChannel, AlertRouter, WebhookConfig};
+pub use events::{EventHandler, SecurityEvent};
+
+#[cfg(feature = "ai-integration")]
+pub use skills::{Skill, SkillLoader, SkillRegistry};
+
+#[derive(Clone)]
+pub struct AgentConfig {
+    pub portfolio_path: Option<PathBuf>,
+    pub memory_dir: PathBuf,
+    pub poll_interval_secs: u64,
+    pub ai_config: Option<crate::config::AiConfig>,
+}
+
+impl Default for AgentConfig {
+    fn default() -> Self {
+        let memory_dir = directories::ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("~/.config/slapper"));
+
+        Self {
+            portfolio_path: None,
+            memory_dir,
+            poll_interval_secs: 60,
+            ai_config: None,
+        }
+    }
+}
+
+pub struct Agent {
+    config: AgentConfig,
+    registry: ToolRegistry,
+    dispatcher: ToolDispatcher,
+    #[cfg(feature = "ai-integration")]
+    ai_client: Option<AiClient>,
+    scheduler: CronScheduler,
+    portfolio: TargetPortfolio,
+    memory: LongitudinalMemory,
+    alert_router: AlertRouter,
+    event_handlers: Vec<Box<dyn EventHandler>>,
+    running: Arc<RwLock<bool>>,
+}
+
+impl Agent {
+    pub async fn new(config: AgentConfig) -> Result<Self> {
+        let registry = create_default_registry();
+        let dispatcher = ToolDispatcher::new(registry.clone());
+
+        let portfolio = if let Some(ref path) = config.portfolio_path {
+            TargetPortfolio::load_from_file(path)?
+        } else {
+            TargetPortfolio::new()
+        };
+
+        let memory_dir = config.memory_dir.join("memory");
+        let memory = LongitudinalMemory::new(memory_dir)?;
+
+        let alert_router = AlertRouter::new();
+
+        Ok(Self {
+            config,
+            registry,
+            dispatcher,
+            #[cfg(feature = "ai-integration")]
+            ai_client: None,
+            scheduler: CronScheduler::new(),
+            portfolio,
+            memory,
+            alert_router,
+            event_handlers: Vec::new(),
+            running: Arc::new(RwLock::new(false)),
+        })
+    }
+
+    #[cfg(feature = "ai-integration")]
+    pub async fn with_ai_client(mut self, ai_config: crate::config::AiConfig) -> Self {
+        let ai_client = AiClient::new(ai_config.clone());
+        self.ai_client = Some(ai_client);
+        self
+    }
+
+    pub fn register_handler(&mut self, handler: Box<dyn EventHandler>) {
+        self.event_handlers.push(handler);
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        {
+            let mut running = self.running.write().await;
+            if *running {
+                return Ok(());
+            }
+            *running = true;
+        }
+
+        tracing::info!("Starting autonomous security agent");
+
+        let mut poll_interval = interval(Duration::from_secs(self.config.poll_interval_secs));
+
+        loop {
+            tokio::select! {
+                _ = poll_interval.tick() => {
+                    if self.process_scheduled_scans().await.is_ok() {
+                        tracing::debug!("Processed scheduled scans");
+                    }
+                }
+            }
+
+            let running = self.running.read().await;
+            if !*running {
+                break;
+            }
+        }
+
+        tracing::info!("Agent stopped");
+        Ok(())
+    }
+
+    pub async fn stop(&self) {
+        let mut running = self.running.write().await;
+        *running = false;
+    }
+
+    async fn process_scheduled_scans(&mut self) -> Result<()> {
+        let now = Utc::now();
+        let targets = self.portfolio.get_all_targets();
+
+        for (target_id, config) in targets {
+            if let Some(ref schedule) = config.schedule {
+                if self.scheduler.should_run_for(schedule, &now) {
+                    tracing::info!("Triggering scheduled scan for {}", target_id);
+
+                    let result = self.execute_scan(&config.target, "pipeline").await;
+
+                    if let Ok(ref response) = result {
+                        self.memory.store_scan_results(&config.target, response)?;
+
+                        let findings = self.process_findings(response);
+                        if !findings.is_empty() {
+                            self.handle_findings(&config.target, findings).await;
+                        }
+                    }
+
+                    self.portfolio.update_last_scan(&target_id, &now);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn execute_scan(&self, target: &str, scan_type: &str) -> Result<ToolResponse> {
+        let request = ToolRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            tool: scan_type.to_string(),
+            target: crate::tool::Target {
+                value: target.to_string(),
+                target_type: crate::tool::TargetType::Url,
+                scope: None,
+            },
+            params: serde_json::json!({}),
+            options: Default::default(),
+            cancellation_token: None,
+        };
+
+        self.dispatcher.dispatch(request).await.map_err(|e| anyhow::anyhow!("{:?}", e))
+    }
+
+    fn process_findings(&self, response: &ToolResponse) -> Vec<crate::tool::response::Finding> {
+        response.findings.clone()
+    }
+
+    async fn handle_findings(&mut self, target: &str, findings: Vec<crate::tool::response::Finding>) {
+        let critical_count = findings.iter()
+            .filter(|f| matches!(f.severity, crate::tool::response::ResponseSeverity::Critical))
+            .count();
+
+        if critical_count > 0 {
+            let alert = Alert {
+                severity: crate::types::Severity::Critical,
+                title: format!("{} critical findings on {}", critical_count, target),
+                message: format!(
+                    "Detected {} critical severity findings during scan of {}",
+                    critical_count, target
+                ),
+                target: target.to_string(),
+                finding_ids: findings.iter().map(|f| f.id.clone()).collect(),
+                recommended_actions: vec![
+                    "Review findings immediately".to_string(),
+                    "Consider initiating emergency response".to_string(),
+                ],
+            };
+
+            if let Err(e) = self.alert_router.send(&alert).await {
+                tracing::error!("Failed to send alert: {}", e);
+            }
+        }
+    }
+
+    pub async fn trigger_scan(&mut self, target: &str, scan_type: &str) -> Result<ToolResponse> {
+        tracing::info!("Manually triggered scan for {} (type: {})", target, scan_type);
+
+        let result = self.execute_scan(target, scan_type).await?;
+
+        if let Err(e) = self.memory.store_scan_results(target, &result) {
+            tracing::warn!("Failed to store scan results: {}", e);
+        }
+
+        Ok(result)
+    }
+
+    pub async fn trigger_event(&mut self, event: SecurityEvent) -> Result<()> {
+        tracing::debug!("Event triggered: {:?}", event.event_type());
+        Ok(())
+    }
+}
+
+impl CronScheduler {
+    pub fn should_run_for(&self, schedule: &str, now: &DateTime<Utc>) -> bool {
+        if let Ok(expr) = crate::output::schedule::CronExpression::parse(schedule) {
+            expr.matches(now)
+        } else {
+            false
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_agent_creation() {
+        let config = AgentConfig::default();
+        let agent = Agent::new(config).await;
+        assert!(agent.is_ok());
+    }
+}

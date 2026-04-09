@@ -92,8 +92,34 @@ pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) ->
 
 #[cfg(feature = "rest-api")]
 pub async fn handle_mcp_serve(_ctx: &CommandContext, args: crate::cli::McpServeArgs) -> Result<()> {
-    eprintln!("[STUB] MCP server is not yet implemented.");
-    eprintln!("  Bind: {}", args.bind);
-    eprintln!("  Port: {}", args.port);
-    Ok(())
+    use std::net::SocketAddr;
+    use tokio::net::TcpListener;
+    use axum::serve;
+    use crate::tool::create_default_registry;
+    use crate::tool::protocol::mcp::{create_mcp_router, run_stdio};
+
+    let registry = create_default_registry();
+
+    if args.stdio {
+        tracing::info!("Starting MCP server in STDIO mode");
+        run_stdio(registry, args.api_key).await;
+        Ok(())
+    } else {
+        let router = create_mcp_router(registry, args.api_key.clone()).await;
+
+        let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Invalid address {}:{} - {}", args.bind, args.port, e))?;
+
+        tracing::info!("Starting MCP server on {}", addr);
+
+        let listener = TcpListener::bind(addr).await
+            .map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
+
+        serve(listener, router)
+            .await
+            .map_err(|e| anyhow::anyhow!("MCP server error: {}", e))?;
+
+        Ok(())
+    }
 }

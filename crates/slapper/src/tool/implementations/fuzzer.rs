@@ -133,6 +133,7 @@ impl SecurityTool for FuzzerTool {
             json: true,
             output: None,
             verbose: false,
+            quiet: false,
             format: None,
             target: None,
             jwt_token: None,

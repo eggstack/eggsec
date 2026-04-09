@@ -118,6 +118,7 @@ impl SecurityTool for ScannerTool {
                     grepable: false,
                     xml: false,
                     verbose: false,
+                    quiet: false,
                     output: None,
                 };
                 let config = crate::config::load_config(None::<&str>).unwrap_or_default();
@@ -131,6 +132,7 @@ impl SecurityTool for ScannerTool {
                     json: true,
                     udp: false,
                     verbose: false,
+                    quiet: false,
                     output: None,
                     concurrency: 20,
                 };
@@ -153,6 +155,7 @@ impl SecurityTool for ScannerTool {
                     include_me: false,
                     include_404: false,
                     verbose: false,
+                    quiet: false,
                     output: None,
                     common: crate::cli::CommonHttpArgs::default(),
                 };

@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::{routing::get, response::IntoResponse, Router};
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -76,53 +76,11 @@ async fn list_models(
 async fn get_model(
     axum::extract::State(_registry): axum::extract::State<ToolRegistry>,
     axum::extract::Path(model_id): axum::extract::Path<String>,
-) -> impl axum::response::IntoResponse {
+) -> Result<impl axum::response::IntoResponse, impl axum::response::IntoResponse> {
     let models = slapper_models();
     match models.into_iter().find(|m| m.id == model_id) {
-        Some(model) => {
-            let body = match serde_json::to_string(&model) {
-                Ok(s) => s,
-                Err(e) => {
-                    return format!(r#"{{"error":"Serialization error: {}"}}"#, e).into_response();
-                }
-            };
-            match axum::response::Response::builder()
-                .status(axum::http::StatusCode::OK)
-                .header("content-type", "application/json")
-                .body(body)
-            {
-                Ok(r) => r,
-                Err(_) => {
-                    axum::response::Response::builder()
-                        .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
-                        .body("{\"error\":\"Internal error\"}".to_string())
-                        .unwrap()
-                }
-            }
-        }
-        None => {
-            let body = serde_json::to_string(&serde_json::json!({
-                "error": {
-                    "message": format!("Model '{}' not found", model_id),
-                    "type": "invalid_request_error",
-                    "param": "model",
-                    "code": "model_not_found",
-                }
-            })).unwrap_or_else(|_| r#"{"error":{"message":"Model not found","type":"invalid_request_error","param":"model","code":"model_not_found"}}"#.to_string());
-            match axum::response::Response::builder()
-                .status(axum::http::StatusCode::NOT_FOUND)
-                .header("content-type", "application/json")
-                .body(body)
-            {
-                Ok(r) => r,
-                Err(_) => {
-                    axum::response::Response::builder()
-                        .status(axum::http::StatusCode::NOT_FOUND)
-                        .body("{\"error\":{\"message\":\"Model not found\"}}".to_string())
-                        .unwrap()
-                }
-            }
-        }
+        Some(model) => Ok(axum::Json(model)),
+        None => Err(axum::http::StatusCode::NOT_FOUND),
     }
 }
 

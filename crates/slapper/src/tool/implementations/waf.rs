@@ -105,6 +105,7 @@ impl SecurityTool for WafTool {
                     timeout: timeout / 1000,
                     json: true,
                     verbose: false,
+                    quiet: false,
                     output: None,
                     common: crate::cli::CommonHttpArgs::default(),
                 };
@@ -124,6 +125,7 @@ impl SecurityTool for WafTool {
                     timeout: timeout / 1000,
                     json: true,
                     verbose: false,
+                    quiet: false,
                     output: None,
                     common: crate::cli::CommonHttpArgs::default(),
                 };
@@ -136,6 +138,7 @@ impl SecurityTool for WafTool {
                     timeout: timeout / 1000,
                     json: true,
                     verbose: false,
+                    quiet: false,
                     output: None,
                     common: crate::cli::CommonHttpArgs::default(),
                 };

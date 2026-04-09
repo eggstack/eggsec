@@ -142,6 +142,9 @@ pub mod tool;
 #[cfg(feature = "ai-integration")]
 pub mod ai;
 
+#[cfg(feature = "rest-api")]
+pub mod agent;
+
 #[cfg(feature = "nse")]
 pub use slapper_nse as nse;
 

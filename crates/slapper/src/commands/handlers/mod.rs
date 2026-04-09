@@ -13,6 +13,8 @@ pub mod notify;
 pub mod auth_test;
 #[cfg(feature = "sbom")]
 pub mod sbom;
+#[cfg(feature = "rest-api")]
+pub mod agent;
 
 pub use ci::*;
 pub use scan::*;
@@ -32,6 +34,8 @@ pub use notify::*;
 #[cfg(feature = "sbom")]
 pub use sbom::*;
 pub use auth_test::*;
+#[cfg(feature = "rest-api")]
+pub use agent::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -126,6 +130,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Serve(args)) => handle_serve(ctx, args).await,
         #[cfg(feature = "rest-api")]
         Some(Commands::McpServe(args)) => handle_mcp_serve(ctx, args).await,
+        #[cfg(feature = "rest-api")]
+        Some(Commands::Agent(args)) => handle_agent(ctx, args).await,
         #[cfg(feature = "ai-integration")]
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(args).await,
     }
