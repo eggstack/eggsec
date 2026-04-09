@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use rustls::pki_types::{CertificateDer, ServerName};
 use rustls::server::ServerConfig;
-use rustls::ClientConfig;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader as TokioBufReader};
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream as ServerTlsStream;

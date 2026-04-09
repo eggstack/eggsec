@@ -138,3 +138,260 @@ impl super::App {
         self.command_palette.as_ref()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::{create_shared_history, App};
+    use crate::tui::tabs::Tab;
+
+    fn create_test_app() -> App {
+        App::new(create_shared_history())
+    }
+
+    #[test]
+    fn test_execute_command_quit_when_not_running() {
+        let mut app = create_test_app();
+        app.should_quit = false;
+        app.execute_command("quit");
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn test_execute_command_exit_alias() {
+        let mut app = create_test_app();
+        app.should_quit = false;
+        app.execute_command("exit");
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_recon() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Fuzz;
+        app.execute_command("recon");
+        assert_eq!(app.current_tab, Tab::Recon);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_load() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("load");
+        assert_eq!(app.current_tab, Tab::Load);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_ports() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("ports");
+        assert_eq!(app.current_tab, Tab::ScanPorts);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_port_alias() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("portscan");
+        assert_eq!(app.current_tab, Tab::ScanPorts);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_endpoints() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("endpoints");
+        assert_eq!(app.current_tab, Tab::ScanEndpoints);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_fuzz() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("fuzz");
+        assert_eq!(app.current_tab, Tab::Fuzz);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_fuzzing_alias() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("fuzzing");
+        assert_eq!(app.current_tab, Tab::Fuzz);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_waf() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("waf");
+        assert_eq!(app.current_tab, Tab::Waf);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_wafstress() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("wafstress");
+        assert_eq!(app.current_tab, Tab::WafStress);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_scan() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("scan");
+        assert_eq!(app.current_tab, Tab::Scan);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_pipeline() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("pipeline");
+        assert_eq!(app.current_tab, Tab::Scan);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_resume() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("resume");
+        assert_eq!(app.current_tab, Tab::Resume);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_history() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("history");
+        assert_eq!(app.current_tab, Tab::History);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_settings() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("settings");
+        assert_eq!(app.current_tab, Tab::Settings);
+    }
+
+    #[test]
+    fn test_execute_command_navigation_dashboard() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.execute_command("dashboard");
+        assert_eq!(app.current_tab, Tab::Dashboard);
+    }
+
+    #[test]
+    fn test_execute_command_next_tab() {
+        let mut app = create_test_app();
+        let initial_tab = app.current_tab;
+        app.execute_command("next");
+        assert_eq!(app.current_tab, initial_tab.next());
+    }
+
+    #[test]
+    fn test_execute_command_prev_tab() {
+        let mut app = create_test_app();
+        let initial_tab = app.current_tab;
+        app.execute_command("prev");
+        assert_eq!(app.current_tab, initial_tab.prev());
+    }
+
+    #[test]
+    fn test_execute_command_toggle_help() {
+        let mut app = create_test_app();
+        assert!(!app.show_help);
+        app.execute_command("help");
+        assert!(app.show_help);
+    }
+
+    #[test]
+    fn test_execute_command_toggle_search() {
+        let mut app = create_test_app();
+        assert!(!app.show_search);
+        app.execute_command("search");
+        assert!(app.show_search);
+    }
+
+    #[test]
+    fn test_execute_command_toggle_http_options() {
+        let mut app = create_test_app();
+        assert!(!app.show_http_options);
+        app.execute_command("http");
+        assert!(app.show_http_options);
+        app.execute_command("http");
+        assert!(!app.show_http_options);
+    }
+
+    #[test]
+    fn test_execute_command_unknown_is_ignored() {
+        let mut app = create_test_app();
+        let initial_tab = app.current_tab;
+        app.execute_command("unknown-command");
+        assert_eq!(app.current_tab, initial_tab);
+        assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn test_execute_command_page_up() {
+        let mut app = create_test_app();
+        app.execute_command("page-up");
+    }
+
+    #[test]
+    fn test_execute_command_page_down() {
+        let mut app = create_test_app();
+        app.execute_command("page-down");
+    }
+
+    #[test]
+    fn test_get_command_palette_initially_none() {
+        let app = create_test_app();
+        assert!(app.get_command_palette().is_none());
+    }
+
+    #[test]
+    fn test_toggle_command_palette_creates_palette() {
+        let mut app = create_test_app();
+        assert!(app.command_palette.is_none());
+        app.toggle_command_palette();
+        assert!(app.command_palette.is_some());
+        let palette = app.get_command_palette().unwrap();
+        assert!(palette.visible);
+        assert!(palette.query.is_empty());
+        assert_eq!(palette.selected_index, 0);
+    }
+
+    #[test]
+    fn test_toggle_command_palette_toggles_visibility() {
+        let mut app = create_test_app();
+        app.toggle_command_palette();
+        assert!(app.get_command_palette().unwrap().visible);
+
+        app.toggle_command_palette();
+        assert!(!app.get_command_palette().unwrap().visible);
+    }
+
+    #[test]
+    fn test_update_command_palette_query() {
+        let mut app = create_test_app();
+        app.toggle_command_palette();
+        app.update_command_palette_query("test");
+        let palette = app.get_command_palette().unwrap();
+        assert_eq!(palette.query, "test");
+    }
+
+    #[test]
+    fn test_toggle_command_palette_resets_state() {
+        let mut app = create_test_app();
+        app.toggle_command_palette();
+        app.toggle_command_palette();
+        app.toggle_command_palette();
+        let palette = app.get_command_palette().unwrap();
+        assert_eq!(palette.selected_index, 0);
+        assert_eq!(palette.scroll_offset, 0);
+    }
+}

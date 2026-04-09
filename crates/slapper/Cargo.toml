@@ -22,7 +22,7 @@ exclude = [
 ]
 
 [dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "fs", "process", "io-util", "io-std", "signal", "test-util"] }
+tokio = { workspace = true }
 tokio-rustls = "0.26"
 rustls = { version = "0.23", features = ["ring"] }
 rustls-pemfile = "2"
@@ -31,47 +31,47 @@ ratatui = "0.30"
 crossterm = "0.28"
 clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { workspace = true }
+serde_json.workspace = true
 serde_yaml = "0.9"
 toml = "0.8"
-anyhow = "1"
-thiserror = "2"
+anyhow.workspace = true
+thiserror.workspace = true
 hdrhistogram = "7"
 indicatif = "0.17"
 futures = "0.3"
 async-channel = "2"
 async-stream = { version = "0.3", optional = true }
-parking_lot = "0.12"
-chrono = { version = "0.4", features = ["serde"] }
+parking_lot.workspace = true
+chrono.workspace = true
 aho-corasick = "1"
-flate2 = "1"
-rand = { version = "0.8", features = ["small_rng"] }
-url = "2"
-regex = "1"
+flate2.workspace = true
+rand.workspace = true
+url.workspace = true
+urlencoding.workspace = true
+regex.workspace = true
 uuid = { version = "1", features = ["v4", "serde"] }
-base64 = "0.22"
-urlencoding = "2.1"
-tracing = "0.1"
+base64.workspace = true
+tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 directories = "5"
 quick-xml = { version = "0.31", features = ["serialize"] }
 ipnetwork = "0.20"
-hickory-resolver = "0.24"
-hostname = "0.4"
+hickory-resolver.workspace = true
+hostname.workspace = true
 sha2 = "0.10"
-md-5 = "0.10"
+md-5.workspace = true
 hmac = "0.12"
-hex = "0.4"
+hex.workspace = true
 subtle = "2"
 crossbeam = "0.8"
-dashmap = "6"
-scraper = "0.21"
+dashmap.workspace = true
+scraper.workspace = true
 rustls-pki-types = "1"
 maxminddb = "0.27"
 shellexpand = "3"
 rcgen = { version = "0.14", features = ["pem"] }
-async-trait = "0.1"
+async-trait.workspace = true
 zeroize = { version = "1", features = ["derive"] }
 strum = { version = "0.26", default-features = false, features = ["derive"] }
 

@@ -158,3 +158,177 @@ impl super::App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::{create_shared_history, App};
+    use crate::tui::tabs::Tab;
+
+    fn create_test_app() -> App {
+        App::new(create_shared_history())
+    }
+
+    #[test]
+    fn test_next_tab_cycles_forward() {
+        let mut app = create_test_app();
+        let initial_tab = app.current_tab;
+        app.next_tab();
+        assert_ne!(app.current_tab, initial_tab);
+        assert_eq!(app.current_tab, initial_tab.next());
+    }
+
+    #[test]
+    fn test_prev_tab_cycles_backward() {
+        let mut app = create_test_app();
+        let initial_tab = app.current_tab;
+        app.prev_tab();
+        assert_ne!(app.current_tab, initial_tab);
+        assert_eq!(app.current_tab, initial_tab.prev());
+    }
+
+    #[test]
+    fn test_select_tab_by_index() {
+        let mut app = create_test_app();
+        app.select_tab(5);
+        assert_eq!(app.current_tab, Tab::Fuzz);
+    }
+
+    #[test]
+    fn test_select_tab_by_invalid_index_ignores() {
+        let mut app = create_test_app();
+        let initial_tab = app.current_tab;
+        app.select_tab(999);
+        assert_eq!(app.current_tab, initial_tab);
+    }
+
+    #[test]
+    fn test_select_tab_by_zero_index() {
+        let mut app = create_test_app();
+        app.select_tab(0);
+        assert_eq!(app.current_tab, Tab::Recon);
+    }
+
+    #[test]
+    fn test_toggle_help() {
+        let mut app = create_test_app();
+        assert!(!app.show_help);
+        assert!(!app.is_help_visible());
+
+        app.toggle_help();
+        assert!(app.show_help);
+        assert!(app.is_help_visible());
+        assert_eq!(app.help_tab, Some(Tab::Recon));
+
+        app.toggle_help();
+        assert!(!app.show_help);
+        assert!(!app.is_help_visible());
+        assert_eq!(app.help_tab, None);
+    }
+
+    #[test]
+    fn test_toggle_help_preserves_current_tab() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::ScanPorts;
+        app.toggle_help();
+        assert!(app.is_help_visible());
+        assert_eq!(app.help_tab, Some(Tab::ScanPorts));
+
+        app.current_tab = Tab::Fuzz;
+        app.toggle_help();
+        assert!(!app.is_help_visible());
+        assert_eq!(app.help_tab, None);
+    }
+
+    #[test]
+    fn test_toggle_search() {
+        let mut app = create_test_app();
+        assert!(!app.show_search);
+
+        app.toggle_search();
+        assert!(app.show_search);
+
+        app.toggle_search();
+        assert!(!app.show_search);
+    }
+
+    #[test]
+    fn test_toggle_search_clears_query_on_open() {
+        let mut app = create_test_app();
+        app.search_query = "test query".to_string();
+        app.toggle_search();
+        assert!(app.show_search);
+        assert!(app.search_query.is_empty());
+    }
+
+    #[test]
+    fn test_is_help_visible() {
+        let mut app = create_test_app();
+        assert!(!app.is_help_visible());
+
+        app.show_help = true;
+        assert!(app.is_help_visible());
+
+        app.show_help = false;
+        assert!(!app.is_help_visible());
+    }
+
+    #[test]
+    fn test_get_current_help_returns_non_empty_string() {
+        let app = create_test_app();
+        let help = app.get_current_help();
+        assert!(!help.is_empty());
+    }
+
+    #[test]
+    fn test_get_current_help_different_per_tab() {
+        let mut app = create_test_app();
+
+        app.current_tab = Tab::Recon;
+        let recon_help = app.get_current_help();
+        assert!(recon_help.contains("Recon"));
+
+        app.current_tab = Tab::Fuzz;
+        let fuzz_help = app.get_current_help();
+        assert!(fuzz_help.contains("Fuzz"));
+
+        app.current_tab = Tab::Waf;
+        let waf_help = app.get_current_help();
+        assert!(waf_help.contains("WAF"));
+    }
+
+    #[test]
+    fn test_navigation_clears_search_on_tab_switch() {
+        let mut app = create_test_app();
+        app.show_search = true;
+        app.search_query = "test query".to_string();
+
+        app.next_tab();
+
+        assert!(!app.show_search);
+        assert!(app.search_query.is_empty());
+    }
+
+    #[test]
+    fn test_prev_navigation_clears_search_on_tab_switch() {
+        let mut app = create_test_app();
+        app.show_search = true;
+        app.search_query = "test query".to_string();
+
+        app.prev_tab();
+
+        assert!(!app.show_search);
+        assert!(app.search_query.is_empty());
+    }
+
+    #[test]
+    fn test_select_tab_clears_search() {
+        let mut app = create_test_app();
+        app.show_search = true;
+        app.search_query = "test query".to_string();
+
+        app.select_tab(3);
+
+        assert!(!app.show_search);
+        assert!(app.search_query.is_empty());
+    }
+}

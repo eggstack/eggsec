@@ -420,11 +420,11 @@ Lower priority items that improve maintainability and security posture.
 - [x] 3.5 Add plugin tests (30 tests for Plugin trait, PluginRegistry, PluginManager)
 
 ### Phase 4: Long-term (Wave 4)
-- [ ] 4.1 Consolidate error types
-- [ ] 4.2 Improve dependency management
-- [ ] 4.3 Fill test coverage gaps
-- [ ] 4.4 Standardize payload tagging
-- [ ] 4.5 Documentation
+- [ ] 4.1 Consolidate error types (DEFERRED - current separation is intentional per AGENTS.md policy)
+- [x] 4.2 Improve dependency management (Added [workspace.dependencies] with 20 shared deps)
+- [x] 4.3 Fill test coverage gaps (Added 74+ TUI app tests in navigation, command, export, state_update, mod)
+- [x] 4.4 Standardize payload tagging (ANALYZED - existing dynamic tagging in sqli/xss/ssrf/traversal is semantically useful, pattern is consistent)
+- [x] 4.5 Documentation (Documented --insecure flag in utils/http.rs, created docs/security.md)
 
 ---
 

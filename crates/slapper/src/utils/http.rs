@@ -1,4 +1,3 @@
-
 use anyhow::{Context, Result};
 use reqwest::Client;
 use std::time::Duration;
@@ -10,6 +9,31 @@ pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
         .context("Failed to create HTTP client")
 }
 
+/// Creates an HTTP client that accepts invalid TLS certificates.
+///
+/// # Security Warning
+///
+/// **This function disables TLS certificate verification.** The client will
+/// accept any certificate, including self-signed, expired, or mismatched certificates.
+///
+/// # When to Use
+///
+/// - Testing against local development servers with self-signed certificates
+/// - Testing behind SSL-terminating proxies or load balancers
+/// - Controlled testing environments where certificate validation is not needed
+///
+/// # Security Risks
+///
+/// Using this client in production or against untrusted targets exposes
+/// connections to man-in-the-middle (MITM) attacks. An attacker could:
+/// - Intercept and read sensitive data transmitted over HTTPS
+/// - Impersonate the target server without detection
+/// - Inject malicious content into responses
+///
+/// # Recommendation
+///
+/// Only use this for testing in isolated environments. For production testing,
+/// ensure proper certificates are installed on target systems.
 pub fn create_insecure_http_client(timeout_secs: u64) -> Result<Client> {
     Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
@@ -36,6 +60,34 @@ where
     builder.build().context("Failed to create HTTP client")
 }
 
+/// Creates an HTTP client with custom options that accepts invalid TLS certificates.
+///
+/// # Security Warning
+///
+/// **This function disables TLS certificate verification.** The client will
+/// accept any certificate, including self-signed, expired, or mismatched certificates.
+///
+/// This is a variant of [`create_insecure_http_client`] that allows custom
+/// builder options to be applied before certificate verification is disabled.
+///
+/// # When to Use
+///
+/// - Testing against local development servers with self-signed certificates
+/// - Testing behind SSL-terminating proxies or load balancers
+/// - Controlled testing environments where certificate validation is not needed
+///
+/// # Security Risks
+///
+/// Using this client in production or against untrusted targets exposes
+/// connections to man-in-the-middle (MITM) attacks. An attacker could:
+/// - Intercept and read sensitive data transmitted over HTTPS
+/// - Impersonate the target server without detection
+/// - Inject malicious content into responses
+///
+/// # Recommendation
+///
+/// Only use this for testing in isolated environments. For production testing,
+/// ensure proper certificates are installed on target systems.
 pub fn create_insecure_client_with_options<F>(timeout_secs: u64, builder_fn: F) -> Result<Client>
 where
     F: FnOnce(reqwest::ClientBuilder) -> reqwest::ClientBuilder,

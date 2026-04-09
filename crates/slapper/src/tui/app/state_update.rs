@@ -363,3 +363,42 @@ impl super::App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::{create_shared_history, App};
+
+    fn create_test_app() -> App {
+        App::new(create_shared_history())
+    }
+
+    #[test]
+    fn test_update_does_not_panic_when_no_channels() {
+        let mut app = create_test_app();
+        app.progress_rx = None;
+        app.result_rx = None;
+        app.update();
+    }
+
+    #[test]
+    fn test_update_with_disconnected_progress_rx_clears_channel() {
+        let mut app = create_test_app();
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        drop(tx);
+        app.progress_rx = Some(rx);
+        app.result_rx = None;
+        app.update();
+        assert!(app.progress_rx.is_none());
+    }
+
+    #[test]
+    fn test_update_with_disconnected_result_rx_clears_channel() {
+        let mut app = create_test_app();
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        drop(tx);
+        app.progress_rx = None;
+        app.result_rx = Some(rx);
+        app.update();
+        assert!(app.result_rx.is_none());
+    }
+}

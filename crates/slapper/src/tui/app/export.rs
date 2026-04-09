@@ -338,3 +338,117 @@ impl super::App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::{create_shared_history, App};
+    use crate::tui::tabs::Tab;
+    use crate::types::OutputFormat;
+
+    fn create_test_app() -> App {
+        App::new(create_shared_history())
+    }
+
+    #[test]
+    fn test_get_export_extension_json() {
+        let mut app = create_test_app();
+        app.export_format = OutputFormat::Json;
+        assert_eq!(app.get_export_extension(), "json");
+    }
+
+    #[test]
+    fn test_get_export_extension_csv() {
+        let mut app = create_test_app();
+        app.export_format = OutputFormat::Csv;
+        assert_eq!(app.get_export_extension(), "csv");
+    }
+
+    #[test]
+    fn test_get_export_extension_html() {
+        let mut app = create_test_app();
+        app.export_format = OutputFormat::Html;
+        assert_eq!(app.get_export_extension(), "html");
+    }
+
+    #[test]
+    fn test_get_export_extension_sarif() {
+        let mut app = create_test_app();
+        app.export_format = OutputFormat::Sarif;
+        assert_eq!(app.get_export_extension(), "sarif");
+    }
+
+    #[test]
+    fn test_get_export_extension_junit() {
+        let mut app = create_test_app();
+        app.export_format = OutputFormat::Junit;
+        assert_eq!(app.get_export_extension(), "xml");
+    }
+
+    #[test]
+    fn test_get_export_extension_markdown() {
+        let mut app = create_test_app();
+        app.export_format = OutputFormat::Markdown;
+        assert_eq!(app.get_export_extension(), "md");
+    }
+
+    #[test]
+    fn test_get_export_extension_compact() {
+        let mut app = create_test_app();
+        app.export_format = OutputFormat::Compact;
+        assert_eq!(app.get_export_extension(), "json");
+    }
+
+    #[test]
+    fn test_get_export_extension_pretty() {
+        let mut app = create_test_app();
+        app.export_format = OutputFormat::Pretty;
+        assert_eq!(app.get_export_extension(), "txt");
+    }
+
+    #[test]
+    fn test_cycle_export_format_cycles_through_all_formats() {
+        let mut app = create_test_app();
+
+        app.export_format = OutputFormat::Pretty;
+        app.cycle_export_format();
+        assert_eq!(app.export_format, OutputFormat::Json);
+
+        app.cycle_export_format();
+        assert_eq!(app.export_format, OutputFormat::Compact);
+
+        app.cycle_export_format();
+        assert_eq!(app.export_format, OutputFormat::Csv);
+
+        app.cycle_export_format();
+        assert_eq!(app.export_format, OutputFormat::Html);
+
+        app.cycle_export_format();
+        assert_eq!(app.export_format, OutputFormat::Markdown);
+
+        app.cycle_export_format();
+        assert_eq!(app.export_format, OutputFormat::Sarif);
+
+        app.cycle_export_format();
+        assert_eq!(app.export_format, OutputFormat::Junit);
+
+        app.cycle_export_format();
+        assert_eq!(app.export_format, OutputFormat::Pretty);
+    }
+
+    #[test]
+    fn test_export_results_does_not_panic() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.export_results();
+    }
+
+    #[test]
+    fn test_export_results_does_not_panic_for_all_tabs() {
+        let mut app = create_test_app();
+        let tabs = Tab::all();
+        for &tab in tabs {
+            app.current_tab = tab;
+            app.export_results();
+        }
+    }
+}

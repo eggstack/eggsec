@@ -9,6 +9,7 @@ pub(crate) mod runner;
 pub(crate) mod state_update;
 pub(crate) mod task_management;
 
+pub use crate::tui::state::create_shared_history;
 pub use input::InputMode;
 pub use options::GlobalHttpOptions;
 pub use runner::run;
@@ -1488,4 +1489,177 @@ impl App {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use crate::tui::tabs::Tab;
+    use crossterm::event::KeyCode;
+
+    fn create_test_app() -> App {
+        App::new(create_shared_history())
+    }
+
+    #[test]
+    fn test_app_new_has_default_values() {
+        let app = create_test_app();
+        assert_eq!(app.current_tab, Tab::Recon);
+        assert!(!app.should_quit);
+        assert_eq!(app.mode, InputMode::Normal);
+        assert!(!app.show_help);
+        assert!(!app.show_search);
+        assert!(app.search_query.is_empty());
+        assert!(app.pending_action.is_none());
+    }
+
+    #[test]
+    fn test_pending_action_message() {
+        assert_eq!(
+            PendingAction::ResetTab.message().0,
+            "Confirm Reset"
+        );
+        assert_eq!(
+            PendingAction::SaveSettings.message().0,
+            "Confirm Save Settings"
+        );
+        assert_eq!(
+            PendingAction::DeleteHistoryEntry.message().0,
+            "Confirm Delete"
+        );
+        assert_eq!(
+            PendingAction::ClearHistory.message().0,
+            "Confirm Clear History"
+        );
+    }
+
+    #[test]
+    fn test_pending_action_message_has_details() {
+        let (_, details) = PendingAction::ResetTab.message();
+        assert!(!details.is_empty());
+    }
+
+    #[test]
+    fn test_request_confirmation_sets_pending_action() {
+        let mut app = create_test_app();
+        assert!(app.pending_action.is_none());
+
+        app.request_confirmation(PendingAction::ResetTab);
+        assert!(app.pending_action.is_some());
+        assert_eq!(app.pending_action, Some(PendingAction::ResetTab));
+    }
+
+    #[test]
+    fn test_confirm_action_clears_pending_action() {
+        let mut app = create_test_app();
+        app.request_confirmation(PendingAction::ResetTab);
+        assert!(app.pending_action.is_some());
+
+        app.confirm_action();
+        assert!(app.pending_action.is_none());
+    }
+
+    #[test]
+    fn test_cancel_action_clears_pending_action() {
+        let mut app = create_test_app();
+        app.request_confirmation(PendingAction::ResetTab);
+        assert!(app.pending_action.is_some());
+
+        app.cancel_action();
+        assert!(app.pending_action.is_none());
+    }
+
+    #[test]
+    fn test_is_confirm_popup_visible() {
+        let mut app = create_test_app();
+        assert!(!app.is_confirm_popup_visible());
+
+        app.request_confirmation(PendingAction::ResetTab);
+        assert!(app.is_confirm_popup_visible());
+
+        app.cancel_action();
+        assert!(!app.is_confirm_popup_visible());
+    }
+
+    #[test]
+    fn test_pending_key_set_and_cleared() {
+        let mut app = create_test_app();
+        assert!(app.pending_key.is_none());
+
+        app.pending_key = Some(KeyCode::Char('a'));
+        assert_eq!(app.pending_key, Some(KeyCode::Char('a')));
+
+        app.pending_key = None;
+        assert!(app.pending_key.is_none());
+    }
+
+    #[test]
+    fn test_help_overlay_set_and_cleared() {
+        let mut app = create_test_app();
+        assert!(app.help_overlay.is_none());
+
+        app.help_overlay = None;
+        assert!(app.help_overlay.is_none());
+    }
+
+    #[test]
+    fn test_search_query_set_and_cleared() {
+        let mut app = create_test_app();
+        assert!(app.search_query.is_empty());
+
+        app.search_query = "test query".to_string();
+        assert_eq!(app.search_query, "test query");
+
+        app.search_query.clear();
+        assert!(app.search_query.is_empty());
+    }
+
+    #[test]
+    fn test_show_http_options_toggle() {
+        let mut app = create_test_app();
+        assert!(!app.show_http_options);
+
+        app.show_http_options = true;
+        assert!(app.show_http_options);
+
+        app.show_http_options = false;
+        assert!(!app.show_http_options);
+    }
+
+    #[test]
+    fn test_help_context_default() {
+        let app = create_test_app();
+        assert_eq!(app.help_context, crate::tui::help::HelpContext::Normal);
+    }
+
+    #[test]
+    fn test_is_running_false_for_all_tabs_initially() {
+        let mut app = create_test_app();
+
+        app.current_tab = Tab::Recon;
+        assert!(!app.is_running());
+
+        app.current_tab = Tab::Load;
+        assert!(!app.is_running());
+
+        app.current_tab = Tab::ScanPorts;
+        assert!(!app.is_running());
+
+        app.current_tab = Tab::Settings;
+        assert!(!app.is_running());
+
+        app.current_tab = Tab::Dashboard;
+        assert!(!app.is_running());
+    }
+
+    #[test]
+    fn test_app_stop_clears_task_handle() {
+        let mut app = create_test_app();
+        app.task_handle = None;
+        app.stop();
+        assert!(app.task_handle.is_none());
+    }
+
+    #[test]
+    fn test_export_format_default() {
+        let app = create_test_app();
+        assert_eq!(app.export_format, OutputFormat::Json);
+    }
+}

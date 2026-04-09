@@ -14,6 +14,29 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/slapper-tool/slapper"
 rust-version = "1.80"
 
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "fs", "process", "io-util", "io-std", "signal", "test-util"] }
+parking_lot = "0.12"
+rand = { version = "0.8", features = ["small_rng"] }
+base64 = "0.22"
+flate2 = "1"
+url = "2"
+urlencoding = "2.1"
+regex = "1"
+hostname = "0.4"
+hex = "0.4"
+md-5 = "0.10"
+dashmap = "6"
+scraper = "0.21"
+hickory-resolver = "0.24"
+
 [profile.release]
 lto = true
 codegen-units = 1
