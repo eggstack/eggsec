@@ -26,18 +26,16 @@ pub fn register_socks_library(lua: &Lua) -> LuaResult<()> {
                         result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                         return Ok(result);
                     }
-                    };
-                    let mut stream = match TcpStream::connect_timeout(
-                        &socket_addr,
-                        Duration::from_secs(10),
-                    ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
                 };
+                let mut stream =
+                    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            result.set("status", "error")?;
+                            result.set("error", e.to_string())?;
+                            return Ok(result);
+                        }
+                    };
 
                 // SOCKS5 greeting
                 let greeting = vec![
@@ -49,7 +47,7 @@ pub fn register_socks_library(lua: &Lua) -> LuaResult<()> {
                 stream.write_all(&greeting).ok();
 
                 let mut response = [0u8; 2];
-                stream.read(&mut response).ok();
+                let _ = stream.read(&mut response);
 
                 if response[1] == 0x00 {
                     // SOCKS5 connect request
@@ -68,7 +66,7 @@ pub fn register_socks_library(lua: &Lua) -> LuaResult<()> {
                     stream.write_all(&request).ok();
 
                     let mut reply = [0u8; 10];
-                    stream.read(&mut reply).ok();
+                    let _ = stream.read(&mut reply);
 
                     if reply[0] == 0x05 && reply[1] == 0x00 {
                         result.set("status", "ok")?;
@@ -99,21 +97,22 @@ pub fn register_socks_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             // SOCKS5 greeting
             stream.write_all(&[0x05, 0x02, 0x00, 0x02]).ok();
 
             let mut response = [0u8; 2];
-            stream.read(&mut response).ok();
+            let _ = stream.read(&mut response);
 
             let methods = lua.create_table()?;
             if response[1] == 0x00 {

@@ -32,6 +32,7 @@ pub mod circuit_breaker;
 pub mod client_pool;
 pub mod formatting;
 pub mod http;
+pub mod logging;
 pub mod output;
 pub mod parsing;
 pub mod rate_limiter;
@@ -46,6 +47,7 @@ pub mod validation;
 pub mod privilege;
 
 pub use formatting::{preserve_all, strip_controls};
+pub use logging::sanitize_for_logging;
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerRegistry, CircuitState};
 pub use client_pool::{ClientPool, OptimizedClientPool};
 pub use http::{

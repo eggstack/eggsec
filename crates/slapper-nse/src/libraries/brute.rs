@@ -386,7 +386,7 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
 
             let mut response = vec![0u8; 1024];
             match stream.read(&mut response) {
-                Ok(n) if n > 0 && n >= 32 && response[9] == 0x00 => {}
+                Ok(n) if n >= 32 && response[9] == 0x00 => {}
                 _ => {
                     result.set("success", false)?;
                     result.set("status", "error")?;
@@ -405,7 +405,7 @@ pub fn register_brute_library(lua: &Lua) -> LuaResult<()> {
 
             let mut response = vec![0u8; 1024];
             match stream.read(&mut response) {
-                Ok(n) if n > 0 && n >= 32 => {
+                Ok(n) if n >= 32 => {
                     let nt_status = u32::from_le_bytes([response[5], response[6], response[7], response[8]]);
                     if nt_status == 0 {
                         result.set("success", true)?;

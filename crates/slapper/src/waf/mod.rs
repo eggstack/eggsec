@@ -82,6 +82,7 @@ use crate::error::Result;
 use std::time::Instant;
 
 use crate::cli::WafArgs;
+use crate::utils::sanitize_for_logging;
 
 pub use bypass::{
     get_auto_profile, get_profile_by_name, BypassEngine, BypassResult, TestType, WafProfile,
@@ -182,7 +183,7 @@ impl WafEngine {
         let start = Instant::now();
 
         if self.args.verbose {
-            eprintln!("Detecting WAF on {}", self.args.url);
+            eprintln!("Detecting WAF on {}", sanitize_for_logging(&self.args.url));
         }
 
         let detection = self.detector.detect(&self.args.url).await?;

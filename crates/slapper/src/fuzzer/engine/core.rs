@@ -11,6 +11,7 @@ use super::super::state::HttpSession;
 use super::super::targets::get_target_payloads;
 
 use crate::cli::{FuzzArgs, FuzzMode, WafStressArgs};
+use crate::utils::sanitize_for_logging;
 use crate::waf::types::Severity;
 
 use super::super::detection::{PatternMatcher, TimingAnalyzer};
@@ -185,7 +186,7 @@ impl FuzzEngine {
     /// Returns an error if HTTP requests fail or results cannot be serialized.
     pub async fn run(&mut self) -> Result<()> {
         if self.args.verbose {
-            eprintln!("Starting fuzz against {}", self.args.url);
+            eprintln!("Starting fuzz against {}", sanitize_for_logging(&self.args.url));
         }
 
         let session = self.run_return_session().await?;

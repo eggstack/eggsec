@@ -3,6 +3,7 @@ use crate::config::SlapperConfig;
 use crate::error::Result;
 use crate::recon::{cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, ssl, subdomain, takeover, techdetect, threatintel, wayback, whois, FullReconResult};
 use crate::types::SensitiveString;
+use crate::utils::sanitize_for_logging;
 use std::sync::{Arc, Mutex};
 
 /// Resolves the target domain to an IP address.
@@ -402,7 +403,7 @@ pub async fn run_full_recon(
         .unwrap_or(config.recon.dns_concurrency.max(10));
 
     if verbose {
-        eprintln!("Starting recon on {}", target);
+        eprintln!("Starting recon on {}", sanitize_for_logging(target));
     }
 
     set_stage(&stage, "resolving");

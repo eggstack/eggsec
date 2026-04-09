@@ -34,7 +34,7 @@ impl InputField {
 
     pub fn with_value(mut self, value: impl Into<String>) -> Self {
         let v = value.into();
-        self.cursor_pos = v.len();
+        self.cursor_pos = v.chars().count();
         self.value = v;
         self
     }
@@ -66,7 +66,7 @@ impl InputField {
 
     pub fn apply_autocomplete(&mut self, suggestion: &str) {
         self.value = suggestion.to_string();
-        self.cursor_pos = self.value.len();
+        self.cursor_pos = self.value.chars().count();
     }
 
     pub fn insert(&mut self, c: char) {
@@ -122,7 +122,7 @@ impl InputField {
     }
 
     pub fn move_end(&mut self) {
-        self.cursor_pos = self.value.len();
+        self.cursor_pos = self.value.chars().count();
     }
 
     pub fn clear(&mut self) {

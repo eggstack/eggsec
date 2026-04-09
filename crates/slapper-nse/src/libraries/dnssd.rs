@@ -249,11 +249,7 @@ pub fn register_dnssd_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, (hostname, family): (String, Option<String>)| {
             let result = lua.create_table()?;
 
-            let addr = if hostname == "localhost" || hostname.ends_with(".local") {
-                "127.0.0.1"
-            } else {
-                "127.0.0.1"
-            };
+            let addr = "127.0.0.1";
 
             result.set("status", "ok")?;
             result.set("hostname", hostname)?;

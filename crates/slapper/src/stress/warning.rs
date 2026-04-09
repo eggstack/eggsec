@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use crate::error::Result;
+use crate::utils::sanitize_for_logging;
 use std::io::{self, Write};
 
 use super::StressConfig;
@@ -27,7 +28,11 @@ By proceeding, you confirm:
     eprintln!("{}", banner);
 
     eprintln!("Test Configuration:");
-    eprintln!("  Target:        {}:{}", config.target, config.port);
+    eprintln!(
+        "  Target:        {}:{}",
+        sanitize_for_logging(&config.target),
+        config.port
+    );
     eprintln!("  Type:          {}", config.stress_type);
     eprintln!("  Rate:          {} packets/second", config.rate_pps);
     eprintln!("  Duration:      {} seconds", config.duration_secs);

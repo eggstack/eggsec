@@ -396,12 +396,12 @@ Lower priority items that improve maintainability and security posture.
 
 ## Implementation Order
 
-### Phase 1: Critical (Wave 1) - Do First
-- [ ] 1.1 Fix slapper-nse clippy errors
-- [ ] 1.2 Add TLS NoVerifier feature flag
-- [ ] 1.3 Add URL encoding for API keys
-- [ ] 1.4 Fix TUI UTF-8 cursor bug
-- [ ] 1.5 Log injection mitigation
+### Phase 1: Critical (Wave 1) - COMPLETED
+- [x] 1.1 Fix slapper-nse clippy errors (46 errors auto-fixed)
+- [x] 1.2 Add TLS NoVerifier feature flag (`insecure-tls` feature added)
+- [x] 1.3 Add URL encoding for API keys (wayback, threatintel, geolocation)
+- [x] 1.4 Fix TUI UTF-8 cursor bug (input.rs: chars().count() fix)
+- [x] 1.5 Log injection mitigation (utils/logging.rs + 8 files updated)
 
 ### Phase 2: High Priority (Wave 2)
 - [ ] 2.1 Refactor TUI dispatch (and remove dead dispatch.rs)

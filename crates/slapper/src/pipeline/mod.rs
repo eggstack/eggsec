@@ -51,6 +51,7 @@ pub mod stage;
 use crate::error::Result;
 
 use crate::cli::ResumeArgs;
+use crate::utils::sanitize_for_logging;
 use crate::cli::ScanArgs;
 use crate::config::SlapperConfig;
 
@@ -74,7 +75,7 @@ pub use stage::{parse_stages, Stage};
 /// - Output file cannot be written
 pub async fn run_cli(args: ScanArgs, config: &SlapperConfig) -> Result<()> {
     if args.verbose {
-        eprintln!("Starting pipeline scan on {}", args.target);
+        eprintln!("Starting pipeline scan on {}", sanitize_for_logging(&args.target));
     }
 
     let pipeline = Pipeline::from_args_with_config(args.clone(), config);

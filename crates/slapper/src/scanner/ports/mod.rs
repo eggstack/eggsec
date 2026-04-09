@@ -8,6 +8,7 @@ mod spoofed;
 use crate::scanner::spoof::{format_spoof_warning, SpoofConfig, SpoofStats};
 use crate::utils::parsing::{parse_ports, resolve_host};
 use crate::utils::strip_controls;
+use crate::utils::sanitize_for_logging;
 use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -95,7 +96,7 @@ impl std::fmt::Display for PortScanResults {
 
 pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
     if args.verbose {
-        eprintln!("Starting port scan on {} ports {}", args.host, args.ports);
+        eprintln!("Starting port scan on {} ports {}", sanitize_for_logging(&args.host), args.ports);
     }
 
     let ports = parse_ports(&args.ports)?;
@@ -135,7 +136,7 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
 
     if args.dry_run {
         eprintln!("\n=== DRY RUN MODE ===");
-        eprintln!("Target: {}", args.host);
+        eprintln!("Target: {}", sanitize_for_logging(&args.host));
         eprintln!("Ports: {}", args.ports);
         eprintln!("Concurrency: {}", args.concurrency);
         eprintln!("Timeout: {}s", timeout_secs);

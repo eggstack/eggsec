@@ -36,15 +36,16 @@ pub fn register_smb2_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             // SMB2 negotiate request
             let mut request = vec![
@@ -70,7 +71,7 @@ pub fn register_smb2_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(&request).ok();
 
             let mut response = vec![0u8; 1024];
-            stream.read(&mut response).ok();
+            let _ = stream.read(&mut response);
 
             if response.len() > 0 {
                 result.set("status", "ok")?;

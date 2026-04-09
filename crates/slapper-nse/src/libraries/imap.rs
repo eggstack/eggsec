@@ -23,7 +23,7 @@ fn imap_send(host: &str, port: u16, command: &str) -> std::io::Result<String> {
 
     // Read greeting
     let mut buffer = vec![0u8; 4096];
-    stream.read(&mut buffer).ok();
+    let _ = stream.read(&mut buffer);
 
     stream.write_all(command.as_bytes())?;
     stream.flush()?;

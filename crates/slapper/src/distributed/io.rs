@@ -144,7 +144,11 @@ pub struct TlsClient {
 }
 
 impl TlsClient {
+    #[cfg(feature = "insecure-tls")]
     pub fn new(domain: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        tracing::warn!(
+            "INSECURE TLS: Certificate verification is disabled. This is a security risk. Use only for testing."
+        );
         let config = ClientConfig::builder()
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoVerifier))
@@ -154,6 +158,11 @@ impl TlsClient {
             connector: TlsConnector::from(Arc::new(config)),
             domain: domain.to_string(),
         })
+    }
+
+    #[cfg(not(feature = "insecure-tls"))]
+    pub fn new(_domain: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Err("TLS client requires the 'insecure-tls' feature flag. This feature disables certificate verification and should only be used for testing.".into())
     }
 
     pub fn connector(&self) -> &TlsConnector {
@@ -170,8 +179,10 @@ impl TlsClient {
 }
 
 #[derive(Debug)]
+#[cfg(feature = "insecure-tls")]
 struct NoVerifier;
 
+#[cfg(feature = "insecure-tls")]
 impl rustls::client::danger::ServerCertVerifier for NoVerifier {
     fn verify_server_cert(
         &self,

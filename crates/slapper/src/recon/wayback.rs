@@ -4,6 +4,7 @@
 use crate::error::Result;
 use crate::types::SensitiveString;
 use reqwest::Client;
+use urlencoding;
 use serde::{Deserialize, Serialize};
 
 use crate::utils::create_http_client_with_options;
@@ -61,7 +62,7 @@ impl WaybackClient {
         let url = if let Some(ref key) = self.api_key {
             format!(
                 "https://web.archive.org/cdx/search/cdx?url={}&output=json&fl=timestamp,original,mimetype,statuscode&filter=statuscode:200&limit={}&api_key={}",
-                domain, limit, key.expose_secret()
+                domain, limit, urlencoding::encode(key.expose_secret())
             )
         } else {
             format!(

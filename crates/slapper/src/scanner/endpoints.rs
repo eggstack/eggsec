@@ -1,6 +1,7 @@
 
 use crate::scanner::spoof::{format_spoof_warning, SpoofConfig};
 use crate::utils::preserve_all;
+use crate::utils::sanitize_for_logging;
 use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -354,7 +355,7 @@ fn is_interesting(path: &str, status_code: u16) -> bool {
 
 pub async fn run_cli(args: EndpointScanArgs, config: &SlapperConfig) -> Result<()> {
     if args.verbose {
-        eprintln!("Starting endpoint enumeration on {}", args.url);
+        eprintln!("Starting endpoint enumeration on {}", sanitize_for_logging(&args.url));
     }
 
     let endpoints = if let Some(wordlist_path) = args.wordlist {

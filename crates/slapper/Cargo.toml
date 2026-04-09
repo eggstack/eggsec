@@ -175,6 +175,10 @@ default = []
 # Tool abstraction layer (always enabled - no extra deps)
 tool-api = []
 
+# Enable insecure TLS (bypasses certificate verification - USE ONLY FOR TESTING)
+# WARNING: This feature introduces security vulnerabilities. Never use in production.
+insecure-tls = []
+
 # REST API server with MCP (Model Context Protocol) for AI agent integration
 rest-api = ["tool-api", "axum", "tower", "async-stream"]
 

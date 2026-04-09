@@ -49,7 +49,7 @@ fn ftp_retr_file(host: &str, port: u16, filename: &str) -> std::io::Result<Strin
         Duration::from_secs(10),
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-    stream.read(&mut vec![0u8; 4096]).ok();
+    let _ = stream.read(&mut vec![0u8; 4096]);
 
     let pasv_cmd = format!("PASV\r\n");
     let pasv_response = ftp_send_command(&mut stream, &pasv_cmd)?;
@@ -92,7 +92,7 @@ fn ftp_stor_file(host: &str, port: u16, filename: &str, data: &str) -> std::io::
         Duration::from_secs(10),
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-    stream.read(&mut vec![0u8; 4096]).ok();
+    let _ = stream.read(&mut vec![0u8; 4096]);
 
     let pasv_cmd = format!("PASV\r\n");
     let pasv_response = ftp_send_command(&mut stream, &pasv_cmd)?;
@@ -134,7 +134,7 @@ fn ftp_list_directory(
         Duration::from_secs(10),
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-    stream.read(&mut vec![0u8; 4096]).ok();
+    let _ = stream.read(&mut vec![0u8; 4096]);
 
     let pasv_cmd = format!("PASV\r\n");
     let pasv_response = ftp_send_command(&mut stream, &pasv_cmd)?;
@@ -197,7 +197,7 @@ fn ftp_delete_file(host: &str, port: u16, filename: &str) -> std::io::Result<boo
         Duration::from_secs(10),
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-    stream.read(&mut vec![0u8; 4096]).ok();
+    let _ = stream.read(&mut vec![0u8; 4096]);
 
     let dele_cmd = format!("DELE {}\r\n", filename);
     let response = ftp_send_command(&mut stream, &dele_cmd)?;
@@ -214,7 +214,7 @@ fn ftp_rename_file(host: &str, port: u16, from_name: &str, to_name: &str) -> std
         Duration::from_secs(10),
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-    stream.read(&mut vec![0u8; 4096]).ok();
+    let _ = stream.read(&mut vec![0u8; 4096]);
 
     let rnfr_cmd = format!("RNFR {}\r\n", from_name);
     let _rnfr_response = ftp_send_command(&mut stream, &rnfr_cmd)?;
@@ -234,7 +234,7 @@ fn ftp_make_directory(host: &str, port: u16, dirname: &str) -> std::io::Result<b
         Duration::from_secs(10),
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-    stream.read(&mut vec![0u8; 4096]).ok();
+    let _ = stream.read(&mut vec![0u8; 4096]);
 
     let mkd_cmd = format!("MKD {}\r\n", dirname);
     let response = ftp_send_command(&mut stream, &mkd_cmd)?;
@@ -251,7 +251,7 @@ fn ftp_remove_directory(host: &str, port: u16, dirname: &str) -> std::io::Result
         Duration::from_secs(10),
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-    stream.read(&mut vec![0u8; 4096]).ok();
+    let _ = stream.read(&mut vec![0u8; 4096]);
 
     let rmd_cmd = format!("RMD {}\r\n", dirname);
     let response = ftp_send_command(&mut stream, &rmd_cmd)?;
@@ -268,7 +268,7 @@ fn ftp_get_file_size(host: &str, port: u16, filename: &str) -> std::io::Result<u
         Duration::from_secs(10),
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-    stream.read(&mut vec![0u8; 4096]).ok();
+    let _ = stream.read(&mut vec![0u8; 4096]);
 
     let size_cmd = format!("SIZE {}\r\n", filename);
     let response = ftp_send_command(&mut stream, &size_cmd)?;
@@ -339,18 +339,18 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
 
             stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
 
-            stream.read(&mut vec![0u8; 4096]).ok();
+            let _ = stream.read(&mut vec![0u8; 4096]);
 
             stream
                 .write_all(format!("USER {}\r\n", user).as_bytes())
                 .ok();
-            stream.read(&mut vec![0u8; 4096]).ok();
+            let _ = stream.read(&mut vec![0u8; 4096]);
 
             stream
                 .write_all(format!("PASS {}\r\n", pass).as_bytes())
                 .ok();
             let mut response = vec![0u8; 4096];
-            stream.read(&mut response).ok();
+            let _ = stream.read(&mut response);
 
             let result = lua.create_table()?;
             result.set(
@@ -381,13 +381,13 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream
             .write_all(format!("CWD {}\r\n", path).as_bytes())
             .ok();
         let mut response = vec![0u8; 4096];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         let result = lua.create_table()?;
         result.set("success", response[..3].starts_with(b"250"))?;
@@ -410,13 +410,13 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream
             .write_all(b"PWD\r\n")
             .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
         let mut response = vec![0u8; 4096];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         let response_str = String::from_utf8_lossy(&response);
         let path = if let Some(start) = response_str.find('"') {
@@ -645,13 +645,13 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream
             .write_all(format!("MDTM {}\r\n", filename).as_bytes())
             .ok();
         let mut response = vec![0u8; 4096];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         let result = lua.create_table()?;
         let response_str = String::from_utf8_lossy(&response).to_string();
@@ -689,13 +689,13 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream
             .write_all(format!("MLST {}\r\n", path).as_bytes())
             .ok();
         let mut response = vec![0u8; 4096];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         let result = lua.create_table()?;
         let response_str = String::from_utf8_lossy(&response).to_string();
@@ -753,11 +753,11 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream.write_all(b"FEAT\r\n").ok();
         let mut response = vec![0u8; 4096];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         let result = lua.create_table()?;
         let response_str = String::from_utf8_lossy(&response).to_string();
@@ -796,13 +796,13 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream
             .write_all(format!("SITE {}\r\n", command).as_bytes())
             .ok();
         let mut response = vec![0u8; 4096];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         let result = lua.create_table()?;
         let response_str = String::from_utf8_lossy(&response).to_string();
@@ -831,7 +831,7 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
             };
 
             stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-            stream.read(&mut vec![0u8; 4096]).ok();
+            let _ = stream.read(&mut vec![0u8; 4096]);
 
             if let Some(p) = path {
                 stream.write_all(format!("STAT {}\r\n", p).as_bytes()).ok();
@@ -839,7 +839,7 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
                 stream.write_all(b"STAT\r\n").ok();
             }
             let mut response = vec![0u8; 4096];
-            stream.read(&mut response).ok();
+            let _ = stream.read(&mut response);
 
             let result = lua.create_table()?;
             result.set(
@@ -869,11 +869,11 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream.write_all(b"NOOP\r\n").ok();
         let mut response = vec![0u8; 256];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         let result = lua.create_table()?;
         result.set("success", response.starts_with(b"200"))?;
@@ -900,11 +900,11 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream.write_all(b"SYST\r\n").ok();
         let mut response = vec![0u8; 256];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         let result = lua.create_table()?;
         let response_str = String::from_utf8_lossy(&response).to_string();
@@ -937,13 +937,13 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream
             .write_all(format!("TYPE {}\r\n", type_char).as_bytes())
             .ok();
         let mut response = vec![0u8; 4096];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         let result = lua.create_table()?;
         result.set("success", response[..3].starts_with(b"200"))?;
@@ -965,13 +965,13 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream
             .write_all(b"PASV\r\n")
             .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
         let mut response = vec![0u8; 4096];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         Ok(String::from_utf8_lossy(&response).to_string())
     })?;
@@ -990,13 +990,13 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-        stream.read(&mut vec![0u8; 4096]).ok();
+        let _ = stream.read(&mut vec![0u8; 4096]);
 
         stream
             .write_all(b"EPSV\r\n")
             .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
         let mut response = vec![0u8; 4096];
-        stream.read(&mut response).ok();
+        let _ = stream.read(&mut response);
 
         Ok(String::from_utf8_lossy(&response).to_string())
     })?;
@@ -1034,20 +1034,20 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
             tokio::runtime::Handle::current().block_on(async {
                 match AsyncTcpStream::connect(&addr).await {
                     Ok(mut stream) => {
-                        stream.read(&mut vec![0u8; 4096]).await.ok();
+                        let _ = stream.read(&mut vec![0u8; 4096]).await;
 
                         stream
                             .write_all(format!("USER {}\r\n", user).as_bytes())
                             .await
                             .ok();
-                        stream.read(&mut vec![0u8; 4096]).await.ok();
+                        let _ = stream.read(&mut vec![0u8; 4096]).await;
 
                         stream
                             .write_all(format!("PASS {}\r\n", pass).as_bytes())
                             .await
                             .ok();
                         let mut response = vec![0u8; 4096];
-                        stream.read(&mut response).await.ok();
+                        let _ = stream.read(&mut response).await;
 
                         let result = lua.create_table()?;
                         result.set(

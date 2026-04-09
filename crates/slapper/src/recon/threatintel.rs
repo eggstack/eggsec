@@ -4,6 +4,7 @@
 use crate::error::{Result, SlapperError};
 use crate::types::SensitiveString;
 use reqwest::Client;
+use urlencoding;
 use serde::{Deserialize, Serialize};
 
 use crate::utils::create_http_client;
@@ -272,7 +273,7 @@ impl ThreatIntelClient {
     }
 
     async fn check_shodan_ip(&self, ip: &str, api_key: &str) -> Result<IpReputation> {
-        let url = format!("https://api.shodan.io/shodan/host/{}?key={}", ip, api_key);
+        let url = format!("https://api.shodan.io/shodan/host/{}?key={}", ip, urlencoding::encode(api_key));
 
         let response = self.client.get(&url).send().await?;
 

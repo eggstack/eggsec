@@ -2,6 +2,7 @@
 use crate::error::{Result, SlapperError};
 use crate::types::SensitiveString;
 use crate::utils::create_http_client_with_options;
+use urlencoding;
 use maxminddb::geoip2;
 use maxminddb::Reader;
 use serde::{Deserialize, Serialize};
@@ -423,7 +424,7 @@ impl GeoLocator {
 
     async fn lookup_ipapi(&self, ip: &str) -> Result<GeoLocation> {
         let url = if let Some(ref key) = self.ipapi_key {
-            format!("https://ipapi.co/{}/json/?key={}", ip, key.expose_secret())
+            format!("https://ipapi.co/{}/json/?key={}", ip, urlencoding::encode(key.expose_secret()))
         } else {
             format!("https://ipapi.co/{}/json/", ip)
         };
