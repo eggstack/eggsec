@@ -1,3 +1,12 @@
+//! SARIF (Static Analysis Results Interchange Format) report generation.
+//!
+//! ## XXE Safety
+//!
+//! SARIF is a JSON-based format ([RFC 8259](https://tools.ietf.org/html/rfc8259)),
+//! not an XML format. Therefore, XXE (XML External Entity) attacks do not apply to
+//! SARIF report generation. This module uses [`serde_json`] for serialization,
+//! which operates on in-memory data structures without XML parsing or entity expansion.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

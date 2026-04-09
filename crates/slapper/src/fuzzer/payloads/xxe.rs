@@ -1,3 +1,24 @@
+//! XXE (XML External Entity) injection test payloads.
+//!
+//! ## Warning: For Authorized Security Testing Only
+//!
+//! These payloads are designed to test if target systems are vulnerable to XXE injection
+//! attacks. They simulate malicious XML input that could exploit XXE vulnerabilities in
+//! misconfigured XML parsers.
+//!
+//! **Use only on systems you have explicit permission to test.** Unauthorized testing
+//! against systems you do not own or have permission to test may be illegal.
+//!
+//! ## Payload Categories
+//!
+//! - File read attacks (`file:///` protocol)
+//! - Directory listing attacks
+//! - External entity injection (`SYSTEM` keyword)
+//! - Parameter entity attacks (`% entity`)
+//! - Protocol handler abuse (`expect://`, `gopher://`, `jar://`, `data://`)
+//! - XInclude attacks
+//! - SSRF via external DTD references
+
 use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
 
 pub fn get_payloads() -> Vec<Payload> {

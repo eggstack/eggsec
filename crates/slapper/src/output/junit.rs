@@ -1,3 +1,13 @@
+//! JUnit XML report generation.
+//!
+//! ## XXE Safety
+//!
+//! This module uses [`quick_xml::Writer`] for XML generation. The Writer operates in
+//! **write-only mode** - it does not parse, validate, or expand XML entities during
+//! output generation. XML is serialized directly from in-memory data structures without
+//! any entity expansion or external resource fetching, making it immune to XXE attacks
+//! when generating reports.
+
 use chrono::{DateTime, Utc};
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
