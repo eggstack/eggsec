@@ -413,11 +413,11 @@ Lower priority items that improve maintainability and security posture.
 - [x] 2.7 Error handling audit - fixed high-risk unwraps in agent_routes.rs, openai handlers
 
 ### Phase 3: Medium Priority (Wave 3)
-- [ ] 3.1 Document XXE safety
-- [ ] 3.2 Clean up dead code in slapper-ruby
-- [ ] 3.3 Remove duplicate ruby.rs (slapper-plugin)
-- [ ] 3.4 Refactor 8-parameter function
-- [ ] 3.5 Add plugin tests
+- [x] 3.1 Document XXE safety (output/junit.rs, output/sarif.rs, fuzzer/payloads/xxe.rs)
+- [x] 3.2 Clean up dead code in slapper-ruby (MSF_CLIENT, MsfClientState feature-gated)
+- [x] 3.3 Remove duplicate ruby.rs (slapper-plugin) - ruby.rs deleted, mod removed
+- [x] 3.4 Refactor 8-parameter function (BaseFuzzConfig struct with From implementations)
+- [x] 3.5 Add plugin tests (30 tests for Plugin trait, PluginRegistry, PluginManager)
 
 ### Phase 4: Long-term (Wave 4)
 - [ ] 4.1 Consolidate error types

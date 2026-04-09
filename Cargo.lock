@@ -5167,6 +5167,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "dirs 5.0.1",
+ "futures",
  "magnus",
  "pyo3",
  "serde",
