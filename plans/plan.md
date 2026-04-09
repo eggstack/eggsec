@@ -1,412 +1,460 @@
-# Slapper Consolidated Improvement Plan
+# Slapper Improvement Plan
+
+This document consolidates code quality improvements and security hardening tasks for the slapper security testing toolkit.
 
 ## Overview
 
-This plan consolidates three improvement initiatives:
-1. **CLI Ergonomics** (plan2.md) - Standardize flags, add argument groups, modern CLI patterns
-2. **AI Harness** (plan3.md) - Fix bugs, refactor code, improve architecture
-3. **TUI Architecture** (plan4.md) - Trait-based dispatch, compliance improvements
-
-**Current Codebase State:**
-- 974 passing tests
-- 1 non-blocking clippy warning (too_many_arguments)
-- 29 Tab variants (Recon through Vuln)
-- Feature-gated AI module behind `ai-integration`
-- TabState, TabRender, TabInput traits implemented
-- 15+ compliance checks in security.rs
+| Crate | Source Files | Tests | Clippy Status |
+|-------|-------------|-------|---------------|
+| `slapper` (main) | 406 | ~976 | ✅ 0 warnings |
+| `slapper-nse` | ~170+ | - | ❌ 46 errors |
+| `slapper-ruby` | 9 | - | ⚠️ 2 warnings |
+| `slapper-plugin` | 3 | - | ✅ Clean |
 
 ---
 
-## Wave 1: Critical Bug Fixes
+## Wave 1: Critical Security & Build Issues
 
-Items that must be completed first as they block compilation.
+Items that block clean builds or have security impact. These should be done first.
 
-### Block A1: Fix Cache Serialization Bug
-- **File**: `crates/slapper/src/ai/cache.rs:68`
-- **Issue**: Instant timestamp restoration uses incorrect arithmetic
-- **Problem**: `Instant::now()` is relative to boot, not system clock; `num_nanoseconds()` returns Option
-- **Fix**: Use proper timestamp serialization that doesn't depend on boot-relative time
+### 1.1 slapper-nse: Clippy Errors (46 errors)
 
-### Block A2: Add Error Conversion
-- **Files**: `crates/slapper/src/ai/errors.rs`, `client.rs`, `planner.rs`
-- **Issue**: `AiError` doesn't implement `From<reqwest::Error>`
-- **Fix**: Add `impl From<reqwest::Error> for AiError`
-- **Verification**: `cargo check --lib -p slapper --features ai-integration`
+**Severity**: CRITICAL  
+**Impact**: Prevents clean builds
 
-### Block A3: Remove Unused Import
-- **File**: `crates/slapper/src/ai/cache.rs:1`
-- **Issue**: Unused `use crate::ai::errors::Result;`
-- **Fix**: Remove the import
+**Current State**: Last verified 2026-04-09 - 46 clippy errors (43x unused_io_amount, 2x redundant_comparisons, 534 warnings)
 
-**Parallelization**: Blocks A1-A3 are independent and can run in parallel.
+**Fix Strategy**:
+1. Run `cargo clippy --fix -p slapper-nse --allow-dirty` to auto-fix
+2. Manually fix remaining issues
+
+**Files**: `slapper-nse/src/libraries/*.rs`, `slapper-nse/src/brute.rs`  
+**Estimated**: 2-4 hours
 
 ---
 
-## Wave 2: AI Module Refactoring
+### 1.2 TLS Security: NoVerifier
 
-Depends on: Wave 1
+**Severity**: CRITICAL  
+**Security Impact**: Man-in-the-middle attacks possible
 
-### Block B1: Eliminate Code Duplication in AiClient
-- **File**: `crates/slapper/src/ai/client.rs`
-- **Issue**: Three nearly identical methods (analyze_findings, suggest_payloads, suggest_waf_bypass)
-- **Fix**: Refactor to common method with parameterized request handling
+**Location**: `crates/slapper/src/distributed/io.rs:147-220`
 
-### Block B2: Centralize API URL Handling
-- **Files**: `client.rs`, `planner.rs`
-- **Issue**: Hardcoded API URLs in multiple locations
-- **Fix**: Use `AiConfig.base_url` centrally; remove duplication in planner.rs
+**Issue**: TLS verification is completely disabled via `NoVerifier`. Documented as "for internal use" but poses security risk.
 
-### Block B3: Make Planner Use AiClient
-- **File**: `crates/slapper/src/ai/planner.rs`
-- **Issue**: Duplicates HTTP logic instead of reusing AiClient
-- **Fix**: Refactor to use AiClient methods
+**Recommended Fix**: Add feature flag `insecure-tls` that must be explicitly enabled + runtime warning
 
-### Block C1: Replace HashMap with AiCache (Payloads)
-- **File**: `crates/slapper/src/ai/payloads.rs`
-- **Issue**: Simple HashMap instead of robust AiCache
-- **Fix**: Replace with AiCache with TTL and persistence
-
-### Block C2: Replace Knowledge Base with AiCache
-- **File**: `crates/slapper/src/ai/waf_bypass.rs`
-- **Issue**: Custom Vec instead of AiCache
-- **Fix**: Replace with AiCache
-
-### Block C3: Add Typed Result Parsing
-- **Files**: `client.rs`, `types.rs`
-- **Issue**: analyze_findings returns raw Value
-- **Fix**: Use defined `AiAnalysisResult` type
-
-**Parallelization**: B1-B3 can be done in parallel after Wave 1; C1-C3 depend on B1-B3 completion.
+**Files**: `crates/slapper/src/distributed/io.rs`  
+**Estimated**: 2 hours
 
 ---
 
-## Wave 3: CLI Ergonomics Improvements
+### 1.3 URL-Embedded API Keys
 
-Independent from Waves 1-2.
+**Severity**: HIGH  
+**Security Impact**: API keys with special characters could cause parsing errors, information disclosure in server logs
 
-### Block A: Flag Standardization
+**Locations**:
 
-#### A1: Concurrency Flag
-- **Files**: `cli/fuzz.rs`, `cli/http.rs`, `cli/scan.rs`
-- **Issue**: Mixed `-c` vs `--concurrency` across commands
-- **Fix**: Standardize all commands to use `-c`
+| File | Line | Pattern |
+|------|------|---------|
+| `recon/wayback.rs` | 63-64 | `&api_key={}` directly in URL |
+| `recon/threatintel.rs` | 275 | `?key={}` in Shodan URL |
+| `recon/geolocation.rs` | 426 | `?key={}` in ipapi URL |
 
-#### A2: Output Flag
-- **Files**: All `cli/*.rs` files with output arguments
-- **Issue**: Mixed `-o`, `--output`, positional args
-- **Fix**: Standardize on `-o`/`--output`, convert positional bools to `--json` flag
+**Fix**: Use `urlencoding` crate for proper encoding
 
-#### A3: Verbose/Quiet Flags
-- **Files**: All commands in `cli/*.rs`
-- **Issue**: Inconsistent verbose exposure; --quiet only on recon and ci
-- **Fix**: Add `--verbose`/`-v` and `--quiet`/`-q` to all commands
-
-### Block B: Argument Groups
-
-#### B1: Port Scanning Grouping
-- **File**: `cli/scan.rs`
-- **Issue**: 15+ individual spoofing flags
-- **Fix**: Create `SpoofOptions` struct with grouped arguments
-
-#### B2: HTTP Auth Grouping
-- **File**: `cli/mod.rs`
-- **Issue**: `CommonHttpArgs` not using clap groups
-- **Fix**: Refactor to use `#[group(args_tag = "auth")]`
-
-### Block C: Modern CLI Patterns
-
-#### C1: Add -y Confirmation Flag
-- **Files**: `cli/auth.rs`, `cli/stress.rs`, `cli/misc.rs`
-- **Issue**: No auto-confirmation for destructive commands
-- **Fix**: Add `-y`/`--yes` flag to destructive commands
-
-#### C2: Add --quiet Mode
-- **Files**: All commands that produce output
-- **Issue**: --quiet only on ci command
-- **Fix**: Add to fuzz, scan, scan-ports, scan-endpoints, fingerprint, recon, load, waf, graphql, oauth, auth-test
-
-### Block D: Help Improvements
-
-#### D1: Categorize Help Output
-- **File**: `cli/mod.rs`
-- **Issue**: 35+ commands in flat list
-- **Fix**: Add `after_help` with categories (Discovery, Attack, Infrastructure, Utilities)
-
-#### D2: Add Missing Examples
-- **Files**: `cli/misc.rs` (PluginArgs, RemoteArgs, ReportArgs)
-- **Issue**: Missing `*_ABOUT` constants
-- **Fix**: Add help text constants with examples
-
-**Parallelization**: Within each block (A, B, C, D), items can run in parallel. Blocks are sequential (A→B→C→D).
+**Files**: `recon/wayback.rs`, `recon/threatintel.rs`, `recon/geolocation.rs`  
+**Estimated**: 1-2 hours
 
 ---
 
-## Wave 4: TUI Architecture Refactor
+### 1.4 TUI: UTF-8 Cursor Position Bug
 
-### Block A: Trait-Based State Access
+**Severity**: HIGH  
+**Bug Status**: Confirmed - causes panic on non-ASCII input
 
-The Tab enum has feature-gated variants. Methods must use `#[cfg]/#[cfg(not)]` pattern.
+**Location**: `crates/slapper/src/tui/components/input.rs:37,69,125`
 
-#### A1: Add as_tab_state() Method
-- **File**: `crates/slapper/src/tui/tabs/mod.rs`
-- **Issue**: No way to get state without matching
-- **Fix**: Add `pub fn as_tab_state(&self, app: &App) -> &dyn TabState`
+**Issue**: `self.cursor_pos = value.len()` uses byte length instead of character count. Present in `set_value()`, `backspace()`, and `delete()` methods.
 
-#### A2: Add as_tab_state_mut() Method
-- **File**: Same as A1
-- **Fix**: Add mutable variant
+**Fix**: Change to `value.chars().count()`
 
-#### A3: Add as_tab_render() Method
-- **File**: Same as A1
-- **Fix**: Add render access method
-
-#### A4: Handle Spawn Decision
-- **Issue**: TabInput::handle_enter() returns `()`, but spawn logic needs to know if task started
-- **Solution**: Hybrid approach - keep match for spawn logic, use traits for method calls
-
-### Block B: Replace Match Statements in App
-
-- **File**: `tui/app/mod.rs` (~1600 lines, 22 match statements)
-- **B1**: Refactor `handle_enter()` - 22 arms
-- **B2**: Refactor input handlers (handle_escape, handle_char, handle_backspace, etc.) - 11 methods × 22 arms
-- **B3**: Refactor `set_error_for_current_tab()` - 22 arms
-- **B4**: Refactor `get_progress_for_current_tab()` - 22 arms
-- **B5**: Refactor `reset_current_tab()` - 22 arms
-- **B6**: Refactor `is_current_tab_running()` - 22 arms
-
-### Block C: Replace Match Statements in UI
-
-- **File**: `tui/ui.rs` (~400 lines, 3 match statements)
-- **C1**: Refactor `draw_breadcrumb()` - 135 lines
-- **C2**: Refactor `draw_content()` - 140 lines
-- **C3**: Refactor `get_status_text()` - 60 lines
-
-### Block D: Replace Match Statements in Other Files
-
-- **File**: `tui/app/state_update.rs` (2 match statements)
-- **File**: `tui/app/export.rs` (3 match statements)
-- **File**: `tui/app/navigation.rs` (1 match statement)
-
-**Parallelization**: A1-A4 can be done in parallel (different methods). B1-B6 can be parallelized (different methods). C1-C3 parallel. D1-D3 parallel.
+**Files**: `tui/components/input.rs`  
+**Estimated**: 30 minutes
 
 ---
 
-## Wave 5: Compliance Improvements
+### 1.5 Log Injection Mitigation
 
-### Block E1: Real Severity Derivation
-- **File**: `tui/workers/security.rs:37-130`
-- **Issue**: Hardcoded severity levels regardless of context
-- **Fix**: Derive severity from:
-  - Actual scan results
-  - Target URL analysis (protocol, path, parameters)
-  - Security header presence with CVSS-like scoring
-  - Production vs development classification
+**Severity**: HIGH  
+**Security Impact**: URLs logged without sanitization could inject control characters
 
-### Block E2: Target Classification
-- **Issue**: No differentiation between production/development
-- **Fix**: Add logic to classify targets:
-  - Production vs Development
-  - Public API vs Web Application
-  - Authentication-present vs Anonymous
+**Locations** (9 logging calls with user-controlled input):
+- `fuzzer/engine/core.rs:188`
+- `recon/runner.rs:405`
+- `scanner/endpoints.rs:357`
+- `scanner/ports/mod.rs:98,138`
+- `waf/mod.rs:185`
+- `pipeline/mod.rs:77`
+- `stress/warning.rs:30`
 
----
+**Fix**:
+1. Create `utils/logging.rs` with `sanitize_for_logging()`:
+   - Strip ANSI escape sequences (CSI codes)
+   - Remove control characters (0x00-0x1F except \n, \r, \t)
+   - Truncate to configurable max length (default: 500 chars)
+2. Update all 9 logging locations to use sanitization
 
-## Wave 6: Testing & Documentation
-
-### Block F1: Add AI Module Tests
-- **client.rs**: 0 tests → Add mock HTTP, circuit breaker tests
-- **waf_bypass.rs**: 0 tests → Add bypass suggestion tests
-- **payloads.rs**: 0 tests → Add payload generation tests
-
-### Block F2: Add Documentation
-- **client.rs**: Add doc comments to public methods (~30 LOC)
-- **waf_bypass.rs**: Add doc comments (~20 LOC)
-- **payloads.rs**: Add doc comments (~15 LOC)
-
-### Block F3: Verification Tests
-```bash
-# Full test suite
-cargo test --lib -p slapper
-
-# TUI-specific tests
-cargo test --test tui_tests -p slapper
-
-# Clippy
-cargo clippy --lib -p slapper
-
-# Feature-gated tests
-cargo test --lib -p slapper --features ai-integration
-cargo test --lib -p slapper --features full
-```
+**Files**: New `utils/logging.rs`, update existing files  
+**Estimated**: 4-6 hours
 
 ---
 
-## Execution Summary
+## Wave 2: High Priority Issues
 
-| Wave | Focus | Actual Status |
-|------|-------|----------------|
-| 1 | Critical Bug Fixes | DONE (all 3 items completed) |
-| 2 | AI Module Refactoring | DONE |
-| 3 | CLI Ergonomics | DONE (all flag standardization complete) |
-| 4 | TUI Architecture | PARTIALLY DONE (trait methods added, match refactor deferred) |
-| 5 | Compliance | DONE |
-| 6 | Testing & Docs | DONE |
+Items that impact maintainability, correctness, or have potential runtime failures.
 
----
+### 2.1 TUI: Massive App Struct with Duplicated Dispatch
 
-## Parallelization Strategy
+**Severity**: HIGH  
+**Impact**: Maintainability - 1,975 line file with 20+ nearly identical dispatch methods
 
-### Phase 1: Independent Work (Can start immediately)
-- **Agent 1**: Wave 3 (CLI Ergonomics)
-- **Agent 2**: Wave 4 (TUI Architecture)
-- **Agent 3**: Wave 5 (Compliance)
+**Location**: `crates/slapper/src/tui/app/mod.rs`
 
-### Phase 2: After Wave 1
-- **Agent 4**: Wave 2 (AI Module)
+**Current Problem**: Each handler method contains identical 29-arm match statement. Adding a new tab requires updating 20+ methods.
 
-### Phase 3: Sequential
-- Wave 6 requires completion of Waves 1-5
+**Recommended Fix**: Create a `TabDispatcher` struct that holds a `Box<dyn TabState>` and delegates all methods dynamically.
+
+**Note**: The dead `tui/app/dispatch.rs` (3-line comment) can be removed as part of this work.
+
+**Files**: Create `tui/app/dispatch.rs`, modify `mod.rs`  
+**Estimated**: 8-12 hours
 
 ---
 
-## Success Criteria
+### 2.2 slapper-plugin: Ruby .unwrap() Panics
 
-### Wave 1 (Bug Fixes) - COMPLETED
-- [x] AiError implements From<reqwest::Error> (errors.rs:34-46)
-- [x] Unused import removed from cache.rs
-- [x] Cache serialization fixed - now uses DateTime<Utc> instead of Instant
+**Severity**: HIGH  
+**Impact**: Application panics if Ruby VM not initialized
 
-### Wave 2 (AI Refactoring) - COMPLETED
-- [x] AiClient code duplication eliminated (chat_completion_from_messages added)
-- [x] AiCache already used in payloads.rs and waf_bypass.rs
-- [x] Centralized API URL handling (api_url(), model() methods)
-- [x] Typed result parsing (analyze_findings_typed added)
-- [x] Planner uses AiClient methods (query_ai_for_plan, query_ai_for_adjustments)
+**Location**: `crates/slapper-plugin/src/ruby.rs:51,77,94`
 
-### Wave 3 (CLI) - COMPLETED
-- [x] All commands use `-c` for concurrency
-- [x] All commands use `-o` for output
-- [x] --verbose flag on all commands
-- [x] --quiet flag added to fuzz, scan-ports, scan-endpoints, fingerprint, recon, load, waf, graphql, oauth, auth-test
-- [x] -y/--yes flag added to auth.rs, stress.rs, misc.rs (RemoteStart, Exec)
+**Issue**: `Ruby::get().unwrap()` panics instead of returning error
 
-### Wave 4 (TUI) - PARTIALLY COMPLETED (deferred)
-- [x] as_tab_state() method implemented (tabs/mod.rs:343)
-- [x] as_tab_state_mut() method implemented (tabs/mod.rs:404)
-- [x] as_tab_render() method implemented (tabs/mod.rs:465)
-- [x] as_tab_input() method added for TabInput trait (tabs/mod.rs:526)
-- [ ] Replace match statements in mod.rs - DEFERRED (architectural issues)
-- [ ] Replace match statements in state_update.rs, export.rs, navigation.rs - DEFERRED (architectural issues)
+**Fix**: Replace with proper error handling (or remove module - see 3.5)
 
-Note: Match statement replacement requires architectural fixes first:
-1. `stop()` method on tabs is NOT part of `impl TabState` - tabs have separate `pub fn stop(&mut self)`
-2. `as_tab_state_mut()` for History tab incorrectly returns `&mut app.dashboard` instead of history data
-3. Feature-gated tabs have explicit fallback behavior that differs from dashboard implementation
-4. Some match statements have special per-tab handling (e.g., History uses `self.history.lock()` directly)
-
-Safe refactoring would require:
-- Adding `fn stop(&mut self)` to each tab's `impl TabState`
-- Fixing `as_tab_state_mut()` for History tab to return actual history reference
-- Standardizing special handling across tabs
-
-### Wave 5 (Compliance) - COMPLETED
-- [x] 15+ checks implemented in security.rs
-- [x] Severity derives from actual scan results/headers
-- [x] Target classification considered but not implemented (future enhancement)
-
-### Wave 6 (Final) - COMPLETED
-- [x] Tests pass (974 tests)
-- [x] All verification tests pass
-- [x] Clippy warnings resolved (1 non-blocking warning on too_many_arguments)
-- [x] Plan reviewed and updated (2026-04-08): Wave 4 deferred items require architectural fixes before refactoring
+**Files**: `slapper-plugin/src/ruby.rs`  
+**Estimated**: 1 hour (or 30 min if removing)
 
 ---
 
-## Backward Compatibility
+### 2.3 slapper-ruby: Ignored Errors
 
-All changes MUST maintain backward compatibility:
-1. **Deprecated flags**: Add new flags alongside old, mark old as deprecated
-2. **Config file compatibility**: Existing configs must continue to work
-3. **Version consideration**: Consider minor version bump after CLI changes
+**Severity**: HIGH  
+**Impact**: Silent failures difficult to debug
 
----
+**Locations**:
+| File | Lines | Issue |
+|------|-------|-------|
+| `api.rs` | 732-866 | `let _ = hash.aset(...)` ignores Result |
+| `bridge.rs` | 55,62 | `let _ = resp.send(...)` ignores send failures |
 
-## Files to Modify
+**Fix**: Add proper error handling or logging
 
-### Wave 1 (AI Bugs)
-| File | Changes | Status |
-|------|---------|--------|
-| `ai/cache.rs` | Fix serialization, remove unused import | DONE |
-| `ai/errors.rs` | Add From impl | DONE |
-
-### Wave 2 (AI Refactor)
-| File | Changes | Status |
-|------|---------|--------|
-| `ai/client.rs` | Refactor duplication, typed results | DONE (added chat_completion_from_messages, analyze_findings_typed) |
-| `ai/planner.rs` | Use AiClient | DONE |
-| `ai/payloads.rs` | Use AiCache | DONE (already using AiCache) |
-| `ai/waf_bypass.rs` | Use AiCache | DONE (already using AiCache) |
-
-### Wave 3 (CLI)
-| File | Changes | Status |
-|------|---------|--------|
-| `cli/mod.rs` | Help categories, CommonHttpArgs refactor | DONE (added after_help) |
-| `cli/scan.rs` | Argument groups, -c/-o standardization, --quiet | DONE |
-| `cli/fuzz.rs` | Flag standardization, --quiet | DONE |
-| `cli/http.rs` | Flag standardization, --quiet | DONE |
-| `cli/auth.rs` | Add -y flag | DONE |
-| `cli/stress.rs` | Add -y flag | DONE |
-| `cli/misc.rs` | Flag standardization, -y flag | DONE |
-| `cli/packet.rs` | Add --quiet | DONE |
-| `cli/cluster.rs` | Add --quiet, -o, --verbose | DONE |
-| `cli/ci.rs` | Already has --quiet | DONE |
-| `cli/ai_analyze.rs` | Add --verbose, --quiet, -o | DONE |
-| `cli/plan.rs` | Add --verbose, --quiet, -o | DONE |
-
-### Wave 4 (TUI)
-| File | Changes | Status |
-|------|---------|--------|
-| `tui/tabs/mod.rs` | Add dispatch methods | DONE (as_tab_state, as_tab_state_mut, as_tab_render, as_tab_input) |
-| `tui/app/mod.rs` | Replace match statements | NOT IMPLEMENTED (requires architectural fixes first) |
-| `tui/app/state_update.rs` | Replace 2 statements | NOT IMPLEMENTED (requires architectural fixes first) |
-| `tui/app/export.rs` | Replace 3 statements | NOT IMPLEMENTED (requires architectural fixes first) |
-| `tui/app/navigation.rs` | Replace 1 statement | NOT IMPLEMENTED (requires architectural fixes first) |
-
-Note: ui.rs has 0 Tab match statements (plan incorrectly listed 3). Actual counts:
-- mod.rs: 24 `match self.current_tab` statements
-- state_update.rs: 2
-- export.rs: 3
-- navigation.rs: 1
-- Total: 30 match statements across TUI
-
-### Wave 5 (Compliance)
-| File | Changes | Status |
-|------|---------|--------|
-| `tui/workers/security.rs` | Real severity derivation | DONE (15+ checks, severity from headers/results) |
+**Files**: `slapper-ruby/src/api.rs`, `slapper-ruby/src/bridge.rs`  
+**Estimated**: 2-3 hours
 
 ---
 
-## Verification Commands
+### 2.4 Fuzzer: HttpSession Serialization Bug
 
-```bash
-# Build
-cargo build --release -p slapper
+**Severity**: HIGH  
+**Bug**: Session persistence broken - still present in codebase
 
-# Library tests
-cargo test --lib -p slapper
+**Location**: `crates/slapper/src/fuzzer/state.rs:16-17`
 
-# TUI tests
-cargo test --test tui_tests -p slapper
+**Issue**: `headers` field marked with `#[serde(skip)]` - always empty after deserialization
 
-# Clippy
-cargo clippy --lib -p slapper
+**Fix Options**:
+- A: Remove `headers` field if unused
+- B: Implement custom serialization for HeaderMap
+- C: Store headers as Vec<(String, String)> with custom serde
 
-# Feature-gated checks
-cargo check --lib -p slapper --features ai-integration
-cargo check --lib -p slapper --features full
+**Recommended**: Option B - custom Serialize/Deserialize for HeaderMap
 
-# Verify CLI help
-./target/release/slapper --help
-./target/release/slapper fuzz --help
-./target/release/slapper scan-ports --help
-```
+**Files**: `fuzzer/state.rs`  
+**Estimated**: 2 hours
+
+---
+
+### 2.5 Fuzzer: Grammar Payload Severity Hardcoded
+
+**Severity**: MEDIUM  
+**Impact**: Inaccurate severity ratings
+
+**Location**: `crates/slapper/src/fuzzer/engine/core.rs:234`
+
+**Issue**: Grammar payloads always use `Severity::Medium` regardless of grammar type (JWT, SSTI, XXE, etc.)
+
+**Fix**: Map grammar type to appropriate severity (JWT=High, SSTI=Critical, XXE=High, etc.)
+
+**Files**: `fuzzer/engine/core.rs`  
+**Estimated**: 1 hour
+
+---
+
+### 2.6 Fuzzer: AI Generator Silent Failure
+
+**Severity**: MEDIUM  
+**Impact**: Poor UX - users don't know AI generation failed
+
+**Location**: `crates/slapper/src/fuzzer/engine/core.rs:244-252`
+
+**Issue**: AI generation errors are silently swallowed
+
+**Fix**: Add `tracing::warn!` for failures
+
+**Files**: `fuzzer/engine/core.rs`  
+**Estimated**: 30 minutes
+
+---
+
+### 2.7 Error Handling Audit
+
+**Severity**: MEDIUM  
+**Impact**: 963+ unwraps could cause panics
+
+**High-risk areas**:
+- Config loading (`config/loader.rs`)
+- Session restore (`pipeline/session.rs`)
+- API request handling (`tool/protocol/rest.rs`)
+
+**Fix**: Replace `.unwrap()` with `?` or match statements with proper error context
+
+**Files**: Multiple  
+**Estimated**: 8-10 hours
+
+---
+
+## Wave 3: Medium Priority
+
+Items that improve code quality and fix known bugs.
+
+### 3.1 XXE Defense Documentation
+
+**Severity**: LOW  
+**Impact**: Documentation improvement
+
+**Task**: Document XML generation safety in output modules:
+- `output/junit.rs` - explain quick_xml Writer is write-only, no parsing
+- `output/sarif.rs` - same
+- `fuzzer/payloads/xxe.rs` - clarify payloads are for testing only
+
+**Estimated**: 1-2 hours
+
+---
+
+### 3.2 slapper-ruby: Dead Code
+
+**Severity**: LOW  
+**Impact**: Unused code clutters codebase
+
+**Locations**: 
+- `api.rs:577` - Static `MSF_CLIENT` never used
+- `api.rs:580` - Struct `MsfClientState` never constructed
+
+**Fix**: Remove unused code or add `#[allow(dead_code)]`
+
+**Files**: `slapper-ruby/src/api.rs`  
+**Estimated**: 15 minutes
+
+---
+
+### 3.3 Duplicate Ruby Code
+
+**Severity**: LOW  
+**Impact**: Confusion - two Ruby implementations exist
+
+**Issue**: 
+- `slapper-plugin/src/ruby.rs` - module exists, has panic-prone `.unwrap()` calls
+- `slapper-ruby/` - full-featured crate with thread-safe message-passing
+
+**Fix**: Remove `slapper-plugin/src/ruby.rs` since slapper-ruby is the production implementation
+
+**Files**: Remove `crates/slapper-plugin/src/ruby.rs`  
+**Estimated**: 30 minutes
+
+---
+
+### 3.4 Commands: 8-Parameter Function
+
+**Severity**: LOW  
+**Style**: Code smell
+
+**Location**: `crates/slapper/src/commands/fuzz_convert.rs:4`
+
+**Issue**: `base_fuzz_args` has 8 parameters
+
+**Fix**: Use config struct or builder pattern
+
+**Files**: `commands/fuzz_convert.rs`  
+**Estimated**: 1-2 hours
+
+---
+
+### 3.5 slapper-plugin: No Unit Tests
+
+**Severity**: MEDIUM  
+**Impact**: No regression protection
+
+**Fix**: Add tests for:
+- Plugin trait implementations
+- PluginRegistry discovery
+- Error handling in PluginManager
+
+**Files**: `slapper-plugin/src/lib.rs`  
+**Estimated**: 4-6 hours
+
+---
+
+## Wave 4: Long-term Improvements
+
+Lower priority items that improve maintainability and security posture.
+
+### 4.1 Error Type Consolidation
+
+**Severity**: LOW  
+**Impact**: Maintainability
+
+**Issue**: Three error types create friction:
+- `SlapperError` (main crate, thiserror)
+- `ConfigError` (config module)
+- `anyhow::Result` (commands, TUI)
+
+**Recommendation**: Standardize on `crate::error::Result` throughout
+
+**Estimated**: 8-12 hours
+
+---
+
+### 4.2 Dependency Management
+
+**Severity**: LOW  
+**Impact**: Security and stability
+
+**Recommendations**:
+1. Add workspace-level pinned deps in `[workspace.dependencies]`
+2. Add `cargo-audit` to CI pipeline
+3. Consider `cargo-deny` for dependency governance
+
+**Estimated**: 2-3 hours
+
+---
+
+### 4.3 Test Coverage Gaps
+
+**Severity**: MEDIUM  
+**Impact**: Regression protection
+
+**Missing Test Coverage**:
+- Circuit breaker (`utils/circuit_breaker.rs`)
+- TUI state management
+- Scope validation edge cases
+- WAF bypass strategies
+
+**Estimated**: 8-16 hours
+
+---
+
+### 4.4 Payload Tagging Standardization
+
+**Severity**: LOW  
+**Impact**: Code consistency
+
+**Issue**: `sqli.rs` and `xss.rs` have post-processing loops for dynamic tagging, but other modules don't follow this pattern
+
+**Recommendation**: Standardize or remove dynamic tagging
+
+**Estimated**: 2-3 hours
+
+---
+
+### 4.5 Documentation & Configuration
+
+**Severity**: LOW  
+**Impact**: User guidance
+
+**Tasks**:
+1. Document `--insecure` flag usage and risks in `utils/http.rs`
+2. Create `docs/security.md` with security-relevant config options
+3. Update AGENTS.md with security findings
+
+**Estimated**: 2-4 hours
+
+---
+
+## Implementation Order
+
+### Phase 1: Critical (Wave 1) - Do First
+- [ ] 1.1 Fix slapper-nse clippy errors
+- [ ] 1.2 Add TLS NoVerifier feature flag
+- [ ] 1.3 Add URL encoding for API keys
+- [ ] 1.4 Fix TUI UTF-8 cursor bug
+- [ ] 1.5 Log injection mitigation
+
+### Phase 2: High Priority (Wave 2)
+- [ ] 2.1 Refactor TUI dispatch (and remove dead dispatch.rs)
+- [ ] 2.2 Fix slapper-plugin Ruby .unwrap() panics (or remove module)
+- [ ] 2.3 Fix slapper-ruby ignored errors
+- [ ] 2.4 Fix fuzzer HttpSession serialization
+- [ ] 2.5 Fix grammar payload severity
+- [ ] 2.6 Add AI generation error logging
+- [ ] 2.7 Error handling audit
+
+### Phase 3: Medium Priority (Wave 3)
+- [ ] 3.1 Document XXE safety
+- [ ] 3.2 Clean up dead code in slapper-ruby
+- [ ] 3.3 Remove duplicate ruby.rs (slapper-plugin)
+- [ ] 3.4 Refactor 8-parameter function
+- [ ] 3.5 Add plugin tests
+
+### Phase 4: Long-term (Wave 4)
+- [ ] 4.1 Consolidate error types
+- [ ] 4.2 Improve dependency management
+- [ ] 4.3 Fill test coverage gaps
+- [ ] 4.4 Standardize payload tagging
+- [ ] 4.5 Documentation
+
+---
+
+## Parallelization Notes
+
+### Blocks That Can Run in Parallel (within each wave)
+
+**Wave 1** - All independent:
+- 1.1 (slapper-nse)
+- 1.2 (TLS)
+- 1.3 (URL encoding)
+- 1.4 (UTF-8 bug)
+- 1.5 (Log injection)
+
+**Wave 2** - All independent (can start after Wave 1):
+- 2.1 (TUI dispatch)
+- 2.2 (Ruby unwrap)
+- 2.3 (slapper-ruby errors)
+- 2.4 (Session serialization)
+- 2.5 (Grammar severity)
+- 2.6 (AI logging)
+- 2.7 (Error handling)
+
+**Wave 3 & 4** - All independent, can run in parallel once earlier waves complete
+
+---
+
+## Notes
+
+- Items marked as "already done" in AGENTS.md (grammar fuzzer labeling, TabState traits, PortScanResults u32, ResponseSeverity Ord, ConfigError) are verified as implemented
+- The main `slapper` crate is in good shape (0 clippy warnings)
+- slapper-nse has the most technical debt due to its large library collection
+- All changes require `cargo test` and `cargo clippy` verification

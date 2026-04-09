@@ -176,7 +176,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plan.md` — Consolidated improvement plan (10 waves, parallelizable in blocks)
+- `plans/plan.md` — Consolidated improvement plan (4 waves, parallelizable by blocks)
 
 ## Lessons Learned
 
@@ -396,8 +396,8 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 
 #### Plan consolidation
 
-- Consolidated 3 plan files (plan2.md, plan3.md, plan4.md) into single `plans/plan.md`
-- Organized into 6 waves with parallelizable blocks
+- Consolidated 2 plan files (plan2.md, plan3.md) into single `plans/plan.md`
+- Organized into 4 waves with parallelizable blocks
 - Before implementing, verify file paths using `glob` or `rg` - some planned features already implemented (TabState, TabRender, TabInput traits exist)
 - Count actual source files with `find crates/slapper/src -name '*.rs' | wc -l` (406 files)
 - Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (976 tests)
@@ -407,13 +407,17 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 
 #### Known bugs identified (not yet fixed)
 
-- UTF-8 panic in `InputField::delete()` and `backspace()` — uses byte indices instead of char boundaries
-- Grammar fuzzer payloads all tagged as `PayloadType::Xss` regardless of actual grammar type
-- CSV export doesn't escape `severity` and `cve_ids` fields
-- `PortScanResults::ports_scanned` is `u16` — overflows at 65,536
-- `ConfigError::Io(String)` wraps string instead of `std::io::Error` — loses error chain
-- `SlapperConfig::load`/`save` take `&PathBuf` instead of `impl AsRef<Path>`
-- `ResponseSeverity` lacks `Ord`/`PartialOrd` implementations
+- UTF-8 panic in `InputField::delete()` and `backspace()` — uses byte indices instead of char boundaries (see plan.md:1.4)
+- Grammar fuzzer payloads all tagged as `Severity::Medium` — hardcoded regardless of grammar type (see plan.md:2.5)
+
+#### Verification best practices
+
+- Always verify plan items against actual codebase before assuming they still apply
+- Use `rg` to confirm file paths, line numbers, and patterns exist
+- Run `cargo test --lib -p slapper` after each change to catch regressions
+- Use `cargo clippy --lib -p slapper` to verify no new warnings
+- Check test counts with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`
+- Count source files with `find crates/slapper/src -name '*.rs' | wc -l`
 
 #### Verification best practices
 
@@ -491,3 +495,27 @@ When adding a new parameter to a public async function like `scan_endpoints()`:
 - All callers must be updated (TUI, CLI, tests, benchmarks)
 - The new parameter should default to a safe value to minimize breaking changes
 - The `verify_tls` parameter was already properly implemented and used
+
+### Lessons Learned (Session 2026-04-09)
+
+#### Plan consolidation
+
+- Consolidated 2 plan files (plan2.md, plan3.md) into single `plans/plan.md`
+- Organized into 4 waves with parallelizable blocks
+- Before implementing, verify file paths using `glob` or `rg` - some planned items may already be implemented
+- Verified actual codebase state - several "bugs" from older AGENTS.md entries are already fixed:
+  - CSV export uses `escape_csv` function
+  - PortScanResults uses `u32` for ports_scanned
+  - ConfigError wraps `std::io::Error` properly
+  - Config load/save use `impl AsRef<Path>`
+  - ResponseSeverity has Ord/PartialOrd implementations
+
+#### Code verification during plan consolidation
+
+When reviewing plan items against actual codebase:
+- Use `grep` to find exact patterns: `rg "cursor_pos.*\.len\(\)"`
+- Use `glob` to find files: `glob "**/input.rs"`
+- Check actual struct fields: `read` file and verify type definitions
+- Don't assume old AGENTS.md entries are still valid - verify each one
+- Count source files with `find crates/slapper/src -name '*.rs' | wc -l` (406 files)
+- Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (976 tests)
