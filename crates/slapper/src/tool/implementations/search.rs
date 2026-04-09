@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
+use crate::output::AgentSeverity;
 use crate::tool::traits::{
     SecurityTool, ToolCapability, ToolCategory, ToolResult,
 };
@@ -322,7 +323,7 @@ impl SecurityTool for SearchTool {
                 parameters: vec![],
                 examples: vec![],
                 attack_surface: vec![],
-                severity_potential: crate::tool::traits::SeverityPotential::InformationGathering,
+                severity_potential: vec![AgentSeverity::Info],
                 prerequisites: vec![],
                 estimated_duration_ms: 5000,
             },
@@ -332,7 +333,7 @@ impl SecurityTool for SearchTool {
                 parameters: vec![],
                 examples: vec![],
                 attack_surface: vec![],
-                severity_potential: crate::tool::traits::SeverityPotential::InformationGathering,
+                severity_potential: vec![AgentSeverity::Info],
                 prerequisites: vec![],
                 estimated_duration_ms: 8000,
             },

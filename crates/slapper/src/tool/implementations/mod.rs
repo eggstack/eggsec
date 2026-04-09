@@ -4,4 +4,5 @@ pub mod loadtest;
 pub mod pipeline;
 pub mod recon;
 pub mod scanner;
+pub mod search;
 pub mod waf;

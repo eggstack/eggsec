@@ -108,6 +108,9 @@ pub fn create_default_registry() -> ToolRegistry {
     if let Err(e) = registry.register(crate::tool::implementations::pipeline::PipelineTool::new()) {
         tracing::warn!("Failed to register tool: pipeline: {}", e);
     }
+    if let Err(e) = registry.register(crate::tool::implementations::search::SearchTool::new(None)) {
+        tracing::warn!("Failed to register tool: search: {}", e);
+    }
 
     registry
 }
