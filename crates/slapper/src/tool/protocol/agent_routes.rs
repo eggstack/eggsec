@@ -31,7 +31,7 @@ async fn register_agent(
         status: AgentStatus::Active,
         last_heartbeat: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs(),
         callback_url: req.callback_url.clone(),
     };
@@ -63,21 +63,39 @@ async fn get_agent(
     axum::extract::Path(id): axum::extract::Path<Uuid>,
 ) -> impl axum::response::IntoResponse {
     match state.registry.get(id).await {
-        Some(agent) => axum::response::Response::builder()
-            .status(axum::http::StatusCode::OK)
-            .header("content-type", "application/json")
-            .body(serde_json::to_string(&agent).unwrap())
-            .unwrap(),
-        None => axum::response::Response::builder()
-            .status(axum::http::StatusCode::NOT_FOUND)
-            .header("content-type", "application/json")
-            .body(
-                serde_json::to_string(&serde_json::json!({
-                    "error": format!("Agent '{}' not found", id)
-                }))
-                .unwrap(),
-            )
-            .unwrap(),
+        Some(agent) => {
+            let body = match serde_json::to_string(&agent) {
+                Ok(s) => s,
+                Err(e) => {
+                    return format!(r#"{{"error":"Serialization error: {}"}}"#, e).into_response();
+                }
+            };
+            axum::response::Response::builder()
+                .status(axum::http::StatusCode::OK)
+                .header("content-type", "application/json")
+                .body(body)
+                .unwrap_or_else(|_| {
+                    axum::response::Response::builder()
+                        .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                        .body("{\"error\":\"Internal error\"}".to_string())
+                        .unwrap()
+                })
+        }
+        None => {
+            let body = serde_json::to_string(&serde_json::json!({
+                "error": format!("Agent '{}' not found", id)
+            })).unwrap_or_else(|_| r#"{"error":"Internal error"}"#.to_string());
+            axum::response::Response::builder()
+                .status(axum::http::StatusCode::NOT_FOUND)
+                .header("content-type", "application/json")
+                .body(body)
+                .unwrap_or_else(|_| {
+                    axum::response::Response::builder()
+                        .status(axum::http::StatusCode::NOT_FOUND)
+                        .body("{\"error\":\"Agent not found\"}".to_string())
+                        .unwrap()
+                })
+        }
     }
 }
 
@@ -89,7 +107,10 @@ async fn unregister_agent(
     axum::response::Response::builder()
         .status(axum::http::StatusCode::NO_CONTENT)
         .body("".to_string())
-        .unwrap()
+        .unwrap_or_else(|_| axum::response::Response::builder()
+            .status(axum::http::StatusCode::NO_CONTENT)
+            .body("".to_string())
+            .unwrap())
 }
 
 #[derive(Debug, Serialize)]
@@ -106,7 +127,7 @@ async fn heartbeat(
     state.registry.heartbeat(id).await;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs();
     Json(HeartbeatResponse {
         id,
@@ -151,7 +172,7 @@ async fn create_task(
         max_retries: 3,
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_millis() as u64,
         scheduled_for: None,
     };
@@ -202,18 +223,21 @@ async fn list_tasks(
 async fn get_task(
     axum::extract::Path(id): axum::extract::Path<Uuid>,
 ) -> impl axum::response::IntoResponse {
+    let body = serde_json::to_string(&serde_json::json!({
+        "id": id,
+        "status": "not_found",
+        "message": "Task details are only available while tasks are in memory"
+    })).unwrap_or_else(|_| r#"{"id":"error","status":"not_found"}"#.to_string());
     axum::response::Response::builder()
         .status(axum::http::StatusCode::OK)
         .header("content-type", "application/json")
-        .body(
-            serde_json::to_string(&serde_json::json!({
-                "id": id,
-                "status": "not_found",
-                "message": "Task details are only available while tasks are in memory"
-            }))
-            .unwrap(),
-        )
-        .unwrap()
+        .body(body)
+        .unwrap_or_else(|_| {
+            axum::response::Response::builder()
+                .status(axum::http::StatusCode::OK)
+                .body("{\"id\":\"error\",\"status\":\"not_found\"}".to_string())
+                .unwrap()
+        })
 }
 
 #[derive(Debug, Serialize)]

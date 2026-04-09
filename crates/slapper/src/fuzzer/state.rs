@@ -9,12 +9,76 @@ fn try_header_name(s: &str) -> Option<HeaderName> {
     HeaderName::from_bytes(s.as_bytes()).ok()
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct SerializableHeaderMap(Vec<(String, String)>);
+
+impl SerializableHeaderMap {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn from_header_map(map: &HeaderMap) -> Self {
+        Self(
+            map.iter()
+                .filter_map(|(k, v)| {
+                    Some((k.to_string(), v.to_str().ok()?.to_string()))
+                })
+                .collect(),
+        )
+    }
+
+    pub fn to_header_map(&self) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (name, value) in &self.0 {
+            if let (Ok(name), Ok(value)) = (
+                HeaderName::from_bytes(name.as_bytes()),
+                HeaderValue::from_str(value),
+            ) {
+                map.insert(name, value);
+            }
+        }
+        map
+    }
+
+    pub fn insert(&mut self, name: HeaderName, value: HeaderValue) {
+        self.0
+            .push((name.to_string(), value.to_str().unwrap_or("").to_string()));
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.0.iter().map(|(k, v)| (k.as_str(), v.as_str()))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl Serialize for SerializableHeaderMap {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for SerializableHeaderMap {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let vec = Vec::<(String, String)>::deserialize(deserializer)?;
+        Ok(Self(vec))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpSession {
     pub cookies: HashMap<String, Cookie>,
     pub tokens: HashMap<String, String>,
     #[serde(skip)]
-    pub headers: HeaderMap,
+    pub headers: SerializableHeaderMap,
     pub state_data: HashMap<String, String>,
 }
 
@@ -40,7 +104,7 @@ impl HttpSession {
         Self {
             cookies: HashMap::new(),
             tokens: HashMap::new(),
-            headers: HeaderMap::new(),
+            headers: SerializableHeaderMap::new(),
             state_data: HashMap::new(),
         }
     }
@@ -247,8 +311,13 @@ impl SessionManager {
             }
         }
 
-        for (name, value) in &session.headers {
-            headers.insert(name.clone(), value.clone());
+        for (name, value) in session.headers.iter() {
+            if let (Ok(name), Ok(value)) = (
+                HeaderName::from_bytes(name.as_bytes()),
+                HeaderValue::from_str(value),
+            ) {
+                headers.insert(name, value);
+            }
         }
     }
 }

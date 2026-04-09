@@ -232,7 +232,7 @@ impl FuzzEngine {
                     payload_type,
                     payload: p,
                     description: "Grammar-generated payload".to_string(),
-                    severity: Severity::Medium,
+                    severity: grammar_fuzzer.kind().severity(),
                     tags: vec!["grammar".to_string()],
                 }));
             }
@@ -250,6 +250,8 @@ impl FuzzEngine {
                     severity: Severity::Medium,
                     tags: vec!["ai-generated".to_string()],
                 }));
+            } else {
+                tracing::warn!("AI payload generation failed for {} (context: {})", vuln_type, context);
             }
         }
 

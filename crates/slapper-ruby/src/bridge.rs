@@ -52,14 +52,18 @@ impl RubyPluginClient {
                 for msg in rx {
                     match msg {
                         RubyRequest::LoadPlugin { path, resp } => {
-                            let _ = resp.send(bridge.load_plugin(&path));
+                            if resp.send(bridge.load_plugin(&path)).is_err() {
+                                tracing::warn!("Ruby VM response channel dropped for load_plugin");
+                            }
                         }
                         RubyRequest::RunPlugin {
                             plugin,
                             target,
                             resp,
                         } => {
-                            let _ = resp.send(bridge.run_plugin(&plugin, &target));
+                            if resp.send(bridge.run_plugin(&plugin, &target)).is_err() {
+                                tracing::warn!("Ruby VM response channel dropped for run_plugin");
+                            }
                         }
                     }
                 }

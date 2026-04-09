@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::types::Severity;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GrammarKind {
     Json,
@@ -17,6 +19,16 @@ impl GrammarKind {
             GrammarKind::Xml => super::payloads::PayloadType::Xxe,
             GrammarKind::Jwt => super::payloads::PayloadType::Jwt,
             GrammarKind::Ssti => super::payloads::PayloadType::Ssti,
+        }
+    }
+
+    pub fn severity(&self) -> Severity {
+        match self {
+            GrammarKind::Json => Severity::Medium,
+            GrammarKind::GraphQL => Severity::Medium,
+            GrammarKind::Xml => Severity::High,
+            GrammarKind::Jwt => Severity::High,
+            GrammarKind::Ssti => Severity::Critical,
         }
     }
 }

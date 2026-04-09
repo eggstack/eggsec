@@ -729,17 +729,16 @@ fn msf_module_info(ruby: &Ruby, module_type: String, module_name: String) -> Res
         if let Some(ref state) = *guard {
             match state.client.get_module_info(msf_type, &module_name).await {
                 Ok(info) => {
-                    let _ = hash.aset("name", info.name);
-                    let _ = hash.aset("fullname", info.fullname);
-                    let _ = hash.aset("description", info.description);
+                    hash.aset("name", info.name)?;
+                    hash.aset("fullname", info.fullname)?;
+                    hash.aset("description", info.description)?;
                     let refs_flat: Vec<String> = info.references.into_iter().flatten().collect();
-                    let _ = hash.aset("references", refs_flat.join(", "));
+                    hash.aset("references", refs_flat.join(", "))?;
 
-                    // Include targets (compatible payloads/exploits) if available
                     if let Some(targets) = info.targets {
                         let target_names: Vec<String> =
                             targets.into_iter().map(|t| t.name).collect();
-                        let _ = hash.aset("targets", target_names);
+                        hash.aset("targets", target_names)?;
                     }
 
                     Ok(())
@@ -796,9 +795,9 @@ fn msf_execute_module(
                 .await
             {
                 Ok(result) => {
-                    let _ = hash.aset("success", result.success);
-                    let _ = hash.aset("message", result.message);
-                    let _ = hash.aset("uuid", result.uuid);
+                    hash.aset("success", result.success)?;
+                    hash.aset("message", result.message)?;
+                    hash.aset("uuid", result.uuid)?;
                     Ok(())
                 }
                 Err(e) => Err(runtime_error(ruby, e.to_string())),
@@ -855,15 +854,15 @@ fn msf_list_sessions(ruby: &Ruby) -> Result<magnus::RArray, Error> {
                 Ok(sessions) => {
                     for (id, session) in sessions {
                         let hash = ruby.hash_new();
-                        let _ = hash.aset("id", id);
-                        let _ = hash.aset("type", session.session_type.to_string());
-                        let _ = hash.aset("exploit", session.exploit_name);
-                        let _ = hash.aset("target", session.target_host);
-                        let _ = hash.aset("info", session.info);
-                        let _ = hash.aset("workspace", session.workspace);
-                        let _ = hash.aset("via_payload", session.via_payload);
-                        let _ = hash.aset("via_exploit", session.via_exploit);
-                        let _ = hash.aset("created_at", session.created_at);
+                        hash.aset("id", id)?;
+                        hash.aset("type", session.session_type.to_string())?;
+                        hash.aset("exploit", session.exploit_name)?;
+                        hash.aset("target", session.target_host)?;
+                        hash.aset("info", session.info)?;
+                        hash.aset("workspace", session.workspace)?;
+                        hash.aset("via_payload", session.via_payload)?;
+                        hash.aset("via_exploit", session.via_exploit)?;
+                        hash.aset("created_at", session.created_at)?;
                         results.push(hash)?;
                     }
                     Ok(())
@@ -888,15 +887,15 @@ fn msf_session_info(ruby: &Ruby, session_id: String) -> Result<magnus::RHash, Er
         if let Some(ref state) = *guard {
             match state.client.get_session(&session_id).await {
                 Ok(session) => {
-                    let _ = hash.aset("id", session_id);
-                    let _ = hash.aset("type", session.session_type.to_string());
-                    let _ = hash.aset("exploit", session.exploit_name);
-                    let _ = hash.aset("target", session.target_host);
-                    let _ = hash.aset("info", session.info);
-                    let _ = hash.aset("workspace", session.workspace);
-                    let _ = hash.aset("via_payload", session.via_payload);
-                    let _ = hash.aset("via_exploit", session.via_exploit);
-                    let _ = hash.aset("created_at", session.created_at);
+                    hash.aset("id", session_id)?;
+                    hash.aset("type", session.session_type.to_string())?;
+                    hash.aset("exploit", session.exploit_name)?;
+                    hash.aset("target", session.target_host)?;
+                    hash.aset("info", session.info)?;
+                    hash.aset("workspace", session.workspace)?;
+                    hash.aset("via_payload", session.via_payload)?;
+                    hash.aset("via_exploit", session.via_exploit)?;
+                    hash.aset("created_at", session.created_at)?;
                     Ok(())
                 }
                 Err(e) => Err(runtime_error(ruby, e.to_string())),

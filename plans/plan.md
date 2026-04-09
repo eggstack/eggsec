@@ -404,13 +404,13 @@ Lower priority items that improve maintainability and security posture.
 - [x] 1.5 Log injection mitigation (utils/logging.rs + 8 files updated)
 
 ### Phase 2: High Priority (Wave 2)
-- [ ] 2.1 Refactor TUI dispatch (and remove dead dispatch.rs)
-- [ ] 2.2 Fix slapper-plugin Ruby .unwrap() panics (or remove module)
-- [ ] 2.3 Fix slapper-ruby ignored errors
-- [ ] 2.4 Fix fuzzer HttpSession serialization
-- [ ] 2.5 Fix grammar payload severity
-- [ ] 2.6 Add AI generation error logging
-- [ ] 2.7 Error handling audit
+- [x] 2.1 Refactor TUI dispatch (and remove dead dispatch.rs) - TabDispatcher struct created, 484 lines removed
+- [x] 2.2 Fix slapper-plugin Ruby .unwrap() panics - replaced with proper error handling
+- [x] 2.3 Fix slapper-ruby ignored errors - 26 `let _ =` patterns removed
+- [x] 2.4 Fix fuzzer HttpSession serialization - SerializableHeaderMap wrapper implemented
+- [x] 2.5 Fix grammar payload severity - GrammarKind::severity() mapping added
+- [x] 2.6 Add AI generation error logging - tracing::warn! added for failures
+- [x] 2.7 Error handling audit - fixed high-risk unwraps in agent_routes.rs, openai handlers
 
 ### Phase 3: Medium Priority (Wave 3)
 - [ ] 3.1 Document XXE safety

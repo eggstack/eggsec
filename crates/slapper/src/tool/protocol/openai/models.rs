@@ -79,26 +79,50 @@ async fn get_model(
 ) -> impl axum::response::IntoResponse {
     let models = slapper_models();
     match models.into_iter().find(|m| m.id == model_id) {
-        Some(model) => axum::response::Response::builder()
-            .status(axum::http::StatusCode::OK)
-            .header("content-type", "application/json")
-            .body(serde_json::to_string(&model).unwrap())
-            .unwrap(),
-        None => axum::response::Response::builder()
-            .status(axum::http::StatusCode::NOT_FOUND)
-            .header("content-type", "application/json")
-            .body(
-                serde_json::to_string(&serde_json::json!({
-                    "error": {
-                        "message": format!("Model '{}' not found", model_id),
-                        "type": "invalid_request_error",
-                        "param": "model",
-                        "code": "model_not_found",
-                    }
-                }))
-                .unwrap(),
-            )
-            .unwrap(),
+        Some(model) => {
+            let body = match serde_json::to_string(&model) {
+                Ok(s) => s,
+                Err(e) => {
+                    return format!(r#"{{"error":"Serialization error: {}"}}"#, e).into_response();
+                }
+            };
+            match axum::response::Response::builder()
+                .status(axum::http::StatusCode::OK)
+                .header("content-type", "application/json")
+                .body(body)
+            {
+                Ok(r) => r,
+                Err(_) => {
+                    axum::response::Response::builder()
+                        .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                        .body("{\"error\":\"Internal error\"}".to_string())
+                        .unwrap()
+                }
+            }
+        }
+        None => {
+            let body = serde_json::to_string(&serde_json::json!({
+                "error": {
+                    "message": format!("Model '{}' not found", model_id),
+                    "type": "invalid_request_error",
+                    "param": "model",
+                    "code": "model_not_found",
+                }
+            })).unwrap_or_else(|_| r#"{"error":{"message":"Model not found","type":"invalid_request_error","param":"model","code":"model_not_found"}}"#.to_string());
+            match axum::response::Response::builder()
+                .status(axum::http::StatusCode::NOT_FOUND)
+                .header("content-type", "application/json")
+                .body(body)
+            {
+                Ok(r) => r,
+                Err(_) => {
+                    axum::response::Response::builder()
+                        .status(axum::http::StatusCode::NOT_FOUND)
+                        .body("{\"error\":{\"message\":\"Model not found\"}}".to_string())
+                        .unwrap()
+                }
+            }
+        }
     }
 }
 

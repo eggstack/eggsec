@@ -48,7 +48,7 @@ impl RubyPluginManager {
     }
 
     fn load_plugin(&mut self, path: &PathBuf) -> Result<(), String> {
-        let ruby = Ruby::get().unwrap();
+        let ruby = Ruby::get().map_err(|e| format!("Ruby VM not initialized: {}", e))?;
 
         let content =
             std::fs::read_to_string(path).map_err(|e| format!("Failed to read plugin: {}", e))?;
@@ -74,7 +74,13 @@ impl RubyPluginManager {
     }
 
     pub fn get_checks(&self) -> Vec<String> {
-        let ruby = Ruby::get().unwrap();
+        let ruby = match Ruby::get() {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("Ruby VM not initialized: {}", e);
+                return Vec::new();
+            }
+        };
         let mut checks = Vec::new();
 
         if let Ok(register_fn) =
@@ -91,7 +97,7 @@ impl RubyPluginManager {
     }
 
     pub fn run_check(&self, check_name: &str, target: &str) -> Result<Vec<PluginFinding>, String> {
-        let ruby = Ruby::get().unwrap();
+        let ruby = Ruby::get().map_err(|e| format!("Ruby VM not initialized: {}", e))?;
 
         let code = format!(
             "if respond_to?(:run_check)\n  run_check('{}', '{}')\nelse\n  nil\nend",

@@ -46,7 +46,7 @@ async fn streaming_response(
         let chunk = StreamChunk {
             id: id.clone(),
             object: "chat.completion.chunk".to_string(),
-            created: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            created: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
             model: model.clone(),
             choices: vec![StreamChoice {
                 index: 0,
@@ -77,7 +77,7 @@ async fn streaming_response(
         let chunk = StreamChunk {
             id: id.clone(),
             object: "chat.completion.chunk".to_string(),
-            created: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            created: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
             model: model.clone(),
             choices: vec![StreamChoice {
                 index: 0,

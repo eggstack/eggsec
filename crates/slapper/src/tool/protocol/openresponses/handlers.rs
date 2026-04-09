@@ -94,7 +94,7 @@ pub async fn create_response(
     let response = ResponsesResponse {
         id: format!("resp_{}", uuid::Uuid::new_v4()),
         object: "response".to_string(),
-        created_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+        created_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
         status: "completed".to_string(),
         output: output_items,
         model: req.model,
