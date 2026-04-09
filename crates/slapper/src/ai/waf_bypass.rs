@@ -130,3 +130,87 @@ impl Clone for SmartWafBypass {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ai::client::AiClient;
+    use crate::config::AiConfig;
+
+    fn create_mock_client() -> AiClient {
+        AiClient::new(AiConfig {
+            provider: "openai".to_string(),
+            model: Some("gpt-4".to_string()),
+            api_key: None,
+            base_url: None,
+            max_tokens: Some(2048),
+            temperature: Some(0.7),
+        })
+    }
+
+    fn create_test_bypass() -> SmartWafBypass {
+        SmartWafBypass::new(create_mock_client())
+    }
+
+    #[tokio::test]
+    async fn test_find_bypass_empty_waf() {
+        let mut bypass = create_test_bypass();
+        let result = bypass.find_bypass("", "payload").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_find_bypass_empty_payload() {
+        let mut bypass = create_test_bypass();
+        let result = bypass.find_bypass("cloudflare", "").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_iterative_bypass_empty_waf() {
+        let mut bypass = create_test_bypass();
+        let result = bypass.iterative_bypass("", "payload".to_string(), 5).await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_record_success_adds_to_knowledge_base() {
+        let mut bypass = create_test_bypass();
+        let initial_len = bypass.knowledge_base.len();
+        bypass.record_success("cloudflare", "payload1", "bypassed1", "technique1");
+        assert_eq!(bypass.knowledge_base.len(), initial_len + 1);
+        let entry = &bypass.knowledge_base[initial_len];
+        assert_eq!(entry.waf_name, "cloudflare");
+        assert_eq!(entry.original_payload, "payload1");
+        assert_eq!(entry.bypass_payload, "bypassed1");
+        assert_eq!(entry.technique, "technique1");
+        assert!(entry.success);
+    }
+
+    #[test]
+    fn test_waf_bypass_entry_serialization() {
+        let entry = WafBypassEntry {
+            waf_name: "cloudflare".to_string(),
+            original_payload: "payload".to_string(),
+            bypass_payload: "bypassed".to_string(),
+            technique: "encoding".to_string(),
+            success: true,
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        let deserialized: WafBypassEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.waf_name, entry.waf_name);
+        assert_eq!(deserialized.original_payload, entry.original_payload);
+        assert_eq!(deserialized.bypass_payload, entry.bypass_payload);
+        assert_eq!(deserialized.technique, entry.technique);
+        assert_eq!(deserialized.success, entry.success);
+    }
+
+    #[test]
+    fn test_clone_preserves_knowledge_base() {
+        let mut bypass = create_test_bypass();
+        bypass.record_success("cloudflare", "p1", "b1", "t1");
+        let bypass_clone = bypass.clone();
+        assert_eq!(bypass_clone.knowledge_base.len(), bypass.knowledge_base.len());
+        assert_eq!(bypass_clone.knowledge_base[0].waf_name, "cloudflare");
+    }
+}

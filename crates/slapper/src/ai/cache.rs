@@ -12,7 +12,7 @@ pub struct CacheEntry {
     created_at: DateTime<Utc>,
     pub ttl: Duration,
     #[serde(default)]
-    hit_count: u64,
+    pub hit_count: u64,
 }
 
 impl<'de> Deserialize<'de> for CacheEntry {
@@ -152,9 +152,10 @@ impl AiCache {
     }
 
     pub async fn get(&self, key: &str) -> Option<String> {
-        let entries = self.entries.read().await;
-        if let Some(entry) = entries.get(key) {
+        let mut entries = self.entries.write().await;
+        if let Some(entry) = entries.get_mut(key) {
             if !entry.is_expired() {
+                entry.hit_count += 1;
                 return Some(entry.value.clone());
             }
         }
@@ -315,7 +316,20 @@ mod tests {
         let cache = AiCache::new(10, Duration::from_secs(60));
         cache.set("key1", "value1", None).await;
         cache.get("key1").await;
+        cache.get("key1").await;
         let stats = cache.stats().await;
         assert_eq!(stats.total_entries, 1);
+        assert_eq!(stats.total_hits, 2);
+    }
+
+    #[tokio::test]
+    async fn test_cache_hit_count_incremented() {
+        let cache = AiCache::new(10, Duration::from_secs(60));
+        cache.set("key1", "value1", None).await;
+        assert_eq!(cache.get("key1").await, Some("value1".to_string()));
+        assert_eq!(cache.get("key1").await, Some("value1".to_string()));
+        assert_eq!(cache.get("key1").await, Some("value1".to_string()));
+        let stats = cache.stats().await;
+        assert_eq!(stats.total_hits, 3);
     }
 }

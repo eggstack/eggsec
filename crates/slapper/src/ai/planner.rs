@@ -22,7 +22,7 @@ pub struct PlanModification {
     pub rationale: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ModificationType {
     AddStage,
@@ -290,12 +290,99 @@ impl AiPlanner {
     }
 
     fn parse_adjustment_response(&self, content: &str) -> AdaptivePlanSuggestion {
-        AdaptivePlanSuggestion {
-            suggested_modifications: vec![],
-            confidence: 0.5,
-            reasoning: content.to_string(),
-            estimated_improvement: None,
+        if let Ok(mods) = serde_json::from_str::<Vec<PlanModification>>(content) {
+            return AdaptivePlanSuggestion {
+                suggested_modifications: mods,
+                confidence: 0.8,
+                reasoning: "Successfully parsed JSON modifications".to_string(),
+                estimated_improvement: None,
+            };
         }
+
+        let modifications = self.extract_modifications_from_text(content);
+        let confidence = if modifications.is_empty() { 0.3 } else { 0.6 };
+
+        AdaptivePlanSuggestion {
+            suggested_modifications: modifications,
+            confidence,
+            reasoning: content.to_string(),
+            estimated_improvement: self.extract_estimated_improvement(content),
+        }
+    }
+
+    fn extract_modifications_from_text(&self, content: &str) -> Vec<PlanModification> {
+        let mut modifications = Vec::new();
+        let lower = content.to_lowercase();
+
+        let mod_types = [
+            ("add stage", ModificationType::AddStage),
+            ("remove stage", ModificationType::RemoveStage),
+            ("reorder", ModificationType::ReorderStages),
+            ("modify stage", ModificationType::ModifyStage),
+            ("add tool", ModificationType::AddTool),
+            ("remove tool", ModificationType::RemoveTool),
+            ("increase coverage", ModificationType::IncreaseCoverage),
+            ("reduce duration", ModificationType::ReduceDuration),
+        ];
+
+        for (keyword, mod_type) in &mod_types {
+            if lower.contains(keyword) {
+                modifications.push(PlanModification {
+                    modification_type: mod_type.clone(),
+                    target_stage: self.extract_stage_reference(content),
+                    description: format!("AI suggested: {}", self.extract_sentence_containing(content, keyword)),
+                    rationale: "Extracted from AI response".to_string(),
+                });
+            }
+        }
+
+        modifications
+    }
+
+    fn extract_stage_reference(&self, content: &str) -> Option<String> {
+        let stage_keywords = ["stage", "phase", "step"];
+        for line in content.lines() {
+            let lower = line.to_lowercase();
+            for kw in &stage_keywords {
+                if lower.contains(kw) {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    for (i, part) in parts.iter().enumerate() {
+                        if part.to_lowercase().contains(kw) && i + 1 < parts.len() {
+                            return Some(parts[i + 1].trim_matches(|c| c == ':' || c == ',').to_string());
+                        }
+                    }
+                    let cleaned = line.trim().trim_end_matches(|c| c == ':' || c == ',' || c == '.');
+                    return Some(cleaned.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    fn extract_sentence_containing(&self, content: &str, keyword: &str) -> String {
+        for sentence in content.split(|c| c == '.' || c == '\n') {
+            if sentence.to_lowercase().contains(keyword) {
+                return sentence.trim().to_string();
+            }
+        }
+        content.chars().take(100).collect::<String>() + "..."
+    }
+
+    fn extract_estimated_improvement(&self, content: &str) -> Option<String> {
+        let improvement_keywords = ["improve", "improvement", "reduce", "increase", "efficiency", "coverage"];
+        let lower = content.to_lowercase();
+
+        for kw in &improvement_keywords {
+            if let Some(pos) = lower.find(kw) {
+                let start = content[..pos].rfind('.').map(|p| p + 1).unwrap_or(0);
+                let end = content[pos..].find('.').map(|p| pos + p).unwrap_or(content.len());
+                let snippet = content[start..end].trim();
+                if !snippet.is_empty() && snippet.len() > 10 {
+                    return Some(snippet.to_string());
+                }
+            }
+        }
+        None
     }
 
     pub fn record_outcome(&self, plan: &ExecutionPlan, outcome: &PlanOutcome) {
@@ -322,5 +409,133 @@ impl AiPlanner {
     pub fn cache_size(&self) -> usize {
         let cache = self.learning_cache.read();
         cache.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_planner() -> AiPlanner {
+        use crate::tool::create_default_registry;
+        let registry = create_default_registry();
+        let chain_planner = ChainPlanner::new(registry);
+        AiPlanner::new(None, chain_planner)
+    }
+
+    #[test]
+    fn test_parse_modifications_from_text_add_stage() {
+        let planner = create_test_planner();
+        let content = "I recommend you add a new stage for SSL analysis after the initial recon phase.";
+        let suggestion = planner.parse_adjustment_response(content);
+
+        assert!(!suggestion.suggested_modifications.is_empty());
+        assert!(suggestion.suggested_modifications.iter().any(|m| m.modification_type == ModificationType::AddStage));
+    }
+
+    #[test]
+    fn test_parse_modifications_from_text_increase_coverage() {
+        let planner = create_test_planner();
+        let content = "To increase coverage, you should add more payload variations.";
+        let suggestion = planner.parse_adjustment_response(content);
+
+        assert!(!suggestion.suggested_modifications.is_empty());
+        assert!(suggestion.suggested_modifications.iter().any(|m| m.modification_type == ModificationType::IncreaseCoverage));
+    }
+
+    #[test]
+    fn test_parse_modifications_from_text_reduce_duration() {
+        let planner = create_test_planner();
+        let content = "Consider reducing duration of the fuzzing phase to save time.";
+        let suggestion = planner.parse_adjustment_response(content);
+
+        assert!(!suggestion.suggested_modifications.is_empty());
+        assert!(suggestion.suggested_modifications.iter().any(|m| m.modification_type == ModificationType::ReduceDuration));
+    }
+
+    #[test]
+    fn test_parse_modifications_multiple_types() {
+        let planner = create_test_planner();
+        let content = "Add a stage for API testing. Increase coverage by adding more SQL injection payloads. Reduce duration of the enumeration phase.";
+        let suggestion = planner.parse_adjustment_response(content);
+
+        assert!(suggestion.suggested_modifications.len() >= 3);
+    }
+
+    #[test]
+    fn test_parse_modifications_json_format() {
+        let planner = create_test_planner();
+        let json_content = r#"[{"modification_type":"add_stage","target_stage":"api_test","description":"Add API testing stage","rationale":"Better coverage"}]"#;
+        let suggestion = planner.parse_adjustment_response(json_content);
+
+        assert!(!suggestion.suggested_modifications.is_empty());
+        assert_eq!(suggestion.confidence, 0.8);
+    }
+
+    #[test]
+    fn test_parse_modifications_empty_content() {
+        let planner = create_test_planner();
+        let suggestion = planner.parse_adjustment_response("No specific recommendations.");
+
+        assert!(suggestion.suggested_modifications.is_empty());
+        assert_eq!(suggestion.confidence, 0.3);
+    }
+
+    #[test]
+    fn test_extract_stage_reference() {
+        let planner = create_test_planner();
+        let content = "In the recon stage, you should add more checks.";
+        let stage = planner.extract_stage_reference(content);
+        assert!(stage.is_some());
+    }
+
+    #[test]
+    fn test_extract_estimated_improvement() {
+        let planner = create_test_planner();
+        let content = "This change would improve scan efficiency by 30%.";
+        let improvement = planner.extract_estimated_improvement(content);
+        assert!(improvement.is_some());
+    }
+
+    #[test]
+    fn test_record_outcome_updates_success_rate() {
+        let planner = create_test_planner();
+        let plan = ExecutionPlan {
+            stages: vec![],
+            estimated_duration_ms: 1000,
+            total_tools: 5,
+        };
+        let outcome = PlanOutcome {
+            success: true,
+            findings_count: 3,
+            severity_distribution: HashMap::new(),
+            duration_ms: 1000,
+            target: "http://example.com".to_string(),
+        };
+
+        planner.record_outcome(&plan, &outcome);
+        assert_eq!(planner.cache_size(), 1);
+    }
+
+    #[test]
+    fn test_planner_cache_clear() {
+        let planner = create_test_planner();
+        let plan = ExecutionPlan {
+            stages: vec![],
+            estimated_duration_ms: 1000,
+            total_tools: 5,
+        };
+        let outcome = PlanOutcome {
+            success: true,
+            findings_count: 3,
+            severity_distribution: HashMap::new(),
+            duration_ms: 1000,
+            target: "http://example.com".to_string(),
+        };
+
+        planner.record_outcome(&plan, &outcome);
+        assert_eq!(planner.cache_size(), 1);
+        planner.clear_cache();
+        assert_eq!(planner.cache_size(), 0);
     }
 }

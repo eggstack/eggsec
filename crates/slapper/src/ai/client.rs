@@ -14,6 +14,9 @@ pub struct AiClient {
 
 impl AiClient {
     pub fn new(config: AiConfig) -> Self {
+        if config.provider.is_empty() {
+            panic!("AiConfig provider cannot be empty");
+        }
         let circuit_breaker = Arc::new(CircuitBreaker::new(
             5,
             3,
@@ -225,5 +228,171 @@ impl AiClient {
 
     pub async fn circuit_breaker_state(&self) -> CircuitState {
         self.circuit_breaker.get_state().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_config() -> AiConfig {
+        AiConfig {
+            provider: "openai".to_string(),
+            model: Some("gpt-4".to_string()),
+            api_key: None,
+            base_url: Some("https://api.openai.com/v1/chat/completions".to_string()),
+            max_tokens: Some(2048),
+            temperature: Some(0.7),
+        }
+    }
+
+    fn create_client_with_key(key: &str) -> AiClient {
+        let mut config = create_test_config();
+        config.api_key = Some(crate::types::SensitiveString::from(key.to_string()));
+        AiClient::new(config)
+    }
+
+    fn create_client_without_key() -> AiClient {
+        AiClient::new(create_test_config())
+    }
+
+    #[test]
+    fn test_api_url_default() {
+        let config = AiConfig {
+            provider: "openai".to_string(),
+            model: Some("gpt-4".to_string()),
+            api_key: None,
+            base_url: None,
+            max_tokens: Some(2048),
+            temperature: Some(0.7),
+        };
+        let client = AiClient::new(config);
+        assert_eq!(client.api_url(), "https://api.openai.com/v1/chat/completions");
+    }
+
+    #[test]
+    fn test_api_url_custom() {
+        let client = create_client_without_key();
+        assert_eq!(client.api_url(), "https://api.openai.com/v1/chat/completions");
+    }
+
+    #[test]
+    fn test_api_url_custom_base_url() {
+        let mut config = create_test_config();
+        config.base_url = Some("https://custom.api.com/v1/chat".to_string());
+        let client = AiClient::new(config);
+        assert_eq!(client.api_url(), "https://custom.api.com/v1/chat");
+    }
+
+    #[test]
+    fn test_model_default() {
+        let mut config = create_test_config();
+        config.model = None;
+        let client = AiClient::new(config);
+        assert_eq!(client.model(), "gpt-4");
+    }
+
+    #[test]
+    fn test_model_custom() {
+        let client = create_client_without_key();
+        assert_eq!(client.model(), "gpt-4");
+    }
+
+    #[test]
+    fn test_model_custom_value() {
+        let mut config = create_test_config();
+        config.model = Some("gpt-3.5-turbo".to_string());
+        let client = AiClient::new(config);
+        assert_eq!(client.model(), "gpt-3.5-turbo");
+    }
+
+    #[test]
+    fn test_apply_auth_with_key() {
+        let client = create_client_with_key("test-api-key");
+        let request = client.apply_auth(reqwest::Client::new().post("http://example.com"));
+        let request_url = request.url();
+        assert_eq!(request_url.as_str(), "http://example.com");
+    }
+
+    #[test]
+    fn test_apply_auth_without_key() {
+        let client = create_client_without_key();
+        let request = client.apply_auth(reqwest::Client::new().post("http://example.com"));
+        let request_url = request.url();
+        assert_eq!(request_url.as_str(), "http://example.com");
+    }
+
+    #[test]
+    fn test_extract_content_valid_response() {
+        let client = create_client_without_key();
+        let response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": "line1\nline2\nline3\n# comment\nline4"
+                }
+            }]
+        });
+        let content = client.extract_content(&response, |l| !l.starts_with('#'));
+        assert_eq!(content.len(), 3);
+        assert!(content.contains(&"line1".to_string()));
+        assert!(content.contains(&"line2".to_string()));
+        assert!(content.contains(&"line3".to_string()));
+        assert!(!content.contains(&"# comment".to_string()));
+    }
+
+    #[test]
+    fn test_extract_content_empty_response() {
+        let client = create_client_without_key();
+        let response = serde_json::json!({});
+        let content = client.extract_content(&response, |l| true);
+        assert!(content.is_empty());
+    }
+
+    #[test]
+    fn test_extract_content_no_choices() {
+        let client = create_client_without_key();
+        let response = serde_json::json!({"choices": []});
+        let content = client.extract_content(&response, |l| true);
+        assert!(content.is_empty());
+    }
+
+    #[test]
+    fn test_extract_content_no_message() {
+        let client = create_client_without_key();
+        let response = serde_json::json!({"choices": [{}]});
+        let content = client.extract_content(&response, |l| true);
+        assert!(content.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_suggest_payloads_empty_vuln_type() {
+        let client = create_client_without_key();
+        let result = client.suggest_payloads("", "test context").await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AiError::InvalidConfig(_)));
+    }
+
+    #[tokio::test]
+    async fn test_suggest_waf_bypass_empty_waf() {
+        let client = create_client_without_key();
+        let result = client.suggest_waf_bypass("", "blocked").await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AiError::InvalidConfig(_)));
+    }
+
+    #[tokio::test]
+    async fn test_suggest_waf_bypass_empty_payload() {
+        let client = create_client_without_key();
+        let result = client.suggest_waf_bypass("cloudflare", "").await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AiError::InvalidConfig(_)));
+    }
+
+    #[test]
+    fn test_client_clone() {
+        let client1 = create_client_without_key();
+        let client2 = client1.clone();
+        assert_eq!(client1.api_url(), client2.api_url());
+        assert_eq!(client1.model(), client2.model());
     }
 }
