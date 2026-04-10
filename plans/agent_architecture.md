@@ -588,21 +588,21 @@ echo '[{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}]' | \
 
 ## Checklist
 
-- [ ] Phase 1.1: Wire up MCP HTTP server
-- [ ] Phase 1.2: Implement MCP STDIO mode
-- [ ] Phase 1.3: Verify authentication
-- [ ] Phase 1.4: Test MCP server
-- [ ] Phase 2.1: Create Agent core
-- [ ] Phase 2.2: Implement TargetPortfolio
-- [ ] Phase 2.3: Build LongitudinalMemory
-- [ ] Phase 2.4: Implement AlertRouter
-- [ ] Phase 2.5: Create Event system
-- [ ] Phase 2.6: Add Agent CLI command
-- [ ] Phase 3.1: Create SkillLoader
-- [ ] Phase 3.2: Build SkillRegistry
-- [ ] Phase 4.1: Implement SearchTool
-- [ ] Phase 4.2: Add SearchConfig
-- [ ] Phase 4.3: Search result types
-- [ ] Phase 5.1: Alert integration
-- [ ] Phase 5.2: Webhook reuse
-- [ ] Update AGENTS.md with agent documentation
+- [x] Phase 1.1: Wire up MCP HTTP server
+- [x] Phase 1.2: Implement MCP STDIO mode
+- [ ] Phase 1.3: Verify authentication (manual testing)
+- [ ] Phase 1.4: Test MCP server (manual testing)
+- [x] Phase 2.1: Create Agent core
+- [x] Phase 2.2: Implement TargetPortfolio
+- [x] Phase 2.3: Build LongitudinalMemory
+- [x] Phase 2.4: Implement AlertRouter
+- [x] Phase 2.5: Create Event system
+- [x] Phase 2.6: Add Agent CLI command
+- [x] Phase 3.1: Create SkillLoader
+- [x] Phase 3.2: Build SkillRegistry
+- [x] Phase 4.1: Implement SearchTool
+- [ ] Phase 4.2: Add SearchConfig (optional - tool works without config)
+- [x] Phase 4.3: Search result types
+- [x] Phase 5.1: Alert integration
+- [x] Phase 5.2: Webhook reuse
+- [x] Update AGENTS.md with agent documentation
