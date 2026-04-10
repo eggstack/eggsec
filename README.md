@@ -635,6 +635,104 @@ Slapper::Report.warning(title, message)
 Slapper::Report.error(title, message)
 ```
 
+## Autonomous Agent
+
+Slapper includes an autonomous security agent for continuous monitoring and scheduled security assessments. The agent maintains longitudinal memory of scan results, routes alerts to configured channels, and uses AI-powered skills for intelligent security testing.
+
+### Build Requirements
+
+```bash
+# Agent requires rest-api feature
+cargo build --release --features rest-api
+
+# With AI integration (recommended)
+cargo build --release --features "rest-api ai-integration"
+```
+
+### Quick Start
+
+```bash
+# Run the agent (continuous monitoring)
+./slapper agent run --portfolio /path/to/portfolio.json
+
+# Run once (single assessment)
+./slapper agent run --once
+
+# With AI analysis
+./slapper agent run --with-ai --ai-config /path/to/ai.toml
+```
+
+### Target Management
+
+```bash
+# List configured targets
+./slapper agent targets list
+
+# Add a target with scheduled scan
+./slapper agent targets add example-com \
+  --target https://example.com \
+  --schedule "0 0 * * *"
+
+# Remove a target
+./slapper agent targets remove example-com
+
+# Enable/disable targets
+./slapper agent targets enable example-com
+./slapper agent targets disable example-com
+```
+
+### Skills
+
+Skills are YAML+Markdown files that guide the agent's behavior. See `slapper_skills/` for available skills.
+
+```bash
+# List available skills
+./slapper agent skills list
+
+# Load custom skills
+./slapper agent skills load /path/to/skills/
+
+# Show skill details
+./slapper agent skills show sql_injection_fuzzing
+```
+
+### Configuration
+
+Create a portfolio file (`portfolio.json`):
+
+```json
+{
+  "version": "1.0",
+  "targets": {
+    "example-com": {
+      "target": "https://example.com",
+      "target_type": "url",
+      "priority": "high",
+      "schedule": "0 0 * * *",
+      "alert_channels": ["webhook"],
+      "enabled": true
+    }
+  }
+}
+```
+
+### Alert Configuration
+
+Configure webhooks in `config.toml`:
+
+```toml
+[agent]
+memory_dir = "~/.config/slapper/memory"
+poll_interval_secs = 60
+
+[[agent.alert_channels]]
+type = "webhook"
+url = "https://hooks.example.com/security"
+secret = "your-hmac-secret"
+```
+
+For detailed documentation, see [docs/AGENT.md](docs/AGENT.md).
+
 ## Docker Usage
 
 ```bash

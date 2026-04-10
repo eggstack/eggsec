@@ -1,12 +1,30 @@
-# Slapper Skills Directory
+# Slapper Skills
 
-This directory contains skill files for use with the Slapper autonomous security agent system.
+This directory contains skill files for the Slapper autonomous security agent system.
+
+**Note:** These skills are for **using** Slapper's agent system, not for working on the Slapper codebase itself. The `AGENTS.md` file in the project root contains guidelines for AI agents working on the Slapper codebase.
 
 ## Purpose
 
-These skills define how AI agents should use Slapper for security testing workflows. Each skill file contains:
-- YAML frontmatter with metadata and triggers
+Skills define how the autonomous agent should approach security testing workflows. Each skill contains:
+- YAML frontmatter with metadata and trigger keywords
 - Markdown body with capabilities, usage examples, and best practices
+
+## Quick Start
+
+```bash
+# Build with agent support
+cargo build --release --features "rest-api ai-integration"
+
+# List available skills
+./slapper agent skills list
+
+# Load skills
+./slapper agent skills load ./slapper_skills/
+
+# Show skill details
+./slapper agent skills show sql_injection_fuzzing
+```
 
 ## Skills Index
 
