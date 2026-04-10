@@ -10,6 +10,10 @@ use chrono::Utc;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use lettre::transport::smtp::SmtpTransport;
+use lettre::transport::Transport;
+use lettre::Message;
+use lettre::message::Mailbox;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Alert {
@@ -121,22 +125,58 @@ impl AlertRouter {
                 self.send_webhook(&webhook_config, alert).await?;
             }
             AlertChannel::Email(config) => {
-                tracing::info!(
-                    "Would send email alert via {}:{} from {} to {:?}",
-                    config.smtp_host,
-                    config.smtp_port,
-                    config.from,
-                    config.to
-                );
+                if let Err(e) = self.send_email(config, alert).await {
+                    tracing::warn!("Failed to send email alert: {}", e);
+                }
             }
             AlertChannel::PagerDuty(config) => {
-                tracing::info!(
-                    "Would send PagerDuty alert with routing_key {} severity {}",
-                    config.routing_key,
-                    config.severity
-                );
+                if let Err(e) = self.send_pagerduty(config, alert).await {
+                    tracing::warn!("Failed to send PagerDuty alert: {}", e);
+                }
             }
         }
+        Ok(())
+    }
+
+    async fn send_email(&self, config: &EmailChannel, alert: &Alert) -> Result<()> {
+        let mailer = SmtpTransport::relay(&config.smtp_host)?
+            .port(config.smtp_port)
+            .build();
+
+        let subject = alert.title.clone();
+        let body = format!(
+            "Severity: {}\nTarget: {}\n\n{}\n\nFinding IDs: {:?}\nRecommended Actions: {:?}",
+            alert.severity.as_str().to_uppercase(),
+            alert.target,
+            alert.message,
+            alert.finding_ids,
+            alert.recommended_actions
+        );
+
+        let mut email_builder = Message::builder()
+            .from(config.from.parse()?)
+            .subject(subject);
+
+        for addr in &config.to {
+            let mailbox: Mailbox = addr.parse()?;
+            email_builder = email_builder.to(mailbox);
+        }
+
+        let email = email_builder.body(body)?;
+
+        tokio::task::spawn_blocking(move || {
+            mailer.send(&email)
+        })
+        .await??;
+
+        tracing::info!(
+            "Email alert sent via {}:{} from {} to {:?}",
+            config.smtp_host,
+            config.smtp_port,
+            config.from,
+            config.to
+        );
+
         Ok(())
     }
 
@@ -173,6 +213,46 @@ impl AlertRouter {
 
         if !response.status().is_success() {
             tracing::warn!("Webhook failed with status: {}", response.status());
+        }
+
+        Ok(())
+    }
+
+    async fn send_pagerduty(&self, config: &PagerDutyChannel, alert: &Alert) -> Result<()> {
+        let pd_severity = match alert.severity {
+            crate::types::Severity::Critical => "critical",
+            crate::types::Severity::High => "error",
+            crate::types::Severity::Medium => "warning",
+            crate::types::Severity::Low => "info",
+            crate::types::Severity::Info => "info",
+        };
+
+        let payload = serde_json::json!({
+            "routing_key": config.routing_key,
+            "event_action": "trigger",
+            "dedup_key": self.make_dedup_key(alert),
+            "payload": {
+                "summary": alert.title,
+                "source": alert.target,
+                "severity": pd_severity,
+                "custom_details": {
+                    "message": alert.message,
+                    "finding_ids": alert.finding_ids,
+                    "recommended_actions": alert.recommended_actions,
+                }
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let response = client
+            .post("https://events.pagerduty.com/v2/enqueue")
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            tracing::warn!("PagerDuty API failed with status: {}", response.status());
         }
 
         Ok(())

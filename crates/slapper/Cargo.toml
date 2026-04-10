@@ -64,6 +64,7 @@ md-5.workspace = true
 hmac = "0.12"
 hex.workspace = true
 subtle = "2"
+lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls", "smtp-transport", "tracing", "rustls-no-provider", "webpki-roots", "builder"] }
 crossbeam = "0.8"
 dashmap.workspace = true
 scraper.workspace = true

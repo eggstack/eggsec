@@ -511,10 +511,10 @@ pub async fn send(&mut self, alert: &Alert) -> Result<()> {
 - [x] 4.3 Session pagination
 
 ### Phase 5: Alerting (Medium)
-- [ ] 5.1 Email alerts
-- [ ] 5.2 PagerDuty alerts
-- [ ] 5.3 Scheduler consumer
-- [ ] 5.4 Lifecycle ping
+- [x] 5.1 Email alerts
+- [x] 5.2 PagerDuty alerts
+- [x] 5.3 Scheduler consumer
+- [x] 5.4 Lifecycle ping
 
 ---
 

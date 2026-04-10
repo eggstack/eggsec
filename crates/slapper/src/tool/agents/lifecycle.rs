@@ -4,6 +4,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::interval;
 use uuid::Uuid;
+use reqwest::Client;
 use crate::tool::agents::registry::{AgentRegistry, AgentStatus};
 
 #[derive(Debug, Clone)]
@@ -109,6 +110,14 @@ impl LifecycleManager {
         });
     }
 
+    async fn check_agent_callback_health(callback_url: &str) -> bool {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap_or_else(|_| Client::new());
+        client.get(callback_url).send().await.map(|resp| resp.status().is_success()).unwrap_or(false)
+    }
+
     async fn perform_health_check(
         health_status: &Arc<RwLock<HashMap<Uuid, AgentHealth>>>,
         agent_registry: &AgentRegistry,
@@ -135,20 +144,34 @@ impl LifecycleManager {
 
             agent_health.last_health_check = now;
 
-            if is_stale {
+            let callback_unhealthy = if let Some(ref callback_url) = agent.callback_url {
+                !Self::check_agent_callback_health(callback_url).await
+            } else {
+                false
+            };
+
+            if is_stale || callback_unhealthy {
                 agent_health.is_healthy = false;
                 if !agent_health.issues.iter().any(|i| matches!(i, HealthIssue::MissedHeartbeat)) {
-                    agent_health.issues.push(HealthIssue::MissedHeartbeat);
+                    if is_stale {
+                        agent_health.issues.push(HealthIssue::MissedHeartbeat);
+                    }
+
+                    let details = if is_stale {
+                        Some(format!(
+                            "Agent {} missed heartbeat, last seen {}s ago",
+                            agent.name,
+                            now - agent.last_heartbeat
+                        ))
+                    } else {
+                        Some(format!("Agent {} failed callback health check", agent.name))
+                    };
 
                     let _ = event_tx.send(LifecycleEvent {
                         event_type: LifecycleEventType::AgentMarkedStale,
                         agent_id: agent.id,
                         timestamp: now,
-                        details: Some(format!(
-                            "Agent {} missed heartbeat, last seen {}s ago",
-                            agent.name,
-                            now - agent.last_heartbeat
-                        )),
+                        details,
                     }).await;
                 }
 
