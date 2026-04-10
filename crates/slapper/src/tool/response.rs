@@ -597,7 +597,7 @@ mod tests {
         assert_eq!(finding.title, "SQL injection test");
         assert_eq!(finding.description, "SQL injection detected");
         assert_eq!(finding.severity, ResponseSeverity::High);
-        assert!(finding.location.contains("Sqli"));
+        assert!(finding.location.contains("SQL Injection"));
         assert!(finding.location.contains("test payload"));
         assert_eq!(
             finding.metadata.get("status_code").and_then(|v| v.as_u64()),
