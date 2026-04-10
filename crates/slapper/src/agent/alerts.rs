@@ -87,6 +87,10 @@ impl AlertRouter {
     }
 
     pub async fn send(&mut self, alert: &Alert) -> Result<()> {
+        if self.recent_alerts.len() > 1000 {
+            self.cleanup_stale_entries();
+        }
+
         let dedup_key = self.make_dedup_key(alert);
         if let Some(last_sent) = self.recent_alerts.get(&dedup_key) {
             if last_sent.elapsed() < Duration::from_secs(self.dedup_window_secs) {
@@ -181,6 +185,11 @@ impl AlertRouter {
             alert.severity.as_str(),
             alert.title
         )
+    }
+
+    fn cleanup_stale_entries(&mut self) {
+        let cutoff = Duration::from_secs(self.dedup_window_secs * 2);
+        self.recent_alerts.retain(|_, last_sent| last_sent.elapsed() < cutoff);
     }
 }
 

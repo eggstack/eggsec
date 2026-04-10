@@ -501,9 +501,9 @@ pub async fn send(&mut self, alert: &Alert) -> Result<()> {
 - [x] 2.2 Fix severity type mismatch
 
 ### Phase 3: Memory (High)
-- [ ] 3.1 Fix target path collision
-- [ ] 3.2 Implement resolved_findings
-- [ ] 3.3 Fix AlertRouter memory leak
+- [x] 3.1 Fix target path collision
+- [x] 3.2 Implement resolved_findings
+- [x] 3.3 Fix AlertRouter memory leak
 
 ### Phase 4: MCP Improvements (Medium)
 - [ ] 4.1 Remove dead sampling types

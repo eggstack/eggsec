@@ -3,7 +3,7 @@
 //! Provides persistent storage of scan results, findings, and pattern detection
 //! across multiple scans of the same targets.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -105,13 +105,21 @@ impl LongitudinalMemory {
     }
 
     fn get_target_path(&self, target: &str) -> PathBuf {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
         let safe_name = target
             .replace("://", "_")
             .replace("/", "_")
             .replace(":", "_");
+
+        let mut hasher = DefaultHasher::new();
+        target.hash(&mut hasher);
+        let hash = format!("{:x}", hasher.finish());
+
         self.storage_dir
             .join("targets")
-            .join(format!("{}.json", safe_name))
+            .join(format!("{}_{}.json", safe_name, hash))
     }
 
     fn get_patterns_path(&self) -> PathBuf {
@@ -246,13 +254,20 @@ impl LongitudinalMemory {
     ) -> Result<BaselineComparison> {
         let target_path = self.get_target_path(target);
 
-        let baseline_ids = if target_path.exists() {
+        let (baseline_ids, all_historical_findings) = if target_path.exists() {
             let content = fs::read_to_string(&target_path)?;
             let memory: TargetMemory = serde_json::from_str(&content)?;
-            memory.baselines
+            let all_findings: Vec<Finding> = memory
+                .scans
+                .iter()
+                .flat_map(|scan| scan.findings.iter().cloned())
+                .collect();
+            (memory.baselines, all_findings)
         } else {
-            Vec::new()
+            (Vec::new(), Vec::new())
         };
+
+        let current_ids: HashSet<&str> = findings.iter().map(|f| f.id.as_str()).collect();
 
         let new_findings: Vec<Finding> = findings
             .iter()
@@ -260,7 +275,14 @@ impl LongitudinalMemory {
             .cloned()
             .collect();
 
-        let resolved_findings: Vec<Finding> = Vec::new();
+        let baseline_ids_set: HashSet<&str> = baseline_ids.iter().map(|s| s.as_str()).collect();
+        let resolved_ids: HashSet<&str> =
+            baseline_ids_set.difference(&current_ids).cloned().collect();
+
+        let resolved_findings: Vec<Finding> = all_historical_findings
+            .into_iter()
+            .filter(|f| resolved_ids.contains(f.id.as_str()))
+            .collect();
 
         Ok(BaselineComparison {
             new_findings,
