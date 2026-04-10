@@ -319,6 +319,17 @@ impl ResponseSeverity {
             ResponseSeverity::None => 0,
         }
     }
+
+    pub fn to_agent_severity(&self) -> crate::types::Severity {
+        match self {
+            ResponseSeverity::Critical => crate::types::Severity::Critical,
+            ResponseSeverity::High => crate::types::Severity::High,
+            ResponseSeverity::Medium => crate::types::Severity::Medium,
+            ResponseSeverity::Low => crate::types::Severity::Low,
+            ResponseSeverity::Info => crate::types::Severity::Info,
+            ResponseSeverity::None => crate::types::Severity::Info,
+        }
+    }
 }
 
 impl Ord for ResponseSeverity {

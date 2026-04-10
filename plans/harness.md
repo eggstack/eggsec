@@ -497,8 +497,8 @@ pub async fn send(&mut self, alert: &Alert) -> Result<()> {
 - [ ] 1.4 (Optional) Add for Scanner/Recon/Pipeline
 
 ### Phase 2: Event System (Critical)
-- [ ] 2.1 Implement `trigger_event()`
-- [ ] 2.2 Fix severity type mismatch
+- [x] 2.1 Implement `trigger_event()`
+- [x] 2.2 Fix severity type mismatch
 
 ### Phase 3: Memory (High)
 - [ ] 3.1 Fix target path collision

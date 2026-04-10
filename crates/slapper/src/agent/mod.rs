@@ -207,13 +207,17 @@ impl Agent {
     }
 
     async fn handle_findings(&mut self, target: &str, findings: Vec<crate::tool::response::Finding>) {
-        let critical_count = findings.iter()
+        let critical_findings: Vec<_> = findings.iter()
             .filter(|f| matches!(f.severity, crate::tool::response::ResponseSeverity::Critical))
-            .count();
+            .collect();
 
-        if critical_count > 0 {
+        if !critical_findings.is_empty() {
+            let critical_count = critical_findings.len();
+            let alert_severity = critical_findings.first()
+                .map(|f| f.severity.to_agent_severity())
+                .unwrap_or(crate::types::Severity::Critical);
             let alert = Alert {
-                severity: crate::types::Severity::Critical,
+                severity: alert_severity,
                 title: format!("{} critical findings on {}", critical_count, target),
                 message: format!(
                     "Detected {} critical severity findings during scan of {}",
@@ -247,6 +251,17 @@ impl Agent {
 
     pub async fn trigger_event(&mut self, event: SecurityEvent) -> Result<()> {
         tracing::debug!("Event triggered: {:?}", event.event_type());
+
+        let handlers: Vec<Box<dyn EventHandler>> = std::mem::take(&mut self.event_handlers);
+
+        for handler in &handlers {
+            if handler.handles(&event) {
+                handler.handle(&event, self).await?;
+            }
+        }
+
+        self.event_handlers = handlers;
+
         Ok(())
     }
 }
