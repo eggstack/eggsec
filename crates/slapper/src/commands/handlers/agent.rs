@@ -10,6 +10,9 @@ use crate::commands::handlers::CommandContext;
 pub async fn handle_agent(_ctx: &CommandContext, args: AgentArgs) -> Result<()> {
     let use_ai = args.with_ai;
     let ai_config_path = args.ai_config.clone();
+    let portfolio_path = args.portfolio.clone();
+    let memory_dir = expand_path(&args.memory_dir);
+    let poll_interval = args.poll_interval;
     
     match args.command {
         None => {
@@ -20,20 +23,27 @@ pub async fn handle_agent(_ctx: &CommandContext, args: AgentArgs) -> Result<()> 
             println!("  slapper agent status      - Show agent status");
             Ok(())
         }
-        Some(AgentCommand::Run(run_args)) => handle_agent_run_impl(use_ai, ai_config_path, run_args).await,
+        Some(AgentCommand::Run(run_args)) => {
+            handle_agent_run_impl(use_ai, ai_config_path, portfolio_path, memory_dir, poll_interval, run_args).await
+        }
         Some(AgentCommand::Targets(targets_args)) => handle_targets(targets_args).await,
         Some(AgentCommand::Skills(skills_args)) => handle_skills(skills_args).await,
-        Some(AgentCommand::Status) => handle_status_impl(use_ai, ai_config_path).await,
+        Some(AgentCommand::Status) => handle_status_impl(use_ai, ai_config_path, portfolio_path).await,
     }
 }
 
-async fn handle_agent_run_impl(use_ai: bool, ai_config_path: Option<String>, run_args: crate::cli::agent::RunArgs) -> Result<()> {
-    let memory_dir = expand_path("~/.config/slapper/memory");
-
+async fn handle_agent_run_impl(
+    use_ai: bool, 
+    ai_config_path: Option<String>, 
+    portfolio_path: Option<String>,
+    memory_dir: PathBuf,
+    poll_interval: u64,
+    run_args: crate::cli::agent::RunArgs
+) -> Result<()> {
     let mut config = AgentConfig {
-        portfolio_path: None,
+        portfolio_path: portfolio_path.map(|p| expand_path(&p)),
         memory_dir,
-        poll_interval_secs: 60,
+        poll_interval_secs: poll_interval,
         ai_config: None,
     };
 
@@ -70,10 +80,14 @@ async fn handle_agent_run_impl(use_ai: bool, ai_config_path: Option<String>, run
     Ok(())
 }
 
-async fn handle_status_impl(_use_ai: bool, _ai_config_path: Option<String>) -> Result<()> {
+async fn handle_status_impl(_use_ai: bool, _ai_config_path: Option<String>, portfolio_path: Option<String>) -> Result<()> {
     println!("Agent Status");
-    println!("  Poll interval: 60s");
-    println!("  Portfolio: not configured");
+
+    if let Some(ref path) = portfolio_path {
+        println!("  Portfolio: {}", path);
+    } else {
+        println!("  Portfolio: not configured");
+    }
     Ok(())
 }
 
