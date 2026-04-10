@@ -3,8 +3,7 @@ mod handlers;
 #[cfg(feature = "rest-api")]
 pub mod prompts;
 pub mod routes;
-#[cfg(feature = "ai-integration")]
-pub mod sampling;
+
 mod streaming;
 mod types;
 

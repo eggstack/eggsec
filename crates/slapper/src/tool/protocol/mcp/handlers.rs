@@ -463,27 +463,84 @@ impl McpServer {
     }
 
     fn build_vulnerability_catalog(&self) -> serde_json::Value {
+        use crate::output::AgentSeverity;
+
+        #[derive(Default)]
+        struct VulnEntry {
+            name: String,
+            max_severity: AgentSeverity,
+            tools: Vec<String>,
+            attack_surfaces: Vec<String>,
+        }
+
+        let mut vuln_map: HashMap<String, VulnEntry> = HashMap::new();
+
+        for tool_info in self.registry.list() {
+            for cap in &tool_info.capabilities {
+                let type_key = cap.name.to_lowercase().replace(' ', "_");
+
+                let entry = vuln_map.entry(type_key.clone()).or_default();
+                if entry.name.is_empty() {
+                    entry.name = cap.name.clone();
+                }
+
+                for severity in &cap.severity_potential {
+                    let current_int = match entry.max_severity {
+                        AgentSeverity::Critical => 4,
+                        AgentSeverity::High => 3,
+                        AgentSeverity::Medium => 2,
+                        AgentSeverity::Low => 1,
+                        AgentSeverity::Info => 0,
+                    };
+                    let new_int = match severity {
+                        AgentSeverity::Critical => 4,
+                        AgentSeverity::High => 3,
+                        AgentSeverity::Medium => 2,
+                        AgentSeverity::Low => 1,
+                        AgentSeverity::Info => 0,
+                    };
+                    if new_int > current_int {
+                        entry.max_severity = *severity;
+                    }
+                }
+
+                if !entry.tools.contains(&tool_info.name) {
+                    entry.tools.push(tool_info.name.clone());
+                }
+
+                for surface in &cap.attack_surface {
+                    let surface_name = surface.display_name();
+                    if !entry.attack_surfaces.contains(&surface_name.to_string()) {
+                        entry.attack_surfaces.push(surface_name.to_string());
+                    }
+                }
+            }
+        }
+
+        let severity_str = |s: AgentSeverity| match s {
+            AgentSeverity::Critical => "critical",
+            AgentSeverity::High => "high",
+            AgentSeverity::Medium => "medium",
+            AgentSeverity::Low => "low",
+            AgentSeverity::Info => "info",
+        };
+
+        let vulnerabilities: Vec<_> = vuln_map
+            .into_iter()
+            .map(|(vtype, entry)| {
+                serde_json::json!({
+                    "type": vtype,
+                    "name": entry.name,
+                    "severity": severity_str(entry.max_severity),
+                    "tools": entry.tools,
+                    "attack_surfaces": entry.attack_surfaces,
+                })
+            })
+            .collect();
+
         serde_json::json!({
-            "vulnerabilities": [
-                {"type": "sqli", "name": "SQL Injection", "cwe": ["CWE-89"], "severity": "critical"},
-                {"type": "xss", "name": "Cross-Site Scripting", "cwe": ["CWE-79"], "severity": "high"},
-                {"type": "ssrf", "name": "Server-Side Request Forgery", "cwe": ["CWE-918"], "severity": "high"},
-                {"type": "path_traversal", "name": "Path Traversal", "cwe": ["CWE-22"], "severity": "high"},
-                {"type": "cmd_injection", "name": "Command Injection", "cwe": ["CWE-78"], "severity": "critical"},
-                {"type": "idor", "name": "Insecure Direct Object Reference", "cwe": ["CWE-639"], "severity": "medium"},
-                {"type": "ssti", "name": "Server-Side Template Injection", "cwe": ["CWE-1336"], "severity": "critical"},
-                {"type": "xxe", "name": "XML External Entity", "cwe": ["CWE-611"], "severity": "high"},
-                {"type": "jwt", "name": "JWT Vulnerabilities", "cwe": ["CWE-345", "CWE-347"], "severity": "high"},
-                {"type": "oauth", "name": "OAuth/OIDC Vulnerabilities", "cwe": ["CWE-287"], "severity": "high"},
-                {"type": "graphql", "name": "GraphQL Security Issues", "cwe": ["CWE-20"], "severity": "medium"},
-                {"type": "redirect", "name": "Open Redirect", "cwe": ["CWE-601"], "severity": "medium"},
-                {"type": "deser", "name": "Insecure Deserialization", "cwe": ["CWE-502"], "severity": "critical"},
-                {"type": "ldap", "name": "LDAP Injection", "cwe": ["CWE-90"], "severity": "high"},
-                {"type": "host", "name": "Host Header Injection", "cwe": ["CWE-74"], "severity": "medium"},
-                {"type": "cache", "name": "Cache Poisoning", "cwe": ["CWE-444"], "severity": "medium"},
-                {"type": "headers", "name": "HTTP Header Injection", "cwe": ["CWE-113"], "severity": "medium"},
-                {"type": "redos", "name": "Regular Expression DoS", "cwe": ["CWE-1333"], "severity": "medium"},
-            ]
+            "vulnerabilities": vulnerabilities,
+            "generated_at": Utc::now().to_rfc3339()
         })
     }
 
@@ -847,10 +904,27 @@ impl McpServer {
     }
 
     async fn handle_session_list(&self, req: McpRequest) -> McpResponse {
+        let (offset, limit) = match &req.params {
+            Some(p) => {
+                let offset = p.get("offset")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as usize;
+                let limit = p.get("limit")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(50) as usize;
+                (offset, limit.clamp(1, 100))
+            }
+            None => (0, 50),
+        };
+
         if let Some(ref manager) = self.session_manager {
-            let sessions = manager.list_sessions().await;
-            let session_list: Vec<serde_json::Value> = sessions
+            let all_sessions = manager.list_sessions().await;
+            let total = all_sessions.len();
+            
+            let paginated_sessions: Vec<serde_json::Value> = all_sessions
                 .iter()
+                .skip(offset)
+                .take(limit)
                 .map(|s| {
                     serde_json::json!({
                         "session_id": s.session_id,
@@ -864,8 +938,10 @@ impl McpServer {
                 .collect();
             
             let result = serde_json::json!({
-                "sessions": session_list,
-                "count": session_list.len()
+                "sessions": paginated_sessions,
+                "total": total,
+                "offset": offset,
+                "limit": limit
             });
             
             return req.success_response(result);
@@ -873,8 +949,9 @@ impl McpServer {
 
         let result = serde_json::json!({
             "sessions": [],
-            "count": 0,
-            "message": "Session manager not configured"
+            "total": 0,
+            "offset": offset,
+            "limit": limit
         });
 
         req.success_response(result)

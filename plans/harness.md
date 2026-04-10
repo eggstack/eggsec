@@ -506,9 +506,9 @@ pub async fn send(&mut self, alert: &Alert) -> Result<()> {
 - [x] 3.3 Fix AlertRouter memory leak
 
 ### Phase 4: MCP Improvements (Medium)
-- [ ] 4.1 Remove dead sampling types
-- [ ] 4.2 Dynamic vulnerability catalog
-- [ ] 4.3 Session pagination
+- [x] 4.1 Remove dead sampling types
+- [x] 4.2 Dynamic vulnerability catalog
+- [x] 4.3 Session pagination
 
 ### Phase 5: Alerting (Medium)
 - [ ] 5.1 Email alerts
