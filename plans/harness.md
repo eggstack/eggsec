@@ -491,9 +491,9 @@ pub async fn send(&mut self, alert: &Alert) -> Result<()> {
 ## Implementation Order
 
 ### Phase 1: Harness (Critical) - START HERE
-- [ ] 1.1 Add `From<FuzzResult> for Finding` conversion
-- [ ] 1.2 Add `run_cli_with_callback` to fuzzer module
-- [ ] 1.3 Update FuzzerTool to use callback
+- [x] 1.1 Add `From<FuzzResult> for Finding` conversion
+- [x] 1.2 Add `run_cli_with_callback` to fuzzer module
+- [x] 1.3 Update FuzzerTool to use callback
 - [ ] 1.4 (Optional) Add for Scanner/Recon/Pipeline
 
 ### Phase 2: Event System (Critical)

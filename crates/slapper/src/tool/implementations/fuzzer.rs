@@ -3,6 +3,7 @@ use chrono::Utc;
 
 use crate::error::SlapperError;
 use crate::output::AgentSeverity;
+use crate::tool::response::Finding;
 use crate::tool::traits::{
     AttackSurface, CapabilityExample, ParameterDef, ParameterType, SecurityTool, ToolCapability,
     ToolCategory,
@@ -156,10 +157,23 @@ impl SecurityTool for FuzzerTool {
             common: crate::cli::CommonHttpArgs::default(),
         };
 
-        let result = crate::fuzzer::run_cli(args).await;
+        let findings: std::sync::Arc<std::sync::Mutex<Vec<Finding>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let findings_clone = findings.clone();
+        let result = crate::fuzzer::run_cli_with_callback(args, move |finding| {
+            if let Ok(mut f) = findings_clone.lock() {
+                f.push(finding);
+            }
+        })
+        .await;
+        let findings = std::sync::Arc::try_unwrap(findings)
+            .expect("Arc should have single owner")
+            .into_inner()
+            .expect("Mutex should not be poisoned");
 
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
+        let findings_count = findings.len();
 
         match result {
             Ok(_) => Ok(ToolResponse {
@@ -172,10 +186,10 @@ impl SecurityTool for FuzzerTool {
                     completed_at,
                     duration_ms,
                     targets_scanned: 1,
-                    findings_count: 0,
+                    findings_count,
                 },
                 errors: vec![],
-                findings: vec![],
+                findings,
             }),
             Err(e) => Ok(ToolResponse {
                 request_id: request.id,
@@ -187,13 +201,13 @@ impl SecurityTool for FuzzerTool {
                     completed_at,
                     duration_ms,
                     targets_scanned: 0,
-                    findings_count: 0,
+                    findings_count,
                 },
                 errors: vec![crate::tool::ToolError::new(
                     "EXECUTION_ERROR",
                     e.to_string(),
                 )],
-                findings: vec![],
+                findings,
             }),
         }
     }

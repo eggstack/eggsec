@@ -64,17 +64,33 @@ async fn handle_agent_run_impl(
 
     let mut agent = Agent::new(config).await?;
 
-    if use_ai_final {
-        let mut agent_with_ai = agent.with_ai_client(ai_config.unwrap()).await;
-        if run_once {
-            agent_with_ai.execute_scan("dummy", "recon").await?;
+    #[cfg(feature = "ai-integration")]
+    {
+        use crate::agent::Agent as AgentTrait;
+        if use_ai_final {
+            let mut agent_with_ai = agent.with_ai_client(ai_config.unwrap()).await;
+            if run_once {
+                agent_with_ai.execute_scan("dummy", "recon").await?;
+            } else {
+                agent_with_ai.run().await?;
+            }
+        } else if run_once {
+            println!("Agent run completed (once mode)");
         } else {
-            agent_with_ai.run().await?;
+            agent.run().await?;
         }
-    } else if run_once {
-        println!("Agent run completed (once mode)");
-    } else {
-        agent.run().await?;
+    }
+
+    #[cfg(not(feature = "ai-integration"))]
+    {
+        if use_ai_final {
+            eprintln!("Warning: AI features not enabled. Recompile with --features ai-integration");
+        }
+        if run_once {
+            println!("Agent run completed (once mode)");
+        } else {
+            agent.run().await?;
+        }
     }
 
     Ok(())

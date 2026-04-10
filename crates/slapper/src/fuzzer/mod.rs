@@ -105,6 +105,9 @@ pub use advanced::{
 
 use crate::error::Result;
 
+#[cfg(feature = "tool-api")]
+use crate::tool::response::Finding;
+
 use crate::cli::FuzzArgs;
 
 pub use chain::{
@@ -133,6 +136,31 @@ pub use waf_fingerprint::{WafDetectionResult, WafFingerprint, WafFingerprinter};
 pub async fn run_cli(args: FuzzArgs) -> Result<()> {
     let mut engine = engine::FuzzEngine::new(args.clone())?;
     engine.run().await
+}
+
+/// Run the fuzzer CLI with a callback for streaming findings
+///
+/// # Arguments
+///
+/// * `args` - Fuzzing arguments from the CLI
+/// * `callback` - A mutable function called for each vulnerable finding
+///
+/// # Returns
+///
+/// Result indicating success or failure of the fuzzing operation
+#[cfg(feature = "tool-api")]
+pub async fn run_cli_with_callback<F>(args: FuzzArgs, mut callback: F) -> Result<()>
+where
+    F: FnMut(Finding) + Send + 'static,
+{
+    let mut engine = engine::FuzzEngine::new(args)?;
+    let session = engine.run_return_session().await?;
+    for result in session.results {
+        if result.is_vulnerable() {
+            callback(Finding::from(result));
+        }
+    }
+    Ok(())
 }
 
 /// Run WAF stress testing

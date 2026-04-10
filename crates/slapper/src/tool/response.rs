@@ -2,6 +2,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::fuzzer::{FuzzResult, Payload};
+use crate::types::Severity;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolResponse {
     pub request_id: String,
@@ -473,5 +476,233 @@ impl std::fmt::Display for StreamEventType {
             StreamEventType::Result => write!(f, "result"),
             StreamEventType::Error => write!(f, "error"),
         }
+    }
+}
+
+impl From<Severity> for ResponseSeverity {
+    fn from(severity: Severity) -> Self {
+        match severity {
+            Severity::Critical => ResponseSeverity::Critical,
+            Severity::High => ResponseSeverity::High,
+            Severity::Medium => ResponseSeverity::Medium,
+            Severity::Low => ResponseSeverity::Low,
+            Severity::Info => ResponseSeverity::Info,
+        }
+    }
+}
+
+impl From<FuzzResult> for Finding {
+    fn from(result: FuzzResult) -> Self {
+        let severity = ResponseSeverity::from(result.detected_severity);
+        let description = if result.leaks_found.is_empty() {
+            String::new()
+        } else {
+            result.leaks_found.join(", ")
+        };
+        let location = format!(
+            "{} - {}",
+            result.payload.payload_type, result.payload.payload
+        );
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            "status_code".to_string(),
+            serde_json::Value::Number(result.status_code.into()),
+        );
+        metadata.insert(
+            "response_time_ms".to_string(),
+            serde_json::Value::Number(result.response_time_ms.into()),
+        );
+        metadata.insert(
+            "is_waf_blocked".to_string(),
+            serde_json::Value::Bool(result.is_waf_blocked),
+        );
+        metadata.insert(
+            "is_anomaly".to_string(),
+            serde_json::Value::Bool(result.is_anomaly),
+        );
+        metadata.insert(
+            "payload".to_string(),
+            serde_json::to_value(&result.payload).unwrap_or_default(),
+        );
+
+        Finding {
+            id: uuid::Uuid::new_v4().to_string(),
+            finding_type: FindingType::Vulnerability,
+            severity,
+            title: result.payload.description,
+            description,
+            location,
+            evidence: None,
+            cve_ids: vec![],
+            remediation: None,
+            references: vec![],
+            metadata,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fuzzer::payloads::{Payload, PayloadType};
+
+    fn make_fuzz_result(
+        leaks: Vec<String>,
+        anomaly: bool,
+        waf: bool,
+        severity: Severity,
+    ) -> FuzzResult {
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::Sqli,
+                payload: "test payload".to_string(),
+                description: "SQL injection test".to_string(),
+                severity: Severity::Medium,
+                tags: vec!["test".to_string()],
+            },
+            status_code: 200,
+            response_time_ms: 150,
+            response_length: Some(500),
+            is_waf_blocked: waf,
+            is_anomaly: anomaly,
+            is_redos_suspected: false,
+            leaks_found: leaks,
+            error: None,
+            owasp_category: None,
+            detected_severity: severity,
+        }
+    }
+
+    #[test]
+    fn test_fuzz_result_to_finding_with_leaks() {
+        let result = make_fuzz_result(
+            vec!["SQL injection detected".to_string()],
+            false,
+            false,
+            Severity::High,
+        );
+        let finding = Finding::from(result);
+
+        assert_eq!(finding.title, "SQL injection test");
+        assert_eq!(finding.description, "SQL injection detected");
+        assert_eq!(finding.severity, ResponseSeverity::High);
+        assert!(finding.location.contains("Sqli"));
+        assert!(finding.location.contains("test payload"));
+        assert_eq!(
+            finding.metadata.get("status_code").and_then(|v| v.as_u64()),
+            Some(200)
+        );
+        assert_eq!(
+            finding
+                .metadata
+                .get("response_time_ms")
+                .and_then(|v| v.as_u64()),
+            Some(150)
+        );
+        assert!(!finding
+            .metadata
+            .get("is_waf_blocked")
+            .unwrap()
+            .as_bool()
+            .unwrap());
+        assert!(!finding
+            .metadata
+            .get("is_anomaly")
+            .unwrap()
+            .as_bool()
+            .unwrap());
+    }
+
+    #[test]
+    fn test_fuzz_result_to_finding_with_anomaly() {
+        let result = make_fuzz_result(vec![], true, false, Severity::Medium);
+        let finding = Finding::from(result);
+
+        assert_eq!(finding.title, "SQL injection test");
+        assert!(finding.description.is_empty());
+        assert_eq!(finding.severity, ResponseSeverity::Medium);
+        assert!(finding
+            .metadata
+            .get("is_anomaly")
+            .unwrap()
+            .as_bool()
+            .unwrap());
+    }
+
+    #[test]
+    fn test_fuzz_result_to_finding_waf_blocked() {
+        let result = make_fuzz_result(vec![], false, true, Severity::Critical);
+        let finding = Finding::from(result);
+
+        assert_eq!(finding.severity, ResponseSeverity::Critical);
+        assert!(finding
+            .metadata
+            .get("is_waf_blocked")
+            .unwrap()
+            .as_bool()
+            .unwrap());
+    }
+
+    #[test]
+    fn test_fuzz_result_to_finding_multiple_leaks() {
+        let result = make_fuzz_result(
+            vec![
+                "leak 1: admin credentials".to_string(),
+                "leak 2: session token".to_string(),
+            ],
+            false,
+            false,
+            Severity::Critical,
+        );
+        let finding = Finding::from(result);
+
+        assert!(finding.description.contains("leak 1"));
+        assert!(finding.description.contains("leak 2"));
+    }
+
+    #[test]
+    fn test_fuzz_result_to_finding_severity_mapping() {
+        for severity_input in [
+            Severity::Critical,
+            Severity::High,
+            Severity::Medium,
+            Severity::Low,
+            Severity::Info,
+        ] {
+            let result = make_fuzz_result(vec![], false, false, severity_input);
+            let finding = Finding::from(result);
+            let expected = ResponseSeverity::from(severity_input);
+            assert_eq!(finding.severity, expected);
+        }
+    }
+
+    #[test]
+    fn test_fuzz_result_to_finding_payload_metadata() {
+        let result = make_fuzz_result(vec![], false, false, Severity::Medium);
+        let finding = Finding::from(result);
+
+        let payload_meta = finding.metadata.get("payload").unwrap();
+        assert!(payload_meta.is_object());
+    }
+
+    #[test]
+    fn test_severity_to_response_severity() {
+        assert_eq!(
+            ResponseSeverity::from(Severity::Critical),
+            ResponseSeverity::Critical
+        );
+        assert_eq!(
+            ResponseSeverity::from(Severity::High),
+            ResponseSeverity::High
+        );
+        assert_eq!(
+            ResponseSeverity::from(Severity::Medium),
+            ResponseSeverity::Medium
+        );
+        assert_eq!(ResponseSeverity::from(Severity::Low), ResponseSeverity::Low);
+        assert_eq!(
+            ResponseSeverity::from(Severity::Info),
+            ResponseSeverity::Info
+        );
     }
 }
