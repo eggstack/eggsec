@@ -140,6 +140,117 @@ impl FullReconResult {
     }
 }
 
+#[cfg(feature = "tool-api")]
+pub async fn run_cli_with_callback<F>(args: ReconArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    let stage = Arc::new(Mutex::new(String::new()));
+    let stop = Arc::new(AtomicBool::new(false));
+    let has_spinner = !args.quiet;
+    let verbose = args.verbose;
+
+    if has_spinner {
+        let stop_clone = stop.clone();
+        let stage_clone = stage.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut spinner = Spinner::new(stop_clone, stage_clone);
+            while !spinner.stop.load(Ordering::Relaxed) {
+                spinner.tick();
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            spinner.stop();
+        });
+        runner::set_stage(&stage, "init");
+    }
+
+    let recon = runner::run_full_recon(&args, config, stage, verbose).await?;
+
+    if has_spinner {
+        stop.store(true, Ordering::Relaxed);
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    if let Some(ref cve_mapping) = recon.cve_mapping {
+        for vuln in &cve_mapping.vulnerabilities {
+            callback(crate::tool::response::Finding::from(vuln.clone()));
+        }
+    }
+
+    if let Some(ref tech_stack) = recon.tech_stack {
+        for server in &tech_stack.servers {
+            callback(crate::tool::response::Finding {
+                id: uuid::Uuid::new_v4().to_string(),
+                finding_type: crate::tool::response::FindingType::Technology,
+                severity: crate::tool::response::ResponseSeverity::Info,
+                title: format!("Technology detected: {}", server),
+                description: format!("Detected server technology: {}", server),
+                location: server.clone(),
+                evidence: None,
+                cve_ids: vec![],
+                remediation: None,
+                references: vec![],
+                metadata: {
+                    let mut m = std::collections::HashMap::new();
+                    m.insert("technology".to_string(), serde_json::Value::String(server.clone()));
+                    m
+                },
+            });
+        }
+    }
+
+    if let Some(ref takeover_results) = recon.takeover {
+        for result in takeover_results {
+            let title = format!(
+                "Potential subdomain takeover: {} ({})",
+                result.target.subdomain,
+                result.service.as_deref().unwrap_or("unknown service")
+            );
+            callback(crate::tool::response::Finding {
+                id: uuid::Uuid::new_v4().to_string(),
+                finding_type: crate::tool::response::FindingType::Vulnerability,
+                severity: crate::tool::response::ResponseSeverity::High,
+                title,
+                description: result.evidence.clone(),
+                location: result.target.subdomain.clone(),
+                evidence: result.target.cname.clone(),
+                cve_ids: vec![],
+                remediation: Some("Register the dormant subdomain or remove the DNS record".to_string()),
+                references: vec![],
+                metadata: {
+                    let mut m = std::collections::HashMap::new();
+                    m.insert("cname".to_string(), serde_json::to_value(&result.target.cname).unwrap_or_default());
+                    m.insert("ns".to_string(), serde_json::to_value(&result.target.ns).unwrap_or_default());
+                    m.insert("service".to_string(), serde_json::to_value(&result.service).unwrap_or_default());
+                    m
+                },
+            });
+        }
+    }
+
+    let output = if args.json {
+        serde_json::to_string_pretty(&recon)?
+    } else {
+        let mut buf = Vec::new();
+        if !has_spinner {
+            buf.extend_from_slice(b"\n");
+        }
+        buf.extend_from_slice(runner::print_recon_results_string(&recon).as_bytes());
+        String::from_utf8(buf)?
+    };
+
+    if let Some(ref output_file) = args.output {
+        tokio::fs::write(output_file, &output).await?;
+        if !args.quiet && !args.json {
+            eprintln!("Results written to {}", output_file);
+        }
+    } else {
+        println!("{}", output);
+    }
+
+    Ok(())
+}
+
 pub async fn run_cli(args: ReconArgs, config: &SlapperConfig) -> Result<()> {
     let stage = Arc::new(Mutex::new(String::new()));
     let stop = Arc::new(AtomicBool::new(false));

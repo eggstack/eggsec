@@ -81,6 +81,9 @@ pub struct SlapperConfig {
 
     #[serde(default)]
     pub ai: Option<AiConfig>,
+
+    #[serde(default)]
+    pub search: Option<SearchConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -148,6 +151,25 @@ pub struct AiConfig {
     pub max_tokens: Option<usize>,
     #[serde(default)]
     pub temperature: Option<f64>,
+}
+
+fn default_search_cache_ttl() -> u64 {
+    3600
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchConfig {
+    #[serde(default)]
+    pub enabled: bool,
+
+    #[serde(default)]
+    pub searxng_url: Option<String>,
+
+    #[serde(default)]
+    pub engines: Vec<String>,
+
+    #[serde(default = "default_search_cache_ttl")]
+    pub cache_ttl_seconds: u64,
 }
 
 impl Default for AiConfig {

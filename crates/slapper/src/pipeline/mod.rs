@@ -73,6 +73,70 @@ pub use stage::{parse_stages, Stage};
 /// - Target is invalid
 /// - Any stage fails to execute
 /// - Output file cannot be written
+#[cfg(feature = "tool-api")]
+pub async fn run_cli_with_callback<F>(args: ScanArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    if args.verbose {
+        eprintln!("Starting pipeline scan on {}", sanitize_for_logging(&args.target));
+    }
+
+    let pipeline = Pipeline::from_args_with_config(args.clone(), config);
+    let report = pipeline.run().await?;
+
+    if args.verbose {
+        eprintln!(
+            "Pipeline complete: {} stages run",
+            report.stage_results.len()
+        );
+    }
+
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!("{}", report);
+    }
+
+    if let Some(output_path) = args.output {
+        match args.format {
+            Some(crate::cli::OutputFormat::Html)
+            | Some(crate::cli::OutputFormat::Pretty)
+            | Some(crate::cli::OutputFormat::Compact)
+            | Some(crate::cli::OutputFormat::Markdown)
+            | None => {
+                let html = report::generate_html(&report)?;
+                tokio::fs::write(&output_path, html).await?;
+            }
+            Some(crate::cli::OutputFormat::Json) => {
+                let json = serde_json::to_string_pretty(&report)?;
+                tokio::fs::write(&output_path, json).await?;
+            }
+            Some(crate::cli::OutputFormat::Csv) => {
+                let csv = report::generate_csv(&report)?;
+                tokio::fs::write(&output_path, csv).await?;
+            }
+            Some(crate::cli::OutputFormat::Sarif) => {
+                let sarif = crate::output::SarifBuilder::new()
+                    .with_report(&report)
+                    .build();
+                tokio::fs::write(&output_path, serde_json::to_string_pretty(&sarif)?).await?;
+            }
+            Some(crate::cli::OutputFormat::Junit) => {
+                let junit = crate::output::JUnitBuilder::new("slapper")
+                    .with_report(&report)
+                    .build();
+                tokio::fs::write(&output_path, junit.to_xml()?).await?;
+            }
+        }
+        if args.verbose {
+            eprintln!("Results written to {}", output_path);
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn run_cli(args: ScanArgs, config: &SlapperConfig) -> Result<()> {
     if args.verbose {
         eprintln!("Starting pipeline scan on {}", sanitize_for_logging(&args.target));

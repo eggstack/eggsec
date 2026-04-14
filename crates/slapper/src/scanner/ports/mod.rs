@@ -253,6 +253,176 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "tool-api")]
+pub type PortFindingCallback = Box<dyn FnMut(crate::tool::response::Finding) + Send + 'static>;
+
+#[cfg(feature = "tool-api")]
+pub async fn run_cli_with_callback<F>(args: PortScanArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    if args.verbose {
+        eprintln!("Starting port scan on {} ports {}", sanitize_for_logging(&args.host), args.ports);
+    }
+
+    let ports = parse_ports(&args.ports)?;
+    let timeout_secs = if args.timeout == 2 {
+        config.scan.port_timeout_secs
+    } else {
+        args.timeout
+    };
+
+    let spoof_config = SpoofConfig::from_args(
+        args.source_ip.clone(),
+        args.spoof_range.clone(),
+        false,
+        args.decoy.clone(),
+        args.decoy_range.clone(),
+        args.decoy_count,
+        args.decoy_mode.clone(),
+        args.include_me,
+        args.source_port,
+        args.random_source_port,
+        args.fragment,
+        args.scan_type.clone(),
+        args.packet_trace.clone(),
+        args.max_rate,
+        args.ttl,
+    )?;
+
+    if let Some(ref trace_path) = spoof_config.packet_trace {
+        if let Err(e) = init_packet_trace(trace_path) {
+            eprintln!("Warning: Failed to initialize packet trace: {}", e);
+        }
+    }
+
+    if spoof_config.enabled {
+        eprintln!("{}", format_spoof_warning(&spoof_config));
+    }
+
+    if args.dry_run {
+        eprintln!("\n=== DRY RUN MODE ===");
+        eprintln!("Target: {}", sanitize_for_logging(&args.host));
+        eprintln!("Ports: {}", args.ports);
+        eprintln!("Concurrency: {}", args.concurrency);
+        eprintln!("Timeout: {}s", timeout_secs);
+        if spoof_config.enabled {
+            if let Some(ref ip) = spoof_config.source_ip {
+                eprintln!("Spoof Source IP: {}", ip);
+            }
+            if let Some(ref range) = spoof_config.ip_range {
+                eprintln!("Spoof IP Range: {}", range);
+            }
+            if let Some(port) = spoof_config.source_port {
+                eprintln!("Source Port: {}", port);
+            }
+            if spoof_config.random_source_port {
+                eprintln!("Source Port: RANDOM");
+            }
+            if spoof_config.fragment {
+                eprintln!("Fragmentation: YES (8-byte fragments)");
+            }
+            eprintln!("Scan Type: {:?}", spoof_config.scan_type);
+            if let Some(ref trace) = spoof_config.packet_trace {
+                eprintln!("Packet Trace: {}", trace);
+            }
+            if let Some(rate) = spoof_config.max_rate {
+                eprintln!("Max Rate: {} pps", rate);
+            }
+            if let Some(ttl) = spoof_config.ttl {
+                eprintln!("TTL: {}", ttl);
+            }
+            if !spoof_config.decoy_ips.is_empty() {
+                eprintln!("Decoy IPs: {} total", spoof_config.decoy_ips.len());
+                for ip in spoof_config.decoy_ips.iter().take(5) {
+                    eprintln!("  - {}", ip);
+                }
+                if spoof_config.decoy_ips.len() > 5 {
+                    eprintln!("  ... and {} more", spoof_config.decoy_ips.len() - 5);
+                }
+                eprintln!("Decoy Mode: {:?}", spoof_config.decoy_mode);
+                if spoof_config.include_real_ip {
+                    eprintln!("Include Real IP: YES");
+                }
+            }
+        }
+        eprintln!("===================\n");
+        return Ok(());
+    }
+
+    let ports_count = ports.len();
+
+    let results = scan_ports(
+        &args.host,
+        ports,
+        args.concurrency,
+        Duration::from_secs(timeout_secs),
+        false,
+        spoof_config,
+        None,
+    )
+    .await?;
+
+    if args.verbose {
+        eprintln!(
+            "Scan complete: {} open ports found out of {} scanned",
+            results.open_ports.len(),
+            ports_count
+        );
+    }
+
+    for port_result in &results.open_ports {
+        callback(crate::tool::response::Finding::from(port_result.clone()));
+    }
+
+    let output = if args.json {
+        serde_json::to_string_pretty(&results)?
+    } else if args.grepable {
+        let mut s = String::new();
+        s.push_str("# Nmap grepable output\n");
+        s.push_str(&format!("Host: {}\n", results.host));
+        s.push_str("Status: up\n");
+        s.push_str("Ports: ");
+        for (i, port) in results.open_ports.iter().enumerate() {
+            if i > 0 {
+                s.push_str(", ");
+            }
+            s.push_str(&format!("{}/open/{}", port.port, port.service));
+        }
+        s.push('\n');
+        s
+    } else if args.xml {
+        let mut s = String::new();
+        s.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        s.push_str("<nmaprun>\n");
+        s.push_str(&format!("  <host>{}</host>\n", results.host));
+        s.push_str("  <ports>\n");
+        for port in &results.open_ports {
+            s.push_str(&format!(
+                r#"    <port protocol="tcp" portid="{}"><state state="open"/><service name="{}"/></port>"#,
+                port.port, port.service
+            ));
+            s.push('\n');
+        }
+        s.push_str("  </ports>\n");
+        s.push_str("</nmaprun>\n");
+        s
+    } else {
+        format!("{}", results)
+    };
+
+    if let Some(ref output_file) = args.output {
+        tokio::fs::write(output_file, &output).await?;
+        if args.verbose {
+            eprintln!("Results written to {}", output_file);
+        }
+    } else {
+        println!("{}", output);
+    }
+
+    Ok(())
+}
+
 pub async fn scan_ports(
     host: &str,
     ports: Vec<u16>,

@@ -166,6 +166,56 @@ pub async fn run_cli(args: FingerprintArgs, config: &SlapperConfig) -> Result<()
     Ok(())
 }
 
+#[cfg(feature = "tool-api")]
+pub async fn run_cli_with_callback<F>(args: FingerprintArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    let timeout_secs = if args.timeout == 5 {
+        config.scan.port_timeout_secs
+    } else {
+        args.timeout
+    };
+
+    if args.udp {
+        let ports = if args.ports == "80,443,22,21,25,3306,5432,6379,27017" {
+            get_default_udp_ports()
+        } else {
+            parse_ports(&args.ports)?
+        };
+
+        let results =
+            fingerprint_udp_services(&args.host, ports, Duration::from_secs(timeout_secs)).await?;
+
+        for fp in &results.results {
+            callback(crate::tool::response::Finding::from(fp.clone()));
+        }
+
+        if args.json {
+            println!("{}", serde_json::to_string_pretty(&results)?);
+        } else {
+            println!("{}", results);
+        }
+    } else {
+        let ports = parse_ports(&args.ports)?;
+        let results =
+            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency, None)
+                .await?;
+
+        for fp in &results.results {
+            callback(crate::tool::response::Finding::from(fp.clone()));
+        }
+
+        if args.json {
+            println!("{}", serde_json::to_string_pretty(&results)?);
+        } else {
+            println!("{}", results);
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn fingerprint_services(
     host: &str,
     ports: Vec<u16>,

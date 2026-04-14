@@ -164,7 +164,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value |
 |--------|-------|
-| Tests | ~976 passing, 2 failing (`negative_tests.rs`) |
+| Tests | 1155 passing |
 | Build | Clean compilation |
 | Clippy | 0 warnings (default features) |
 | Doctests | 17 pass, 1 ignored, 0 fail |
@@ -179,6 +179,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | Tab variants | 29 |
 | Agent module files | 6 (`mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs`) |
 | Skill files | 16 (in `slapper_skills/`) |
+| Tool findings | Scanner, Recon, Pipeline, Fuzzer tools now return findings via callback |
 
 ## Planning
 
@@ -493,10 +494,12 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 - Verify codebase metrics (test counts, file sizes, line counts) against actual code before referencing in plans
 - The plan uses waves organized into parallelizable blocks where items within each block are independent
 
-#### Known bugs identified (not yet fixed)
+#### Known bugs FIXED (2026-04-14)
 
-- UTF-8 panic in `InputField::delete()` and `backspace()` — uses byte indices instead of char boundaries (see plan.md:1.4)
-- Grammar fuzzer payloads all tagged as `Severity::Medium` — hardcoded regardless of grammar type (see plan.md:2.5)
+- ✅ UTF-8 cursor panic in `InputField::delete()` and `backspace()` — Fixed with `chars().count()` (plan.md:1.4)
+- ✅ Grammar fuzzer payloads severity hardcoded to Medium — Fixed with `GrammarKind::severity()` mapping (plan.md:2.5)
+- ✅ Tool findings not propagating to agent/MCP — Fixed with callback infrastructure in scanner, recon, pipeline modules (harness.md:1.4)
+- ✅ SearchConfig added to settings.rs for search tool configuration (agent_architecture.md:4.2)
 
 #### Verification best practices
 
@@ -607,3 +610,30 @@ When reviewing plan items against actual codebase:
 - Don't assume old AGENTS.md entries are still valid - verify each one
 - Count source files with `find crates/slapper/src -name '*.rs' | wc -l` (406 files)
 - Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (976 tests)
+
+### Lessons Learned (Session 2026-04-14)
+
+#### Tool Findings Harness Implementation
+
+- Added `From<>` implementations in `tool/response.rs` for `PortResult`, `ServiceFingerprint`, `EndpointResult`, `UdpServiceFingerprint`, `VulnerabilityInfo` → `Finding`
+- Added `run_cli_with_callback` functions to scanner modules (ports, fingerprint, endpoints), recon, and pipeline
+- All `run_cli_with_callback` functions are gated behind `#[cfg(feature = "tool-api")]`
+- `ScannerTool`, `ReconTool`, and `PipelineTool` now return populated findings via callback
+- `FuzzerTool` was already implemented with callback (already existed)
+
+#### Feature Gate Pattern
+
+- `run_cli_with_callback` in scanner/recon/pipeline modules must have `#[cfg(feature = "tool-api")]`
+- Without this, the code fails to compile when `tool` module is behind a feature flag
+- The `tool/implementations/*.rs` files already have proper feature gating since they're behind `rest-api`
+
+#### SearchConfig Addition
+
+- Added `SearchConfig` struct with `enabled`, `searxng_url`, `engines`, `cache_ttl_seconds` fields
+- Added `search: Option<SearchConfig>` to `SlapperConfig`
+- Added `search: None` to `SlapperConfig::to_config()` in TUI settings tab
+
+#### Restoring Deleted Code
+
+- When adding new functions that duplicate existing logic, the original function body may need to be examined in `git show HEAD:<file>`
+- The `is_interesting()` function in `scanner/endpoints.rs` was accidentally removed during refactoring and had to be restored from git history

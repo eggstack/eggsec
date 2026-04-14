@@ -3,6 +3,7 @@ use chrono::Utc;
 
 use crate::error::SlapperError;
 use crate::output::AgentSeverity;
+use crate::tool::response::Finding;
 use crate::tool::traits::{
     validate_parameters, AttackSurface, CapabilityExample, ParameterDef, ParameterType, SecurityTool,
     ToolCapability, ToolCategory,
@@ -48,7 +49,10 @@ impl SecurityTool for ReconTool {
         let target = &request.target.value;
         let params = &request.params;
 
-        // Parse params to customize recon behavior
+        let findings: std::sync::Arc<std::sync::Mutex<Vec<Finding>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let findings_clone = findings.clone();
+
         let no_tech = params
             .get("no_tech")
             .and_then(|v| v.as_bool())
@@ -132,7 +136,18 @@ impl SecurityTool for ReconTool {
 
         let config = crate::config::load_config(None::<&str>).unwrap_or_default();
 
-        let result = crate::recon::run_cli(args, &config).await;
+        let result = crate::recon::run_cli_with_callback(args, &config, move |f| {
+            if let Ok(mut findings) = findings_clone.lock() {
+                findings.push(f);
+            }
+        })
+        .await;
+
+        let findings = std::sync::Arc::try_unwrap(findings)
+            .expect("Arc should have single owner")
+            .into_inner()
+            .expect("Mutex should not be poisoned");
+        let findings_count = findings.len();
 
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
@@ -148,10 +163,10 @@ impl SecurityTool for ReconTool {
                     completed_at,
                     duration_ms,
                     targets_scanned: 1,
-                    findings_count: 0,
+                    findings_count,
                 },
                 errors: vec![],
-                findings: vec![],
+                findings,
             }),
             Err(e) => Ok(ToolResponse {
                 request_id: request.id,
@@ -163,13 +178,13 @@ impl SecurityTool for ReconTool {
                     completed_at,
                     duration_ms,
                     targets_scanned: 0,
-                    findings_count: 0,
+                    findings_count,
                 },
                 errors: vec![crate::tool::ToolError::new(
                     "EXECUTION_ERROR",
                     e.to_string(),
                 )],
-                findings: vec![],
+                findings,
             }),
         }
     }

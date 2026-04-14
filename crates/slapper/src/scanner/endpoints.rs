@@ -353,6 +353,96 @@ fn is_interesting(path: &str, status_code: u16) -> bool {
     false
 }
 
+#[cfg(feature = "tool-api")]
+pub async fn run_cli_with_callback<F>(args: EndpointScanArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+where
+    F: FnMut(crate::tool::response::Finding) + Send + 'static,
+{
+    if args.verbose {
+        eprintln!("Starting endpoint enumeration on {}", sanitize_for_logging(&args.url));
+    }
+
+    let endpoints = if let Some(wordlist_path) = args.wordlist {
+        let content = tokio::fs::read_to_string(&wordlist_path).await?;
+        content
+            .lines()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    } else {
+        DEFAULT_ENDPOINTS.iter().map(|s| s.to_string()).collect()
+    };
+
+    let timeout_secs = if args.timeout == 10 {
+        config.http.timeout_secs
+    } else {
+        args.timeout
+    };
+
+    let spoof_config = SpoofConfig::from_args(
+        args.spoof_ip.clone(),
+        args.spoof_range.clone(),
+        false,
+        args.decoy.clone(),
+        args.decoy_range.clone(),
+        args.decoy_count,
+        args.decoy_mode.clone(),
+        args.include_me,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+    )?;
+
+    if spoof_config.enabled {
+        eprintln!("{}", format_spoof_warning(&spoof_config));
+    }
+
+    let results = scan_endpoints(EndpointScanConfig {
+        base_url: args.url.clone(),
+        endpoints,
+        concurrency: args.concurrency,
+        timeout_duration: Duration::from_secs(timeout_secs),
+        include_404: args.include_404,
+        tui_mode: false,
+        spoof_config,
+        verify_tls: config.http.verify_tls,
+        progress_tx: None,
+    })
+    .await?;
+
+    if args.verbose {
+        eprintln!(
+            "Endpoint scan complete: {} endpoints found",
+            results.endpoints_found
+        );
+    }
+
+    for endpoint_result in &results.results {
+        callback(crate::tool::response::Finding::from(endpoint_result.clone()));
+    }
+
+    let output = if args.json {
+        serde_json::to_string_pretty(&results)?
+    } else {
+        format!("{}", results)
+    };
+
+    if let Some(ref output_file) = args.output {
+        tokio::fs::write(output_file, &output).await?;
+        if args.verbose {
+            eprintln!("Results written to {}", output_file);
+        }
+    } else {
+        println!("{}", output);
+    }
+
+    Ok(())
+}
+
 pub async fn run_cli(args: EndpointScanArgs, config: &SlapperConfig) -> Result<()> {
     if args.verbose {
         eprintln!("Starting endpoint enumeration on {}", sanitize_for_logging(&args.url));

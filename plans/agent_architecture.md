@@ -601,7 +601,7 @@ echo '[{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}]' | \
 - [x] Phase 3.1: Create SkillLoader
 - [x] Phase 3.2: Build SkillRegistry
 - [x] Phase 4.1: Implement SearchTool
-- [ ] Phase 4.2: Add SearchConfig (optional - tool works without config)
+- [x] Phase 4.2: Add SearchConfig (search config added to SlapperConfig)
 - [x] Phase 4.3: Search result types
 - [x] Phase 5.1: Alert integration
 - [x] Phase 5.2: Webhook reuse

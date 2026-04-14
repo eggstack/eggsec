@@ -203,6 +203,7 @@ impl SettingsTab {
             remote: crate::config::RemoteConfig::default(),
             proxies: Vec::new(),
             ai: None,
+            search: None,
         }
     }
 
