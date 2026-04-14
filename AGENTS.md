@@ -671,3 +671,39 @@ Successfully completed all 9 critical security fixes in Wave 1:
 4. **MCP auth bypass**: The `initialize` method bypass may be protocol-required, but auth MUST be enforced when api_key is configured (`Some`)
 
 5. **NSE sandbox**: Default to `enabled: true` - security by default over convenience
+
+### Lessons Learned (Session 2026-04-14 - Wave 2)
+
+#### Wave 2 Implementation Summary
+
+Completed 5 of 7 security fixes in Wave 2:
+
+**Block A - Path Traversal (2.1):**
+- Added `validate_path()` and `validate_path_string()` in `utils/validation.rs`
+- Pattern: use `canonicalize()` + prefix check to prevent directory escapes
+- Applied to: `tui/app/export.rs`, `commands/handlers/sbom.rs`, `agent/skills.rs`, `agent/portfolio.rs`, `recon/git_secrets.rs`
+
+**Block A - ReDoS (2.2):**
+- Replaced `Regex::new()` with `RegexBuilder::new().size_limit(100_000).build()`
+- Applied to: `fuzzer/chain.rs` (2 locations), `recon/js.rs` (4 functions), `recon/email.rs` (4 functions)
+
+**Block B - Concurrency fixes:**
+- **2.4** `spoofed.rs`: Changed `OnceLock` init to return `SlapperError::Runtime` on failure instead of silent panics
+- **2.5** `slapper-ruby/src/api.rs`: Changed `get_runtime()` to use `Handle::current()` instead of creating new runtime
+- **2.7** `circuit_breaker.rs`: Moved atomic operations inside mutex lock to fix race condition
+
+**Pending:**
+- **2.3** Unbounded Memory Allocation: Requires architectural changes (streaming/pagination) - not a simple fix
+- **2.6** Distributed Worker JoinHandle: Requires significant restructuring (inner spawned tasks don't have access to Worker's state)
+
+#### Security Fix Patterns
+
+1. **Path validation pattern**: Use `canonicalize()` to resolve symlinks, then check if result starts with allowed prefix
+
+2. **ReDoS prevention**: Always use `RegexBuilder` with explicit `size_limit()` when building regexes from untrusted input
+
+3. **OnceLock error handling**: `OnceLock::get_or_try_init()` returns `Result`, must handle appropriately
+
+4. **Ruby runtime isolation**: Use `Handle::current()` to access existing runtime, not `Runtime::new()` which creates new runtime that can't coordinate with main runtime
+
+5. **Race condition with atomics**: When using both `Mutex` and atomic operations, ensure atomic operations happen inside the mutex lock to prevent inconsistent state reads
