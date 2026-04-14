@@ -105,6 +105,12 @@ impl TargetPortfolio {
     }
 
     pub fn load_from_file(path: &PathBuf) -> Result<Self> {
+        let base_dir = directories::ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("~/.config/slapper"));
+
+        crate::utils::validation::validate_path(&base_dir, path)?;
+
         if path.exists() {
             let content = fs::read_to_string(path)?;
             let data: PortfolioData = serde_json::from_str(&content)?;
@@ -119,6 +125,12 @@ impl TargetPortfolio {
 
     pub fn save(&self) -> Result<()> {
         if let Some(ref path) = self.file_path {
+            let base_dir = directories::ProjectDirs::from("com", "slapper", "slapper")
+                .map(|d| d.config_dir().to_path_buf())
+                .unwrap_or_else(|| PathBuf::from("~/.config/slapper"));
+
+            crate::utils::validation::validate_path(&base_dir, path)?;
+
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
             }

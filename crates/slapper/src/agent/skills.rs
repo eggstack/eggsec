@@ -141,14 +141,28 @@ impl SkillLoader {
         let mut skills = Vec::new();
 
         for dir in &self.skill_dirs {
-            if dir.exists() {
-                for entry in fs::read_dir(dir)? {
-                    let entry = entry?;
-                    let path = entry.path();
+            let canonical_dir = dir.canonicalize().map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to canonicalize skill directory {}: {}",
+                    dir.display(),
+                    e
+                )
+            })?;
 
-                    if path.extension().map(|e| e == "md").unwrap_or(false) {
-                        if let Ok(skill) = self.load_skill(&path) {
-                            skills.push(skill);
+            if !canonical_dir.exists() {
+                continue;
+            }
+
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                let path = entry.path();
+
+                if path.extension().map(|e| e == "md").unwrap_or(false) {
+                    if let Ok(canonical_path) = path.canonicalize() {
+                        if canonical_path.starts_with(&canonical_dir) {
+                            if let Ok(skill) = self.load_skill(&path) {
+                                skills.push(skill);
+                            }
                         }
                     }
                 }

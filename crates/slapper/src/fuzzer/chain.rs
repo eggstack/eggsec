@@ -1,4 +1,5 @@
 
+use regex::RegexBuilder;
 use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -237,7 +238,10 @@ impl ChainExecutor {
 
         let pattern = self.interpolate_string(&rule.pattern);
 
-        let value = match regex::Regex::new(&pattern) {
+        let value = match RegexBuilder::new(&pattern)
+            .size_limit(100_000)
+            .build()
+        {
             Ok(re) => {
                 if let Some(caps) = re.captures(&source) {
                     if let Some(group) = rule.group {
@@ -300,7 +304,9 @@ impl ChainExecutor {
                 .unwrap_or(false),
             ConditionCheck::RegexMatch(pattern) => {
                 if let Some(body) = self.variables.get("_last_body") {
-                    regex::Regex::new(pattern)
+                    RegexBuilder::new(pattern)
+                        .size_limit(100_000)
+                        .build()
                         .map(|re| re.is_match(body))
                         .unwrap_or(false)
                 } else {

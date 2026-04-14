@@ -49,16 +49,27 @@ impl GitSecretsScanner {
 
     pub fn scan_directory(&self, repo_path: &str) -> Result<GitSecretsReport> {
         let path = Path::new(repo_path);
-        if !path.exists() {
+
+        let canonical_path = path.canonicalize().map_err(|e| {
+            crate::error::SlapperError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!(
+                    "Path does not exist or cannot be canonicalized: {} - {}",
+                    repo_path, e
+                ),
+            ))
+        })?;
+
+        if !canonical_path.exists() {
             return Err(crate::error::SlapperError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("Path does not exist: {}", repo_path),
             )));
         }
 
-        let git_dir = path.join(".git");
+        let git_dir = canonical_path.join(".git");
         if !git_dir.exists() {
-            return self.scan_directory_fallback(path);
+            return self.scan_directory_fallback(&canonical_path);
         }
 
         self.scan_with_git(repo_path)

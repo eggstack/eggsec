@@ -282,6 +282,13 @@ impl super::App {
             .as_ref()
             .and_then(|c| c.paths.export_dir.as_deref())
             .unwrap_or(crate::constants::DEFAULT_EXPORT_DIR);
+
+        let base_dir = std::path::Path::new(crate::constants::DEFAULT_EXPORT_DIR);
+        if let Err(e) = crate::utils::validation::validate_path_string(base_dir, export_dir) {
+            tracing::error!("Invalid export directory: {}", e);
+            return;
+        }
+
         let json_path = format!("{}/{}", export_dir, json_filename);
 
         match load_scan_report(&json_path) {
@@ -317,6 +324,13 @@ impl super::App {
             .as_ref()
             .and_then(|c| c.paths.export_dir.as_deref())
             .unwrap_or(crate::constants::DEFAULT_EXPORT_DIR);
+
+        let base_dir = std::path::Path::new(crate::constants::DEFAULT_EXPORT_DIR);
+        if let Err(e) = crate::utils::validation::validate_path_string(base_dir, export_dir) {
+            tracing::error!("Invalid export directory: {}", e);
+            return;
+        }
+
         let path = format!("{}/{}", export_dir, filename);
         let dir = std::path::Path::new(export_dir);
         if !dir.exists() {

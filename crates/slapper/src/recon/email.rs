@@ -1,5 +1,5 @@
 use crate::error::Result;
-use regex::Regex;
+use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -72,7 +72,9 @@ impl EmailDiscoveryClient {
     }
 
     fn extract_emails(&self, content: &str) -> Vec<EmailContact> {
-        let email_regex = Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+        let email_regex = RegexBuilder::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+            .size_limit(100_000)
+            .build()
             .expect("valid email extraction regex");
 
         let mut emails = HashSet::new();
@@ -107,7 +109,10 @@ impl EmailDiscoveryClient {
         let mut phones = HashSet::new();
 
         for pattern in phone_patterns {
-            if let Ok(re) = Regex::new(pattern) {
+            if let Ok(re) = RegexBuilder::new(pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 for cap in re.find_iter(content) {
                     let number = cap.as_str().to_string();
                     if number.len() >= 10 {
@@ -140,7 +145,10 @@ impl EmailDiscoveryClient {
         let mut socials = HashSet::new();
 
         for (pattern, platform) in patterns {
-            if let Ok(re) = Regex::new(pattern) {
+            if let Ok(re) = RegexBuilder::new(pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 for cap in re.captures_iter(content) {
                     if let Some(handle) = cap.get(1) {
                         let url = format!(
@@ -170,7 +178,10 @@ impl EmailDiscoveryClient {
         let mut addresses = Vec::new();
 
         for pattern in address_patterns {
-            if let Ok(re) = Regex::new(pattern) {
+            if let Ok(re) = RegexBuilder::new(pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 for cap in re.find_iter(content) {
                     addresses.push(PhysicalAddress {
                         address: cap.as_str().to_string(),

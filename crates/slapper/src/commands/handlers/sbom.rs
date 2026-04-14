@@ -1,17 +1,24 @@
 use crate::cli::{SbomArgs, SbomCommand};
 use anyhow::{Context, Result};
 
+fn validate_project_path(project_path: &str) -> Result<std::path::PathBuf> {
+    let base = std::path::Path::new(".");
+    crate::utils::validation::validate_path_string(base, project_path)
+}
+
 pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs) -> Result<()> {
     match args.command {
         SbomCommand::Generate(gen_args) => {
+            let project_path = validate_project_path(&gen_args.project)?;
+            
             let gen = crate::supply_chain::sbom::SbomGenerator::new();
 
-            let report = if std::path::Path::new(&gen_args.project).join("Cargo.toml").exists() {
-                gen.generate_from_cargo(&gen_args.project)?
-            } else if std::path::Path::new(&gen_args.project).join("package.json").exists() {
-                gen.generate_from_npm(&gen_args.project)?
-            } else if std::path::Path::new(&gen_args.project).join("requirements.txt").exists() {
-                gen.generate_from_requirements(&gen_args.project)?
+            let report = if project_path.join("Cargo.toml").exists() {
+                gen.generate_from_cargo(project_path.to_str().unwrap())?
+            } else if project_path.join("package.json").exists() {
+                gen.generate_from_npm(project_path.to_str().unwrap())?
+            } else if project_path.join("requirements.txt").exists() {
+                gen.generate_from_requirements(project_path.to_str().unwrap())?
             } else {
                 return Err(crate::error::SlapperError::Validation(
                     "No supported manifest file found (Cargo.toml, package.json, requirements.txt)".to_string(),
@@ -26,7 +33,8 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
             };
 
             if let Some(ref output_file) = gen_args.output {
-                tokio::fs::write(output_file, &output).await
+                let output_path = validate_project_path(output_file)?;
+                tokio::fs::write(output_path.to_str().unwrap(), &output).await
                     .with_context(|| format!("Failed to write output to {}", output_file))?;
                 eprintln!("SBOM written to {}", output_file);
             } else {
@@ -34,11 +42,12 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
             }
         }
         SbomCommand::CheckTyposquat(typo_args) => {
+            let project_path = validate_project_path(&typo_args.project)?;
             let detector = crate::supply_chain::typosquat::TyposquatDetector::new(typo_args.threshold);
 
             let mut packages = Vec::new();
 
-            let cargo_toml = std::path::Path::new(&typo_args.project).join("Cargo.toml");
+            let cargo_toml = project_path.join("Cargo.toml");
             if cargo_toml.exists() {
                 let content = std::fs::read_to_string(&cargo_toml)?;
                 let mut in_deps = false;
@@ -60,7 +69,7 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
                 }
             }
 
-            let package_json = std::path::Path::new(&typo_args.project).join("package.json");
+            let package_json = project_path.join("package.json");
             if package_json.exists() {
                 let content = std::fs::read_to_string(&package_json)?;
                 let json: serde_json::Value = serde_json::from_str(&content)?;
@@ -71,7 +80,7 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
                 }
             }
 
-            let req_file = std::path::Path::new(&typo_args.project).join("requirements.txt");
+            let req_file = project_path.join("requirements.txt");
             if req_file.exists() {
                 let content = std::fs::read_to_string(&req_file)?;
                 for line in content.lines() {

@@ -82,7 +82,8 @@ pub fn init_packet_trace(path: &str) -> Result<()> {
         let _ = writeln!(f, "timestamp,src_ip,src_port,dst_ip,dst_port,scan_type");
     }
 
-    PACKET_TRACE_FILE.set(std::sync::Mutex::new(file)).ok();
+    PACKET_TRACE_FILE.set(std::sync::Mutex::new(file))
+        .map_err(|_| SlapperError::Runtime("Packet trace file already initialized".to_string()))?;
     Ok(())
 }
 

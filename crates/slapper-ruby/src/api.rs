@@ -2,9 +2,9 @@
 use magnus::{prelude::*, Error, Ruby};
 
 #[cfg(feature = "ruby-plugins")]
-fn get_runtime() -> &'static tokio::runtime::Runtime {
-    static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
-    RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().expect("Failed to create tokio runtime"))
+fn get_runtime() -> &'static tokio::runtime::Handle {
+    static HANDLE: std::sync::OnceLock<tokio::runtime::Handle> = std::sync::OnceLock::new();
+    HANDLE.get_or_init(|| tokio::runtime::Handle::current())
 }
 
 #[cfg(feature = "ruby-plugins")]

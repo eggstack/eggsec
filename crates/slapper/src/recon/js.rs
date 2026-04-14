@@ -1,5 +1,5 @@
 use crate::error::Result;
-use regex::Regex;
+use regex::RegexBuilder;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -156,7 +156,10 @@ impl JsAnalyzer {
         ];
 
         for pattern in patterns {
-            if let Ok(re) = Regex::new(pattern) {
+            if let Ok(re) = RegexBuilder::new(pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 for cap in re.captures_iter(content) {
                     if let Some(endpoint) = cap.get(1) {
                         let endpoint_str = endpoint.as_str();
@@ -199,7 +202,10 @@ impl JsAnalyzer {
         ];
 
         for (pattern, secret_type) in patterns {
-            if let Ok(re) = Regex::new(pattern) {
+            if let Ok(re) = RegexBuilder::new(pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 for cap in re.captures_iter(content) {
                     let full_match = cap
                         .get(0)
@@ -230,7 +236,10 @@ impl JsAnalyzer {
         ];
 
         for (pattern, key_type) in patterns {
-            if let Ok(re) = Regex::new(pattern) {
+            if let Ok(re) = RegexBuilder::new(pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 for cap in re.captures_iter(content) {
                     if let Some(key) = cap.get(0) {
                         api_keys.push(ApiKey {
@@ -249,7 +258,9 @@ impl JsAnalyzer {
     fn extract_urls(&self, content: &str) -> Vec<String> {
         let mut urls = HashSet::new();
 
-        let url_pattern = Regex::new(r#"https?://[^\s\"'<>]+"#)
+        let url_pattern = RegexBuilder::new(r#"https?://[^\s\"'<>]+"#)
+            .size_limit(100_000)
+            .build()
             .expect("valid URL extraction regex");
         for cap in url_pattern.find_iter(content) {
             let url = cap.as_str().to_string();

@@ -1,5 +1,27 @@
 use crate::constants::{http, scan};
 use anyhow::{anyhow, Result};
+use std::path::{Path, PathBuf};
+
+pub fn validate_path(base: &Path, user_path: &Path) -> Result<PathBuf> {
+    let canonical = user_path
+        .canonicalize()
+        .map_err(|e| anyhow!("Failed to canonicalize path: {}", e))?;
+    let base_canonical = base
+        .canonicalize()
+        .map_err(|e| anyhow!("Failed to canonicalize base path: {}", e))?;
+    if !canonical.starts_with(&base_canonical) {
+        return Err(anyhow!(
+            "Path traversal detected: {} is not within {}",
+            user_path.display(),
+            base.display()
+        ));
+    }
+    Ok(canonical)
+}
+
+pub fn validate_path_string(base: &Path, user_path: &str) -> Result<PathBuf> {
+    validate_path(base, Path::new(user_path))
+}
 
 pub fn validate_url(url: &str) -> Result<()> {
     if url.is_empty() {
