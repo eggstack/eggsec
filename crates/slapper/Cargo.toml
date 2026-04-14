@@ -63,6 +63,7 @@ sha2 = "0.10"
 md-5.workspace = true
 hmac = "0.12"
 hex.workspace = true
+rustc-hash = { workspace = true }
 subtle = "2"
 lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls", "smtp-transport", "tracing", "rustls-no-provider", "webpki-roots", "builder"] }
 crossbeam = "0.8"
@@ -75,6 +76,7 @@ rcgen = { version = "0.14", features = ["pem"] }
 async-trait.workspace = true
 zeroize = { version = "1", features = ["derive"] }
 strum = { version = "0.26", default-features = false, features = ["derive"] }
+smallvec = "1"
 
 # Workspace crates
 slapper-plugin = { path = "../slapper-plugin", optional = true }

@@ -1,6 +1,7 @@
 
 use crate::utils::parsing::parse_ports;
 use crate::utils::strip_controls;
+use smallvec::SmallVec;
 use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -9,8 +10,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
 use tokio::time::timeout;
+use dashmap::DashMap;
 
 use super::udp_fingerprint::{fingerprint_udp_services, get_default_udp_ports};
 use crate::cli::FingerprintArgs;
@@ -224,7 +225,7 @@ pub async fn fingerprint_services(
     concurrency: usize,
     progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
 ) -> Result<FingerprintResults> {
-    let results: Arc<Mutex<Vec<ServiceFingerprint>>> = Arc::new(Mutex::new(Vec::new()));
+    let results: Arc<DashMap<u16, ServiceFingerprint>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
     let total_ports = ports.len() as u64;
 
@@ -257,8 +258,7 @@ pub async fn fingerprint_services(
 
         let handle = tokio::spawn(async move {
             if let Some(fp) = fingerprint_port(&host, port, timeout_dur).await {
-                let mut results = results.lock().await;
-                results.push(fp);
+                results.insert(port, fp);
             }
             if let Some(ref pb) = progress {
                 pb.inc(1);
@@ -282,7 +282,7 @@ pub async fn fingerprint_services(
         pb.finish_and_clear();
     }
 
-    let mut results = results.lock().await.clone();
+    let mut results: Vec<ServiceFingerprint> = DashMap::clone(&results).into_iter().map(|(_, v)| v).collect();
     results.sort_by_key(|p| p.port);
 
     let identified = results.len();
@@ -387,21 +387,21 @@ async fn probe_service(
         let _ = stream.write_all(probe_data).await;
     }
 
-    let mut buffer = vec![0u8; 4096];
+    let mut buffer: SmallVec<[u8; 256]> = SmallVec::new();
+    buffer.resize(4096, 0);
     let read_result = timeout(timeout_duration, stream.read(&mut buffer)).await;
 
     match read_result {
         Ok(Ok(n)) if n > 0 => {
             let response = &buffer[..n];
             let response_str = String::from_utf8_lossy(response);
+            let response_lower = response_str.to_lowercase();
 
             let matches = match_pattern.split('|').any(|pattern| {
                 if pattern.starts_with("\\x") {
                     hex_match(pattern, response)
                 } else {
-                    response_str
-                        .to_lowercase()
-                        .contains(&pattern.to_lowercase())
+                    response_lower.contains(&pattern.to_lowercase())
                 }
             });
 

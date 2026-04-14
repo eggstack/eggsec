@@ -10,19 +10,22 @@ impl CsvExporter {
             return String::new();
         }
 
+        use std::fmt::Write;
         let mut output = String::new();
-        output.push_str("Severity,Target,Path,Description,CVE,Remediation\n");
+        writeln!(output, "Severity,Target,Path,Description,CVE,Remediation").unwrap();
 
         for f in findings {
-            output.push_str(&format!(
-                "{},{},{},{},{},{}\n",
+            writeln!(
+                output,
+                "{},{},{},{},{},{}",
                 super::escape::escape_csv(&f.severity),
                 super::escape::escape_csv(&f.target),
                 super::escape::escape_csv(&f.path),
                 super::escape::escape_csv(&f.description),
                 super::escape::escape_csv(f.cve.as_deref().unwrap_or("")),
                 super::escape::escape_csv(f.remediation.as_deref().unwrap_or("")),
-            ));
+            )
+            .unwrap();
         }
 
         output
@@ -33,19 +36,22 @@ impl CsvExporter {
             return String::new();
         }
 
+        use std::fmt::Write;
         let mut output = String::new();
-        output.push_str("Host,Port,Protocol,Service,Version,State\n");
+        writeln!(output, "Host,Port,Protocol,Service,Version,State").unwrap();
 
         for p in ports {
-            output.push_str(&format!(
-                "{},{},{},{},{},{}\n",
+            writeln!(
+                output,
+                "{},{},{},{},{},{}",
                 super::escape::escape_csv(&p.host),
                 p.port,
                 super::escape::escape_csv(&p.protocol),
                 super::escape::escape_csv(p.service.as_deref().unwrap_or("")),
                 super::escape::escape_csv(p.version.as_deref().unwrap_or("")),
                 super::escape::escape_csv(&p.state),
-            ));
+            )
+            .unwrap();
         }
 
         output
@@ -56,18 +62,21 @@ impl CsvExporter {
             return String::new();
         }
 
+        use std::fmt::Write;
         let mut output = String::new();
-        output.push_str("URL,Method,Status,Content-Type,Content-Length\n");
+        writeln!(output, "URL,Method,Status,Content-Type,Content-Length").unwrap();
 
         for e in endpoints {
-            output.push_str(&format!(
-                "{},{},{},{},{}\n",
+            writeln!(
+                output,
+                "{},{},{},{},{}",
                 super::escape::escape_csv(&e.url),
                 super::escape::escape_csv(&e.method),
                 e.status,
                 super::escape::escape_csv(e.content_type.as_deref().unwrap_or("")),
                 e.content_length,
-            ));
+            )
+            .unwrap();
         }
 
         output

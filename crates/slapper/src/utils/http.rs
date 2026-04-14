@@ -5,6 +5,9 @@ use std::time::Duration;
 pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
     Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
+        .pool_max_idle_per_host(20)
+        .pool_idle_timeout(Duration::from_secs(30))
+        .tcp_nodelay(true)
         .build()
         .context("Failed to create HTTP client")
 }
@@ -37,6 +40,9 @@ pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
 pub fn create_insecure_http_client(timeout_secs: u64) -> Result<Client> {
     Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
+        .pool_max_idle_per_host(20)
+        .pool_idle_timeout(Duration::from_secs(30))
+        .tcp_nodelay(true)
         .danger_accept_invalid_certs(true)
         .build()
         .context("Failed to create insecure HTTP client")
@@ -47,6 +53,9 @@ pub fn create_http_client_with_proxy(timeout_secs: u64, proxy: &str) -> Result<C
 
     Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
+        .pool_max_idle_per_host(20)
+        .pool_idle_timeout(Duration::from_secs(30))
+        .tcp_nodelay(true)
         .proxy(proxy)
         .build()
         .context("Failed to create HTTP client with proxy")
@@ -56,7 +65,13 @@ pub fn create_http_client_with_options<F>(timeout_secs: u64, builder_fn: F) -> R
 where
     F: FnOnce(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
 {
-    let builder = builder_fn(Client::builder().timeout(Duration::from_secs(timeout_secs)));
+    let builder = builder_fn(
+        Client::builder()
+            .timeout(Duration::from_secs(timeout_secs))
+            .pool_max_idle_per_host(20)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_nodelay(true),
+    );
     builder.build().context("Failed to create HTTP client")
 }
 
@@ -95,6 +110,9 @@ where
     let builder = builder_fn(
         Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
+            .pool_max_idle_per_host(20)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_nodelay(true)
             .danger_accept_invalid_certs(true),
     );
     builder.build().context("Failed to create HTTP client")

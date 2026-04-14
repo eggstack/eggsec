@@ -17,8 +17,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
 use tokio::time::timeout;
+use dashmap::DashMap;
 
 use crate::cli::PortScanArgs;
 use crate::config::SlapperConfig;
@@ -447,7 +447,7 @@ pub async fn scan_ports(
     }
 
     let addr = resolve_host(host)?;
-    let results = Arc::new(Mutex::new(Vec::new()));
+    let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
     let total_ports = ports.len() as u64;
 
@@ -481,24 +481,23 @@ pub async fn scan_ports(
             let socket_addr = std::net::SocketAddr::new(addr, port);
             let result = timeout(timeout_dur, TcpStream::connect(&socket_addr)).await;
 
-            let mut results = results.lock().await;
             match result {
                 Ok(Ok(_)) => {
-                    results.push(PortResult {
+                    results.insert(port, PortResult {
                         port,
                         status: "open".to_string(),
                         service: get_service_name(port),
                     });
                 }
                 Ok(Err(_)) => {
-                    results.push(PortResult {
+                    results.insert(port, PortResult {
                         port,
                         status: "closed".to_string(),
                         service: get_service_name(port),
                     });
                 }
                 Err(_) => {
-                    results.push(PortResult {
+                    results.insert(port, PortResult {
                         port,
                         status: "filtered".to_string(),
                         service: get_service_name(port),
@@ -527,9 +526,8 @@ pub async fn scan_ports(
         pb.finish_and_clear();
     }
 
-    let mut results = results.lock().await;
+    let mut results: Vec<PortResult> = DashMap::clone(&results).into_iter().map(|(_, v)| v).collect();
     results.sort_by_key(|p| p.port);
-    let results = std::mem::take(&mut *results);
 
     Ok(PortScanResults {
         host: host.to_string(),

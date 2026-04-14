@@ -218,7 +218,7 @@ impl FuzzEngine {
 
     async fn prepare_payloads(&mut self, pt: PayloadType) -> Result<Vec<Payload>> {
         let mut payloads = if self.args.mutate {
-            self.mutate_payloads(get_payloads(pt))
+            self.mutate_payloads(&get_payloads(pt))
         } else {
             get_payloads(pt)
         };
@@ -329,10 +329,10 @@ impl FuzzEngine {
     ///
     /// Returns an error if any HTTP request fails critically.
     pub async fn run_all_types(&mut self) -> Result<()> {
-        let payloads = if self.args.mutate {
+        let payloads: Vec<Payload> = if self.args.mutate {
             self.mutate_payloads(get_all_payloads_cached())
         } else {
-            get_all_payloads_cached()
+            get_all_payloads_cached().clone()
         };
 
         let start = Instant::now();

@@ -63,6 +63,11 @@ pub fn resolve_host(host: &str) -> Result<IpAddr> {
         .ok_or_else(|| anyhow!("Could not resolve host: {}", host))
 }
 
+#[inline]
+pub fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
+    haystack.to_lowercase().contains(&needle.to_lowercase())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

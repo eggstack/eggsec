@@ -1,7 +1,7 @@
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, SET_COOKIE};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -75,11 +75,11 @@ impl<'de> Deserialize<'de> for SerializableHeaderMap {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpSession {
-    pub cookies: HashMap<String, Cookie>,
-    pub tokens: HashMap<String, String>,
+    pub cookies: FxHashMap<String, Cookie>,
+    pub tokens: FxHashMap<String, String>,
     #[serde(skip)]
     pub headers: SerializableHeaderMap,
-    pub state_data: HashMap<String, String>,
+    pub state_data: FxHashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,10 +102,10 @@ impl Default for HttpSession {
 impl HttpSession {
     pub fn new() -> Self {
         Self {
-            cookies: HashMap::new(),
-            tokens: HashMap::new(),
+            cookies: FxHashMap::default(),
+            tokens: FxHashMap::default(),
             headers: SerializableHeaderMap::new(),
-            state_data: HashMap::new(),
+            state_data: FxHashMap::default(),
         }
     }
 
@@ -247,7 +247,7 @@ impl HttpSession {
 }
 
 pub struct SessionManager {
-    sessions: Arc<RwLock<HashMap<String, HttpSession>>>,
+    sessions: Arc<RwLock<FxHashMap<String, HttpSession>>>,
     default_session: Arc<RwLock<HttpSession>>,
 }
 
@@ -260,7 +260,7 @@ impl Default for SessionManager {
 impl SessionManager {
     pub fn new() -> Self {
         Self {
-            sessions: Arc::new(RwLock::new(HashMap::new())),
+            sessions: Arc::new(RwLock::new(FxHashMap::default())),
             default_session: Arc::new(RwLock::new(HttpSession::new())),
         }
     }

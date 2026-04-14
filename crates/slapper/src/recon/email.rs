@@ -1,9 +1,43 @@
 use crate::error::Result;
-use regex::RegexBuilder;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::sync::LazyLock;
 
 use crate::utils::create_http_client;
+
+static EMAIL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap()
+});
+
+static PHONE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"\+?1?[-.\s]?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}").unwrap(),
+        Regex::new(r"\+?[0-9]{1,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}").unwrap(),
+        Regex::new(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b").unwrap(),
+    ]
+});
+
+static SOCIAL_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| {
+    vec![
+        ("Facebook", Regex::new(r"facebook\.com/([a-zA-Z0-9._-]+)").unwrap()),
+        ("Twitter", Regex::new(r"twitter\.com/([a-zA-Z0-9._-]+)").unwrap()),
+        ("X", Regex::new(r"x\.com/([a-zA-Z0-9._-]+)").unwrap()),
+        ("Instagram", Regex::new(r"instagram\.com/([a-zA-Z0-9._-]+)").unwrap()),
+        ("LinkedIn", Regex::new(r"linkedin\.com/in/([a-zA-Z0-9._-]+)").unwrap()),
+        ("LinkedIn", Regex::new(r"linkedin\.com/company/([a-zA-Z0-9._-]+)").unwrap()),
+        ("GitHub", Regex::new(r"github\.com/([a-zA-Z0-9._-]+)").unwrap()),
+        ("YouTube", Regex::new(r"youtube\.com/@([a-zA-Z0-9._-]+)").unwrap()),
+        ("TikTok", Regex::new(r"tiktok\.com/@([a-zA-Z0-9._-]+)").unwrap()),
+    ]
+});
+
+static ADDRESS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Way|Place|Pl)\.?\s*,?\s*(?:[A-Za-z\s]+,)?\s*[A-Z]{2}\s*\d{5}(?:-\d{4})?").unwrap(),
+        Regex::new(r"[A-Z][a-z]+,\s*[A-Z]{2}\s*\d{5}").unwrap(),
+    ]
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EmailDiscovery {
@@ -72,13 +106,8 @@ impl EmailDiscoveryClient {
     }
 
     fn extract_emails(&self, content: &str) -> Vec<EmailContact> {
-        let email_regex = RegexBuilder::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
-            .size_limit(100_000)
-            .build()
-            .expect("valid email extraction regex");
-
         let mut emails = HashSet::new();
-        for cap in email_regex.find_iter(content) {
+        for cap in EMAIL_PATTERN.find_iter(content) {
             let email = cap.as_str().to_lowercase();
             if !email.contains("example.com")
                 && !email.contains("test.com")
@@ -100,28 +129,17 @@ impl EmailDiscoveryClient {
     }
 
     fn extract_phones(&self, content: &str) -> Vec<PhoneNumber> {
-        let phone_patterns = [
-            r"\+?1?[-.\s]?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}",
-            r"\+?[0-9]{1,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}",
-            r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b",
-        ];
-
         let mut phones = HashSet::new();
 
-        for pattern in phone_patterns {
-            if let Ok(re) = RegexBuilder::new(pattern)
-                .size_limit(100_000)
-                .build()
-            {
-                for cap in re.find_iter(content) {
-                    let number = cap.as_str().to_string();
-                    if number.len() >= 10 {
-                        phones.insert(PhoneNumber {
-                            number,
-                            context: String::new(),
-                            source: "website".to_string(),
-                        });
-                    }
+        for re in PHONE_PATTERNS.iter() {
+            for cap in re.find_iter(content) {
+                let number = cap.as_str().to_string();
+                if number.len() >= 10 {
+                    phones.insert(PhoneNumber {
+                        number,
+                        context: String::new(),
+                        source: "website".to_string(),
+                    });
                 }
             }
         }
@@ -130,38 +148,21 @@ impl EmailDiscoveryClient {
     }
 
     fn extract_social_media(&self, content: &str) -> Vec<SocialMedia> {
-        let patterns = [
-            (r"facebook\.com/([a-zA-Z0-9._-]+)", "Facebook"),
-            (r"twitter\.com/([a-zA-Z0-9._-]+)", "Twitter"),
-            (r"x\.com/([a-zA-Z0-9._-]+)", "X"),
-            (r"instagram\.com/([a-zA-Z0-9._-]+)", "Instagram"),
-            (r"linkedin\.com/in/([a-zA-Z0-9._-]+)", "LinkedIn"),
-            (r"linkedin\.com/company/([a-zA-Z0-9._-]+)", "LinkedIn"),
-            (r"github\.com/([a-zA-Z0-9._-]+)", "GitHub"),
-            (r"youtube\.com/@([a-zA-Z0-9._-]+)", "YouTube"),
-            (r"tiktok\.com/@([a-zA-Z0-9._-]+)", "TikTok"),
-        ];
-
         let mut socials = HashSet::new();
 
-        for (pattern, platform) in patterns {
-            if let Ok(re) = RegexBuilder::new(pattern)
-                .size_limit(100_000)
-                .build()
-            {
-                for cap in re.captures_iter(content) {
-                    if let Some(handle) = cap.get(1) {
-                        let url = format!(
-                            "https://{}.com/{}",
-                            platform.to_lowercase(),
-                            handle.as_str()
-                        );
-                        socials.insert(SocialMedia {
-                            platform: platform.to_string(),
-                            url,
-                            handle: Some(handle.as_str().to_string()),
-                        });
-                    }
+        for (platform, re) in SOCIAL_PATTERNS.iter() {
+            for cap in re.captures_iter(content) {
+                if let Some(handle) = cap.get(1) {
+                    let url = format!(
+                        "https://{}.com/{}",
+                        platform.to_lowercase(),
+                        handle.as_str()
+                    );
+                    socials.insert(SocialMedia {
+                        platform: platform.to_string(),
+                        url,
+                        handle: Some(handle.as_str().to_string()),
+                    });
                 }
             }
         }
@@ -170,25 +171,15 @@ impl EmailDiscoveryClient {
     }
 
     fn extract_addresses(&self, content: &str) -> Vec<PhysicalAddress> {
-        let address_patterns = [
-            r"\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Way|Place|Pl)\.?\s*,?\s*(?:[A-Za-z\s]+,)?\s*[A-Z]{2}\s*\d{5}(?:-\d{4})?",
-            r"[A-Z][a-z]+,\s*[A-Z]{2}\s*\d{5}",
-        ];
-
         let mut addresses = Vec::new();
 
-        for pattern in address_patterns {
-            if let Ok(re) = RegexBuilder::new(pattern)
-                .size_limit(100_000)
-                .build()
-            {
-                for cap in re.find_iter(content) {
-                    addresses.push(PhysicalAddress {
-                        address: cap.as_str().to_string(),
-                        context: String::new(),
-                        source: "website".to_string(),
-                    });
-                }
+        for re in ADDRESS_PATTERNS.iter() {
+            for cap in re.find_iter(content) {
+                addresses.push(PhysicalAddress {
+                    address: cap.as_str().to_string(),
+                    context: String::new(),
+                    source: "website".to_string(),
+                });
             }
         }
 

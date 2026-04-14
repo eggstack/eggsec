@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
+use dashmap::DashMap;
 
 use crate::cli::EndpointScanArgs;
 use crate::config::SlapperConfig;
@@ -681,8 +682,8 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         .redirect(reqwest::redirect::Policy::limited(5))
         .build().map_err(|e| crate::error::SlapperError::from(e).with_timeout(config.timeout_duration.as_millis() as u64))?;
 
-    let results: Arc<Mutex<Vec<EndpointResult>>> = Arc::new(Mutex::new(Vec::new()));
-    let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
+    let results: Arc<DashMap<usize, EndpointResult>> = Arc::new(DashMap::new());
+    let scanned_count = Arc::new(Mutex::new(0u64));
     let total_endpoints = config.endpoints.len() as u64;
 
     let progress = if config.tui_mode {
@@ -704,7 +705,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
     let base = config.base_url.trim_end_matches('/');
     let endpoints_count = config.endpoints.len();
 
-    for endpoint in config.endpoints {
+    for (idx, endpoint) in config.endpoints.into_iter().enumerate() {
         let permit = semaphore.clone().acquire_owned().await?;
         let client = client.clone();
         let results = results.clone();
@@ -747,8 +748,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
 
                     let interesting = is_interesting(&endpoint_path, status_code);
 
-                    let mut results = results.lock().await;
-                    results.push(EndpointResult {
+                    results.insert(idx, EndpointResult {
                         path: endpoint_path,
                         status_code,
                         status_text: status.canonical_reason().unwrap_or("Unknown").to_string(),
@@ -782,7 +782,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         pb.finish_and_clear();
     }
 
-    let mut results = results.lock().await.clone();
+    let mut results: Vec<EndpointResult> = DashMap::clone(&results).into_iter().map(|(_, v)| v).collect();
     results.sort_by(|a, b| {
         b.interesting
             .cmp(&a.interesting)

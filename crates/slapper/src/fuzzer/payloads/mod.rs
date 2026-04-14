@@ -125,6 +125,10 @@ static PAYLOAD_CACHE: LazyLock<std::collections::HashMap<PayloadType, Vec<Payloa
         map
     });
 
+static ALL_PAYLOADS_CACHE: LazyLock<Vec<Payload>> = LazyLock::new(|| {
+    PAYLOAD_CACHE.values().flatten().cloned().collect()
+});
+
 pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
     match payload_type {
         PayloadType::Sqli => sqli::get_payloads(),
@@ -162,9 +166,9 @@ pub fn get_payloads_cached(payload_type: PayloadType) -> &'static Vec<Payload> {
 
 #[deprecated(since = "0.1.0", note = "Use get_all_payloads_cached instead")]
 pub fn get_all_payloads() -> Vec<Payload> {
-    get_all_payloads_cached()
+    get_all_payloads_cached().clone()
 }
 
-pub fn get_all_payloads_cached() -> Vec<Payload> {
-    PAYLOAD_CACHE.values().flatten().cloned().collect()
+pub fn get_all_payloads_cached() -> &'static Vec<Payload> {
+    &ALL_PAYLOADS_CACHE
 }

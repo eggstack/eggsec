@@ -18,7 +18,17 @@ use crate::tool::{ToolRequest, ToolResponse};
 pub struct SearchTool {
     searxng_url: String,
     cache: Arc<tokio::sync::RwLock<std::collections::HashMap<String, SearchResult>>>,
+    client: reqwest::Client,
 }
+
+static SEARCH_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
+    reqwest::Client::builder()
+        .pool_max_idle_per_host(20)
+        .pool_idle_timeout(std::time::Duration::from_secs(30))
+        .tcp_nodelay(true)
+        .build()
+        .expect("Failed to create search HTTP client")
+});
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SearchResult {
@@ -43,11 +53,11 @@ impl SearchTool {
         Self {
             searxng_url: searxng_url.unwrap_or_else(|| "http://localhost:8888".to_string()),
             cache: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+            client: SEARCH_CLIENT.clone(),
         }
     }
 
     async fn search_searxng(&self, query: &str, categories: Option<&str>) -> Result<Vec<SearchResult>, String> {
-        let client = reqwest::Client::new();
         let mut url = format!("{}/search?q={}", self.searxng_url, urlencoding::encode(query));
         
         if let Some(cats) = categories {
@@ -55,7 +65,7 @@ impl SearchTool {
         }
         url.push_str("&format=json");
 
-        let response = client
+        let response = self.client
             .get(&url)
             .timeout(std::time::Duration::from_secs(10))
             .send()

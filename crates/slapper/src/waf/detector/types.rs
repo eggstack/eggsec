@@ -1,3 +1,4 @@
+use crate::utils::contains_ignore_case;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,10 +41,10 @@ impl ResponseDiff {
             > crate::constants::waf::LENGTH_DIFF_THRESHOLD;
 
         let header_blocked = self.header_diffs.iter().any(|h| {
-            h.to_lowercase().contains("waf")
-                || h.to_lowercase().contains("firewall")
-                || h.to_lowercase().contains("blocked")
-                || h.to_lowercase().contains("attack")
+            contains_ignore_case(h, "waf")
+                || contains_ignore_case(h, "firewall")
+                || contains_ignore_case(h, "blocked")
+                || contains_ignore_case(h, "attack")
         });
 
         status_blocked || length_blocked || header_blocked

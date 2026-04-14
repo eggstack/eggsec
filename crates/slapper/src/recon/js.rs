@@ -1,10 +1,48 @@
 use crate::error::Result;
-use regex::RegexBuilder;
+use regex::Regex;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::sync::LazyLock;
 
 use crate::utils::create_http_client_with_options;
+
+static ENDPOINT_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r#"(?:api|endpoint|path|route|url)["']?\s*[:=]\s*["']([^"'<>\s]+)["']"#).unwrap(),
+        Regex::new(r#"fetch\s*\(\s*["']([^"'<>\s]+)["']"#).unwrap(),
+        Regex::new(r#"axios\.[\w]+\(\s*["']([^"'<>\s]+)["']"#).unwrap(),
+        Regex::new(r#"\$\.ajax\s*\(\s*\{[^}]*url\s*:\s*["']([^"'<>\s]+)["']"#).unwrap(),
+        Regex::new(r#"window\.open\s*\(\s*["']([^"'<>\s]+)["']"#).unwrap(),
+        Regex::new(r#"(?:href|src|action)\s*=\s*["']([^"'<>\s]+)["']"#).unwrap(),
+    ]
+});
+
+static SECRET_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| {
+    vec![
+        (r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#, Regex::new(r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#).unwrap()),
+        (r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#, Regex::new(r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#).unwrap()),
+        (r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#, Regex::new(r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#).unwrap()),
+        (r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#, Regex::new(r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#).unwrap()),
+        (r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#, Regex::new(r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#).unwrap()),
+        (r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#, Regex::new(r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#).unwrap()),
+    ]
+});
+
+static API_KEY_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| {
+    vec![
+        (r#"(?i)sk-[a-zA-Z0-9]{20,}"#, Regex::new(r#"(?i)sk-[a-zA-Z0-9]{20,}"#).unwrap()),
+        (r#"(?i)AIza[0-9A-Za-z\-_]{35}"#, Regex::new(r#"(?i)AIza[0-9A-Za-z\-_]{35}"#).unwrap()),
+        (r#"(?i)ya29\.[0-9A-Za-z\-_]+"#, Regex::new(r#"(?i)ya29\.[0-9A-Za-z\-_]+"#).unwrap()),
+        (r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#, Regex::new(r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#).unwrap()),
+        (r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#, Regex::new(r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#).unwrap()),
+        (r#"(?i)AKIA[0-9A-Z]{16}"#, Regex::new(r#"(?i)AKIA[0-9A-Z]{16}"#).unwrap()),
+    ]
+});
+
+static URL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"https?://[^\s"'<>]+"#).unwrap()
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct JsAnalysis {
@@ -146,29 +184,15 @@ impl JsAnalyzer {
     fn extract_endpoints(&self, content: &str) -> Vec<String> {
         let mut endpoints = HashSet::new();
 
-        let patterns = [
-            r#"(?:api|endpoint|path|route|url)["']?\s*[:=]\s*["']([^"'<>\s]+)["']"#,
-            r#"fetch\s*\(\s*["']([^"'<>\s]+)["']"#,
-            r#"axios\.[\w]+\(\s*["']([^"'<>\s]+)["']"#,
-            r#"\$\.ajax\s*\(\s*\{[^}]*url\s*:\s*["']([^"'<>\s]+)["']"#,
-            r#"window\.open\s*\(\s*["']([^"'<>\s]+)["']"#,
-            r#"(?:href|src|action)\s*=\s*["']([^"'<>\s]+)["']"#,
-        ];
-
-        for pattern in patterns {
-            if let Ok(re) = RegexBuilder::new(pattern)
-                .size_limit(100_000)
-                .build()
-            {
-                for cap in re.captures_iter(content) {
-                    if let Some(endpoint) = cap.get(1) {
-                        let endpoint_str = endpoint.as_str();
-                        if !endpoint_str.starts_with('#')
-                            && !endpoint_str.starts_with("javascript:")
-                            && endpoint_str.len() > 2
-                        {
-                            endpoints.insert(endpoint_str.to_string());
-                        }
+        for re in ENDPOINT_PATTERNS.iter() {
+            for cap in re.captures_iter(content) {
+                if let Some(endpoint) = cap.get(1) {
+                    let endpoint_str = endpoint.as_str();
+                    if !endpoint_str.starts_with('#')
+                        && !endpoint_str.starts_with("javascript:")
+                        && endpoint_str.len() > 2
+                    {
+                        endpoints.insert(endpoint_str.to_string());
                     }
                 }
             }
@@ -180,43 +204,17 @@ impl JsAnalyzer {
     fn extract_secrets(&self, content: &str) -> Vec<Secret> {
         let mut secrets = Vec::new();
 
-        let patterns = [
-            (
-                r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#,
-                "API_KEY",
-            ),
-            (
-                r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#,
-                "AWS_KEY",
-            ),
-            (
-                r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#,
-                "PASSWORD",
-            ),
-            (r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#, "BEARER_TOKEN"),
-            (r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#, "BASIC_AUTH"),
-            (
-                r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#,
-                "JWT",
-            ),
-        ];
-
-        for (pattern, secret_type) in patterns {
-            if let Ok(re) = RegexBuilder::new(pattern)
-                .size_limit(100_000)
-                .build()
-            {
-                for cap in re.captures_iter(content) {
-                    let full_match = cap
-                        .get(0)
-                        .map(|m| m.as_str().to_string())
-                        .unwrap_or_default();
-                    secrets.push(Secret {
-                        secret_type: secret_type.to_string(),
-                        value: full_match.chars().skip(4).take(20).collect::<String>() + "...",
-                        context: full_match.chars().take(50).collect(),
-                    });
-                }
+        for (secret_type, re) in SECRET_PATTERNS.iter() {
+            for cap in re.captures_iter(content) {
+                let full_match = cap
+                    .get(0)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
+                secrets.push(Secret {
+                    secret_type: secret_type.to_string(),
+                    value: full_match.chars().skip(4).take(20).collect::<String>() + "...",
+                    context: full_match.chars().take(50).collect(),
+                });
             }
         }
 
@@ -226,28 +224,14 @@ impl JsAnalyzer {
     fn extract_api_keys(&self, content: &str) -> Vec<ApiKey> {
         let mut api_keys = Vec::new();
 
-        let patterns = [
-            (r#"(?i)sk-[a-zA-Z0-9]{20,}"#, "OpenAI"),
-            (r#"(?i)AIza[0-9A-Za-z\-_]{35}"#, "Google API"),
-            (r#"(?i)ya29\.[0-9A-Za-z\-_]+"#, "Google OAuth"),
-            (r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#, "GitHub PAT"),
-            (r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#, "GitLab PAT"),
-            (r#"(?i)AKIA[0-9A-Z]{16}"#, "AWS Access Key"),
-        ];
-
-        for (pattern, key_type) in patterns {
-            if let Ok(re) = RegexBuilder::new(pattern)
-                .size_limit(100_000)
-                .build()
-            {
-                for cap in re.captures_iter(content) {
-                    if let Some(key) = cap.get(0) {
-                        api_keys.push(ApiKey {
-                            key_type: key_type.to_string(),
-                            value: key.as_str().chars().take(15).collect::<String>() + "...",
-                            confidence: "high".to_string(),
-                        });
-                    }
+        for (key_type, re) in API_KEY_PATTERNS.iter() {
+            for cap in re.captures_iter(content) {
+                if let Some(key) = cap.get(0) {
+                    api_keys.push(ApiKey {
+                        key_type: key_type.to_string(),
+                        value: key.as_str().chars().take(15).collect::<String>() + "...",
+                        confidence: "high".to_string(),
+                    });
                 }
             }
         }
@@ -258,11 +242,7 @@ impl JsAnalyzer {
     fn extract_urls(&self, content: &str) -> Vec<String> {
         let mut urls = HashSet::new();
 
-        let url_pattern = RegexBuilder::new(r#"https?://[^\s\"'<>]+"#)
-            .size_limit(100_000)
-            .build()
-            .expect("valid URL extraction regex");
-        for cap in url_pattern.find_iter(content) {
+        for cap in URL_PATTERN.find_iter(content) {
             let url = cap.as_str().to_string();
             if url.len() > 10 && !url.contains(".js") && !url.contains(".css") {
                 urls.insert(url);

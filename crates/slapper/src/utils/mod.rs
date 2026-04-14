@@ -57,7 +57,7 @@ pub use http::{
 pub use output::{
     print_error, print_info, print_json, print_json_compact, print_success, print_warning,
 };
-pub use parsing::{parse_headers, parse_url_validated};
+pub use parsing::{contains_ignore_case, parse_headers, parse_url_validated};
 pub use scope::{check_scope, check_scope_from_url};
 pub use target::{
     extract_domain, extract_host_port, extract_target_from_url, is_ip_address, normalize_url,

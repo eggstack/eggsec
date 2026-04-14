@@ -16,7 +16,7 @@ use super::types::{BaselineResponse, FuzzResult, FuzzSession, OwaspSummary};
 use super::core::FuzzEngine;
 
 impl FuzzEngine {
-    pub(crate) fn mutate_payloads(&self, payloads: Vec<Payload>) -> Vec<Payload> {
+    pub(crate) fn mutate_payloads(&self, payloads: &[Payload]) -> Vec<Payload> {
         let mut mutated = Vec::new();
 
         for payload in payloads {

@@ -1,5 +1,6 @@
 use crate::constants::waf::BLOCKED_STATUS_CODES;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
 pub struct WafSignature {
@@ -10,7 +11,7 @@ pub struct WafSignature {
     pub ip_ranges: Vec<String>,
 }
 
-pub fn get_waf_signatures() -> HashMap<String, WafSignature> {
+static WAF_SIGNATURES: LazyLock<HashMap<String, WafSignature>> = LazyLock::new(|| {
     let mut signatures = HashMap::new();
 
     signatures.insert(
@@ -513,6 +514,10 @@ pub fn get_waf_signatures() -> HashMap<String, WafSignature> {
     );
 
     signatures
+});
+
+pub fn get_waf_signatures() -> HashMap<String, WafSignature> {
+    WAF_SIGNATURES.clone()
 }
 
 pub fn get_blocked_status_codes() -> Vec<u16> {

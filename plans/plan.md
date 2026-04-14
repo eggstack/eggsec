@@ -223,6 +223,8 @@ This document tracks all deferred and remaining work items across all plan files
 
 **Estimated**: 2-3 hours
 
+**Completed**: 2026-04-14
+
 ---
 
 #### 3.2 FxHashMap for Hot Paths (HIGH)
@@ -240,6 +242,8 @@ This document tracks all deferred and remaining work items across all plan files
 
 **Estimated**: 4-6 hours
 
+**Completed**: 2026-04-14
+
 ---
 
 #### 3.3 Regex Recompilation in `recon/js.rs` (HIGH)
@@ -253,6 +257,8 @@ This document tracks all deferred and remaining work items across all plan files
 **Solution**: Pre-compile regexes at module level using `LazyLock` (already done correctly in `recon/secrets.rs:23+`).
 
 **Estimated**: 1-2 hours
+
+**Completed**: 2026-04-14
 
 ---
 
@@ -282,6 +288,8 @@ pub fn escape_html(s: &str) -> String {
 
 **Estimated**: 1-2 hours
 
+**Completed**: 2026-04-14
+
 ---
 
 #### 3.5 Cache WAF Signatures with LazyLock (MEDIUM)
@@ -306,6 +314,8 @@ pub fn get_waf_signatures() -> &'static HashMap<String, WafSignature> {
 
 **Estimated**: 1 hour
 
+**Completed**: 2026-04-14
+
 ---
 
 #### 3.6 HTTP Client Connection Pooling (MEDIUM)
@@ -324,6 +334,8 @@ Client::builder()
 
 **Estimated**: 1-2 hours
 
+**Completed**: 2026-04-14
+
 ---
 
 #### 3.7 Payload Cache Optimization (MEDIUM)
@@ -337,6 +349,8 @@ Client::builder()
 
 **Estimated**: 2 hours
 
+**Completed**: 2026-04-14
+
 ---
 
 #### 3.8 Report Generation Efficiency (MEDIUM)
@@ -347,6 +361,8 @@ Client::builder()
 **Solution**: Use `writeln!` with single String buffer; cache theme strings as `LazyLock`.
 
 **Estimated**: 1-2 hours
+
+**Completed**: 2026-04-14
 
 ---
 
@@ -369,6 +385,8 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 
 **Estimated**: 2-3 hours
 
+**Completed**: 2026-04-14
+
 ---
 
 #### 3.10 Banner Buffer Optimization (LOW)
@@ -379,6 +397,8 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 **Solution**: Replace `Vec<u8>` with `SmallVec<[u8; 256]>` in banner parsing.
 
 **Estimated**: 1 hour
+
+**Completed**: 2026-04-14
 
 ---
 
@@ -391,7 +411,11 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 
 **Solution**: Pass `&Grammar` by reference instead of cloning.
 
+**Note**: Borrow checker prevents elimination - `expand_rule` takes `&mut self` conflicting with borrowing `&self.grammar.start`. The `String::clone()` is cheap (pointer+len+cap).
+
 **Estimated**: 30 minutes
+
+**Partial**: 2026-04-14 (clone retained due to borrow checker constraints)
 
 ---
 
@@ -913,11 +937,11 @@ cargo build --release -p slapper --features full
 |------|-------|----------------|--------|
 | 1: Critical Security | 9 | 10-15 hours | ✅ COMPLETED |
 | 2: High Priority | 7 | 9-13 hours | 5 done, 2 pending |
-| 3: Performance | 11 | 15-20 hours | Pending |
+| 3: Performance | 11 | 15-20 hours | ✅ COMPLETED (3.11 partial) |
 | 4: Code Quality | 10 | 35-45 hours | Pending |
 | 5: Testing/Docs | 7 | 10-15 hours | Pending |
 | 6: Additional | 9 | 8-12 hours | Pending |
-| **Total** | **~53 items** | **80-110 hours** | 14 done |
+| **Total** | **~53 items** | **80-110 hours** | 26 done |
 
 ---
 

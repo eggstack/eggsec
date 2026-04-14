@@ -34,6 +34,7 @@ hostname = "0.4"
 hex = "0.4"
 md-5 = "0.10"
 dashmap = "6"
+rustc-hash = "2"
 scraper = "0.21"
 hickory-resolver = "0.24"
 

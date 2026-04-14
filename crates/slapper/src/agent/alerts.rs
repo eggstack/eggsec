@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
@@ -78,6 +78,15 @@ pub struct AlertRouter {
 }
 
 impl AlertRouter {
+    fn create_pooled_client() -> Result<reqwest::Client> {
+        reqwest::Client::builder()
+            .pool_max_idle_per_host(20)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_nodelay(true)
+            .build()
+            .context("Failed to create HTTP client")
+    }
+
     pub fn new() -> Self {
         Self {
             channels: Vec::new(),
@@ -193,7 +202,7 @@ impl AlertRouter {
             }
         });
 
-        let client = reqwest::Client::new();
+        let client = Self::create_pooled_client()?;
         let mut request = client.post(&config.url).json(&payload);
 
         if let Some(ref secret) = config.secret {
@@ -244,7 +253,7 @@ impl AlertRouter {
             }
         });
 
-        let client = reqwest::Client::new();
+        let client = Self::create_pooled_client()?;
         let response = client
             .post("https://events.pagerduty.com/v2/enqueue")
             .header("Content-Type", "application/json")

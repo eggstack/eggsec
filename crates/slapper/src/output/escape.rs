@@ -1,9 +1,16 @@
 pub fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
+    let mut buf = String::with_capacity(s.len() * 6);
+    for c in s.chars() {
+        match c {
+            '&' => buf.push_str("&amp;"),
+            '<' => buf.push_str("&lt;"),
+            '>' => buf.push_str("&gt;"),
+            '"' => buf.push_str("&quot;"),
+            '\'' => buf.push_str("&#39;"),
+            _ => buf.push(c),
+        }
+    }
+    buf
 }
 
 pub fn escape_csv(s: &str) -> String {
@@ -22,9 +29,16 @@ pub fn escape_csv(s: &str) -> String {
 
 #[allow(dead_code)]
 pub fn escape_xml(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
+    let mut buf = String::with_capacity(s.len() * 6);
+    for c in s.chars() {
+        match c {
+            '&' => buf.push_str("&amp;"),
+            '<' => buf.push_str("&lt;"),
+            '>' => buf.push_str("&gt;"),
+            '"' => buf.push_str("&quot;"),
+            '\'' => buf.push_str("&apos;"),
+            _ => buf.push(c),
+        }
+    }
+    buf
 }

@@ -1,6 +1,6 @@
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::utils::create_insecure_client_with_options;
 
@@ -20,7 +20,7 @@ pub struct TechStack {
 pub struct TechDetectionResult {
     pub url: String,
     pub status_code: u16,
-    pub headers: HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
     pub tech_stack: TechStack,
 }
 
@@ -43,7 +43,7 @@ impl TechDetector {
         let response = self.client.get(url).send().await?;
         let status = response.status().as_u16();
 
-        let headers: HashMap<String, String> = response
+        let headers: FxHashMap<String, String> = response
             .headers()
             .iter()
             .filter_map(|(k, v)| v.to_str().ok().map(|v| (k.to_string(), v.to_string())))
@@ -70,7 +70,7 @@ impl TechDetector {
         })
     }
 
-    fn detect_servers(&self, headers: &HashMap<String, String>, stack: &mut TechStack) {
+    fn detect_servers(&self, headers: &FxHashMap<String, String>, stack: &mut TechStack) {
         let server = headers.get("server").map(|s| s.to_lowercase());
 
         if let Some(s) = server {
@@ -116,7 +116,7 @@ impl TechDetector {
 
     fn detect_frameworks(
         &self,
-        headers: &HashMap<String, String>,
+        headers: &FxHashMap<String, String>,
         body: &str,
         stack: &mut TechStack,
     ) {
@@ -229,7 +229,7 @@ impl TechDetector {
             }
     }
 
-    fn detect_cms(&self, headers: &HashMap<String, String>, _body: &str, stack: &mut TechStack) {
+    fn detect_cms(&self, headers: &FxHashMap<String, String>, _body: &str, stack: &mut TechStack) {
         let powered_by = headers.get("x-powered-by").map(|s| s.to_lowercase());
 
         if let Some(pb) = powered_by {
@@ -245,7 +245,7 @@ impl TechDetector {
         }
     }
 
-    fn detect_cdns(&self, headers: &HashMap<String, String>, stack: &mut TechStack) {
+    fn detect_cdns(&self, headers: &FxHashMap<String, String>, stack: &mut TechStack) {
         for (key, value) in headers {
             let key_lower = key.to_lowercase();
             let value_lower = value.to_lowercase();
@@ -291,7 +291,7 @@ impl TechDetector {
 
     fn detect_databases(
         &self,
-        headers: &HashMap<String, String>,
+        headers: &FxHashMap<String, String>,
         _body: &str,
         stack: &mut TechStack,
     ) {
@@ -357,7 +357,7 @@ impl TechDetector {
 
     fn detect_languages(
         &self,
-        headers: &HashMap<String, String>,
+        headers: &FxHashMap<String, String>,
         _body: &str,
         stack: &mut TechStack,
     ) {
@@ -439,7 +439,7 @@ mod tests {
         let result = TechDetectionResult {
             url: "https://example.com".to_string(),
             status_code: 200,
-            headers: std::collections::HashMap::from([
+            headers: FxHashMap::from_iter([
                 ("server".to_string(), "nginx".to_string()),
                 ("x-powered-by".to_string(), "Express".to_string()),
             ]),
@@ -473,7 +473,7 @@ mod tests {
         let result = TechDetectionResult {
             url: "https://example.com".to_string(),
             status_code: 404,
-            headers: std::collections::HashMap::new(),
+            headers: FxHashMap::default(),
             tech_stack: TechStack::default(),
         };
         let cloned = result.clone();

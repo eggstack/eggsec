@@ -57,32 +57,32 @@ impl MarkdownReport {
     }
 
     pub fn generate(&self) -> String {
+        use std::fmt::Write;
         let mut md = String::new();
 
-        md.push_str("# Security Scan Report\n\n");
-        md.push_str("## Summary\n\n");
-        md.push_str("| Field | Value |\n");
-        md.push_str("|-------|-------|\n");
-        md.push_str(&format!("| Target | {} |\n", self.summary.target));
-        md.push_str(&format!("| Scan Type | {} |\n", self.summary.scan_type));
-        md.push_str(&format!("| Timestamp | {} |\n", self.summary.timestamp));
-        md.push_str(&format!(
-            "| Duration | {} seconds |\n",
+        writeln!(md, "# Security Scan Report\n").unwrap();
+        writeln!(md, "## Summary\n").unwrap();
+        writeln!(md, "| Field | Value |").unwrap();
+        writeln!(md, "|-------|-------|").unwrap();
+        writeln!(md, "| Target | {} |", self.summary.target).unwrap();
+        writeln!(md, "| Scan Type | {} |", self.summary.scan_type).unwrap();
+        writeln!(md, "| Timestamp | {} |", self.summary.timestamp).unwrap();
+        writeln!(
+            md,
+            "| Duration | {} seconds |",
             self.summary.duration_seconds
-        ));
-        md.push_str(&format!(
-            "| Total Requests | {} |\n",
-            self.summary.total_requests
-        ));
-        md.push_str(&format!("| Critical | {} |\n", self.summary.critical_count));
-        md.push_str(&format!("| High | {} |\n", self.summary.high_count));
-        md.push_str(&format!("| Medium | {} |\n", self.summary.medium_count));
-        md.push_str(&format!("| Low | {} |\n", self.summary.low_count));
-        md.push_str(&format!("| Info | {} |\n", self.summary.info_count));
-        md.push('\n');
+        )
+        .unwrap();
+        writeln!(md, "| Total Requests | {} |", self.summary.total_requests).unwrap();
+        writeln!(md, "| Critical | {} |", self.summary.critical_count).unwrap();
+        writeln!(md, "| High | {} |", self.summary.high_count).unwrap();
+        writeln!(md, "| Medium | {} |", self.summary.medium_count).unwrap();
+        writeln!(md, "| Low | {} |", self.summary.low_count).unwrap();
+        writeln!(md, "| Info | {} |", self.summary.info_count).unwrap();
+        writeln!(md).unwrap();
 
         if !self.findings.is_empty() {
-            md.push_str("## Findings\n\n");
+            writeln!(md, "## Findings\n").unwrap();
 
             for (i, finding) in self.findings.iter().enumerate() {
                 let severity_icon = match finding.severity.to_lowercase().as_str() {
@@ -93,43 +93,38 @@ impl MarkdownReport {
                     _ => "⚪",
                 };
 
-                md.push_str(&format!(
-                    "### {}. {} {}\n\n",
-                    i + 1,
-                    severity_icon,
-                    finding.title
-                ));
-                md.push_str(&format!("**Severity:** {}  \n", finding.severity));
-                md.push_str(&format!("**Category:** {}  \n", finding.category));
-                md.push_str(&format!("**Location:** {}  \n\n", finding.location));
+                writeln!(md, "### {}. {} {}\n", i + 1, severity_icon, finding.title).unwrap();
+                writeln!(md, "**Severity:** {}  \n", finding.severity).unwrap();
+                writeln!(md, "**Category:** {}  \n", finding.category).unwrap();
+                writeln!(md, "**Location:** {}  \n\n", finding.location).unwrap();
 
-                md.push_str(&format!("{}\n\n", finding.description));
+                writeln!(md, "{}\n\n", finding.description).unwrap();
 
                 if let Some(evidence) = &finding.evidence {
-                    md.push_str(&format!("**Evidence:**\n```\n{}\n```\n\n", evidence));
+                    writeln!(md, "**Evidence:**\n```\n{}\n```\n\n", evidence).unwrap();
                 }
 
                 if let Some(remediation) = &finding.remediation {
-                    md.push_str(&format!("**Remediation:** {}\n\n", remediation));
+                    writeln!(md, "**Remediation:** {}\n\n", remediation).unwrap();
                 }
 
                 if !finding.cve_ids.is_empty() {
-                    md.push_str(&format!("**CVE IDs:** {}\n\n", finding.cve_ids.join(", ")));
+                    writeln!(md, "**CVE IDs:** {}\n\n", finding.cve_ids.join(", ")).unwrap();
                 }
 
                 if !finding.references.is_empty() {
-                    md.push_str("**References:**\n");
+                    writeln!(md, "**References:**\n").unwrap();
                     for reference in &finding.references {
-                        md.push_str(&format!("- {}\n", reference));
+                        writeln!(md, "- {}\n", reference).unwrap();
                     }
-                    md.push('\n');
+                    writeln!(md).unwrap();
                 }
 
-                md.push_str("---\n\n");
+                writeln!(md, "---\n\n").unwrap();
             }
         } else {
-            md.push_str("## Findings\n\n");
-            md.push_str("No vulnerabilities were found in this scan.\n\n");
+            writeln!(md, "## Findings\n\n").unwrap();
+            writeln!(md, "No vulnerabilities were found in this scan.\n\n").unwrap();
         }
 
         md
