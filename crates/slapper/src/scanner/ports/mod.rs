@@ -9,6 +9,7 @@ use crate::scanner::spoof::{format_spoof_warning, SpoofConfig, SpoofStats};
 use crate::utils::parsing::{parse_ports, resolve_host};
 use crate::utils::strip_controls;
 use crate::utils::sanitize_for_logging;
+use crate::output::escape::escape_xml;
 use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -225,7 +226,7 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
         let mut s = String::new();
         s.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         s.push_str("<nmaprun>\n");
-        s.push_str(&format!("  <host>{}</host>\n", results.host));
+        s.push_str(&format!("  <host>{}</host>\n", escape_xml(&results.host)));
         s.push_str("  <ports>\n");
         for port in &results.open_ports {
             s.push_str(&format!(
@@ -395,7 +396,7 @@ where
         let mut s = String::new();
         s.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         s.push_str("<nmaprun>\n");
-        s.push_str(&format!("  <host>{}</host>\n", results.host));
+        s.push_str(&format!("  <host>{}</host>\n", escape_xml(&results.host)));
         s.push_str("  <ports>\n");
         for port in &results.open_ports {
             s.push_str(&format!(

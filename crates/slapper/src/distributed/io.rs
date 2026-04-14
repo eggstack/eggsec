@@ -140,15 +140,14 @@ impl TlsServer {
 pub struct TlsClient {
     connector: TlsConnector,
     domain: String,
+    #[cfg(feature = "insecure-tls")]
+    warn_on_use: bool,
 }
 
 impl TlsClient {
     #[cfg(feature = "insecure-tls")]
     pub fn new(domain: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        tracing::warn!(
-            "INSECURE TLS: Certificate verification is disabled. This is a security risk. Use only for testing."
-        );
-        let config = ClientConfig::builder()
+        let config = rustls::ClientConfig::builder()
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoVerifier))
             .with_no_client_auth();
@@ -156,6 +155,7 @@ impl TlsClient {
         Ok(Self {
             connector: TlsConnector::from(Arc::new(config)),
             domain: domain.to_string(),
+            warn_on_use: true,
         })
     }
 
@@ -174,6 +174,16 @@ impl TlsClient {
 
     pub fn clone_connector(&self) -> TlsConnector {
         self.connector.clone()
+    }
+
+    #[cfg(feature = "insecure-tls")]
+    pub fn should_warn_and_consume(&mut self) -> bool {
+        if self.warn_on_use {
+            self.warn_on_use = false;
+            true
+        } else {
+            false
+        }
     }
 }
 

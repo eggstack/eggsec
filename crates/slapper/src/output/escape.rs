@@ -7,7 +7,13 @@ pub fn escape_html(s: &str) -> String {
 }
 
 pub fn escape_csv(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
+    let formula_chars = ['=', '+', '-', '@', '\t', '\r'];
+    let starts_with_formula = s
+        .chars()
+        .next()
+        .map(|c| formula_chars.contains(&c))
+        .unwrap_or(false);
+    if s.contains(',') || s.contains('"') || s.contains('\n') || starts_with_formula {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
         s.to_string()

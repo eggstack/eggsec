@@ -56,7 +56,7 @@ pub struct SandboxConfig {
 impl Default for SandboxConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             allowed_dir: None,
             allowed_commands: Vec::new(),
             log_violations: true,

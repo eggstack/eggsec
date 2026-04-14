@@ -1,20 +1,19 @@
 use serde::{Deserialize, Serialize};
 
 use super::executor::StageResult;
+use crate::output::escape::{escape_html, escape_xml};
 use crate::scanner::endpoints::EndpointResult;
 use crate::scanner::fingerprint::ServiceFingerprint;
 use crate::scanner::ports::PortResult;
 
-fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
-
 fn escape_csv(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
+    let formula_chars = ['=', '+', '-', '@', '\t', '\r'];
+    let starts_with_formula = s
+        .chars()
+        .next()
+        .map(|c| formula_chars.contains(&c))
+        .unwrap_or(false);
+    if s.contains(',') || s.contains('"') || s.contains('\n') || starts_with_formula {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
         s.to_string()
@@ -147,7 +146,7 @@ pub fn generate_html(report: &PipelineReport) -> crate::error::Result<String> {
             html.push_str(&format!(
                 "<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n",
                 port.port,
-                port.status,
+                escape_xml(&port.status),
                 escape_html(&port.service)
             ));
         }

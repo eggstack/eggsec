@@ -26,7 +26,7 @@ fn sanitize_bytes(input: &str, max_len: usize) -> String {
             continue;
         }
 
-        if (0x00..=0x1F).contains(&b) && b != 0x0A && b != 0x0D && b != 0x09 {
+        if (0x00..=0x1F).contains(&b) && b != 0x09 {
             i += 1;
             continue;
         }
@@ -109,10 +109,10 @@ mod tests {
     }
 
     #[test]
-    fn test_preserves_newline_tab_carriage_return() {
+    fn test_preserves_tab_only() {
         let input = "Line1\nLine2\rLine3\tTab";
         let result = sanitize_for_logging(input);
-        assert_eq!(result, input);
+        assert_eq!(result, "Line1Line2Line3\tTab");
     }
 
     #[test]

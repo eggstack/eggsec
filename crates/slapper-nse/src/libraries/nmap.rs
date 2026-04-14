@@ -1510,6 +1510,11 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
             let iface = _lua.create_table()?;
 
             if let Some(iface_name) = name {
+                if !iface_name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                    return Err(mlua::Error::RuntimeError(
+                        "Invalid interface name".to_string(),
+                    ));
+                }
                 iface.set("device", iface_name.clone())?;
 
                 #[cfg(unix)]

@@ -199,7 +199,8 @@ impl AlertRouter {
         if let Some(ref secret) = config.secret {
             let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
                 .expect("HMAC can take key of any size");
-            mac.update(payload.to_string().as_bytes());
+            let canonical_json = serde_json::to_string(&payload).unwrap();
+            mac.update(canonical_json.as_bytes());
             let result = mac.finalize();
             let signature = format!("sha256={}", hex::encode(result.into_bytes()));
             request = request.header("X-Signature-256", signature);

@@ -1,6 +1,7 @@
-use axum::{routing::get, routing::post, routing::delete, response::IntoResponse, Json, Router};
+use axum::{routing::get, routing::post, routing::delete, extract::State, response::IntoResponse, Json, Router, http::HeaderMap};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use subtle::ConstantTimeEq;
 
 use crate::tool::agents::{AgentRegistry, AgentInfo, AgentStatus, TaskScheduler, ScheduledTask, TaskPriority};
 
@@ -20,9 +21,13 @@ pub struct RegisterAgentResponse {
 }
 
 async fn register_agent(
-    axum::extract::State(state): axum::extract::State<AgentState>,
+    State(state): State<AgentState>,
+    headers: HeaderMap,
     Json(req): Json<RegisterAgentRequest>,
-) -> Json<RegisterAgentResponse> {
+) -> Result<Json<RegisterAgentResponse>, &'static str> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err(e);
+    }
     let id = Uuid::new_v4();
     let agent = AgentInfo {
         id,
@@ -36,12 +41,12 @@ async fn register_agent(
         callback_url: req.callback_url.clone(),
     };
     state.registry.register(agent).await;
-    Json(RegisterAgentResponse {
+    Ok(Json(RegisterAgentResponse {
         id,
         name: req.name,
         status: "active".to_string(),
         capabilities: req.capabilities,
-    })
+    }))
 }
 
 #[derive(Debug, Serialize)]
@@ -51,35 +56,47 @@ pub struct ListAgentsResponse {
 }
 
 async fn list_agents(
-    axum::extract::State(state): axum::extract::State<AgentState>,
-) -> Json<ListAgentsResponse> {
+    State(state): State<AgentState>,
+    headers: HeaderMap,
+) -> Result<Json<ListAgentsResponse>, &'static str> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err(e);
+    }
     let agents = state.registry.list().await;
     let total = agents.len();
-    Json(ListAgentsResponse { agents, total })
+    Ok(Json(ListAgentsResponse { agents, total }))
 }
 
 async fn get_agent(
-    axum::extract::State(state): axum::extract::State<AgentState>,
-    axum::extract::Path(id): axum::extract::Path<Uuid>,
-) -> Result<impl axum::response::IntoResponse, impl axum::response::IntoResponse> {
+    State(state): State<AgentState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, impl IntoResponse> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err((StatusCode::UNAUTHORIZED, e));
+    }
     match state.registry.get(id).await {
         Some(agent) => Ok(axum::Json(agent)),
-        None => Err(axum::http::StatusCode::NOT_FOUND),
+        None => Err(StatusCode::NOT_FOUND),
     }
 }
 
 async fn unregister_agent(
-    axum::extract::State(state): axum::extract::State<AgentState>,
-    axum::extract::Path(id): axum::extract::Path<Uuid>,
-) -> impl axum::response::IntoResponse {
+    State(state): State<AgentState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, impl IntoResponse> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err((StatusCode::UNAUTHORIZED, e));
+    }
     state.registry.unregister(id).await;
-    axum::response::Response::builder()
-        .status(axum::http::StatusCode::NO_CONTENT)
+    Ok(Response::builder()
+        .status(StatusCode::NO_CONTENT)
         .body("".to_string())
-        .unwrap_or_else(|_| axum::response::Response::builder()
-            .status(axum::http::StatusCode::NO_CONTENT)
+        .unwrap_or_else(|_| Response::builder()
+            .status(StatusCode::NO_CONTENT)
             .body("".to_string())
-            .unwrap())
+            .unwrap()))
 }
 
 #[derive(Debug, Serialize)]
@@ -90,19 +107,23 @@ pub struct HeartbeatResponse {
 }
 
 async fn heartbeat(
-    axum::extract::State(state): axum::extract::State<AgentState>,
-    axum::extract::Path(id): axum::extract::Path<Uuid>,
-) -> impl axum::response::IntoResponse {
+    State(state): State<AgentState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<Json<HeartbeatResponse>, &'static str> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err(e);
+    }
     state.registry.heartbeat(id).await;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    Json(HeartbeatResponse {
+    Ok(Json(HeartbeatResponse {
         id,
         last_heartbeat: now,
         status: "ok".to_string(),
-    })
+    }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,9 +143,13 @@ pub struct CreateTaskResponse {
 }
 
 async fn create_task(
-    axum::extract::State(state): axum::extract::State<AgentState>,
+    State(state): State<AgentState>,
+    headers: HeaderMap,
     Json(req): Json<CreateTaskRequest>,
-) -> Json<CreateTaskResponse> {
+) -> Result<Json<CreateTaskResponse>, &'static str> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err(e);
+    }
     let priority = match req.priority.as_deref() {
         Some("critical") => TaskPriority::Critical,
         Some("high") => TaskPriority::High,
@@ -156,12 +181,12 @@ async fn create_task(
         TaskPriority::Low => "low",
     };
 
-    Json(CreateTaskResponse {
+    Ok(Json(CreateTaskResponse {
         id: task_id,
         task_type: req.task_type,
         priority: priority_str.to_string(),
         status: "scheduled".to_string(),
-    })
+    }))
 }
 
 #[derive(Debug, Serialize)]
@@ -180,33 +205,42 @@ pub struct TaskInfo {
 }
 
 async fn list_tasks(
-    axum::extract::State(state): axum::extract::State<AgentState>,
-) -> Json<ListTasksResponse> {
+    State(state): State<AgentState>,
+    headers: HeaderMap,
+) -> Result<Json<ListTasksResponse>, &'static str> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err(e);
+    }
     let count = state.scheduler.pending_count().await;
-    Json(ListTasksResponse {
+    Ok(Json(ListTasksResponse {
         tasks: vec![],
         total: count,
-    })
+    }))
 }
 
 async fn get_task(
-    axum::extract::Path(id): axum::extract::Path<Uuid>,
-) -> impl axum::response::IntoResponse {
+    State(state): State<AgentState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, impl IntoResponse> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err((StatusCode::UNAUTHORIZED, e));
+    }
     let body = serde_json::to_string(&serde_json::json!({
         "id": id,
         "status": "not_found",
         "message": "Task details are only available while tasks are in memory"
     })).unwrap_or_else(|_| r#"{"id":"error","status":"not_found"}"#.to_string());
-    axum::response::Response::builder()
-        .status(axum::http::StatusCode::OK)
+    Ok(Response::builder()
+        .status(StatusCode::OK)
         .header("content-type", "application/json")
         .body(body)
         .unwrap_or_else(|_| {
-            axum::response::Response::builder()
-                .status(axum::http::StatusCode::OK)
+            Response::builder()
+                .status(StatusCode::OK)
                 .body("{\"id\":\"error\",\"status\":\"not_found\"}".to_string())
                 .unwrap()
-        })
+        }))
 }
 
 #[derive(Debug, Serialize)]
@@ -216,21 +250,42 @@ pub struct CancelTaskResponse {
 }
 
 async fn cancel_task(
-    axum::extract::State(state): axum::extract::State<AgentState>,
-    axum::extract::Path(id): axum::extract::Path<Uuid>,
-) -> Json<CancelTaskResponse> {
+    State(state): State<AgentState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<Json<CancelTaskResponse>, &'static str> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err(e);
+    }
     let cancelled = state.scheduler.cancel(id).await;
-    Json(CancelTaskResponse { id, cancelled })
+    Ok(Json(CancelTaskResponse { id, cancelled }))
 }
 
 #[derive(Clone)]
 pub struct AgentState {
     pub registry: AgentRegistry,
     pub scheduler: TaskScheduler,
+    pub api_key: Option<String>,
 }
 
-pub fn router(registry: AgentRegistry, scheduler: TaskScheduler) -> Router {
-    let state = AgentState { registry, scheduler };
+fn require_auth(api_key: &Option<String>, headers: &HeaderMap) -> Result<(), &'static str> {
+    if let Some(ref key) = api_key {
+        let auth = headers
+            .get("authorization")
+            .or_else(|| headers.get("x-api-key"))
+            .and_then(|v| v.to_str().ok());
+
+        match auth {
+            Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
+            _ => Err("Invalid or missing API key"),
+        }
+    } else {
+        Ok(())
+    }
+}
+
+pub fn router(registry: AgentRegistry, scheduler: TaskScheduler, api_key: Option<String>) -> Router {
+    let state = AgentState { registry, scheduler, api_key };
     Router::new()
         .route("/api/v1/agents", post(register_agent))
         .route("/api/v1/agents", get(list_agents))

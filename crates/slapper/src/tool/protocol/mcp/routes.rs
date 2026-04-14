@@ -176,11 +176,9 @@ async fn handle_mcp(
     let mut responses = Vec::new();
 
     for req in requests {
-        if req.method != "initialize" {
-            if let Err(e) = state.mcp_server.validate_auth(&headers) {
-                responses.push(req.error_response(e));
-                continue;
-            }
+        if let Err(e) = state.mcp_server.validate_auth(&headers) {
+            responses.push(req.error_response(e));
+            continue;
         }
 
         let response = state.mcp_server.handle_request(req).await;
