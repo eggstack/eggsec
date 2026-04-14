@@ -164,17 +164,17 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1155 passing |
+| Tests | 1059 passing |
 | Build | Clean compilation |
-| Clippy | 0 warnings (default features) |
+| Clippy | 1 warning (unused import `stress::*` in cli/mod.rs:23) |
 | Doctests | 17 pass, 1 ignored, 0 fail |
 | `SlapperError` variants | 23 |
 | `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (664 lines — split into submodules) |
-| Source files | 406 `.rs` files |
+| Largest file | `tui/app/mod.rs` (1665 lines — needs further decomposition) |
+| Source files | 415 `.rs` files |
 | TUI files | 60 `.rs` files |
 | Tab variants | 29 |
 | Agent module files | 6 (`mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs`) |
@@ -183,9 +183,9 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Deferred and remaining work items
-- `plans/harness.md` — MCP/Agent findings harness (completed)
-- `plans/agent_architecture.md` — Agent architecture (completed)
+- `plans/plan.md` — Consolidated plan with all deferred and remaining work items (6 waves, ~53 items, 80-110 hours)
+- `plans/harness.md` — MCP/Agent findings harness (COMPLETED)
+- `plans/agent_architecture.md` — Agent architecture (COMPLETED)
 
 ## Lessons Learned
 
@@ -610,32 +610,29 @@ When reviewing plan items against actual codebase:
 - Use `glob` to find files: `glob "**/input.rs"`
 - Check actual struct fields: `read` file and verify type definitions
 - Don't assume old AGENTS.md entries are still valid - verify each one
-- Count source files with `find crates/slapper/src -name '*.rs' | wc -l` (406 files)
-- Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (1155 tests)
+- Count source files with `find crates/slapper/src -name '*.rs' | wc -l` (415 files as of 2026-04-14)
+- Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (1059 tests as of 2026-04-14)
 
 ### Lessons Learned (Session 2026-04-14)
 
-#### Tool Findings Harness Implementation
+This session focused on plan consolidation rather than implementation. Key lessons:
 
-- Added `From<>` implementations in `tool/response.rs` for `PortResult`, `ServiceFingerprint`, `EndpointResult`, `UdpServiceFingerprint`, `VulnerabilityInfo` → `Finding`
-- Added `run_cli_with_callback` functions to scanner modules (ports, fingerprint, endpoints), recon, and pipeline
-- All `run_cli_with_callback` functions are gated behind `#[cfg(feature = "tool-api")]`
-- `ScannerTool`, `ReconTool`, and `PipelineTool` now return populated findings via callback
-- `FuzzerTool` was already implemented with callback (already existed)
+#### Plan Consolidation Best Practices
 
-#### Feature Gate Pattern
+- Multiple plan files should be consolidated into a single `plans/plan.md`
+- Before implementing, verify file paths using `glob` or `rg` - some planned items already implemented
+- Always verify plan items against actual codebase before assuming they still apply
+- Use `rg` to confirm file paths, line numbers, and patterns exist
 
-- `run_cli_with_callback` in scanner/recon/pipeline modules must have `#[cfg(feature = "tool-api")]`
-- Without this, the code fails to compile when `tool` module is behind a feature flag
-- The `tool/implementations/*.rs` files already have proper feature gating since they're behind `rest-api`
+#### Plan Structure
 
-#### SearchConfig Addition
+- Organized into waves with parallelizable blocks
+- Items within each block are independent (can be parallelized)
+- Use "waves" for phased implementation where phases can run in parallel via sub-agents
 
-- Added `SearchConfig` struct with `enabled`, `searxng_url`, `engines`, `cache_ttl_seconds` fields
-- Added `search: Option<SearchConfig>` to `SlapperConfig`
-- Added `search: None` to `SlapperConfig::to_config()` in TUI settings tab
+#### Codebase Verification
 
-#### Restoring Deleted Code
-
-- When adding new functions that duplicate existing logic, the original function body may need to be examined in `git show HEAD:<file>`
-- The `is_interesting()` function in `scanner/endpoints.rs` was accidentally removed during refactoring and had to be restored from git history
+- Use `find crates/slapper/src -name '*.rs' | wc -l` for file count
+- Use `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` for test count
+- Run `cargo clippy --lib -p slapper` to check for warnings
+- Verify actual line numbers and file paths before implementing plan items
