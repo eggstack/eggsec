@@ -183,7 +183,9 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan (4 waves, parallelizable by blocks)
+- `plans/plan.md` — Deferred and remaining work items
+- `plans/harness.md` — MCP/Agent findings harness (completed)
+- `plans/agent_architecture.md` — Agent architecture (completed)
 
 ## Lessons Learned
 
@@ -609,7 +611,7 @@ When reviewing plan items against actual codebase:
 - Check actual struct fields: `read` file and verify type definitions
 - Don't assume old AGENTS.md entries are still valid - verify each one
 - Count source files with `find crates/slapper/src -name '*.rs' | wc -l` (406 files)
-- Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (976 tests)
+- Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (1155 tests)
 
 ### Lessons Learned (Session 2026-04-14)
 
