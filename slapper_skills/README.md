@@ -51,6 +51,8 @@ cargo build --release --features "rest-api ai-integration"
 | `ssrf_testing.md` | Server-Side Request Forgery | fuzzer |
 | `command_injection_testing.md` | OS command injection | fuzzer |
 | `ldap_injection_testing.md` | LDAP injection testing | fuzzer |
+| `formula_injection_testing.md` | CSV/spreadsheet formula injection | fuzzer |
+| `log_injection_testing.md` | Log injection and falsification | fuzzer |
 
 ### API Testing
 | Skill | Description | Tools |

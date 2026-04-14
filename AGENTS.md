@@ -164,7 +164,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1059 passing |
+| Tests | 1057 passing |
 | Build | Clean compilation |
 | Clippy | 1 warning (unused import `stress::*` in cli/mod.rs:23) |
 | Doctests | 17 pass, 1 ignored, 0 fail |
@@ -180,6 +180,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | Agent module files | 6 (`mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs`) |
 | Skill files | 16 (in `slapper_skills/`) |
 | Tool findings | Scanner, Recon, Pipeline, Fuzzer tools now return findings via callback |
+| Wave 1 | ✅ COMPLETED (9 security fixes) |
 
 ## Planning
 
@@ -636,3 +637,37 @@ This session focused on plan consolidation rather than implementation. Key lesso
 - Use `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` for test count
 - Run `cargo clippy --lib -p slapper` to check for warnings
 - Verify actual line numbers and file paths before implementing plan items
+
+### Lessons Learned (Session 2026-04-14 - Wave 1)
+
+#### Wave 1 Implementation Summary
+
+Successfully completed all 9 critical security fixes in Wave 1:
+
+**Block A - Authentication (3 fixes):**
+- `agent_routes.rs`: Added `require_auth` to all 9 endpoints with `api_key: Option<String>` state
+- `ai_routes.rs`: Added auth middleware to all 6 AI endpoints
+- `mcp/routes.rs`: Fixed initialize bypass - auth now enforced when api_key is Some
+- `slapper-nse/src/lib.rs`: Changed `SandboxConfig::default()` to `enabled: true`
+
+**Block B - Injection (4 fixes):**
+- `output/escape.rs`: `escape_csv` now detects formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`)
+- `scanner/ports/mod.rs` + `pipeline/report.rs`: Applied `escape_xml()` to `results.host`
+- `utils/logging.rs`: Strip `\n` and `\r` from log sanitization (keep `\t`)
+- `slapper-nse/src/libraries/nmap.rs`: Added interface name validation
+
+**Block C - Crypto (2 fixes):**
+- `distributed/io.rs`: Added runtime warning on each insecure TLS connection
+- `agent/alerts.rs`: Use `serde_json::to_string()` for deterministic HMAC input
+
+#### Security Fix Patterns
+
+1. **Auth middleware pattern**: Add `Option<String>` to state, create local `require_auth` function using constant-time comparison (`subtle::ConstantTimeEq`), apply to all handlers
+
+2. **Formula injection**: Check for unsafe prefixes at START of string (`starts_with`) not just anywhere in string (`contains`)
+
+3. **Log sanitization**: When changing sanitization behavior, update corresponding tests that assert old behavior
+
+4. **MCP auth bypass**: The `initialize` method bypass may be protocol-required, but auth MUST be enforced when api_key is configured (`Some`)
+
+5. **NSE sandbox**: Default to `enabled: true` - security by default over convenience
