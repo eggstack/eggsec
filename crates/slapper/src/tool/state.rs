@@ -81,6 +81,18 @@ impl AgentSession {
         session
     }
 
+    pub fn regenerate_session_id(&mut self) {
+        self.session_id = Uuid::new_v4().to_string();
+        self.updated_at = Utc::now();
+    }
+
+    pub fn set_authenticated(&mut self, authenticated: bool) {
+        if self.context.authenticated != authenticated {
+            self.regenerate_session_id();
+        }
+        self.context.authenticated = authenticated;
+    }
+
     pub fn update_activity(&mut self) {
         self.updated_at = Utc::now();
         self.context.last_activity = Some(Utc::now());
@@ -184,7 +196,7 @@ impl SessionManager {
     async fn save_to_disk(&self, session: &AgentSession) -> Result<()> {
         let filename = format!("{}.json", session.session_id);
         let path = self.storage_path.join(filename);
-        let content = serde_json::to_string_pretty(session)?;
+        let content = serde_json::to_string(session)?;
         fs::write(path, content)?;
         Ok(())
     }

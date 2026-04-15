@@ -83,6 +83,7 @@ impl SearchTool {
 
         let mut search_results = Vec::new();
         if let Some(results_array) = results["results"].as_array() {
+            search_results.reserve(results_array.len());
             for item in results_array {
                 search_results.push(SearchResult {
                     title: item["title"].as_str().unwrap_or("").to_string(),
@@ -123,6 +124,7 @@ impl SearchTool {
 
         let mut cve_results = Vec::new();
         if let Some(vulns) = results["vulns"].as_array() {
+            cve_results.reserve(vulns.len());
             for item in vulns {
                 let cve_id = item["id"].as_str().unwrap_or("UNKNOWN").to_string();
                 let description = item["summary"].as_str().unwrap_or("").to_string();

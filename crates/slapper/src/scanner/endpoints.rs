@@ -700,7 +700,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
     };
 
     let semaphore = Arc::new(tokio::sync::Semaphore::new(config.concurrency));
-    let mut handles = Vec::new();
+    let mut handles = Vec::with_capacity(config.endpoints.len());
     let start = std::time::Instant::now();
     let base = config.base_url.trim_end_matches('/');
     let endpoints_count = config.endpoints.len();

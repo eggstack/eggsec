@@ -89,7 +89,7 @@ impl ContentScanner {
             handles.push(handle);
         }
 
-        let mut discovered = Vec::new();
+        let mut discovered = Vec::with_capacity(handles.len());
         let mut sensitive = Vec::new();
 
         for handle in handles {

@@ -237,7 +237,7 @@ impl SubdomainEnumerator {
             handles.push(handle);
         }
 
-        let mut subdomains = Vec::new();
+        let mut subdomains = Vec::with_capacity(handles.len());
         for handle in handles {
             if let Ok(Some(info)) = handle.await {
                 subdomains.push(info);

@@ -157,8 +157,8 @@ impl SecurityTool for FuzzerTool {
             common: crate::cli::CommonHttpArgs::default(),
         };
 
-        let findings: std::sync::Arc<std::sync::Mutex<Vec<Finding>>> =
-            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let findings: std::sync::Arc<parking_lot::Mutex<Vec<Finding>>> =
+            std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
         let findings_clone = findings.clone();
         let result = crate::fuzzer::run_cli_with_callback(args, move |finding| {
             if let Ok(mut f) = findings_clone.lock() {
@@ -168,8 +168,7 @@ impl SecurityTool for FuzzerTool {
         .await;
         let findings = std::sync::Arc::try_unwrap(findings)
             .expect("Arc should have single owner")
-            .into_inner()
-            .expect("Mutex should not be poisoned");
+            .into_inner();
 
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;

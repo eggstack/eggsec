@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::recon::secrets::{SecretFinding, SecretScanner};
+use crate::utils::validate_git_repo_path;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -48,6 +49,8 @@ impl GitSecretsScanner {
     }
 
     pub fn scan_directory(&self, repo_path: &str) -> Result<GitSecretsReport> {
+        validate_git_repo_path(repo_path)?;
+
         let path = Path::new(repo_path);
 
         let canonical_path = path.canonicalize().map_err(|e| {

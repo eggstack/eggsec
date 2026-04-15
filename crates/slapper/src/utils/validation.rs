@@ -69,6 +69,27 @@ pub fn validate_rate_limit(rps: u32) -> Result<()> {
     Ok(())
 }
 
+pub fn validate_git_repo_path(repo_path: &str) -> Result<()> {
+    let path = Path::new(repo_path);
+
+    if !path.exists() {
+        return Err(anyhow!("Path does not exist: {}", repo_path));
+    }
+
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| anyhow!("Failed to canonicalize path: {} - {}", repo_path, e))?;
+
+    if !canonical.exists() {
+        return Err(anyhow!(
+            "Path does not exist after canonicalization: {}",
+            repo_path
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

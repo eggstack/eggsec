@@ -87,6 +87,7 @@ impl WaybackClient {
         let mut endpoints = std::collections::HashSet::new();
 
         let lines: Vec<&str> = text.lines().collect();
+        snapshots.reserve(lines.len().saturating_sub(1));
         for line in lines.iter().skip(1) {
             let parts: Vec<&str> = line.split(',').collect();
             if parts.len() >= 2 {

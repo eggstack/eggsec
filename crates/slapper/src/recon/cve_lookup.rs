@@ -216,6 +216,7 @@ impl CveEngine {
         let mut cves = Vec::new();
 
         if let Some(vulns) = json.get("vulnerabilities").and_then(|v| v.as_array()) {
+            cves.reserve(vulns.len().min(20));
             for vuln in vulns.iter().take(20) {
                 if let Some(cve) = vuln.get("cve") {
                     let id = cve

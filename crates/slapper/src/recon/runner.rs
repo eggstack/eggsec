@@ -4,6 +4,7 @@ use crate::error::Result;
 use crate::recon::{cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, ssl, subdomain, takeover, techdetect, threatintel, wayback, whois, FullReconResult};
 use crate::types::SensitiveString;
 use crate::utils::sanitize_for_logging;
+use crate::utils::target::strip_url_protocol;
 use std::sync::{Arc, Mutex};
 
 /// Resolves the target domain to an IP address.
@@ -11,13 +12,7 @@ use std::sync::{Arc, Mutex};
 /// Strips protocol prefixes, extracts the domain, and performs DNS resolution
 /// if the target is not already an IP address.
 async fn resolve_target(target: &str, verbose: bool) -> (String, Option<String>, Option<String>) {
-    let target_clean = if target.starts_with("http://") {
-        target.strip_prefix("http://").unwrap_or(target)
-    } else if target.starts_with("https://") {
-        target.strip_prefix("https://").unwrap_or(target)
-    } else {
-        target
-    };
+    let target_clean = strip_url_protocol(target);
 
     let domain = target_clean.split('/').next().map(|s| s.to_string());
     let url = if target.starts_with("http://") || target.starts_with("https://") {

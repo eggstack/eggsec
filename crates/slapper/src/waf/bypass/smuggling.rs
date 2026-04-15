@@ -67,7 +67,7 @@ impl SmugglingBypass {
         let parsed = url::Url::parse(url).ok();
         let path = parsed.as_ref().map(|u| u.path()).unwrap_or("/");
 
-        let mut requests = Vec::new();
+        let mut requests = Vec::with_capacity(6);
 
         let body = "GET /admin HTTP/1.1\r\nHost: localhost\r\n\r\n";
         requests.push(SmugglingRequest {

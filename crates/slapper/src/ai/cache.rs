@@ -251,7 +251,7 @@ impl AiCache {
                 default_ttl_nanos: self.default_ttl.as_nanos() as u64,
             };
             
-            if let Ok(json) = serde_json::to_string_pretty(&serialized) {
+            if let Ok(json) = serde_json::to_string(&serialized) {
                 let _ = std::fs::write(path, json);
             }
         }

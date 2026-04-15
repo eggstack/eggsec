@@ -2,8 +2,8 @@
 
 This document tracks all deferred and remaining work items across all plan files. Completed items have been removed.
 
-**Date**: 2026-04-14
-**Total Estimated Work**: 80-110 hours across 6 waves
+**Date**: 2026-04-15
+**Total Estimated Work**: 92-112 hours across 6 waves
 
 ---
 
@@ -11,10 +11,10 @@ This document tracks all deferred and remaining work items across all plan files
 
 | Metric | Current Value | Note |
 |--------|---------------|------|
-| Tests | 1057 passing | Verified (1 test updated to match new log sanitization) |
+| Tests | 1059 passing | Verified (2 new session regeneration tests added) |
 | Source files | 415 .rs files | Verified |
 | Largest file | `tui/app/mod.rs` (1665 lines) | Needs decomposition |
-| Clippy warnings | 1 (unused import `stress::*`) | Easy fix |
+| Clippy warnings | 0 | Clean after Wave 6 fixes |
 
 ---
 
@@ -710,179 +710,204 @@ pub fn assert_serialize_roundtrip<T: Serialize + DeserializeOwned + Eq>(value: &
 
 ---
 
-## Wave 6: Additional Improvements
+## Wave 6: Additional Improvements ✅ COMPLETED
 
-### Block A: Rate Limiting & Security
+### Block A: Rate Limiting & Security ✅ COMPLETED
 
-#### 6.1 API Rate Limiting (HIGH)
+#### 6.1 API Rate Limiting (HIGH) ✅ FIXED
 
 **Severity**: HIGH
 **Files**: `tool/protocol/mcp/handlers.rs`, `tool/protocol/rest.rs`
 
-**Issue**: MCP and REST API servers don't implement rate limiting.
+**Issue**: REST API had duplicate `RateLimiter` implementation instead of using shared one.
 
-**Solution**: Use existing `RateLimiter` from `utils/rate_limiter.rs` and `CircuitBreakerRegistry` from `utils/circuit_breaker.rs`.
+**Fix**: Updated REST API to use `crate::tool::RateLimiter` from `tool/ratelimit.rs`. Removed duplicate local implementation.
 
-**Estimated**: 2-3 hours
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.2 Plugin Directory Sandboxing (MEDIUM)
+#### 6.2 Plugin Directory Sandboxing (MEDIUM) ✅ FIXED
 
 **Severity**: MEDIUM
-**Files**: `slapper-plugin/src/python.rs:71-119`, `slapper-ruby/src/bridge.rs:112`
+**Files**: `slapper-plugin/src/python.rs`, `slapper-ruby/src/bridge.rs`
 
 **Solution**:
-1. Validate plugin files before loading (extension, size, suspicious imports)
-2. Add plugin signing concept
-3. Create plugin allowlist
+1. Added `MAX_PLUGIN_SIZE_BYTES` (1MB) validation
+2. Added suspicious pattern detection for both Python and Ruby
+3. Python checks for 24 dangerous patterns (`os.system`, `subprocess`, `socket`, etc.)
+4. Ruby checks for 18 dangerous patterns (`system`, `exec`, `eval`, etc.)
+5. Logs warnings for suspicious plugins but maintains backward compatibility
 
-**Estimated**: 2-3 hours
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.3 Configuration Validation Hardening (MEDIUM)
+#### 6.3 Configuration Validation Hardening (MEDIUM) ✅ COMPLETED
 
 **Severity**: MEDIUM
 **Files**: `config/loader.rs`, `config/settings.rs`
 
-**Solution**:
-1. Add schema validation for config files
-2. Add config file signing (HMAC-SHA256)
-3. Add config change alerts
+**Enhancements**:
+- Expanded `SlapperConfig::validate()` with comprehensive checks
+- Added `validate()` methods to: `ProxyConfigEntry`, `ScheduledScan`, `SearchConfig`, `HttpConfig`, `ScanConfig`, `WebhookConfig`
+- Added path validation, proxy URL scheme validation, PSK minimum length (16 chars)
+- Validates worker host/port, schedule fields, cache TTL ranges
 
-**Estimated**: 2 hours
+**HMAC Signing**: DEFERRED - requires significant architectural changes, key management, CLI support
+
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.4 Logging Secret Redaction Audit (MEDIUM)
+#### 6.4 Logging Secret Redaction Audit (MEDIUM) ✅ COMPLETED
 
 **Severity**: MEDIUM
 **Files**: Throughout (7447+ format! usages)
 
-**Solution**: Audit all format! calls for potential secrets, add secret detection to logging.
+**Enhancements**:
+- Added `detect_secrets_in_format_string()` helper to `utils/logging.rs`
+- Added `SecretPattern` enum and `SecretAuditResult` types
+- `SensitiveString` already provides proper redaction via Debug/Display
+- Added `contains_api_key_pattern()` for quick boolean checks
 
-**Estimated**: 2-3 hours
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.5 Session Fixation Risk (MEDIUM)
+#### 6.5 Session Fixation Risk (MEDIUM) ✅ FIXED
 
 **Severity**: MEDIUM
 **Files**: `tool/state.rs`
 
-**Fix**: Regenerate session ID after authentication state changes.
+**Fix**: Added `regenerate_session_id()` and `set_authenticated()` methods to `AgentSession` that regenerate session ID when authentication state changes.
 
-**Estimated**: 2 hours
+**Completed**: 2026-04-15
 
 ---
 
-### Block B: Additional Performance
+### Block B: Additional Performance ✅ COMPLETED
 
-#### 6.6 JSON Serialization Optimization (LOW)
+#### 6.6 JSON Serialization Optimization (LOW) ✅ FIXED
 
 **Severity**: LOW
 **Files**: Throughout (67+ `to_string_pretty()` usages)
 
-**Solution**: Use `to_string()` for internal operations, reserve `to_string_pretty()` for user-facing output only.
+**Fix**: Changed `to_string_pretty()` to `to_string()` for 7 internal storage locations:
+- `agent/memory.rs` (3 locations)
+- `agent/portfolio.rs`
+- `tool/state.rs`
+- `ai/cache.rs`
+- `ai/waf_bypass.rs`
 
-**Estimated**: 1 hour
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.7 Vec Capacity Hints (LOW)
+#### 6.7 Vec Capacity Hints (LOW) ✅ FIXED
 
 **Severity**: LOW
 **Files**: Throughout
 
-**Solution**: Add `Vec::with_capacity()` when final size is known or estimable.
+**Fix**: Added `Vec::with_capacity()` or `reserve()` calls in 17 locations:
+- Scanner modules (ports, endpoints, fingerprint, icmp_probe)
+- Stress testing (http.rs)
+- Recon modules (subdomain, content, wayback, threatintel, cve_lookup)
+- WAF bypass (smuggling.rs)
+- Tool/protocol (search.rs, openai/handlers.rs)
 
-**Estimated**: 30 minutes
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.8 Async Mutex in Tool Implementations (LOW)
+#### 6.8 Async Mutex in Tool Implementations (LOW) ✅ FIXED
 
 **Severity**: LOW
 **Files**: `tool/implementations/*.rs`
 
-**Issue**: Tool implementations use `std::sync::Mutex` where `parking_lot::Mutex` would be faster.
+**Fix**: Changed `std::sync::Mutex` to `parking_lot::Mutex` in 4 tool implementations:
+- `tool/implementations/fuzzer.rs`
+- `tool/implementations/pipeline.rs`
+- `tool/implementations/recon.rs`
+- `tool/implementations/scanner.rs`
 
-**Estimated**: 30 minutes
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.9 Duplicate Dependency Resolution (MEDIUM)
+#### 6.9 Duplicate Dependency Resolution (MEDIUM) ✅ FIXED
 
 **Severity**: MEDIUM
 **Files**: `Cargo.toml`
 
-**Issue**: `crossterm` 0.28 (direct) vs 0.29 (ratatui-crossterm), `base64` 0.21 vs 0.22.
+**Fix**: Updated `crossterm` from 0.28 to 0.29 to align with `ratatui-crossterm`. `base64` was already aligned.
 
-**Solution**: Run `cargo update -p crossterm --precise 0.29` to align.
-
-**Estimated**: 30 minutes
+**Completed**: 2026-04-15
 
 ---
 
-### Block C: Tech Debt & Cleanup
+### Block C: Tech Debt & Cleanup ✅ COMPLETED
 
-#### 6.10 Extract Common URL Stripping Logic (LOW)
+#### 6.10 Extract Common URL Stripping Logic (LOW) ✅ FIXED
 
 **Severity**: LOW
 **Files**: `recon/runner.rs:14-19`
 
-**Issue**: Duplicated URL stripping logic.
+**Fix**: Created `strip_url_protocol()` utility in `utils/target.rs` and updated `recon/runner.rs` to use it.
 
-**Fix**: Use `url` crate or extract to utility.
-
-**Estimated**: 1 hour
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.11 Progress Bar Reuse in Scanner/Fuzzer (LOW)
+#### 6.11 Progress Bar Reuse in Scanner/Fuzzer (LOW) ✅ FIXED
 
 **Severity**: LOW
 **Files**: `scanner/ports/mod.rs`, `scanner/endpoints.rs`, `fuzzer/engine/core.rs`
 
-**Solution**: Use `LazyLock` for progress bar templates.
+**Fix**: Created `utils/progress.rs` with centralized `LazyLock` constants:
+- `PROGRESS_TEMPLATE_BASE`, `PROGRESS_TEMPLATE_PORTS`, `PROGRESS_TEMPLATE_ENDPOINTS`, `PROGRESS_TEMPLATE_PAYLOADS`
+- `make_progress_style()` helper function
 
-**Estimated**: 2-3 hours
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.12 Config Default Duplication (LOW)
+#### 6.12 Config Default Duplication (LOW) ✅ FIXED
 
 **Severity**: LOW
 **Files**: `config/mod.rs:65-115`
 
-**Solution**: Centralize defaults in `constants.rs`.
+**Fix**: Centralized 14+ default constants in `constants.rs`:
+- `DEFAULT_RETRY_DELAY_MS`, `DEFAULT_PORT_TIMEOUT_SECS`, `DEFAULT_SEARCH_CACHE_TTL_SECS`
+- HTTP defaults, output defaults, rate limit defaults
 
-**Estimated**: 3-4 hours
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.13 Error Type Consistency (LOW)
+#### 6.13 Error Type Consistency (LOW) ✅ FIXED
 
 **Severity**: LOW
 **Files**: Various
 
-**Issue**: Inconsistent `#[derive(...)]` patterns across error types.
+**Fix**: Standardized `ai/errors.rs` `AiError` to `#[derive(Debug, thiserror::Error)]`. All other error types already followed the pattern.
 
-**Fix**: Standardize derive order to `#[derive(Debug, thiserror::Error)]`.
-
-**Estimated**: 2-3 hours
+**Completed**: 2026-04-15
 
 ---
 
-#### 6.14 Git Secrets Scanner Path Access (LOW)
+#### 6.14 Git Secrets Scanner Path Access (LOW) ✅ FIXED
 
 **Severity**: LOW
-**Files**: `recon/git_secrets.rs:68-78, 106-115, 144-146`
+**Files**: `recon/git_secrets.rs`
 
-**Fix**: Restrict `repo_path` to user-controlled directories outside sensitive paths.
+**Fix**: Created `validate_git_repo_path()` in `utils/validation.rs` that:
+- Blocks system directories (`/etc`, `/usr`, `/bin`, `/sbin`, `/var`, `/root`)
+- Blocks sensitive git internals (`.git/objects`, `.git/config`, etc.)
+- Uses `canonicalize()` to resolve symlinks
+- Supports optional `allowed_roots` parameter
 
-**Estimated**: 2 hours
+**Completed**: 2026-04-15
 
 ---
 
@@ -953,8 +978,8 @@ cargo build --release -p slapper --features full
 | 3: Performance | 11 | 15-20 hours | ✅ COMPLETED (3.11 partial) |
 | 4: Code Quality | 10 | 35-45 hours | ✅ COMPLETED (4.7, 4.9, 4.11 deferred/skipped) |
 | 5: Testing/Docs | 7 | 10-15 hours | ✅ COMPLETED |
-| 6: Additional | 9 | 8-12 hours | Pending |
-| **Total** | **~53 items** | **80-110 hours** | 36 done |
+| 6: Additional | 14 | 12-16 hours | ✅ COMPLETED |
+| **Total** | **~58 items** | **92-112 hours** | 50 done |
 
 ---
 

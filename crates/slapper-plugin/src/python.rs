@@ -7,6 +7,33 @@ use std::time::Instant;
 
 use super::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult};
 
+const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
+
+const SUSPICIOUS_PATTERNS: &[&str] = &[
+    "os.system",
+    "subprocess",
+    "socket",
+    "eval(",
+    "exec",
+    "fork",
+    "__import__",
+    "open(",
+];
+
+fn validate_python_plugin(content: &str) -> Result<()> {
+    if content.len() > MAX_PLUGIN_SIZE_BYTES {
+        anyhow::bail!("Plugin exceeds maximum size of {} bytes", MAX_PLUGIN_SIZE_BYTES);
+    }
+
+    for pattern in SUSPICIOUS_PATTERNS {
+        if content.contains(pattern) {
+            tracing::warn!("Plugin contains suspicious pattern: {}", pattern);
+        }
+    }
+
+    Ok(())
+}
+
 pub struct PythonPluginManager {
     plugins: Vec<LoadedPlugin>,
     info: PluginInfo,
@@ -85,11 +112,32 @@ impl PythonPluginManager {
 
             for entry in std::fs::read_dir(plugin_dir)? {
                 let entry = entry?;
-                let path = entry.path();
+                let file_path = entry.path();
 
-                if path.extension().map(|e| e == "py").unwrap_or(false) {
-                    if let Some(stem) = path.file_stem() {
+                if file_path.extension().map(|e| e == "py").unwrap_or(false) {
+                    if let Some(stem) = file_path.file_stem() {
                         if let Some(module_name) = stem.to_str() {
+                            let plugin_content = match std::fs::read_to_string(&file_path) {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    tracing::warn!(
+                                        file = %file_path.display(),
+                                        error = %e,
+                                        "Failed to read plugin file"
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            if let Err(e) = validate_python_plugin(&plugin_content) {
+                                tracing::warn!(
+                                    file = %file_path.display(),
+                                    error = %e,
+                                    "Plugin validation failed"
+                                );
+                                continue;
+                            }
+
                             match PyModule::import(py, module_name) {
                                 Ok(module) => {
                                     let class_plugins =
@@ -103,7 +151,7 @@ impl PythonPluginManager {
                                 Err(e) => {
                                     tracing::warn!(
                                         module = %module_name,
-                                        path = %path.display(),
+                                        path = %file_path.display(),
                                         error = %e,
                                         "Failed to import Python plugin"
                                     );

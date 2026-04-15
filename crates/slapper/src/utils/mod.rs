@@ -35,6 +35,7 @@ pub mod http;
 pub mod logging;
 pub mod output;
 pub mod parsing;
+pub mod progress;
 pub mod rate_limiter;
 pub mod scope;
 pub mod service_detection;
@@ -61,8 +62,9 @@ pub use parsing::{contains_ignore_case, parse_headers, parse_url_validated};
 pub use scope::{check_scope, check_scope_from_url};
 pub use target::{
     extract_domain, extract_host_port, extract_target_from_url, is_ip_address, normalize_url,
-    parse_host_port, parse_socket_addr,
+    parse_host_port, parse_socket_addr, strip_url_protocol,
 };
+pub use validation::{validate_concurrency, validate_git_repo_path, validate_path, validate_path_string, validate_rate_limit, validate_timeout, validate_url};
 
 #[cfg(any(feature = "stress-testing", feature = "packet-inspection"))]
 pub use privilege::{check_privileged, is_root, require_root};

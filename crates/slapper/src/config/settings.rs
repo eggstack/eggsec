@@ -4,22 +4,22 @@ pub use super::scan::{NotificationConfig, OutputConfig, ScanConfig, ScanProfile}
 
 use crate::constants::cache as cache_constants;
 use crate::constants::http;
+pub use crate::constants::DEFAULT_REMOTE_PORT;
 use crate::proxy::ProxyType;
 use crate::types::SensitiveString;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-
-use crate::constants;
 
 fn default_ttl() -> u64 {
     cache_constants::DEFAULT_TTL_SECS
 }
 
 fn default_remote_port() -> u16 {
-    constants::DEFAULT_REMOTE_PORT
+    DEFAULT_REMOTE_PORT
 }
 
 fn default_concurrency() -> usize {
@@ -172,6 +172,211 @@ pub struct SearchConfig {
     pub cache_ttl_seconds: u64,
 }
 
+impl SearchConfig {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(ref url) = self.searxng_url {
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                return Err(ConfigError::Validation(
+                    "search.searxng_url must start with http:// or https://".to_string(),
+                ));
+            }
+        }
+        if self.cache_ttl_seconds == 0 {
+            return Err(ConfigError::Validation(
+                "search.cache_ttl_seconds cannot be 0".to_string(),
+            ));
+        }
+        if self.cache_ttl_seconds > 86400 {
+            return Err(ConfigError::Validation(
+                "search.cache_ttl_seconds cannot exceed 86400 (24 hours)".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl ScheduledScan {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.schedule.is_empty() {
+            return Err(ConfigError::Validation(
+                "schedule cron expression cannot be empty".to_string(),
+            ));
+        }
+        if self.target.is_empty() {
+            return Err(ConfigError::Validation(
+                "schedule.target cannot be empty".to_string(),
+            ));
+        }
+        if self.scan_type.is_empty() {
+            return Err(ConfigError::Validation(
+                "schedule.scan_type cannot be empty".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl ProxyConfigEntry {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.address.is_empty() {
+            return Err(ConfigError::Validation(
+                "proxy.address cannot be empty".to_string(),
+            ));
+        }
+        if self.port == 0 {
+            return Err(ConfigError::Validation(format!(
+                "proxy.port {} is invalid",
+                self.port
+            )));
+        }
+        if let Some(ref username) = self.username {
+            if username.is_empty() {
+                return Err(ConfigError::Validation(
+                    "proxy.username cannot be empty when specified".to_string(),
+                ));
+            }
+            if self.password.is_none() {
+                return Err(ConfigError::Validation(
+                    "proxy.password is required when proxy.username is set".to_string(),
+                ));
+            }
+        }
+        if let Some(ref local_addr) = self.local_addr {
+            if local_addr.is_empty() {
+                return Err(ConfigError::Validation(
+                    "proxy.local_addr cannot be empty when specified".to_string(),
+                ));
+            }
+            if let Err(e) = local_addr.parse::<IpAddr>() {
+                return Err(ConfigError::Validation(format!(
+                    "proxy.local_addr '{}' is not a valid IP address: {}",
+                    local_addr, e
+                )));
+            }
+        }
+        if let Some(weight) = self.weight {
+            if weight == 0 {
+                return Err(ConfigError::Validation(
+                    "proxy.weight cannot be 0".to_string(),
+                ));
+            }
+        }
+        if let Some(priority) = self.priority {
+            if priority == 0 {
+                return Err(ConfigError::Validation(
+                    "proxy.priority cannot be 0".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl HttpConfig {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.timeout_secs == 0 {
+            return Err(ConfigError::Validation(
+                "http.timeout_secs cannot be 0".to_string(),
+            ));
+        }
+        if self.timeout_secs > 300 {
+            return Err(ConfigError::Validation(
+                "http.timeout_secs cannot exceed 300".to_string(),
+            ));
+        }
+        if self.max_retries > 10 {
+            return Err(ConfigError::Validation(
+                "http.max_retries cannot exceed 10".to_string(),
+            ));
+        }
+        if self.retry_delay_ms == 0 {
+            return Err(ConfigError::Validation(
+                "http.retry_delay_ms cannot be 0".to_string(),
+            ));
+        }
+        if self.max_redirects > 50 {
+            return Err(ConfigError::Validation(
+                "http.max_redirects cannot exceed 50".to_string(),
+            ));
+        }
+        if self.proxy_auth.is_some() && self.proxy.is_none() {
+            return Err(ConfigError::Validation(
+                "http.proxy_auth requires http.proxy to be set".to_string(),
+            ));
+        }
+        if let Some(ref proxy) = self.proxy {
+            if !proxy.starts_with("http://")
+                && !proxy.starts_with("https://")
+                && !proxy.starts_with("socks5://")
+                && !proxy.starts_with("socks4://")
+            {
+                return Err(ConfigError::Validation(
+                    "http.proxy must start with http://, https://, socks5://, or socks4://"
+                        .to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl ScanConfig {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.default_concurrency == 0 {
+            return Err(ConfigError::Validation(
+                "scan.default_concurrency cannot be 0".to_string(),
+            ));
+        }
+        if self.default_concurrency > 1000 {
+            return Err(ConfigError::Validation(
+                "scan.default_concurrency cannot exceed 1000".to_string(),
+            ));
+        }
+        if self.port_timeout_secs == 0 {
+            return Err(ConfigError::Validation(
+                "scan.port_timeout_secs cannot be 0".to_string(),
+            ));
+        }
+        if self.port_timeout_secs > 60 {
+            return Err(ConfigError::Validation(
+                "scan.port_timeout_secs cannot exceed 60".to_string(),
+            ));
+        }
+        for port in &self.exclude_ports {
+            if *port == 0 {
+                return Err(ConfigError::Validation(format!(
+                    "scan.exclude_ports contains invalid port {}",
+                    port
+                )));
+            }
+        }
+        for host in &self.exclude_hosts {
+            if host.is_empty() {
+                return Err(ConfigError::Validation(
+                    "scan.exclude_hosts cannot contain empty strings".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+fn validate_dir_path(path: &Path, field_name: &str) -> Result<(), ConfigError> {
+    if !path.exists() {
+        return Err(ConfigError::Validation(format!(
+            "{field_name} path '{}' does not exist",
+            path.display()
+        )));
+    }
+    if !path.is_dir() {
+        return Err(ConfigError::Validation(format!(
+            "{field_name} path '{}' is not a directory",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
 impl Default for AiConfig {
     fn default() -> Self {
         Self {
@@ -261,6 +466,11 @@ impl SlapperConfig {
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.http.timeout_secs == 0 {
+            return Err(ConfigError::Validation(
+                "timeout_secs cannot be 0".to_string(),
+            ));
+        }
         if self.http.timeout_secs > 300 {
             return Err(ConfigError::Validation(
                 "timeout_secs cannot exceed 300".to_string(),
@@ -271,9 +481,35 @@ impl SlapperConfig {
                 "max_retries cannot exceed 10".to_string(),
             ));
         }
+        if self.http.retry_delay_ms == 0 {
+            return Err(ConfigError::Validation(
+                "retry_delay_ms cannot be 0".to_string(),
+            ));
+        }
+        if self.http.max_redirects > 50 {
+            return Err(ConfigError::Validation(
+                "max_redirects cannot exceed 50".to_string(),
+            ));
+        }
         if self.http.proxy_auth.is_some() && self.http.proxy.is_none() {
             return Err(ConfigError::Validation(
                 "proxy_auth requires proxy to be set".to_string(),
+            ));
+        }
+        if let Some(ref proxy) = self.http.proxy {
+            if !proxy.starts_with("http://")
+                && !proxy.starts_with("https://")
+                && !proxy.starts_with("socks5://")
+                && !proxy.starts_with("socks4://")
+            {
+                return Err(ConfigError::Validation(
+                    "proxy must start with http://, https://, socks5://, or socks4://".to_string(),
+                ));
+            }
+        }
+        if self.scan.default_concurrency == 0 {
+            return Err(ConfigError::Validation(
+                "default_concurrency cannot be 0".to_string(),
             ));
         }
         if self.scan.default_concurrency > 1000 {
@@ -281,8 +517,114 @@ impl SlapperConfig {
                 "default_concurrency cannot exceed 1000".to_string(),
             ));
         }
+        if self.scan.port_timeout_secs == 0 {
+            return Err(ConfigError::Validation(
+                "port_timeout_secs cannot be 0".to_string(),
+            ));
+        }
+        if self.scan.port_timeout_secs > 60 {
+            return Err(ConfigError::Validation(
+                "port_timeout_secs cannot exceed 60".to_string(),
+            ));
+        }
+        if let Some(rate_limit) = self.scan.rate_limit_per_second {
+            if rate_limit == 0 {
+                return Err(ConfigError::Validation(
+                    "rate_limit_per_second cannot be 0 when set".to_string(),
+                ));
+            }
+            if rate_limit > 100000 {
+                return Err(ConfigError::Validation(
+                    "rate_limit_per_second cannot exceed 100000".to_string(),
+                ));
+            }
+        }
+        for port in &self.scan.exclude_ports {
+            if *port == 0 {
+                return Err(ConfigError::Validation(format!(
+                    "exclude_ports contains invalid port {}",
+                    port
+                )));
+            }
+        }
+        for host in &self.scan.exclude_hosts {
+            if host.is_empty() {
+                return Err(ConfigError::Validation(
+                    "exclude_hosts cannot contain empty strings".to_string(),
+                ));
+            }
+        }
+        if self.recon.dns_concurrency == 0 {
+            return Err(ConfigError::Validation(
+                "dns_concurrency cannot be 0".to_string(),
+            ));
+        }
+        if self.recon.dns_concurrency > 100 {
+            return Err(ConfigError::Validation(
+                "dns_concurrency cannot exceed 100".to_string(),
+            ));
+        }
+        for scan in &self.schedule {
+            scan.validate()?;
+        }
+        for proxy in &self.proxies {
+            proxy.validate()?;
+        }
         if let Some(ref ai) = self.ai {
             ai.validate()?;
+        }
+        if let Some(ref search) = self.search {
+            search.validate()?;
+        }
+        for (name, profile) in &self.profiles {
+            if name.is_empty() {
+                return Err(ConfigError::Validation(
+                    "profile names cannot be empty".to_string(),
+                ));
+            }
+            if let Some(ref http) = profile.http {
+                http.validate()?;
+            }
+            if let Some(ref scan) = profile.scan {
+                scan.validate()?;
+            }
+        }
+        if let Some(ref paths) = self.paths.custom_payloads_dir {
+            validate_dir_path(paths, "custom_payloads_dir")?;
+        }
+        if let Some(ref paths) = self.paths.plugins_dir {
+            validate_dir_path(paths, "plugins_dir")?;
+        }
+        if let Some(ref paths) = self.paths.wordlists_dir {
+            validate_dir_path(paths, "wordlists_dir")?;
+        }
+        if let Some(ref remote) = self.remote.psk {
+            let psk = remote.expose_secret();
+            if psk.len() < 16 {
+                return Err(ConfigError::Validation(
+                    "remote.psk must be at least 16 characters".to_string(),
+                ));
+            }
+        }
+        for worker in &self.remote.allowed_workers {
+            if worker.host.is_empty() {
+                return Err(ConfigError::Validation(
+                    "allowed_workers.host cannot be empty".to_string(),
+                ));
+            }
+            if let Some(port) = worker.port {
+                if port == 0 {
+                    return Err(ConfigError::Validation(format!(
+                        "allowed_workers.port {} is invalid",
+                        port
+                    )));
+                }
+            }
+        }
+        if self.remote.default_port == 0 && self.remote.psk.is_some() {
+            return Err(ConfigError::Validation(
+                "remote.default_port cannot be 0 when PSK is configured".to_string(),
+            ));
         }
         Ok(())
     }

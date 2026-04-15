@@ -134,7 +134,7 @@ impl TargetPortfolio {
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            let content = serde_json::to_string_pretty(&self.data)?;
+            let content = serde_json::to_string(&self.data)?;
             fs::write(path, content)?;
         }
         Ok(())

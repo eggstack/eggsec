@@ -1,7 +1,7 @@
 use reqwest::Error as ReqwestError;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum AiError {
     #[error("API request failed: {0}")]
     RequestFailed(String),

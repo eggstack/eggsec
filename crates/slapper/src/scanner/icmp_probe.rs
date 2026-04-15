@@ -35,7 +35,7 @@ pub async fn ping_host(
     let target_ip = resolve_target(target).await?;
 
     let identifier = PingIdentifier(rand::random::<u16>());
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(count as usize);
 
     for i in 0..count {
         let payload = [0u8; 56];

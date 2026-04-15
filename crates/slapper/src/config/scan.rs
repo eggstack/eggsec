@@ -1,3 +1,4 @@
+use crate::config::settings::ConfigError;
 use crate::constants::http;
 use crate::types::SensitiveString;
 use serde::{Deserialize, Serialize};
@@ -142,6 +143,36 @@ pub enum WebhookEvent {
     ScanComplete,
     Finding,
     Error,
+}
+
+impl WebhookConfig {
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.url.is_empty() {
+            return Err(ConfigError::Validation(
+                "webhook.url cannot be empty".to_string(),
+            ));
+        }
+        if !self.url.starts_with("http://") && !self.url.starts_with("https://") {
+            return Err(ConfigError::Validation(
+                "webhook.url must start with http:// or https://".to_string(),
+            ));
+        }
+        for header_key in self.headers.keys() {
+            if header_key.is_empty() {
+                return Err(ConfigError::Validation(
+                    "webhook.headers keys cannot be empty".to_string(),
+                ));
+            }
+        }
+        if let Some(ref name) = self.name {
+            if name.is_empty() {
+                return Err(ConfigError::Validation(
+                    "webhook.name cannot be empty when specified".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

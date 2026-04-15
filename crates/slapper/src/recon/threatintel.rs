@@ -163,6 +163,7 @@ impl ThreatIntelClient {
 
         let mut threats = Vec::new();
         if let Some(categories) = data.get("categories").and_then(|c| c.as_object()) {
+            threats.reserve(categories.len());
             for (cat, _) in categories {
                 threats.push(cat.clone());
             }
@@ -234,6 +235,7 @@ impl ThreatIntelClient {
 
         let mut threats = Vec::new();
         if let Some(categories) = data.get("categories").and_then(|c| c.as_object()) {
+            threats.reserve(categories.len());
             for (cat, _) in categories {
                 threats.push(cat.clone());
             }
@@ -293,6 +295,7 @@ impl ThreatIntelClient {
 
         let mut threats = Vec::new();
         if let Some(vulns) = shodan_resp.get("vulns").and_then(|v| v.as_array()) {
+            threats.reserve(vulns.len().min(5));
             for vuln in vulns.iter().take(5) {
                 if let Some(cve) = vuln.as_str() {
                     threats.push(cve.to_string());
@@ -393,6 +396,7 @@ impl ThreatIntelClient {
 
         let mut records = Vec::new();
         if let Some(pdns) = otx_resp.get("passive_dns").and_then(|p| p.as_array()) {
+            records.reserve(pdns.len().min(20));
             for record in pdns.iter().take(20) {
                 if let Some(ip) = record.get("address").and_then(|a| a.as_str()) {
                     records.push(PassiveDnsRecord {

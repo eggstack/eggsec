@@ -112,7 +112,7 @@ async fn non_streaming_response(
 
     let content = if !matched_tools.is_empty() && req.tools.is_some() {
         let target = extract_target_from_query(&user_query);
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(matched_tools.len().min(3));
 
         for tool_info in matched_tools.iter().take(3) {
             if let Some(tool) = registry.get(&tool_info.id) {

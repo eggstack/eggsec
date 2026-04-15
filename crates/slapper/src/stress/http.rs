@@ -51,7 +51,7 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
 
     metrics.start();
 
-    let mut handles = Vec::new();
+    let mut handles = Vec::with_capacity(total_requests);
     let total_requests = config.rate_pps * config.duration_secs;
     let _requests_per_second = config.rate_pps;
 

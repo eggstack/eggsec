@@ -114,7 +114,7 @@ impl SmartWafBypass {
         if let Some(parent) = self.persist_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        if let Ok(json) = serde_json::to_string_pretty(&self.knowledge_base) {
+        if let Ok(json) = serde_json::to_string(&self.knowledge_base) {
             let _ = std::fs::write(&self.persist_path, json);
         }
     }

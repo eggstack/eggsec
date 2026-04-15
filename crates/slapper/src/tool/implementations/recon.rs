@@ -49,8 +49,8 @@ impl SecurityTool for ReconTool {
         let target = &request.target.value;
         let params = &request.params;
 
-        let findings: std::sync::Arc<std::sync::Mutex<Vec<Finding>>> =
-            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let findings: std::sync::Arc<parking_lot::Mutex<Vec<Finding>>> =
+            std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
         let findings_clone = findings.clone();
 
         let no_tech = params
@@ -145,8 +145,7 @@ impl SecurityTool for ReconTool {
 
         let findings = std::sync::Arc::try_unwrap(findings)
             .expect("Arc should have single owner")
-            .into_inner()
-            .expect("Mutex should not be poisoned");
+            .into_inner();
         let findings_count = findings.len();
 
         let completed_at = Utc::now();

@@ -243,7 +243,7 @@ pub async fn fingerprint_services(
     };
 
     let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
-    let mut handles = Vec::new();
+    let mut handles = Vec::with_capacity(ports.len());
     let start = std::time::Instant::now();
     let ports_count = ports.len();
 

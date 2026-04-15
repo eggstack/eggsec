@@ -57,6 +57,12 @@ pub fn normalize_url(url: &str) -> String {
     }
 }
 
+pub fn strip_url_protocol(url: &str) -> &str {
+    url.strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .unwrap_or(url)
+}
+
 pub fn extract_domain(url: &str) -> Option<String> {
     let cleaned = url
         .trim_start_matches("http://")

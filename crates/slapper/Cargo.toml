@@ -28,7 +28,7 @@ rustls = { version = "0.23", features = ["ring"] }
 rustls-pemfile = "2"
 reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2", "form", "query", "blocking"], default-features = false }
 ratatui = "0.30"
-crossterm = "0.28"
+crossterm = "0.29"
 clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
 serde = { workspace = true }

@@ -6,13 +6,10 @@ use axum::{
     Router,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::RwLock;
-use subtle::ConstantTimeEq;
 
 use crate::error::SlapperError;
+use crate::tool::ratelimit::{RateLimiter, RateLimitConfig};
 use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse};
 
 #[derive(Clone)]
@@ -23,68 +20,10 @@ pub struct RestState {
     pub rate_limiter: RateLimiter,
 }
 
-pub struct RateLimiter {
-    requests: RwLock<HashMap<String, Vec<std::time::Instant>>>,
-    max_requests: u64,
-    window_secs: u64,
-}
-
-impl Clone for RateLimiter {
-    fn clone(&self) -> Self {
-        Self {
-            requests: RwLock::new(HashMap::new()),
-            max_requests: self.max_requests,
-            window_secs: self.window_secs,
-        }
-    }
-}
-
-impl RateLimiter {
-    pub fn new(max_requests: u64, window_secs: u64) -> Self {
-        Self {
-            requests: RwLock::new(HashMap::new()),
-            max_requests,
-            window_secs,
-        }
-    }
-
-    pub async fn check(&self, key: &str) -> bool {
-        let now = std::time::Instant::now();
-        let mut requests = self.requests.write().await;
-
-        let timestamps = requests.entry(key.to_string()).or_insert_with(Vec::new);
-        timestamps.retain(|t| now.duration_since(*t) < Duration::from_secs(self.window_secs));
-
-        if timestamps.len() >= self.max_requests as usize {
-            return false;
-        }
-
-        timestamps.push(now);
-        true
-    }
-
-    pub fn blocking_check(&self, key: &str) -> bool {
-        let now = std::time::Instant::now();
-
-        match self.requests.try_write() { Ok(mut requests) => {
-            let timestamps = requests.entry(key.to_string()).or_insert_with(Vec::new);
-            timestamps.retain(|t| now.duration_since(*t) < Duration::from_secs(self.window_secs));
-
-            if timestamps.len() >= self.max_requests as usize {
-                return false;
-            }
-            timestamps.push(now);
-            true
-        } _ => {
-            false
-        }}
-    }
-}
-
 impl RestState {
     pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
-        let rate_limiter = RateLimiter::new(100, 60);
+        let rate_limiter = RateLimiter::new(RateLimitConfig::standard());
         Self {
             registry,
             dispatcher,
@@ -179,7 +118,7 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>) -> Router 
 }
 
 fn check_rate_limit(state: &Arc<RestState>, client_id: &str) -> Result<(), SlapperError> {
-    if !state.rate_limiter.blocking_check(client_id) {
+    if state.rate_limiter.check_rate_limit(client_id).is_err() {
         return Err(SlapperError::Config("Rate limit exceeded".to_string()));
     }
     Ok(())
@@ -358,7 +297,7 @@ async fn execute_tool(
     }
 
     let client_id = payload.target.clone();
-    if !state.rate_limiter.blocking_check(&client_id) {
+    if state.rate_limiter.check_rate_limit(&client_id).is_err() {
         return Err(SlapperError::Config(
             "Rate limit exceeded for this target".to_string(),
         ));
@@ -393,51 +332,26 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiter_allows_within_limit() {
-        let limiter = RateLimiter::new(3, 60);
-        assert!(limiter.check("client-1").await);
-        assert!(limiter.check("client-1").await);
-        assert!(limiter.check("client-1").await);
+        let limiter = RateLimiter::new(RateLimitConfig::standard());
+        assert!(limiter.check_rate_limit("client-1").is_ok());
+        assert!(limiter.check_rate_limit("client-1").is_ok());
+        assert!(limiter.check_rate_limit("client-1").is_ok());
     }
 
     #[tokio::test]
     async fn test_rate_limiter_blocks_over_limit() {
-        let limiter = RateLimiter::new(2, 60);
-        assert!(limiter.check("client-1").await);
-        assert!(limiter.check("client-1").await);
-        assert!(!limiter.check("client-1").await);
+        let limiter = RateLimiter::new(RateLimitConfig::strict());
+        assert!(limiter.check_rate_limit("client-1").is_ok());
+        assert!(limiter.check_rate_limit("client-1").is_ok());
+        assert!(limiter.check_rate_limit("client-1").is_err());
     }
 
     #[tokio::test]
     async fn test_rate_limiter_separate_keys() {
-        let limiter = RateLimiter::new(1, 60);
-        assert!(limiter.check("client-1").await);
-        assert!(!limiter.check("client-1").await);
-        assert!(limiter.check("client-2").await);
-        assert!(!limiter.check("client-2").await);
-    }
-
-    #[test]
-    fn test_blocking_rate_limiter_allows_within_limit() {
-        let limiter = RateLimiter::new(3, 60);
-        assert!(limiter.blocking_check("client-1"));
-        assert!(limiter.blocking_check("client-1"));
-        assert!(limiter.blocking_check("client-1"));
-    }
-
-    #[test]
-    fn test_blocking_rate_limiter_blocks_over_limit() {
-        let limiter = RateLimiter::new(2, 60);
-        assert!(limiter.blocking_check("client-1"));
-        assert!(limiter.blocking_check("client-1"));
-        assert!(!limiter.blocking_check("client-1"));
-    }
-
-    #[test]
-    fn test_blocking_rate_limiter_separate_keys() {
-        let limiter = RateLimiter::new(1, 60);
-        assert!(limiter.blocking_check("client-1"));
-        assert!(!limiter.blocking_check("client-1"));
-        assert!(limiter.blocking_check("client-2"));
-        assert!(!limiter.blocking_check("client-2"));
+        let limiter = RateLimiter::new(RateLimitConfig::strict());
+        assert!(limiter.check_rate_limit("client-1").is_ok());
+        assert!(limiter.check_rate_limit("client-1").is_err());
+        assert!(limiter.check_rate_limit("client-2").is_ok());
+        assert!(limiter.check_rate_limit("client-2").is_err());
     }
 }

@@ -154,7 +154,7 @@ impl LongitudinalMemory {
 
         memory.scans.push(scan_memory);
 
-        let content = serde_json::to_string_pretty(&memory)?;
+        let content = serde_json::to_string(&memory)?;
         fs::write(&target_path, content)?;
 
         self.detect_and_record_patterns(target, &memory)?;
@@ -203,7 +203,7 @@ impl LongitudinalMemory {
 
         memory.baselines = finding_ids;
 
-        let content = serde_json::to_string_pretty(&memory)?;
+        let content = serde_json::to_string(&memory)?;
         fs::write(&target_path, content)?;
 
         Ok(())
@@ -240,7 +240,7 @@ impl LongitudinalMemory {
 
         if !patterns.is_empty() {
             let patterns_path = self.get_patterns_path();
-            let content = serde_json::to_string_pretty(&patterns.values().collect::<Vec<_>>())?;
+            let content = serde_json::to_string(&patterns.values().collect::<Vec<_>>())?;
             fs::write(&patterns_path, content)?;
         }
 
