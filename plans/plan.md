@@ -472,15 +472,15 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 #### 4.4 TUI App Decomposition (MEDIUM) ⚠️ IN PROGRESS
 
 **Severity**: MEDIUM
-**Files**: `tui/app/mod.rs` (1225 lines as of 2026-04-15, down from 1665 - 440 lines removed)
+**Files**: `tui/app/mod.rs` (985 lines as of 2026-04-15, down from 1665 - 680 lines removed, 41% reduction)
 
 **Issue**: Large monolithic file. Already partially split (navigation.rs, command.rs, export.rs, state_update.rs, task_management.rs, dispatch.rs).
 
 **Extracted Submodules** (11 files total ~1800 lines):
 | File | Lines | Purpose |
 |------|-------|---------|
-| `mod.rs` | 1225 | Main App struct (down from 1665, 440 lines removed) |
-| `dispatch.rs` | 113 | TabDispatcher wrapper (now with 15 methods) |
+| `mod.rs` | 985 | Main App struct (down from 1665, 680 lines removed) |
+| `dispatch.rs` | 113 | TabDispatcher wrapper (now with 16 methods) |
 | `export.rs` | 468 | Export functionality |
 | `runner.rs` | 425 | Main event loop |
 | `state_update.rs` | 404 | State updates |
@@ -489,27 +489,29 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 | `navigation.rs` | 334 | Tab navigation |
 
 **Methods Extracted to Dispatcher (2026-04-15)**:
-- handle_autocomplete ✅ (54 lines)
-- handle_char ✅ (65 lines)
-- handle_backspace ✅ (66 lines)
-- handle_escape ✅ (67 lines)
-- stop ✅ (65 lines)
-- page_up ✅
-- page_down ✅
-- reset_current_tab ✅ (55 lines)
-**Total**: ~440 lines removed from mod.rs
+| Method | Lines Removed | Pattern |
+|--------|---------------|---------|
+| handle_autocomplete | 54 | Dispatcher |
+| handle_char | 65 | Hybrid (History lock) |
+| handle_backspace | 66 | Hybrid (History lock) |
+| handle_escape | 67 | Hybrid (show_help toggle) |
+| stop | 65 | Dispatcher |
+| page_up | ~65 | Hybrid (History lock) |
+| page_down | ~65 | Hybrid (History lock) |
+| reset_current_tab | 55 | Hybrid (History lock) |
+| handle_left_or_prev_tab | ~60 | Dispatcher + post-processing |
+| handle_right_or_next_tab | ~60 | Dispatcher + post-processing |
+| handle_left | ~70 | Dispatcher + post-processing |
+| handle_right | ~70 | Dispatcher + post-processing |
+| is_running | 59 | Dispatcher + TabState supertrait |
+| **Total** | **~680** | **41% reduction** |
 
-**Remaining Methods** (6 with 29-arm matches):
-- is_running - TabState trait has default impl, complex to unify with TabInput
-- handle_enter - business logic (spawns different tasks per tab)
-- handle_left - post-processing (calls prev_tab if not moved)
-- handle_right - post-processing (calls next_tab if not moved)
-- handle_left_or_prev_tab - navigation logic
-- handle_right_or_next_tab - navigation logic
+**Remaining Method** (1 with 29-arm match):
+- `handle_enter` - Cannot extract: tab-specific business logic calling different `build_X_task()` methods per tab
 
-**Status**: IN PROGRESS - 8 methods extracted (~440 lines). Remaining 6 are architecturally complex.
+**Status**: NEARLY COMPLETE - 13 methods extracted (~680 lines). Only `handle_enter` remains, which requires architectural redesign (TaskBuilder trait or similar) to simplify.
 
-**Estimated**: 20+ hours original; 8 methods (~440 lines) done in ~2 hours. Remaining 6 methods require architectural changes.
+**Estimated**: 20+ hours original; ~680 lines done in 2 sessions (~4 hours). `handle_enter` alone would require 4-6 hours for proper extraction.
 
 ---
 
@@ -1017,13 +1019,13 @@ cargo build --release -p slapper --features full
 | 2.6 Worker JoinHandle | ✅ FIXED | Added task_processor_handle field |
 | 2.3 Memory Bounds | ✅ FIXED | Streaming + max_results limits implemented |
 | 4.7 Unwrap Audit | ✅ VERIFIED | Listed locations were test code only |
-| 4.4 TUI Decompose | ⚠️ IN PROGRESS | 440 lines removed, 8 methods extracted (1225 lines remain) |
+| 4.4 TUI Decompose | ⚠️ IN PROGRESS | 680 lines removed, 13 methods extracted (985 lines remain) |
 
 ### Remaining Work
 
 | Item | Remaining Work | Difficulty |
 |------|----------------|------------|
-| 4.4 TUI Decomposition | 6 complex methods remain (is_running, handle_enter, handle_left/right, etc.) | Architectural changes needed |
+| 4.4 TUI Decomposition | `handle_enter` only (680 lines removed, 41% reduction) | Requires TaskBuilder trait redesign |
 | D.1 Error Consolidation | Per AGENTS.md policy | Keep separate (not recommended) |
 
 ---
