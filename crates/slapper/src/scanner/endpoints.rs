@@ -28,6 +28,7 @@ pub struct EndpointScanConfig {
     pub spoof_config: SpoofConfig,
     pub verify_tls: bool,
     pub progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
+    pub max_results: Option<usize>,
 }
 
 pub static DEFAULT_ENDPOINTS: &[&str] = &[
@@ -414,6 +415,7 @@ where
         spoof_config,
         verify_tls: config.http.verify_tls,
         progress_tx: None,
+        max_results: None,
     })
     .await?;
 
@@ -500,6 +502,7 @@ pub async fn run_cli(args: EndpointScanArgs, config: &SlapperConfig) -> Result<(
         spoof_config,
         verify_tls: config.http.verify_tls,
         progress_tx: None,
+        max_results: None,
     })
     .await?;
 
@@ -686,6 +689,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
 
     let results: Arc<DashMap<usize, EndpointResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(Mutex::new(0u64));
+    let results_count = Arc::new(Mutex::new(0usize));
     let total_endpoints = config.endpoints.len() as u64;
 
     let progress = if config.tui_mode {
@@ -717,6 +721,8 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         let spoof_config = config.spoof_config.clone();
         let scanned_count = scanned_count.clone();
         let progress_tx = config.progress_tx.clone();
+        let results_count = results_count.clone();
+        let max_results = config.max_results;
 
         let handle = tokio::spawn(async move {
             let request_start = std::time::Instant::now();
@@ -750,15 +756,29 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
 
                     let interesting = is_interesting(&endpoint_path, status_code);
 
-                    results.insert(idx, EndpointResult {
-                        path: endpoint_path,
-                        status_code,
-                        status_text: status.canonical_reason().unwrap_or("Unknown").to_string(),
-                        content_length,
-                        response_time_ms: request_start.elapsed().as_millis() as u64,
-                        redirect,
-                        interesting,
-                    });
+                    let should_insert = match max_results {
+                        Some(limit) => {
+                            let count = *results_count.lock().await;
+                            if count >= limit {
+                                false
+                            } else {
+                                *results_count.lock().await += 1;
+                                true
+                            }
+                        }
+                        None => true,
+                    };
+                    if should_insert {
+                        results.insert(idx, EndpointResult {
+                            path: endpoint_path,
+                            status_code,
+                            status_text: status.canonical_reason().unwrap_or("Unknown").to_string(),
+                            content_length,
+                            response_time_ms: request_start.elapsed().as_millis() as u64,
+                            redirect,
+                            interesting,
+                        });
+                    }
                 }
             }
 

@@ -1,4 +1,4 @@
-use slapper::scanner::endpoints::{scan_endpoints, DEFAULT_ENDPOINTS};
+use slapper::scanner::endpoints::{scan_endpoints, DEFAULT_ENDPOINTS, EndpointScanConfig};
 use slapper::scanner::ports::scan_ports_optimized;
 use slapper::scanner::spoof::SpoofConfig;
 use slapper::scanner::timing::{PortPriority, TimingConfig, TimingPreset};
@@ -110,15 +110,18 @@ async fn benchmark_endpoint_scan(url: &str, concurrency: usize) {
     let endpoints: Vec<String> = DEFAULT_ENDPOINTS.iter().map(|s| s.to_string()).collect();
 
     let start = Instant::now();
-    let result = scan_endpoints(
-        url,
+    let result = scan_endpoints(EndpointScanConfig {
+        base_url: url.to_string(),
         endpoints,
         concurrency,
-        Duration::from_secs(5),
-        false,
-        false,
-        SpoofConfig::default(),
-    )
+        timeout_duration: Duration::from_secs(5),
+        include_404: false,
+        tui_mode: false,
+        spoof_config: SpoofConfig::default(),
+        verify_tls: false,
+        progress_tx: None,
+        max_results: None,
+    })
     .await;
 
     match result {

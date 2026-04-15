@@ -156,7 +156,7 @@ pub async fn run_cli(args: FingerprintArgs, config: &SlapperConfig) -> Result<()
     } else {
         let ports = parse_ports(&args.ports)?;
         let results =
-            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency, None)
+            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency, None, None)
                 .await?;
 
         if args.json {
@@ -202,7 +202,7 @@ where
     } else {
         let ports = parse_ports(&args.ports)?;
         let results =
-            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency, None)
+            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency, None, None)
                 .await?;
 
         for fp in &results.results {
@@ -226,9 +226,11 @@ pub async fn fingerprint_services(
     tui_mode: bool,
     concurrency: usize,
     progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
+    max_results: Option<usize>,
 ) -> Result<FingerprintResults> {
     let results: Arc<DashMap<u16, ServiceFingerprint>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
+    let results_count = Arc::new(tokio::sync::Mutex::new(0usize));
     let total_ports = ports.len() as u64;
 
     let progress = if tui_mode {
@@ -257,10 +259,25 @@ pub async fn fingerprint_services(
         let timeout_dur = timeout_duration;
         let scanned_count = scanned_count.clone();
         let progress_tx = progress_tx.clone();
+        let results_count = results_count.clone();
 
         let handle = tokio::spawn(async move {
             if let Some(fp) = fingerprint_port(&host, port, timeout_dur).await {
-                results.insert(port, fp);
+                let should_insert = match max_results {
+                    Some(limit) => {
+                        let count = *results_count.lock().await;
+                        if count >= limit {
+                            false
+                        } else {
+                            *results_count.lock().await += 1;
+                            true
+                        }
+                    }
+                    None => true,
+                };
+                if should_insert {
+                    results.insert(port, fp);
+                }
             }
             if let Some(ref pb) = progress {
                 pb.inc(1);

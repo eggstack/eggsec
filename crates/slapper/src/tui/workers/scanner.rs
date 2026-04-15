@@ -26,6 +26,7 @@ pub async fn run_port_scan(
         true,
         SpoofConfig::default(),
         Some(progress_tx.clone()),
+        None,
     )
     .await?;
 
@@ -68,6 +69,7 @@ pub async fn run_endpoint_scan(
         spoof_config: SpoofConfig::default(),
         verify_tls: true,
         progress_tx: Some(progress_tx.clone()),
+        max_results: None,
     })
     .await?;
 
@@ -98,6 +100,7 @@ pub async fn run_fingerprint(
         true,
         20,
         Some(progress_tx.clone()),
+        None,
     )
     .await?;
 

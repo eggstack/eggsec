@@ -29,6 +29,7 @@ async fn test_endpoint_scan_basic() {
         spoof_config,
         verify_tls: false,
         progress_tx: None,
+        max_results: None,
     };
 
     let results = slapper::scanner::scan_endpoints(config).await.unwrap();
@@ -56,6 +57,7 @@ async fn test_endpoint_scan_include_404() {
         spoof_config,
         verify_tls: false,
         progress_tx: None,
+        max_results: None,
     };
 
     let results = slapper::scanner::scan_endpoints(config).await.unwrap();
@@ -82,6 +84,7 @@ async fn test_endpoint_scan_interesting() {
         spoof_config,
         verify_tls: false,
         progress_tx: None,
+        max_results: None,
     };
 
     let results = slapper::scanner::scan_endpoints(config).await.unwrap();
@@ -108,6 +111,7 @@ async fn test_endpoint_scan_json_response() {
         spoof_config,
         verify_tls: false,
         progress_tx: None,
+        max_results: None,
     };
 
     let results = slapper::scanner::scan_endpoints(config).await.unwrap();
@@ -133,6 +137,7 @@ async fn test_endpoint_scan_waf_blocked() {
         spoof_config,
         verify_tls: false,
         progress_tx: None,
+        max_results: None,
     };
 
     let results = slapper::scanner::scan_endpoints(config).await.unwrap();
@@ -157,6 +162,7 @@ async fn test_endpoint_scan_empty_wordlist() {
         spoof_config,
         verify_tls: false,
         progress_tx: None,
+        max_results: None,
     };
 
     let results = slapper::scanner::scan_endpoints(config).await.unwrap();

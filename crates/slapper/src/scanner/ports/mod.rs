@@ -197,6 +197,7 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
         false,
         spoof_config,
         None,
+        None,
     )
     .await?;
 
@@ -363,6 +364,7 @@ where
         false,
         spoof_config,
         None,
+        None,
     )
     .await?;
 
@@ -434,6 +436,7 @@ pub async fn scan_ports(
     tui_mode: bool,
     spoof_config: SpoofConfig,
     progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
+    max_results: Option<usize>,
 ) -> Result<PortScanResults> {
     if spoof_config.enabled && spoof_config.use_raw_sockets {
         return spoofed::scan_ports_spoofed(
@@ -451,6 +454,7 @@ pub async fn scan_ports(
     let addr = resolve_host(host)?;
     let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
+    let results_count = Arc::new(tokio::sync::Mutex::new(0usize));
     let total_ports = ports.len() as u64;
 
     let progress = if tui_mode {
@@ -478,6 +482,7 @@ pub async fn scan_ports(
         let timeout_dur = timeout_duration;
         let scanned_count = scanned_count.clone();
         let progress_tx = progress_tx.clone();
+        let results_count = results_count.clone();
 
         let handle = tokio::spawn(async move {
             let socket_addr = std::net::SocketAddr::new(addr, port);
@@ -485,25 +490,67 @@ pub async fn scan_ports(
 
             match result {
                 Ok(Ok(_)) => {
-                    results.insert(port, PortResult {
-                        port,
-                        status: "open".to_string(),
-                        service: get_service_name(port),
-                    });
+                    let should_insert = match max_results {
+                        Some(limit) => {
+                            let count = *results_count.lock().await;
+                            if count >= limit {
+                                false
+                            } else {
+                                *results_count.lock().await += 1;
+                                true
+                            }
+                        }
+                        None => true,
+                    };
+                    if should_insert {
+                        results.insert(port, PortResult {
+                            port,
+                            status: "open".to_string(),
+                            service: get_service_name(port),
+                        });
+                    }
                 }
                 Ok(Err(_)) => {
-                    results.insert(port, PortResult {
-                        port,
-                        status: "closed".to_string(),
-                        service: get_service_name(port),
-                    });
+                    let should_insert = match max_results {
+                        Some(limit) => {
+                            let count = *results_count.lock().await;
+                            if count >= limit {
+                                false
+                            } else {
+                                *results_count.lock().await += 1;
+                                true
+                            }
+                        }
+                        None => true,
+                    };
+                    if should_insert {
+                        results.insert(port, PortResult {
+                            port,
+                            status: "closed".to_string(),
+                            service: get_service_name(port),
+                        });
+                    }
                 }
                 Err(_) => {
-                    results.insert(port, PortResult {
-                        port,
-                        status: "filtered".to_string(),
-                        service: get_service_name(port),
-                    });
+                    let should_insert = match max_results {
+                        Some(limit) => {
+                            let count = *results_count.lock().await;
+                            if count >= limit {
+                                false
+                            } else {
+                                *results_count.lock().await += 1;
+                                true
+                            }
+                        }
+                        None => true,
+                    };
+                    if should_insert {
+                        results.insert(port, PortResult {
+                            port,
+                            status: "filtered".to_string(),
+                            service: get_service_name(port),
+                        });
+                    }
                 }
             }
             if let Some(ref pb) = progress {

@@ -23,6 +23,8 @@ async fn test_fingerprint_http_service() {
         std::time::Duration::from_secs(5),
         true, // tui_mode to suppress progress bar
         10,   // concurrency
+        None, // progress_tx
+        None, // max_results
     )
     .await
     .unwrap();
@@ -43,6 +45,8 @@ async fn test_fingerprint_unreachable_port() {
         std::time::Duration::from_secs(1),
         true,
         10, // concurrency
+        None, // progress_tx
+        None, // max_results
     )
     .await
     .unwrap();
