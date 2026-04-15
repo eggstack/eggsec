@@ -166,11 +166,12 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 |--------|-------|
 | Tests | 1057 passing |
 | Build | Clean compilation |
-| Clippy | 1 warning (unused import `stress::*` in cli/mod.rs:23) |
+| Clippy | Clean (1 warning fixed in Wave 4) |
 | Doctests | 17 pass, 1 ignored, 0 fail |
 | `SlapperError` variants | 23 |
 | `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
 | Wave 3 | ✅ COMPLETED (11 performance optimizations) |
+| Wave 4 | ✅ COMPLETED (6 of 10 items, 4 deferred/skipped) |
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
@@ -747,3 +748,40 @@ Completed all 11 performance optimization items in Wave 3:
 6. **SmallVec for stack-allocated buffers**: Use `SmallVec<[u8; 256]>` instead of `Vec<u8>` for small fixed-size buffers to avoid heap allocation
 
 7. **contains_ignore_case helper**: For repeated case-insensitive substring checks, call `to_lowercase()` once before the loop instead of once per pattern
+
+### Lessons Learned (Session 2026-04-15 - Wave 4)
+
+#### Wave 4 Implementation Summary
+
+Completed 6 of 10 items in Wave 4 (4 deferred, 2 skipped):
+
+**Block A - Broken Tests & Fixes:**
+- **4.1** `fuzzer_tests.rs`: Changed `get_all_payloads` to `get_all_payloads_cached`, fixed iterator issue
+- **4.2** `stress_tests.rs`: Added `#![cfg(feature = "stress-testing")]`
+- **4.3** Doc test fixes in `fuzzer/engine/core.rs`, `output/mod.rs`, `recon/mod.rs`, `scanner/mod.rs`
+
+**Block B - Code Organization:**
+- **4.6** `integrations/github.rs`, `recon/subdomain.rs`: Added `urlencoding::encode()` for URL query parameters
+- **4.4** TUI decomposition: DEFERRED (20+ hours)
+- **4.5** SensitiveString docs: DEFERRED (low priority)
+
+**Block C - Unwrap/Expect Audit:**
+- **4.8** `distributed/command.rs`: Removed dead code after early return
+- **4.10** `error/mod.rs`: Added `From` implementations for `AiError`, `CaptureError`, `TracerouteError` (feature-gated)
+- **4.7** High-risk unwrap audit: PENDING (8-12 hours, major refactoring)
+- **4.9** ProxyPool sync: SKIPPED (low severity, regression risk)
+- **4.11** Mutex mixing: SKIPPED (low severity, regression risk)
+
+#### Code Quality Fix Patterns
+
+1. **Test feature gating**: Always gate integration tests with `#[cfg(feature = "...")]` when they depend on optional features
+
+2. **Doc test compilation**: Doc examples must use correct types and function signatures - always verify against actual code
+
+3. **URL encoding**: Use `urlencoding::encode()` for any user-provided query string components in URLs
+
+4. **Error conversion**: When adding `From` impls for feature-gated error types, gate the entire impl block with the appropriate `#[cfg(feature = "...")]`
+
+5. **Dead code security**: Code after an early return that can never execute is a security risk - remove it
+
+6. **Low-priority items**: Skipping items like 4.9 and 4.11 is acceptable when the risk of regressions outweighs the benefit
