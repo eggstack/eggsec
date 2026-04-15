@@ -649,136 +649,26 @@ impl App {
         if self.show_help {
             return;
         }
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_char(c),
-            Tab::Load => self.load.handle_char(c),
-            Tab::ScanPorts => self.scan_ports.handle_char(c),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_char(c),
-            Tab::Fingerprint => self.fingerprint.handle_char(c),
-            Tab::Fuzz => self.fuzz.handle_char(c),
-            Tab::Waf => self.waf.handle_char(c),
-            Tab::WafStress => self.waf_stress.handle_char(c),
-            Tab::Scan => self.scan.handle_char(c),
-            Tab::Resume => self.resume.handle_char(c),
-            Tab::Proxy => self.proxy.handle_char(c),
-            Tab::Packet => self.packet.handle_char(c),
-            Tab::GraphQl => self.graphql.handle_char(c),
-            Tab::OAuth => self.oauth.handle_char(c),
-            Tab::Cluster => self.cluster.handle_char(c),
-            Tab::Stress => self.stress.handle_char(c),
-            Tab::Report => self.report.handle_char(c),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_char(c),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {}
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_char(c),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {}
-            Tab::Settings => self.settings.handle_char(c),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_char(c);
-                }
+        if self.current_tab == Tab::History {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_char(c);
             }
-            Tab::Dashboard => self.dashboard.handle_char(c),
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.handle_char(c),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {}
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.handle_char(c),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {}
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.handle_char(c),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {}
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.handle_char(c),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => {}
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.handle_char(c),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {}
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.handle_char(c),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {}
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.handle_char(c),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {}
+            return;
         }
+        self.dispatcher_mut().handle_char(c);
     }
 
     pub fn handle_backspace(&mut self) {
         if self.show_help {
             return;
         }
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_backspace(),
-            Tab::Load => self.load.handle_backspace(),
-            Tab::ScanPorts => self.scan_ports.handle_backspace(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_backspace(),
-            Tab::Fingerprint => self.fingerprint.handle_backspace(),
-            Tab::Fuzz => self.fuzz.handle_backspace(),
-            Tab::Waf => self.waf.handle_backspace(),
-            Tab::WafStress => self.waf_stress.handle_backspace(),
-            Tab::Scan => self.scan.handle_backspace(),
-            Tab::Resume => self.resume.handle_backspace(),
-            Tab::Proxy => self.proxy.handle_backspace(),
-            Tab::Packet => self.packet.handle_backspace(),
-            Tab::GraphQl => self.graphql.handle_backspace(),
-            Tab::OAuth => self.oauth.handle_backspace(),
-            Tab::Cluster => self.cluster.handle_backspace(),
-            Tab::Stress => self.stress.handle_backspace(),
-            Tab::Report => self.report.handle_backspace(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_backspace(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {}
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_backspace(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {}
-            Tab::Settings => self.settings.handle_backspace(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_backspace();
-                }
+        if self.current_tab == Tab::History {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_backspace();
             }
-            Tab::Dashboard => self.dashboard.handle_backspace(),
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.handle_backspace(),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {}
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.handle_backspace(),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {}
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.handle_backspace(),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {}
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.handle_backspace(),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => {}
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.handle_backspace(),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {}
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.handle_backspace(),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {}
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.handle_backspace(),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {}
+            return;
         }
+        self.dispatcher_mut().handle_backspace();
     }
 
     pub fn handle_autocomplete(&mut self) -> bool {
