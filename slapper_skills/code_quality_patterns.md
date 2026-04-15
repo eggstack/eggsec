@@ -1,6 +1,6 @@
 ---
 name: code_quality_patterns
-description: "Code quality patterns, error handling, and testing best practices for Slapper"
+description: "Code quality patterns, error handling, testing best practices, and documentation standards for Slapper"
 triggers:
   - code quality
   - error handling
@@ -11,6 +11,9 @@ triggers:
   - feature flag
   - clippy
   - unwrap audit
+  - documentation
+  - ADR
+  - architecture
 metadata:
   category: maintenance
   tools: [general]
@@ -160,9 +163,88 @@ if env.is_some() {
 }
 ```
 
+## Serialization Roundtrip Testing Pattern
+
+When testing types that implement `Serialize` + `DeserializeOwned` + `Eq`, use the helper from `tests/common/mod.rs`:
+
+```rust
+use crate::tests::common::assert_serialize_roundtrip;
+use slapper::types::Severity;
+
+// Instead of repeating serialization logic:
+let json = serde_json::to_string(&value).unwrap();
+let decoded: Type = serde_json::from_str(&json).unwrap();
+assert_eq!(value, decoded);
+
+// Use the helper:
+assert_serialize_roundtrip(&value);
+```
+
+## Public API Documentation Pattern
+
+All public functions should have doc comments with `# Arguments`, `# Returns`, and `# Example` sections:
+
+```rust
+/// Creates a successful response with the given results.
+///
+/// # Arguments
+///
+/// * `request_id` - The request ID from the original ToolRequest
+/// * `tool_id` - The tool identifier
+/// * `results` - The tool-specific results as JSON
+///
+/// # Example
+///
+/// ```rust
+/// use slapper::tool::response::ToolResponse;
+///
+/// let response = ToolResponse::success(
+///     "req-123",
+///     "scanner",
+///     serde_json::json!({"ports": [80, 443]})
+/// );
+/// ```
+pub fn success(
+    request_id: impl Into<String>,
+    tool_id: impl Into<String>,
+    results: serde_json::Value,
+) -> Self {
+    // ...
+}
+```
+
+## Architecture Decision Records
+
+When making significant architectural decisions, document them in `docs/adr/`:
+
+```markdown
+# ADR-XXX: Title
+
+## Status
+Accepted
+
+## Context
+What problem are we solving?
+
+## Decision
+What is the change we're making?
+
+## Consequences
+What becomes easier or harder due to this change?
+
+## References
+Links to relevant documentation
+```
+
+See existing ADRs in `docs/adr/` for examples:
+- ADR-001: SensitiveString vs SecretString
+- ADR-002: Feature flag design rationale
+- ADR-003: rustls over native-tls (except nse)
+- ADR-004: Error type separation
+
 ## Triggers
 
-Keywords: code quality, error handling, From impl, error conversion, doc test, test gating, feature flag, clippy, unwrap audit, feature gate, security patterns, defensive coding
+Keywords: code quality, error handling, From impl, error conversion, doc test, test gating, feature flag, clippy, unwrap audit, feature gate, security patterns, defensive coding, documentation, ADR, architecture, serialization, roundtrip
 
 ## Common Pitfalls
 
