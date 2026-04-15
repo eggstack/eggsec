@@ -166,12 +166,13 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 |--------|-------|
 | Tests | 1057 passing |
 | Build | Clean compilation |
-| Clippy | Clean (1 warning fixed in Wave 4) |
+| Clippy | Clean |
 | Doctests | 17 pass, 1 ignored, 0 fail |
 | `SlapperError` variants | 23 |
 | `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
 | Wave 3 | ✅ COMPLETED (11 performance optimizations) |
 | Wave 4 | ✅ COMPLETED (6 of 10 items, 4 deferred/skipped) |
+| Wave 5 | ✅ COMPLETED (7 items) |
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
@@ -183,6 +184,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | Skill files | 16 (in `slapper_skills/`) |
 | Tool findings | Scanner, Recon, Pipeline, Fuzzer tools now return findings via callback |
 | Wave 1 | ✅ COMPLETED (9 security fixes) |
+| ADRs | 4 (in `docs/adr/`) |
 
 ## Planning
 
@@ -785,3 +787,45 @@ Completed 6 of 10 items in Wave 4 (4 deferred, 2 skipped):
 5. **Dead code security**: Code after an early return that can never execute is a security risk - remove it
 
 6. **Low-priority items**: Skipping items like 4.9 and 4.11 is acceptable when the risk of regressions outweighs the benefit
+
+### Lessons Learned (Session 2026-04-15 - Wave 5)
+
+#### Wave 5 Implementation Summary
+
+Completed all 7 items in Wave 5:
+
+**Block A - Test Improvements:**
+- **5.1** `tests/common/mod.rs`: Added `assert_serialize_roundtrip<T>` and `assert_string_serialize_roundtrip` helpers for serialization testing
+- **5.2** `tests/scope_tests.rs`: Replaced URL normalization test with real scope enforcement test using `Scope::is_target_allowed`
+- **5.3** `tests/common/wiremock_helpers.rs`: Removed unused helpers (`mock_secure_headers`, `mock_jwt_response`, `mock_rate_limited`)
+- **5.4**: Verified test infrastructure is well-organized with `tests/common/` directory
+
+**Block B - Documentation:**
+- **5.5** `tool/traits.rs`, `tool/response.rs`, `tool/registry.rs`: Added comprehensive doc comments to `SecurityTool` trait, `ToolResponse` builders, and `ToolRegistry` methods
+- **5.6** `generated/slapper.tool.v1.rs`: Added comment explaining manual maintenance requirement
+- **5.7** Created 4 Architecture Decision Records in `docs/adr/`:
+  - ADR-001: SensitiveString vs SecretString
+  - ADR-002: Feature flag design rationale
+  - ADR-003: rustls over native-tls (except nse)
+  - ADR-004: Error type separation
+
+#### Testing & Documentation Patterns
+
+1. **Serialization roundtrip helper**: Use `assert_serialize_roundtrip(&value)` for types implementing `Serialize + DeserializeOwned + Eq`
+
+2. **Doc comment format**: Always include description, `# Arguments`, `# Returns`, and `# Example` sections for public functions
+
+3. **Unused code**: Remove unused helpers rather than keeping dead code; they can be recovered from git history if needed
+
+4. **Generated file documentation**: When a file is manually maintained despite being marked as generated, add a clear comment explaining this
+
+5. **ADR structure**: Architecture Decision Records should include Status, Context, Decision, Consequences, and References sections
+
+#### Updated Codebase Metrics
+
+| Metric | Current Value | Note |
+|--------|---------------|------|
+| Tests | 1057 passing | Verified |
+| Wave 5 | ✅ COMPLETED | All 7 items done |
+| Total items done | 36 | Across Waves 1-5 |
+| ADRs | 4 created | docs/adr/ |
