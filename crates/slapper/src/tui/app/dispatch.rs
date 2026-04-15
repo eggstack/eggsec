@@ -37,12 +37,10 @@ impl<'a> TabDispatcher<'a> {
         self.0.handle_down();
     }
 
-    #[allow(dead_code)]
     pub fn handle_left(&mut self) -> bool {
         self.0.handle_left()
     }
 
-    #[allow(dead_code)]
     pub fn handle_right(&mut self) -> bool {
         self.0.handle_right()
     }
@@ -80,12 +78,10 @@ impl<'a> TabDispatcher<'a> {
         self.0.is_input_focused()
     }
 
-    #[allow(dead_code)]
     pub fn is_at_left_edge(&self) -> bool {
         self.0.is_at_left_edge()
     }
 
-    #[allow(dead_code)]
     pub fn is_at_right_edge(&mut self) -> bool {
         self.0.is_at_right_edge()
     }

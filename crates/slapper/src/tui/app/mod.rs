@@ -778,137 +778,31 @@ impl App {
             return false;
         }
         let at_left_edge = match self.current_tab {
-            Tab::Recon => self.recon.is_at_left_edge(),
-            Tab::Load => self.load.is_at_left_edge(),
-            Tab::ScanPorts => self.scan_ports.is_at_left_edge(),
-            Tab::ScanEndpoints => self.scan_endpoints.is_at_left_edge(),
-            Tab::Fingerprint => self.fingerprint.is_at_left_edge(),
-            Tab::Fuzz => self.fuzz.is_at_left_edge(),
-            Tab::Waf => self.waf.is_at_left_edge(),
-            Tab::WafStress => self.waf_stress.is_at_left_edge(),
-            Tab::Scan => self.scan.is_at_left_edge(),
-            Tab::Resume => self.resume.is_at_left_edge(),
-            Tab::Proxy => self.proxy.is_at_left_edge(),
-            Tab::Packet => self.packet.is_at_left_edge(),
-            Tab::GraphQl => self.graphql.is_at_left_edge(),
-            Tab::OAuth => self.oauth.is_at_left_edge(),
-            Tab::Cluster => self.cluster.is_at_left_edge(),
-            Tab::Stress => self.stress.is_at_left_edge(),
-            Tab::Report => self.report.is_at_left_edge(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.is_at_left_edge(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.is_at_left_edge(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => self.settings.is_at_left_edge(),
             Tab::History => true,
             Tab::Dashboard => true,
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.is_at_left_edge(),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => false,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.is_at_left_edge(),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => false,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.is_at_left_edge(),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => false,
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.is_at_left_edge(),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => false,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.is_at_left_edge(),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => false,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.is_at_left_edge(),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => false,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.is_at_left_edge(),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => false,
+            _ => self.dispatcher_mut().is_at_left_edge(),
         };
         if at_left_edge {
             false
         } else {
-            self.handle_left();
+            self.dispatcher_mut().handle_left();
             true
         }
     }
 
-    pub fn handle_right_or_next_tab(&mut self) -> bool {
+pub fn handle_right_or_next_tab(&mut self) -> bool {
         if self.show_help {
             return false;
         }
         let at_right_edge = match self.current_tab {
-            Tab::Recon => self.recon.is_at_right_edge(),
-            Tab::Load => self.load.is_at_right_edge(),
-            Tab::ScanPorts => self.scan_ports.is_at_right_edge(),
-            Tab::ScanEndpoints => self.scan_endpoints.is_at_right_edge(),
-            Tab::Fingerprint => self.fingerprint.is_at_right_edge(),
-            Tab::Fuzz => self.fuzz.is_at_right_edge(),
-            Tab::Waf => self.waf.is_at_right_edge(),
-            Tab::WafStress => self.waf_stress.is_at_right_edge(),
-            Tab::Scan => self.scan.is_at_right_edge(),
-            Tab::Resume => self.resume.is_at_right_edge(),
-            Tab::Proxy => self.proxy.is_at_right_edge(),
-            Tab::Packet => self.packet.is_at_right_edge(),
-            Tab::GraphQl => self.graphql.is_at_right_edge(),
-            Tab::OAuth => self.oauth.is_at_right_edge(),
-            Tab::Cluster => self.cluster.is_at_right_edge(),
-            Tab::Stress => self.stress.is_at_right_edge(),
-            Tab::Report => self.report.is_at_right_edge(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.is_at_right_edge(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.is_at_right_edge(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => self.settings.is_at_right_edge(),
             Tab::History => true,
             Tab::Dashboard => true,
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.is_at_right_edge(),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => false,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.is_at_right_edge(),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => false,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.is_at_right_edge(),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => false,
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.is_at_right_edge(),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => false,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.is_at_right_edge(),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => false,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.is_at_right_edge(),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => false,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.is_at_right_edge(),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => false,
+            _ => self.dispatcher_mut().is_at_right_edge(),
         };
         if at_right_edge {
             false
         } else {
-            self.handle_right();
+            self.dispatcher_mut().handle_right();
             true
         }
     }
