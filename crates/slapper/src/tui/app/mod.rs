@@ -19,10 +19,11 @@ use super::error::make_friendly_error;
 use crate::tui::help::{HelpManager, HelpOverlay, CommandPalette, HelpContext};
 use crate::tui::state::SharedHistory;
 use crate::tui::tabs;
-use crate::tui::tabs::{Tab, TabInput, TabState};
+use crate::tui::tabs::{Tab, TabInput};
 use dispatch::TabDispatcher;
 use crate::tui::workers;
 use crate::types::OutputFormat;
+use task_management::TaskBuilder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PendingAction {
@@ -347,159 +348,56 @@ impl App {
             return;
         }
 
+        self.dispatcher_mut().handle_enter();
+
+        if self.dispatcher_mut().is_running() {
+            if let Some(task_config) = self.build_current_task() {
+                self.spawn_task(Some(task_config));
+            }
+        }
+    }
+
+    fn build_current_task(&self) -> Option<workers::TaskConfig> {
         match self.current_tab {
-            Tab::Recon => {
-                self.recon.handle_enter();
-                if self.recon.is_running() {
-                    self.spawn_task(self.build_recon_task());
-                }
-            }
-            Tab::Load => {
-                self.load.handle_enter();
-                if self.load.is_running() {
-                    self.spawn_task(self.build_load_task());
-                }
-            }
-            Tab::ScanPorts => {
-                self.scan_ports.handle_enter();
-                if self.scan_ports.is_running() {
-                    self.spawn_task(self.build_port_scan_task());
-                }
-            }
-            Tab::ScanEndpoints => {
-                self.scan_endpoints.handle_enter();
-                if self.scan_endpoints.is_running() {
-                    self.spawn_task(self.build_endpoint_scan_task());
-                }
-            }
-            Tab::Fingerprint => {
-                self.fingerprint.handle_enter();
-                if self.fingerprint.is_running() {
-                    self.spawn_task(self.build_fingerprint_task());
-                }
-            }
-            Tab::Fuzz => {
-                self.fuzz.handle_enter();
-                if self.fuzz.is_running() {
-                    self.spawn_task(self.build_fuzz_task());
-                }
-            }
-            Tab::Waf => {
-                self.waf.handle_enter();
-                if self.waf.is_running() {
-                    self.spawn_task(self.build_waf_task());
-                }
-            }
-            Tab::WafStress => {
-                self.waf_stress.handle_enter();
-                if self.waf_stress.is_running() {
-                    self.spawn_task(self.build_waf_stress_task());
-                }
-            }
-            Tab::Scan => {
-                self.scan.handle_enter();
-                if self.scan.is_running() {
-                    self.spawn_task(self.build_pipeline_task());
-                }
-            }
-            Tab::Resume => self.resume.handle_enter(),
-            Tab::Proxy => self.proxy.handle_enter(),
-            Tab::Packet => {
-                self.packet.handle_enter();
-                if self.packet.is_running() {
-                    match self.packet.current_view {
-                        tabs::packet::PacketView::Capture => {
-                            self.spawn_task(self.build_packet_capture_task());
-                        }
-                        tabs::packet::PacketView::Traceroute => {
-                            self.spawn_task(self.build_packet_traceroute_task());
-                        }
-                        tabs::packet::PacketView::Send => {
-                            self.spawn_task(self.build_packet_send_task());
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            Tab::GraphQl => self.graphql.handle_enter(),
-            Tab::OAuth => self.oauth.handle_enter(),
-            Tab::Cluster => self.cluster.handle_enter(),
-            Tab::Stress => self.stress.handle_enter(),
-            Tab::Report => self.report.handle_enter(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_enter(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {},
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_enter(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {},
-            Tab::Settings => self.settings.handle_enter(),
-            Tab::History => {}
-            Tab::Dashboard => self.dashboard.handle_enter(),
+            Tab::Recon => Some(self.recon.build_task_config()?),
+            Tab::Load => Some(self.load.build_task_config()?),
+            Tab::ScanPorts => Some(self.scan_ports.build_task_config()?),
+            Tab::ScanEndpoints => Some(self.scan_endpoints.build_task_config()?),
+            Tab::Fingerprint => Some(self.fingerprint.build_task_config()?),
+            Tab::Fuzz => Some(self.fuzz.build_task_config()?),
+            Tab::Waf => Some(self.waf.build_task_config()?),
+            Tab::WafStress => Some(self.waf_stress.build_task_config()?),
+            Tab::Scan => Some(self.scan.build_task_config()?),
+            Tab::Packet => Some(self.packet.build_task_config()?),
             #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => {
-                self.hunt.handle_enter();
-                if self.hunt.is_running() {
-                    self.spawn_task(self.build_hunt_task());
-                }
-            }
+            Tab::Hunt => Some(self.hunt.build_task_config()?),
             #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {}
+            Tab::Hunt => None,
             #[cfg(feature = "headless-browser")]
-            Tab::Browser => {
-                self.browser.handle_enter();
-                if self.browser.is_running() {
-                    self.spawn_task(self.build_browser_task());
-                }
-            }
+            Tab::Browser => Some(self.browser.build_task_config()?),
             #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {},
+            Tab::Browser => None,
             #[cfg(feature = "compliance")]
-            Tab::Compliance => {
-                self.compliance.handle_enter();
-                if self.compliance.is_running() {
-                    self.spawn_task(self.build_compliance_task());
-                }
-            }
+            Tab::Compliance => Some(self.compliance.build_task_config()?),
             #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {}
+            Tab::Compliance => None,
             #[cfg(feature = "database")]
-            Tab::Storage => {
-                self.storage.handle_enter();
-                if self.storage.is_running() {
-                    self.spawn_task(self.build_storage_task());
-                }
-            }
+            Tab::Storage => Some(self.storage.build_task_config()?),
             #[cfg(not(feature = "database"))]
-            Tab::Storage => {}
+            Tab::Storage => None,
             #[cfg(feature = "external-integrations")]
-            Tab::Integrations => {
-                self.integrations.handle_enter();
-                if self.integrations.is_running() {
-                    self.spawn_task(self.build_integrations_task());
-                }
-            }
+            Tab::Integrations => Some(self.integrations.build_task_config()?),
             #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {}
+            Tab::Integrations => None,
             #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => {
-                self.workflow.handle_enter();
-                if self.workflow.is_running() {
-                    self.spawn_task(self.build_workflow_task());
-                }
-            }
+            Tab::Workflow => Some(self.workflow.build_task_config()?),
             #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {}
+            Tab::Workflow => None,
             #[cfg(feature = "vuln-management")]
-            Tab::Vuln => {
-                self.vuln.handle_enter();
-                if self.vuln.is_running() {
-                    self.spawn_task(self.build_vuln_task());
-                }
-            }
+            Tab::Vuln => Some(self.vuln.build_task_config()?),
             #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {}
+            Tab::Vuln => None,
+            _ => None,
         }
     }
 

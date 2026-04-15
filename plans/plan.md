@@ -469,23 +469,23 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 
 ### Block B: Code Organization
 
-#### 4.4 TUI App Decomposition (MEDIUM) ⚠️ IN PROGRESS
+#### 4.4 TUI App Decomposition (MEDIUM) ✅ COMPLETED
 
 **Severity**: MEDIUM
-**Files**: `tui/app/mod.rs` (985 lines as of 2026-04-15, down from 1665 - 680 lines removed, 41% reduction)
+**Files**: `tui/app/mod.rs` (883 lines as of 2026-04-15, down from 1665 - 782 lines removed, 47% reduction)
 
 **Issue**: Large monolithic file. Already partially split (navigation.rs, command.rs, export.rs, state_update.rs, task_management.rs, dispatch.rs).
 
-**Extracted Submodules** (11 files total ~1800 lines):
+**Extracted Submodules** (11 files total ~2200 lines):
 | File | Lines | Purpose |
 |------|-------|---------|
-| `mod.rs` | 985 | Main App struct (down from 1665, 680 lines removed) |
-| `dispatch.rs` | 113 | TabDispatcher wrapper (now with 16 methods) |
+| `mod.rs` | 883 | Main App struct (down from 1665, 782 lines removed, 47% reduction) |
+| `dispatch.rs` | 115 | TabDispatcher wrapper (now with 17 methods) |
 | `export.rs` | 468 | Export functionality |
 | `runner.rs` | 425 | Main event loop |
 | `state_update.rs` | 404 | State updates |
 | `command.rs` | 397 | Command palette |
-| `task_management.rs` | 345 | Task spawning |
+| `task_management.rs` | 430 | Task spawning + TaskBuilder trait implementations |
 | `navigation.rs` | 334 | Tab navigation |
 
 **Methods Extracted to Dispatcher (2026-04-15)**:
@@ -506,12 +506,17 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 | is_running | 59 | Dispatcher + TabState supertrait |
 | **Total** | **~680** | **41% reduction** |
 
-**Remaining Method** (1 with 29-arm match):
-- `handle_enter` - Cannot extract: tab-specific business logic calling different `build_X_task()` methods per tab
+**Final TaskBuilder Refactor (2026-04-15)**:
+- Created `TaskBuilder` trait with `build_task_config()` method
+- Implemented `TaskBuilder` for all 29 tab types (both task-spawning and non-task tabs)
+- Moved task building logic from `App::build_X_task()` methods to tab trait implementations
+- Simplified `handle_enter` from 160 lines to 40 lines using generic dispatch
+- Added `handle_enter` to `TabDispatcher` for consistency
+- Total reduction: Additional 102 lines from mod.rs + ~300 lines of App methods removed
 
-**Status**: NEARLY COMPLETE - 13 methods extracted (~680 lines). Only `handle_enter` remains, which requires architectural redesign (TaskBuilder trait or similar) to simplify.
+**Status**: COMPLETED - All methods extracted. The `handle_enter` method was successfully refactored using the `TaskBuilder` trait pattern, reducing it from ~160 lines with 29 match arms to ~40 lines using generic dispatch.
 
-**Estimated**: 20+ hours original; ~680 lines done in 2 sessions (~4 hours). `handle_enter` alone would require 4-6 hours for proper extraction.
+**Completed**: 2026-04-15 (Session 3)
 
 ---
 

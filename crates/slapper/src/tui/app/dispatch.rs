@@ -3,6 +3,12 @@ use crate::tui::tabs::{AppState, TabInput, TabState};
 pub struct TabDispatcher<'a>(&'a mut dyn TabInput);
 
 impl<'a> TabDispatcher<'a> {
+    pub fn handle_enter(&mut self) {
+        self.0.handle_enter();
+    }
+}
+
+impl<'a> TabDispatcher<'a> {
     pub fn new(tab_input: &'a mut dyn TabInput) -> Self {
         Self(tab_input)
     }
