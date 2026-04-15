@@ -667,4 +667,7 @@ pub trait TabInput {
     fn is_at_right_edge(&self) -> bool {
         true
     }
+    fn stop(&mut self) {}
+    fn page_up(&mut self, _page_size: usize) {}
+    fn page_down(&mut self, _page_size: usize) {}
 }

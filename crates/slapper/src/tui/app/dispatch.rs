@@ -86,7 +86,19 @@ impl<'a> TabDispatcher<'a> {
     }
 
     #[allow(dead_code)]
-    pub fn is_at_right_edge(&self) -> bool {
+    pub fn is_at_right_edge(&mut self) -> bool {
         self.0.is_at_right_edge()
+    }
+
+    pub fn stop(&mut self) {
+        self.0.stop();
+    }
+
+    pub fn page_up(&mut self, page_size: usize) {
+        self.0.page_up(page_size);
+    }
+
+    pub fn page_down(&mut self, page_size: usize) {
+        self.0.page_down(page_size);
     }
 }

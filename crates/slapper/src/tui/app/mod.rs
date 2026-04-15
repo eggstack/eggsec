@@ -354,64 +354,7 @@ impl App {
         if let Some(handle) = self.task_handle.take() {
             handle.abort();
         }
-        match self.current_tab {
-            Tab::Recon => self.recon.stop(),
-            Tab::Load => self.load.stop(),
-            Tab::ScanPorts => self.scan_ports.stop(),
-            Tab::ScanEndpoints => self.scan_endpoints.stop(),
-            Tab::Fingerprint => self.fingerprint.stop(),
-            Tab::Fuzz => self.fuzz.stop(),
-            Tab::Waf => self.waf.stop(),
-            Tab::WafStress => self.waf_stress.stop(),
-            Tab::Scan => self.scan.stop(),
-            Tab::Resume => self.resume.stop(),
-            Tab::Proxy => self.proxy.stop(),
-            Tab::Packet => self.packet.stop(),
-            Tab::GraphQl => self.graphql.stop(),
-            Tab::OAuth => self.oauth.stop(),
-            Tab::Cluster => self.cluster.stop(),
-            Tab::Stress => self.stress.stop(),
-            Tab::Report => self.report.stop(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.stop(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {}
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.stop(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {}
-            Tab::Settings => {}
-            Tab::History => {}
-            Tab::Dashboard => {}
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.stop(),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {}
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.stop(),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {}
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.stop(),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {}
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.stop(),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => {}
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.stop(),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {}
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.stop(),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {}
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.stop(),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {}
-        }
+        self.dispatcher_mut().stop();
     }
 
     pub fn handle_enter(&mut self) {
@@ -1073,134 +1016,24 @@ impl App {
 
     pub fn page_up(&mut self) {
         const PAGE_SIZE: usize = 10;
-        match self.current_tab {
-            Tab::Recon => self.recon.page_up(PAGE_SIZE),
-            Tab::Load => self.load.page_up(PAGE_SIZE),
-            Tab::ScanPorts => self.scan_ports.page_up(PAGE_SIZE),
-            Tab::ScanEndpoints => self.scan_endpoints.page_up(PAGE_SIZE),
-            Tab::Fingerprint => self.fingerprint.page_up(PAGE_SIZE),
-            Tab::Fuzz => self.fuzz.page_up(PAGE_SIZE),
-            Tab::Waf => self.waf.page_up(PAGE_SIZE),
-            Tab::WafStress => self.waf_stress.page_up(PAGE_SIZE),
-            Tab::Scan => self.scan.page_up(PAGE_SIZE),
-            Tab::Resume => self.resume.page_up(PAGE_SIZE),
-            Tab::Proxy => self.proxy.page_up(PAGE_SIZE),
-            Tab::Packet => self.packet.page_up(PAGE_SIZE),
-            Tab::GraphQl => self.graphql.page_up(PAGE_SIZE),
-            Tab::OAuth => self.oauth.page_up(PAGE_SIZE),
-            Tab::Cluster => self.cluster.page_up(PAGE_SIZE),
-            Tab::Stress => self.stress.page_up(PAGE_SIZE),
-            Tab::Report => self.report.page_up(PAGE_SIZE),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.page_up(PAGE_SIZE),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {}
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.page_up(PAGE_SIZE),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {}
-            Tab::Settings => {}
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.page_up(PAGE_SIZE);
-                }
+        if self.current_tab == Tab::History {
+            if let Ok(mut h) = self.history.lock() {
+                h.page_up(PAGE_SIZE);
             }
-            Tab::Dashboard => self.dashboard.page_up(PAGE_SIZE),
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.page_up(PAGE_SIZE),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {}
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.page_up(PAGE_SIZE),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {}
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.page_up(PAGE_SIZE),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {}
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.page_up(PAGE_SIZE),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => {}
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.page_up(PAGE_SIZE),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {}
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.page_up(PAGE_SIZE),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {}
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.page_up(PAGE_SIZE),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {}
+            return;
         }
+        self.dispatcher_mut().page_up(PAGE_SIZE);
     }
 
     pub fn page_down(&mut self) {
         const PAGE_SIZE: usize = 10;
-        match self.current_tab {
-            Tab::Recon => self.recon.page_down(PAGE_SIZE),
-            Tab::Load => self.load.page_down(PAGE_SIZE),
-            Tab::ScanPorts => self.scan_ports.page_down(PAGE_SIZE),
-            Tab::ScanEndpoints => self.scan_endpoints.page_down(PAGE_SIZE),
-            Tab::Fingerprint => self.fingerprint.page_down(PAGE_SIZE),
-            Tab::Fuzz => self.fuzz.page_down(PAGE_SIZE),
-            Tab::Waf => self.waf.page_down(PAGE_SIZE),
-            Tab::WafStress => self.waf_stress.page_down(PAGE_SIZE),
-            Tab::Scan => self.scan.page_down(PAGE_SIZE),
-            Tab::Resume => self.resume.page_down(PAGE_SIZE),
-            Tab::Proxy => self.proxy.page_down(PAGE_SIZE),
-            Tab::Packet => self.packet.page_down(PAGE_SIZE),
-            Tab::GraphQl => self.graphql.page_down(PAGE_SIZE),
-            Tab::OAuth => self.oauth.page_down(PAGE_SIZE),
-            Tab::Cluster => self.cluster.page_down(PAGE_SIZE),
-            Tab::Stress => self.stress.page_down(PAGE_SIZE),
-            Tab::Report => self.report.page_down(PAGE_SIZE),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.page_down(PAGE_SIZE),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {}
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.page_down(PAGE_SIZE),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {}
-            Tab::Settings => {}
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.page_down(PAGE_SIZE);
-                }
+        if self.current_tab == Tab::History {
+            if let Ok(mut h) = self.history.lock() {
+                h.page_down(PAGE_SIZE);
             }
-            Tab::Dashboard => self.dashboard.page_down(PAGE_SIZE),
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.page_down(PAGE_SIZE),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {}
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.page_down(PAGE_SIZE),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {}
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.page_down(PAGE_SIZE),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {}
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.page_down(PAGE_SIZE),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => {}
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.page_down(PAGE_SIZE),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {}
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.page_down(PAGE_SIZE),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {}
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.page_down(PAGE_SIZE),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {}
+            return;
         }
+        self.dispatcher_mut().page_down(PAGE_SIZE);
     }
 
     pub fn handle_word_forward(&mut self) {
