@@ -154,12 +154,6 @@ impl CommandExecutor {
         let mut cmd = Command::new(program);
         cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
 
-        if let Some(env_vars) = env {
-            for (key, value) in env_vars {
-                cmd.env(&key, &value);
-            }
-        }
-
         if let Some(timeout) = timeout_secs {
             let result =
                 tokio::time::timeout(std::time::Duration::from_secs(timeout), cmd.output()).await;
