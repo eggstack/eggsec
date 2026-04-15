@@ -227,64 +227,48 @@ impl App {
         }
     }
 
-    pub fn is_running(&self) -> bool {
+    pub fn is_running(&mut self) -> bool {
         match self.current_tab {
-            Tab::Recon => self.recon.is_running(),
-            Tab::Load => self.load.is_running(),
-            Tab::ScanPorts => self.scan_ports.is_running(),
-            Tab::ScanEndpoints => self.scan_endpoints.is_running(),
-            Tab::Fingerprint => self.fingerprint.is_running(),
-            Tab::Fuzz => self.fuzz.is_running(),
-            Tab::Waf => self.waf.is_running(),
-            Tab::WafStress => self.waf_stress.is_running(),
-            Tab::Scan => self.scan.is_running(),
-            Tab::Resume => self.resume.is_running(),
-            Tab::Proxy => self.proxy.is_running(),
-            Tab::Packet => self.packet.is_running(),
-            Tab::GraphQl => self.graphql.is_running(),
-            Tab::OAuth => self.oauth.is_running(),
-            Tab::Cluster => self.cluster.is_running(),
-            Tab::Stress => self.stress.is_running(),
-            Tab::Report => self.report.is_running(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.is_running(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.is_running(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
             Tab::Settings => false,
             Tab::History => false,
             Tab::Dashboard => false,
+            #[cfg(feature = "nse")]
+            Tab::Nse => false,
+            #[cfg(not(feature = "nse"))]
+            Tab::Nse => false,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            Tab::Plugin => false,
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            Tab::Plugin => false,
             #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.is_running(),
+            Tab::Hunt => false,
             #[cfg(not(feature = "advanced-hunting"))]
             Tab::Hunt => false,
             #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.is_running(),
+            Tab::Browser => false,
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => false,
             #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.is_running(),
+            Tab::Compliance => false,
             #[cfg(not(feature = "compliance"))]
             Tab::Compliance => false,
             #[cfg(feature = "database")]
-            Tab::Storage => self.storage.is_running(),
+            Tab::Storage => false,
             #[cfg(not(feature = "database"))]
             Tab::Storage => false,
             #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.is_running(),
+            Tab::Integrations => false,
             #[cfg(not(feature = "external-integrations"))]
             Tab::Integrations => false,
             #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.is_running(),
+            Tab::Workflow => false,
             #[cfg(not(feature = "finding-workflow"))]
             Tab::Workflow => false,
             #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.is_running(),
+            Tab::Vuln => false,
             #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => false,
+            _ => self.dispatcher_mut().is_running(),
         }
     }
 

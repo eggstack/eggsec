@@ -619,7 +619,7 @@ pub trait TabRender {
 }
 
 #[allow(dead_code)]
-pub trait TabInput {
+pub trait TabInput: TabState {
     fn handle_focus_next(&mut self);
     fn handle_focus_prev(&mut self);
     fn handle_char(&mut self, c: char);

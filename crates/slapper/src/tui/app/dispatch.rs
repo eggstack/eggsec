@@ -1,4 +1,4 @@
-use crate::tui::tabs::TabInput;
+use crate::tui::tabs::{AppState, TabInput, TabState};
 
 pub struct TabDispatcher<'a>(&'a mut dyn TabInput);
 
@@ -99,6 +99,10 @@ impl<'a> TabDispatcher<'a> {
     }
 
     pub fn reset(&mut self) {
-        self.0.reset();
+        TabInput::reset(self.0);
+    }
+
+    pub fn is_running(&self) -> bool {
+        TabState::state(self.0) == AppState::Running
     }
 }
