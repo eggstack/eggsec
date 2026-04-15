@@ -101,4 +101,8 @@ impl<'a> TabDispatcher<'a> {
     pub fn page_down(&mut self, page_size: usize) {
         self.0.page_down(page_size);
     }
+
+    pub fn reset(&mut self) {
+        self.0.reset();
+    }
 }

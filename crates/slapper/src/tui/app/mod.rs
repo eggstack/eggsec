@@ -914,68 +914,13 @@ impl App {
     }
 
     pub fn reset_current_tab(&mut self) {
-        match self.current_tab {
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.clear_all();
-                }
+        if self.current_tab == Tab::History {
+            if let Ok(mut h) = self.history.lock() {
+                h.clear_all();
             }
-            Tab::Recon => self.recon.reset(),
-            Tab::Load => self.load.reset(),
-            Tab::ScanPorts => self.scan_ports.reset(),
-            Tab::ScanEndpoints => self.scan_endpoints.reset(),
-            Tab::Fingerprint => self.fingerprint.reset(),
-            Tab::Fuzz => self.fuzz.reset(),
-            Tab::Waf => self.waf.reset(),
-            Tab::WafStress => self.waf_stress.reset(),
-            Tab::Scan => self.scan.reset(),
-            Tab::Resume => self.resume.reset(),
-            Tab::Proxy => self.proxy.reset(),
-            Tab::Packet => self.packet.reset(),
-            Tab::GraphQl => self.graphql.reset(),
-            Tab::OAuth => self.oauth.reset(),
-            Tab::Cluster => self.cluster.reset(),
-            Tab::Stress => self.stress.reset(),
-            Tab::Report => self.report.reset(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.reset(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {}
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.reset(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {}
-            Tab::Settings => self.settings.reset(),
-            Tab::Dashboard => self.dashboard.reset(),
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.reset(),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {}
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.reset(),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {}
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.reset(),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {}
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.reset(),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => {}
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.reset(),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {}
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.reset(),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {}
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.reset(),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {}
+            return;
         }
+        self.dispatcher_mut().reset();
     }
 
     pub fn save_settings(&mut self) {

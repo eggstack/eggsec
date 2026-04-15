@@ -670,4 +670,5 @@ pub trait TabInput {
     fn stop(&mut self) {}
     fn page_up(&mut self, _page_size: usize) {}
     fn page_down(&mut self, _page_size: usize) {}
+    fn reset(&mut self) {}
 }
