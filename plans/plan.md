@@ -469,15 +469,29 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 #### 4.4 TUI App Decomposition (MEDIUM) ⏳ DEFERRED
 
 **Severity**: MEDIUM
-**Files**: `tui/app/mod.rs` (664 lines)
+**Files**: `tui/app/mod.rs` (1665 lines as of 2026-04-15)
 
-**Issue**: Large monolithic file. Already partially split (navigation.rs, command.rs, export.rs, state_update.rs, task_management.rs).
+**Issue**: Large monolithic file. Already partially split (navigation.rs, command.rs, export.rs, state_update.rs, task_management.rs, dispatch.rs).
+
+**Extracted Submodules** (11 files total ~1800 lines):
+| File | Lines | Purpose |
+|------|-------|---------|
+| `mod.rs` | 1665 | Main App struct + 18 methods with 29-arm matches |
+| `dispatch.rs` | 94 | TabDispatcher wrapper (partial) |
+| `export.rs` | 468 | Export functionality |
+| `runner.rs` | 425 | Main event loop |
+| `state_update.rs` | 404 | State updates |
+| `command.rs` | 397 | Command palette |
+| `task_management.rs` | 345 | Task spawning |
+| `navigation.rs` | 334 | Tab navigation |
 
 **Remaining Work**:
-- Move `App` struct methods into corresponding feature-specific submodules
-- Extract `match self.current_tab` dispatch into a `TabDispatcher` trait/impl
+- Extract `dispatcher_mut()` 29-arm match into proper factory pattern
+- Move remaining 18 methods with 29-tab matches to TabDispatcher trait
+- Each method has 29 feature-gated arms (some tabs conditional)
+- High regression risk - any mistake breaks all 29 tabs
 
-**Status**: DEFERRED - Requires significant refactoring (20+ hours estimated)
+**Status**: DEFERRED - Requires 20+ hours focused work. Cannot be safely parallelized.
 
 **Estimated**: 20+ hours
 
