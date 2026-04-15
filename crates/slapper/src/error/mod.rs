@@ -267,7 +267,65 @@ impl From<hickory_resolver::error::ResolveError> for SlapperError {
 
 impl From<anyhow::Error> for SlapperError {
     fn from(e: anyhow::Error) -> Self {
-        SlapperError::Runtime(format!("{:#}", e))
+        SlapperError::RequestFailed {
+            method: "UNKNOWN".to_string(),
+            url: "unknown".to_string(),
+            error: e.to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "ai-integration")]
+impl From<crate::ai::AiError> for SlapperError {
+    fn from(e: crate::ai::AiError) -> Self {
+        match e {
+            crate::ai::AiError::RequestFailed(msg) => SlapperError::RequestFailed {
+                method: "AI".to_string(),
+                url: "ai-api".to_string(),
+                error: msg,
+            },
+            crate::ai::AiError::MissingApiKey => {
+                SlapperError::Config("Missing AI API key".to_string())
+            }
+            crate::ai::AiError::InvalidConfig(msg) => {
+                SlapperError::Config(format!("AI config error: {}", msg))
+            }
+            crate::ai::AiError::ApiError(msg) => SlapperError::RequestFailed {
+                method: "AI".to_string(),
+                url: "ai-api".to_string(),
+                error: msg,
+            },
+            crate::ai::AiError::ParseError(msg) => {
+                SlapperError::Parse(format!("AI parse error: {}", msg))
+            }
+            crate::ai::AiError::Timeout => SlapperError::Timeout {
+                timeout_ms: 0,
+                operation: "ai-request".to_string(),
+            },
+            crate::ai::AiError::RateLimited => {
+                SlapperError::RateLimited("AI rate limit exceeded".to_string())
+            }
+            crate::ai::AiError::InvalidResponse => {
+                SlapperError::Parse("Invalid AI response".to_string())
+            }
+            crate::ai::AiError::CircuitBreakerOpen => {
+                SlapperError::RateLimited("AI circuit breaker open".to_string())
+            }
+        }
+    }
+}
+
+#[cfg(feature = "packet-inspection")]
+impl From<crate::packet::CaptureError> for SlapperError {
+    fn from(e: crate::packet::CaptureError) -> Self {
+        SlapperError::Network(format!("Packet capture error: {}", e))
+    }
+}
+
+#[cfg(any(feature = "packet-inspection", feature = "stress-testing"))]
+impl From<crate::packet::TracerouteError> for SlapperError {
+    fn from(e: crate::packet::TracerouteError) -> Self {
+        SlapperError::Network(format!("Traceroute error: {}", e))
     }
 }
 
