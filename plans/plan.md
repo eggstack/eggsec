@@ -469,18 +469,18 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 
 ### Block B: Code Organization
 
-#### 4.4 TUI App Decomposition (MEDIUM) ⏳ DEFERRED
+#### 4.4 TUI App Decomposition (MEDIUM) ⚠️ IN PROGRESS
 
 **Severity**: MEDIUM
-**Files**: `tui/app/mod.rs` (1665 lines as of 2026-04-15)
+**Files**: `tui/app/mod.rs` (1280 lines as of 2026-04-15, down from 1665)
 
 **Issue**: Large monolithic file. Already partially split (navigation.rs, command.rs, export.rs, state_update.rs, task_management.rs, dispatch.rs).
 
 **Extracted Submodules** (11 files total ~1800 lines):
 | File | Lines | Purpose |
 |------|-------|---------|
-| `mod.rs` | 1665 | Main App struct + 18 methods with 29-arm matches |
-| `dispatch.rs` | 94 | TabDispatcher wrapper (partial) |
+| `mod.rs` | 1280 | Main App struct (down from 1665, ~385 lines removed) |
+| `dispatch.rs` | 108 | TabDispatcher wrapper (now with 11 methods) |
 | `export.rs` | 468 | Export functionality |
 | `runner.rs` | 425 | Main event loop |
 | `state_update.rs` | 404 | State updates |
@@ -488,15 +488,25 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 | `task_management.rs` | 345 | Task spawning |
 | `navigation.rs` | 334 | Tab navigation |
 
-**Remaining Work**:
-- Extract `dispatcher_mut()` 29-arm match into proper factory pattern
-- Move remaining 18 methods with 29-tab matches to TabDispatcher trait
-- Each method has 29 feature-gated arms (some tabs conditional)
-- High regression risk - any mistake breaks all 29 tabs
+**Methods Extracted to Dispatcher (2026-04-15 session)**:
+- handle_autocomplete ✅
+- handle_char ✅
+- handle_backspace ✅
+- handle_escape ✅
+- stop ✅
+- page_up ✅
+- page_down ✅
 
-**Status**: DEFERRED - Requires 20+ hours focused work. Cannot be safely parallelized.
+**Remaining Methods** (11 still in mod.rs):
+- is_running (complex - TabState trait vs TabInput trait)
+- handle_enter (complex - business logic)
+- handle_left/handle_right (complex - edge navigation)
+- handle_left_or_prev_tab / handle_right_or_next_tab (complex)
+- reset_current_tab (complex)
 
-**Estimated**: 20+ hours
+**Status**: IN PROGRESS - ~50% of 29-arm match methods extracted. Remaining methods are complex/have special handling.
+
+**Estimated**: 20+ hours original; ~10 hours remaining for complex methods
 
 ---
 
