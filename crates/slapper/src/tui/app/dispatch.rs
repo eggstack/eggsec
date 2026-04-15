@@ -72,7 +72,6 @@ impl<'a> TabDispatcher<'a> {
         self.0.handle_bottom();
     }
 
-    #[allow(dead_code)]
     pub fn handle_autocomplete(&mut self) -> bool {
         self.0.handle_autocomplete()
     }

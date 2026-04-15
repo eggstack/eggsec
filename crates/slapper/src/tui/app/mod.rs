@@ -787,62 +787,9 @@ impl App {
         }
 
         match self.current_tab {
-            Tab::Recon => self.recon.handle_autocomplete(),
-            Tab::Load => self.load.handle_autocomplete(),
-            Tab::ScanPorts => self.scan_ports.handle_autocomplete(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_autocomplete(),
-            Tab::Fingerprint => self.fingerprint.handle_autocomplete(),
-            Tab::Fuzz => self.fuzz.handle_autocomplete(),
-            Tab::Waf => self.waf.handle_autocomplete(),
-            Tab::WafStress => self.waf_stress.handle_autocomplete(),
-            Tab::Scan => self.scan.handle_autocomplete(),
-            Tab::Resume => self.resume.handle_autocomplete(),
-            Tab::Proxy => self.proxy.handle_autocomplete(),
-            Tab::Packet => self.packet.handle_autocomplete(),
-            Tab::GraphQl => { self.graphql.handle_autocomplete() }
-            Tab::OAuth => { self.oauth.handle_autocomplete() }
-            Tab::Cluster => { self.cluster.handle_autocomplete() }
-            Tab::Stress => { self.stress.handle_autocomplete() }
-            Tab::Report => { self.report.handle_autocomplete() }
-            #[cfg(feature = "nse")]
-            Tab::Nse => { self.nse.handle_autocomplete() }
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => { self.plugin.handle_autocomplete() }
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => self.settings.handle_autocomplete(),
             Tab::History => false,
             Tab::Dashboard => false,
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.handle_autocomplete(),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => false,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.handle_autocomplete(),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => false,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.handle_autocomplete(),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => false,
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.handle_autocomplete(),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => false,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.handle_autocomplete(),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => false,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.handle_autocomplete(),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => false,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.handle_autocomplete(),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => false,
+            _ => self.dispatcher_mut().handle_autocomplete(),
         }
     }
 
