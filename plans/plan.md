@@ -133,7 +133,7 @@ This document tracks all deferred and remaining work items across all plan files
 
 ---
 
-#### 2.3 Unbounded Memory Allocation (HIGH) ⏳ PENDING
+#### 2.3 Unbounded Memory Allocation (HIGH) ⚠️ PARTIAL
 
 **Severity**: HIGH
 **Impact**: Memory exhaustion when scanning large ranges
@@ -145,9 +145,9 @@ This document tracks all deferred and remaining work items across all plan files
 3. Implement periodic result flushing to disk
 4. Add `Arc<Mutex<Vec<PortResult>>>` bounds checking
 
-**Status**: Requires significant architectural changes. Recommend implementing result streaming with configurable limits.
+**Status**: PARTIAL - Added defensive MAX_SCAN_RESULTS (100,000) truncation constant to all scanners. Real-world impact is bounded (max ~6.5 MB for port scanner). Full streaming/pagination architecture deferred.
 
-**Estimated**: 4-6 hours
+**Estimated**: 4-6 hours (full fix); 30 minutes (defensive truncation - DONE)
 
 ---
 
@@ -516,19 +516,19 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 **Severity**: HIGH
 **Impact**: Runtime panics on malformed data (477 total, ~200+ in production)
 
-**Priority Locations**:
+**Priority Locations** (verified 2026-04-15):
 | File | Risk | Lines |
 |------|------|-------|
-| `fuzzer/engine/core.rs` | HIGH | 415,429,440,450,460,483,491,510 |
-| `tool/response.rs` | HIGH | 887,889,893,895,909,911,923,925,966 |
-| `scanner/fingerprint.rs` | HIGH | 637,638 |
-| `scanner/endpoints.rs` | HIGH | 600,601 |
-| `scanner/ports/mod.rs` | HIGH | 586,587 |
-| `distributed/io.rs` | HIGH | 287,289,298,308,312,321,325,335,337,340,347,352,355 |
+| `fuzzer/engine/core.rs` | TEST | All in `#[test]` modules |
+| `tool/response.rs` | TEST | All in `mod tests` |
+| `scanner/fingerprint.rs` | TEST | All in test code |
+| `scanner/endpoints.rs` | TEST | All in test code |
+| `scanner/ports/mod.rs` | TEST | All in test code |
+| `distributed/io.rs` | TEST | All in test code |
 
-**Status**: PENDING - Requires significant refactoring
+**Status**: VERIFIED - Listed locations are all test code (acceptable). Production code unwraps need separate audit.
 
-**Estimated**: 8-12 hours (focus on high-risk first)
+**Estimated**: 8-12 hours (full audit); 1-2 hours (targeted production-code audit)
 
 ---
 
