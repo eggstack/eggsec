@@ -472,15 +472,15 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 #### 4.4 TUI App Decomposition (MEDIUM) ⚠️ IN PROGRESS
 
 **Severity**: MEDIUM
-**Files**: `tui/app/mod.rs` (1280 lines as of 2026-04-15, down from 1665)
+**Files**: `tui/app/mod.rs` (1225 lines as of 2026-04-15, down from 1665 - 440 lines removed)
 
 **Issue**: Large monolithic file. Already partially split (navigation.rs, command.rs, export.rs, state_update.rs, task_management.rs, dispatch.rs).
 
 **Extracted Submodules** (11 files total ~1800 lines):
 | File | Lines | Purpose |
 |------|-------|---------|
-| `mod.rs` | 1280 | Main App struct (down from 1665, ~385 lines removed) |
-| `dispatch.rs` | 108 | TabDispatcher wrapper (now with 11 methods) |
+| `mod.rs` | 1225 | Main App struct (down from 1665, 440 lines removed) |
+| `dispatch.rs` | 113 | TabDispatcher wrapper (now with 15 methods) |
 | `export.rs` | 468 | Export functionality |
 | `runner.rs` | 425 | Main event loop |
 | `state_update.rs` | 404 | State updates |
@@ -488,25 +488,28 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 | `task_management.rs` | 345 | Task spawning |
 | `navigation.rs` | 334 | Tab navigation |
 
-**Methods Extracted to Dispatcher (2026-04-15 session)**:
-- handle_autocomplete ✅
-- handle_char ✅
-- handle_backspace ✅
-- handle_escape ✅
-- stop ✅
+**Methods Extracted to Dispatcher (2026-04-15)**:
+- handle_autocomplete ✅ (54 lines)
+- handle_char ✅ (65 lines)
+- handle_backspace ✅ (66 lines)
+- handle_escape ✅ (67 lines)
+- stop ✅ (65 lines)
 - page_up ✅
 - page_down ✅
+- reset_current_tab ✅ (55 lines)
+**Total**: ~440 lines removed from mod.rs
 
-**Remaining Methods** (11 still in mod.rs):
-- is_running (complex - TabState trait vs TabInput trait)
-- handle_enter (complex - business logic)
-- handle_left/handle_right (complex - edge navigation)
-- handle_left_or_prev_tab / handle_right_or_next_tab (complex)
-- reset_current_tab (complex)
+**Remaining Methods** (6 with 29-arm matches):
+- is_running - TabState trait has default impl, complex to unify with TabInput
+- handle_enter - business logic (spawns different tasks per tab)
+- handle_left - post-processing (calls prev_tab if not moved)
+- handle_right - post-processing (calls next_tab if not moved)
+- handle_left_or_prev_tab - navigation logic
+- handle_right_or_next_tab - navigation logic
 
-**Status**: IN PROGRESS - ~50% of 29-arm match methods extracted. Remaining methods are complex/have special handling.
+**Status**: IN PROGRESS - 8 methods extracted (~440 lines). Remaining 6 are architecturally complex.
 
-**Estimated**: 20+ hours original; ~10 hours remaining for complex methods
+**Estimated**: 20+ hours original; 8 methods (~440 lines) done in ~2 hours. Remaining 6 methods require architectural changes.
 
 ---
 
