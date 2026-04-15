@@ -33,10 +33,6 @@ impl ResumeTab {
             .unwrap_or("")
     }
 
-    pub fn is_running(&self) -> bool {
-        self.state == AppState::Running
-    }
-
     pub fn start(&mut self) {
         if !self.session_file().is_empty() {
             self.state = AppState::Running;

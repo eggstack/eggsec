@@ -104,10 +104,6 @@ impl PacketTab {
         }
     }
 
-    pub fn is_running(&self) -> bool {
-        self.state == AppState::Running
-    }
-
     pub fn stop(&mut self) {
         self.state = AppState::Idle;
     }
