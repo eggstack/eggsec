@@ -134,7 +134,7 @@ pub(crate) async fn scan_ports_spoofed(
     let sent_packets: Arc<parking_lot::Mutex<HashMap<u16, u32>>> = Arc::new(parking_lot::Mutex::new(HashMap::new()));
     let responses: Arc<parking_lot::Mutex<HashMap<u16, String>>> = Arc::new(parking_lot::Mutex::new(HashMap::new()));
     let stop_receiver = Arc::new(AtomicBool::new(false));
-    let results = Arc::new(Mutex::new(Vec::new()));
+    let results = Arc::new(parking_lot::Mutex::new(Vec::new()));
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
     let total_ports = ports.len() as u64;
     let progress = if tui_mode {

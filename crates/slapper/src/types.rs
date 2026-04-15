@@ -191,6 +191,16 @@ impl std::fmt::Display for SensitiveString {
 }
 
 impl serde::Serialize for SensitiveString {
+    /// WARNING: SensitiveString serializes secrets in plaintext!
+    ///
+    /// This is intentional for config file compatibility. The secret value is
+    /// serialized directly without encryption or redaction.
+    ///
+    /// # Security Warning
+    ///
+    /// Ensure that config files containing `SensitiveString` values have
+    /// appropriate access controls (e.g., filesystem permissions, encrypted
+    /// storage) to protect the secrets from unauthorized access.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.0)
     }
