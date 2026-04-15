@@ -47,12 +47,27 @@ fn test_scope_bypass_with_at_symbol() {
 }
 
 #[test]
-fn test_scope_enforcement_in_handlers() {
-    use slapper::utils::target::normalize_url;
+fn test_scope_enforcement_via_api() {
+    use slapper::config::{Scope, ScopeRule};
 
-    let allowed = normalize_url("https://allowed.example.com");
-    let denied = normalize_url("https://denied.example.com");
+    let mut scope = Scope::default();
+    scope
+        .allowed_targets
+        .push(ScopeRule::new("allowed.example.com".to_string()));
+    scope
+        .excluded_targets
+        .push(ScopeRule::new("evil.example.com".to_string()));
 
-    assert!(allowed.starts_with("https://allowed."));
-    assert!(denied.starts_with("https://denied."));
+    assert!(
+        scope.is_target_allowed("allowed.example.com").unwrap(),
+        "allowed.example.com should be in scope"
+    );
+    assert!(
+        !scope.is_target_allowed("evil.example.com").unwrap(),
+        "evil.example.com should be excluded"
+    );
+    assert!(
+        !scope.is_target_allowed("other.example.com").unwrap(),
+        "other.example.com should be out of scope"
+    );
 }

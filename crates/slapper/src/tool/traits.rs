@@ -113,27 +113,92 @@ impl std::fmt::Display for ParameterType {
     }
 }
 
+/// Security tool interface for the Slapper tool abstraction layer.
+///
+/// This trait defines the contract for all security testing tools in Slapper.
+/// Tools must implement async execution and provide metadata about their
+/// capabilities, supported protocols, and output formats.
+///
+/// # Example
+///
+/// ```rust
+/// use async_trait::async_trait;
+/// use slapper::tool::{ToolRequest, ToolResponse, ToolResult};
+/// use slapper::tool::traits::{SecurityTool, ToolCategory};
+///
+/// struct MyTool;
+///
+/// #[async_trait]
+/// impl SecurityTool for MyTool {
+///     fn id(&self) -> &'static str { "my-tool" }
+///     fn name(&self) -> &'static str { "My Tool" }
+///     fn category(&self) -> ToolCategory { ToolCategory::Recon }
+///     fn description(&self) -> &'static str { "A sample tool" }
+///
+///     async fn execute(&self, request: ToolRequest) -> ToolResult<ToolResponse> {
+///         Ok(ToolResponse::success(request.request_id, self.id(), serde_json::json!({})))
+///     }
+/// }
+/// ```
 #[async_trait]
 pub trait SecurityTool: Send + Sync {
+    /// Returns the unique identifier for this tool.
     fn id(&self) -> &'static str;
+
+    /// Returns the human-readable name of this tool.
     fn name(&self) -> &'static str;
+
+    /// Returns the category this tool belongs to.
     fn category(&self) -> ToolCategory;
+
+    /// Returns a brief description of what this tool does.
     fn description(&self) -> &'static str;
 
+    /// Executes the tool with the given request.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - The tool request containing target, parameters, and options
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(ToolResponse)` on success or `Err(SlapperError)` on failure.
     async fn execute(&self, request: ToolRequest) -> ToolResult<ToolResponse>;
 
+    /// Validates the request before execution.
+    ///
+    /// Override this method to add custom validation logic.
+    /// By default, all requests are considered valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - The request to validate
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if valid, or `Err(SlapperError)` if invalid.
     fn validate(&self, _request: &ToolRequest) -> ToolResult<()> {
         Ok(())
     }
 
+    /// Returns the capabilities this tool provides.
+    ///
+    /// Override to advertise specific capabilities like payload types,
+    /// attack vectors, or specialized features.
     fn capabilities(&self) -> Vec<ToolCapability> {
         vec![]
     }
 
+    /// Returns the list of protocols this tool supports.
+    ///
+    /// Common protocols are "http" and "https".
     fn supported_protocols(&self) -> Vec<&'static str> {
         vec!["http", "https"]
     }
 
+    /// Returns the JSON schema for this tool's output.
+    ///
+    /// Override to provide a schema for the results field in ToolResponse.
     fn output_schema(&self) -> Option<serde_json::Value> {
         None
     }

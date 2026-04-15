@@ -5,17 +5,52 @@ use std::sync::Arc;
 use crate::error::SlapperError;
 use crate::tool::traits::{SecurityTool, ToolCapability, ToolCategory};
 
+/// Registry for managing security tools.
+///
+/// The `ToolRegistry` provides centralized tool management, allowing tools
+/// to be registered, unregistered, and queried. It is the primary interface
+/// for the tool abstraction layer.
+///
+/// # Example
+///
+/// ```rust
+/// use slapper::tool::registry::ToolRegistry;
+///
+/// let registry = ToolRegistry::new();
+/// // Register tools...
+/// let tools = registry.list();
+/// ```
 pub struct ToolRegistry {
     tools: Arc<RwLock<HashMap<String, Arc<dyn SecurityTool>>>>,
 }
 
 impl ToolRegistry {
+    /// Creates a new empty tool registry.
     pub fn new() -> Self {
         Self {
             tools: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
+    /// Registers a tool with the registry.
+    ///
+    /// # Arguments
+    ///
+    /// * `tool` - The tool to register (must implement `SecurityTool`)
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(SlapperError::Config)` if a tool with the same ID
+    /// is already registered.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use slapper::tool::registry::ToolRegistry;
+    ///
+    /// let registry = ToolRegistry::new();
+    /// // registry.register(my_tool)?;  // Returns Result
+    /// ```
     pub fn register(&self, tool: impl SecurityTool + 'static) -> Result<(), SlapperError> {
         let id = tool.id().to_string();
         let mut tools = self.tools.write();
@@ -31,14 +66,38 @@ impl ToolRegistry {
         Ok(())
     }
 
+    /// Unregisters a tool from the registry.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The ID of the tool to unregister
+    ///
+    /// # Returns
+    ///
+    /// Returns the unregistered tool if it existed, or `None` if no
+    /// tool with that ID was found.
     pub fn unregister(&self, id: &str) -> Option<Arc<dyn SecurityTool>> {
         self.tools.write().remove(id)
     }
 
+    /// Gets a tool by its ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The ID of the tool to retrieve
+    ///
+    /// # Returns
+    ///
+    /// Returns the tool if found, or `None` if no tool with that ID exists.
     pub fn get(&self, id: &str) -> Option<Arc<dyn SecurityTool>> {
         self.tools.read().get(id).cloned()
     }
 
+    /// Lists all registered tools.
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of `ToolInfo` structs containing tool metadata.
     pub fn list(&self) -> Vec<ToolInfo> {
         self.tools
             .read()
@@ -62,6 +121,15 @@ impl ToolRegistry {
             .collect()
     }
 
+    /// Lists all tools in a specific category.
+    ///
+    /// # Arguments
+    ///
+    /// * `category` - The category to filter by
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of `ToolInfo` structs for tools in the category.
     pub fn list_by_category(&self, category: ToolCategory) -> Vec<ToolInfo> {
         self.list()
             .into_iter()
@@ -69,6 +137,11 @@ impl ToolRegistry {
             .collect()
     }
 
+    /// Returns all unique tool categories in the registry.
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of `ToolCategory` values.
     pub fn categories(&self) -> Vec<ToolCategory> {
         let mut categories: Vec<ToolCategory> =
             self.tools.read().values().map(|t| t.category()).collect();
@@ -77,6 +150,16 @@ impl ToolRegistry {
         categories
     }
 
+    /// Finds tools that provide a specific capability.
+    ///
+    /// # Arguments
+    ///
+    /// * `capability_name` - The name of the capability to search for
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of `ToolInfo` structs for tools that have
+    /// the specified capability.
     pub fn find_by_capability(&self, capability_name: &str) -> Vec<ToolInfo> {
         self.list()
             .into_iter()
@@ -84,6 +167,16 @@ impl ToolRegistry {
             .collect()
     }
 
+    /// Finds tools matching a keyword in name, description, or capabilities.
+    ///
+    /// # Arguments
+    ///
+    /// * `keyword` - The keyword to search for (case-insensitive)
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of `ToolInfo` structs for tools that match
+    /// the keyword in name, description, or any capability field.
     pub fn find_by_keyword(&self, keyword: &str) -> Vec<ToolInfo> {
         let keyword_lower = keyword.to_lowercase();
         self.list()

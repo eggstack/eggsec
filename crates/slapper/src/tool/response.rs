@@ -5,18 +5,48 @@ use std::collections::HashMap;
 use crate::fuzzer::{FuzzResult, Payload};
 use crate::types::Severity;
 
+/// Response returned by a tool after execution.
+///
+/// Contains the request ID, tool ID, status, results, metadata,
+/// any errors encountered, and findings discovered.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolResponse {
+    /// Unique identifier for the original request
     pub request_id: String,
+    /// Identifier of the tool that generated this response
     pub tool_id: String,
+    /// Overall status of the execution
     pub status: ResponseStatus,
+    /// Tool-specific results as JSON
     pub results: serde_json::Value,
+    /// Execution metadata (timing, counts, etc.)
     pub metadata: ResponseMetadata,
+    /// Errors encountered during execution
     pub errors: Vec<ToolError>,
+    /// Security findings discovered during execution
     pub findings: Vec<Finding>,
 }
 
 impl ToolResponse {
+    /// Creates a successful response with the given results.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_id` - The request ID from the original ToolRequest
+    /// * `tool_id` - The tool identifier
+    /// * `results` - The tool-specific results as JSON
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use slapper::tool::response::ToolResponse;
+    ///
+    /// let response = ToolResponse::success(
+    ///     "req-123",
+    ///     "scanner",
+    ///     serde_json::json!({"ports": [80, 443]})
+    /// );
+    /// ```
     pub fn success(
         request_id: impl Into<String>,
         tool_id: impl Into<String>,
@@ -40,17 +70,37 @@ impl ToolResponse {
         }
     }
 
+    /// Adds execution metadata to the response.
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` - The response metadata to attach
     pub fn with_metadata(mut self, metadata: ResponseMetadata) -> Self {
         self.metadata = metadata;
         self
     }
 
+    /// Adds findings to the response.
+    ///
+    /// Also updates the `findings_count` in metadata.
+    ///
+    /// # Arguments
+    ///
+    /// * `findings` - List of findings to attach
     pub fn with_findings(mut self, findings: Vec<Finding>) -> Self {
         self.findings = findings;
         self.metadata.findings_count = self.findings.len();
         self
     }
 
+    /// Adds errors to the response.
+    ///
+    /// If errors are added and the status is currently `Success`,
+    /// the status is changed to `PartialSuccess`.
+    ///
+    /// # Arguments
+    ///
+    /// * `errors` - List of errors to attach
     pub fn with_errors(mut self, errors: Vec<ToolError>) -> Self {
         self.errors = errors.clone();
         if !errors.is_empty() && self.status == ResponseStatus::Success {
@@ -59,6 +109,9 @@ impl ToolResponse {
         self
     }
 
+    /// Returns `true` if the status indicates success.
+    ///
+    /// This is true for both `Success` and `PartialSuccess` statuses.
     pub fn is_success(&self) -> bool {
         matches!(
             self.status,
