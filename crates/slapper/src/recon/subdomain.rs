@@ -89,7 +89,10 @@ impl SubdomainEnumerator {
     }
 
     async fn query_crtsh(&self, domain: &str) -> Result<HashSet<String>> {
-        let url = format!("https://crt.sh/?q={}&output=json", domain);
+        let url = format!(
+            "https://crt.sh/?q={}&output=json",
+            urlencoding::encode(domain)
+        );
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {

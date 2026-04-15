@@ -219,7 +219,10 @@ impl IssueTracker for GitHubClient {
     }
 
     fn search_issues(&self, query: &str) -> Result<Vec<Issue>> {
-        let url = format!("https://api.github.com/search/issues?q={}", query);
+        let url = format!(
+            "https://api.github.com/search/issues?q={}",
+            urlencoding::encode(query)
+        );
 
         let response = self
             .client
