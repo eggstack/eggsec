@@ -39,6 +39,7 @@ pub struct Worker {
     receiver: Option<mpsc::Receiver<Task>>,
     client: reqwest::Client,
     heartbeat_handle: Option<JoinHandle<()>>,
+    task_processor_handle: Option<JoinHandle<()>>,
 }
 
 impl Worker {
@@ -55,6 +56,7 @@ impl Worker {
             receiver: None,
             client: reqwest::Client::new(),
             heartbeat_handle: None,
+            task_processor_handle: None,
         }
     }
 
@@ -126,7 +128,7 @@ impl Worker {
 
     async fn start_task_processing_loop(&mut self) {
         if let Some(receiver) = self.receiver.take() {
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 let mut receiver = receiver;
 
                 while let Some(task) = receiver.recv().await {
@@ -138,6 +140,7 @@ impl Worker {
                     });
                 }
             });
+            self.task_processor_handle = Some(handle);
         }
     }
 

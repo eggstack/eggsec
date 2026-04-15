@@ -179,18 +179,16 @@ This document tracks all deferred and remaining work items across all plan files
 
 ---
 
-#### 2.6 Distributed Worker JoinHandle Tracking (HIGH) ⏳ PENDING
+#### 2.6 Distributed Worker JoinHandle Tracking (HIGH) ✅ FIXED
 
 **Severity**: HIGH
 **Files**: `crates/slapper/src/distributed/worker.rs:133`
 
 **Issue**: Spawned task JoinHandle not stored, preventing graceful shutdown.
 
-**Fix**: Requires significant restructuring. The inner spawned tasks in `start_task_processing_loop` don't have access to the Worker's state. Would need to restructure using a channel to communicate handles back to the Worker.
+**Fix**: Added `task_processor_handle: Option<JoinHandle<()>>` field to Worker struct and store the JoinHandle from `tokio::spawn` in `start_task_processing_loop`.
 
-**Status**: Requires significant architectural changes.
-
-**Estimated**: 30 minutes (but needs design work)
+**Status**: COMPLETED - 2026-04-15
 
 ---
 
@@ -485,18 +483,16 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 
 ---
 
-#### 4.5 SensitiveString Serialization Documentation (MEDIUM) ⏳ DEFERRED
+#### 4.5 SensitiveString Serialization Documentation (MEDIUM) ✅ FIXED
 
 **Severity**: MEDIUM
 **Files**: `crates/slapper/src/types.rs:193-196`
 
 **Issue**: `SensitiveString` serializes secrets in plaintext.
 
-**Fix**: Add prominent doc warning about plaintext serialization.
+**Fix**: Added prominent doc warning about plaintext serialization explaining config file compatibility.
 
-**Status**: DEFERRED - Low priority
-
-**Estimated**: 15 minutes
+**Status**: COMPLETED - 2026-04-15
 
 ---
 
@@ -575,16 +571,16 @@ fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
 
 ---
 
-#### 4.11 Mixing Sync Primitives (MEDIUM) ⏳ SKIPPED
+#### 4.11 Mixing Sync Primitives (MEDIUM) ✅ FIXED
 
 **Severity**: MEDIUM
 **Files**: `scanner/ports/spoofed.rs:133-165`
 
 **Issue**: Mixes `parking_lot::Mutex` and `tokio::sync::Mutex` in same function.
 
-**Status**: SKIPPED - Low severity, risk of introducing regressions
+**Fix**: Changed `results` from `std::sync::Mutex` to `parking_lot::Mutex` for consistency with other mutexes in the file.
 
-**Estimated**: 30 minutes
+**Status**: COMPLETED - 2026-04-15
 
 ---
 
