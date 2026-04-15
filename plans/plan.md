@@ -1005,7 +1005,7 @@ cargo build --release -p slapper --features full
 | 4: Code Quality | 10 | 35-45 hours | ✅ COMPLETED |
 | 5: Testing/Docs | 7 | 10-15 hours | ✅ COMPLETED |
 | 6: Additional | 14 | 12-16 hours | ✅ COMPLETED |
-| **Total** | **~58 items** | **92-112 hours** | 55 ✅ + 2 ⏳ deferred |
+| **Total** | **~58 items** | **92-112 hours** | 56 ✅ + 1 ⚠️ IN PROGRESS + 1 ⏳ deferred |
 
 ### Items Resolved This Session
 
@@ -1017,14 +1017,14 @@ cargo build --release -p slapper --features full
 | 2.6 Worker JoinHandle | ✅ FIXED | Added task_processor_handle field |
 | 2.3 Memory Bounds | ✅ FIXED | Streaming + max_results limits implemented |
 | 4.7 Unwrap Audit | ✅ VERIFIED | Listed locations were test code only |
-| 4.4 TUI Decompose | ⏳ DEFERRED | 20+ hours, high regression risk |
+| 4.4 TUI Decompose | ⚠️ IN PROGRESS | 440 lines removed, 8 methods extracted (1225 lines remain) |
 
 ### Remaining Work
 
 | Item | Remaining Work | Difficulty |
 |------|----------------|------------|
-| 4.4 TUI Decomposition | Extract 18×29-arm match statements | 20+ hours |
-| D.1 Error Consolidation | Consolidate error types | 8-12 hours (per policy: keep separate) |
+| 4.4 TUI Decomposition | 6 complex methods remain (is_running, handle_enter, handle_left/right, etc.) | Architectural changes needed |
+| D.1 Error Consolidation | Per AGENTS.md policy | Keep separate (not recommended) |
 
 ---
 
