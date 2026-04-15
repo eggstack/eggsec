@@ -23,6 +23,8 @@ use dashmap::DashMap;
 use crate::cli::PortScanArgs;
 use crate::config::SlapperConfig;
 
+const MAX_SCAN_RESULTS: usize = 100_000;
+
 pub use spoofed::init_packet_trace;
 
 static COMMON_PORTS: &[(u16, &str)] = &[
@@ -528,6 +530,10 @@ pub async fn scan_ports(
 
     let mut results: Vec<PortResult> = DashMap::clone(&results).into_iter().map(|(_, v)| v).collect();
     results.sort_by_key(|p| p.port);
+
+    if results.len() > MAX_SCAN_RESULTS {
+        results.truncate(MAX_SCAN_RESULTS);
+    }
 
     Ok(PortScanResults {
         host: host.to_string(),

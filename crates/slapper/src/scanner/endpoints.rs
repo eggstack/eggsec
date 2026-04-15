@@ -15,6 +15,8 @@ use dashmap::DashMap;
 use crate::cli::EndpointScanArgs;
 use crate::config::SlapperConfig;
 
+const MAX_SCAN_RESULTS: usize = 100_000;
+
 #[derive(Clone)]
 pub struct EndpointScanConfig {
     pub base_url: String,
@@ -789,6 +791,10 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
             .then_with(|| a.status_code.cmp(&b.status_code))
             .then_with(|| a.path.cmp(&b.path))
     });
+
+    if results.len() > MAX_SCAN_RESULTS {
+        results.truncate(MAX_SCAN_RESULTS);
+    }
 
     let endpoints_found = results.len();
     let interesting = results.iter().filter(|r| r.interesting).count();

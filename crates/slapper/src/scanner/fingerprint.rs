@@ -17,6 +17,8 @@ use super::udp_fingerprint::{fingerprint_udp_services, get_default_udp_ports};
 use crate::cli::FingerprintArgs;
 use crate::config::SlapperConfig;
 
+const MAX_SCAN_RESULTS: usize = 100_000;
+
 static PROBES: &[(&str, &[u8], &str)] = &[
     ("HTTP", b"HEAD / HTTP/1.0\r\n\r\n", "HTTP"),
     ("SSH", b"", "SSH"),
@@ -284,6 +286,10 @@ pub async fn fingerprint_services(
 
     let mut results: Vec<ServiceFingerprint> = DashMap::clone(&results).into_iter().map(|(_, v)| v).collect();
     results.sort_by_key(|p| p.port);
+
+    if results.len() > MAX_SCAN_RESULTS {
+        results.truncate(MAX_SCAN_RESULTS);
+    }
 
     let identified = results.len();
 
