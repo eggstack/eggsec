@@ -601,72 +601,13 @@ impl App {
         if self.show_help {
             return;
         }
-
-        let moved = match self.current_tab {
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_left()
-                } else {
-                    false
-                }
+        if self.current_tab == Tab::History {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_left();
             }
-            Tab::Recon => self.recon.handle_left(),
-            Tab::Load => self.load.handle_left(),
-            Tab::ScanPorts => self.scan_ports.handle_left(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_left(),
-            Tab::Fingerprint => self.fingerprint.handle_left(),
-            Tab::Fuzz => self.fuzz.handle_left(),
-            Tab::Waf => self.waf.handle_left(),
-            Tab::WafStress => self.waf_stress.handle_left(),
-            Tab::Scan => self.scan.handle_left(),
-            Tab::Resume => self.resume.handle_left(),
-            Tab::Proxy => self.proxy.handle_left(),
-            Tab::Packet => self.packet.handle_left(),
-            Tab::GraphQl => self.graphql.handle_left(),
-            Tab::OAuth => self.oauth.handle_left(),
-            Tab::Cluster => self.cluster.handle_left(),
-            Tab::Stress => self.stress.handle_left(),
-            Tab::Report => self.report.handle_left(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_left(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_left(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => self.settings.handle_left(),
-            Tab::Dashboard => self.dashboard.handle_left(),
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.handle_left(),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => false,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.handle_left(),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => false,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.handle_left(),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => false,
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.handle_left(),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => false,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.handle_left(),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => false,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.handle_left(),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => false,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.handle_left(),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => false,
-        };
-
+            return;
+        }
+        let moved = self.dispatcher_mut().handle_left();
         if !moved {
             self.prev_tab();
         }
@@ -676,72 +617,13 @@ impl App {
         if self.show_help {
             return;
         }
-
-        let moved = match self.current_tab {
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_right()
-                } else {
-                    false
-                }
+        if self.current_tab == Tab::History {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_right();
             }
-            Tab::Recon => self.recon.handle_right(),
-            Tab::Load => self.load.handle_right(),
-            Tab::ScanPorts => self.scan_ports.handle_right(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_right(),
-            Tab::Fingerprint => self.fingerprint.handle_right(),
-            Tab::Fuzz => self.fuzz.handle_right(),
-            Tab::Waf => self.waf.handle_right(),
-            Tab::WafStress => self.waf_stress.handle_right(),
-            Tab::Scan => self.scan.handle_right(),
-            Tab::Resume => self.resume.handle_right(),
-            Tab::Proxy => self.proxy.handle_right(),
-            Tab::Packet => self.packet.handle_right(),
-            Tab::GraphQl => self.graphql.handle_right(),
-            Tab::OAuth => self.oauth.handle_right(),
-            Tab::Cluster => self.cluster.handle_right(),
-            Tab::Stress => self.stress.handle_right(),
-            Tab::Report => self.report.handle_right(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_right(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_right(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
-            Tab::Settings => self.settings.handle_right(),
-            Tab::Dashboard => self.dashboard.handle_right(),
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.handle_right(),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => false,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.handle_right(),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => false,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.handle_right(),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => false,
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.handle_right(),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => false,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.handle_right(),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => false,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.handle_right(),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => false,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.handle_right(),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => false,
-        };
-
+            return;
+        }
+        let moved = self.dispatcher_mut().handle_right();
         if !moved {
             self.next_tab();
         }
