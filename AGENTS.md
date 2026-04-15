@@ -183,12 +183,19 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | Agent module files | 6 (`mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs`) |
 | Skill files | 16 (in `slapper_skills/`) |
 | Tool findings | Scanner, Recon, Pipeline, Fuzzer tools now return findings via callback |
+| Tests | 1061 passing |
+| Clippy | 0 warnings |
 | Wave 1 | ✅ COMPLETED (9 security fixes) |
-| ADRs | 4 (in `docs/adr/`) |
+| Wave 2 | ✅ COMPLETED (5 of 7 - 2 deferred) |
+| Wave 3 | ✅ COMPLETED (11 performance optimizations) |
+| Wave 4 | ✅ COMPLETED (code quality fixes) |
+| Wave 5 | ✅ COMPLETED (testing & documentation) |
+| Wave 6 | ✅ COMPLETED (14 additional improvements) |
+| ADRs | 4 (in `docs/adr/`)
 
 ## Planning
 
-- `plans/plan.md` — Consolidated plan with all deferred and remaining work items (6 waves, ~53 items, 80-110 hours)
+- `plans/plan.md` — Consolidated plan with all deferred and remaining work items (6 waves, ~58 items, 92-112 hours) — ALL COMPLETED
 - `plans/harness.md` — MCP/Agent findings harness (COMPLETED)
 - `plans/agent_architecture.md` — Agent architecture (COMPLETED)
 
@@ -237,7 +244,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 - `tui/app/mod.rs` contains the `App` struct (664 lines); split into submodules: `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
 - `tui/workers/` directory contains 8 files: `runner.rs`, `scanner.rs`, `fuzzer.rs`, `network.rs`, `api.rs`, `recon.rs`, `security.rs`, `pipeline.rs`
 - Tab dispatch uses match statements across ~18+ methods (29-arm matches)
-- TUI uses ratatui 0.30 + crossterm 0.28 with immediate-mode rendering
+- TUI uses ratatui 0.30 + crossterm 0.29 with immediate-mode rendering
 - 29 tab variants exist (Recon=0 through Vuln=28); all 29 are fully functional
 - `tui/app/mod.rs` contains ~664 lines - uses dispatch macros in `dispatch.rs` for tab delegation
 - 6 dispatch macros exist: `dispatch!`, `dispatch_void!`, `dispatch_bool!`, `dispatch_page!`, `dispatch_is_at_edge!`, `dispatch_reset!`
