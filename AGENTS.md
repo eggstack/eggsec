@@ -164,38 +164,28 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1057 passing |
+| Tests | 1061 passing |
 | Build | Clean compilation |
-| Clippy | Clean |
+| Clippy | Clean (1 pre-existing warning) |
 | Doctests | 17 pass, 1 ignored, 0 fail |
 | `SlapperError` variants | 23 |
 | `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
-| Wave 3 | ✅ COMPLETED (11 performance optimizations) |
-| Wave 4 | ✅ COMPLETED (6 of 10 items, 4 deferred/skipped) |
-| Wave 5 | ✅ COMPLETED (7 items) |
 | MSRV | 1.80 |
 | `thiserror` | 2.x |
 | Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (1665 lines — needs further decomposition) |
+| Largest file | `tui/app/mod.rs` (883 lines — 47% reduction from 1665) |
 | Source files | 415 `.rs` files |
 | TUI files | 60 `.rs` files |
 | Tab variants | 29 |
 | Agent module files | 6 (`mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs`) |
 | Skill files | 16 (in `slapper_skills/`) |
 | Tool findings | Scanner, Recon, Pipeline, Fuzzer tools now return findings via callback |
-| Tests | 1061 passing |
-| Clippy | 0 warnings |
-| Wave 1 | ✅ COMPLETED (9 security fixes) |
-| Wave 2 | ✅ COMPLETED (5 of 7 - 2 deferred) |
-| Wave 3 | ✅ COMPLETED (11 performance optimizations) |
-| Wave 4 | ✅ COMPLETED (code quality fixes) |
-| Wave 5 | ✅ COMPLETED (testing & documentation) |
-| Wave 6 | ✅ COMPLETED (14 additional improvements) |
-| ADRs | 4 (in `docs/adr/`)
+| ADRs | 4 (in `docs/adr/`) |
+| Plans | ALL COMPLETED |
 
 ## Planning
 
-- `plans/plan.md` — Consolidated plan with all deferred and remaining work items (6 waves, ~58 items, 92-112 hours) — ALL COMPLETED
+- `plans/plan.md` — Consolidated plan with all items COMPLETED (6 waves, ~58 items, 92-112 hours, 57 completed + 1 deferred)
 - `plans/harness.md` — MCP/Agent findings harness (COMPLETED)
 - `plans/agent_architecture.md` — Agent architecture (COMPLETED)
 
@@ -241,13 +231,14 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ### TUI-Specific Patterns
 
 - `tui/app/runner.rs` contains the main event loop (`run_app`)
-- `tui/app/mod.rs` contains the `App` struct (664 lines); split into submodules: `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
+- `tui/app/mod.rs` contains the `App` struct (883 lines); split into submodules: `dispatch.rs`, `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
 - `tui/workers/` directory contains 8 files: `runner.rs`, `scanner.rs`, `fuzzer.rs`, `network.rs`, `api.rs`, `recon.rs`, `security.rs`, `pipeline.rs`
 - Tab dispatch uses match statements across ~18+ methods (29-arm matches)
 - TUI uses ratatui 0.30 + crossterm 0.29 with immediate-mode rendering
 - 29 tab variants exist (Recon=0 through Vuln=28); all 29 are fully functional
-- `tui/app/mod.rs` contains ~664 lines - uses dispatch macros in `dispatch.rs` for tab delegation
-- 6 dispatch macros exist: `dispatch!`, `dispatch_void!`, `dispatch_bool!`, `dispatch_page!`, `dispatch_is_at_edge!`, `dispatch_reset!`
+- `tui/app/mod.rs` contains 883 lines - uses `TabDispatcher` for tab delegation
+- `tui/app/dispatch.rs` has `TabDispatcher` wrapper with 17 methods
+- `tui/app/task_management.rs` contains `TaskBuilder` trait for task building logic
 - Tab cfg attributes: `Nse` and `Plugin` variants are always present in the Tab enum; use both `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]` arms for feature-gated dispatch
 
 ### Output Module
