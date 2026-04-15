@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use slapper::fuzzer::{get_all_payloads, get_payloads, PayloadType, Severity};
+use slapper::fuzzer::{get_all_payloads_cached, get_payloads, PayloadType, Severity};
 
 #[test]
 fn test_fuzzer_mutations() {
@@ -79,12 +79,12 @@ fn test_payload_generation_ssrf() {
 
 #[test]
 fn test_all_payload_types() {
-    let all_payloads = get_all_payloads();
+    let all_payloads = get_all_payloads_cached();
     assert!(!all_payloads.is_empty(), "All payloads should not be empty");
 
     // Verify all payload types are represented
     let mut types_seen = std::collections::HashSet::new();
-    for payload in &all_payloads {
+    for payload in all_payloads {
         types_seen.insert(payload.payload_type);
     }
     // There are 21 payload types (WebSocket is not included in get_all_payloads)

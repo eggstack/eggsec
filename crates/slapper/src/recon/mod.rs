@@ -46,21 +46,14 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use slapper::recon::{run_full_recon, ReconArgs};
+//! use slapper::recon::{FullReconResult, TechDetector};
 //! use slapper::config::SlapperConfig;
 //!
 //! # async fn example() -> slapper::error::Result<()> {
-//! let args = ReconArgs {
-//!     target: "example.com".to_string(),
-//!     output: None,
-//!     json: false,
-//!     quiet: true,
-//!     verbose: false,
-//! };
 //! let config = SlapperConfig::default();
-//! let result = run_full_recon(&args, &config, Default::default(), false).await?;
-//! println!("Found {} subdomains",
-//!     result.subdomains.as_ref().map(|s| s.subdomains.len()).unwrap_or(0));
+//! let detector = TechDetector::new("example.com".to_string(), config.into());
+//! let tech_stack = detector.detect().await?;
+//! println!("Detected {} technologies", tech_stack.technologies.len());
 //! # Ok(())
 //! # }
 //! ```

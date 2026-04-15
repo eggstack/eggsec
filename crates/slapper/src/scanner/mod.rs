@@ -35,6 +35,7 @@
 //!     Duration::from_secs(5),
 //!     false,  // tui_mode
 //!     SpoofConfig::default(),
+//!     None,  // progress_tx
 //! ).await?;
 //!
 //! for port in &results.open_ports {
@@ -47,7 +48,7 @@
 //! ### Endpoint Discovery
 //!
 //! ```rust,no_run
-//! use slapper::scanner::{endpoints::{scan_endpoints, EndpointScanConfig}, SpoofConfig};
+//! use slapper::scanner::endpoints::{scan_endpoints, EndpointScanConfig};
 //! use std::time::Duration;
 //!
 //! # async fn example() -> slapper::error::Result<()> {
@@ -58,8 +59,9 @@
 //!     timeout_duration: Duration::from_secs(30),
 //!     include_404: false,
 //!     tui_mode: false,
-//!     spoof_config: SpoofConfig::default(),
+//!     spoof_config: Default::default(),
 //!     verify_tls: true,
+//!     progress_tx: None,
 //! };
 //!
 //! let results = scan_endpoints(config).await?;

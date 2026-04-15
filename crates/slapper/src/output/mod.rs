@@ -31,9 +31,9 @@
 //! ```rust,no_run
 //! use slapper::output::{convert_to_csv, load_scan_report};
 //!
-//! # async fn example() -> slapper::error::Result<()> {
-//! let report = load_scan_report("scan.json").await?;
-//! let csv = convert_to_csv(&report)?;
+//! # fn example() -> slapper::error::Result<()> {
+//! let report = load_scan_report("scan.json")?;
+//! let csv = convert_to_csv(&report);
 //! println!("{}", csv);
 //! # Ok(())
 //! # }

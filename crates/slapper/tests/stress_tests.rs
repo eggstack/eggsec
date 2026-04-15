@@ -1,3 +1,5 @@
+#![cfg(feature = "stress-testing")]
+
 use slapper::stress::authorization::{create_example_stress_config, StressScope};
 
 #[test]

@@ -28,17 +28,54 @@ use super::types::{FuzzResult, FuzzSession};
 /// # Examples
 ///
 /// ```no_run
-/// use slapper::cli::{FuzzArgs, CommonHttpArgs};
+/// use slapper::cli::{FuzzArgs, CommonHttpArgs, FuzzMode};
 /// use slapper::fuzzer::engine::FuzzEngine;
 ///
 /// # fn main() -> slapper::error::Result<()> {
 /// let args = FuzzArgs {
-///     target: "http://example.com".to_string(),
+///     url: "http://example.com".to_string(),
 ///     payload_type: "sqli".to_string(),
+///     common: CommonHttpArgs::default(),
+///     method: "GET".to_string(),
+///     param: None,
 ///     concurrency: 10,
 ///     timeout: 30,
-///     // ... other fields
-///     ..Default::default()
+///     verbose: false,
+///     quiet: false,
+///     json: false,
+///     output: None,
+///     mutate: false,
+///     mutation_count: 5,
+///     grammar_fuzz: false,
+///     grammar_type: None,
+///     session: false,
+///     diffing: false,
+///     capture_baseline: false,
+///     mode: FuzzMode::Sequential,
+///     target: None,
+///     graphql_introspection: false,
+///     graphql_depth_bypass: false,
+///     graphql_alias_overload: false,
+///     jwt_token: None,
+///     oauth_client_id: None,
+///     oauth_client_secret: None,
+///     oauth_redirect: false,
+///     oauth_scope: false,
+///     oauth_state: false,
+///     oauth_grant: false,
+///     oauth_issuer: None,
+///     idor_base_id: None,
+///     idor_user_ids: None,
+///     ssti_param: None,
+///     adaptive_rate: false,
+///     enhanced_redos: false,
+///     waf_fingerprint: false,
+///     chaining: false,
+///     chain_file: None,
+///     format: None,
+///     schema: None,
+///     discover_only: false,
+///     auto_discover_schema: false,
 /// };
 /// let engine = FuzzEngine::new(args)?;
 /// # Ok(())
