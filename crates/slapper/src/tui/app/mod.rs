@@ -581,68 +581,13 @@ impl App {
             self.show_help = false;
             return;
         }
-        match self.current_tab {
-            Tab::Recon => self.recon.handle_escape(),
-            Tab::Load => self.load.handle_escape(),
-            Tab::ScanPorts => self.scan_ports.handle_escape(),
-            Tab::ScanEndpoints => self.scan_endpoints.handle_escape(),
-            Tab::Fingerprint => self.fingerprint.handle_escape(),
-            Tab::Fuzz => self.fuzz.handle_escape(),
-            Tab::Waf => self.waf.handle_escape(),
-            Tab::WafStress => self.waf_stress.handle_escape(),
-            Tab::Scan => self.scan.handle_escape(),
-            Tab::Resume => self.resume.handle_escape(),
-            Tab::Proxy => self.proxy.handle_escape(),
-            Tab::Packet => self.packet.handle_escape(),
-            Tab::GraphQl => self.graphql.handle_escape(),
-            Tab::OAuth => self.oauth.handle_escape(),
-            Tab::Cluster => self.cluster.handle_escape(),
-            Tab::Stress => self.stress.handle_escape(),
-            Tab::Report => self.report.handle_escape(),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.handle_escape(),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {}
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.handle_escape(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {}
-            Tab::Settings => self.settings.handle_escape(),
-            Tab::History => {
-                if let Ok(mut h) = self.history.lock() {
-                    h.handle_escape();
-                }
+        if self.current_tab == Tab::History {
+            if let Ok(mut h) = self.history.lock() {
+                h.handle_escape();
             }
-            Tab::Dashboard => self.dashboard.handle_escape(),
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.handle_escape(),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {}
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.handle_escape(),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {}
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.handle_escape(),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {}
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.handle_escape(),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => {}
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.handle_escape(),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {}
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.handle_escape(),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {}
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.handle_escape(),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {}
+            return;
         }
+        self.dispatcher_mut().handle_escape();
     }
 
     pub fn handle_char(&mut self, c: char) {

@@ -25,7 +25,6 @@ impl<'a> TabDispatcher<'a> {
         self.0.handle_backspace();
     }
 
-    #[allow(dead_code)]
     pub fn handle_escape(&mut self) {
         self.0.handle_escape();
     }
