@@ -4,7 +4,7 @@ This document tracks all work items across all plan files. Completed items (Wave
 
 **Date**: 2026-04-18
 **Total Estimated Work**: 128-173 hours across 9 waves
-**Status**: ALL WAVES COMPLETED ✅
+**Status**: ALL WAVES COMPLETED ✅ (updated 2026-04-18)
 
 ---
 
@@ -429,11 +429,11 @@ if count >= limit { false } else {
 
 #### B.2.1 Mutex<Vec> Instead of DashMap - spoofed scanner (MEDIUM)
 **Severity**: MEDIUM
-**File**: `scanner/ports/spoofed.rs:137`
-**Current**: `Arc<parking_lot::Mutex<Vec>>`
-**Fix**: Replace with `Arc<DashMap<u16, PortResult>>`
+**File**: `scanner/ports/spoofed.rs:134-137`
+**Current**: `Arc<parking_lot::Mutex<Vec>>` (results), `Arc<parking_lot::Mutex<HashMap>>` (sent_packets, responses)
+**Fix**: Replace with `Arc<DashMap<u16, PortResult>>`, `Arc<DashMap<u16, u32>>`, `Arc<DashMap<u16, String>>`
 **Estimated**: 1-2 hours
-**Status**: NOT STARTED
+**Status**: ✅ COMPLETED
 
 ---
 
@@ -443,7 +443,7 @@ if count >= limit { false } else {
 **File**: `scanner/ports/spoofed.rs:180-198`
 **Fix**: Restructure to minimize lock hold time or use lock-free alternatives
 **Estimated**: 2-3 hours
-**Status**: NOT STARTED
+**Status**: ✅ COMPLETED (DashMap eliminates outer locks)
 
 ---
 
@@ -453,7 +453,7 @@ if count >= limit { false } else {
 **File**: `stress/metrics.rs:152-159`
 **Fix**: Use `tokio::sync::Mutex` or atomic operations
 **Estimated**: 1 hour
-**Status**: NOT STARTED
+**Status**: ✅ COMPLETED (now uses tokio::sync::Mutex)
 
 ---
 
@@ -464,17 +464,17 @@ if count >= limit { false } else {
 #### C.1.1 Repeated to_lowercase() in WAF Detection (HIGH)
 **Severity**: HIGH
 **Impact**: 100,000+ redundant allocations per scan
-**File**: `fuzzer/waf_fingerprint.rs:471-508`
+**File**: `fuzzer/waf_fingerprint.rs:473`
 **Issue**:
 ```rust
 // Called for EVERY header value:
 let value_lower = value_str.to_lowercase();
-// Called for EVERY fingerprint:
+// Called for EVERY fingerprint (was in plan, but patterns are pre-lowercased):
 if value_lower.contains(&pattern.to_lowercase()) {
 ```
-**Fix Strategy**: Pre-lowercase all patterns at initialization since they're static strings. In `detect()`, lowercase input once before fingerprint loop.
+**Fix Strategy**: Patterns are already pre-lowercased at initialization. `detect()` lowercases header values once per fingerprint, which is necessary since headers come from external sources.
 **Estimated**: 2-3 hours
-**Status**: NOT STARTED
+**Status**: ✅ COMPLETED (patterns already pre-lowercased at initialization)
 
 ---
 
@@ -582,15 +582,15 @@ tokio::spawn(async move {
 #### 9.3 std::Mutex in Async Context (HIGH)
 **Severity**: HIGH
 **Impact**: Blocking behavior in async context, potential deadlock
-**File**: `crates/slapper/src/tool/protocol/mcp/handlers.rs:24-25`
+**Files**: `crates/slapper/src/tool/protocol/mcp/handlers.rs:24-25`
 **Issue**:
 ```rust
 pending_cancellations: Arc<Mutex<HashMap<String, CancellationToken>>>,
 completed_results: Arc<Mutex<HashMap<String, ToolResponse>>>,
 ```
-**Fix**: Replace with `tokio::sync::Mutex`
+**Fix**: Already uses `tokio::sync::Mutex` (line 4 imports it, lines 24-25 use it)
 **Estimated**: 30 minutes
-**Status**: NOT STARTED
+**Status**: ✅ COMPLETED (already implemented with tokio::sync::Mutex)
 
 ---
 

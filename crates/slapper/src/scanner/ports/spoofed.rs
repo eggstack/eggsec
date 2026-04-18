@@ -102,6 +102,7 @@ pub(crate) async fn scan_ports_spoofed(
         get_network_interface, random_ip_from_cidr,
     };
     use crate::utils::parsing::resolve_host;
+    use dashmap::DashMap;
     use futures::future::join_all;
     use indicatif::{ProgressBar, ProgressStyle};
     use pnet::datalink::Config;
@@ -131,10 +132,10 @@ pub(crate) async fn scan_ports_spoofed(
     let target_ip_u32: u32 = u32::from(target_ipv4);
     let local_ip_u32: u32 = u32::from(local_ip);
 
-    let sent_packets: Arc<parking_lot::Mutex<HashMap<u16, u32>>> = Arc::new(parking_lot::Mutex::new(HashMap::new()));
-    let responses: Arc<parking_lot::Mutex<HashMap<u16, String>>> = Arc::new(parking_lot::Mutex::new(HashMap::new()));
+    let sent_packets: Arc<DashMap<u16, u32>> = Arc::new(DashMap::new());
+    let responses: Arc<DashMap<u16, String>> = Arc::new(DashMap::new());
     let stop_receiver = Arc::new(AtomicBool::new(false));
-    let results = Arc::new(parking_lot::Mutex::new(Vec::new()));
+    let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
     let total_ports = ports.len() as u64;
     let progress = if tui_mode {
@@ -189,11 +190,9 @@ pub(crate) async fn scan_ports_spoofed(
                 
                 if let Some((src_ip, dst_port, status)) = parse_tcp_response(&packet) {
                     if src_ip == target_ip_u32 || src_ip == local_ip_u32 {
-                        let sent_guard = sent_packets.lock();
-                        if sent_guard.contains_key(&dst_port) {
-                            let mut resp_guard = responses.lock();
-                            if !resp_guard.contains_key(&dst_port) {
-                                resp_guard.insert(dst_port, status.clone());
+                        if sent_packets.contains_key(&dst_port) {
+                            if !responses.contains_key(&dst_port) {
+                                responses.insert(dst_port, status.clone());
                             }
                         }
                     }
@@ -409,8 +408,7 @@ pub(crate) async fn scan_ports_spoofed(
                 );
             }
 
-            let mut results = results.lock().await;
-            results.push(PortResult {
+            results.insert(port, PortResult {
                 port,
                 status: status.to_string(),
                 service: get_service_name(port),
@@ -447,7 +445,7 @@ pub(crate) async fn scan_ports_spoofed(
         pb.finish_and_clear();
     }
 
-    let mut results = results.lock().await.clone();
+    let mut results: Vec<PortResult> = results.into_iter().map(|(_, v)| v).collect();
     results.sort_by_key(|p| p.port);
 
     let spoof_stats = Some(crate::scanner::spoof::SpoofStats {
