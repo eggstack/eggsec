@@ -1,9 +1,10 @@
 # Slapper Consolidated Improvement Plan
 
-This document tracks all deferred and remaining work items across all plan files. Completed items have been removed.
+This document tracks all work items across all plan files. Completed items (Waves 1-6) have been preserved from the original plan.md. New waves have been added for remaining work.
 
-**Date**: 2026-04-15
-**Total Estimated Work**: 92-112 hours across 6 waves
+**Date**: 2026-04-18
+**Total Estimated Work**: 128-173 hours across 9 waves
+**Status**: Waves 1-6 COMPLETED, Waves 7-9 PENDING
 
 ---
 
@@ -11,977 +12,719 @@ This document tracks all deferred and remaining work items across all plan files
 
 | Metric | Current Value | Note |
 |--------|---------------|------|
-| Tests | 1059 passing | Verified (2 new session regeneration tests added) |
+| Tests | 1063 passing | Verified |
 | Source files | 415 .rs files | Verified |
-| Largest file | `tui/app/mod.rs` (1665 lines) | Needs decomposition |
-| Clippy warnings | 0 | Clean after Wave 6 fixes |
+| Largest file | `tui/app/mod.rs` (883 lines) | Decomposed from 1665 |
+| Clippy warnings | 1 | `scan_ports` has 8 arguments (exceeds 7) |
+| Remaining items | 44 | Across Waves 7-9 |
 
 ---
 
-## Wave 1: Critical Security Fixes (CRITICAL/PRIORITY)
+## COMPLETED: Waves 1-6 (From Original plan.md)
 
-### Block A: Authentication & Access Control ✅ COMPLETED
+All items in Waves 1-6 were completed in previous sessions. See original plan.md (archived) for details.
 
-#### 1.1 Agent/AI Routes Authentication Bypass (CRITICAL) ✅ FIXED
+### Wave 1: Critical Security Fixes ✅ COMPLETED
+- 1.1 Agent/AI Routes Authentication Bypass ✅
+- 1.2 MCP Authentication Bypass via "initialize" ✅
+- 1.3 NSE Sandbox Enforcement ✅
+- 1.4 CSV Formula Injection ✅
+- 1.5 XML Injection in Port Scan Output ✅
+- 1.6 Log Injection via Newlines ✅
+- 1.7 NSE `nmap.get_interface()` Command Injection ✅
+- 1.8 TLS Certificate Verification Bypass - Warnings ✅
+- 1.9 HMAC Serialization Order ✅
+
+### Wave 2: High Priority Security & Performance ✅ COMPLETED
+- 2.1 Path Traversal Vulnerabilities ✅
+- 2.2 ReDoS Vulnerabilities ✅
+- 2.3 Unbounded Memory Allocation ✅
+- 2.4 Packet Trace OnceLock Silent Failure ✅
+- 2.5 Ruby API Isolated Runtime ✅
+- 2.6 Distributed Worker JoinHandle Tracking ✅
+- 2.7 Circuit Breaker Race Condition ✅
+
+### Wave 3: Performance Optimizations ✅ COMPLETED
+- 3.1 Mutex Contention in Scanner Result Aggregation ✅
+- 3.2 FxHashMap for Hot Paths ✅
+- 3.3 Regex Recompilation in `recon/js.rs` ✅
+- 3.4 String Escape Function Allocations ✅
+- 3.5 Cache WAF Signatures with LazyLock ✅
+- 3.6 HTTP Client Connection Pooling ✅
+- 3.7 Payload Cache Optimization ✅
+- 3.8 Report Generation Efficiency ✅
+- 3.9 `to_lowercase()` in Hot Paths ✅
+- 3.10 Banner Buffer Optimization ✅
+- 3.11 Grammar Fuzzer Clone Reduction ✅ (partial - borrow checker constraint)
+
+### Wave 4: Code Quality ✅ COMPLETED
+- 4.1 Fuzzer Test Import Fix ✅
+- 4.2 Stress Test Feature Gate ✅
+- 4.3 Doc Test Fixes ✅
+- 4.4 TUI App Decomposition ✅ (883 lines, 47% reduction)
+- 4.5 SensitiveString Serialization Documentation ✅
+- 4.6 URL Encoding Fixes ✅
+- 4.7 High-Risk Unwrap Audit ✅ (verified - listed locations were test code)
+- 4.8 Distributed Command Dead Code Removal ✅
+- 4.9 Redundant ProxyPool Synchronization ⏭️ SKIPPED
+- 4.10 Secondary Error Type Conversions ✅
+- 4.11 Mixing Sync Primitives ✅
+
+### Wave 5: Testing & Documentation ✅ COMPLETED
+- 5.1 Serialization Roundtrip Test Helper ✅
+- 5.2 Scope Enforcement Test ✅
+- 5.3 Unused Mock Helpers ✅
+- 5.4 Test Organization & Coverage ✅
+- 5.5 Public API Documentation ✅
+- 5.6 Generated File Documentation ✅
+- 5.7 Architecture Decision Records ✅
+
+### Wave 6: Additional Improvements ✅ COMPLETED
+- 6.1 API Rate Limiting ✅
+- 6.2 Plugin Directory Sandboxing ✅
+- 6.3 Configuration Validation Hardening ✅
+- 6.4 Logging Secret Redaction Audit ✅
+- 6.5 Session Fixation Risk ✅
+- 6.6 JSON Serialization Optimization ✅
+- 6.7 Vec Capacity Hints ✅
+- 6.8 Async Mutex in Tool Implementations ✅
+- 6.9 Duplicate Dependency Resolution ✅
+- 6.10 Extract Common URL Stripping Logic ✅
+- 6.11 Progress Bar Reuse in Scanner/Fuzzer ✅
+- 6.12 Config Default Duplication ✅
+- 6.13 Error Type Consistency ✅
+- 6.14 Git Secrets Scanner Path Access ✅
+
+---
+
+## Wave 7: Security Fixes (CRITICAL/HIGH)
+
+### Block A: Plugin Security (CRITICAL)
+
+#### 7.1 Python Plugin Pattern Detection Bypass (CRITICAL)
 **Severity**: CRITICAL
-**Impact**: Unauthorized access to all agent and AI endpoints
-**Files**: `tool/protocol/agent_routes.rs`, `tool/protocol/ai_routes.rs`
-**Fix**: Added `require_auth` to all agent and AI endpoints
-
----
-
-#### 1.2 MCP Authentication Bypass via "initialize" (HIGH) ✅ FIXED
-**Severity**: HIGH
-**Impact**: Authentication bypass for MCP protocol clients
-**Files**: `tool/protocol/mcp/routes.rs`
-**Fix**: Auth now enforced for all methods when api_key is configured
-
----
-
-#### 1.3 NSE Sandbox Enforcement (CRITICAL) ✅ FIXED
-**Severity**: CRITICAL
-**Impact**: Arbitrary shell command execution via Lua scripts
-**Files**: `slapper-nse/src/lib.rs`
-**Fix**: Changed `SandboxConfig::default()` to have `enabled: true`
-
----
-
-### Block B: Injection Vulnerabilities ✅ COMPLETED
-
-#### 1.4 CSV Formula Injection (CRITICAL) ✅ FIXED
-**Severity**: CRITICAL
-**Impact**: Remote code execution via CSV files opened in spreadsheet applications
-**Files**: `output/escape.rs`, `output/csv.rs`, `output/convert.rs`, `pipeline/report.rs`
-**Fix**: Added formula-unsafe character detection (`=`, `+`, `-`, `@`, `\t`, `\r`) at start
-
----
-
-#### 1.5 XML Injection in Port Scan Output (MEDIUM) ✅ FIXED
-**Severity**: MEDIUM
-**Impact**: Malformed XML output, potential XXE if XML is re-processed
-**Files**: `scanner/ports/mod.rs`, `pipeline/report.rs`
-**Fix**: Added `escape_xml()` to `results.host` in XML output
-
----
-
-#### 1.6 Log Injection via Newlines (MEDIUM) ✅ FIXED
-**Severity**: MEDIUM
-**Impact**: Fake log entries, log falsification attacks
-**Files**: `utils/logging.rs`
-**Fix**: Removed `\n` and `\r` from allowed characters; `\t` preserved
-
----
-
-#### 1.7 NSE `nmap.get_interface()` Command Injection (MEDIUM) ✅ FIXED
-**Severity**: MEDIUM
-**Impact**: Shell command injection via interface names
-**Files**: `slapper-nse/src/libraries/nmap.rs`
-**Fix**: Added interface name validation with alphanumeric/-/_ check
-
----
-
-### Block C: Cryptography & Secrets ✅ COMPLETED
-
-#### 1.8 TLS Certificate Verification Bypass - Warnings (HIGH) ✅ FIXED
-**Severity**: HIGH
-**Impact**: Man-in-the-middle attacks on distributed cluster communications
-**Files**: `distributed/io.rs`
-**Fix**: Added runtime warning on each connection when insecure TLS is used
-
----
-
-#### 1.9 HMAC Serialization Order (MEDIUM) ✅ FIXED
-**Severity**: MEDIUM
-**Files**: `agent/alerts.rs`
-**Fix**: Used `serde_json::to_string()` for deterministic JSON serialization
-
----
-
-## Wave 2: High Priority Security & Performance
-
-### Block A: Path & Memory Security
-
-#### 2.1 Path Traversal Vulnerabilities (HIGH) ✅ FIXED
-
-**Severity**: HIGH
-**Impact**: Arbitrary file read/write via user-controlled paths
-**Files**: `config/loader.rs`, `config/settings.rs`, `tui/app/export.rs`, `commands/handlers/sbom.rs`, `agent/skills.rs`, `agent/portfolio.rs`, `recon/git_secrets.rs`
-
-**Fix**: Added `validate_path` and `validate_path_string` utility functions in `utils/validation.rs` and applied path validation to:
-- `tui/app/export.rs` - validate export directory path
-- `commands/handlers/sbom.rs` - validate project and output paths
-- `agent/skills.rs` - validate skill directory paths
-- `agent/portfolio.rs` - validate portfolio file paths
-- `recon/git_secrets.rs` - validate repository path with canonicalization
-
-**Completed**: 2026-04-14
-
----
-
-#### 2.2 ReDoS (Regex DoS) Vulnerabilities (HIGH) ✅ FIXED
-
-**Severity**: HIGH
-**Impact**: CPU exhaustion via malicious regex patterns
-**Files**: `fuzzer/chain.rs`, `recon/js.rs`, `recon/email.rs`
-
-**Fix**: Replaced `Regex::new()` with `RegexBuilder::new().size_limit(100_000).build()` in all regex operations:
-- `fuzzer/chain.rs` - `execute_extract()` and `check_condition()` functions
-- `recon/js.rs` - `extract_endpoints()`, `extract_secrets()`, `extract_api_keys()`, `extract_urls()`
-- `recon/email.rs` - `extract_emails()`, `extract_phones()`, `extract_social_media()`, `extract_addresses()`
-
-**Completed**: 2026-04-14
-
----
-
-#### 2.3 Unbounded Memory Allocation (HIGH) ✅ FIXED
-
-**Severity**: HIGH
-**Impact**: Memory exhaustion when scanning large ranges
-**Files**: `scanner/ports/mod.rs`, `scanner/endpoints.rs`, `scanner/fingerprint.rs`
-
-**Fix Applied**:
-1. Added `max_results: Option<usize>` parameter to all scanner functions
-2. Added `results_count` counter to track insertions
-3. When limit reached, skip inserting but continue scanning (for accurate counts)
-4. Defensive MAX_SCAN_RESULTS (100,000) truncation still applies as safety net
-
-**Implementation**: 2026-04-15
-- `scan_ports()` - port scanner
-- `scan_endpoints()` - endpoint scanner
-- `fingerprint_services()` - fingerprint scanner
-
-**Estimated**: 4-6 hours; actual 2 hours
-
----
-
-### Block B: Concurrency Fixes
-
-#### 2.4 Packet Trace OnceLock Silent Failure (HIGH) ✅ FIXED
-
-**Severity**: HIGH
-**Files**: `crates/slapper/src/scanner/ports/spoofed.rs:85`
-
-**Issue**: `OnceLock::set().ok()` silently ignores if already initialized.
-
-**Fix**: Changed to return `SlapperError::Runtime` when initialization fails.
-
-**Completed**: 2026-04-14
-
----
-
-#### 2.5 Ruby API Isolated Runtime (HIGH) ✅ FIXED
-
-**Severity**: HIGH
-**Files**: `slapper-ruby/src/api.rs:5-8`
-
-**Issue**: Creates new isolated Tokio runtime instead of using existing one.
-
-**Fix**: Changed `get_runtime()` to return `&'static tokio::runtime::Handle` using `Handle::current()` instead of creating a new runtime.
-
-**Completed**: 2026-04-14
-
----
-
-#### 2.6 Distributed Worker JoinHandle Tracking (HIGH) ✅ FIXED
-
-**Severity**: HIGH
-**Files**: `crates/slapper/src/distributed/worker.rs:133`
-
-**Issue**: Spawned task JoinHandle not stored, preventing graceful shutdown.
-
-**Fix**: Added `task_processor_handle: Option<JoinHandle<()>>` field to Worker struct and store the JoinHandle from `tokio::spawn` in `start_task_processing_loop`.
-
-**Status**: COMPLETED - 2026-04-15
-
----
-
-#### 2.7 Circuit Breaker Race Condition (MEDIUM) ✅ FIXED
-
-**Severity**: MEDIUM
-**Files**: `crates/slapper/src/utils/circuit_breaker.rs:67-81`
-
-**Issue**: `success_count.fetch_add()` and mutex check are not atomic together.
-
-**Fix**: Moved atomic operations inside the mutex lock to ensure consistent state during state transitions. Also simplified the `record_failure()` logic to avoid identical branches.
-
-**Completed**: 2026-04-14
-
----
-
-## Wave 3: Performance Optimizations (HIGH IMPACT)
-
-### Block A: HashMap & Regex Optimization
-
-#### 3.1 Mutex Contention in Scanner Result Aggregation (HIGH)
-
-**Severity**: HIGH
-**Impact**: High concurrency performance bottleneck
-**Files**: `scanner/ports/mod.rs:449`, `scanner/endpoints.rs`, `scanner/fingerprint.rs`
-
-**Issue**: All spawned tasks contend for `Arc<Mutex<Vec>>` to append results.
-
-**Solution**: Replace `Arc<Mutex<Vec<T>>>` with `Arc<DashMap<usize, T>>` for lock-free append.
-
-**Estimated**: 2-3 hours
-
-**Completed**: 2026-04-14
-
----
-
-#### 3.2 FxHashMap for Hot Paths (HIGH)
-
-**Severity**: HIGH
-**Impact**: 2-3x faster hash lookups
-**Files**: Throughout (300+ HashMap usages)
-
-**Solution**: Add `rustc-hash` and replace `std::collections::HashMap` with `FxHashMap` in hot paths:
-- `fuzzer/state.rs` - Session/cookie storage
-- `scanner/ports/mod.rs` - Port results
-- `scanner/fingerprint.rs` - Service fingerprints
-- `scanner/endpoints.rs` - Endpoint lookups
-- `recon/techdetect.rs` - Technology detection
-
-**Estimated**: 4-6 hours
-
-**Completed**: 2026-04-14
-
----
-
-#### 3.3 Regex Recompilation in `recon/js.rs` (HIGH)
-
-**Severity**: HIGH
-**Impact**: CPU overhead on every JS analysis call
-**Files**: `recon/js.rs:146, 177, 220, 249`, `recon/email.rs:110, 143, 173`
-
-**Issue**: `Regex::new(pattern)` called inside functions repeatedly.
-
-**Solution**: Pre-compile regexes at module level using `LazyLock` (already done correctly in `recon/secrets.rs:23+`).
-
-**Estimated**: 1-2 hours
-
-**Completed**: 2026-04-14
-
----
-
-### Block B: String & Memory Optimization
-
-#### 3.4 String Escape Function Allocations (HIGH)
-
-**Severity**: HIGH
-**Impact**: Multi-allocation per escape operation
-**Files**: `output/escape.rs`, `output/csv.rs`, `output/markdown.rs`
-
-**Issue**: `escape_html()` creates 5 intermediate Strings via chained `.replace()`
-
-**Solution**: Use `write!` with single buffer:
+**Impact**: Malicious plugins can execute arbitrary system commands, read/write files, establish network connections
+**Files**: `crates/slapper-plugin/src/python.rs:28-31`
+**Issue**: `validate_python_plugin()` only logs warnings for suspicious patterns but still loads the plugin:
 ```rust
-pub fn escape_html(s: &str) -> String {
-    let mut buf = String::with_capacity(s.len() * 6);
-    for c in s.chars() {
-        match c {
-            '&' => buf.push_str("&amp;"),
-            // ... etc
-        }
+for pattern in SUSPICIOUS_PATTERNS {
+    if content.contains(pattern) {
+        tracing::warn!("Plugin contains suspicious pattern: {}", pattern);
+        // BUG: Plugin is still loaded!
     }
-    buf
 }
 ```
+**Fix**: Add `block_suspicious_plugins: bool` to `PluginConfig`, default to `true`. Return error when pattern detected and blocking enabled.
+**Estimated**: 3-4 hours
+**Status**: NOT STARTED
 
+---
+
+#### 7.2 Ruby Plugin Pattern Detection (HIGH)
+**Severity**: HIGH
+**Impact**: Same as Python - malicious Ruby plugins can execute arbitrary code
+**Files**: `crates/slapper-ruby/src/bridge.rs`
+**Issue**: Ruby plugins have no pattern detection.
+**Fix**: Add `validate_ruby_plugin()` with suspicious pattern detection:
+- `eval`, `exec`, `system`, `\`\``, `IO.popen`, `Process.spawn`
+- `File.read`, `File.write` on arbitrary paths
+- `Net::HTTP`, `Socket` connections
+**Estimated**: 2-3 hours
+**Status**: NOT STARTED
+
+---
+
+### Block B: TLS/Certificate Verification (HIGH)
+
+#### 7.3 TLS Warning Enhancement (HIGH)
+**Severity**: HIGH
+**Impact**: Users may unknowingly use insecure TLS in production
+**Files**: Multiple (48+ locations with `danger_accept_invalid_certs(true)`)
+**Current State**: Some locations have runtime warnings, but most don't.
+**Fix**:
+1. Create centralized `create_insecure_client()` in `utils/http.rs` that logs warning at WARN level
+2. Replace all `danger_accept_invalid_certs(true)` calls with this helper
+3. Add `#[cfg(feature = "insecure-tls")]` to gate these clients
+**Estimated**: 4-6 hours
+**Status**: NOT STARTED
+
+---
+
+#### 7.4 Distributed IO NoVerifier Runtime Warning Enhancement (HIGH)
+**Severity**: HIGH
+**Files**: `crates/slapper/src/distributed/io.rs:192-239`
+**Issue**: `NoVerifier` bypasses certificate verification silently.
+**Enhancement**:
+- Add connection-level counter for insecure connections
+- Add metrics endpoint to expose insecure connection count
+- Log local and remote addresses for each insecure connection
 **Estimated**: 1-2 hours
-
-**Completed**: 2026-04-14
+**Status**: NOT STARTED
 
 ---
 
-#### 3.5 Cache WAF Signatures with LazyLock (MEDIUM)
+### Block C: Input Validation Fixes (MEDIUM)
 
+#### 7.5 Path Unwrap Fixes (MEDIUM)
 **Severity**: MEDIUM
-**Files**: `waf/waf_patterns.rs:13`
-
-**Issue**: `get_waf_signatures()` creates a new `HashMap` on every call.
-
-**Solution**:
+**Impact**: Panic on malformed user input
+**Files**:
+- `crates/slapper/src/scanner/ports/spoofed.rs:500` - `path.to_str().unwrap()`
+- `crates/slapper/src/websocket/origin.rs:59` - `origin.parse().unwrap()`
+**Fix**:
 ```rust
-use std::sync::LazyLock;
+// Before:
+let path_str = path.to_str().unwrap();
 
-static WAF_SIGNATURES: LazyLock<HashMap<String, WafSignature>> = LazyLock::new(|| {
-    // ... populate signatures
-});
-
-pub fn get_waf_signatures() -> &'static HashMap<String, WafSignature> {
-    &WAF_SIGNATURES
-}
+// After:
+let path_str = path.to_str().ok_or_else(|| SlapperError::InvalidInput("Path contains non-UTF8 characters".to_string()))?;
 ```
-
 **Estimated**: 1 hour
-
-**Completed**: 2026-04-14
+**Status**: NOT STARTED
 
 ---
 
-#### 3.6 HTTP Client Connection Pooling (MEDIUM)
-
+#### 7.6 SensitiveString Config Encryption Advisory (MEDIUM)
 **Severity**: MEDIUM
-**Impact**: Reduced latency for repeated requests to same host
-**Files**: `utils/http.rs`, `agent/alerts.rs`, `tool/implementations/search.rs`
+**Impact**: Secrets stored in plaintext in config files
+**Files**: `crates/slapper/src/types.rs:193-206`
+**Issue**: `SensitiveString` serializes as plaintext for config compatibility.
+**Fix Options**:
+1. **Recommended**: Add file permission check with warning at startup
+2. Document that config files should have `0600` permissions
+**Implementation**:
+- Add `check_config_file_permissions(path: &Path)` function
+- Check if file is readable by group/other (mode bits > 0o600)
+- Log warning if permissions are too open
+**Estimated**: 2-3 hours
+**Status**: NOT STARTED
 
-**Solution**: Add connection pooling to HTTP client creation:
+---
+
+#### 7.7 NSE Path Validation TOCTOU Advisory (MEDIUM)
+**Severity**: MEDIUM
+**Impact**: Symlink race condition can bypass path restrictions
+**Files**: `crates/slapper-nse/src/lib.rs:77-99`
+**Issue**: `is_path_allowed()` uses `canonicalize()` but doesn't prevent TOCTOU attacks.
+**Fix**:
+1. Add advisory warning in function doc comment
+2. Consider adding file descriptor opened immediately after canonicalize
+3. Document that NSE scripts should assume paths may change after validation
+**Estimated**: 1-2 hours
+**Status**: NOT STARTED
+
+---
+
+### Block D: Additional Security Improvements (LOW)
+
+#### 7.8 Circuit Breaker Metrics Exposure (LOW)
+**Severity**: LOW
+**Status**: ✅ ALREADY IMPLEMENTED
+No action required - `CircuitBreaker` already exposes `total_calls()`, `total_failures()`, `failure_rate()`, and `CircuitBreakerRegistry` exposes `stats()`.
+
+---
+
+#### 7.9 API Rate Limit Enhancement (LOW)
+**Severity**: LOW
+**Impact**: Rate limiter has no visibility into current state
+**Files**: `tool/protocol/rest.rs`
+**Fix**: Add rate limit status endpoint showing:
+- Current token count
+- Last refill timestamp
+- Remaining requests
+**Estimated**: 1-2 hours
+**Status**: NOT STARTED
+
+---
+
+#### 7.10 Webhook Secret Rotation Support (LOW)
+**Severity**: LOW
+**Impact**: Webhook secrets cannot be rotated without restart
+**Files**: `agent/alerts.rs`
+**Fix**: Add `update_webhook_secret(channel_id: &str, new_secret: String)` method to `AlertRouter`.
+**Estimated**: 1 hour
+**Status**: NOT STARTED
+
+---
+
+## Wave 8: Performance Optimizations
+
+### Track A: HTTP Client Configuration (CRITICAL)
+
+**Summary**: 12 items, ~3.5 hours, all low-risk mechanical fixes
+**Priority**: HIGH - Provides 20-40% throughput improvement
+
+#### A.1.1 AiClient Unconfigured HTTP Client (CRITICAL)
+**Severity**: CRITICAL
+**Impact**: `Client::new()` with no timeout, no pooling, no TCP optimizations
+**File**: `ai/client.rs:26`
+**Fix**: Replace with configured client:
 ```rust
 Client::builder()
+    .timeout(Duration::from_secs(60))
     .pool_max_idle_per_host(20)
     .pool_idle_timeout(Duration::from_secs(30))
     .tcp_nodelay(true)
+    .build()
 ```
-
-**Estimated**: 1-2 hours
-
-**Completed**: 2026-04-14
-
----
-
-#### 3.7 Payload Cache Optimization (MEDIUM)
-
-**Severity**: MEDIUM
-**Files**: `fuzzer/payloads/mod.rs:168-169`
-
-**Issue**: `get_all_payloads_cached()` creates full owned copies.
-
-**Solution**: Return references or use `Rc<[Payload]>` for cached data.
-
-**Estimated**: 2 hours
-
-**Completed**: 2026-04-14
-
----
-
-#### 3.8 Report Generation Efficiency (MEDIUM)
-
-**Severity**: MEDIUM
-**Files**: `output/markdown.rs`, `output/html.rs`, `output/csv.rs`
-
-**Solution**: Use `writeln!` with single String buffer; cache theme strings as `LazyLock`.
-
-**Estimated**: 1-2 hours
-
-**Completed**: 2026-04-14
-
----
-
-### Block C: Allocation Reduction
-
-#### 3.9 `to_lowercase()` in Hot Paths (HIGH)
-
-**Severity**: HIGH
-**Impact**: 241 occurrences allocating on every path check
-**Files**: `scanner/endpoints.rs:343`, `scanner/fingerprint.rs`, `waf/detector/types.rs:43-46`
-
-**Issue**: `path.to_lowercase().contains("wp-content")` allocates a new String on every check.
-
-**Solution**: Add helper function:
-```rust
-fn str_contains_ignore_case(haystack: &str, needle: &str) -> bool {
-    haystack.to_lowercase().contains(&needle.to_lowercase())
-}
-```
-
-**Estimated**: 2-3 hours
-
-**Completed**: 2026-04-14
-
----
-
-#### 3.10 Banner Buffer Optimization (LOW)
-
-**Severity**: LOW
-**Files**: `scanner/fingerprint.rs`
-
-**Solution**: Replace `Vec<u8>` with `SmallVec<[u8; 256]>` in banner parsing.
-
-**Estimated**: 1 hour
-
-**Completed**: 2026-04-14
-
----
-
-#### 3.11 Grammar Fuzzer Clone Reduction (LOW)
-
-**Severity**: LOW
-**Files**: `fuzzer/grammar.rs:227,243,249`
-
-**Issue**: `start.clone()` called on every `generate()`.
-
-**Solution**: Pass `&Grammar` by reference instead of cloning.
-
-**Note**: Borrow checker prevents elimination - `expand_rule` takes `&mut self` conflicting with borrowing `&self.grammar.start`. The `String::clone()` is cheap (pointer+len+cap).
-
 **Estimated**: 30 minutes
-
-**Partial**: 2026-04-14 (clone retained due to borrow checker constraints)
+**Status**: NOT STARTED
 
 ---
 
-## Wave 4: Code Quality ✅ COMPLETED
-
-### Block A: Broken Tests & Fixes ✅ COMPLETED
-
-#### 4.1 Fuzzer Test Import Fix (HIGH) ✅ FIXED
-
+#### A.1.2 SEARCH_CLIENT Missing Timeout (HIGH)
 **Severity**: HIGH
-**Files**: `crates/slapper/tests/fuzzer_tests.rs:4`
-
-**Issue**: `get_all_payloads` is not re-exported from `slapper::fuzzer`.
-
-**Fix**: Updated import to use `get_all_payloads_cached` and fixed iterator usage.
-
-**Completed**: 2026-04-15
-
----
-
-#### 4.2 Stress Test Feature Gate (HIGH) ✅ FIXED
-
-**Severity**: HIGH
-**Files**: `crates/slapper/tests/stress_tests.rs:1`
-
-**Issue**: Missing `#[cfg(feature = "stress-testing")]` attribute.
-
-**Fix**: Added proper feature gate at top of file.
-
-**Completed**: 2026-04-15
-
----
-
-#### 4.3 Doc Test Fixes (MEDIUM) ✅ FIXED
-
-**Severity**: MEDIUM
-**Files**: `fuzzer/engine/core.rs`, `output/mod.rs`, `recon/mod.rs`, `scanner/mod.rs`
-
-**Issue**: 5 doc tests failing due to invalid examples.
-
-**Fix**:
-- `fuzzer/engine/core.rs`: Fixed FuzzArgs with correct field names and values
-- `output/mod.rs`: Removed async/await since `load_scan_report` is synchronous
-- `recon/mod.rs`: Replaced private `ReconArgs` with accessible `TechDetector` example
-- `scanner/mod.rs`: Added missing `progress_tx` argument to `scan_ports` and `EndpointScanConfig`
-
-**Completed**: 2026-04-15
-
----
-
-### Block B: Code Organization
-
-#### 4.4 TUI App Decomposition (MEDIUM) ✅ COMPLETED
-
-**Severity**: MEDIUM
-**Files**: `tui/app/mod.rs` (883 lines as of 2026-04-15, down from 1665 - 782 lines removed, 47% reduction)
-
-**Issue**: Large monolithic file. Already partially split (navigation.rs, command.rs, export.rs, state_update.rs, task_management.rs, dispatch.rs).
-
-**Extracted Submodules** (11 files total ~2200 lines):
-| File | Lines | Purpose |
-|------|-------|---------|
-| `mod.rs` | 883 | Main App struct (down from 1665, 782 lines removed, 47% reduction) |
-| `dispatch.rs` | 115 | TabDispatcher wrapper (now with 17 methods) |
-| `export.rs` | 468 | Export functionality |
-| `runner.rs` | 425 | Main event loop |
-| `state_update.rs` | 404 | State updates |
-| `command.rs` | 397 | Command palette |
-| `task_management.rs` | 430 | Task spawning + TaskBuilder trait implementations |
-| `navigation.rs` | 334 | Tab navigation |
-
-**Methods Extracted to Dispatcher (2026-04-15)**:
-| Method | Lines Removed | Pattern |
-|--------|---------------|---------|
-| handle_autocomplete | 54 | Dispatcher |
-| handle_char | 65 | Hybrid (History lock) |
-| handle_backspace | 66 | Hybrid (History lock) |
-| handle_escape | 67 | Hybrid (show_help toggle) |
-| stop | 65 | Dispatcher |
-| page_up | ~65 | Hybrid (History lock) |
-| page_down | ~65 | Hybrid (History lock) |
-| reset_current_tab | 55 | Hybrid (History lock) |
-| handle_left_or_prev_tab | ~60 | Dispatcher + post-processing |
-| handle_right_or_next_tab | ~60 | Dispatcher + post-processing |
-| handle_left | ~70 | Dispatcher + post-processing |
-| handle_right | ~70 | Dispatcher + post-processing |
-| is_running | 59 | Dispatcher + TabState supertrait |
-| **Total** | **~680** | **41% reduction** |
-
-**Final TaskBuilder Refactor (2026-04-15)**:
-- Created `TaskBuilder` trait with `build_task_config()` method
-- Implemented `TaskBuilder` for all 29 tab types (both task-spawning and non-task tabs)
-- Moved task building logic from `App::build_X_task()` methods to tab trait implementations
-- Simplified `handle_enter` from 160 lines to 40 lines using generic dispatch
-- Added `handle_enter` to `TabDispatcher` for consistency
-- Total reduction: Additional 102 lines from mod.rs + ~300 lines of App methods removed
-
-**Status**: COMPLETED - All methods extracted. The `handle_enter` method was successfully refactored using the `TaskBuilder` trait pattern, reducing it from ~160 lines with 29 match arms to ~40 lines using generic dispatch.
-
-**Completed**: 2026-04-15 (Session 3)
-
----
-
-#### 4.5 SensitiveString Serialization Documentation (MEDIUM) ✅ FIXED
-
-**Severity**: MEDIUM
-**Files**: `crates/slapper/src/types.rs:193-196`
-
-**Issue**: `SensitiveString` serializes secrets in plaintext.
-
-**Fix**: Added prominent doc warning about plaintext serialization explaining config file compatibility.
-
-**Status**: COMPLETED - 2026-04-15
-
----
-
-#### 4.6 URL Encoding Fixes (MEDIUM) ✅ FIXED
-
-**Severity**: MEDIUM
-**Files**:
-- `integrations/github.rs:222` - Query parameter not encoded
-- `recon/subdomain.rs:92` - crt.sh query not encoded
-
-**Fix**: Added `urlencoding::encode()` for query parameters.
-
-**Completed**: 2026-04-15
-
----
-
-### Block C: Unwrap/Expect Audit (HIGH - 8-12 hours)
-
-#### 4.7 High-Risk Unwrap Audit ⏳ PENDING
-
-**Severity**: HIGH
-**Impact**: Runtime panics on malformed data (477 total, ~200+ in production)
-
-**Priority Locations** (verified 2026-04-15):
-| File | Risk | Lines |
-|------|------|-------|
-| `fuzzer/engine/core.rs` | TEST | All in `#[test]` modules |
-| `tool/response.rs` | TEST | All in `mod tests` |
-| `scanner/fingerprint.rs` | TEST | All in test code |
-| `scanner/endpoints.rs` | TEST | All in test code |
-| `scanner/ports/mod.rs` | TEST | All in test code |
-| `distributed/io.rs` | TEST | All in test code |
-
-**Status**: VERIFIED - Listed locations are all test code (acceptable). Production code unwraps need separate audit.
-
-**Estimated**: 8-12 hours (full audit); 1-2 hours (targeted production-code audit)
-
----
-
-#### 4.8 Distributed Command Dead Code Removal (CRITICAL) ✅ FIXED
-
-**Severity**: CRITICAL (security implication)
-**Files**: `crates/slapper/src/distributed/command.rs:145-161`
-
-**Issue**: Early return at line 147 makes lines 157-161 unreachable. Dead code creates security risk.
-
-**Fix**: Removed dead code (lines 157-161).
-
-**Completed**: 2026-04-15
-
----
-
-#### 4.9 Redundant ProxyPool Synchronization (LOW) ⏳ SKIPPED
-
-**Severity**: LOW
-**Files**: `proxy/pool.rs:53-58`, `proxy/mod.rs:31`
-
-**Issue**: `DashMap` is already thread-safe, wrapping in `RwLock` is redundant.
-
-**Status**: SKIPPED - Low severity, risk of introducing regressions
-
-**Estimated**: 30 minutes
-
----
-
-#### 4.10 Secondary Error Type Conversions (MEDIUM) ✅ FIXED
-
-**Severity**: MEDIUM
-**Files**: `ai/errors.rs`, `packet/capture.rs`, `packet/traceroute.rs`
-
-**Issue**: `AiError`, `CaptureError`, `TracerouteError` have no conversion path to `SlapperError`.
-
-**Fix**: Added `From` implementations in `error/mod.rs` (feature-gated appropriately).
-
-**Completed**: 2026-04-15
-
----
-
-#### 4.11 Mixing Sync Primitives (MEDIUM) ✅ FIXED
-
-**Severity**: MEDIUM
-**Files**: `scanner/ports/spoofed.rs:133-165`
-
-**Issue**: Mixes `parking_lot::Mutex` and `tokio::sync::Mutex` in same function.
-
-**Fix**: Changed `results` from `std::sync::Mutex` to `parking_lot::Mutex` for consistency with other mutexes in the file.
-
-**Status**: COMPLETED - 2026-04-15
-
----
-
-## Wave 5: Testing & Documentation
-
-### Block A: Test Improvements
-
-#### 5.1 Serialization Roundtrip Test Helper (MEDIUM) ✅ COMPLETED
-
-**Severity**: MEDIUM
-**Files**: Throughout (10+ test files)
-
-**Issue**: Repeated pattern across test files:
-```rust
-let json = serde_json::to_string(&fp).unwrap();
-let deserialized: Type = serde_json::from_str(&json).unwrap();
-```
-
-**Fix**: Create test helper in `tests/common/mod.rs`:
-```rust
-pub fn assert_serialize_roundtrip<T: Serialize + DeserializeOwned + Eq>(value: &T) {
-    let json = serde_json::to_string(value).unwrap();
-    let decoded: T = serde_json::from_str(&json).unwrap();
-    assert_eq!(value, &decoded);
-}
-```
-
-**Completed**: 2026-04-15 (created `assert_serialize_roundtrip` and `assert_string_serialize_roundtrip` helpers)
-
-**Estimated**: 2-3 hours
-
----
-
-#### 5.2 Scope Enforcement Test (MEDIUM) ✅ COMPLETED
-
-**Severity**: MEDIUM
-**Files**: `tests/scope_tests.rs:50-58`
-
-**Issue**: `test_scope_enforcement_in_handlers` only tests URL normalization, not scope enforcement.
-
-**Fix**: Replaced test with real scope enforcement test that creates a Scope, adds rules, and tests `is_target_allowed`.
-
-**Completed**: 2026-04-15
-
-**Estimated**: 1 hour
-
----
-
-#### 5.3 Unused Mock Helpers (LOW) ✅ COMPLETED
-
-**Severity**: LOW
-**Files**: `tests/common/wiremock_helpers.rs`
-
-**Issue**: 3 helpers never used: `mock_secure_headers()`, `mock_jwt_response()`, `mock_rate_limited()`.
-
-**Fix**: Removed unused helpers to reduce dead code.
-
-**Completed**: 2026-04-15
-
-**Estimated**: 30 minutes
-
----
-
-#### 5.4 Test Organization & Coverage (MEDIUM) ✅ COMPLETED
-
-**Severity**: MEDIUM
-**Files**: `crates/slapper/tests/`
-
-**Solution**: Verified test infrastructure is well-organized with `tests/common/` directory containing shared utilities. Serialization roundtrip helper added.
-
-**Completed**: 2026-04-15
-
-**Estimated**: 2-3 hours
-
----
-
-### Block B: Documentation
-
-#### 5.5 Public API Documentation (MEDIUM) ✅ COMPLETED
-
-**Severity**: MEDIUM
-**Files**: `tool/traits.rs`, `tool/response.rs`, `tool/registry.rs`
-
-**Issue**: Minimal `#[doc(...)]` attributes on public functions.
-
-**Fix**: Added comprehensive doc comments to `SecurityTool` trait, `ToolResponse` struct and builders, and `ToolRegistry`. Documented all public methods with descriptions, arguments, and examples.
-
-**Completed**: 2026-04-15 (core tool abstraction layer documented)
-
-**Estimated**: 4-6 hours
-
----
-
-#### 5.6 Generated File Documentation (LOW) ✅ COMPLETED
-
-**Severity**: LOW
-**Files**: `crates/slapper/src/generated/slapper.tool.v1.rs`
-
-**Issue**: File marked `@generated by prost-build` but no build.rs for regeneration.
-
-**Fix**: Added comment explaining manual maintenance requirement and regeneration instructions.
-
-**Completed**: 2026-04-15
-
+**Impact**: Static client has pooling but no request timeout
+**File**: `tool/implementations/search.rs:24-31`
+**Fix**: Add `.timeout(Duration::from_secs(30))` to builder chain
 **Estimated**: 10 minutes
+**Status**: NOT STARTED
 
 ---
 
-#### 5.7 Architecture Decision Records (LOW) ✅ COMPLETED
-
-**Severity**: LOW
-**Files**: New `docs/adr/`
-
-**Created**:
-- ADR-001: Why `SensitiveString` instead of `SecretString`
-- ADR-002: Feature flag design rationale
-- ADR-003: Why `rustls` over `native-tls` (except nse)
-- ADR-004: Error type separation (`SlapperError` vs `anyhow::Result`)
-
-**Completed**: 2026-04-15
-
-**Estimated**: 3-4 hours
+#### A.2.1 search_osv() Creates New Client (MEDIUM)
+**Severity**: MEDIUM
+**File**: `tool/implementations/search.rs:101`
+**Fix**: Replace `reqwest::Client::new()` with `SEARCH_CLIENT.clone()`
+**Estimated**: 10 minutes
+**Status**: NOT STARTED
 
 ---
 
-## Wave 6: Additional Improvements ✅ COMPLETED
+#### A.2.2 search_nvd() Creates New Client (MEDIUM)
+**Severity**: MEDIUM
+**File**: `tool/implementations/search.rs:154`
+**Fix**: Replace `reqwest::Client::new()` with `SEARCH_CLIENT.clone()`
+**Estimated**: 10 minutes
+**Status**: NOT STARTED
 
-### Block A: Rate Limiting & Security ✅ COMPLETED
+---
 
-#### 6.1 API Rate Limiting (HIGH) ✅ FIXED
-
+#### A.3.1 distributed/worker.rs Unconfigured Client (HIGH)
 **Severity**: HIGH
-**Files**: `tool/protocol/mcp/handlers.rs`, `tool/protocol/rest.rs`
-
-**Issue**: REST API had duplicate `RateLimiter` implementation instead of using shared one.
-
-**Fix**: Updated REST API to use `crate::tool::RateLimiter` from `tool/ratelimit.rs`. Removed duplicate local implementation.
-
-**Completed**: 2026-04-15
+**File**: `distributed/worker.rs:57`
+**Fix**: Use `crate::utils::http::create_http_client()` or add pooling settings
+**Estimated**: 15 minutes
+**Status**: NOT STARTED
 
 ---
 
-#### 6.2 Plugin Directory Sandboxing (MEDIUM) ✅ FIXED
-
+#### A.3.2 scanner/endpoints.rs Missing Pooling (MEDIUM)
 **Severity**: MEDIUM
-**Files**: `slapper-plugin/src/python.rs`, `slapper-ruby/src/bridge.rs`
-
-**Solution**:
-1. Added `MAX_PLUGIN_SIZE_BYTES` (1MB) validation
-2. Added suspicious pattern detection for both Python and Ruby
-3. Python checks for 24 dangerous patterns (`os.system`, `subprocess`, `socket`, etc.)
-4. Ruby checks for 18 dangerous patterns (`system`, `exec`, `eval`, etc.)
-5. Logs warnings for suspicious plugins but maintains backward compatibility
-
-**Completed**: 2026-04-15
+**File**: `scanner/endpoints.rs:684-688`
+**Fix**: Add `.pool_max_idle_per_host(20).pool_idle_timeout(Duration::from_secs(30)).tcp_nodelay(true)`
+**Estimated**: 15 minutes
+**Status**: NOT STARTED
 
 ---
 
-#### 6.3 Configuration Validation Hardening (MEDIUM) ✅ COMPLETED
-
+#### A.3.3 waf/detector/compare.rs Missing Pooling (MEDIUM)
 **Severity**: MEDIUM
-**Files**: `config/loader.rs`, `config/settings.rs`
-
-**Enhancements**:
-- Expanded `SlapperConfig::validate()` with comprehensive checks
-- Added `validate()` methods to: `ProxyConfigEntry`, `ScheduledScan`, `SearchConfig`, `HttpConfig`, `ScanConfig`, `WebhookConfig`
-- Added path validation, proxy URL scheme validation, PSK minimum length (16 chars)
-- Validates worker host/port, schedule fields, cache TTL ranges
-
-**HMAC Signing**: DEFERRED - requires significant architectural changes, key management, CLI support
-
-**Completed**: 2026-04-15
+**File**: `waf/detector/compare.rs:15-20`
+**Fix**: Add pooling settings
+**Estimated**: 15 minutes
+**Status**: NOT STARTED
 
 ---
 
-#### 6.4 Logging Secret Redaction Audit (MEDIUM) ✅ COMPLETED
-
+#### A.3.4 tui/workers/api.rs Missing Pooling (MEDIUM)
 **Severity**: MEDIUM
-**Files**: Throughout (7447+ format! usages)
-
-**Enhancements**:
-- Added `detect_secrets_in_format_string()` helper to `utils/logging.rs`
-- Added `SecretPattern` enum and `SecretAuditResult` types
-- `SensitiveString` already provides proper redaction via Debug/Display
-- Added `contains_api_key_pattern()` for quick boolean checks
-
-**Completed**: 2026-04-15
+**File**: `tui/workers/api.rs:24-28, 201-205`
+**Fix**: Add pooling settings to two clients
+**Estimated**: 15 minutes
+**Status**: NOT STARTED
 
 ---
 
-#### 6.5 Session Fixation Risk (MEDIUM) ✅ FIXED
-
+#### A.3.5 recon/asn.rs Missing Pooling (MEDIUM)
 **Severity**: MEDIUM
-**Files**: `tool/state.rs`
-
-**Fix**: Added `regenerate_session_id()` and `set_authenticated()` methods to `AgentSession` that regenerate session ID when authentication state changes.
-
-**Completed**: 2026-04-15
-
----
-
-### Block B: Additional Performance ✅ COMPLETED
-
-#### 6.6 JSON Serialization Optimization (LOW) ✅ FIXED
-
-**Severity**: LOW
-**Files**: Throughout (67+ `to_string_pretty()` usages)
-
-**Fix**: Changed `to_string_pretty()` to `to_string()` for 7 internal storage locations:
-- `agent/memory.rs` (3 locations)
-- `agent/portfolio.rs`
-- `tool/state.rs`
-- `ai/cache.rs`
-- `ai/waf_bypass.rs`
-
-**Completed**: 2026-04-15
+**File**: `recon/asn.rs:36-38, 125-127, 173-175`
+**Fix**: Add `.pool_max_idle_per_host(10).pool_idle_timeout(Duration::from_secs(30))`
+**Estimated**: 15 minutes
+**Status**: NOT STARTED
 
 ---
 
-#### 6.7 Vec Capacity Hints (LOW) ✅ FIXED
-
-**Severity**: LOW
-**Files**: Throughout
-
-**Fix**: Added `Vec::with_capacity()` or `reserve()` calls in 17 locations:
-- Scanner modules (ports, endpoints, fingerprint, icmp_probe)
-- Stress testing (http.rs)
-- Recon modules (subdomain, content, wayback, threatintel, cve_lookup)
-- WAF bypass (smuggling.rs)
-- Tool/protocol (search.rs, openai/handlers.rs)
-
-**Completed**: 2026-04-15
-
----
-
-#### 6.8 Async Mutex in Tool Implementations (LOW) ✅ FIXED
-
-**Severity**: LOW
-**Files**: `tool/implementations/*.rs`
-
-**Fix**: Changed `std::sync::Mutex` to `parking_lot::Mutex` in 4 tool implementations:
-- `tool/implementations/fuzzer.rs`
-- `tool/implementations/pipeline.rs`
-- `tool/implementations/recon.rs`
-- `tool/implementations/scanner.rs`
-
-**Completed**: 2026-04-15
-
----
-
-#### 6.9 Duplicate Dependency Resolution (MEDIUM) ✅ FIXED
-
+#### A.3.6 recon/cve_lookup.rs Missing Pooling (MEDIUM)
 **Severity**: MEDIUM
-**Files**: `Cargo.toml`
-
-**Fix**: Updated `crossterm` from 0.28 to 0.29 to align with `ratatui-crossterm`. `base64` was already aligned.
-
-**Completed**: 2026-04-15
+**File**: `recon/cve_lookup.rs:56-58, 193`
+**Fix**: Add pooling settings
+**Estimated**: 15 minutes
+**Status**: NOT STARTED
 
 ---
 
-### Block C: Tech Debt & Cleanup ✅ COMPLETED
-
-#### 6.10 Extract Common URL Stripping Logic (LOW) ✅ FIXED
-
+#### A.3.7 Integration Clients Missing Pooling (LOW)
 **Severity**: LOW
-**Files**: `recon/runner.rs:14-19`
-
-**Fix**: Created `strip_url_protocol()` utility in `utils/target.rs` and updated `recon/runner.rs` to use it.
-
-**Completed**: 2026-04-15
+**Files**: `integrations/github.rs:20-23`, `integrations/jira.rs:21-24`, `integrations/gitlab.rs:20-23`
+**Fix**: Add pooling settings for consistency
+**Estimated**: 15 minutes total
+**Status**: NOT STARTED
 
 ---
 
-#### 6.11 Progress Bar Reuse in Scanner/Fuzzer (LOW) ✅ FIXED
+#### A.4.1 tcp_nodelay Inconsistency (MEDIUM)
+**Severity**: MEDIUM
+**Impact**: Nagle delay for small requests on clients missing `tcp_nodelay(true)`
+**Files Missing tcp_nodelay**:
+- `scanner/endpoints.rs`
+- `waf/detector/compare.rs`
+- `proxy/health.rs`
+- `tui/workers/api.rs`
+- `tool/agents/lifecycle.rs`
+- `recon/asn.rs`
+- `recon/cve_lookup.rs`
+- Integration clients
+**Fix**: Add `.tcp_nodelay(true)` to all high-performance HTTP clients
+**Estimated**: 30 minutes total
+**Status**: NOT STARTED
 
+---
+
+### Track B: Lock Contention Fixes (HIGH)
+
+**Summary**: 6 items, 8-11 hours, MEDIUM risk
+
+#### B.1.1 Port Scanner Double-Lock Race Condition (CRITICAL)
+**Severity**: CRITICAL
+**Impact**: Incorrect port count when `max_results` limit is reached under high concurrency
+**File**: `scanner/ports/mod.rs:495-565`
+**Issue**: Three locations have the same double-lock bug:
+```rust
+let count = *results_count.lock().await;  // Lock #1
+if count >= limit { false } else {
+    *results_count.lock().await += 1;    // Lock #2 - race!
+    true
+}
+```
+**Fix**: Replace `Arc<tokio::sync::Mutex<usize>>` with `Arc<AtomicUsize>`:
+```rust
+let results_count = Arc::new(AtomicUsize::new(0));
+let count = results_count.load(Ordering::Relaxed);
+if count >= limit { false } else {
+    results_count.fetch_add(1, Ordering::Relaxed);
+    true
+}
+```
+**Estimated**: 2-3 hours
+**Status**: NOT STARTED
+
+---
+
+#### B.1.2 scanned_count Should Be Atomic - scanner/endpoints.rs (LOW)
 **Severity**: LOW
-**Files**: `scanner/ports/mod.rs`, `scanner/endpoints.rs`, `fuzzer/engine/core.rs`
-
-**Fix**: Created `utils/progress.rs` with centralized `LazyLock` constants:
-- `PROGRESS_TEMPLATE_BASE`, `PROGRESS_TEMPLATE_PORTS`, `PROGRESS_TEMPLATE_ENDPOINTS`, `PROGRESS_TEMPLATE_PAYLOADS`
-- `make_progress_style()` helper function
-
-**Completed**: 2026-04-15
+**File**: `scanner/endpoints.rs:691`
+**Estimated**: 1 hour
+**Status**: NOT STARTED
 
 ---
 
-#### 6.12 Config Default Duplication (LOW) ✅ FIXED
-
+#### B.1.3 scanned_count Should Be Atomic - scanner/fingerprint.rs (LOW)
 **Severity**: LOW
-**Files**: `config/mod.rs:65-115`
-
-**Fix**: Centralized 14+ default constants in `constants.rs`:
-- `DEFAULT_RETRY_DELAY_MS`, `DEFAULT_PORT_TIMEOUT_SECS`, `DEFAULT_SEARCH_CACHE_TTL_SECS`
-- HTTP defaults, output defaults, rate limit defaults
-
-**Completed**: 2026-04-15
+**File**: `scanner/fingerprint.rs:232`
+**Estimated**: 1 hour
+**Status**: NOT STARTED
 
 ---
 
-#### 6.13 Error Type Consistency (LOW) ✅ FIXED
+#### B.2.1 Mutex<Vec> Instead of DashMap - spoofed scanner (MEDIUM)
+**Severity**: MEDIUM
+**File**: `scanner/ports/spoofed.rs:137`
+**Current**: `Arc<parking_lot::Mutex<Vec>>`
+**Fix**: Replace with `Arc<DashMap<u16, PortResult>>`
+**Estimated**: 1-2 hours
+**Status**: NOT STARTED
 
+---
+
+#### B.2.2 Lock Chain in Spoofed Scanner Packet Parsing (MEDIUM)
+**Severity**: MEDIUM
+**Impact**: 3 sequential locks per packet: `rx`, `sent_packets`, `responses`
+**File**: `scanner/ports/spoofed.rs:180-198`
+**Fix**: Restructure to minimize lock hold time or use lock-free alternatives
+**Estimated**: 2-3 hours
+**Status**: NOT STARTED
+
+---
+
+#### B.2.3 Blocking Mutex in RateLimiter (MEDIUM)
+**Severity**: MEDIUM
+**Impact**: Uses `std::sync::Mutex` in async context
+**File**: `stress/metrics.rs:152-159`
+**Fix**: Use `tokio::sync::Mutex` or atomic operations
+**Estimated**: 1 hour
+**Status**: NOT STARTED
+
+---
+
+### Track C: Memory Allocation Fixes (MEDIUM)
+
+**Summary**: 4 items, 4-5.5 hours
+
+#### C.1.1 Repeated to_lowercase() in WAF Detection (HIGH)
+**Severity**: HIGH
+**Impact**: 100,000+ redundant allocations per scan
+**File**: `fuzzer/waf_fingerprint.rs:471-508`
+**Issue**:
+```rust
+// Called for EVERY header value:
+let value_lower = value_str.to_lowercase();
+// Called for EVERY fingerprint:
+if value_lower.contains(&pattern.to_lowercase()) {
+```
+**Fix Strategy**: Pre-lowercase all patterns at initialization since they're static strings. In `detect()`, lowercase input once before fingerprint loop.
+**Estimated**: 2-3 hours
+**Status**: NOT STARTED
+
+---
+
+#### C.2.1 Missing Vec Capacity in WAF Detect (LOW)
 **Severity**: LOW
-**Files**: Various
-
-**Fix**: Standardized `ai/errors.rs` `AiError` to `#[derive(Debug, thiserror::Error)]`. All other error types already followed the pattern.
-
-**Completed**: 2026-04-15
+**File**: `fuzzer/waf_fingerprint.rs:462,466`
+**Fix**: Use `Vec::with_capacity()` when approximate size is known
+**Estimated**: 30 minutes
+**Status**: NOT STARTED
 
 ---
 
-#### 6.14 Git Secrets Scanner Path Access (LOW) ✅ FIXED
-
+#### C.2.2 String Concatenation in WAF Detection Loop (LOW)
 **Severity**: LOW
-**Files**: `recon/git_secrets.rs`
-
-**Fix**: Created `validate_git_repo_path()` in `utils/validation.rs` that:
-- Blocks system directories (`/etc`, `/usr`, `/bin`, `/sbin`, `/var`, `/root`)
-- Blocks sensitive git internals (`.git/objects`, `.git/config`, etc.)
-- Uses `canonicalize()` to resolve symlinks
-- Supports optional `allowed_roots` parameter
-
-**Completed**: 2026-04-15
+**File**: `fuzzer/waf_fingerprint.rs:476,481,495,503,510`
+**Issue**: `format!()` in loop creates temporary allocations
+**Fix**: Use `String::from(prefix)` + `push_str()` for fixed-prefix strings
+**Estimated**: 30 minutes
+**Status**: NOT STARTED
 
 ---
 
-## Deferred Items (Not Currently Recommended)
+#### C.2.3 Clone in Hot Path (LOW)
+**Severity**: LOW
+**File**: `fuzzer/waf_fingerprint.rs:517`
+**Issue**: `matches.push((fp.clone(), confidence, matched_rules));`
+**Fix**: Restructure to avoid clone - move `matched_rules` creation inside loop
+**Estimated**: 1 hour
+**Status**: NOT STARTED
 
-### D.1 Error Type Consolidation
+---
 
-**Status**: DEFERRED (per AGENTS.md policy)
+### Track D: Concurrency Anti-patterns (MEDIUM)
 
-**Issue**: Three error types (`SlapperError`, `ConfigError`, `anyhow::Result`) create friction.
+**Summary**: 3 items, 2.5-4.5 hours
 
-**Recommendation**: Current separation serves different purposes. Consolidation deemed counterproductive.
+#### D.1.1 Unbounded Spawn in Distributed Worker (HIGH)
+**Severity**: HIGH
+**Impact**: Unbounded `tokio::spawn` without backpressure can overwhelm system
+**File**: `distributed/worker.rs:134-141`
+**Fix**: Add semaphore for controlled concurrency:
+```rust
+let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrency));
+while let Some(task) = receiver.recv().await {
+    let permit = semaphore.clone().acquire_owned().await?;
+    tokio::spawn(async move {
+        let result = process_task(task).await;
+        drop(permit);
+    });
+}
+```
+**Estimated**: 1-2 hours
+**Status**: NOT STARTED
 
-**Estimated**: 8-12 hours
+---
+
+#### D.2.1 Small Result Channel Capacity (LOW)
+**Severity**: LOW
+**File**: `tui/app/task_management.rs:410`
+**Current**: `tokio::sync::mpsc::channel(1)` - can cause blocking
+**Fix**: Increase to 10-50
+**Estimated**: 10 minutes
+**Status**: NOT STARTED
+
+---
+
+#### D.2.2 Progress Polling with Mutex (LOW)
+**Severity**: LOW
+**Impact**: TUI progress polling every 200ms with mutex instead of watch channel
+**File**: `tui/workers/recon.rs:111-141`
+**Fix**: Use `tokio::sync::watch` channel for progress updates
+**Estimated**: 1-2 hours
+**Status**: NOT STARTED
+
+---
+
+## Wave 9: Code Quality Improvements
+
+### Block A: Critical Race Condition Fixes (CRITICAL)
+
+#### 9.1 Port Scanner Double-Lock Race Condition (CRITICAL)
+**Note**: This is the same issue as B.1.1 in Wave 8. Complete only once.
+**See**: Wave 8, Track B, Item B.1.1
+
+---
+
+#### 9.2 Distributed Worker Detached Tasks (HIGH)
+**Severity**: HIGH
+**Impact**: In-flight tasks continue running when worker shuts down with no way to await or propagate errors
+**File**: `crates/slapper/src/distributed/worker.rs:135`
+**Issue**: Inner `tokio::spawn` creates fire-and-forget tasks with no `JoinHandle`:
+```rust
+tokio::spawn(async move {
+    let result = process_task(task).await;  // No handle tracked
+});
+```
+**Fix**: Create `HashMap<TaskId, JoinHandle<()>>` protected by mutex, cleanup on shutdown.
+**Estimated**: 2-3 hours
+**Status**: NOT STARTED
+
+---
+
+### Block B: Concurrency Pattern Fixes (HIGH)
+
+#### 9.3 std::Mutex in Async Context (HIGH)
+**Severity**: HIGH
+**Impact**: Blocking behavior in async context, potential deadlock
+**File**: `crates/slapper/src/tool/protocol/mcp/handlers.rs:24-25`
+**Issue**:
+```rust
+pending_cancellations: Arc<Mutex<HashMap<String, CancellationToken>>>,
+completed_results: Arc<Mutex<HashMap<String, ToolResponse>>>,
+```
+**Fix**: Replace with `tokio::sync::Mutex`
+**Estimated**: 30 minutes
+**Status**: NOT STARTED
+
+---
+
+#### 9.4 TUI State Mutex Optimization (MEDIUM)
+**Severity**: MEDIUM
+**Impact**: Unnecessary serialization under read-heavy workloads
+**File**: `crates/slapper/src/tui/state/mod.rs:6`
+**Fix**: Replace `Arc<Mutex<HistoryTab>>` with `Arc<parking_lot::RwLock<HistoryTab>>`
+**Estimated**: 30 minutes
+**Status**: NOT STARTED
+
+---
+
+### Block C: Unwrap/Expect Audit (HIGH)
+
+#### 9.5 Production Unwrap Audit (HIGH)
+**Severity**: HIGH
+**Impact**: Runtime panics on malformed data
+**Count**: ~547 total, estimated ~200+ in production code
+**Priority Production Files**:
+- `scanner/endpoints.rs:606-607` - Serialization roundtrip
+- `scanner/fingerprint.rs:660-661` - Serialization roundtrip
+- `scanner/ports/mod.rs:638-639` - Serialization roundtrip
+- `recon/wayback.rs:193-196` - Serialization roundtrip
+- `fuzzer/engine/core.rs:178` - Uses `args.common.insecure`
+- `tui/workers/api.rs:26` - Insecure TLS client
+**Estimated**: 6-8 hours (full audit); 2-3 hours (targeted fixes)
+**Status**: PENDING
+
+---
+
+#### 9.6 Safe Serialization Helpers (MEDIUM)
+**Severity**: MEDIUM
+**Files**: `crates/slapper/src/utils/serialization.rs` (new file)
+**Fix**: Create safe helpers:
+```rust
+pub fn serialize_to_json<T: Serialize>(value: &T) -> Result<String> {
+    serde_json::to_string(value)
+        .map_err(|e| SlapperError::Parse(format!("JSON serialization failed: {}", e)))
+}
+
+pub fn deserialize_from_json<T: DeserializeOwned>(json: &str) -> Result<T> {
+    serde_json::from_str(json)
+        .map_err(|e| SlapperError::Parse(format!("JSON deserialization failed: {}", e)))
+}
+```
+**Estimated**: 1 hour
+**Status**: NOT STARTED
+
+---
+
+### Block D: Code Organization
+
+#### 9.7 Too-Many-Arguments Warning (LOW)
+**Severity**: LOW (clippy warning)
+**File**: `crates/slapper/src/scanner/ports/mod.rs:431`
+**Issue**: `scan_ports` has 8 arguments, exceeding clippy's 7-argument limit.
+**Fix**: Group related arguments into `PortScanConfig` struct
+**Estimated**: 1-2 hours
+**Status**: NOT STARTED
+
+---
+
+#### 9.8 TUI App Size Reduction (MEDIUM)
+**Severity**: MEDIUM
+**File**: `crates/slapper/src/tui/app/mod.rs` (883 lines)
+**Status**: DEFERRED - Already reduced from 1665 to 883 (47% reduction), further decomposition would require significant refactoring.
+**Estimated**: 4-6 hours (if prioritized)
+
+---
+
+### Block E: Static Analysis Improvements
+
+#### 9.9 Static Regex RegexBuilder Consistency (LOW)
+**Severity**: LOW
+**Files**: `crates/slapper/src/recon/js.rs:10-45`, `crates/slapper/src/recon/email.rs:9-40`
+**Issue**: Static regexes use `Regex::new()` instead of `RegexBuilder` with explicit `size_limit`
+**Fix**:
+```rust
+// Current:
+static EMAIL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"...").unwrap()
+});
+
+// Better:
+static EMAIL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    RegexBuilder::new(r"...").size_limit(100_000).build().unwrap()
+});
+```
+**Estimated**: 30 minutes
+**Status**: NOT STARTED
+
+---
+
+#### 9.10 Improve Error Messages for Debugging (LOW)
+**Severity**: LOW
+**Impact**: Some error messages lack context for debugging
+**Fix**: Add task ID and relevant context to error messages
+**Estimated**: 2-3 hours
+**Status**: NOT STARTED
 
 ---
 
 ## Implementation Notes
 
-### Wave 1 (Critical Security)
-**Block A (Auth)**: Items 1.1, 1.2, 1.3 — Can parallelize
-**Block B (Injection)**: Items 1.4, 1.5, 1.6, 1.7 — Can parallelize
-**Block C (Crypto)**: Items 1.8, 1.9 — Can parallelize
+### Parallelization Strategy (Waves)
 
-### Wave 2 (High Priority)
-**Block A (Path/Memory)**: Sequential (path traversal affects many files)
-**Block B (Concurrency)**: Items 2.4-2.7 — Can parallelize
+**Wave 7 (Security)**: Items within blocks can parallelize:
+- Block A (Plugin): 7.1 and 7.2 are independent
+- Block B (TLS): 7.3 and 7.4 are sequential (7.3 creates helper for 7.4)
+- Block C (Input): 7.5, 7.6, 7.7 are independent
+- Block D (Additional): 7.9, 7.10 are independent (7.8 is DONE)
 
-### Wave 3 (Performance)
-All items are independent — parallelizable
+**Wave 8 (Performance)**: 
+- Track A items are all independent - parallelizable
+- Track B items B.1.2, B.1.3 depend on B.1.1 pattern
+- Track C items should be done in order (C.1.1 before C.2.x)
+- Track D items are independent
 
-### Wave 4 (Code Quality)
-**Block A (Tests)**: Sequential (fix order doesn't matter)
-**Block B (Code Org)**: Sequential
-**Block C (Unwrap Audit)**: Sequential per file
+**Wave 9 (Code Quality)**:
+- 9.1 is same as B.1.1 - do only once
+- 9.3, 9.4 are independent
+- 9.5 audit can run in parallel with other work
+- 9.9 is independent
 
-### Wave 5 (Testing/Docs)
-All items are independent — parallelizable
+### Recommended Implementation Order
 
-### Wave 6 (Additional)
-All items are independent — parallelizable
+1. **Wave 7 Block A (Plugin Security)** - Critical security, independent
+2. **Wave 8 Track A (HTTP Configuration)** - Quick wins, high impact
+3. **Wave 8 B.1.1 (Scanner Race Condition)** - Critical, fix early
+4. **Wave 9 Block B (Concurrency)** - Quick fixes
+5. **Wave 8 Track C (Memory)** - Medium effort
+6. **Wave 9 Block C (Unwrap Audit)** - Ongoing
+7. **Remaining items** - Can parallelize
 
 ---
 
@@ -1006,38 +749,54 @@ cargo build --release -p slapper --features full
 
 | Wave | Items | Estimated Time | Status |
 |------|-------|----------------|--------|
-| 1: Critical Security | 9 | 10-15 hours | ✅ COMPLETED |
-| 2: High Priority | 7 | 9-13 hours | ✅ COMPLETED |
-| 3: Performance | 11 | 15-20 hours | ✅ COMPLETED (3.11 partial) |
-| 4: Code Quality | 10 | 35-45 hours | ✅ COMPLETED |
-| 5: Testing/Docs | 7 | 10-15 hours | ✅ COMPLETED |
-| 6: Additional | 14 | 12-16 hours | ✅ COMPLETED |
-| **Total** | **~58 items** | **92-112 hours** | 57 ✅ + 1 ⏳ deferred |
+| 1-6 | ~58 | 92-112 hours | ✅ COMPLETED |
+| 7: Security | 9 | 16-23 hours | PENDING |
+| 8: Performance | 25 | 18-24 hours | PENDING |
+| 9: Code Quality | 10 | 18-26 hours | PENDING |
+| **Total Remaining** | **44** | **52-73 hours** | |
 
-### Items Resolved This Session
+### Security Items (Wave 7)
+| Item | Severity | Estimated | Status |
+|------|----------|-----------|--------|
+| 7.1 Python Plugin Block | CRITICAL | 3-4 hrs | NOT STARTED |
+| 7.2 Ruby Plugin Detection | HIGH | 2-3 hrs | NOT STARTED |
+| 7.3 TLS Warning Enhancement | HIGH | 4-6 hrs | NOT STARTED |
+| 7.4 NoVerifier Metrics | HIGH | 1-2 hrs | NOT STARTED |
+| 7.5 Path Unwrap Fixes | MEDIUM | 1 hr | NOT STARTED |
+| 7.6 Config Encryption Advisory | MEDIUM | 2-3 hrs | NOT STARTED |
+| 7.7 NSE TOCTOU Advisory | MEDIUM | 1-2 hrs | NOT STARTED |
+| 7.8 Circuit Metrics | LOW | DONE | ✅ |
+| 7.9 Rate Limit Status | LOW | 1-2 hrs | NOT STARTED |
+| 7.10 Webhook Rotation | LOW | 1 hr | NOT STARTED |
 
-| Item | Status | Resolution |
-|------|--------|-----------|
-| 4.5 SensitiveString Docs | ✅ FIXED | Added security warning doc |
-| 4.9 ProxyPool Sync | ⏭️ SKIPPED | RwLock serves legitimate API purpose |
-| 4.11 Sync Primitives | ✅ FIXED | Changed to parking_lot::Mutex |
-| 2.6 Worker JoinHandle | ✅ FIXED | Added task_processor_handle field |
-| 2.3 Memory Bounds | ✅ FIXED | Streaming + max_results limits implemented |
-| 4.7 Unwrap Audit | ✅ VERIFIED | Listed locations were test code only |
-| 4.4 TUI Decompose | ✅ COMPLETED | TaskBuilder trait refactor - 883 lines (47% reduction from 1665) |
+### Performance Items (Wave 8)
+| Track | Items | Estimated | Status |
+|-------|-------|-----------|--------|
+| A: HTTP Config | 12 | 3.5 hrs | NOT STARTED |
+| B: Lock Contention | 6 | 8-11 hrs | NOT STARTED |
+| C: Memory | 4 | 4-5.5 hrs | NOT STARTED |
+| D: Concurrency | 3 | 2.5-4.5 hrs | NOT STARTED |
 
-### Remaining Work
-
-| Item | Remaining Work | Difficulty |
-|------|----------------|------------|
-| D.1 Error Consolidation | Per AGENTS.md policy | Keep separate (not recommended) |
+### Code Quality Items (Wave 9)
+| Item | Severity | Estimated | Status |
+|------|----------|-----------|--------|
+| 9.1 Scanner Race | CRITICAL | (see B.1.1) | NOT STARTED |
+| 9.2 Detached Tasks | HIGH | 2-3 hrs | NOT STARTED |
+| 9.3 std::Mutex Async | HIGH | 30 min | NOT STARTED |
+| 9.4 TUI State Mutex | MEDIUM | 30 min | NOT STARTED |
+| 9.5 Unwrap Audit | HIGH | 6-8 hrs | PENDING |
+| 9.6 Safe Serialization | MEDIUM | 1 hr | NOT STARTED |
+| 9.7 Too-Many-Arguments | LOW | 1-2 hrs | NOT STARTED |
+| 9.8 TUI Size | MEDIUM | DEFERRED | DEFERRED |
+| 9.9 Regex Consistency | LOW | 30 min | NOT STARTED |
+| 9.10 Error Messages | LOW | 2-3 hrs | NOT STARTED |
 
 ---
 
 ## Notes
 
-- **Dependencies**: Wave 1 Block B (1.4 CSV injection) should be completed before CSV export features
+- **Dependencies**: Wave 7 Block B (TLS) 7.3 should be completed before 7.4
 - **Security First**: Always prioritize security fixes over performance
 - **Backward Compatibility**: All changes must maintain backward compatibility unless explicitly breaking
 - **Feature Flags**: Properly gate optional functionality
-- Run `cargo test --lib -p slapper` and `cargo clippy --lib -p slapper` to verify any changes
+- **Atomic Ordering**: When converting Mutex to AtomicUsize, use `Ordering::Relaxed` for counters that don't need strict ordering guarantees

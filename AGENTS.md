@@ -130,7 +130,7 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 - `CircuitBreaker` - individual breaker with state (Closed/Open/HalfOpen)
 - `CircuitBreakerRegistry` - manages multiple breakers by name
 - Tracks failure/success counts, total calls, failure rate
-- Configurable failure threshold, success threshold, and timeout
+- Exposes `total_calls()`, `total_failures()`, `failure_rate()` methods
 
 ### Truncation Functions
 
@@ -162,32 +162,41 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 `scanner/ports/spoofed.rs` contains raw socket scanning (feature-gated). `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled. Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing.
 
-| Metric | Value |
-|--------|-------|
-| Tests | 1061 passing |
-| Build | Clean compilation |
-| Clippy | Clean (1 pre-existing warning) |
-| Doctests | 17 pass, 1 ignored, 0 fail |
-| `SlapperError` variants | 23 |
-| `once_cell` in slapper | 0 (replaced with `std::sync::LazyLock`) |
-| MSRV | 1.80 |
-| `thiserror` | 2.x |
-| Ruby plugins | Zero warnings with `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (883 lines — 47% reduction from 1665) |
-| Source files | 415 `.rs` files |
-| TUI files | 60 `.rs` files |
-| Tab variants | 29 |
-| Agent module files | 6 (`mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs`) |
-| Skill files | 16 (in `slapper_skills/`) |
-| Tool findings | Scanner, Recon, Pipeline, Fuzzer tools now return findings via callback |
-| ADRs | 4 (in `docs/adr/`) |
-| Plans | ALL COMPLETED |
+### Current Codebase Metrics
+
+| Metric | Value | Note |
+|--------|-------|------|
+| Tests | 1063 passing | Verified |
+| Build | Clean compilation | |
+| Clippy | 1 warning | `scan_ports` has 8 args (exceeds 7) |
+| Doctests | 17 pass, 1 ignored, 0 fail | |
+| `SlapperError` variants | 23 | |
+| `once_cell` in slapper | 0 | Replaced with `std::sync::LazyLock` |
+| MSRV | 1.80 | |
+| `thiserror` | 2.x | |
+| Ruby plugins | Zero warnings | With `--features ruby-plugins` |
+| Largest file | `tui/app/mod.rs` (883 lines) | Decomposed from 1665 (47% reduction) |
+| Source files | 415 `.rs` files | |
+| TUI files | 60 `.rs` files | |
+| Tab variants | 29 | |
+| Agent module files | 6 | `mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs` |
+| Skill files | 16 | In `slapper_skills/` |
+| ADRs | 4 | In `docs/adr/` |
 
 ## Planning
 
-- `plans/plan.md` — Consolidated plan with all items COMPLETED (6 waves, ~58 items, 92-112 hours, 57 completed + 1 deferred)
+- `plans/plan.md` — Consolidated plan (Waves 1-6 COMPLETED, Waves 7-9 PENDING)
 - `plans/harness.md` — MCP/Agent findings harness (COMPLETED)
 - `plans/agent_architecture.md` — Agent architecture (COMPLETED)
+
+### Remaining Work (Waves 7-9)
+
+| Wave | Items | Estimated Time | Status |
+|------|-------|----------------|--------|
+| 7: Security | 9 | 16-23 hours | PENDING |
+| 8: Performance | 25 | 18-24 hours | PENDING |
+| 9: Code Quality | 10 | 18-26 hours | PENDING |
+| **Total** | **44** | **52-73 hours** | |
 
 ## Lessons Learned
 
@@ -457,373 +466,114 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 
 - `output/ai_schema.rs` — `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` types
 
-### Lessons Learned (Session 2026-04-05)
+## Security Patterns
 
-#### Test coverage improvements
+### Authentication Middleware Pattern
 
-- Added `#[cfg(test)]` modules to 10 recon modules (asn, cve, cve_lookup, dns_enhanced, ssl, subdomain, techdetect, threatintel, wayback, runner) — added 77 new tests
-- Test count: 851 → 974 (verified with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`)
+When adding auth to new endpoints:
+1. Add `Option<String>` to state
+2. Create local `require_auth` function using constant-time comparison (`subtle::ConstantTimeEq`)
+3. Apply to all handlers
 
-#### Stub module implementation
+### Formula Injection Prevention
 
-- All 8 stub modules (`container`, `storage`, `supply_chain`, `hunt`, `compliance`, `integrations`, `workflow`, `vuln`) are now implemented with real functionality:
-  - `TaskConfig` enum variants include config/mode parameters
-  - `TaskResult` enum variants use real result types (`StorageListScans`, `StorageListFindings`, `IntegrationsCreateIssue`, `IntegrationsSearchIssues`, `Workflow(WorkflowReport)`, `Vuln(VulnAssessment)`)
-  - `VulnAssessment` struct added to `vuln/mod.rs`
-  - `Issue` struct updated with `id`, `status`, `url`, `created_at` fields — required fixing all 6 construction sites in github.rs, gitlab.rs, jira.rs
-  - Tab `get_mode()` methods added for Storage, Integrations, Workflow, Vuln tabs
-  - `build_*_task()` methods pass config from tab state to worker
-
-#### Compliance checks expansion
-
-- `run_compliance_task()` expanded from ~7 to 15 checks:
-  - HTTPS enforcement, HSTS, X-Content-Type-Options, X-Frame-Options/CSP frame-ancestors
-  - server/X-Powered-by, status codes, CSP, Referrer-Policy, Permissions-Policy
-  - cache-control on sensitive pages, HttpOnly/Secure/SameSite cookies
-  - CORS wildcard, X-XSS-Protection
-
-#### Performance optimizations
-
-- `ScrollableText::render()` — replaced `Vec::with_capacity` + loop with `.cloned().collect()` iterator pattern
-
-### Lessons Learned (Session 2026-04-07)
-
-#### Plan consolidation
-
-- Consolidated 2 plan files (plan2.md, plan3.md) into single `plans/plan.md`
-- Organized into 4 waves with parallelizable blocks
-- Before implementing, verify file paths using `glob` or `rg` - some planned features already implemented (TabState, TabRender, TabInput traits exist)
-- Count actual source files with `find crates/slapper/src -name '*.rs' | wc -l` (406 files)
-- Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (976 tests)
-- Before implementing any plan item, verify file paths exist using `glob` or `rg`
-- Verify codebase metrics (test counts, file sizes, line counts) against actual code before referencing in plans
-- The plan uses waves organized into parallelizable blocks where items within each block are independent
-
-#### Known bugs FIXED (2026-04-14)
-
-- ✅ UTF-8 cursor panic in `InputField::delete()` and `backspace()` — Fixed with `chars().count()` (plan.md:1.4)
-- ✅ Grammar fuzzer payloads severity hardcoded to Medium — Fixed with `GrammarKind::severity()` mapping (plan.md:2.5)
-- ✅ Tool findings not propagating to agent/MCP — Fixed with callback infrastructure in scanner, recon, pipeline modules (harness.md:1.4)
-- ✅ SearchConfig added to settings.rs for search tool configuration (agent_architecture.md:4.2)
-
-#### Verification best practices
-
-- Always verify plan items against actual codebase before assuming they still apply
-- Use `rg` to confirm file paths, line numbers, and patterns exist
-- Run `cargo test --lib -p slapper` after each change to catch regressions
-- Use `cargo clippy --lib -p slapper` to verify no new warnings
-- Check test counts with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`
-- Count source files with `find crates/slapper/src -name '*.rs' | wc -l`
-
-#### Verification best practices
-
-- Always verify plan items against actual codebase before assuming they still apply
-- Use `rg` to confirm file paths, line numbers, and patterns exist
-- Run `cargo test --lib -p slapper` after each change to catch regressions
-- Use `cargo clippy --lib -p slapper` to verify no new warnings
-- Check test counts with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`
-- Count source files with `find crates/slapper/src -name '*.rs' | wc -l`
-
-### Lessons Learned (Session 2026-04-03)
-
-#### Plan consolidation
-
-- Multiple plan files should be consolidated into a single `plan.md` in the `plans/` directory
-- Waves should be organized into parallelizable blocks (A, B, C, etc.) where items within each block are independent
-- Before implementing any plan item, verify file paths exist using `glob` or `rg`
-
-#### Known bugs FIXED (2026-04-03)
-
-- ✅ WebSocket payloads mislabeled as `PayloadType::GraphQL` in `fuzzer/payloads/websocket.rs` — Fixed by adding `PayloadType::Websocket` variant and updating `websocket::get_payloads()` to use correct type
-- ✅ `AiConfig` field is `base_url`, not `api_url` — Fixed `ai/client.rs` to use `self.config.base_url`
-- ✅ `AiConfig` missing `temperature` field — Added `pub temperature: Option<f64>` to `config/settings.rs`
-- ✅ `AiConfig.api_key` should be `Option<SensitiveString>` — Changed from `SensitiveString` to `Option<SensitiveString>` with `#[serde(default)]`
-
-#### Feature flag patterns
-
-- New feature flags follow the pattern: optional dep in `Cargo.toml` + `#[cfg(feature = "...")]` in code
-- The `full` feature should include all new optional flags
-- `grpc-api` and `nse-sandbox` are intentionally excluded from `full`
-
-### Verification Best Practices
-
-When working with improvement plans or code reviews:
-- Verify every item against the actual codebase before assuming it still applies
-- Use `rg` to confirm file paths, line numbers, and patterns exist
-- Plans may describe issues from earlier code states that have since been resolved
-- Run `cargo test --lib -p slapper` after each change to catch regressions
-- Use `cargo clippy --lib -p slapper` to verify no new warnings
-
-### Lessons Learned (Session 2026-04-02)
-
-#### Clippy warnings can be auto-fixed
-
-Many clippy warnings can be automatically fixed with:
-```bash
-cargo clippy --fix --lib -p slapper --allow-dirty
+Check for unsafe prefixes at START of string (`starts_with`) not just anywhere in string (`contains`):
+```rust
+// SAFE: Check first character
+if content.starts_with('=') || content.starts_with('+') || content.starts_with('-') || content.starts_with('@') {
+    // Handle formula injection
+}
 ```
 
-#### Doc tests must compile as standalone examples
+### Log Sanitization
 
-Doc test examples in `error/mod.rs` and similar files:
-- Must use actual types and values that compile
-- Cannot use `reqwest::Error::from(std::io::Error::new(...))` because `reqwest::Error` doesn't have such a constructor
-- Use direct `SlapperError::Timeout {...}` construction instead
+When changing sanitization behavior, update corresponding tests that assert old behavior.
 
-#### TUI imports matter
+### MCP Auth Bypass
 
-When adding `set_error()` implementations to tabs:
-- `ratatui::text::Line` and `ratatui::style::Style` may need to be imported
-- Use `#[allow(unused_imports)]` temporarily if unsure, then run clippy to identify what's actually needed
-- For `set_error()` in tabs like ResumeTab, only `Line` was needed (not `Span` and `Style` which were already in scope)
+The `initialize` method bypass may be protocol-required, but auth MUST be enforced when api_key is configured (`Some`).
 
-#### Dead code removal impact
+### NSE Sandbox
 
-- Removing a private helper function used by multiple callers in the same module: add the import first, then remove the duplicate
-- When removing duplicate `centered_rect()` from `tui/ui.rs`, needed to:
-  1. Add import: `use crate::tui::components::popup::centered_rect;`
-  2. Export it from `tui/components/mod.rs`: `pub use popup::centered_rect;`
-  3. Update import in `tui/ui.rs` to use the re-export path
+Default to `enabled: true` - security by default over convenience.
 
-#### Function signature changes
+### Path Validation Pattern
 
-When adding a new parameter to a public async function like `scan_endpoints()`:
-- All callers must be updated (TUI, CLI, tests, benchmarks)
-- The new parameter should default to a safe value to minimize breaking changes
-- The `verify_tls` parameter was already properly implemented and used
+Use `canonicalize()` to resolve symlinks, then check if result starts with allowed prefix.
 
-### Lessons Learned (Session 2026-04-09)
+### ReDoS Prevention
 
-#### Plan consolidation
+Always use `RegexBuilder` with explicit `size_limit()` when building regexes from untrusted input.
 
-- Consolidated 2 plan files (plan2.md, plan3.md) into single `plans/plan.md`
-- Organized into 4 waves with parallelizable blocks
-- Before implementing, verify file paths using `glob` or `rg` - some planned items may already be implemented
-- Verified actual codebase state - several "bugs" from older AGENTS.md entries are already fixed:
-  - CSV export uses `escape_csv` function
-  - PortScanResults uses `u32` for ports_scanned
-  - ConfigError wraps `std::io::Error` properly
-  - Config load/save use `impl AsRef<Path>`
-  - ResponseSeverity has Ord/PartialOrd implementations
+### Race Condition with Atomics
 
-#### Code verification during plan consolidation
+When using both `Mutex` and atomic operations, ensure atomic operations happen inside the mutex lock to prevent inconsistent state reads.
 
-When reviewing plan items against actual codebase:
-- Use `grep` to find exact patterns: `rg "cursor_pos.*\.len\(\)"`
-- Use `glob` to find files: `glob "**/input.rs"`
-- Check actual struct fields: `read` file and verify type definitions
-- Don't assume old AGENTS.md entries are still valid - verify each one
-- Count source files with `find crates/slapper/src -name '*.rs' | wc -l` (415 files as of 2026-04-14)
-- Count tests with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` (1059 tests as of 2026-04-14)
+## Performance Patterns
 
-### Lessons Learned (Session 2026-04-14)
+### DashMap for Concurrent Aggregation
 
-This session focused on plan consolidation rather than implementation. Key lessons:
+Replace `Arc<Mutex<Vec>>` with `Arc<DashMap<K, V>>` for lock-free concurrent appends.
 
-#### Plan Consolidation Best Practices
+### FxHashMap for Hot Paths
 
-- Multiple plan files should be consolidated into a single `plans/plan.md`
-- Before implementing, verify file paths using `glob` or `rg` - some planned items already implemented
+Use `rustc_hash::FxHashMap` instead of `std::collections::HashMap` for 2-3x faster lookups in high-traffic areas.
+
+### LazyLock for Static Regex
+
+Pre-compile regex patterns at module level using `std::sync::LazyLock` to avoid repeated compilation.
+
+### Single-Buffer Escape Functions
+
+Use `write!` with pre-allocated `String` instead of chained `.replace()` calls to avoid intermediate allocations.
+
+### HTTP Connection Pooling
+
+Add `.pool_max_idle_per_host(20).pool_idle_timeout(Duration::from_secs(30)).tcp_nodelay(true)` to client builders.
+
+### SmallVec for Stack-Allocated Buffers
+
+Use `SmallVec<[u8; 256]>` instead of `Vec<u8>` for small fixed-size buffers to avoid heap allocation.
+
+### contains_ignore_case Helper
+
+For repeated case-insensitive substring checks, call `to_lowercase()` once before the loop instead of once per pattern.
+
+## Code Quality Patterns
+
+### Test Feature Gating
+
+Always gate integration tests with `#[cfg(feature = "...")]` when they depend on optional features.
+
+### Doc Test Compilation
+
+Doc examples must use correct types and function signatures - always verify against actual code.
+
+### URL Encoding
+
+Use `urlencoding::encode()` for any user-provided query string components in URLs.
+
+### Error Conversion
+
+When adding `From` impls for feature-gated error types, gate the entire impl block with the appropriate `#[cfg(feature = "...")]`.
+
+### Dead Code Security
+
+Code after an early return that can never execute is a security risk - remove it.
+
+## Verification Best Practices
+
 - Always verify plan items against actual codebase before assuming they still apply
 - Use `rg` to confirm file paths, line numbers, and patterns exist
+- Run `cargo test --lib -p slapper` after each change to catch regressions
+- Use `cargo clippy --lib -p slapper` to verify no new warnings
+- Check test counts with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`
+- Count source files with `find crates/slapper/src -name '*.rs' | wc -l`
 
-#### Plan Structure
+## Plan Structure
 
-- Organized into waves with parallelizable blocks
+Plans are organized into waves with parallelizable blocks:
 - Items within each block are independent (can be parallelized)
 - Use "waves" for phased implementation where phases can run in parallel via sub-agents
-
-#### Codebase Verification
-
-- Use `find crates/slapper/src -name '*.rs' | wc -l` for file count
-- Use `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l` for test count
-- Run `cargo clippy --lib -p slapper` to check for warnings
-- Verify actual line numbers and file paths before implementing plan items
-
-### Lessons Learned (Session 2026-04-14 - Wave 1)
-
-#### Wave 1 Implementation Summary
-
-Successfully completed all 9 critical security fixes in Wave 1:
-
-**Block A - Authentication (3 fixes):**
-- `agent_routes.rs`: Added `require_auth` to all 9 endpoints with `api_key: Option<String>` state
-- `ai_routes.rs`: Added auth middleware to all 6 AI endpoints
-- `mcp/routes.rs`: Fixed initialize bypass - auth now enforced when api_key is Some
-- `slapper-nse/src/lib.rs`: Changed `SandboxConfig::default()` to `enabled: true`
-
-**Block B - Injection (4 fixes):**
-- `output/escape.rs`: `escape_csv` now detects formula prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`)
-- `scanner/ports/mod.rs` + `pipeline/report.rs`: Applied `escape_xml()` to `results.host`
-- `utils/logging.rs`: Strip `\n` and `\r` from log sanitization (keep `\t`)
-- `slapper-nse/src/libraries/nmap.rs`: Added interface name validation
-
-**Block C - Crypto (2 fixes):**
-- `distributed/io.rs`: Added runtime warning on each insecure TLS connection
-- `agent/alerts.rs`: Use `serde_json::to_string()` for deterministic HMAC input
-
-#### Security Fix Patterns
-
-1. **Auth middleware pattern**: Add `Option<String>` to state, create local `require_auth` function using constant-time comparison (`subtle::ConstantTimeEq`), apply to all handlers
-
-2. **Formula injection**: Check for unsafe prefixes at START of string (`starts_with`) not just anywhere in string (`contains`)
-
-3. **Log sanitization**: When changing sanitization behavior, update corresponding tests that assert old behavior
-
-4. **MCP auth bypass**: The `initialize` method bypass may be protocol-required, but auth MUST be enforced when api_key is configured (`Some`)
-
-5. **NSE sandbox**: Default to `enabled: true` - security by default over convenience
-
-### Lessons Learned (Session 2026-04-14 - Wave 2)
-
-#### Wave 2 Implementation Summary
-
-Completed 5 of 7 security fixes in Wave 2:
-
-**Block A - Path Traversal (2.1):**
-- Added `validate_path()` and `validate_path_string()` in `utils/validation.rs`
-- Pattern: use `canonicalize()` + prefix check to prevent directory escapes
-- Applied to: `tui/app/export.rs`, `commands/handlers/sbom.rs`, `agent/skills.rs`, `agent/portfolio.rs`, `recon/git_secrets.rs`
-
-**Block A - ReDoS (2.2):**
-- Replaced `Regex::new()` with `RegexBuilder::new().size_limit(100_000).build()`
-- Applied to: `fuzzer/chain.rs` (2 locations), `recon/js.rs` (4 functions), `recon/email.rs` (4 functions)
-
-**Block B - Concurrency fixes:**
-- **2.4** `spoofed.rs`: Changed `OnceLock` init to return `SlapperError::Runtime` on failure instead of silent panics
-- **2.5** `slapper-ruby/src/api.rs`: Changed `get_runtime()` to use `Handle::current()` instead of creating new runtime
-- **2.7** `circuit_breaker.rs`: Moved atomic operations inside mutex lock to fix race condition
-
-**Pending:**
-- **2.3** Unbounded Memory Allocation: Requires architectural changes (streaming/pagination) - not a simple fix
-- **2.6** Distributed Worker JoinHandle: Requires significant restructuring (inner spawned tasks don't have access to Worker's state)
-
-#### Security Fix Patterns
-
-1. **Path validation pattern**: Use `canonicalize()` to resolve symlinks, then check if result starts with allowed prefix
-
-2. **ReDoS prevention**: Always use `RegexBuilder` with explicit `size_limit()` when building regexes from untrusted input
-
-3. **OnceLock error handling**: `OnceLock::get_or_try_init()` returns `Result`, must handle appropriately
-
-4. **Ruby runtime isolation**: Use `Handle::current()` to access existing runtime, not `Runtime::new()` which creates new runtime that can't coordinate with main runtime
-
-5. **Race condition with atomics**: When using both `Mutex` and atomic operations, ensure atomic operations happen inside the mutex lock to prevent inconsistent state reads
-
-### Lessons Learned (Session 2026-04-14 - Wave 3)
-
-#### Wave 3 Implementation Summary
-
-Completed all 11 performance optimization items in Wave 3:
-
-**Block A - HashMap & Regex Optimization:**
-- **3.1** `scanner/ports/mod.rs`, `scanner/endpoints.rs`, `scanner/fingerprint.rs`: Replaced `Arc<Mutex<Vec>>` with `Arc<DashMap>` for lock-free append
-- **3.2** `fuzzer/state.rs`, `recon/techdetect.rs`: Added `rustc-hash` and replaced `HashMap` with `FxHashMap` in hot paths
-- **3.3** `recon/js.rs`, `recon/email.rs`: Pre-compiled regexes with `LazyLock` at module level
-
-**Block B - String & Memory Optimization:**
-- **3.4** `output/escape.rs`: Replaced chained `.replace()` with single-buffer `write!` loop for `escape_html()` and `escape_xml()`
-- **3.5** `waf/waf_patterns.rs`: Added `LazyLock` static cache for WAF signatures
-- **3.6** `utils/http.rs`, `agent/alerts.rs`, `tool/implementations/search.rs`: Added HTTP connection pooling (`pool_max_idle_per_host(20)`, `pool_idle_timeout(30s)`, `tcp_nodelay(true)`)
-- **3.7** `fuzzer/payloads/mod.rs`: Added `LazyLock` cache for payload data
-- **3.8** `output/markdown.rs`, `output/html.rs`, `output/csv.rs`: Used `writeln!` macro and cached theme strings
-
-**Block C - Allocation Reduction:**
-- **3.9** `utils/parsing.rs`: Added `contains_ignore_case()` helper, applied in WAF detector and fingerprint
-- **3.10** `scanner/fingerprint.rs`: Replaced `Vec<u8>` with `SmallVec<[u8; 256]>`
-- **3.11** `fuzzer/grammar.rs`: Clone retained due to borrow checker constraints (borrow conflict between `&mut self` and `&self.grammar.start`)
-
-#### Performance Optimization Patterns
-
-1. **DashMap for concurrent aggregation**: Replace `Arc<Mutex<Vec>>` with `Arc<DashMap<K, V>>` for lock-free concurrent appends
-
-2. **FxHashMap for hot paths**: Use `rustc_hash::FxHashMap` instead of `std::collections::HashMap` for 2-3x faster lookups in high-traffic areas
-
-3. **LazyLock for static regex**: Pre-compile regex patterns at module level using `std::sync::LazyLock` to avoid repeated compilation
-
-4. **Single-buffer escape functions**: Use `write!` with pre-allocated `String` instead of chained `.replace()` calls to avoid intermediate allocations
-
-5. **HTTP connection pooling**: Add `.pool_max_idle_per_host(20).pool_idle_timeout(Duration::from_secs(30)).tcp_nodelay(true)` to client builders
-
-6. **SmallVec for stack-allocated buffers**: Use `SmallVec<[u8; 256]>` instead of `Vec<u8>` for small fixed-size buffers to avoid heap allocation
-
-7. **contains_ignore_case helper**: For repeated case-insensitive substring checks, call `to_lowercase()` once before the loop instead of once per pattern
-
-### Lessons Learned (Session 2026-04-15 - Wave 4)
-
-#### Wave 4 Implementation Summary
-
-Completed 6 of 10 items in Wave 4 (4 deferred, 2 skipped):
-
-**Block A - Broken Tests & Fixes:**
-- **4.1** `fuzzer_tests.rs`: Changed `get_all_payloads` to `get_all_payloads_cached`, fixed iterator issue
-- **4.2** `stress_tests.rs`: Added `#![cfg(feature = "stress-testing")]`
-- **4.3** Doc test fixes in `fuzzer/engine/core.rs`, `output/mod.rs`, `recon/mod.rs`, `scanner/mod.rs`
-
-**Block B - Code Organization:**
-- **4.6** `integrations/github.rs`, `recon/subdomain.rs`: Added `urlencoding::encode()` for URL query parameters
-- **4.4** TUI decomposition: DEFERRED (20+ hours)
-- **4.5** SensitiveString docs: DEFERRED (low priority)
-
-**Block C - Unwrap/Expect Audit:**
-- **4.8** `distributed/command.rs`: Removed dead code after early return
-- **4.10** `error/mod.rs`: Added `From` implementations for `AiError`, `CaptureError`, `TracerouteError` (feature-gated)
-- **4.7** High-risk unwrap audit: PENDING (8-12 hours, major refactoring)
-- **4.9** ProxyPool sync: SKIPPED (low severity, regression risk)
-- **4.11** Mutex mixing: SKIPPED (low severity, regression risk)
-
-#### Code Quality Fix Patterns
-
-1. **Test feature gating**: Always gate integration tests with `#[cfg(feature = "...")]` when they depend on optional features
-
-2. **Doc test compilation**: Doc examples must use correct types and function signatures - always verify against actual code
-
-3. **URL encoding**: Use `urlencoding::encode()` for any user-provided query string components in URLs
-
-4. **Error conversion**: When adding `From` impls for feature-gated error types, gate the entire impl block with the appropriate `#[cfg(feature = "...")]`
-
-5. **Dead code security**: Code after an early return that can never execute is a security risk - remove it
-
-6. **Low-priority items**: Skipping items like 4.9 and 4.11 is acceptable when the risk of regressions outweighs the benefit
-
-### Lessons Learned (Session 2026-04-15 - Wave 5)
-
-#### Wave 5 Implementation Summary
-
-Completed all 7 items in Wave 5:
-
-**Block A - Test Improvements:**
-- **5.1** `tests/common/mod.rs`: Added `assert_serialize_roundtrip<T>` and `assert_string_serialize_roundtrip` helpers for serialization testing
-- **5.2** `tests/scope_tests.rs`: Replaced URL normalization test with real scope enforcement test using `Scope::is_target_allowed`
-- **5.3** `tests/common/wiremock_helpers.rs`: Removed unused helpers (`mock_secure_headers`, `mock_jwt_response`, `mock_rate_limited`)
-- **5.4**: Verified test infrastructure is well-organized with `tests/common/` directory
-
-**Block B - Documentation:**
-- **5.5** `tool/traits.rs`, `tool/response.rs`, `tool/registry.rs`: Added comprehensive doc comments to `SecurityTool` trait, `ToolResponse` builders, and `ToolRegistry` methods
-- **5.6** `generated/slapper.tool.v1.rs`: Added comment explaining manual maintenance requirement
-- **5.7** Created 4 Architecture Decision Records in `docs/adr/`:
-  - ADR-001: SensitiveString vs SecretString
-  - ADR-002: Feature flag design rationale
-  - ADR-003: rustls over native-tls (except nse)
-  - ADR-004: Error type separation
-
-#### Testing & Documentation Patterns
-
-1. **Serialization roundtrip helper**: Use `assert_serialize_roundtrip(&value)` for types implementing `Serialize + DeserializeOwned + Eq`
-
-2. **Doc comment format**: Always include description, `# Arguments`, `# Returns`, and `# Example` sections for public functions
-
-3. **Unused code**: Remove unused helpers rather than keeping dead code; they can be recovered from git history if needed
-
-4. **Generated file documentation**: When a file is manually maintained despite being marked as generated, add a clear comment explaining this
-
-5. **ADR structure**: Architecture Decision Records should include Status, Context, Decision, Consequences, and References sections
-
-#### Updated Codebase Metrics
-
-| Metric | Current Value | Note |
-|--------|---------------|------|
-| Tests | 1057 passing | Verified |
-| Wave 5 | ✅ COMPLETED | All 7 items done |
-| Total items done | 36 | Across Waves 1-5 |
-| ADRs | 4 created | docs/adr/ |
+- Verify file paths using `glob` or `rg` before implementing plan items
+- Verify actual line numbers and file paths before implementing
