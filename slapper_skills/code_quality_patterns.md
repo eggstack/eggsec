@@ -99,19 +99,21 @@ Doc tests must use correct types and signatures:
 /// # Examples
 ///
 /// ```rust,no_run
-/// use slapper::scanner::{scan_ports, SpoofConfig};
+/// use slapper::scanner::{scan_ports, PortScanConfig, SpoofConfig};
 /// use std::time::Duration;
 ///
 /// # async fn example() -> slapper::error::Result<()> {
-/// let results = scan_ports(
-///     "example.com",
-///     vec![80, 443],
-///     100,  // concurrency
-///     Duration::from_secs(5),
-///     false,  // tui_mode
-///     SpoofConfig::default(),
-///     None,  // progress_tx
-/// ).await?;
+/// let config = PortScanConfig {
+///     host: "example.com".to_string(),
+///     ports: vec![80, 443],
+///     concurrency: 100,
+///     timeout_duration: Duration::from_secs(5),
+///     tui_mode: false,
+///     spoof_config: SpoofConfig::default(),
+///     progress_tx: None,
+///     max_results: None,
+/// };
+/// let results = scan_ports(config).await?;
 /// # Ok(())
 /// # }
 /// ```

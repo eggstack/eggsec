@@ -9,6 +9,9 @@ use crate::tool::{
     ToolRegistry, ToolRequest, ToolResponse,
 };
 
+#[cfg(feature = "ai-integration")]
+use crate::ai::AiClient;
+
 use super::auth::{validate_auth, validate_auth_params};
 use super::prompts::get_builtin_prompts;
 use super::types::{CapabilitySummary, McpError, McpRequest, McpResource, McpResponse, McpTool};
@@ -24,6 +27,8 @@ pub struct McpServer {
     pending_cancellations: Arc<Mutex<HashMap<String, CancellationToken>>>,
     completed_results: Arc<Mutex<HashMap<String, ToolResponse>>>,
     stream_events: Arc<tokio::sync::broadcast::Sender<StreamEvent>>,
+    #[cfg(feature = "ai-integration")]
+    ai_client: Option<AiClient>,
 }
 
 impl McpServer {
@@ -43,6 +48,8 @@ impl McpServer {
             pending_cancellations,
             completed_results,
             stream_events: Arc::new(stream_events),
+            #[cfg(feature = "ai-integration")]
+            ai_client: None,
         };
         
         server.start_hashmap_reaper(60);
@@ -71,7 +78,20 @@ impl McpServer {
             pending_cancellations: self.pending_cancellations,
             completed_results: self.completed_results,
             stream_events: self.stream_events,
+            #[cfg(feature = "ai-integration")]
+            ai_client: self.ai_client,
         }
+    }
+
+    #[cfg(feature = "ai-integration")]
+    pub fn with_ai_client(mut self, client: AiClient) -> Self {
+        self.ai_client = Some(client);
+        self
+    }
+
+    #[cfg(feature = "ai-integration")]
+    pub fn ai_client(&self) -> Option<&AiClient> {
+        self.ai_client.as_ref()
     }
 
     pub fn validate_auth(&self, headers: &axum::http::HeaderMap) -> Result<(), McpError> {

@@ -38,6 +38,16 @@ pub fn run(config_path: Option<String>) -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    if let Ok(size) = terminal.size() {
+        if size.width < 80 || size.height < 24 {
+            eprintln!(
+                "Warning: Terminal size ({}x{}) is smaller than recommended (80x24). \
+                 Some UI elements may not display correctly.",
+                size.width, size.height
+            );
+        }
+    }
+
     let history = state::create_shared_history();
     let mut app = App::new(history);
     if let Some(path) = config_path {

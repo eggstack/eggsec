@@ -27,6 +27,7 @@
 //! # }
 //! ```
 
+pub mod auth;
 pub mod cache;
 pub mod circuit_breaker;
 pub mod client_pool;
@@ -47,6 +48,7 @@ pub mod validation;
 #[cfg(any(feature = "stress-testing", feature = "packet-inspection"))]
 pub mod privilege;
 
+pub use auth::constant_time_eq;
 pub use formatting::{preserve_all, strip_controls};
 pub use logging::sanitize_for_logging;
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerRegistry, CircuitState};

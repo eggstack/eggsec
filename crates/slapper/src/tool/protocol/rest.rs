@@ -92,6 +92,7 @@ pub struct ToolDetailResponse {
 }
 
 pub fn create_router(registry: ToolRegistry, api_key: Option<String>) -> Router {
+    let ai_key = api_key.clone();
     let state = Arc::new(RestState::new(registry, api_key));
 
     let mut router = Router::new()
@@ -104,7 +105,7 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>) -> Router 
 
     #[cfg(feature = "ai-integration")]
     {
-        router = router.merge(super::ai_routes::router());
+        router = router.merge(super::ai_routes::router(ai_key));
     }
 
     {

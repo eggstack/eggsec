@@ -9,7 +9,7 @@ mod adaptive;
 mod planner;
 
 pub use cache::{AiCache, CacheKeyBuilder, CacheStats};
-pub use client::AiClient;
+pub use client::{AiClient, Provider};
 pub use errors::{AiError, Result};
 pub use types::*;
 pub use payloads::AiPayloadGenerator;

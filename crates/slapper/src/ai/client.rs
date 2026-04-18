@@ -5,11 +5,48 @@ use crate::utils::circuit_breaker::{CircuitBreaker, CircuitState};
 use std::sync::Arc;
 use std::time::Duration;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Provider {
+    OpenAI,
+    Azure,
+    Anthropic,
+    OpenAICompatible,
+}
+
+impl Provider {
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "openai" | "openai.com" => Provider::OpenAI,
+            "azure" | "azureopenai" | "azureopenai.com" => Provider::Azure,
+            "anthropic" | "anthropic.com" | "claude" => Provider::Anthropic,
+            _ => Provider::OpenAICompatible,
+        }
+    }
+
+    pub fn default_model(&self) -> &'static str {
+        match self {
+            Provider::OpenAI => "gpt-4",
+            Provider::Azure => "gpt-4",
+            Provider::Anthropic => "claude-3-sonnet-20240229",
+            Provider::OpenAICompatible => "gpt-4",
+        }
+    }
+
+    pub fn supports_bearer_auth(&self) -> bool {
+        matches!(self, Provider::OpenAI | Provider::OpenAICompatible | Provider::Anthropic)
+    }
+
+    pub fn supports_azure_auth(&self) -> bool {
+        matches!(self, Provider::Azure)
+    }
+}
+
 #[derive(Clone)]
 pub struct AiClient {
     client: Client,
     config: AiConfig,
     circuit_breaker: Arc<CircuitBreaker>,
+    provider: Provider,
 }
 
 impl AiClient {
@@ -17,32 +54,59 @@ impl AiClient {
         if config.provider.is_empty() {
             panic!("AiConfig provider cannot be empty");
         }
+        let provider = Provider::from_str(&config.provider);
         let circuit_breaker = Arc::new(CircuitBreaker::new(
             5,
             3,
             Duration::from_secs(60),
         ));
         Self {
-            client: Client::new(),
+            client: Client::builder()
+                .timeout(Duration::from_secs(60))
+                .pool_max_idle_per_host(20)
+                .pool_idle_timeout(Duration::from_secs(30))
+                .tcp_nodelay(true)
+                .build()
+                .expect("Failed to create AI HTTP client"),
             config,
             circuit_breaker,
+            provider,
         }
+    }
+
+    pub fn provider(&self) -> Provider {
+        self.provider
     }
 
     pub fn api_url(&self) -> &str {
         self.config
             .base_url
             .as_deref()
-            .unwrap_or("https://api.openai.com/v1/chat/completions")
+            .unwrap_or_else(|| match self.provider {
+                Provider::OpenAI => "https://api.openai.com/v1/chat/completions",
+                Provider::Azure => "https://api.openai.com/v1/chat/completions",
+                Provider::Anthropic => "https://api.anthropic.com/v1/messages",
+                Provider::OpenAICompatible => "https://api.openai.com/v1/chat/completions",
+            })
     }
 
     pub fn model(&self) -> &str {
-        self.config.model.as_deref().unwrap_or("gpt-4")
+        self.config.model.as_deref().unwrap_or(self.provider.default_model())
     }
 
     pub fn apply_auth(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         if let Some(key) = &self.config.api_key {
-            request.bearer_auth(key.expose_secret().to_string())
+            match self.provider {
+                Provider::Azure => {
+                    request
+                        .header("api-key", key.expose_secret().to_string())
+                        .header("Content-Type", "application/json")
+                }
+                _ if self.provider.supports_bearer_auth() => {
+                    request.bearer_auth(key.expose_secret().to_string())
+                }
+                _ => request,
+            }
         } else {
             request
         }
@@ -392,5 +456,72 @@ mod tests {
         let client2 = client1.clone();
         assert_eq!(client1.api_url(), client2.api_url());
         assert_eq!(client1.model(), client2.model());
+    }
+
+    #[test]
+    fn test_provider_from_str_openai() {
+        assert_eq!(Provider::from_str("openai"), Provider::OpenAI);
+        assert_eq!(Provider::from_str("OpenAI"), Provider::OpenAI);
+        assert_eq!(Provider::from_str("openai.com"), Provider::OpenAI);
+    }
+
+    #[test]
+    fn test_provider_from_str_azure() {
+        assert_eq!(Provider::from_str("azure"), Provider::Azure);
+        assert_eq!(Provider::from_str("Azure"), Provider::Azure);
+        assert_eq!(Provider::from_str("azureopenai"), Provider::Azure);
+    }
+
+    #[test]
+    fn test_provider_from_str_anthropic() {
+        assert_eq!(Provider::from_str("anthropic"), Provider::Anthropic);
+        assert_eq!(Provider::from_str("Anthropic"), Provider::Anthropic);
+        assert_eq!(Provider::from_str("claude"), Provider::Anthropic);
+    }
+
+    #[test]
+    fn test_provider_from_str_openai_compatible() {
+        assert_eq!(Provider::from_str("custom"), Provider::OpenAICompatible);
+        assert_eq!(Provider::from_str("openrouter"), Provider::OpenAICompatible);
+        assert_eq!(Provider::from_str("ollama"), Provider::OpenAICompatible);
+    }
+
+    #[test]
+    fn test_provider_default_model() {
+        assert_eq!(Provider::OpenAI.default_model(), "gpt-4");
+        assert_eq!(Provider::Azure.default_model(), "gpt-4");
+        assert_eq!(Provider::Anthropic.default_model(), "claude-3-sonnet-20240229");
+        assert_eq!(Provider::OpenAICompatible.default_model(), "gpt-4");
+    }
+
+    #[test]
+    fn test_client_provider() {
+        let client = create_client_without_key();
+        assert_eq!(client.provider(), Provider::OpenAI);
+    }
+
+    #[test]
+    fn test_client_provider_azure() {
+        let mut config = create_test_config();
+        config.provider = "azure".to_string();
+        let client = AiClient::new(config);
+        assert_eq!(client.provider(), Provider::Azure);
+    }
+
+    #[test]
+    fn test_client_provider_anthropic() {
+        let mut config = create_test_config();
+        config.provider = "anthropic".to_string();
+        let client = AiClient::new(config);
+        assert_eq!(client.provider(), Provider::Anthropic);
+    }
+
+    #[test]
+    fn test_anthropic_default_url() {
+        let mut config = create_test_config();
+        config.provider = "anthropic".to_string();
+        config.base_url = None;
+        let client = AiClient::new(config);
+        assert_eq!(client.api_url(), "https://api.anthropic.com/v1/messages");
     }
 }

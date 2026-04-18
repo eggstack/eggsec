@@ -67,6 +67,8 @@ pub mod session;
 pub mod trend;
 
 pub use agent::AttackSurface;
+pub use agent::Severity;
+#[deprecated(since = "0.1.0", note = "Use Severity directly from this module")]
 pub use agent::Severity as AgentSeverity;
 pub use agent::{
     AgentFinding, Confidence, Evidence, FindingStatus, FindingSummary, Remediation,

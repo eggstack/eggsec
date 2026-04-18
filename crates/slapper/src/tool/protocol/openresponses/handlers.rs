@@ -120,7 +120,7 @@ fn validate_auth(api_key: &Option<String>, headers: &HeaderMap) -> Result<(), (S
             .or_else(|| headers.get("x-api-key").and_then(|v| v.to_str().ok()));
 
         match provided {
-            Some(key) if constant_time_eq(key, expected) => Ok(()),
+            Some(key) if crate::utils::constant_time_eq(key, expected) => Ok(()),
             _ => Err((
                 StatusCode::UNAUTHORIZED,
                 Json(serde_json::json!({
@@ -131,11 +131,6 @@ fn validate_auth(api_key: &Option<String>, headers: &HeaderMap) -> Result<(), (S
     } else {
         Ok(())
     }
-}
-
-fn constant_time_eq(a: &str, b: &str) -> bool {
-    use subtle::ConstantTimeEq;
-    a.as_bytes().ct_eq(b.as_bytes()).into()
 }
 
 fn extract_target(input: &Input) -> Target {
@@ -271,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_constant_time_eq() {
-        assert!(constant_time_eq("test", "test"));
-        assert!(!constant_time_eq("test", "other"));
+        assert!(crate::utils::constant_time_eq("test", "test"));
+        assert!(!crate::utils::constant_time_eq("test", "other"));
     }
 }

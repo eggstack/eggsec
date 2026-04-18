@@ -229,11 +229,9 @@ pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>) {
                 let mut responses = Vec::new();
 
                 for req in reqs {
-                    if req.method != "initialize" {
-                        if let Err(e) = server.validate_auth_params(&req.params) {
-                            responses.push(req.error_response(e));
-                            continue;
-                        }
+                    if let Err(e) = server.validate_auth_params(&req.params) {
+                        responses.push(req.error_response(e));
+                        continue;
                     }
 
                     let response = server.handle_request(req).await;

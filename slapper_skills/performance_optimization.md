@@ -33,10 +33,57 @@ let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
 // In spawned task:
 results.insert(port, result);  // No lock needed
 // Collect at end:
-results.clone().into_iter().map(|(_, v)| v).collect()
+Arc::try_unwrap(results).map(|dm| dm.into_iter().map(|(_, v)| v).collect()).unwrap_or_default()
 ```
 
-**Files**: `scanner/ports/mod.rs`, `scanner/endpoints.rs`, `scanner/fingerprint.rs`
+**Files**: `scanner/ports/mod.rs`, `scanner/endpoints.rs`, `scanner/fingerprint.rs`, `fuzzer/engine/execution.rs`
+
+### 2. AtomicU64 for Simple Counters
+
+**Problem**: `Arc<Mutex<u64>>` for counters adds unnecessary synchronization overhead.
+
+**Solution**: Use `Arc<AtomicU64>` for lock-free counter operations:
+```rust
+use std::sync::atomic::{AtomicU64, Ordering};
+let counter = Arc::new(AtomicU64::new(0));
+// Increment:
+counter.fetch_add(1, Ordering::Relaxed);
+```
+
+**Files**: `scanner/ports/mod.rs` (scanned_count)
+
+### 3. Broadcast Channel for Event Notification
+
+**Problem**: Polling loops (e.g., `sleep(50ms)`) waste CPU cycles.
+
+**Solution**: Use `tokio::sync::broadcast` channel for event notification:
+```rust
+use tokio::sync::broadcast;
+let (tx, mut rx) = broadcast::channel(100);
+// In worker task when event occurs:
+let _ = tx.send(port_number);
+// In listener:
+while let Some(port) = rx.recv().await {
+    // Process event
+}
+```
+
+**Files**: `scanner/ports/spoofed.rs`
+
+### 4. Pre-Allocation with String::with_capacity
+
+**Problem**: String concatenation without pre-allocation causes multiple heap reallocations.
+
+**Solution**: Pre-allocate based on expected output size:
+```rust
+// For URL encoding: output can be up to 3x input size
+let mut output = String::with_capacity(input.len() * 3);
+// For escape functions: estimate based on input
+let mut buf = String::with_capacity(s.len() + 10);
+write!(buf, "\"{}\"", s.replace('"', "\\\"")).unwrap();
+```
+
+**Files**: `utils/urlencoding.rs`, `waf/bypass/evasion.rs`, `output/escape.rs`
 
 ### 2. FxHashMap for Hot Paths
 

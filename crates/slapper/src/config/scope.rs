@@ -275,9 +275,44 @@ impl TargetScope {
             .map_err(|e| ScopeError::DnsResolution(host.to_string(), e.to_string()))?
             .collect();
 
-        addrs.first().map(|a| a.ip()).ok_or_else(|| {
+        let ip = addrs.first().map(|a| a.ip()).ok_or_else(|| {
             ScopeError::DnsResolution(host.to_string(), "No addresses found".to_string())
-        })
+        })?;
+
+        if ip.is_loopback() {
+            return Err(ScopeError::DnsResolution(
+                host.to_string(),
+                "Resolved to loopback address blocked by security policy".to_string(),
+            ));
+        }
+
+        if is_private_ip(&ip) {
+            return Err(ScopeError::DnsResolution(
+                host.to_string(),
+                "Resolved to private IP address blocked by security policy".to_string(),
+            ));
+        }
+
+        Ok(ip)
+    }
+}
+
+fn is_private_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            let octets = ipv4.octets();
+            octets[0] == 10
+                || (octets[0] == 172 && (15..=31).contains(&octets[1]))
+                || (octets[0] == 192 && octets[1] == 168)
+                || (octets[0] == 169 && octets[1] == 254)
+                || (octets[0] == 127)
+        }
+        IpAddr::V6(ipv6) => {
+            ipv6.is_loopback()
+                || ipv6.segments()[0] == 0xfc00 >> 8
+                || ipv6.segments()[0] == 0xfd00 >> 8
+                || ipv6.segments()[0] == 0xfe80 >> 8
+        }
     }
 }
 

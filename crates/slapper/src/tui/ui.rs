@@ -489,28 +489,35 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
         }
         crate::tui::tabs::Tab::GraphQl => {
             app.graphql.render(f, area, insert_mode);
+            app.graphql.render_overlays(f, area);
         }
         crate::tui::tabs::Tab::OAuth => {
             app.oauth.render(f, area, insert_mode);
+            app.oauth.render_overlays(f, area);
         }
         crate::tui::tabs::Tab::Cluster => {
             app.cluster.render(f, area, insert_mode);
+            app.cluster.render_overlays(f, area);
         }
         crate::tui::tabs::Tab::Stress => {
             app.stress.render(f, area, insert_mode);
+            app.stress.render_overlays(f, area);
         }
         crate::tui::tabs::Tab::Report => {
             app.report.render(f, area, insert_mode);
+            app.report.render_overlays(f, area);
         }
         #[cfg(feature = "nse")]
         crate::tui::tabs::Tab::Nse => {
             app.nse.render(f, area, insert_mode);
+            app.nse.render_overlays(f, area);
         }
         #[cfg(not(feature = "nse"))]
         crate::tui::tabs::Tab::Nse => {}
         #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
         crate::tui::tabs::Tab::Plugin => {
             app.plugin.render(f, area, insert_mode);
+            app.plugin.render_overlays(f, area);
         }
         #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
         crate::tui::tabs::Tab::Plugin => {}
@@ -670,29 +677,46 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     } else {
         match app.mode {
             super::InputMode::Normal => {
-                let mut help = " [h/l] Tab | [j/k] Nav | [w/b] Word | [1-9] Jump | [Space] Help | [i] Insert | [q] Quit | [Enter] Start | [e] Export ".to_string();
+                let mut help = if area.width < 80 {
+                    " [h/l]Tab [j/k]Nav [Space]Help [i]Insert [q]Quit [e]Export ".to_string()
+                } else {
+                    " [h/l] Tab | [j/k] Nav | [w/b] Word | [1-9] Jump | [Space] Help | [i] Insert | [q] Quit | [Enter] Start | [e] Export ".to_string()
+                };
                 if let Some(palette) = app.get_command_palette() {
                     if palette.visible {
-                        help.push_str("[Ctrl+P] Close Palette ");
+                        help.push_str("[Ctrl+P] Close ");
                     } else {
-                        help.push_str("[Ctrl+P] Open Palette ");
+                        help.push_str("[Ctrl+P] Open ");
                     }
                 }
                 help
             }
             super::InputMode::Insert => {
-                " [Esc] Normal | Type to input | [Ctrl+C] Cancel ".to_string()
+                if area.width < 60 {
+                    " [Esc] Normal | Type | [Ctrl+C] Cancel ".to_string()
+                } else {
+                    " [Esc] Normal | Type to input | [Ctrl+C] Cancel ".to_string()
+                }
             }
         }
     };
 
+    let use_compact = area.width < 100;
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(10), // [MODE][HELP]
-            Constraint::Percentage(55),
-            Constraint::Percentage(40),
-        ])
+        .constraints(if use_compact {
+            [
+                Constraint::Length(8),
+                Constraint::Percentage(60),
+                Constraint::Percentage(40),
+            ]
+        } else {
+            [
+                Constraint::Length(10),
+                Constraint::Percentage(55),
+                Constraint::Percentage(40),
+            ]
+        })
         .split(area);
 
     // Mode indicator (NORMAL/INSERT)

@@ -383,6 +383,28 @@ impl ResponseSeverity {
             ResponseSeverity::None => crate::types::Severity::Info,
         }
     }
+
+    pub fn to_option(&self) -> Option<crate::types::Severity> {
+        match self {
+            ResponseSeverity::Critical => Some(crate::types::Severity::Critical),
+            ResponseSeverity::High => Some(crate::types::Severity::High),
+            ResponseSeverity::Medium => Some(crate::types::Severity::Medium),
+            ResponseSeverity::Low => Some(crate::types::Severity::Low),
+            ResponseSeverity::Info => Some(crate::types::Severity::Info),
+            ResponseSeverity::None => None,
+        }
+    }
+
+    pub fn from_option(opt: Option<crate::types::Severity>) -> Self {
+        match opt {
+            Some(crate::types::Severity::Critical) => ResponseSeverity::Critical,
+            Some(crate::types::Severity::High) => ResponseSeverity::High,
+            Some(crate::types::Severity::Medium) => ResponseSeverity::Medium,
+            Some(crate::types::Severity::Low) => ResponseSeverity::Low,
+            Some(crate::types::Severity::Info) => ResponseSeverity::Info,
+            None => ResponseSeverity::None,
+        }
+    }
 }
 
 impl Ord for ResponseSeverity {

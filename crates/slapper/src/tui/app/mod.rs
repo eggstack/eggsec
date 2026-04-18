@@ -230,46 +230,60 @@ impl App {
 
     pub fn is_running(&mut self) -> bool {
         match self.current_tab {
-            Tab::Settings => false,
-            Tab::History => false,
-            Tab::Dashboard => false,
+            Tab::Recon => tabs::TabState::state(&self.recon) == tabs::AppState::Running,
+            Tab::Load => tabs::TabState::state(&self.load) == tabs::AppState::Running,
+            Tab::ScanPorts => tabs::TabState::state(&self.scan_ports) == tabs::AppState::Running,
+            Tab::ScanEndpoints => tabs::TabState::state(&self.scan_endpoints) == tabs::AppState::Running,
+            Tab::Fingerprint => tabs::TabState::state(&self.fingerprint) == tabs::AppState::Running,
+            Tab::Fuzz => tabs::TabState::state(&self.fuzz) == tabs::AppState::Running,
+            Tab::Waf => tabs::TabState::state(&self.waf) == tabs::AppState::Running,
+            Tab::WafStress => tabs::TabState::state(&self.waf_stress) == tabs::AppState::Running,
+            Tab::Scan => tabs::TabState::state(&self.scan) == tabs::AppState::Running,
+            Tab::Resume => tabs::TabState::state(&self.resume) == tabs::AppState::Running,
+            Tab::Proxy => tabs::TabState::state(&self.proxy) == tabs::AppState::Running,
+            Tab::Packet => tabs::TabState::state(&self.packet) == tabs::AppState::Running,
+            Tab::GraphQl => tabs::TabState::state(&self.graphql) == tabs::AppState::Running,
+            Tab::OAuth => tabs::TabState::state(&self.oauth) == tabs::AppState::Running,
+            Tab::Cluster => tabs::TabState::state(&self.cluster) == tabs::AppState::Running,
+            Tab::Stress => tabs::TabState::state(&self.stress) == tabs::AppState::Running,
+            Tab::Report => tabs::TabState::state(&self.report) == tabs::AppState::Running,
+            Tab::Settings | Tab::History | Tab::Dashboard => false,
             #[cfg(feature = "nse")]
-            Tab::Nse => false,
+            Tab::Nse => tabs::TabState::state(&self.nse) == tabs::AppState::Running,
             #[cfg(not(feature = "nse"))]
             Tab::Nse => false,
             #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => false,
+            Tab::Plugin => tabs::TabState::state(&self.plugin) == tabs::AppState::Running,
             #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => false,
             #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => false,
+            Tab::Hunt => tabs::TabState::state(&self.hunt) == tabs::AppState::Running,
             #[cfg(not(feature = "advanced-hunting"))]
             Tab::Hunt => false,
             #[cfg(feature = "headless-browser")]
-            Tab::Browser => false,
+            Tab::Browser => tabs::TabState::state(&self.browser) == tabs::AppState::Running,
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => false,
             #[cfg(feature = "compliance")]
-            Tab::Compliance => false,
+            Tab::Compliance => tabs::TabState::state(&self.compliance) == tabs::AppState::Running,
             #[cfg(not(feature = "compliance"))]
             Tab::Compliance => false,
             #[cfg(feature = "database")]
-            Tab::Storage => false,
+            Tab::Storage => tabs::TabState::state(&self.storage) == tabs::AppState::Running,
             #[cfg(not(feature = "database"))]
             Tab::Storage => false,
             #[cfg(feature = "external-integrations")]
-            Tab::Integrations => false,
+            Tab::Integrations => tabs::TabState::state(&self.integrations) == tabs::AppState::Running,
             #[cfg(not(feature = "external-integrations"))]
             Tab::Integrations => false,
             #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => false,
+            Tab::Workflow => tabs::TabState::state(&self.workflow) == tabs::AppState::Running,
             #[cfg(not(feature = "finding-workflow"))]
             Tab::Workflow => false,
             #[cfg(feature = "vuln-management")]
-            Tab::Vuln => false,
+            Tab::Vuln => tabs::TabState::state(&self.vuln) == tabs::AppState::Running,
             #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => false,
-            _ => self.dispatcher_mut().is_running(),
         }
     }
 

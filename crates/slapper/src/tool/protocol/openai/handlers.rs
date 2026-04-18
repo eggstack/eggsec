@@ -1,23 +1,46 @@
 use axum::{
+    extract::State,
+    http::HeaderMap,
     response::{IntoResponse, Response, Sse},
     Json,
 };
 use futures::stream::{self};
 use std::convert::Infallible;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use subtle::ConstantTimeEq;
 
 use super::types::*;
+use super::OpenAiState;
 use crate::tool::registry::ToolRegistry;
 use crate::tool::request::{Target, ToolRequest};
 
-pub async fn chat_completions(
-    axum::extract::State(registry): axum::extract::State<ToolRegistry>,
-    Json(req): Json<ChatCompletionRequest>,
-) -> Response {
-    if req.stream.unwrap_or(false) {
-        streaming_response(registry, req).await.into_response()
+fn require_auth(state: &Arc<OpenAiState>, headers: &HeaderMap) -> Result<(), &'static str> {
+    if let Some(ref key) = state.api_key {
+        let auth = headers
+            .get("authorization")
+            .or_else(|| headers.get("x-api-key"))
+            .and_then(|v| v.to_str().ok());
+
+        match auth {
+            Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
+            _ => Err("Invalid or missing API key"),
+        }
     } else {
-        Json(non_streaming_response(registry, req).await).into_response()
+        Ok(())
+    }
+}
+
+pub async fn chat_completions(
+    State(state): State<Arc<OpenAiState>>,
+    headers: HeaderMap,
+    Json(req): Json<ChatCompletionRequest>,
+) -> Result<Response, &'static str> {
+    require_auth(&state, &headers)?;
+    if req.stream.unwrap_or(false) {
+        Ok(streaming_response(state.registry.clone(), req).await.into_response())
+    } else {
+        Ok(Json(non_streaming_response(state.registry.clone(), req).await).into_response())
     }
 }
 

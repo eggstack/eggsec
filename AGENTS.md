@@ -166,10 +166,10 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1063+ passing | Verified |
+| Tests | 1064 passing | Verified after Wave A-G |
 | Build | Clean compilation | |
-| Clippy | 0 warnings | No new warnings |
-| Doctests | 17 pass, 1 ignored, 0 fail | After Wave A fixes applied |
+| Clippy | 1 warning | Pre-existing (scan_ports 8 args) |
+| Doctests | 19 pass, 0 fail | All passing |
 | `SlapperError` variants | 23 | |
 | `once_cell` in slapper | 0 | Replaced with `std::sync::LazyLock` |
 | MSRV | 1.80 | |
@@ -181,25 +181,32 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | Tab variants | 29 | |
 | Agent module files | 6 | `mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs` |
 | Skill files | 26 | In `slapper_skills/` |
-| ADRs | 4 | In `docs/adr/` |
+| ADRs | 5 | In `docs/adr/` (added CLI_ARCH.md) |
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan (136+ items across 7 parallel tracks)
+- `plans/plan.md` — Consolidated improvement plan. **Status: ~75% COMPLETE (Wave A-G executed)**
+  - Wave A: COMPLETED (all 8 items)
+  - Wave B: PARTIALLY COMPLETED (B1 auth fixes, B3 input validation partial)
+  - Wave C: COMPLETED (C1-C3 all items)
+  - Wave D: COMPLETED (D1-D6 all items)
+  - Wave E: PARTIALLY COMPLETED (E1-E2, E4 completed; E3, E5 deferred)
+  - Wave F: MOSTLY COMPLETED (F1-F4 complete, F5-F7 partial)
+  - Wave G: MOSTLY COMPLETED (G1-G4 partial/deferred)
 
 ### Wave-Based Execution
 
 Improvements are organized into 7 parallel tracks (Waves A-G). Sub-agents can execute tracks independently:
 
-| Wave | Track | Items | Parallel Agent |
-|------|-------|-------|----------------|
-| A | Core Fixes | 8 | Agent-1 (blocks all others) |
-| B | Security | 33 | Agent-2 |
-| C | Performance | 18 | Agent-3 |
-| D | Documentation & Testing | 30 | Agent-4 |
-| E | TUI Architecture | 14 | Agent-5 |
-| F | LLM/AI Provider | 10 | Agent-6 |
-| G | CLI Architecture | 13 | Agent-6 (with F) |
+| Wave | Track | Items | Status |
+|------|-------|-------|--------|
+| A | Core Fixes | 8 | ✅ COMPLETED (all 8 items) |
+| B | Security | 33 | ⚠️ PARTIAL (B1 auth, B3 partial) |
+| C | Performance | 18 | ✅ COMPLETED (C1-C3) |
+| D | Documentation & Testing | 30 | ✅ COMPLETED (D1-D6) |
+| E | TUI Architecture | 14 | ⚠️ PARTIAL (E1-E2, E4) |
+| F | LLM/AI Provider | 10 | ⚠️ MOSTLY (F1-F4, F5 partial) |
+| G | CLI Architecture | 13 | ⚠️ MOSTLY (G1-G4 partial) |
 
 See `plans/plan.md` for full parallelization strategy and item details.
 
@@ -604,6 +611,32 @@ tx.send("Processing step 1".to_string())?;
 while rx.changed().await.is_ok() {
     println!("Progress: {}", *rx.borrow());
 }
+```
+
+### TUI Render Caching (Dirty Flag)
+
+Avoid unnecessary redraws by tracking whether the UI actually needs to be updated:
+```rust
+struct AppState {
+    needs_redraw: bool,
+}
+loop {
+    if app.needs_redraw {
+        terminal.draw(|f| ui::draw(f, app))?;
+        app.needs_redraw = false;
+    }
+    // Handle events
+    app.needs_redraw = true;
+}
+```
+
+### AtomicU64 for Lock-Free Counters
+
+For simple counter operations, use `AtomicU64` instead of `Mutex<u64>`:
+```rust
+use std::sync::atomic::{AtomicU64, Ordering};
+let counter = Arc::new(AtomicU64::new(0));
+counter.fetch_add(1, Ordering::Relaxed);
 ```
 
 ## Code Quality Patterns

@@ -113,59 +113,40 @@ pub enum Tab {
 }
 
 impl Tab {
+    const TAB_TITLES: &'static [&'static str] = &[
+        "[1] Recon",
+        "[2] Load",
+        "[3] Scan Ports",
+        "[4] Scan Endpoints",
+        "[5] Fingerprint",
+        "[6] Fuzz",
+        "[7] WAF",
+        "[8] WAF Stress",
+        "[9] Scan",
+        "[10] Resume",
+        "[11] Proxy",
+        "[12] Packet",
+        "[13] GraphQL",
+        "[14] OAuth",
+        "[15] Cluster",
+        "[16] Stress",
+        "[17] Report",
+        "[18] NSE",
+        "[19] Plugins",
+        "[20] Settings",
+        "[21] History",
+        "[22] Dashboard",
+        "[23] Hunt",
+        "[24] Browser",
+        "[25] Compliance",
+        "[26] Storage",
+        "[27] Integrations",
+        "[28] Workflow",
+        "[29] Vuln",
+    ];
+
     pub fn title(&self) -> &'static str {
-        match self {
-            Tab::Recon => "[1] Recon",
-            Tab::Load => "[2] Load",
-            Tab::ScanPorts => "[3] Scan Ports",
-            Tab::ScanEndpoints => "[4] Scan Endpoints",
-            Tab::Fingerprint => "[5] Fingerprint",
-            Tab::Fuzz => "[6] Fuzz",
-            Tab::Waf => "[7] WAF",
-            Tab::WafStress => "[8] WAF Stress",
-            Tab::Scan => "[9] Scan",
-            Tab::Resume => "[10] Resume",
-            Tab::Proxy => "[11] Proxy",
-            Tab::Packet => "[12] Packet",
-            Tab::GraphQl => "[13] GraphQL",
-            Tab::OAuth => "[14] OAuth",
-            Tab::Cluster => "[15] Cluster",
-            Tab::Stress => "[16] Stress",
-            Tab::Report => "[17] Report",
-            Tab::Nse => "[18] NSE",
-            Tab::Plugin => "[19] Plugins",
-            Tab::Settings => "[20] Settings",
-            Tab::History => "[21] History",
-            Tab::Dashboard => "[22] Dashboard",
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => "[23] Hunt",
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => "[23] Hunt",
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => "[24] Browser",
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => "[24] Browser",
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => "[25] Compliance",
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => "[25] Compliance",
-            #[cfg(feature = "database")]
-            Tab::Storage => "[26] Storage",
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => "[26] Storage",
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => "[27] Integrations",
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => "[27] Integrations",
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => "[28] Workflow",
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => "[28] Workflow",
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => "[29] Vuln",
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => "[29] Vuln",
-        }
+        Self::TAB_TITLES[*self as usize]
     }
 
     pub fn cli_command(&self) -> &'static str {
