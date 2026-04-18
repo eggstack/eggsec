@@ -1,5 +1,8 @@
 //! Shared types used across the crate.
 
+use std::fs;
+use std::path::Path;
+
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
@@ -229,6 +232,61 @@ impl From<String> for SensitiveString {
 impl From<&str> for SensitiveString {
     fn from(s: &str) -> Self {
         Self(s.to_string())
+    }
+}
+
+/// Check if a config file has overly permissive permissions.
+///
+/// Logs a warning if the file is readable by group or other (mode bits > 0o600).
+/// Config files containing `SensitiveString` values should have restrictive
+/// permissions to protect secrets from unauthorized access.
+///
+/// # Arguments
+///
+/// * `path` - Path to the config file to check
+///
+/// # Example
+///
+/// ```ignore
+/// use slapper::types::check_config_file_permissions;
+///
+/// if let Some(path) = config_path {
+///     check_config_file_permissions(&path);
+/// }
+/// ```
+pub fn check_config_file_permissions(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let metadata = match fs::metadata(path) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::debug!("Could not read config file permissions: {}", e);
+            return;
+        }
+    };
+
+    let mode = metadata.permissions().mode();
+    let world_readable = mode & 0o007;
+    let group_readable = mode & 0o070;
+
+    if world_readable != 0 {
+        tracing::warn!(
+            "Config file '{}' has world-readable permissions ({:o}). \
+             Secrets may be accessible to other users. Consider running: \
+             chmod 600 '{}'",
+            path.display(),
+            mode,
+            path.display()
+        );
+    } else if group_readable != 0 {
+        tracing::warn!(
+            "Config file '{}' has group-readable permissions ({:o}). \
+             Secrets may be accessible to other users on multi-user systems. \
+             Consider running: chmod 600 '{}'",
+            path.display(),
+            mode,
+            path.display()
+        );
     }
 }
 

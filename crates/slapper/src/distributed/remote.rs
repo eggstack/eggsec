@@ -245,8 +245,8 @@ impl RemoteListener {
             Some(acceptor) => match StreamWrapper::accept_tls(&acceptor, stream).await {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::error!("TLS handshake failed: {}", e);
-                    return Err(SlapperError::Network(format!("TLS handshake failed: {}", e)));
+                    tracing::error!(addr = %addr, "TLS handshake failed: {}", e);
+                    return Err(SlapperError::Network(format!("TLS handshake failed from {}: {}", addr, e)));
                 }
             },
             None => StreamWrapper::plain(stream),
@@ -431,6 +431,18 @@ impl RemoteClient {
 
         let stream = match &self.tls {
             Some(tls_client) => {
+                #[cfg(feature = "insecure-tls")]
+                {
+                    let peer_addr = stream.peer_addr().ok();
+                    let local_addr = stream.local_addr().ok();
+                    tls_client.increment_insecure_connection();
+                    tracing::warn!(
+                        local_addr = ?local_addr,
+                        peer_addr = ?peer_addr,
+                        domain = %tls_client.domain(),
+                        "Establishing INSECURE TLS connection (certificate verification disabled)"
+                    );
+                }
                 match StreamWrapper::connect_tls(
                     tls_client.connector(),
                     tls_client.domain(),

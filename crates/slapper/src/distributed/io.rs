@@ -1,6 +1,8 @@
 
 use std::io::{BufReader, Cursor};
 use std::pin::Pin;
+#[cfg(feature = "insecure-tls")]
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use rustls::pki_types::{CertificateDer, ServerName};
@@ -142,6 +144,8 @@ pub struct TlsClient {
     domain: String,
     #[cfg(feature = "insecure-tls")]
     warn_on_use: bool,
+    #[cfg(feature = "insecure-tls")]
+    insecure_connection_count: Arc<AtomicUsize>,
 }
 
 impl TlsClient {
@@ -156,6 +160,7 @@ impl TlsClient {
             connector: TlsConnector::from(Arc::new(config)),
             domain: domain.to_string(),
             warn_on_use: true,
+            insecure_connection_count: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -184,6 +189,16 @@ impl TlsClient {
         } else {
             false
         }
+    }
+
+    #[cfg(feature = "insecure-tls")]
+    pub fn insecure_connection_count(&self) -> usize {
+        self.insecure_connection_count.load(Ordering::Relaxed)
+    }
+
+    #[cfg(feature = "insecure-tls")]
+    pub fn increment_insecure_connection(&self) {
+        self.insecure_connection_count.fetch_add(1, Ordering::Relaxed);
     }
 }
 

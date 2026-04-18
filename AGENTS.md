@@ -166,9 +166,9 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1063 passing | Verified |
+| Tests | 1063+ passing | Verified |
 | Build | Clean compilation | |
-| Clippy | 1 warning | `scan_ports` has 8 args (exceeds 7) |
+| Clippy | 0 warnings | No new warnings |
 | Doctests | 17 pass, 1 ignored, 0 fail | |
 | `SlapperError` variants | 23 | |
 | `once_cell` in slapper | 0 | Replaced with `std::sync::LazyLock` |
@@ -176,7 +176,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | `thiserror` | 2.x | |
 | Ruby plugins | Zero warnings | With `--features ruby-plugins` |
 | Largest file | `tui/app/mod.rs` (883 lines) | Decomposed from 1665 (47% reduction) |
-| Source files | 415 `.rs` files | |
+| Source files | 415+ `.rs` files | |
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
 | Agent module files | 6 | `mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs` |
@@ -185,18 +185,18 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Consolidated plan (Waves 1-6 COMPLETED, Waves 7-9 PENDING)
+- `plans/plan.md` — Consolidated plan (ALL WAVES COMPLETED ✅)
 - `plans/harness.md` — MCP/Agent findings harness (COMPLETED)
 - `plans/agent_architecture.md` — Agent architecture (COMPLETED)
 
-### Remaining Work (Waves 7-9)
+### Completed Work (Waves 7-9)
 
 | Wave | Items | Estimated Time | Status |
 |------|-------|----------------|--------|
-| 7: Security | 9 | 16-23 hours | PENDING |
-| 8: Performance | 25 | 18-24 hours | PENDING |
-| 9: Code Quality | 10 | 18-26 hours | PENDING |
-| **Total** | **44** | **52-73 hours** | |
+| 7: Security | 9 | 16-23 hours | ✅ COMPLETED |
+| 8: Performance | 25 | 18-24 hours | ✅ COMPLETED |
+| 9: Code Quality | 10 | 18-26 hours | ✅ COMPLETED |
+| **Total** | **44** | **52-73 hours** | ✅ COMPLETED |
 
 ## Lessons Learned
 
@@ -280,6 +280,29 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 - The `crate::plugin` re-export in `lib.rs` is gated on `any(feature = "python-plugins", feature = "ruby-plugins")`
 - `slapper-plugin` has separate feature flags: `python-plugins` (pyo3) and `ruby-plugins` (magnus)
 - TUI plugin tab is gated on `any(feature = "python-plugins", feature = "ruby-plugins")` in all TUI files
+
+### Plugin Security (block_suspicious_plugins)
+
+Both Python and Ruby plugins support suspicious pattern detection and blocking:
+
+**Python Plugins** (`crates/slapper-plugin/src/python.rs`):
+- `validate_python_plugin(content, block_suspicious_plugins)` checks for dangerous patterns
+- Patterns detected: `os.system`, `subprocess`, `socket`, `eval(`, `exec`, `fork`, `__import__`, `open(`
+- When `block_suspicious_plugins: true` (default), plugins with suspicious patterns are rejected
+
+**Ruby Plugins** (`crates/slapper-ruby/src/bridge.rs`):
+- `validate_ruby_plugin(content, block_suspicious_plugins)` checks for dangerous patterns
+- Patterns detected: `eval(`, `exec(`, `system(`, `` ` ``, `IO.popen`, `Process.spawn`, `File.read(`, `File.write(`, `File.open(`, `Net::HTTP`, `Socket.open`, `TCPSocket`, `UDPSocket`, `Open3.`, `Shellwords.escape`
+- Default behavior blocks suspicious plugins for security
+
+**Configuration** (`PluginConfig`):
+```rust
+pub struct PluginConfig {
+    pub enabled: bool,
+    pub config: HashMap<String, serde_json::Value>,
+    pub block_suspicious_plugins: bool,  // default: true
+}
+```
 
 ### Ruby Plugin Thread Safety
 
@@ -489,6 +512,23 @@ if content.starts_with('=') || content.starts_with('+') || content.starts_with('
 
 When changing sanitization behavior, update corresponding tests that assert old behavior.
 
+### TLS Certificate Verification Bypass
+
+When creating HTTP clients that bypass TLS verification (`danger_accept_invalid_certs(true)`), use the centralized helpers that log warnings:
+
+```rust
+// In utils/http.rs - creates client and logs warning
+pub fn create_insecure_http_client(timeout_secs: u64) -> Result<Client> {
+    tracing::warn!(
+        "Creating HTTP client with disabled TLS certificate verification. \
+         This is insecure and should only be used in isolated testing environments."
+    );
+    // ... creates client with danger_accept_invalid_certs(true)
+}
+```
+
+For custom options, use `create_insecure_client_with_options()`.
+
 ### MCP Auth Bypass
 
 The `initialize` method bypass may be protocol-required, but auth MUST be enforced when api_key is configured (`Some`).
@@ -538,6 +578,19 @@ Use `SmallVec<[u8; 256]>` instead of `Vec<u8>` for small fixed-size buffers to a
 ### contains_ignore_case Helper
 
 For repeated case-insensitive substring checks, call `to_lowercase()` once before the loop instead of once per pattern.
+
+### Watch Channel for Progress Updates
+
+Use `tokio::sync::watch` channel instead of mutex-polling for progress updates:
+```rust
+let (tx, rx) = watch::channel<String>("initial".to_string());
+// In worker:
+tx.send("Processing step 1".to_string())?;
+// In UI:
+while rx.changed().await.is_ok() {
+    println!("Progress: {}", *rx.borrow());
+}
+```
 
 ## Code Quality Patterns
 

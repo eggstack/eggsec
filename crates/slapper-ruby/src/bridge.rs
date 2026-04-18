@@ -8,11 +8,64 @@ use super::{RubyPlugin, RubyPluginResult};
 #[cfg(feature = "ruby-plugins")]
 use magnus::{prelude::*, Ruby};
 
+const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
+
+const SUSPICIOUS_RUBY_PATTERNS: &[&str] = &[
+    "eval(",
+    "exec(",
+    "system(",
+    "`",
+    "IO.popen",
+    "Process.spawn",
+    "File.read(",
+    "File.write(",
+    "File.open(",
+    "Net::HTTP",
+    "Socket.open",
+    "TCPSocket",
+    "UDPSocket",
+    "Open3.",
+    "Shellwords.escape",
+];
+
+fn validate_ruby_plugin(content: &str, block_suspicious_plugins: bool) -> Result<()> {
+    if content.len() > MAX_PLUGIN_SIZE_BYTES {
+        anyhow::bail!(
+            "Ruby plugin exceeds maximum size of {} bytes",
+            MAX_PLUGIN_SIZE_BYTES
+        );
+    }
+
+    let mut suspicious_found: Vec<&str> = Vec::new();
+    for pattern in SUSPICIOUS_RUBY_PATTERNS {
+        if content.contains(pattern) {
+            suspicious_found.push(pattern);
+        }
+    }
+
+    if !suspicious_found.is_empty() {
+        if block_suspicious_plugins {
+            anyhow::bail!(
+                "Ruby plugin contains suspicious patterns and blocking is enabled: {}",
+                suspicious_found.join(", ")
+            );
+        } else {
+            tracing::warn!(
+                "Ruby plugin contains suspicious patterns (allowing due to config): {}",
+                suspicious_found.join(", ")
+            );
+        }
+    }
+
+    Ok(())
+}
+
 /// Internal bridge that owns the Ruby VM. NOT Send/Sync — lives on one thread only.
 pub struct RubyBridge {
     #[cfg(feature = "ruby-plugins")]
     ruby: Ruby,
     loaded: bool,
+    block_suspicious_plugins: bool,
 }
 
 /// Messages sent to the Ruby VM thread.
@@ -110,7 +163,11 @@ impl RubyBridge {
         match init_result {
             Ok(()) => {
                 let ruby = unsafe { magnus::Ruby::get_unchecked() };
-                Ok(Self { ruby, loaded: true })
+                Ok(Self {
+                    ruby,
+                    loaded: true,
+                    block_suspicious_plugins: true,
+                })
             }
             Err(e) => Err(anyhow!("Failed to initialize Ruby: {}", e)),
         }
@@ -118,7 +175,30 @@ impl RubyBridge {
 
     #[cfg(not(feature = "ruby-plugins"))]
     fn new() -> Result<Self> {
-        Ok(Self { loaded: false })
+        Ok(Self {
+            loaded: false,
+            block_suspicious_plugins: true,
+        })
+    }
+
+    #[cfg(feature = "ruby-plugins")]
+    fn with_block_suspicious_plugins(block: bool) -> Result<Self> {
+        let init_result = magnus::Ruby::init(|ruby| {
+            super::api::register_api(ruby)?;
+            Ok(())
+        });
+
+        match init_result {
+            Ok(()) => {
+                let ruby = unsafe { magnus::Ruby::get_unchecked() };
+                Ok(Self {
+                    ruby,
+                    loaded: true,
+                    block_suspicious_plugins: block,
+                })
+            }
+            Err(e) => Err(anyhow!("Failed to initialize Ruby: {}", e)),
+        }
     }
 
     #[cfg(feature = "ruby-plugins")]
@@ -126,6 +206,11 @@ impl RubyBridge {
         let path_str = path
             .to_str()
             .ok_or_else(|| anyhow!("Invalid plugin path"))?;
+
+        let plugin_content = std::fs::read_to_string(path)
+            .map_err(|e| anyhow!("Failed to read plugin file: {}", e))?;
+
+        validate_ruby_plugin(&plugin_content, self.block_suspicious_plugins)?;
 
         self.ruby
             .require(path_str)

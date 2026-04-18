@@ -158,6 +158,42 @@ writeln!(output, "Content: {}", value).unwrap();
 
 **Files**: `output/markdown.rs`, `output/html.rs`, `output/csv.rs`
 
+### 10. Watch Channel for Progress Updates
+
+**Problem**: TUI progress polling every 200ms with mutex instead of efficient signaling.
+
+**Solution**: Use `tokio::sync::watch` channel for progress updates:
+```rust
+use tokio::sync::watch;
+
+let (tx, rx) = watch::channel::<String>("initial".to_string());
+
+// In worker (send progress):
+tx.send("Processing step 1".to_string())?;
+
+// In UI (receive progress):
+while rx.changed().await.is_ok() {
+    println!("Progress: {}", *rx.borrow());
+}
+```
+
+**Files**: `tui/workers/recon.rs`, `recon/runner.rs`, `recon/spinner.rs`
+
+### 11. HTTP Client Connection Pooling
+
+**Problem**: Creating new HTTP clients for each request adds latency.
+
+**Solution**: Configure connection pooling with proper settings:
+```rust
+Client::builder()
+    .pool_max_idle_per_host(20)
+    .pool_idle_timeout(Duration::from_secs(30))
+    .tcp_nodelay(true)
+    .build()
+```
+
+**Files**: `utils/http.rs`, `ai/client.rs`, `tool/implementations/search.rs`
+
 ## Dependency Additions
 
 When adding new optimization dependencies:

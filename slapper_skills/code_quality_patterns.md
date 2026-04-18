@@ -180,6 +180,22 @@ assert_eq!(value, decoded);
 assert_serialize_roundtrip(&value);
 ```
 
+## Safe Serialization Helpers
+
+For production code that serializes/deserializes JSON, use the safe helpers in `utils/serialization.rs`:
+
+```rust
+use crate::utils::serialization::{serialize_to_json, deserialize_from_json};
+
+// Safe serialization (returns Result, not unwrap)
+let json = serialize_to_json(&my_value)?;
+
+// Safe deserialization (returns Result, not unwrap)
+let decoded: MyType = deserialize_from_json(&json)?;
+```
+
+These helpers convert serde errors to `SlapperError::Parse` for consistent error handling.
+
 ## Public API Documentation Pattern
 
 All public functions should have doc comments with `# Arguments`, `# Returns`, and `# Example` sections:

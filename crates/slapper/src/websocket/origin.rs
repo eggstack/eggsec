@@ -56,7 +56,15 @@ impl OriginTester {
                 }
             };
 
-            request.headers_mut().insert("Origin", origin.parse().unwrap());
+            let origin_header = match origin.parse() {
+                Ok(h) => h,
+                Err(e) => {
+                    result.details = format!("Invalid origin '{}': {}", origin, e);
+                    results.push(result);
+                    continue;
+                }
+            };
+            request.headers_mut().insert("Origin", origin_header);
 
             match connect_async(request).await {
                 Ok((mut ws_stream, response)) => {

@@ -32,6 +32,12 @@ pub enum PluginLanguage {
 pub struct PluginConfig {
     pub enabled: bool,
     pub config: HashMap<String, serde_json::Value>,
+    #[serde(default = "default_block_suspicious_plugins")]
+    pub block_suspicious_plugins: bool,
+}
+
+fn default_block_suspicious_plugins() -> bool {
+    true
 }
 
 impl Default for PluginConfig {
@@ -39,6 +45,7 @@ impl Default for PluginConfig {
         Self {
             enabled: true,
             config: HashMap::new(),
+            block_suspicious_plugins: true,
         }
     }
 }

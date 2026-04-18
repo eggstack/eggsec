@@ -20,14 +20,29 @@ const SUSPICIOUS_PATTERNS: &[&str] = &[
     "open(",
 ];
 
-fn validate_python_plugin(content: &str) -> Result<()> {
+fn validate_python_plugin(content: &str, block_suspicious_plugins: bool) -> Result<()> {
     if content.len() > MAX_PLUGIN_SIZE_BYTES {
         anyhow::bail!("Plugin exceeds maximum size of {} bytes", MAX_PLUGIN_SIZE_BYTES);
     }
 
+    let mut suspicious_found = Vec::new();
     for pattern in SUSPICIOUS_PATTERNS {
         if content.contains(pattern) {
-            tracing::warn!("Plugin contains suspicious pattern: {}", pattern);
+            suspicious_found.push(pattern);
+        }
+    }
+
+    if !suspicious_found.is_empty() {
+        if block_suspicious_plugins {
+            anyhow::bail!(
+                "Plugin contains suspicious patterns and blocking is enabled: {}",
+                suspicious_found.join(", ")
+            );
+        } else {
+            tracing::warn!(
+                "Plugin contains suspicious patterns (allowing due to config): {}",
+                suspicious_found.join(", ")
+            );
         }
     }
 
@@ -37,6 +52,7 @@ fn validate_python_plugin(content: &str) -> Result<()> {
 pub struct PythonPluginManager {
     plugins: Vec<LoadedPlugin>,
     info: PluginInfo,
+    block_suspicious_plugins: bool,
 }
 
 struct LoadedPlugin {
@@ -92,6 +108,22 @@ impl PythonPluginManager {
                 tags: vec!["python".to_string()],
                 language: PluginLanguage::Python,
             },
+            block_suspicious_plugins: true,
+        }
+    }
+
+    pub fn with_block_suspicious_plugins(block: bool) -> Self {
+        Self {
+            plugins: Vec::new(),
+            info: PluginInfo {
+                name: "python-plugin-manager".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                description: "Python plugin backend".to_string(),
+                author: "Slapper".to_string(),
+                tags: vec!["python".to_string()],
+                language: PluginLanguage::Python,
+            },
+            block_suspicious_plugins: block,
         }
     }
 
@@ -129,7 +161,7 @@ impl PythonPluginManager {
                                 }
                             };
 
-                            if let Err(e) = validate_python_plugin(&plugin_content) {
+                            if let Err(e) = validate_python_plugin(&plugin_content, self.block_suspicious_plugins) {
                                 tracing::warn!(
                                     file = %file_path.display(),
                                     error = %e,
