@@ -104,7 +104,7 @@ Single canonical definition in `types.rs`. All other modules re-export from it:
 | `output::agent::Severity` | `pub use crate::types::Severity` |
 | `output::trend::Severity` | `pub use crate::types::Severity` |
 
-The `tool/response.rs` module uses a separate `ResponseSeverity` enum with an extra `None` variant for API compatibility.
+The `tool/response.rs` module uses a separate `ResponseSeverity` enum with an extra `None` variant for API compatibility. **Note**: This is being phased out in favor of `Option<Severity>` - see Wave F item F4 in `plans/plan.md`.
 
 **When adding new code:** re-export from `crate::types::Severity`. Do not create a new definition.
 
@@ -169,7 +169,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | Tests | 1063+ passing | Verified |
 | Build | Clean compilation | |
 | Clippy | 0 warnings | No new warnings |
-| Doctests | 17 pass, 1 ignored, 0 fail | |
+| Doctests | 17 pass, 1 ignored, 0 fail | After Wave A fixes applied |
 | `SlapperError` variants | 23 | |
 | `once_cell` in slapper | 0 | Replaced with `std::sync::LazyLock` |
 | MSRV | 1.80 | |
@@ -180,25 +180,39 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
 | Agent module files | 6 | `mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs` |
-| Skill files | 16 | In `slapper_skills/` |
+| Skill files | 26 | In `slapper_skills/` |
 | ADRs | 4 | In `docs/adr/` |
 
 ## Planning
 
-- `plans/plan.md` — Consolidated plan (ALL WAVES COMPLETED ✅)
-- `plans/harness.md` — MCP/Agent findings harness (COMPLETED)
-- `plans/agent_architecture.md` — Agent architecture (COMPLETED)
+- `plans/plan.md` — Consolidated improvement plan (136+ items across 7 parallel tracks)
 
-### Completed Work (Waves 7-9)
+### Wave-Based Execution
 
-| Wave | Items | Estimated Time | Status |
-|------|-------|----------------|--------|
-| 7: Security | 9 | 16-23 hours | ✅ COMPLETED |
-| 8: Performance | 25 | 18-24 hours | ✅ COMPLETED |
-| 9: Code Quality | 10 | 18-26 hours | ✅ COMPLETED |
-| **Total** | **44** | **52-73 hours** | ✅ COMPLETED |
+Improvements are organized into 7 parallel tracks (Waves A-G). Sub-agents can execute tracks independently:
+
+| Wave | Track | Items | Parallel Agent |
+|------|-------|-------|----------------|
+| A | Core Fixes | 8 | Agent-1 (blocks all others) |
+| B | Security | 33 | Agent-2 |
+| C | Performance | 18 | Agent-3 |
+| D | Documentation & Testing | 30 | Agent-4 |
+| E | TUI Architecture | 14 | Agent-5 |
+| F | LLM/AI Provider | 10 | Agent-6 |
+| G | CLI Architecture | 13 | Agent-6 (with F) |
+
+See `plans/plan.md` for full parallelization strategy and item details.
 
 ## Lessons Learned
+
+### Parallelization Strategy
+
+When executing improvements across multiple tracks:
+
+1. **Wave A (Core Fixes) must execute first** - it fixes test compilation and doctest failures that block verification
+2. **Sub-tracks within waves can parallelize** - e.g., Wave B Security: B1 (Auth) and B2 (Plugin Security) can run simultaneously
+3. **Use 6 parallel agents** for maximum throughput: Agent-1 (Core), Agent-2 (Security), Agent-3 (Performance), Agent-4 (Doc/Testing), Agent-5 (TUI), Agent-6 (LLM+CLI)
+4. **Verify each wave independently** before declaring complete
 
 ### Configuration
 
@@ -623,10 +637,12 @@ Code after an early return that can never execute is a security risk - remove it
 - Check test counts with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`
 - Count source files with `find crates/slapper/src -name '*.rs' | wc -l`
 
-## Plan Structure
+## Architecture Decision Records
 
-Plans are organized into waves with parallelizable blocks:
-- Items within each block are independent (can be parallelized)
-- Use "waves" for phased implementation where phases can run in parallel via sub-agents
-- Verify file paths using `glob` or `rg` before implementing plan items
-- Verify actual line numbers and file paths before implementing
+Located in `docs/adr/`:
+- ADR-001: SensitiveString vs SecretString
+- ADR-002: Feature flag design rationale
+- ADR-003: rustls over native-tls (except nse)
+- ADR-004: Error type separation
+
+When making significant architectural decisions, document them here using the ADR template.
