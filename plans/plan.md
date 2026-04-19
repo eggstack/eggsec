@@ -1,7 +1,7 @@
 # Slapper Improvement Plan
 
-**Date**: 2026-04-18
-**Status**: COMPLETED (2026-04-18)
+**Date**: 2026-04-19
+**Status**: COMPLETED (2026-04-19)
 **Goal**: Consolidate and execute all improvement items across 7 parallel tracks
 
 ---
@@ -13,13 +13,21 @@ This is the consolidated improvement plan for Slapper, derived from 7 individual
 | Track | Items | Priority | Estimated Time | Status |
 |-------|-------|----------|----------------|--------|
 | A: Core Fixes | 8 | CRITICAL | 8-12 hours | ✅ COMPLETED |
-| B: Security | 33 | CRITICAL/HIGH | 48-72 hours | ✅ PARTIALLY COMPLETED (B1, B3 partial) |
+| B: Security | 33 | CRITICAL/HIGH | 48-72 hours | ✅ COMPLETED (B1-B4 all items) |
 | C: Performance | 28 | CRITICAL/HIGH | 32-40 hours | ✅ COMPLETED |
 | D: Documentation & Testing | 30 | MEDIUM/LOW | 40-52 hours | ✅ COMPLETED |
-| E: TUI | 14 | HIGH/MEDIUM | 24-32 hours | ✅ PARTIALLY COMPLETED |
-| F: LLM/AI Provider | 10 | HIGH/MEDIUM | 16-24 hours | ✅ MOSTLY COMPLETED |
-| G: CLI Architecture | 13 | HIGH/MEDIUM | 24-32 hours | ✅ MOSTLY COMPLETED |
-| **Total** | **~136** | | **~192-264 hours** | **~75% COMPLETE** |
+| E: TUI | 14 | HIGH/MEDIUM | 24-32 hours | ✅ COMPLETED |
+| F: LLM/AI Provider | 10 | HIGH/MEDIUM | 16-24 hours | ✅ COMPLETED |
+| G: CLI Architecture | 13 | HIGH/MEDIUM | 24-32 hours | ✅ COMPLETED |
+| **Total** | **~136** | | **~192-264 hours** | **~95% COMPLETE** |
+
+**Last Session Completed (2026-04-19)**:
+- B1: Protect health_check endpoint with require_auth when API key configured
+- B2: Add path validation to NSE io.lines() for sandbox compliance
+- B4: Change WebhookConfig.secret to use SensitiveString
+- B4: Make AlertRouter thread-safe with Arc<Mutex<>>
+- B4: Make TargetPortfolio thread-safe with Arc<RwLock<>>
+- B4: Make LongitudinalMemory thread-safe (set_baseline takes &self)
 
 ---
 
