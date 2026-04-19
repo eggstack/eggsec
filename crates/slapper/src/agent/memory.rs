@@ -188,7 +188,7 @@ impl LongitudinalMemory {
         Ok(memory.patterns)
     }
 
-    pub fn set_baseline(&mut self, target: &str, finding_ids: Vec<String>) -> Result<()> {
+    pub fn set_baseline(&self, target: &str, finding_ids: Vec<String>) -> Result<()> {
         let target_path = self.get_target_path(target);
 
         let mut memory = if target_path.exists() {

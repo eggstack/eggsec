@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -92,14 +93,14 @@ impl Default for PortfolioData {
 
 #[derive(Clone)]
 pub struct TargetPortfolio {
-    data: PortfolioData,
+    data: Arc<RwLock<PortfolioData>>,
     file_path: Option<PathBuf>,
 }
 
 impl TargetPortfolio {
     pub fn new() -> Self {
         Self {
-            data: PortfolioData::default(),
+            data: Arc::new(RwLock::new(PortfolioData::default())),
             file_path: None,
         }
     }
@@ -115,7 +116,7 @@ impl TargetPortfolio {
             let content = fs::read_to_string(path)?;
             let data: PortfolioData = serde_json::from_str(&content)?;
             Ok(Self {
-                data,
+                data: Arc::new(RwLock::new(data)),
                 file_path: Some(path.clone()),
             })
         } else {
@@ -134,30 +135,33 @@ impl TargetPortfolio {
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            let content = serde_json::to_string(&self.data)?;
+            let data = self.data.read().unwrap();
+            let content = serde_json::to_string(&*data)?;
             fs::write(path, content)?;
         }
         Ok(())
     }
 
-    pub fn add_target(&mut self, id: String, config: TargetConfig) {
-        self.data.targets.insert(id, config);
+    pub fn add_target(&self, id: String, config: TargetConfig) {
+        self.data.write().unwrap().targets.insert(id, config);
     }
 
-    pub fn remove_target(&mut self, id: &str) -> bool {
-        self.data.targets.remove(id).is_some()
+    pub fn remove_target(&self, id: &str) -> bool {
+        self.data.write().unwrap().targets.remove(id).is_some()
     }
 
-    pub fn get_target(&self, id: &str) -> Option<&TargetConfig> {
-        self.data.targets.get(id)
+    pub fn get_target(&self, id: &str) -> Option<TargetConfig> {
+        self.data.read().unwrap().targets.get(id).cloned()
     }
 
-    pub fn get_mut_target(&mut self, id: &str) -> Option<&mut TargetConfig> {
-        self.data.targets.get_mut(id)
+    pub fn get_mut_target(&self, id: &str) -> Option<TargetConfig> {
+        self.data.read().unwrap().targets.get(id).cloned()
     }
 
     pub fn get_all_targets(&self) -> Vec<(String, TargetConfig)> {
         self.data
+            .read()
+            .unwrap()
             .targets
             .iter()
             .filter(|(_, c)| c.enabled)
@@ -165,30 +169,30 @@ impl TargetPortfolio {
             .collect()
     }
 
-    pub fn update_last_scan(&mut self, id: &str, timestamp: &DateTime<Utc>) {
-        if let Some(target) = self.data.targets.get_mut(id) {
+    pub fn update_last_scan(&self, id: &str, timestamp: &DateTime<Utc>) {
+        if let Some(target) = self.data.write().unwrap().targets.get_mut(id) {
             target.last_scan = Some(*timestamp);
         }
     }
 
-    pub fn add_scan_record(&mut self, id: &str, record: ScanRecord) {
-        if let Some(target) = self.data.targets.get_mut(id) {
+    pub fn add_scan_record(&self, id: &str, record: ScanRecord) {
+        if let Some(target) = self.data.write().unwrap().targets.get_mut(id) {
             target.scan_history.push(record);
         }
     }
 
-    pub fn set_baseline(&mut self, id: &str, finding_ids: Vec<String>) {
-        if let Some(target) = self.data.targets.get_mut(id) {
+    pub fn set_baseline(&self, id: &str, finding_ids: Vec<String>) {
+        if let Some(target) = self.data.write().unwrap().targets.get_mut(id) {
             target.baseline_findings = finding_ids;
         }
     }
 
     pub fn targets_count(&self) -> usize {
-        self.data.targets.len()
+        self.data.read().unwrap().targets.len()
     }
 
     pub fn enabled_count(&self) -> usize {
-        self.data.targets.values().filter(|t| t.enabled).count()
+        self.data.read().unwrap().targets.values().filter(|t| t.enabled).count()
     }
 }
 

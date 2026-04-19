@@ -147,11 +147,21 @@ pub fn generate_correlation_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-async fn health_check() -> impl IntoResponse {
-    Json(serde_json::json!({
+async fn health_check(
+    State(state): State<Arc<RestState>>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, SlapperError> {
+    if state.api_key.is_some() {
+        if let Err(e) = require_auth(&state, &headers) {
+            return Err(SlapperError::Config(e.to_string()));
+        }
+    }
+
+    Ok(Json(serde_json::json!({
         "status": "healthy",
-        "service": "slapper-tool-api"
-    }))
+        "service": "slapper-tool-api",
+        "authenticated": state.api_key.is_some()
+    })))
 }
 
 async fn openapi_spec() -> impl IntoResponse {

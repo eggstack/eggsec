@@ -3,6 +3,7 @@
 //! Routes alerts to configured channels (webhooks, email, Slack, PagerDuty)
 //! with rate limiting and deduplication.
 
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -28,7 +29,7 @@ pub struct Alert {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WebhookConfig {
     pub url: String,
-    pub secret: Option<String>,
+    pub secret: Option<crate::types::SensitiveString>,
     pub headers: std::collections::HashMap<String, String>,
 }
 
@@ -72,8 +73,8 @@ pub enum AlertChannel {
 }
 
 pub struct AlertRouter {
-    channels: Vec<AlertChannel>,
-    recent_alerts: std::collections::HashMap<String, Instant>,
+    channels: Arc<Mutex<Vec<AlertChannel>>>,
+    recent_alerts: Arc<Mutex<std::collections::HashMap<String, Instant>>>,
     dedup_window_secs: u64,
 }
 
@@ -89,34 +90,45 @@ impl AlertRouter {
 
     pub fn new() -> Self {
         Self {
-            channels: Vec::new(),
-            recent_alerts: std::collections::HashMap::new(),
+            channels: Arc::new(Mutex::new(Vec::new())),
+            recent_alerts: Arc::new(Mutex::new(std::collections::HashMap::new())),
             dedup_window_secs: 300,
         }
     }
 
-    pub fn add_channel(&mut self, channel: AlertChannel) {
-        self.channels.push(channel);
+    pub fn add_channel(&self, channel: AlertChannel) {
+        self.channels.lock().unwrap().push(channel);
     }
 
-    pub async fn send(&mut self, alert: &Alert) -> Result<()> {
-        if self.recent_alerts.len() > 1000 {
-            self.cleanup_stale_entries();
-        }
-
-        let dedup_key = self.make_dedup_key(alert);
-        if let Some(last_sent) = self.recent_alerts.get(&dedup_key) {
-            if last_sent.elapsed() < Duration::from_secs(self.dedup_window_secs) {
-                tracing::debug!("Duplicate alert suppressed: {}", dedup_key);
-                return Ok(());
+    pub async fn send(&self, alert: &Alert) -> Result<()> {
+        {
+            let recent_alerts = self.recent_alerts.lock().unwrap();
+            if recent_alerts.len() > 1000 {
+                drop(recent_alerts);
+                self.cleanup_stale_entries();
             }
         }
 
-        for channel in &self.channels {
+        let dedup_key = self.make_dedup_key(alert);
+        {
+            let recent_alerts = self.recent_alerts.lock().unwrap();
+            if let Some(last_sent) = recent_alerts.get(&dedup_key) {
+                if last_sent.elapsed() < Duration::from_secs(self.dedup_window_secs) {
+                    tracing::debug!("Duplicate alert suppressed: {}", dedup_key);
+                    return Ok(());
+                }
+            }
+        }
+
+        let channels = self.channels.lock().unwrap().clone();
+        for channel in &channels {
             self.send_to_channel(channel, alert).await?;
         }
 
-        self.recent_alerts.insert(dedup_key, Instant::now());
+        {
+            let mut recent_alerts = self.recent_alerts.lock().unwrap();
+            recent_alerts.insert(dedup_key, Instant::now());
+        }
         Ok(())
     }
 
@@ -206,7 +218,7 @@ impl AlertRouter {
         let mut request = client.post(&config.url).json(&payload);
 
         if let Some(ref secret) = config.secret {
-            let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+            let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
                 .expect("HMAC can take key of any size");
             let canonical_json = serde_json::to_string(&payload).unwrap();
             mac.update(canonical_json.as_bytes());
@@ -277,9 +289,9 @@ impl AlertRouter {
         )
     }
 
-    fn cleanup_stale_entries(&mut self) {
+    fn cleanup_stale_entries(&self) {
         let cutoff = Duration::from_secs(self.dedup_window_secs * 2);
-        self.recent_alerts.retain(|_, last_sent| last_sent.elapsed() < cutoff);
+        self.recent_alerts.lock().unwrap().retain(|_, last_sent| last_sent.elapsed() < cutoff);
     }
 }
 

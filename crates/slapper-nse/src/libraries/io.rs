@@ -206,7 +206,24 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
 
     io.set(
         "lines",
-        lua.create_function(|lua, filename: String| {
+        lua.create_function(move |lua, filename: String| {
+            if sandbox_enabled {
+                let path_buf = PathBuf::from(&filename);
+                if let Some(ref dir) = allowed_dir {
+                    let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
+                    if !canonical.starts_with(dir) {
+                        let result = lua.create_table()?;
+                        result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
+                        return Ok(result);
+                    }
+                }
+                if filename.contains("..") {
+                    let result = lua.create_table()?;
+                    result.set("error", "Path traversal blocked by sandbox")?;
+                    return Ok(result);
+                }
+            }
+
             let lines = lua.create_table()?;
 
             if let Ok(content) = std::fs::read_to_string(&filename) {
