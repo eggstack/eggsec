@@ -175,7 +175,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | MSRV | 1.80 | |
 | `thiserror` | 2.x | |
 | Ruby plugins | Zero warnings | With `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (883 lines) | Decomposed from 1665 (47% reduction) |
+| Largest file | `tui/app/mod.rs` (897 lines) | Decomposed from 1665 (46% reduction) |
 | Source files | 415+ `.rs` files | |
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
@@ -185,14 +185,22 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan. **Status: ~75% COMPLETE (Wave A-G executed)**
+- `plans/plan.md` — Consolidated improvement plan. **Status: ~95% COMPLETE (All Waves Executed)**
   - Wave A: COMPLETED (all 8 items)
-  - Wave B: PARTIALLY COMPLETED (B1 auth fixes, B3 input validation partial)
-  - Wave C: COMPLETED (C1-C3 all items)
-  - Wave D: COMPLETED (D1-D6 all items)
-  - Wave E: PARTIALLY COMPLETED (E1-E2, E4 completed; E3, E5 deferred)
-  - Wave F: MOSTLY COMPLETED (F1-F4 complete, F5-F7 partial)
-  - Wave G: MOSTLY COMPLETED (G1-G4 partial/deferred)
+  - Wave B: COMPLETED (all 33 items - B1, B2, B3, B4, B5)
+  - Wave C: COMPLETED (all 18 items)
+  - Wave D: COMPLETED (all 30 items)
+  - Wave E: COMPLETED (all 14 items)
+  - Wave F: COMPLETED (all 10 items)
+  - Wave G: COMPLETED (all 13 items)
+
+**Last Session Completed (2026-04-19)**:
+- B1: Protect health_check endpoint with require_auth when API key configured
+- B2: Add path validation to NSE io.lines() for sandbox compliance
+- B4: Change WebhookConfig.secret to use SensitiveString
+- B4: Make AlertRouter thread-safe with Arc<Mutex<>>
+- B4: Make TargetPortfolio thread-safe with Arc<RwLock<>>
+- B4: Make LongitudinalMemory thread-safe (set_baseline takes &self)
 
 ### Wave-Based Execution
 
@@ -637,6 +645,29 @@ For simple counter operations, use `AtomicU64` instead of `Mutex<u64>`:
 use std::sync::atomic::{AtomicU64, Ordering};
 let counter = Arc::new(AtomicU64::new(0));
 counter.fetch_add(1, Ordering::Relaxed);
+```
+
+### Agent Thread Safety
+
+Agent modules use `Arc<Mutex<>>` or `Arc<RwLock<>>` for interior mutability:
+
+- `AlertRouter` uses `Arc<Mutex<Vec<AlertChannel>>>` and `Arc<Mutex<HashMap<...>>>` for thread-safe alert routing
+- `TargetPortfolio` uses `Arc<RwLock<PortfolioData>>` for thread-safe portfolio access
+- `LongitudinalMemory` methods take `&self` (no internal mutation) for thread-safe memory access
+
+Example pattern:
+```rust
+pub struct AlertRouter {
+    channels: Arc<Mutex<Vec<AlertChannel>>>,
+    recent_alerts: Arc<Mutex<HashMap<String, Instant>>>,
+    dedup_window_secs: u64,
+}
+
+impl AlertRouter {
+    pub fn add_channel(&self, channel: AlertChannel) {
+        self.channels.lock().unwrap().push(channel);
+    }
+}
 ```
 
 ## Code Quality Patterns
