@@ -180,43 +180,30 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
 | Agent module files | 6 | `mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs` |
-| Skill files | 26 | In `slapper_skills/` |
+| Skill files | 27 | In `slapper_skills/` |
 | ADRs | 5 | In `docs/adr/` (added CLI_ARCH.md) |
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan. **Status: ~95% COMPLETE (All Waves Executed)**
-  - Wave A: COMPLETED (all 8 items)
-  - Wave B: COMPLETED (all 33 items - B1, B2, B3, B4, B5)
-  - Wave C: COMPLETED (all 18 items)
-  - Wave D: COMPLETED (all 30 items)
-  - Wave E: COMPLETED (all 14 items)
-  - Wave F: COMPLETED (all 10 items)
-  - Wave G: COMPLETED (all 13 items)
-
-**Last Session Completed (2026-04-19)**:
-- B1: Protect health_check endpoint with require_auth when API key configured
-- B2: Add path validation to NSE io.lines() for sandbox compliance
-- B4: Change WebhookConfig.secret to use SensitiveString
-- B4: Make AlertRouter thread-safe with Arc<Mutex<>>
-- B4: Make TargetPortfolio thread-safe with Arc<RwLock<>>
-- B4: Make LongitudinalMemory thread-safe (set_baseline takes &self)
+- `plans/plan.md` — Current improvement plan. **Status: COMPLETED**
+- `plans/plan-archive.md` — Historical execution details
+- `plans/plan-current.md` — Backup of plan before archival
 
 ### Wave-Based Execution
 
-Improvements are organized into 7 parallel tracks (Waves A-G). Sub-agents can execute tracks independently:
+Improvements were organized into 7 parallel tracks (Waves A-G). All items have been completed.
 
 | Wave | Track | Items | Status |
 |------|-------|-------|--------|
-| A | Core Fixes | 8 | ✅ COMPLETED (all 8 items) |
-| B | Security | 33 | ⚠️ PARTIAL (B1 auth, B3 partial) |
-| C | Performance | 18 | ✅ COMPLETED (C1-C3) |
-| D | Documentation & Testing | 30 | ✅ COMPLETED (D1-D6) |
-| E | TUI Architecture | 14 | ⚠️ PARTIAL (E1-E2, E4) |
-| F | LLM/AI Provider | 10 | ⚠️ MOSTLY (F1-F4, F5 partial) |
-| G | CLI Architecture | 13 | ⚠️ MOSTLY (G1-G4 partial) |
+| A | Core Fixes | 8 | ✅ COMPLETED |
+| B | Security | 33 | ✅ COMPLETED |
+| C | Performance | 18 | ✅ COMPLETED |
+| D | Documentation & Testing | 30 | ✅ COMPLETED |
+| E | TUI Architecture | 14 | ✅ COMPLETED |
+| F | LLM/AI Provider | 10 | ✅ COMPLETED |
+| G | CLI Architecture | 13 | ✅ COMPLETED |
 
-See `plans/plan.md` for full parallelization strategy and item details.
+See `plans/plan.md` for the current plan status and `plans/plan-archive.md` for execution history.
 
 ## Lessons Learned
 

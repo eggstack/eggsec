@@ -99,19 +99,58 @@ pub struct RubyBridge {
 2. **Review plugin sources** - Even with blocking disabled, warnings are logged
 3. **Use isolated environments** - Run plugins in sandboxed environments when possible
 
+## NSE Sandbox
+
+Slapper's NSE (Nmap Scripting Engine) support includes sandboxing for Lua scripts:
+
+### Sandbox Configuration
+
+```rust
+pub struct SandboxConfig {
+    pub enabled: bool,           // Default: true
+    pub allowed_dir: Option<PathBuf>,  // Restrict file access
+    pub allowed_commands: Vec<String>, // Allowed commands for io.popen
+    pub log_violations: bool,    // Log instead of block
+}
+```
+
+### NSE io Library
+
+The NSE `io` library is sandboxed:
+
+- `io.open()` - Path validation with canonicalization
+- `io.lines()` - Path validation (blocks traversal attempts)
+- `io.popen()` - Command validation via `is_command_allowed()`
+- `io.tmpfile()` - Creates files in system temp directory
+
+### Path Validation Pattern
+
+All file operations use `canonicalize()` to resolve symlinks before checking:
+
+```rust
+if sandbox_enabled {
+    let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
+    if !canonical.starts_with(allowed_dir) {
+        return Err("Path blocked by sandbox");
+    }
+}
+```
+
 ## Feature Flags
 
 - `python-plugins` - Enable Python plugin support
 - `ruby-plugins` - Enable Ruby plugin support
-
-Both can be enabled together with `--features python-plugins,ruby-plugins`
+- `nse` - Enable NSE script support
+- `nse-sandbox` - Enable NSE sandbox mode (default: enabled)
 
 ## Triggers
 
-Keywords: plugin security, block_suspicious_plugins, validate_python_plugin, validate_ruby_plugin, plugin validation, python plugin, ruby plugin, suspicious patterns, plugin blocking, plugin allowlist
+Keywords: plugin security, block_suspicious_plugins, validate_python_plugin, validate_ruby_plugin, plugin validation, python plugin, ruby plugin, suspicious patterns, plugin blocking, plugin allowlist, NSE sandbox, io.lines, io.popen
 
 ## References
 
 - `crates/slapper-plugin/src/python.rs` - Python plugin manager
 - `crates/slapper-plugin/src/lib.rs` - PluginConfig definition
 - `crates/slapper-ruby/src/bridge.rs` - Ruby plugin bridge
+- `crates/slapper-nse/src/libraries/io.rs` - NSE io library with sandbox
+- `crates/slapper-nse/src/lib.rs` - SandboxConfig definition

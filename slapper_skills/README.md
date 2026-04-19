@@ -86,6 +86,7 @@ cargo build --release --features "rest-api ai-integration"
 | Skill | Description | Tools |
 |-------|-------------|-------|
 | `autonomous_security_agent.md` | Agent configuration and usage | agent |
+| `agent_thread_safety.md` | Thread safety patterns | agent |
 
 ## Usage
 
