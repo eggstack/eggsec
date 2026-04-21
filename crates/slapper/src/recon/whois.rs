@@ -190,36 +190,37 @@ fn parse_whois_response(domain: &str, response: &str) -> WhoisResult {
 
     for line in response.lines() {
         let line = line.trim();
+        let line_lower = line.to_lowercase();
 
-        if line.to_lowercase().starts_with("registrar:") {
+        if line_lower.starts_with("registrar:") {
             result.registrar = Some(line[10..].trim().to_string());
-        } else if line.to_lowercase().starts_with("creation date:")
-            || line.to_lowercase().starts_with("created date:")
+        } else if line_lower.starts_with("creation date:")
+            || line_lower.starts_with("created date:")
         {
             result.created_date = Some(extract_value(line));
-        } else if line.to_lowercase().starts_with("expiry date:")
-            || line.to_lowercase().starts_with("expiration date:")
+        } else if line_lower.starts_with("expiry date:")
+            || line_lower.starts_with("expiration date:")
         {
             result.expires_date = Some(extract_value(line));
-        } else if line.to_lowercase().starts_with("updated date:")
-            || line.to_lowercase().starts_with("modified date:")
+        } else if line_lower.starts_with("updated date:")
+            || line_lower.starts_with("modified date:")
         {
             result.updated_date = Some(extract_value(line));
-        } else if line.to_lowercase().starts_with("name server:")
-            || line.to_lowercase().starts_with("nserver:")
+        } else if line_lower.starts_with("name server:")
+            || line_lower.starts_with("nserver:")
         {
             let ns = extract_value(line);
             if !ns.is_empty() && !result.nameservers.contains(&ns) {
                 result.nameservers.push(ns);
             }
-        } else if line.to_lowercase().starts_with("domain status:")
-            || line.to_lowercase().starts_with("status:")
+        } else if line_lower.starts_with("domain status:")
+            || line_lower.starts_with("status:")
         {
             let status = extract_value(line);
             if !status.is_empty() && !result.status.contains(&status) {
                 result.status.push(status);
             }
-        } else if line.to_lowercase().starts_with("registrant:") {
+        } else if line_lower.starts_with("registrant:") {
             result.registrant = Some(extract_value(line));
         }
     }

@@ -9,10 +9,6 @@
 use crate::error::{Result, SlapperError};
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
-#[cfg(feature = "wireless")]
-use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WirelessNetwork {

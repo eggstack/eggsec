@@ -225,7 +225,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management"]
+full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream"]
@@ -256,6 +256,9 @@ git-secrets = []
 
 # PDF report generation
 pdf = ["printpdf"]
+
+# Wireless security testing (WiFi scanning, authentication testing)
+wireless = []
 
 [[bin]]
 name = "slapper"

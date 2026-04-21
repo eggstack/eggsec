@@ -160,6 +160,9 @@ pub use slapper_ruby as ruby;
 #[cfg(any(feature = "packet-inspection", feature = "stress-testing"))]
 pub mod packet;
 
+#[cfg(feature = "wireless")]
+pub mod wireless;
+
 
 pub use config::{load_config, load_scope, Scope, SlapperConfig};
 pub use error::{Result, SlapperError};

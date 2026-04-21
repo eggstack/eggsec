@@ -28,6 +28,20 @@ pub struct TechDetector {
     client: reqwest::Client,
 }
 
+struct LowercaseHeaders {
+    server: Option<String>,
+    powered_by: Option<String>,
+}
+
+impl TechDetector {
+    fn lowercase_headers(headers: &FxHashMap<String, String>) -> LowercaseHeaders {
+        LowercaseHeaders {
+            server: headers.get("server").map(|s| s.to_lowercase()),
+            powered_by: headers.get("x-powered-by").map(|s| s.to_lowercase()),
+        }
+    }
+}
+
 impl TechDetector {
     pub fn new() -> Result<Self> {
         let client = create_insecure_client_with_options(15, |builder| {
@@ -53,14 +67,20 @@ impl TechDetector {
         let body_lower = body.to_lowercase();
 
         let mut tech_stack = TechStack::default();
+        let lowercase_headers = Self::lowercase_headers(&headers);
 
-        self.detect_servers(&headers, &mut tech_stack);
-        self.detect_frameworks(&headers, &body_lower, &mut tech_stack);
-        self.detect_cms(&headers, &body_lower, &mut tech_stack);
+        self.detect_servers(lowercase_headers.server.as_deref(), &mut tech_stack);
+        self.detect_frameworks(
+            lowercase_headers.powered_by.as_deref(),
+            &headers,
+            &body_lower,
+            &mut tech_stack,
+        );
+        self.detect_cms(lowercase_headers.powered_by.as_deref(), &mut tech_stack);
         self.detect_cdns(&headers, &mut tech_stack);
-        self.detect_databases(&headers, &body_lower, &mut tech_stack);
+        self.detect_databases(lowercase_headers.server.as_deref(), &mut tech_stack);
         self.detect_javascript(&body_lower, &mut tech_stack);
-        self.detect_languages(&headers, &body_lower, &mut tech_stack);
+        self.detect_languages(lowercase_headers.powered_by.as_deref(), &mut tech_stack);
 
         Ok(TechDetectionResult {
             url: url.to_string(),
@@ -70,10 +90,8 @@ impl TechDetector {
         })
     }
 
-    fn detect_servers(&self, headers: &FxHashMap<String, String>, stack: &mut TechStack) {
-        let server = headers.get("server").map(|s| s.to_lowercase());
-
-        if let Some(s) = server {
+    fn detect_servers(&self, server_lower: Option<&str>, stack: &mut TechStack) {
+        if let Some(s) = server_lower {
             if s.contains("nginx") && !stack.servers.contains(&"Nginx".to_string()) {
                 stack.servers.push("Nginx".to_string());
             }
@@ -116,14 +134,14 @@ impl TechDetector {
 
     fn detect_frameworks(
         &self,
+        powered_by_lower: Option<&str>,
         headers: &FxHashMap<String, String>,
         body: &str,
         stack: &mut TechStack,
     ) {
-        let powered_by = headers.get("x-powered-by").map(|s| s.to_lowercase());
         let framework = headers.get("x-framework").map(|s| s.to_lowercase());
 
-        if let Some(pb) = powered_by {
+        if let Some(pb) = powered_by_lower {
             if pb.contains("express") && !stack.frameworks.contains(&"Express".to_string()) {
                 stack.frameworks.push("Express".to_string());
             }
@@ -229,10 +247,8 @@ impl TechDetector {
             }
     }
 
-    fn detect_cms(&self, headers: &FxHashMap<String, String>, _body: &str, stack: &mut TechStack) {
-        let powered_by = headers.get("x-powered-by").map(|s| s.to_lowercase());
-
-        if let Some(pb) = powered_by {
+    fn detect_cms(&self, powered_by_lower: Option<&str>, stack: &mut TechStack) {
+        if let Some(pb) = powered_by_lower {
             if pb.contains("wordpress") && !stack.cms.contains(&"WordPress".to_string()) {
                 stack.cms.push("WordPress".to_string());
             }
@@ -289,15 +305,8 @@ impl TechDetector {
         }
     }
 
-    fn detect_databases(
-        &self,
-        headers: &FxHashMap<String, String>,
-        _body: &str,
-        stack: &mut TechStack,
-    ) {
-        let server = headers.get("server").map(|s| s.to_lowercase());
-
-        if let Some(s) = server {
+    fn detect_databases(&self, server_lower: Option<&str>, stack: &mut TechStack) {
+        if let Some(s) = server_lower {
             if s.contains("mysql") && !stack.databases.contains(&"MySQL".to_string()) {
                 stack.databases.push("MySQL".to_string());
             }
@@ -355,15 +364,8 @@ impl TechDetector {
         }
     }
 
-    fn detect_languages(
-        &self,
-        headers: &FxHashMap<String, String>,
-        _body: &str,
-        stack: &mut TechStack,
-    ) {
-        let powered_by = headers.get("x-powered-by").map(|s| s.to_lowercase());
-
-        if let Some(pb) = powered_by {
+    fn detect_languages(&self, powered_by_lower: Option<&str>, stack: &mut TechStack) {
+        if let Some(pb) = powered_by_lower {
             if pb.contains("php") && !stack.languages.contains(&"PHP".to_string()) {
                 stack.languages.push("PHP".to_string());
             }
