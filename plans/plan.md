@@ -646,14 +646,16 @@ When starting new improvement work:
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1064 passing | Verified after Waves H-N |
+| Tests | 1064 passing | Verified after all waves |
 | Clippy | 1 warning | Pre-existing (scan_ports 8 args) |
 | Source files | 430+ | |
 | TUI files | 60 | |
 | Tab variants | 29 | |
 | Skill files | 27 | In `slapper_skills/` |
 | Payload types | 32 | fuzzer/payloads (added 6 new) |
-| Dependencies | Updated | pyo3 0.28, magnus 0.8.2, mlua 0.11.6, serde_yaml_neo |
+| Dependencies | Updated | pyo3 0.28, magnus 0.8.2, mlua 0.11.6, serde_yaml_neo, pem |
+| New modules | 6 | ssh_auth, ftp_auth, smtp_auth, wireless, ssl_audit, containers |
+| Test coverage | 25+ | Agent/AiClient integration, webhook, parsing, persistence |
 
 ---
 
@@ -662,43 +664,65 @@ When starting new improvement work:
 ### Wave H: Security Foundations
 - H1.1: pyo3 0.25 → 0.28
 - H1.2: serde_yaml → serde_yaml_neo
+- H1.3: rustls-pemfile → pem crate
 - H1.4: magnus 0.8 → 0.8.2
 - H1.5: mlua 0.11 → 0.11.6
-- H2.1-H2.4: NSE sandbox fixes (allowed_dir, lfs, socket)
+- H2.1: Add sandbox parameter to lfs library registration
+- H2.2: Add sandbox parameter to socket library registration
+- H2.3: Fix NSE io.open allowed_dir default (/tmp/slapper-nse)
+- H2.4: Add symlink cycle detection to path validation
+- H3.1-H3.3: Security documentation (insecure-tls, NSE sandbox, config)
 
 ### Wave I: Code Quality
-- I1.1-I1.4: Error handling fixes (RwLock, Mutex unwrap, debug→warn, DNS context)
-- I2.1-I2.3: Test quality fixes (scope CIDR, ports range, utils assertions)
+- I1.2: Replace Mutex::lock().unwrap() with proper error handling
+- I1.3: Improve fuzz error visibility (debug→warn)
+- I1.4: Preserve DNS resolution error context
+- I2.2: Strengthen test_parse_ports_large_range assertion
 - I3: Skipped (complex nested runtime changes)
 
 ### Wave J: Performance
+- J1.1: Replace Mutex<Vec> with DashMap in fuzzer execution
+- J1.2: Replace std::fs with tokio::fs in agent memory
+- J2.1: Use AtomicU64 for progress updates in scanner
 - J2.3: HashMap → FxHashMap in fuzzer/payloads/mod.rs
+- J2.4: Implement centralized HTTP client creation
+- J2.5: Optimize string allocations in techdetect
 - J3.1: Capped idle connections to 100 in stress/http.rs
-- Others: Skipped (complex changes)
+- J3.2: Add RegexBuilder size limits in js.rs
+- J3.3: Cache lowercase values in whois
 
 ### Wave K: Plugin System
 - K1.1: Regex-based pattern detection (LazyLock)
 - K1.2: Removed dangerous session_shell_upgrade()
+- K1.3: Add plugin sandboxing (resource limits for CPU, memory)
 - K1.4: Added JSON size limits
 - K2.1: Added timeout_secs to PluginConfig
 - K2.2: RubyPluginClient::close()
-- K2.4: Parallelized plugin checks
+- K2.3: Fix async/sync deadlock risk (rt.block_on)
+- K2.4: Parallelized PluginRegistry::run_check()
+- K2.5: Reset MSF_CLIENT global state between invocations
 
 ### Wave L: AI Agent Testing
 - L1.1: Wiremock helpers in ai/client.rs
 - L1.2: Memory system file I/O tests
 - L1.3: SkillLoader test fixtures
-- L2.1-L2.4: Integration tests
+- L2.1: Add Agent + AiClient integration test
+- L2.2: Add AlertRouter webhook delivery tests
+- L2.3: Add multi-provider response parsing tests
+- L2.4: Add TargetPortfolio persistence tests
 - L3.1-L3.3: Circuit breaker, error handling, webhook security
 
 ### Wave M: Pentesting Tools
 - M1.1: Template engine (scanner/templates/)
 - M1.2: Intercepting proxy (proxy/intercept/)
+- M2.1: Multi-protocol auth testing (SSH, FTP, SMTP)
 - M2.2-M2.4: ssl_audit, containers, cms modules
 - M3.1: Wireless module (feature-gated)
 
 ### Wave N: TUI & Attack Patterns
-- N1.1-N1.4: TUI improvements (scroll state, progress, status indicators)
+- N1.1: Fix TUI tab overflow (horizontal scrolling for 29 tabs)
+- N1.2: Redesign help overlay (smaller, contextual)
+- N1.3: Improve progress visibility (show percentage)
 - N2.1-N2.6: New payload modules (nosql, xpath, expression, prototype, race, mass_assign)
 
 ---

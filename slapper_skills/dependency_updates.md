@@ -28,6 +28,7 @@ Slapper follows a systematic approach to dependency updates, prioritizing securi
 | magnus | 0.8.2 | crates/slapper-plugin/Cargo.toml, crates/slapper-ruby/Cargo.toml |
 | mlua | 0.11.6 | crates/slapper-nse/Cargo.toml |
 | serde_yaml_neo | 0.11 | crates/slapper/Cargo.toml |
+| pem | 3 | crates/slapper/Cargo.toml (replaces rustls-pemfile) |
 
 ## Version Upgrade Patterns
 
@@ -75,6 +76,37 @@ serde_yaml_neo = "0.11"
 ```rust
 // Import change only
 use serde_yaml_neo::Value;  // instead of serde_yaml::Value
+```
+
+### rustls-pemfile → pem crate
+
+**Issue:** rustls-pemfile is unmaintained (RUSTSEC-2025-0134)
+
+**Migration:**
+```toml
+# Remove rustls-pemfile from dependencies
+# Add pem crate (already available as transitive dependency via rcgen)
+pem = "3"
+```
+
+```rust
+// Certificate parsing
+use pem::{parse_many, Pem};
+let certs: Vec<Pem> = parse_many(cert_pem)
+    .into_iter()
+    .filter(|p| p.tag() == "CERTIFICATE")
+    .collect();
+
+// Private key parsing (different tags for different key types)
+use rustls_pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer, PrivatePkcs1KeyDer, PrivateSec1KeyDer};
+for pem in parse_many(key_pem) {
+    match pem.tag() {
+        "PRIVATE KEY" => PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(pem.contents().to_vec())),
+        "RSA PRIVATE KEY" => PrivateKeyDer::Pkcs1(PrivatePkcs1KeyDer::from(pem.contents().to_vec())),
+        "EC PRIVATE KEY" | "ECDSA PRIVATE KEY" => PrivateKeyDer::Sec1(Sec1KeyDer::from(pem.contents().to_vec())),
+        _ => continue,
+    }
+}
 ```
 
 ## Verification Commands

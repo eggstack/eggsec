@@ -46,14 +46,21 @@ crates/slapper/
 │   │   └── ports/     # Port scanning (mod.rs + spoofed.rs)
 │   ├── waf/           # WAF detection and bypass
 │   ├── recon/         # Reconnaissance modules
+│   │   └── auth/      # Multi-protocol auth testing (ssh_auth, ftp_auth, smtp_auth)
 │   ├── output/        # Report generation (JSON, HTML, SARIF, JUnit)
+│   ├── wireless/      # Wireless security testing (WiFi scanning, auth testing)
 │   ├── tool/          # Tool abstraction layer
 │   │   ├── implementations/  # Tool implementations (recon, scanner, fuzzer, waf, search, etc.)
 │   │   └── protocol/
 │   │       └── mcp/   # MCP server (mod.rs, handlers.rs, routes.rs, types.rs, auth.rs, streaming.rs)
-│   ├── tui/           # Terminal UI
-│   │   └── app/       # App state and logic (mod.rs, runner.rs, error.rs, input.rs, options.rs)
-│   └── utils/         # Common utilities
+│   ├── scanner/       # Port scanning, endpoint discovery
+│   │   ├── templates/ # Nuclei-style template engine
+│   │   └── ports/     # Port scanning (mod.rs + spoofed.rs)
+│   ├── proxy/         # Proxy modules
+│   │   └── intercept/ # Intercepting proxy with dynamic SSL certs
+│   ├── fuzzer/        # Fuzzing engine (32+ payload types)
+│   │   └── payloads/
+│   │       └── macros.rs  # payload_vec! macro
 ├── tests/             # Integration tests
 └── Cargo.toml
 ```
@@ -85,9 +92,9 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 ### PyO3 Dependency
 
-- Current version: 0.25 (supports Python 3.14)
-- In `crates/slapper-plugin/Cargo.toml`: `pyo3 = { version = "0.25", features = ["auto-initialize"], optional = true }`
-- When upgrading: check PyO3 CHANGELOG for breaking changes; `Python::with_gil` still works in 0.25 (renamed to `Python::attach` in 0.26)
+- Current version: 0.28 (supports Python 3.14)
+- In `crates/slapper-plugin/Cargo.toml`: `pyo3 = { version = "0.28", features = ["auto-initialize"], optional = true }`
+- Breaking changes: `Python::with_gil` renamed to `Python::attach` in 0.26; `Bound` API introduced in 0.21 is now standard; GIL lifetime constraints tightened
 
 ## Codebase Health
 
@@ -659,11 +666,26 @@ pub struct AlertRouter {
 }
 
 impl AlertRouter {
-    pub fn add_channel(&self, channel: AlertChannel) {
-        self.channels.lock().unwrap().push(channel);
+    pub fn add_channel(&self, channel: AlertChannel) -> Result<()> {
+        self.channels.lock().map_err(|e| ...).push(channel);
+        Ok(())
     }
 }
 ```
+
+### parking_lot vs std::sync Mutex
+
+`parking_lot::Mutex::lock()` returns `MutexGuard` directly, NOT `Result<MutexGuard, PoisonError>` like `std::sync::Mutex`:
+```rust
+// parking_lot (correct):
+let guard = mutex.lock();
+guard.push(value);
+
+// std::sync (returns Result):
+let guard = mutex.lock().unwrap();
+```
+
+When converting from `std::sync::Mutex` to `parking_lot::Mutex`, remove `Ok()` pattern matching on lock results.
 
 ## Code Quality Patterns
 
