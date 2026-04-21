@@ -53,6 +53,12 @@ cargo build --release --features "rest-api ai-integration"
 | `ldap_injection_testing.md` | LDAP injection testing | fuzzer |
 | `formula_injection_testing.md` | CSV/spreadsheet formula injection | fuzzer |
 | `log_injection_testing.md` | Log injection and falsification | fuzzer |
+| `nosql_injection.md` | NoSQL injection (MongoDB, Redis, etc.) | fuzzer |
+| `xpath_injection.md` | XPath injection for XML APIs | fuzzer |
+| `expression_injection.md` | Expression language injection (Spring EL, OGNL, etc.) | fuzzer |
+| `prototype_pollution.md` | JavaScript prototype pollution | fuzzer |
+| `race_condition.md` | Race condition and TOCTOU testing | fuzzer |
+| `mass_assignment.md` | Mass assignment vulnerabilities | fuzzer |
 
 ### API Testing
 | Skill | Description | Tools |

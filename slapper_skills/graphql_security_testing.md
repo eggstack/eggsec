@@ -25,14 +25,15 @@ GraphQL security testing discovers vulnerabilities specific to GraphQL APIs incl
 
 - GraphQL introspection querying
 - Schema enumeration
-- Query depth limiting bypass
-- Alias-based rate limit bypass
-- Batching attacks (user enumeration)
+- Query depth limiting bypass (nested queries up to depth 50)
+- Alias-based rate limit bypass (20+ aliases)
+- Batch query bypass for user enumeration
 - Injection via query variables
 - Directive injection
-- Mutation testing
+- Mutation introspection testing
 - Subscription DoS testing
 - Field cost analysis
+- Advanced payload generation with multiple bypass techniques
 
 ## Usage
 
