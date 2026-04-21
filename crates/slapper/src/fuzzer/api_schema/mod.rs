@@ -400,7 +400,7 @@ impl ApiSchemaFuzzer {
     }
 
     fn yaml_to_json(content: &str) -> Result<serde_json::Value> {
-        let yaml_value: serde_yaml::Value = serde_yaml::from_str(content)?;
+        let yaml_value: serde_yaml_neo::Value = serde_yaml_neo::from_str(content)?;
         Ok(serde_json::to_value(yaml_value)?)
     }
 

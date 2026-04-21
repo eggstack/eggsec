@@ -28,7 +28,7 @@ fn validate_python_plugin(content: &str, block_suspicious_plugins: bool) -> Resu
     let mut suspicious_found = Vec::new();
     for pattern in SUSPICIOUS_PATTERNS {
         if content.contains(pattern) {
-            suspicious_found.push(pattern);
+            suspicious_found.push(*pattern);
         }
     }
 
@@ -128,7 +128,7 @@ impl PythonPluginManager {
     }
 
     pub fn load_plugins(&mut self, plugin_dir: &Path) -> Result<()> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             if !plugin_dir.exists() {
                 return Ok(());
             }
@@ -275,7 +275,7 @@ impl PythonPluginManager {
     }
 
     pub fn get_checks(&self) -> Vec<PluginCheck> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut checks = Vec::new();
 
             for plugin in &self.plugins {
@@ -341,7 +341,7 @@ impl PythonPluginManager {
     }
 
     pub fn run_check_direct(&self, check_name: &str, target: &str) -> Result<Vec<serde_json::Value>> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut all_results = Vec::new();
 
             for plugin in &self.plugins {

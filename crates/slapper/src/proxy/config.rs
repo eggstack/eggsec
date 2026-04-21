@@ -168,7 +168,7 @@ impl ProxyEntry {
             .map(|e| e == "yaml" || e == "yml")
             .unwrap_or(false)
         {
-            serde_yaml::from_str(&content)?
+            serde_yaml_neo::from_str(&content)?
         } else {
             Self::parse_proxy_list(&content)?
         };
@@ -547,8 +547,8 @@ mod tests {
     #[test]
     fn test_proxy_entry_yaml_roundtrip() {
         let entry = ProxyEntry::new(ProxyType::Socks5, "10.0.0.1".to_string(), 9050);
-        let yaml = serde_yaml::to_string(&entry).unwrap();
-        let parsed: ProxyEntry = serde_yaml::from_str(&yaml).unwrap();
+        let yaml = serde_yaml_neo::to_string(&entry).unwrap();
+        let parsed: ProxyEntry = serde_yaml_neo::from_str(&yaml).unwrap();
         assert_eq!(parsed.address, "10.0.0.1");
         assert_eq!(parsed.port, 9050);
     }

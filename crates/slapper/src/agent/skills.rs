@@ -44,7 +44,7 @@ impl Skill {
             );
         }
 
-        let frontmatter: SkillFrontmatter = serde_yaml::from_str(parts[0])?;
+        let frontmatter: SkillFrontmatter = serde_yaml_neo::from_str(parts[0])?;
 
         let name = frontmatter.name.clone();
         let description = frontmatter

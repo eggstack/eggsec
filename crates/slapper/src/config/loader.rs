@@ -31,7 +31,7 @@ pub fn load_config(config_path: Option<&str>) -> Result<SlapperConfig> {
         .map(|e| e == "yaml" || e == "yml")
         .unwrap_or(false)
     {
-        serde_yaml::from_str(&content)
+        serde_yaml_neo::from_str(&content)
             .with_context(|| format!("Failed to parse YAML config: {:?}", path))?
     } else {
         toml::from_str(&content)

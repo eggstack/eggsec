@@ -21,14 +21,14 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     let io = lua.create_table()?;
 
     let sandbox_enabled = sandbox.enabled;
-    let allowed_dir = sandbox.allowed_dir.clone();
+    let allowed_dir_for_open = sandbox.allowed_dir.clone();
 
     io.set(
         "open",
         lua.create_function(move |lua, (filename, mode): (String, Option<String>)| {
             if sandbox_enabled {
                 let path_buf = PathBuf::from(&filename);
-                if let Some(ref dir) = allowed_dir {
+                if let Some(ref dir) = allowed_dir_for_open {
                     let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
                     if !canonical.starts_with(dir) {
                         let result = lua.create_table()?;
@@ -204,12 +204,13 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
         })?,
     )?;
 
+    let allowed_dir_for_lines = sandbox.allowed_dir.clone();
     io.set(
         "lines",
         lua.create_function(move |lua, filename: String| {
             if sandbox_enabled {
                 let path_buf = PathBuf::from(&filename);
-                if let Some(ref dir) = allowed_dir {
+                if let Some(ref dir) = allowed_dir_for_lines {
                     let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
                     if !canonical.starts_with(dir) {
                         let result = lua.create_table()?;

@@ -38,7 +38,7 @@ impl Scope {
             .map_err(|e| ScopeError::FileRead(path.to_string(), e.to_string()))?;
 
         let scope: Scope = if path.ends_with(".yaml") || path.ends_with(".yml") {
-            serde_yaml::from_str(&content)
+            serde_yaml_neo::from_str(&content)
                 .map_err(|e| ScopeError::Parse(path.to_string(), e.to_string()))?
         } else {
             toml::from_str(&content)

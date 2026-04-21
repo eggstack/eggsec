@@ -226,8 +226,8 @@ impl From<std::net::AddrParseError> for SlapperError {
     }
 }
 
-impl From<serde_yaml::Error> for SlapperError {
-    fn from(e: serde_yaml::Error) -> Self {
+impl From<serde_yaml_neo::Error> for SlapperError {
+    fn from(e: serde_yaml_neo::Error) -> Self {
         SlapperError::Parse(format!("YAML error: {}", e))
     }
 }

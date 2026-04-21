@@ -7,7 +7,7 @@ rust-version.workspace = true
 description = "Ruby/Metasploit integration for Slapper"
 
 [dependencies]
-magnus = { version = "0.8", features = ["embed"], optional = true }
+magnus = { version = "0.8.2", features = ["embed"], optional = true }
 reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2"], default-features = false }
 tokio = { workspace = true }
 base64.workspace = true
