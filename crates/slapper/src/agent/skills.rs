@@ -304,4 +304,273 @@ Reconnaissance skill.
         assert!(skill.matches_trigger("recon"));
         assert!(skill.matches_trigger("run recon on example.com"));
     }
+
+    const VALID_SKILL_CONTENT: &str = r#"---
+name: sql-injection-scanner
+description: "SQL injection vulnerability scanner"
+triggers:
+  - sql injection
+  - sqli
+  - database
+metadata:
+  category: vulnerability
+  tools: [fuzzer, scanner]
+  scope: targets
+---
+
+## Overview
+Scans for SQL injection vulnerabilities.
+
+## Usage
+Use the fuzzer with SQL injection payloads.
+
+## Keywords
+SQL injection, SQLi, database vulnerability
+"#;
+
+    const VALID_SKILL_CONTENT_2: &str = r#"---
+name: xss-scanner
+description: "Cross-site scripting scanner"
+triggers:
+  - xss
+  - cross-site scripting
+  - javascript
+metadata:
+  category: vulnerability
+  tools: [fuzzer]
+  scope: targets
+---
+
+## Overview
+Scans for XSS vulnerabilities.
+"#;
+
+    #[test]
+    fn test_skill_parse_valid() {
+        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        assert_eq!(skill.name, "sql-injection-scanner");
+        assert!(skill.description.contains("SQL injection"));
+        assert!(skill.triggers.contains(&"sql injection".to_string()));
+        assert_eq!(skill.metadata.category, "vulnerability");
+        assert!(skill.metadata.tools.contains(&"fuzzer".to_string()));
+    }
+
+    #[test]
+    fn test_skill_parse_without_frontmatter_triggers() {
+        let content = r#"---
+name: test-skill
+description: "Test skill"
+metadata:
+  category: testing
+  tools: [scan]
+  scope: targets
+---
+
+## Overview
+This is a test skill.
+
+## Keywords
+scan, test, security
+"#;
+
+        let skill = Skill::parse(content).unwrap();
+        assert!(!skill.triggers.is_empty());
+    }
+
+    #[test]
+    fn test_skill_parse_invalid_no_separator() {
+        let content = r#"name: test-skill
+description: Test skill
+
+This is just plain markdown without YAML frontmatter.
+"#;
+
+        let result = Skill::parse(content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_skill_parse_invalid_yaml() {
+        let content = r#"---
+name: [invalid yaml
+description: "Test"
+---
+Content
+"#;
+
+        let result = Skill::parse(content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_skill_matches_trigger_case_insensitive() {
+        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        assert!(skill.matches_trigger("SQL INJECTION"));
+        assert!(skill.matches_trigger("Sql Injection"));
+        assert!(skill.matches_trigger("sqli testing"));
+    }
+
+    #[test]
+    fn test_skill_matches_trigger_partial() {
+        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        assert!(skill.matches_trigger("test for sql injection on login"));
+    }
+
+    #[test]
+    fn test_skill_matches_trigger_no_match() {
+        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        assert!(!skill.matches_trigger("xss attack"));
+        assert!(!skill.matches_trigger(" Buffer Overflow"));
+    }
+
+    #[test]
+    fn test_skill_to_prompt() {
+        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        let prompt = skill.to_prompt();
+        assert!(prompt.contains("sql-injection-scanner"));
+        assert!(prompt.contains("fuzzer"));
+        assert!(prompt.contains("scanner"));
+    }
+
+    #[test]
+    fn test_skill_to_prompt_truncates_content() {
+        let long_content = format!("{}\n{}\n{}", VALID_SKILL_CONTENT, "# Section 2\n".repeat(100), "## End");
+        let skill = Skill::parse(&long_content).unwrap();
+        let prompt = skill.to_prompt();
+        let lines: Vec<&str> = prompt.lines().collect();
+        assert!(lines.len() < 100);
+    }
+
+    #[test]
+    fn test_extract_description() {
+        let content = r#"## Overview
+This is the overview section.
+
+## Usage
+This describes usage.
+
+## Another Section
+More content here.
+"#;
+
+        let description = extract_description(content);
+        assert!(description.contains("This is the overview section"));
+        assert!(!description.contains("Usage"));
+    }
+
+    #[test]
+    fn test_extract_triggers_default() {
+        let content = "# Just a header\n\nSome content without triggers";
+        let triggers = extract_triggers(content);
+        assert!(triggers.contains(&"scan".to_string()));
+        assert!(triggers.contains(&"security".to_string()));
+    }
+
+    #[test]
+    fn test_extract_triggers_from_keyword_line() {
+        let content = "## Keywords\nsql, injection, sqli, database";
+        let triggers = extract_triggers(content);
+        assert!(triggers.iter().any(|t| t.contains("sql")));
+        assert!(triggers.iter().any(|t| t.contains("injection")));
+    }
+
+    #[test]
+    fn test_skill_registry_new() {
+        let registry = SkillRegistry::new();
+        assert_eq!(registry.skill_count(), 0);
+    }
+
+    #[test]
+    fn test_skill_registry_register() {
+        let mut registry = SkillRegistry::new();
+        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        let result = registry.register(skill);
+        assert!(result.is_ok());
+        assert_eq!(registry.skill_count(), 1);
+    }
+
+    #[test]
+    fn test_skill_registry_find_by_trigger() {
+        let mut registry = SkillRegistry::new();
+        let skill1 = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        let skill2 = Skill::parse(VALID_SKILL_CONTENT_2).unwrap();
+        registry.register(skill1).unwrap();
+        registry.register(skill2).unwrap();
+
+        let found = registry.find_by_trigger("sql injection");
+        assert!(!found.is_empty());
+        assert!(found.iter().any(|s| s.name == "sql-injection-scanner"));
+    }
+
+    #[test]
+    fn test_skill_registry_find_by_trigger_no_match() {
+        let mut registry = SkillRegistry::new();
+        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        registry.register(skill).unwrap();
+
+        let found = registry.find_by_trigger("nonexistent");
+        assert!(found.is_empty());
+    }
+
+    #[test]
+    fn test_skill_registry_find_by_tool() {
+        let mut registry = SkillRegistry::new();
+        let skill1 = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        let skill2 = Skill::parse(VALID_SKILL_CONTENT_2).unwrap();
+        registry.register(skill1).unwrap();
+        registry.register(skill2).unwrap();
+
+        let found = registry.find_by_tool("fuzzer");
+        assert_eq!(found.len(), 2);
+    }
+
+    #[test]
+    fn test_skill_registry_find_by_tool_no_match() {
+        let mut registry = SkillRegistry::new();
+        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        registry.register(skill).unwrap();
+
+        let found = registry.find_by_tool("nonexistent");
+        assert!(found.is_empty());
+    }
+
+    #[test]
+    fn test_skill_registry_get_prompts_for_context() {
+        let mut registry = SkillRegistry::new();
+        let skill1 = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        let skill2 = Skill::parse(VALID_SKILL_CONTENT_2).unwrap();
+        registry.register(skill1).unwrap();
+        registry.register(skill2).unwrap();
+
+        let prompts = registry.get_prompts_for_context("scan for sql injection");
+        assert!(!prompts.is_empty());
+    }
+
+    #[test]
+    fn test_skill_registry_get_prompts_for_context_no_match() {
+        let mut registry = SkillRegistry::new();
+        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
+        registry.register(skill).unwrap();
+
+        let prompts = registry.get_prompts_for_context("buffer overflow scan");
+        assert!(prompts.is_empty());
+    }
+
+    #[test]
+    fn test_skill_loader_new() {
+        let loader = SkillLoader::new(vec![]);
+        assert!(loader.load_skills().is_ok());
+    }
+
+    #[test]
+    fn test_skill_metadata_default() {
+        let metadata = SkillMetadata {
+            category: "test".to_string(),
+            tools: vec!["scan".to_string()],
+            scope: "targets".to_string(),
+            requires: None,
+        };
+        assert_eq!(metadata.category, "test");
+        assert!(metadata.tools.contains(&"scan".to_string()));
+    }
 }

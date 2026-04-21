@@ -524,4 +524,148 @@ mod tests {
         let client = AiClient::new(config);
         assert_eq!(client.api_url(), "https://api.anthropic.com/v1/messages");
     }
+
+    fn create_mock_openai_response(content: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": "chatcmpl-mock-123",
+            "object": "chat.completion",
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": content
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 20,
+                "total_tokens": 30
+            }
+        })
+    }
+
+    fn create_mock_anthropic_response(content: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": "msg-mock-123",
+            "type": "message",
+            "role": "assistant",
+            "content": [{
+                "type": "text",
+                "text": content
+            }],
+            "usage": {
+                "input_tokens": 10,
+                "output_tokens": 20
+            }
+        })
+    }
+
+    fn create_mock_error_response(message: &str) -> serde_json::Value {
+        serde_json::json!({
+            "error": {
+                "message": message,
+                "type": "invalid_request_error",
+                "code": "invalid_request"
+            }
+        })
+    }
+
+    #[test]
+    fn test_mock_openai_response_parsing() {
+        let response = create_mock_openai_response("Test payload line1\nTest payload line2");
+        let client = create_client_without_key();
+        let content = client.extract_content(&response, |l| !l.is_empty());
+        assert_eq!(content.len(), 2);
+        assert!(content[0].contains("Test payload line1"));
+    }
+
+    #[test]
+    fn test_mock_anthropic_response_structure() {
+        let response = create_mock_anthropic_response("Bypass suggestion 1\nBypass suggestion 2");
+        assert!(response.get("content").is_some());
+        if let Some(content_array) = response.get("content").and_then(|c| c.as_array()) {
+            assert!(!content_array.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_mock_error_response_structure() {
+        let response = create_mock_error_response("Rate limit exceeded");
+        assert!(response.get("error").is_some());
+        let error_msg = response.get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(|m| m.as_str());
+        assert_eq!(error_msg, Some("Rate limit exceeded"));
+    }
+
+    #[test]
+    fn test_multi_provider_response_openai() {
+        let response = create_mock_openai_response("SQL injection payload\nXSS payload");
+        let client = create_client_without_key();
+        let content = client.extract_content(&response, |l| !l.starts_with('#'));
+        assert_eq!(content.len(), 2);
+    }
+
+    #[test]
+    fn test_multi_provider_response_empty_content() {
+        let response = create_mock_openai_response("");
+        let client = create_client_without_key();
+        let content = client.extract_content(&response, |_| true);
+        assert!(content.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_initial_state() {
+        let client = create_client_without_key();
+        let state = client.circuit_breaker_state().await;
+        assert_eq!(state, CircuitState::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_after_failures() {
+        let client = create_client_without_key();
+        for _ in 0..5 {
+            client.circuit_breaker.record_failure().await;
+        }
+        let state = client.circuit_breaker_state().await;
+        assert_eq!(state, CircuitState::Open);
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_after_success() {
+        let client = create_client_without_key();
+        for _ in 0..5 {
+            client.circuit_breaker.record_failure().await;
+        }
+        client.circuit_breaker.record_success().await;
+        let state = client.circuit_breaker_state().await;
+        assert_eq!(state, CircuitState::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_half_open_transition() {
+        let client = create_client_without_key();
+        for _ in 0..5 {
+            client.circuit_breaker.record_failure().await;
+        }
+        assert_eq!(client.circuit_breaker_state().await, CircuitState::Open);
+        client.circuit_breaker.record_success().await;
+        assert_eq!(client.circuit_breaker_state().await, CircuitState::Closed);
+    }
+
+    #[test]
+    fn test_provider_supports_bearer_auth() {
+        assert!(Provider::OpenAI.supports_bearer_auth());
+        assert!(Provider::Anthropic.supports_bearer_auth());
+        assert!(Provider::OpenAICompatible.supports_bearer_auth());
+        assert!(!Provider::Azure.supports_bearer_auth());
+    }
+
+    #[test]
+    fn test_provider_supports_azure_auth() {
+        assert!(Provider::Azure.supports_azure_auth());
+        assert!(!Provider::OpenAI.supports_azure_auth());
+        assert!(!Provider::Anthropic.supports_azure_auth());
+        assert!(!Provider::OpenAICompatible.supports_azure_auth());
+    }
 }

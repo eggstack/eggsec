@@ -310,6 +310,7 @@ impl Default for LongitudinalMemory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_scan_summary() {
@@ -317,5 +318,179 @@ mod tests {
 
         let summary = ScanSummary::from_findings(&findings);
         assert_eq!(summary.total_findings, 0);
+    }
+
+    #[test]
+    fn test_scan_summary_with_findings() {
+        let finding = Finding {
+            id: "test-1".to_string(),
+            finding_type: crate::tool::response::FindingType::SqlInjection,
+            severity: crate::types::Severity::Critical,
+            title: "SQL Injection".to_string(),
+            description: "SQL injection detected".to_string(),
+            evidence: vec![],
+            remediation: vec![],
+            confidence: 0.9,
+            metadata: Default::default(),
+        };
+        let findings = vec![finding];
+
+        let summary = ScanSummary::from_findings(&findings);
+        assert_eq!(summary.total_findings, 1);
+        assert_eq!(*summary.by_severity.get("Critical").unwrap_or(&0), 1);
+    }
+
+    #[test]
+    fn test_longitudinal_memory_new_creates_directories() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().join("memory");
+        let memory = LongitudinalMemory::new(storage_dir.clone()).unwrap();
+
+        assert!(storage_dir.exists());
+        assert!(storage_dir.join("targets").exists());
+        assert!(storage_dir.join("patterns").exists());
+    }
+
+    #[test]
+    fn test_longitudinal_memory_store_and_retrieve() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().join("memory");
+        let memory = LongitudinalMemory::new(storage_dir.clone()).unwrap();
+
+        let tool_response = crate::tool::ToolResponse {
+            request_id: "scan-123".to_string(),
+            tool_id: "recon".to_string(),
+            findings: vec![],
+            metadata: crate::tool::response::ToolResponseMetadata {
+                started_at: chrono::Utc::now(),
+                completed_at: chrono::Utc::now(),
+                duration_ms: 100,
+            },
+        };
+
+        let result = memory.store_scan_results("https://example.com", &tool_response);
+        assert!(result.is_ok());
+
+        let history = memory.get_target_history("https://example.com").unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].scan_id, "scan-123");
+    }
+
+    #[test]
+    fn test_longitudinal_memory_get_target_history_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().join("memory");
+        let memory = LongitudinalMemory::new(storage_dir).unwrap();
+
+        let history = memory.get_target_history("https://nonexistent.com").unwrap();
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn test_longitudinal_memory_multiple_scans() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().join("memory");
+        let memory = LongitudinalMemory::new(storage_dir).unwrap();
+
+        for i in 0..3 {
+            let tool_response = crate::tool::ToolResponse {
+                request_id: format!("scan-{}", i),
+                tool_id: "recon".to_string(),
+                findings: vec![],
+                metadata: crate::tool::response::ToolResponseMetadata {
+                    started_at: chrono::Utc::now(),
+                    completed_at: chrono::Utc::now(),
+                    duration_ms: 100,
+                },
+            };
+            memory.store_scan_results("https://example.com", &tool_response).unwrap();
+        }
+
+        let history = memory.get_target_history("https://example.com").unwrap();
+        assert_eq!(history.len(), 3);
+    }
+
+    #[test]
+    fn test_longitudinal_memory_set_and_get_baseline() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().join("memory");
+        let memory = LongitudinalMemory::new(storage_dir).unwrap();
+
+        let finding_ids = vec!["finding-1".to_string(), "finding-2".to_string()];
+        let result = memory.set_baseline("https://example.com", finding_ids.clone());
+        assert!(result.is_ok());
+
+        let tool_response = crate::tool::ToolResponse {
+            request_id: "scan-1".to_string(),
+            tool_id: "recon".to_string(),
+            findings: vec![],
+            metadata: crate::tool::response::ToolResponseMetadata {
+                started_at: chrono::Utc::now(),
+                completed_at: chrono::Utc::now(),
+                duration_ms: 100,
+            },
+        };
+        memory.store_scan_results("https://example.com", &tool_response).unwrap();
+
+        let history = memory.get_target_history("https://example.com").unwrap();
+        assert!(!history.is_empty());
+    }
+
+    #[test]
+    fn test_longitudinal_memory_compare_with_baseline_new_findings() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().join("memory");
+        let memory = LongitudinalMemory::new(storage_dir).unwrap();
+
+        memory.set_baseline("https://example.com", vec![]).unwrap();
+
+        let new_finding = Finding {
+            id: "new-finding-1".to_string(),
+            finding_type: crate::tool::response::FindingType::SqlInjection,
+            severity: crate::types::Severity::Critical,
+            title: "SQL Injection".to_string(),
+            description: "SQL injection detected".to_string(),
+            evidence: vec![],
+            remediation: vec![],
+            confidence: 0.9,
+            metadata: Default::default(),
+        };
+
+        let comparison = memory.compare_with_baseline("https://example.com", &[new_finding]).unwrap();
+        assert_eq!(comparison.new_findings.len(), 1);
+        assert_eq!(comparison.new_findings[0].id, "new-finding-1");
+    }
+
+    #[test]
+    fn test_longitudinal_memory_get_patterns_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().join("memory");
+        let memory = LongitudinalMemory::new(storage_dir).unwrap();
+
+        let patterns = memory.get_patterns("https://example.com").unwrap();
+        assert!(patterns.is_empty());
+    }
+
+    #[test]
+    fn test_target_memory_default() {
+        let memory = TargetMemory::default();
+        assert!(memory.target.is_empty());
+        assert!(memory.scans.is_empty());
+        assert!(memory.patterns.is_empty());
+        assert!(memory.baselines.is_empty());
+    }
+
+    #[test]
+    fn test_pattern_entry_creation() {
+        let entry = PatternEntry {
+            pattern_type: "SQLInjection".to_string(),
+            description: "SQL injection pattern".to_string(),
+            first_seen: chrono::Utc::now(),
+            last_seen: chrono::Utc::now(),
+            occurrence_count: 5,
+            related_findings: vec!["finding-1".to_string()],
+        };
+        assert_eq!(entry.occurrence_count, 5);
+        assert_eq!(entry.pattern_type, "SQLInjection");
     }
 }

@@ -237,4 +237,208 @@ mod tests {
         assert!(Priority::High.as_int() > Priority::Normal.as_int());
         assert!(Priority::Normal.as_int() > Priority::Low.as_int());
     }
+
+    #[test]
+    fn test_target_config_default() {
+        let config = TargetConfig::default();
+        assert!(config.target.is_empty());
+        assert_eq!(config.target_type, "url");
+        assert_eq!(config.priority, Priority::Normal);
+        assert!(config.schedule.is_none());
+        assert!(config.alert_channels.is_empty());
+        assert!(config.last_scan.is_none());
+        assert!(config.scan_history.is_empty());
+        assert!(config.baseline_findings.is_empty());
+        assert!(config.enabled);
+    }
+
+    #[test]
+    fn test_target_config_with_values() {
+        let config = TargetConfig {
+            target: "https://example.com".to_string(),
+            target_type: "url".to_string(),
+            priority: Priority::High,
+            schedule: Some("0 0 * * *".to_string()),
+            alert_channels: vec!["webhook".to_string()],
+            last_scan: Some(chrono::Utc::now()),
+            scan_history: vec![],
+            baseline_findings: vec!["finding-1".to_string()],
+            enabled: true,
+        };
+        assert_eq!(config.target, "https://example.com");
+        assert_eq!(config.priority, Priority::High);
+        assert!(config.schedule.is_some());
+        assert_eq!(config.alert_channels.len(), 1);
+        assert_eq!(config.baseline_findings.len(), 1);
+    }
+
+    #[test]
+    fn test_portfolio_data_default() {
+        let data = PortfolioData::default();
+        assert_eq!(data.version, "1.0");
+        assert!(data.targets.is_empty());
+    }
+
+    #[test]
+    fn test_target_portfolio_new() {
+        let portfolio = TargetPortfolio::new();
+        assert_eq!(portfolio.targets_count(), 0);
+        assert_eq!(portfolio.enabled_count(), 0);
+    }
+
+    #[test]
+    fn test_target_portfolio_add_target() {
+        let portfolio = TargetPortfolio::new();
+        let config = TargetConfig {
+            target: "https://example.com".to_string(),
+            priority: Priority::High,
+            ..Default::default()
+        };
+        portfolio.add_target("example.com".to_string(), config);
+        assert_eq!(portfolio.targets_count(), 1);
+        assert_eq!(portfolio.enabled_count(), 1);
+    }
+
+    #[test]
+    fn test_target_portfolio_remove_target() {
+        let portfolio = TargetPortfolio::new();
+        let config = TargetConfig {
+            target: "https://example.com".to_string(),
+            ..Default::default()
+        };
+        portfolio.add_target("example.com".to_string(), config);
+        assert_eq!(portfolio.targets_count(), 1);
+
+        let removed = portfolio.remove_target("example.com");
+        assert!(removed);
+        assert_eq!(portfolio.targets_count(), 0);
+    }
+
+    #[test]
+    fn test_target_portfolio_remove_nonexistent() {
+        let portfolio = TargetPortfolio::new();
+        let removed = portfolio.remove_target("nonexistent.com");
+        assert!(!removed);
+    }
+
+    #[test]
+    fn test_target_portfolio_get_target() {
+        let portfolio = TargetPortfolio::new();
+        let config = TargetConfig {
+            target: "https://example.com".to_string(),
+            priority: Priority::Critical,
+            ..Default::default()
+        };
+        portfolio.add_target("example.com".to_string(), config);
+
+        let retrieved = portfolio.get_target("example.com");
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().priority, Priority::Critical);
+    }
+
+    #[test]
+    fn test_target_portfolio_get_target_nonexistent() {
+        let portfolio = TargetPortfolio::new();
+        let retrieved = portfolio.get_target("nonexistent.com");
+        assert!(retrieved.is_none());
+    }
+
+    #[test]
+    fn test_target_portfolio_get_all_targets() {
+        let portfolio = TargetPortfolio::new();
+
+        portfolio.add_target("example1.com".to_string(), TargetConfig {
+            target: "https://example1.com".to_string(),
+            enabled: true,
+            ..Default::default()
+        });
+        portfolio.add_target("example2.com".to_string(), TargetConfig {
+            target: "https://example2.com".to_string(),
+            enabled: false,
+            ..Default::default()
+        });
+        portfolio.add_target("example3.com".to_string(), TargetConfig {
+            target: "https://example3.com".to_string(),
+            enabled: true,
+            ..Default::default()
+        });
+
+        let targets = portfolio.get_all_targets();
+        assert_eq!(targets.len(), 2);
+    }
+
+    #[test]
+    fn test_target_portfolio_update_last_scan() {
+        let portfolio = TargetPortfolio::new();
+        portfolio.add_target("example.com".to_string(), TargetConfig::default());
+
+        let now = chrono::Utc::now();
+        portfolio.update_last_scan("example.com", &now);
+
+        let target = portfolio.get_target("example.com").unwrap();
+        assert!(target.last_scan.is_some());
+    }
+
+    #[test]
+    fn test_target_portfolio_add_scan_record() {
+        let portfolio = TargetPortfolio::new();
+        portfolio.add_target("example.com".to_string(), TargetConfig::default());
+
+        let record = ScanRecord {
+            scan_id: "scan-123".to_string(),
+            scan_type: "recon".to_string(),
+            timestamp: chrono::Utc::now(),
+            findings_count: 5,
+            severity_counts: std::collections::HashMap::new(),
+        };
+        portfolio.add_scan_record("example.com", record);
+
+        let target = portfolio.get_target("example.com").unwrap();
+        assert_eq!(target.scan_history.len(), 1);
+    }
+
+    #[test]
+    fn test_target_portfolio_set_baseline() {
+        let portfolio = TargetPortfolio::new();
+        portfolio.add_target("example.com".to_string(), TargetConfig::default());
+
+        let finding_ids = vec!["finding-1".to_string(), "finding-2".to_string()];
+        portfolio.set_baseline("example.com", finding_ids.clone());
+
+        let target = portfolio.get_target("example.com").unwrap();
+        assert_eq!(target.baseline_findings, finding_ids);
+    }
+
+    #[test]
+    fn test_scan_record_creation() {
+        let record = ScanRecord {
+            scan_id: "scan-456".to_string(),
+            scan_type: "fuzzer".to_string(),
+            timestamp: chrono::Utc::now(),
+            findings_count: 10,
+            severity_counts: {
+                let mut counts = std::collections::HashMap::new();
+                counts.insert("Critical".to_string(), 2);
+                counts.insert("High".to_string(), 5);
+                counts.insert("Medium".to_string(), 3);
+                counts
+            },
+        };
+        assert_eq!(record.scan_id, "scan-456");
+        assert_eq!(record.findings_count, 10);
+        assert_eq!(record.severity_counts.get("Critical"), Some(&2));
+    }
+
+    #[test]
+    fn test_priority_as_int_values() {
+        assert_eq!(Priority::Low.as_int(), 0);
+        assert_eq!(Priority::Normal.as_int(), 1);
+        assert_eq!(Priority::High.as_int(), 2);
+        assert_eq!(Priority::Critical.as_int(), 3);
+    }
+
+    #[test]
+    fn test_priority_default() {
+        assert_eq!(Priority::default(), Priority::Normal);
+    }
 }

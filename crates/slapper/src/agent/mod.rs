@@ -286,4 +286,94 @@ mod tests {
         let agent = Agent::new(config).await;
         assert!(agent.is_ok());
     }
+
+    #[cfg(feature = "ai-integration")]
+    #[tokio::test]
+    async fn test_agent_with_ai_client() {
+        let config = AgentConfig::default();
+        let agent = Agent::new(config).await.unwrap();
+        let ai_config = crate::config::AiConfig {
+            provider: "openai".to_string(),
+            model: Some("gpt-4".to_string()),
+            api_key: Some(crate::types::SensitiveString::from("test-key".to_string())),
+            base_url: Some("https://api.openai.com/v1/chat/completions".to_string()),
+            max_tokens: Some(2048),
+            temperature: Some(0.7),
+        };
+        let agent_with_ai = agent.with_ai_client(ai_config).await;
+        assert!(agent_with_ai.ai_client.is_some());
+    }
+
+    #[cfg(feature = "ai-integration")]
+    #[tokio::test]
+    async fn test_agent_execute_scan_returns_result() {
+        let config = AgentConfig::default();
+        let agent = Agent::new(config).await.unwrap();
+        let result = agent.execute_scan("https://example.com", "recon").await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_agent_stop() {
+        let config = AgentConfig::default();
+        let agent = Agent::new(config).await.unwrap();
+        agent.stop().await;
+    }
+
+    #[tokio::test]
+    async fn test_agent_portfolio_operations() {
+        let config = AgentConfig::default();
+        let agent = Agent::new(config).await.unwrap();
+
+        let targets = agent.portfolio.get_all_targets();
+        assert!(targets.is_empty());
+
+        let config = TargetConfig {
+            target: "https://example.com".to_string(),
+            schedule: Some("0 0 * * *".to_string()),
+            ..Default::default()
+        };
+        agent.portfolio.add_target("example.com".to_string(), config);
+
+        let targets = agent.portfolio.get_all_targets();
+        assert_eq!(targets.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_agent_register_event_handler() {
+        let mut agent = Agent::new(AgentConfig::default()).await.unwrap();
+        struct TestHandler;
+        impl EventHandler for TestHandler {
+            fn handles(&self, _event: &SecurityEvent) -> bool {
+                true
+            }
+            async fn handle(&self, _event: &SecurityEvent, _agent: &mut Agent) -> anyhow::Result<()> {
+                Ok(())
+            }
+        }
+        agent.register_handler(Box::new(TestHandler));
+        assert_eq!(agent.event_handlers.len(), 1);
+    }
+
+    #[test]
+    fn test_cron_scheduler_should_run_for_valid_expression() {
+        let scheduler = CronScheduler::new();
+        let now = chrono::Utc::now();
+        assert!(scheduler.should_run_for("0 0 * * *", &now));
+    }
+
+    #[test]
+    fn test_cron_scheduler_should_not_run_for_invalid_expression() {
+        let scheduler = CronScheduler::new();
+        let now = chrono::Utc::now();
+        assert!(!scheduler.should_run_for("invalid", &now));
+    }
+
+    #[test]
+    fn test_agent_config_default() {
+        let config = AgentConfig::default();
+        assert!(config.portfolio_path.is_none());
+        assert!(config.ai_config.is_none());
+        assert_eq!(config.poll_interval_secs, 60);
+    }
 }

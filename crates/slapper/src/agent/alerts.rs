@@ -334,4 +334,258 @@ mod tests {
 
         assert_eq!(alert.severity.as_str(), "critical");
     }
+
+    #[test]
+    fn test_webhook_config_default() {
+        let config = WebhookConfig::default();
+        assert!(config.url.is_empty());
+        assert!(config.secret.is_none());
+        assert!(config.headers.is_empty());
+    }
+
+    #[test]
+    fn test_webhook_config_with_secret() {
+        let config = WebhookConfig {
+            url: "https://example.com/webhook".to_string(),
+            secret: Some(crate::types::SensitiveString::from("secret-key".to_string())),
+            headers: std::collections::HashMap::new(),
+        };
+        assert!(config.secret.is_some());
+        assert_eq!(config.secret.as_ref().unwrap().expose_secret(), "secret-key");
+    }
+
+    #[test]
+    fn test_webhook_config_with_headers() {
+        let mut headers = std::collections::HashMap::new();
+        headers.insert("Authorization".to_string(), "Bearer token".to_string());
+        headers.insert("X-Custom-Header".to_string(), "custom-value".to_string());
+
+        let config = WebhookConfig {
+            url: "https://example.com/webhook".to_string(),
+            secret: None,
+            headers,
+        };
+        assert_eq!(config.headers.len(), 2);
+        assert_eq!(config.headers.get("Authorization"), Some(&"Bearer token".to_string()));
+    }
+
+    #[test]
+    fn test_alert_router_new() {
+        let router = AlertRouter::new();
+        assert_eq!(router.dedup_window_secs, 300);
+    }
+
+    #[test]
+    fn test_alert_router_add_webhook_channel() {
+        let router = AlertRouter::new();
+        let config = WebhookConfig {
+            url: "https://example.com/webhook".to_string(),
+            secret: None,
+            headers: std::collections::HashMap::new(),
+        };
+        router.add_channel(AlertChannel::Webhook(config));
+    }
+
+    #[test]
+    fn test_alert_router_add_slack_channel() {
+        let router = AlertRouter::new();
+        let config = SlackChannel {
+            webhook_url: "https://hooks.slack.com/services/xxx".to_string(),
+            channel: Some("#alerts".to_string()),
+        };
+        router.add_channel(AlertChannel::Slack(config));
+    }
+
+    #[test]
+    fn test_alert_router_add_email_channel() {
+        let router = AlertRouter::new();
+        let config = EmailChannel {
+            smtp_host: "smtp.example.com".to_string(),
+            smtp_port: 587,
+            from: "alerts@example.com".to_string(),
+            to: vec!["admin@example.com".to_string()],
+        };
+        router.add_channel(AlertChannel::Email(config));
+    }
+
+    #[test]
+    fn test_alert_router_add_pagerduty_channel() {
+        let router = AlertRouter::new();
+        let config = PagerDutyChannel {
+            routing_key: "routing-key-123".to_string(),
+            severity: "critical".to_string(),
+        };
+        router.add_channel(AlertChannel::PagerDuty(config));
+    }
+
+    #[test]
+    fn test_make_dedup_key() {
+        let router = AlertRouter::new();
+        let alert = Alert {
+            severity: crate::types::Severity::High,
+            title: "SQL Injection".to_string(),
+            message: "Vulnerability found".to_string(),
+            target: "https://example.com".to_string(),
+            finding_ids: vec![],
+            recommended_actions: vec![],
+        };
+        let key = router.make_dedup_key(&alert);
+        assert!(key.contains("https://example.com"));
+        assert!(key.contains("high"));
+        assert!(key.contains("SQL Injection"));
+    }
+
+    #[test]
+    fn test_make_dedup_key_different_severities() {
+        let router = AlertRouter::new();
+        let alert1 = Alert {
+            severity: crate::types::Severity::Critical,
+            title: "Test".to_string(),
+            message: "".to_string(),
+            target: "https://example.com".to_string(),
+            finding_ids: vec![],
+            recommended_actions: vec![],
+        };
+        let alert2 = Alert {
+            severity: crate::types::Severity::Low,
+            title: "Test".to_string(),
+            message: "".to_string(),
+            target: "https://example.com".to_string(),
+            finding_ids: vec![],
+            recommended_actions: vec![],
+        };
+        let key1 = router.make_dedup_key(&alert1);
+        let key2 = router.make_dedup_key(&alert2);
+        assert_ne!(key1, key2);
+    }
+
+    #[tokio::test]
+    async fn test_alert_router_send_duplicate_suppression() {
+        let router = AlertRouter::new();
+        let config = WebhookConfig {
+            url: "https://example.com/webhook".to_string(),
+            secret: None,
+            headers: std::collections::HashMap::new(),
+        };
+        router.add_channel(AlertChannel::Webhook(config));
+
+        let alert = Alert {
+            severity: crate::types::Severity::Critical,
+            title: "Test Alert".to_string(),
+            message: "This is a test".to_string(),
+            target: "https://example.com".to_string(),
+            finding_ids: vec!["finding-1".to_string()],
+            recommended_actions: vec!["Review immediately".to_string()],
+        };
+
+        let result1 = router.send(&alert).await;
+        let result2 = router.send(&alert).await;
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+    }
+
+    #[test]
+    fn test_hmac_signature_generation() {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+        type HmacSha256 = Hmac<Sha256>;
+
+        let secret = "test-secret-key";
+        let payload = serde_json::json!({"alert": {"title": "Test"}});
+        let canonical_json = serde_json::to_string(&payload).unwrap();
+
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+        mac.update(canonical_json.as_bytes());
+        let result = mac.finalize();
+        let signature = format!("sha256={}", hex::encode(result.into_bytes()));
+
+        assert!(signature.starts_with("sha256="));
+        assert_eq!(signature.len(), 71);
+    }
+
+    #[test]
+    fn test_hmac_signature_different_payloads_different_signatures() {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+        type HmacSha256 = Hmac<Sha256>;
+
+        let secret = "test-secret-key";
+
+        let payload1 = serde_json::json!({"alert": {"title": "Test1"}});
+        let payload2 = serde_json::json!({"alert": {"title": "Test2"}});
+
+        let canonical_json1 = serde_json::to_string(&payload1).unwrap();
+        let canonical_json2 = serde_json::to_string(&payload2).unwrap();
+
+        let mut mac1 = HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+        mac1.update(canonical_json1.as_bytes());
+        let sig1 = hex::encode(mac1.finalize().into_bytes());
+
+        let mut mac2 = HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+        mac2.update(canonical_json2.as_bytes());
+        let sig2 = hex::encode(mac2.finalize().into_bytes());
+
+        assert_ne!(sig1, sig2);
+    }
+
+    #[test]
+    fn test_hmac_signature_different_keys_different_signatures() {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+        type HmacSha256 = Hmac<Sha256>;
+
+        let payload = serde_json::json!({"alert": {"title": "Test"}});
+        let canonical_json = serde_json::to_string(&payload).unwrap();
+
+        let mut mac1 = HmacSha256::new_from_slice("key1".as_bytes()).expect("HMAC can take key of any size");
+        mac1.update(canonical_json.as_bytes());
+        let sig1 = hex::encode(mac1.finalize().into_bytes());
+
+        let mut mac2 = HmacSha256::new_from_slice("key2".as_bytes()).expect("HMAC can take key of any size");
+        mac2.update(canonical_json.as_bytes());
+        let sig2 = hex::encode(mac2.finalize().into_bytes());
+
+        assert_ne!(sig1, sig2);
+    }
+
+    #[test]
+    fn test_sensitive_string_in_webhook_secret() {
+        let sensitive = crate::types::SensitiveString::from("my-secret-key".to_string());
+        let config = WebhookConfig {
+            url: "https://example.com/webhook".to_string(),
+            secret: Some(sensitive),
+            headers: std::collections::HashMap::new(),
+        };
+        assert!(config.secret.is_some());
+        let exposed = config.secret.unwrap().expose_secret();
+        assert_eq!(exposed, "my-secret-key");
+    }
+
+    #[test]
+    fn test_webhook_payload_structure() {
+        let alert = Alert {
+            severity: crate::types::Severity::Critical,
+            title: "Critical Finding".to_string(),
+            message: "SQL injection detected".to_string(),
+            target: "https://example.com/login".to_string(),
+            finding_ids: vec!["finding-1".to_string(), "finding-2".to_string()],
+            recommended_actions: vec!["Patch immediately".to_string()],
+        };
+
+        let payload = serde_json::json!({
+            "alert": {
+                "severity": alert.severity.as_str(),
+                "title": alert.title,
+                "message": alert.message,
+                "target": alert.target,
+                "finding_ids": alert.finding_ids,
+                "recommended_actions": alert.recommended_actions,
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+            }
+        });
+
+        assert_eq!(payload["alert"]["severity"], "critical");
+        assert_eq!(payload["alert"]["title"], "Critical Finding");
+        assert!(payload["alert"]["finding_ids"].as_array().unwrap().len() == 2);
+    }
 }
