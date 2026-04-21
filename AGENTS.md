@@ -173,7 +173,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1065 passing | Verified after Wave A-G |
+| Tests | 1104 passing | After post-verification fixes |
 | Build | Clean compilation | |
 | Clippy | 1 warning | Pre-existing (scan_ports 8 args) |
 | Doctests | 19 pass, 0 fail | All passing |
@@ -183,42 +183,18 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | `thiserror` | 2.x | |
 | Ruby plugins | Zero warnings | With `--features ruby-plugins` |
 | Largest file | `tui/app/mod.rs` (897 lines) | Decomposed from 1665 (46% reduction) |
-| Source files | 415+ `.rs` files | |
+| Source files | 430+ `.rs` files | |
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
-| Agent module files | 6 | `mod.rs`, `portfolio.rs`, `memory.rs`, `events.rs`, `alerts.rs`, `skills.rs` |
+| Payload types | 38 | Added 6 new (nosql, xpath, expression, prototype, race, mass_assign) |
 | Skill files | 27 | In `slapper_skills/` |
-| ADRs | 5 | In `docs/adr/` (added CLI_ARCH.md) |
+| ADRs | 5 | In `docs/adr/` |
 
 ## Planning
 
-- `plans/plan.md` — Current improvement plan
+- `plans/plan.md` — Historical improvement plan (all Waves A-N completed)
 
-### Completed Work (Waves A-G)
-
-All items in Waves A-G have been completed:
-
-| Wave | Track | Items | Status |
-|------|-------|-------|--------|
-| A | Core Fixes | 8 | ✅ COMPLETED |
-| B | Security | 33 | ✅ COMPLETED |
-| C | Performance | 18 | ✅ COMPLETED |
-| D | Documentation & Testing | 30 | ✅ COMPLETED |
-| E | TUI Architecture | 14 | ✅ COMPLETED |
-| F | LLM/AI Provider | 10 | ✅ COMPLETED |
-| G | CLI Architecture | 13 | ✅ COMPLETED |
-
-### Pending Work (Waves H-N)
-
-New improvement work is organized into phases:
-
-| Phase | Waves | Focus | Status |
-|-------|-------|-------|--------|
-| 1 | H | Security Foundations (dependencies, NSE sandbox) | PENDING |
-| 2 | I, J, K | Core Improvements (code quality, performance, plugins) | PENDING |
-| 3 | L, M, N | Feature Expansion (AI testing, tools, TUI/attacks) | PENDING |
-
-See `plans/plan.md` for detailed item breakdown and parallelization strategy.
+All planned improvement work (Waves A-N) has been completed and verified. See `plans/plan.md` for the implementation timeline.
 
 ## Lessons Learned
 
@@ -226,9 +202,9 @@ See `plans/plan.md` for detailed item breakdown and parallelization strategy.
 
 When executing improvements across multiple tracks:
 
-1. **Wave A (Core Fixes) must execute first** - it fixes test compilation and doctest failures that block verification
-2. **Sub-tracks within waves can parallelize** - e.g., Wave B Security: B1 (Auth) and B2 (Plugin Security) can run simultaneously
-3. **Use 6 parallel agents** for maximum throughput: Agent-1 (Core), Agent-2 (Security), Agent-3 (Performance), Agent-4 (Doc/Testing), Agent-5 (TUI), Agent-6 (LLM+CLI)
+1. **Always verify implementation** - don't assume items marked "completed" are actually implemented
+2. **Sub-tracks within waves can parallelize** - use multiple agents for independent work
+3. **Use 6 parallel agents** for maximum throughput
 4. **Verify each wave independently** before declaring complete
 
 ### Configuration
