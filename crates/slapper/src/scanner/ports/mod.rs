@@ -14,6 +14,7 @@ use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -453,7 +454,7 @@ pub async fn scan_ports(
 
     let addr = resolve_host(host)?;
     let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
-    let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
+    let scanned_count = Arc::new(AtomicU64::new(0));
     let results_count = Arc::new(tokio::sync::Mutex::new(0usize));
     let total_ports = ports.len() as u64;
 
@@ -557,11 +558,7 @@ pub async fn scan_ports(
                 pb.inc(1);
             }
             if let Some(ref tx) = progress_tx {
-                let count = {
-                    let mut c = scanned_count.lock().await;
-                    *c += 1;
-                    *c
-                };
+                let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
                 let _ = tx.send((count, total_ports)).await;
             }
             drop(permit);

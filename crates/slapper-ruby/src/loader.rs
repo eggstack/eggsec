@@ -10,6 +10,18 @@ use slapper_plugin::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLangua
 use super::bridge::RubyPluginClient;
 use super::{RubyPlugin, RubyPluginResult};
 
+const MAX_JSON_SIZE_BYTES: usize = 100_000;
+
+fn check_json_size(json_str: &str) -> Result<()> {
+    if json_str.len() > MAX_JSON_SIZE_BYTES {
+        anyhow::bail!(
+            "JSON result exceeds maximum size of {} bytes",
+            MAX_JSON_SIZE_BYTES
+        );
+    }
+    Ok(())
+}
+
 pub struct PluginLoader {
     client: Arc<RubyPluginClient>,
     plugin_dirs: Vec<PathBuf>,
@@ -154,6 +166,13 @@ impl Plugin for RubyPluginAdapter {
         }
 
         let ruby_result = self.client.run_plugin(&self.plugin, target)?;
+
+        for finding in &ruby_result.findings {
+            if let Some(ref evidence) = finding.evidence {
+                check_json_size(evidence)?;
+            }
+        }
+
         let execution_time_ms = start.elapsed().as_millis() as u64;
 
         let findings = ruby_result

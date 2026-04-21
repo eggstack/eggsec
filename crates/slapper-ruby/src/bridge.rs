@@ -5,32 +5,32 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 
-use regex::Regex;
-
 use super::{RubyPlugin, RubyPluginResult};
 
 const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
 
-static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+#[cfg(feature = "ruby-plugins")]
+static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
     vec![
-        Regex::new(r"\beval\(").unwrap(),
-        Regex::new(r"\bexec\(").unwrap(),
-        Regex::new(r"\bsystem\(").unwrap(),
-        Regex::new(r"`").unwrap(),
-        Regex::new(r"IO\.popen").unwrap(),
-        Regex::new(r"Process\.spawn").unwrap(),
-        Regex::new(r"File\.read\(").unwrap(),
-        Regex::new(r"File\.write\(").unwrap(),
-        Regex::new(r"File\.open\(").unwrap(),
-        Regex::new(r"Net::HTTP").unwrap(),
-        Regex::new(r"Socket\.open").unwrap(),
-        Regex::new(r"TCPSocket").unwrap(),
-        Regex::new(r"UDPSocket").unwrap(),
-        Regex::new(r"Open3\.").unwrap(),
-        Regex::new(r"Shellwords\.escape").unwrap(),
+        regex::Regex::new(r"\beval\(").unwrap(),
+        regex::Regex::new(r"\bexec\(").unwrap(),
+        regex::Regex::new(r"\bsystem\(").unwrap(),
+        regex::Regex::new(r"`").unwrap(),
+        regex::Regex::new(r"IO\.popen").unwrap(),
+        regex::Regex::new(r"Process\.spawn").unwrap(),
+        regex::Regex::new(r"File\.read\(").unwrap(),
+        regex::Regex::new(r"File\.write\(").unwrap(),
+        regex::Regex::new(r"File\.open\(").unwrap(),
+        regex::Regex::new(r"Net::HTTP").unwrap(),
+        regex::Regex::new(r"Socket\.open").unwrap(),
+        regex::Regex::new(r"TCPSocket").unwrap(),
+        regex::Regex::new(r"UDPSocket").unwrap(),
+        regex::Regex::new(r"Open3\.").unwrap(),
+        regex::Regex::new(r"Shellwords\.escape").unwrap(),
     ]
 });
 
+#[cfg(feature = "ruby-plugins")]
 fn validate_ruby_plugin(content: &str, block_suspicious_plugins: bool) -> Result<()> {
     if content.len() > MAX_PLUGIN_SIZE_BYTES {
         anyhow::bail!(

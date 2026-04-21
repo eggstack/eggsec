@@ -241,14 +241,20 @@ impl UserData for SocketHandle {
     }
 }
 
-pub fn register_socket_library(lua: &Lua) -> LuaResult<()> {
+pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> LuaResult<()> {
     let globals = lua.globals();
+
+    let sandbox_enabled = sandbox.enabled;
+    let log_violations = sandbox.log_violations;
 
     let socket = lua.create_table()?;
 
-    let tcp_fn = lua.create_function(|lua, _: ()| {
+    let tcp_fn = lua.create_function(move |lua, _: ()| {
         let mut sock = SocketHandle::new();
         sock.socket_type = "tcp".to_string();
+        if sandbox_enabled && log_violations {
+            tracing::info!("[NSE Sandbox] Socket created: TCP (sandbox enabled)");
+        }
         Ok(lua.create_userdata(sock)?)
     })?;
     socket.set("tcp", tcp_fn)?;
@@ -267,7 +273,10 @@ pub fn register_socket_library(lua: &Lua) -> LuaResult<()> {
     })?;
     socket.set("sctp", sctp_fn)?;
 
-    let tcp_connect_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let tcp_connect_fn = lua.create_function(move |lua, (host, port): (String, u16)| {
+        if sandbox_enabled && log_violations {
+            tracing::info!("[NSE Sandbox] TCP connect: {}:{} (sandbox enabled)", host, port);
+        }
         let mut sock = SocketHandle::new();
         sock.connect(&host, port)
             .map_err(|e| mlua::Error::RuntimeError(e))?;
@@ -280,7 +289,10 @@ pub fn register_socket_library(lua: &Lua) -> LuaResult<()> {
     })?;
     socket.set("tcp_connect", tcp_connect_fn)?;
 
-    let connect_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let connect_fn = lua.create_function(move |lua, (host, port): (String, u16)| {
+        if sandbox_enabled && log_violations {
+            tracing::info!("[NSE Sandbox] Socket connect: {}:{} (sandbox enabled)", host, port);
+        }
         let mut sock = SocketHandle::new();
         sock.connect(&host, port)
             .map_err(|e| mlua::Error::RuntimeError(e))?;

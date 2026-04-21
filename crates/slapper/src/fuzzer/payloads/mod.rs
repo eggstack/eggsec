@@ -3,6 +3,7 @@ pub mod cmd;
 pub mod compression;
 pub mod csv;
 pub mod deser;
+pub mod expression;
 pub mod graphql;
 pub mod grpc;
 pub mod headers;
@@ -12,7 +13,11 @@ pub mod jwt;
 pub mod ldap;
 #[macro_use]
 pub mod macros;
+pub mod mass_assign;
+pub mod nosql;
 pub mod oauth;
+pub mod prototype;
+pub mod race;
 pub mod redirect;
 pub mod redos;
 pub mod soap;
@@ -22,6 +27,7 @@ pub mod ssti;
 pub mod traversal;
 pub mod websocket;
 pub mod xss;
+pub mod xpath;
 pub mod xxe;
 
 use serde::{Deserialize, Serialize};
@@ -53,6 +59,12 @@ pub enum PayloadType {
     Csv,
     Soap,
     Websocket,
+    Nosql,
+    Xpath,
+    Expression,
+    Prototype,
+    Race,
+    MassAssign,
 }
 
 impl std::fmt::Display for PayloadType {
@@ -81,6 +93,12 @@ impl std::fmt::Display for PayloadType {
             PayloadType::Csv => write!(f, "CSV Injection"),
             PayloadType::Soap => write!(f, "SOAP/XML"),
             PayloadType::Websocket => write!(f, "WebSocket"),
+            PayloadType::Nosql => write!(f, "NoSQL Injection"),
+            PayloadType::Xpath => write!(f, "XPath Injection"),
+            PayloadType::Expression => write!(f, "Expression Injection"),
+            PayloadType::Prototype => write!(f, "Prototype Pollution"),
+            PayloadType::Race => write!(f, "Race Condition"),
+            PayloadType::MassAssign => write!(f, "Mass Assignment"),
         }
     }
 }
@@ -154,6 +172,12 @@ pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
         PayloadType::Csv => csv::get_payloads(),
         PayloadType::Soap => soap::get_payloads(),
         PayloadType::Websocket => websocket::get_payloads(),
+        PayloadType::Nosql => nosql::get_payloads(),
+        PayloadType::Xpath => xpath::get_payloads(),
+        PayloadType::Expression => expression::get_payloads(),
+        PayloadType::Prototype => prototype::get_payloads(),
+        PayloadType::Race => race::get_payloads(),
+        PayloadType::MassAssign => mass_assign::get_payloads(),
     }
 }
 

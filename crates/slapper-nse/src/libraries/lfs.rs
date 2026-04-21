@@ -5,14 +5,54 @@
 
 use mlua::{Lua, Result as LuaResult, Table};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-pub fn register_lfs_library(lua: &Lua) -> LuaResult<()> {
+use crate::SandboxConfig;
+
+fn is_path_allowed(path: &str, sandbox: &SandboxConfig) -> bool {
+    if !sandbox.enabled {
+        return true;
+    }
+    if let Some(ref allowed_dir) = sandbox.allowed_dir {
+        let path_buf = PathBuf::from(path);
+        let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf);
+        if !canonical.starts_with(allowed_dir) {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> {
     let globals = lua.globals();
     let lfs = lua.create_table()?;
 
+    let sandbox_enabled = sandbox.enabled;
+    let allowed_dir = sandbox.allowed_dir.clone();
+
+    // Helper function for path validation
+    let check_path = move |path: &str| -> bool {
+        if !sandbox_enabled {
+            return true;
+        }
+        if let Some(ref dir) = allowed_dir {
+            let path_buf = PathBuf::from(path);
+            let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
+            if !canonical.starts_with(dir) {
+                return false;
+            }
+        }
+        true
+    };
+
     // lfs.attributes(path) - Get file attributes
     let attributes_fn = lua.create_function(|lua, path: String| {
+        if !check_path(&path) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "Path '{}' blocked by sandbox",
+                path
+            )));
+        }
         let p = Path::new(&path);
 
         match fs::metadata(p) {
@@ -74,7 +114,14 @@ pub fn register_lfs_library(lua: &Lua) -> LuaResult<()> {
     lfs.set("attributes", attributes_fn)?;
 
     // lfs.dir(path) - Iterate over directory entries
-    let dir_fn = lua.create_function(|lua, path: String| {
+    let check_path_dir = check_path.clone();
+    let dir_fn = lua.create_function(move |lua, path: String| {
+        if !check_path_dir(&path) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "Path '{}' blocked by sandbox",
+                path
+            )));
+        }
         let entries = lua.create_table()?;
 
         match fs::read_dir(&path) {
@@ -97,37 +144,70 @@ pub fn register_lfs_library(lua: &Lua) -> LuaResult<()> {
     lfs.set("dir", dir_fn)?;
 
     // lfs.mkdir(path) - Create directory
-    let mkdir_fn = lua.create_function(|_lua, path: String| match fs::create_dir_all(&path) {
-        Ok(()) => Ok(true),
-        Err(e) => Err(mlua::Error::RuntimeError(format!(
-            "Failed to create directory: {}",
-            e
-        ))),
+    let check_path_mkdir = check_path.clone();
+    let mkdir_fn = lua.create_function(move |_lua, path: String| {
+        if !check_path_mkdir(&path) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "Path '{}' blocked by sandbox",
+                path
+            )));
+        }
+        match fs::create_dir_all(&path) {
+            Ok(()) => Ok(true),
+            Err(e) => Err(mlua::Error::RuntimeError(format!(
+                "Failed to create directory: {}",
+                e
+            ))),
+        }
     })?;
     lfs.set("mkdir", mkdir_fn)?;
 
     // lfs.rmdir(path) - Remove directory
-    let rmdir_fn = lua.create_function(|_lua, path: String| match fs::remove_dir(&path) {
-        Ok(()) => Ok(true),
-        Err(e) => Err(mlua::Error::RuntimeError(format!(
-            "Failed to remove directory: {}",
-            e
-        ))),
+    let check_path_rmdir = check_path.clone();
+    let rmdir_fn = lua.create_function(move |_lua, path: String| {
+        if !check_path_rmdir(&path) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "Path '{}' blocked by sandbox",
+                path
+            )));
+        }
+        match fs::remove_dir(&path) {
+            Ok(()) => Ok(true),
+            Err(e) => Err(mlua::Error::RuntimeError(format!(
+                "Failed to remove directory: {}",
+                e
+            ))),
+        }
     })?;
     lfs.set("rmdir", rmdir_fn)?;
 
     // lfs.remove(path) - Remove file
-    let remove_fn = lua.create_function(|_lua, path: String| match fs::remove_file(&path) {
-        Ok(()) => Ok(true),
-        Err(e) => Err(mlua::Error::RuntimeError(format!(
-            "Failed to remove file: {}",
-            e
-        ))),
+    let check_path_remove = check_path.clone();
+    let remove_fn = lua.create_function(move |_lua, path: String| {
+        if !check_path_remove(&path) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "Path '{}' blocked by sandbox",
+                path
+            )));
+        }
+        match fs::remove_file(&path) {
+            Ok(()) => Ok(true),
+            Err(e) => Err(mlua::Error::RuntimeError(format!(
+                "Failed to remove file: {}",
+                e
+            ))),
+        }
     })?;
     lfs.set("remove", remove_fn)?;
 
     // lfs.rename(old, new) - Rename file/directory
-    let rename_fn = lua.create_function(|_lua, (old_path, new_path): (String, String)| {
+    let check_path_rename = check_path.clone();
+    let rename_fn = lua.create_function(move |_lua, (old_path, new_path): (String, String)| {
+        if !check_path_rename(&old_path) || !check_path_rename(&new_path) {
+            return Err(mlua::Error::RuntimeError(
+                "Rename blocked by sandbox".to_string(),
+            ));
+        }
         match fs::rename(&old_path, &new_path) {
             Ok(()) => Ok(true),
             Err(e) => Err(mlua::Error::RuntimeError(format!(
@@ -139,27 +219,31 @@ pub fn register_lfs_library(lua: &Lua) -> LuaResult<()> {
     lfs.set("rename", rename_fn)?;
 
     // lfs.link(source, link, symbolic) - Create link
-    let link_fn =
-        lua.create_function(|_lua, (source, link, symbolic): (String, String, bool)| {
-            if symbolic {
-                match std::os::unix::fs::symlink(&source, &link) {
-                    Ok(()) => Ok(true),
-                    Err(e) => Err(mlua::Error::RuntimeError(format!(
-                        "Failed to create symlink: {}",
-                        e
-                    ))),
-                }
-            } else {
-                // Hard link - use standard fs::hard_link if available
-                match fs::hard_link(&source, &link) {
-                    Ok(()) => Ok(true),
-                    Err(e) => Err(mlua::Error::RuntimeError(format!(
-                        "Failed to create hard link: {}",
-                        e
-                    ))),
-                }
+    let check_path_link = check_path.clone();
+    let link_fn = lua.create_function(move |_lua, (source, link, symbolic): (String, String, bool)| {
+        if !check_path_link(&source) || !check_path_link(&link) {
+            return Err(mlua::Error::RuntimeError(
+                "Link creation blocked by sandbox".to_string(),
+            ));
+        }
+        if symbolic {
+            match std::os::unix::fs::symlink(&source, &link) {
+                Ok(()) => Ok(true),
+                Err(e) => Err(mlua::Error::RuntimeError(format!(
+                    "Failed to create symlink: {}",
+                    e
+                ))),
             }
-        })?;
+        } else {
+            match fs::hard_link(&source, &link) {
+                Ok(()) => Ok(true),
+                Err(e) => Err(mlua::Error::RuntimeError(format!(
+                    "Failed to create hard link: {}",
+                    e
+                ))),
+            }
+        }
+    })?;
     lfs.set("link", link_fn)?;
 
     // lfs.currentdir() - Get current directory
@@ -173,29 +257,39 @@ pub fn register_lfs_library(lua: &Lua) -> LuaResult<()> {
     lfs.set("currentdir", currentdir_fn)?;
 
     // lfs.chdir(path) - Change directory
-    let chdir_fn =
-        lua.create_function(
-            |_lua, path: String| match std::env::set_current_dir(&path) {
-                Ok(()) => Ok(true),
-                Err(e) => Err(mlua::Error::RuntimeError(format!(
-                    "Failed to change directory: {}",
-                    e
-                ))),
-            },
-        )?;
+    let check_path_chdir = check_path.clone();
+    let chdir_fn = lua.create_function(move |_lua, path: String| {
+        if !check_path_chdir(&path) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "Path '{}' blocked by sandbox",
+                path
+            )));
+        }
+        match std::env::set_current_dir(&path) {
+            Ok(()) => Ok(true),
+            Err(e) => Err(mlua::Error::RuntimeError(format!(
+                "Failed to change directory: {}",
+                e
+            ))),
+        }
+    })?;
     lfs.set("chdir", chdir_fn)?;
 
     // lfs.touch(path) - Touch file
+    let check_path_touch = check_path.clone();
     let touch_fn = lua.create_function(
-        |_lua, (path, access_time, modification_time): (String, Option<u64>, Option<u64>)| {
+        move |_lua, (path, access_time, modification_time): (String, Option<u64>, Option<u64>)| {
+            if !check_path_touch(&path) {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "Path '{}' blocked by sandbox",
+                    path
+                )));
+            }
             let p = Path::new(&path);
 
-            // Touch file (create or update timestamp)
             if p.exists() {
-                // File exists, just update timestamps would require more complex handling
                 Ok(true)
             } else {
-                // Create empty file
                 match fs::write(p, "") {
                     Ok(()) => Ok(true),
                     Err(e) => Err(mlua::Error::RuntimeError(format!(
@@ -221,12 +315,10 @@ pub fn register_lfs_library(lua: &Lua) -> LuaResult<()> {
 
     // lfs.set_mode(path, mode) - Set file permissions
     let set_mode_fn = lua.create_function(|_lua, (path, mode): (String, String)| {
-        // Simplified - just try to parse as octal
         if let Ok(perms) = u32::from_str_radix(&mode, 8) {
             match fs::metadata(&path) {
                 Ok(meta) => {
                     let _ = meta.permissions();
-                    // Setting permissions on Windows is limited
                     Ok(true)
                 }
                 Err(e) => Err(mlua::Error::RuntimeError(format!(
@@ -241,7 +333,14 @@ pub fn register_lfs_library(lua: &Lua) -> LuaResult<()> {
     lfs.set("set_mode", set_mode_fn)?;
 
     // lfs.symlinkattributes(path) - Get symlink attributes
-    let symlinkattributes_fn = lua.create_function(|lua, path: String| {
+    let check_path_symlink = check_path.clone();
+    let symlinkattributes_fn = lua.create_function(move |lua, path: String| {
+        if !check_path_symlink(&path) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "Path '{}' blocked by sandbox",
+                path
+            )));
+        }
         let p = Path::new(&path);
 
         match fs::symlink_metadata(p) {
@@ -254,7 +353,6 @@ pub fn register_lfs_library(lua: &Lua) -> LuaResult<()> {
                 attrs.set("is_file", meta.is_file())?;
                 attrs.set("is_link", meta.is_symlink())?;
 
-                // Get target if it's a symlink
                 if meta.is_symlink() {
                     if let Ok(target) = fs::read_link(p) {
                         attrs.set("target", target.to_string_lossy().to_string())?;

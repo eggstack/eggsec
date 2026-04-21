@@ -25,7 +25,7 @@ exclude = [
 tokio = { workspace = true }
 tokio-rustls = "0.26"
 rustls = { version = "0.23", features = ["ring"] }
-rustls-pemfile = "2"
+pem = "3"
 reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2", "form", "query", "blocking"], default-features = false }
 ratatui = "0.30"
 crossterm = "0.29"

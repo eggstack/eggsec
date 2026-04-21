@@ -1040,11 +1040,10 @@ mod tests {
         assert_eq!(summary.high, 2);
     }
 
-    #[test]
-    fn test_scan_nonexistent_project() {
+    #[tokio::test]
+    async fn test_scan_nonexistent_project() {
         let scanner = DependencyScanner::new().unwrap();
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(scanner.scan_project("/nonexistent/path/that/does/not/exist"));
+        let result = scanner.scan_project("/nonexistent/path/that/does/not/exist").await;
         assert!(result.is_ok());
         let report = result.unwrap();
         assert_eq!(report.total_dependencies, 0);

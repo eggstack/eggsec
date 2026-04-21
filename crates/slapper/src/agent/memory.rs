@@ -4,7 +4,7 @@
 //! across multiple scans of the same targets.
 
 use std::collections::{HashMap, HashSet};
-use std::fs;
+use tokio::fs;
 use std::path::PathBuf;
 
 use anyhow::Result;

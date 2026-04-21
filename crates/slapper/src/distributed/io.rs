@@ -1,5 +1,4 @@
 
-use std::io::{BufReader, Cursor};
 use std::pin::Pin;
 #[cfg(feature = "insecure-tls")]
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -111,18 +110,33 @@ impl TlsServer {
         key_path: P,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let cert_data = std::fs::read(&cert_path)?;
-        let mut cert_reader = BufReader::new(Cursor::new(cert_data));
-        let certs: Vec<CertificateDer<'_>> = rustls_pemfile::certs(&mut cert_reader)
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let pem_file = pem::parse_many(&cert_data)?;
+        let certs: Vec<CertificateDer<'_>> = pem_file
+            .iter()
+            .filter(|p| p.tag() == "CERTIFICATE")
+            .map(|p| CertificateDer::from(p.contents().to_vec()))
+            .collect();
+
+        if certs.is_empty() {
+            return Err("No certificates found in PEM file".into());
+        }
 
         let key_data = std::fs::read(&key_path)?;
-        let mut key_reader = BufReader::new(Cursor::new(key_data));
-        let key = rustls_pemfile::private_key(&mut key_reader)?
+        let pem_file = pem::parse_many(&key_data)?;
+        let key_pem = pem_file
+            .iter()
+            .find(|p| p.tag() == "PRIVATE KEY" || p.tag() == "RSA PRIVATE KEY")
             .ok_or("No private key found in PEM file")?;
 
+        use rustls::pki_types::{PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
+        let key_der = if key_pem.tag() == "RSA PRIVATE KEY" {
+            PrivateKeyDer::Pkcs1(PrivatePkcs1KeyDer::from(key_pem.contents().to_vec()))
+        } else {
+            PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_pem.contents().to_vec()))
+        };
         let config = ServerConfig::builder()
             .with_no_client_auth()
-            .with_single_cert(certs, key)
+            .with_single_cert(certs, key_der)
             .map_err(|e| format!("Failed to build server config: {}", e))?;
 
         Ok(Self {

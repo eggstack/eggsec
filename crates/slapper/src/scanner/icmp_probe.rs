@@ -255,10 +255,9 @@ mod tests {
         assert!(json.contains("ttl"));
     }
 
-    #[test]
-    fn test_resolve_target_ip() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(resolve_target("127.0.0.1"));
+    #[tokio::test]
+    async fn test_resolve_target_ip() {
+        let result = resolve_target("127.0.0.1").await;
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
@@ -266,24 +265,21 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_resolve_target_ipv6() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(resolve_target("::1"));
+    #[tokio::test]
+    async fn test_resolve_target_ipv6() {
+        let result = resolve_target("::1").await;
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn test_resolve_target_invalid_ip() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(resolve_target("999.999.999.999"));
+    #[tokio::test]
+    async fn test_resolve_target_invalid_ip() {
+        let result = resolve_target("999.999.999.999").await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_resolve_target_localhost_hostname() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(resolve_target("localhost"));
+    #[tokio::test]
+    async fn test_resolve_target_localhost_hostname() {
+        let result = resolve_target("localhost").await;
         assert!(result.is_ok());
     }
 }

@@ -39,6 +39,8 @@ pub struct PluginConfig {
     pub block_suspicious_plugins: bool,
     #[serde(default = "default_timeout_secs")]
     pub timeout_secs: u64,
+    #[serde(default = "default_max_file_size_bytes")]
+    pub max_file_size_bytes: usize,
 }
 
 fn default_block_suspicious_plugins() -> bool {
@@ -49,6 +51,10 @@ fn default_timeout_secs() -> u64 {
     300
 }
 
+fn default_max_file_size_bytes() -> usize {
+    1_000_000
+}
+
 impl Default for PluginConfig {
     fn default() -> Self {
         Self {
@@ -56,6 +62,7 @@ impl Default for PluginConfig {
             config: HashMap::new(),
             block_suspicious_plugins: true,
             timeout_secs: 300,
+            max_file_size_bytes: 1_000_000,
         }
     }
 }
@@ -123,6 +130,13 @@ impl PluginRegistry {
         self.plugins.push(plugin);
     }
 
+    /// Unregister a plugin backend by name.
+    pub fn unregister(&mut self, name: &str) -> bool {
+        let initial_len = self.plugins.len();
+        self.plugins.retain(|p| p.info().name != name);
+        self.plugins.len() < initial_len
+    }
+
     /// List all registered plugins.
     pub fn list(&self) -> Vec<&PluginInfo> {
         self.plugins.iter().map(|p| p.info()).collect()
@@ -135,24 +149,51 @@ impl PluginRegistry {
 
     /// Run a check on all plugins that have it.
     pub async fn run_check(&self, check_name: &str, target: &str) -> Result<Vec<PluginResult>> {
-        let mut results = Vec::new();
-        for plugin in &self.plugins {
-            let checks = plugin.list_checks();
-            if checks.iter().any(|c| c.name == check_name) {
-                match plugin.run_check(check_name, target).await {
-                    Ok(result) => results.push(result),
+        #[cfg(feature = "python-plugins")]
+        {
+            let futures: Vec<_> = self
+                .plugins
+                .iter()
+                .filter(|p| p.list_checks().iter().any(|c| c.name == check_name))
+                .map(|plugin| plugin.run_check(check_name, target))
+                .collect();
+
+            let results = join_all(futures).await;
+            let mut successful = Vec::new();
+            for result in results {
+                match result {
+                    Ok(r) => successful.push(r),
                     Err(e) => {
                         tracing::warn!(
-                            plugin = %plugin.info().name,
-                            check = %check_name,
                             error = %e,
                             "Plugin check failed"
                         );
                     }
                 }
             }
+            Ok(successful)
         }
-        Ok(results)
+        #[cfg(not(feature = "python-plugins"))]
+        {
+            let mut results = Vec::new();
+            for plugin in &self.plugins {
+                let checks = plugin.list_checks();
+                if checks.iter().any(|c| c.name == check_name) {
+                    match plugin.run_check(check_name, target).await {
+                        Ok(result) => results.push(result),
+                        Err(e) => {
+                            tracing::warn!(
+                                plugin = %plugin.info().name,
+                                check = %check_name,
+                                error = %e,
+                                "Plugin check failed"
+                            );
+                        }
+                    }
+                }
+            }
+            Ok(results)
+        }
     }
 
     /// Run all plugins against a target.

@@ -20,6 +20,14 @@ pub struct RubyPlugin {
     pub path: PathBuf,
 }
 
+impl PartialEq for RubyPlugin {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.version == other.version
+    }
+}
+
+impl Eq for RubyPlugin {}
+
 impl RubyPlugin {
     pub fn new(name: String, version: String, path: PathBuf) -> Self {
         Self {

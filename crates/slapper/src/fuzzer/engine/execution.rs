@@ -1,10 +1,11 @@
 use crate::error::Result;
+use dashmap::DashMap;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Method;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::Mutex;
 
 use crate::waf::types::Severity;
 
@@ -92,8 +93,8 @@ impl FuzzEngine {
             Some(pb)
         };
 
-        let results: Arc<Mutex<Vec<FuzzResult>>> =
-            Arc::new(Mutex::new(Vec::with_capacity(payload_count)));
+        let results: Arc<DashMap<usize, FuzzResult>> = Arc::new(DashMap::new());
+        let counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
         let semaphore = Arc::new(tokio::sync::Semaphore::new(self.args.concurrency));
         let mut handles = Vec::new();
 
@@ -109,6 +110,7 @@ impl FuzzEngine {
             let progress = progress.clone();
             let payload_clone = payload.clone();
             let user_agent = self.user_agent.clone();
+            let counter = counter.clone();
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore.acquire_owned().await;
@@ -125,7 +127,7 @@ impl FuzzEngine {
                 .await;
 
                 match result {
-                    Ok(r) => { results.lock().await.push(r); }
+                    Ok(r) => { results.insert(counter.fetch_add(1, Ordering::Relaxed), r); }
                     Err(e) => { tracing::warn!("Fuzz request failed: {:?}", e); }
                 }
 
@@ -141,8 +143,8 @@ impl FuzzEngine {
         if let Some(ref pb) = progress {
             pb.finish_and_clear();
         }
-        let results = results.lock().await.clone();
-        Ok(results)
+        let final_results: Vec<FuzzResult> = <DashMap<usize, FuzzResult> as Clone>::clone(&results).into_iter().map(|(_, v)| v).collect();
+        Ok(final_results)
     }
 
     pub(crate) async fn send_payload(&self, payload: &Payload) -> Result<FuzzResult> {

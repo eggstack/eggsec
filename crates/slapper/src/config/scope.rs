@@ -227,7 +227,13 @@ let ip = Some(Self::resolve_host(&host)
             return Err(ScopeError::InvalidTarget(target.to_string()));
         }
 
-        let ip = Self::resolve_host(&host).ok();
+        let ip = match Self::resolve_host(&host) {
+            Ok(ip) => Some(ip),
+            Err(e) => {
+                tracing::debug!("DNS resolution failed for '{}': {}", host, e);
+                None
+            }
+        };
 
         Ok(Self { host, ip })
     }

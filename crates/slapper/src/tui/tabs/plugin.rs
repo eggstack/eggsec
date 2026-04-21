@@ -30,7 +30,22 @@ pub struct PluginInfo {
     pub name: String,
     pub version: String,
     pub description: String,
+    pub author: String,
+    pub tags: Vec<String>,
     pub language: String,
+}
+
+impl From<slapper_plugin::PluginInfo> for PluginInfo {
+    fn from(info: slapper_plugin::PluginInfo) -> Self {
+        Self {
+            name: info.name,
+            version: info.version,
+            description: info.description,
+            author: info.author,
+            tags: info.tags,
+            language: format!("{:?}", info.language),
+        }
+    }
 }
 
 impl PluginTab {

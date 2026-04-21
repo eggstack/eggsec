@@ -57,7 +57,7 @@ impl Default for SandboxConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            allowed_dir: None,
+            allowed_dir: Some(PathBuf::from("/tmp/slapper-nse")),
             allowed_commands: Vec::new(),
             log_violations: true,
         }

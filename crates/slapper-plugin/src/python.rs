@@ -59,6 +59,7 @@ pub struct PythonPluginManager {
     plugins: Vec<LoadedPlugin>,
     info: PluginInfo,
     block_suspicious_plugins: bool,
+    checks_cache: std::sync::OnceLock<Vec<PluginCheck>>,
 }
 
 struct LoadedPlugin {
@@ -115,6 +116,7 @@ impl PythonPluginManager {
                 language: PluginLanguage::Python,
             },
             block_suspicious_plugins: true,
+            checks_cache: std::sync::OnceLock::new(),
         }
     }
 
@@ -130,6 +132,7 @@ impl PythonPluginManager {
                 language: PluginLanguage::Python,
             },
             block_suspicious_plugins: block,
+            checks_cache: std::sync::OnceLock::new(),
         }
     }
 
@@ -281,69 +284,73 @@ impl PythonPluginManager {
     }
 
     pub fn get_checks(&self) -> Vec<PluginCheck> {
-        Python::attach(|py| {
-            let mut checks = Vec::new();
+        self.checks_cache
+            .get_or_init(|| {
+                Python::attach(|py| {
+                    let mut checks = Vec::new();
 
-            for plugin in &self.plugins {
-                // Collect checks from function-based plugins
-                if let Ok(module) = plugin.module.bind(py).downcast::<PyModule>() {
-                    if let Ok(register_func) = module.getattr("register_checks") {
-                        if let Ok(result) = register_func.call0() {
-                            if let Ok(list) = result.downcast::<PyList>() {
-                                for item in list.iter() {
-                                    if let Ok(dict) = item.downcast::<PyDict>() {
-                                        let name = dict
-                                            .get_item("name")
-                                            .ok()
-                                            .flatten()
-                                            .and_then(|v| v.extract::<String>().ok())
-                                            .unwrap_or_default();
-                                        let check_type = dict
-                                            .get_item("type")
-                                            .ok()
-                                            .flatten()
-                                            .and_then(|v| v.extract::<String>().ok())
-                                            .unwrap_or_default();
-                                        let target = dict
-                                            .get_item("target")
-                                            .ok()
-                                            .flatten()
-                                            .and_then(|v| v.extract::<String>().ok());
-                                        let description = dict
-                                            .get_item("description")
-                                            .ok()
-                                            .flatten()
-                                            .and_then(|v| v.extract::<String>().ok());
-                                        let check = PluginCheck {
-                                            name,
-                                            check_type,
-                                            target,
-                                            description,
-                                        };
-                                        checks.push(check);
+                    for plugin in &self.plugins {
+                        // Collect checks from function-based plugins
+                        if let Ok(module) = plugin.module.bind(py).downcast::<PyModule>() {
+                            if let Ok(register_func) = module.getattr("register_checks") {
+                                if let Ok(result) = register_func.call0() {
+                                    if let Ok(list) = result.downcast::<PyList>() {
+                                        for item in list.iter() {
+                                            if let Ok(dict) = item.downcast::<PyDict>() {
+                                                let name = dict
+                                                    .get_item("name")
+                                                    .ok()
+                                                    .flatten()
+                                                    .and_then(|v| v.extract::<String>().ok())
+                                                    .unwrap_or_default();
+                                                let check_type = dict
+                                                    .get_item("type")
+                                                    .ok()
+                                                    .flatten()
+                                                    .and_then(|v| v.extract::<String>().ok())
+                                                    .unwrap_or_default();
+                                                let target = dict
+                                                    .get_item("target")
+                                                    .ok()
+                                                    .flatten()
+                                                    .and_then(|v| v.extract::<String>().ok());
+                                                let description = dict
+                                                    .get_item("description")
+                                                    .ok()
+                                                    .flatten()
+                                                    .and_then(|v| v.extract::<String>().ok());
+                                                let check = PluginCheck {
+                                                    name,
+                                                    check_type,
+                                                    target,
+                                                    description,
+                                                };
+                                                checks.push(check);
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
+
+                        // Collect checks from class-based plugins
+                        for class_plugin in &plugin.class_plugins {
+                            checks.push(PluginCheck {
+                                name: class_plugin.name.clone(),
+                                check_type: "class".to_string(),
+                                target: None,
+                                description: Some(format!(
+                                    "Class-based plugin from {}",
+                                    plugin.name
+                                )),
+                            });
+                        }
                     }
-                }
 
-                // Collect checks from class-based plugins
-                for class_plugin in &plugin.class_plugins {
-                    checks.push(PluginCheck {
-                        name: class_plugin.name.clone(),
-                        check_type: "class".to_string(),
-                        target: None,
-                        description: Some(format!(
-                            "Class-based plugin from {}",
-                            plugin.name
-                        )),
-                    });
-                }
-            }
-
-            checks
-        })
+                    checks
+                })
+            })
+            .clone()
     }
 
     pub fn run_check_direct(&self, check_name: &str, target: &str) -> Result<Vec<serde_json::Value>> {

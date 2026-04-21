@@ -407,7 +407,7 @@ impl ExecutorCore {
         crate::libraries::sslcert::register_sslcert_library(&self.lua)?;
         crate::libraries::tls::register_tls_library(&self.lua)?;
         crate::libraries::shortport::register_shortport_library(&self.lua)?;
-        crate::libraries::socket::register_socket_library(&self.lua)?;
+        crate::libraries::socket::register_socket_library(&self.lua, &self.sandbox)?;
         crate::libraries::ssh2::register_ssh2_library(&self.lua)?;
         crate::libraries::ftp::register_ftp_library(&self.lua)?;
         crate::libraries::smtp::register_smtp_library(&self.lua)?;
@@ -536,7 +536,7 @@ impl ExecutorCore {
         crate::libraries::matchs::register_matchs_library(&self.lua)?;
         crate::libraries::lpeg_utility::register_lpeg_utility_library(&self.lua)?;
         crate::libraries::lpeg::register_lpeg_library(&self.lua)?;
-        crate::libraries::lfs::register_lfs_library(&self.lua)?;
+        crate::libraries::lfs::register_lfs_library(&self.lua, &self.sandbox)?;
         crate::libraries::libssh2::register_libssh2_library(&self.lua)?;
         crate::libraries::msrpcperformance::register_msrpcperformance_library(&self.lua)?;
         crate::libraries::msrpctypes::register_msrpctypes_library(&self.lua)?;

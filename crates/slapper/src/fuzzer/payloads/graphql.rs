@@ -490,6 +490,42 @@ pub fn get_payloads() -> Vec<Payload> {
         tags: vec!["graphql".to_string(), "ssti".to_string()],
     });
 
+    for depth_query in generate_depth_limit_bypass() {
+        payloads.push(Payload {
+            payload_type: PayloadType::GraphQL,
+            payload: depth_query.clone(),
+            description: format!("Depth limit bypass (depth: {})", depth_query.matches('{').count()),
+            severity: Severity::Medium,
+            tags: vec!["graphql".to_string(), "depth-bypass".to_string(), "dos".to_string()],
+        });
+    }
+
+    for alias_query in generate_alias_overload() {
+        payloads.push(Payload {
+            payload_type: PayloadType::GraphQL,
+            payload: alias_query.clone(),
+            description: "Alias overload DoS attempt".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["graphql".to_string(), "alias-overload".to_string(), "dos".to_string()],
+        });
+    }
+
+    payloads.push(Payload {
+        payload_type: PayloadType::GraphQL,
+        payload: r#"[{"query":"{__schema{queryType{name}}}"},{"query":"{__typename}"}]"#.to_string(),
+        description: "Batch query bypass".to_string(),
+        severity: Severity::Medium,
+        tags: vec!["graphql".to_string(), "batch".to_string()],
+    });
+
+    payloads.push(Payload {
+        payload_type: PayloadType::GraphQL,
+        payload: r#"mutation{__typename}"#.to_string(),
+        description: "Mutation introspection".to_string(),
+        severity: Severity::Info,
+        tags: vec!["graphql".to_string(), "mutation".to_string()],
+    });
+
     payloads
 }
 

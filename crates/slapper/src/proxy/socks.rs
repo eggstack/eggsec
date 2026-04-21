@@ -497,56 +497,51 @@ mod tests {
         assert!(err.to_string().contains("Unknown error"));
     }
 
-    #[test]
-    fn test_connect_through_wrong_proxy_type() {
+    #[tokio::test]
+    async fn test_connect_through_wrong_proxy_type() {
         let proxy = ProxyEntry::new(ProxyType::Http, "proxy.com".to_string(), 8080);
         let target: SocketAddr = "93.184.216.34:80".parse().unwrap();
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(connect_through(proxy, target));
+        let result = connect_through(proxy, target).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Not a SOCKS proxy"));
     }
 
-    #[test]
-    fn test_connect_through_empty_chain() {
+    #[tokio::test]
+    async fn test_connect_through_empty_chain() {
         let proxies: Vec<ProxyEntry> = vec![];
         let target: SocketAddr = "93.184.216.34:80".parse().unwrap();
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(chain_connect(&proxies, target));
+        let result = chain_connect(&proxies, target).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("No proxies in chain"));
     }
 
-    #[test]
-    fn test_connect_through_invalid_address() {
+    #[tokio::test]
+    async fn test_connect_through_invalid_address() {
         let proxy = ProxyEntry::new(ProxyType::Socks5, "not-an-ip".to_string(), 1080);
         let target: SocketAddr = "93.184.216.34:80".parse().unwrap();
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(connect_through(proxy, target));
+        let result = connect_through(proxy, target).await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_connect_through_with_domain_invalid_address() {
+    #[tokio::test]
+    async fn test_connect_through_with_domain_invalid_address() {
         let proxy = ProxyEntry::new(ProxyType::Socks5, "not-an-ip".to_string(), 1080);
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(connect_through_with_domain(&proxy, "example.com", 80));
+        let result = connect_through_with_domain(&proxy, "example.com", 80).await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_chain_connect_invalid_proxy_address() {
+    #[tokio::test]
+    async fn test_chain_connect_invalid_proxy_address() {
         let proxy = ProxyEntry::new(ProxyType::Socks5, "invalid".to_string(), 1080);
         let target: SocketAddr = "93.184.216.34:80".parse().unwrap();
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(chain_connect(&[proxy], target));
+        let result = chain_connect(&[proxy], target).await;
         assert!(result.is_err());
     }
 }

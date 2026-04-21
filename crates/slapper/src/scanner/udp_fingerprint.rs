@@ -378,39 +378,36 @@ mod tests {
         assert!(!display.contains('\x01'));
     }
 
-    #[test]
-    fn test_fingerprint_udp_port_invalid_host() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(fingerprint_udp_port(
+    #[tokio::test]
+    async fn test_fingerprint_udp_port_invalid_host() {
+        let result = fingerprint_udp_port(
             "invalid-host-that-does-not-exist.local",
             53,
             Duration::from_millis(10),
-        ));
+        ).await;
         assert!(result.is_none());
     }
 
-    #[test]
-    fn test_fingerprint_udp_services_empty_ports() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(fingerprint_udp_services(
+    #[tokio::test]
+    async fn test_fingerprint_udp_services_empty_ports() {
+        let result = fingerprint_udp_services(
             "127.0.0.1",
             vec![],
             Duration::from_millis(10),
-        ));
+        ).await;
         assert!(result.is_ok());
         let results = result.unwrap();
         assert_eq!(results.ports_scanned, 0);
         assert_eq!(results.services_identified, 0);
     }
 
-    #[test]
-    fn test_fingerprint_udp_services_unreachable_host() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(fingerprint_udp_services(
+    #[tokio::test]
+    async fn test_fingerprint_udp_services_unreachable_host() {
+        let result = fingerprint_udp_services(
             "192.0.2.1",
             vec![53],
             Duration::from_millis(10),
-        ));
+        ).await;
         assert!(result.is_ok());
         let results = result.unwrap();
         assert_eq!(results.ports_scanned, 1);
