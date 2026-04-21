@@ -211,7 +211,8 @@ impl TargetScope {
                 .ok_or_else(|| ScopeError::InvalidTarget(target.to_string()))?
                 .to_string();
 
-            let ip = Self::resolve_host(&host).ok();
+let ip = Some(Self::resolve_host(&host)
+                .map_err(|e| ScopeError::InvalidTarget(format!("DNS resolution failed for '{}': {}", host, e)))?);
 
             return Ok(Self { host, ip });
         }

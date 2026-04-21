@@ -102,7 +102,10 @@ impl AlertRouter {
 
     pub async fn send(&self, alert: &Alert) -> Result<()> {
         {
-            let recent_alerts = self.recent_alerts.lock().unwrap();
+            let recent_alerts = self.recent_alerts.lock().map_err(|_| std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "Failed to acquire lock on recent alerts"
+            ))?;
             if recent_alerts.len() > 1000 {
                 drop(recent_alerts);
                 self.cleanup_stale_entries();
@@ -111,7 +114,10 @@ impl AlertRouter {
 
         let dedup_key = self.make_dedup_key(alert);
         {
-            let recent_alerts = self.recent_alerts.lock().unwrap();
+            let recent_alerts = self.recent_alerts.lock().map_err(|_| std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "Failed to acquire lock on recent alerts"
+            ))?;
             if let Some(last_sent) = recent_alerts.get(&dedup_key) {
                 if last_sent.elapsed() < Duration::from_secs(self.dedup_window_secs) {
                     tracing::debug!("Duplicate alert suppressed: {}", dedup_key);
@@ -120,13 +126,19 @@ impl AlertRouter {
             }
         }
 
-        let channels = self.channels.lock().unwrap().clone();
+        let channels = self.channels.lock().map_err(|_| std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "Failed to acquire lock on channels"
+            ))?.clone();
         for channel in &channels {
             self.send_to_channel(channel, alert).await?;
         }
 
         {
-            let mut recent_alerts = self.recent_alerts.lock().unwrap();
+            let mut recent_alerts = self.recent_alerts.lock().map_err(|_| std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "Failed to acquire lock on recent alerts"
+            ))?;
             recent_alerts.insert(dedup_key, Instant::now());
         }
         Ok(())
@@ -291,7 +303,9 @@ impl AlertRouter {
 
     fn cleanup_stale_entries(&self) {
         let cutoff = Duration::from_secs(self.dedup_window_secs * 2);
-        self.recent_alerts.lock().unwrap().retain(|_, last_sent| last_sent.elapsed() < cutoff);
+        if let Ok(mut recent_alerts) = self.recent_alerts.lock() {
+            recent_alerts.retain(|_, last_sent| last_sent.elapsed() < cutoff);
+        }
     }
 }
 

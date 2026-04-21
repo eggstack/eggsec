@@ -1,32 +1,35 @@
+use std::sync::LazyLock;
+
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 
-use super::{RubyPlugin, RubyPluginResult};
+use regex::Regex;
 
-#[cfg(feature = "ruby-plugins")]
-use magnus::{prelude::*, Ruby};
+use super::{RubyPlugin, RubyPluginResult};
 
 const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
 
-const SUSPICIOUS_RUBY_PATTERNS: &[&str] = &[
-    "eval(",
-    "exec(",
-    "system(",
-    "`",
-    "IO.popen",
-    "Process.spawn",
-    "File.read(",
-    "File.write(",
-    "File.open(",
-    "Net::HTTP",
-    "Socket.open",
-    "TCPSocket",
-    "UDPSocket",
-    "Open3.",
-    "Shellwords.escape",
-];
+static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"\beval\(").unwrap(),
+        Regex::new(r"\bexec\(").unwrap(),
+        Regex::new(r"\bsystem\(").unwrap(),
+        Regex::new(r"`").unwrap(),
+        Regex::new(r"IO\.popen").unwrap(),
+        Regex::new(r"Process\.spawn").unwrap(),
+        Regex::new(r"File\.read\(").unwrap(),
+        Regex::new(r"File\.write\(").unwrap(),
+        Regex::new(r"File\.open\(").unwrap(),
+        Regex::new(r"Net::HTTP").unwrap(),
+        Regex::new(r"Socket\.open").unwrap(),
+        Regex::new(r"TCPSocket").unwrap(),
+        Regex::new(r"UDPSocket").unwrap(),
+        Regex::new(r"Open3\.").unwrap(),
+        Regex::new(r"Shellwords\.escape").unwrap(),
+    ]
+});
 
 fn validate_ruby_plugin(content: &str, block_suspicious_plugins: bool) -> Result<()> {
     if content.len() > MAX_PLUGIN_SIZE_BYTES {
@@ -37,9 +40,9 @@ fn validate_ruby_plugin(content: &str, block_suspicious_plugins: bool) -> Result
     }
 
     let mut suspicious_found: Vec<&str> = Vec::new();
-    for pattern in SUSPICIOUS_RUBY_PATTERNS {
-        if content.contains(pattern) {
-            suspicious_found.push(pattern);
+    for pattern in SUSPICIOUS_RUBY_PATTERNS.iter() {
+        if pattern.is_match(content) {
+            suspicious_found.push(pattern.as_str());
         }
     }
 
@@ -149,6 +152,10 @@ impl RubyPluginClient {
             .map_err(|_| anyhow!("Ruby VM thread has shut down"))?;
         rx.recv()
             .map_err(|_| anyhow!("Ruby VM thread did not respond"))?
+    }
+
+    pub fn close(&self) {
+        drop(&self.tx);
     }
 }
 

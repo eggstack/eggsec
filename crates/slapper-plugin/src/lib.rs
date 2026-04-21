@@ -1,15 +1,18 @@
-#[cfg(feature = "python-plugins")]
-pub mod python;
-
-#[cfg(feature = "python-plugins")]
-pub use python::PythonPluginManager;
-
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+#[cfg(feature = "python-plugins")]
+pub mod python;
+
+#[cfg(feature = "python-plugins")]
+pub use python::PythonPluginManager;
+
+#[cfg(feature = "python-plugins")]
+use futures::future::join_all;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
@@ -34,10 +37,16 @@ pub struct PluginConfig {
     pub config: HashMap<String, serde_json::Value>,
     #[serde(default = "default_block_suspicious_plugins")]
     pub block_suspicious_plugins: bool,
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
 }
 
 fn default_block_suspicious_plugins() -> bool {
     true
+}
+
+fn default_timeout_secs() -> u64 {
+    300
 }
 
 impl Default for PluginConfig {
@@ -46,6 +55,7 @@ impl Default for PluginConfig {
             enabled: true,
             config: HashMap::new(),
             block_suspicious_plugins: true,
+            timeout_secs: 300,
         }
     }
 }
@@ -147,20 +157,34 @@ impl PluginRegistry {
 
     /// Run all plugins against a target.
     pub async fn run_all(&self, target: &str, config: &PluginConfig) -> Result<Vec<PluginResult>> {
-        let mut results = Vec::new();
-        for plugin in &self.plugins {
-            match plugin.run(target, config).await {
-                Ok(result) => results.push(result),
-                Err(e) => {
-                    tracing::warn!(
-                        plugin = %plugin.info().name,
-                        error = %e,
-                        "Plugin execution failed"
-                    );
+        #[cfg(feature = "python-plugins")]
+        {
+            let futures: Vec<_> = self.plugins.iter().map(|plugin| plugin.run(target, config)).collect();
+            let results = join_all(futures).await;
+            let mut successful = Vec::new();
+            for result in results {
+                match result {
+                    Ok(r) => successful.push(r),
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Plugin execution failed");
+                    }
                 }
             }
+            Ok(successful)
         }
-        Ok(results)
+        #[cfg(not(feature = "python-plugins"))]
+        {
+            let mut results = Vec::new();
+            for plugin in &self.plugins {
+                match plugin.run(target, config).await {
+                    Ok(result) => results.push(result),
+                    Err(e) => {
+                        tracing::warn!(plugin = %plugin.info().name, error = %e, "Plugin execution failed");
+                    }
+                }
+            }
+            Ok(results)
+        }
     }
 
     /// Returns the number of registered plugins.

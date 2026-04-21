@@ -135,7 +135,10 @@ impl TargetPortfolio {
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            let data = self.data.read().unwrap();
+            let data = self.data.read().map_err(|_| std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "Failed to acquire read lock on portfolio data"
+            ))?;
             let content = serde_json::to_string(&*data)?;
             fs::write(path, content)?;
         }

@@ -75,8 +75,7 @@ fn test_extract_host_port_basic() {
 fn test_extract_host_port_default_port() {
     // extract_host_port requires a port to be specified
     let result = extract_host_port("example.com");
-    // It might return None without a port
-    let _ = result;
+    assert!(result.is_none(), "Missing port should return None");
 }
 
 #[test]

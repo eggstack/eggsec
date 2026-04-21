@@ -126,7 +126,7 @@ impl FuzzEngine {
 
                 match result {
                     Ok(r) => { results.lock().await.push(r); }
-                    Err(e) => { tracing::debug!("Fuzz request failed: {:?}", e); }
+                    Err(e) => { tracing::warn!("Fuzz request failed: {:?}", e); }
                 }
 
                 if let Some(ref pb) = progress {

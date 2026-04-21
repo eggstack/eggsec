@@ -109,7 +109,7 @@ async fn build_client(
     let mut builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .danger_accept_invalid_certs(true)
-        .pool_max_idle_per_host(max_connections / 2)
+        .pool_max_idle_per_host(max_connections.min(100))
         .pool_idle_timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(5))
         .tcp_keepalive(Duration::from_secs(60))

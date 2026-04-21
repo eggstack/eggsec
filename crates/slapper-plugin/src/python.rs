@@ -3,22 +3,28 @@ use async_trait::async_trait;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Instant;
+
+use regex::Regex;
 
 use super::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult};
 
 const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
+const MAX_JSON_SIZE_BYTES: usize = 100_000;
 
-const SUSPICIOUS_PATTERNS: &[&str] = &[
-    "os.system",
-    "subprocess",
-    "socket",
-    "eval(",
-    "exec",
-    "fork",
-    "__import__",
-    "open(",
-];
+static SUSPICIOUS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"os\.system").unwrap(),
+        Regex::new(r"subprocess").unwrap(),
+        Regex::new(r"socket").unwrap(),
+        Regex::new(r"eval\(").unwrap(),
+        Regex::new(r"\bexec\b").unwrap(),
+        Regex::new(r"\bfork\b").unwrap(),
+        Regex::new(r"__import__").unwrap(),
+        Regex::new(r"\bopen\(").unwrap(),
+    ]
+});
 
 fn validate_python_plugin(content: &str, block_suspicious_plugins: bool) -> Result<()> {
     if content.len() > MAX_PLUGIN_SIZE_BYTES {
@@ -26,9 +32,9 @@ fn validate_python_plugin(content: &str, block_suspicious_plugins: bool) -> Resu
     }
 
     let mut suspicious_found = Vec::new();
-    for pattern in SUSPICIOUS_PATTERNS {
-        if content.contains(pattern) {
-            suspicious_found.push(*pattern);
+    for pattern in SUSPICIOUS_PATTERNS.iter() {
+        if pattern.is_match(content) {
+            suspicious_found.push(pattern.as_str());
         }
     }
 
@@ -352,11 +358,17 @@ impl PythonPluginManager {
                         if let Ok(result) = run_func.call1(args) {
                             if let Ok(list) = result.downcast::<PyList>() {
                                 for item in list.iter() {
-                                    if let Ok(json_str) = item.extract::<String>() {
-                                        if let Ok(value) = serde_json::from_str(&json_str) {
-                                            all_results.push(value);
+                                        if let Ok(json_str) = item.extract::<String>() {
+                                            if json_str.len() > MAX_JSON_SIZE_BYTES {
+                                                tracing::warn!(
+                                                    "JSON result exceeds max size, truncating"
+                                                );
+                                                continue;
+                                            }
+                                            if let Ok(value) = serde_json::from_str(&json_str) {
+                                                all_results.push(value);
+                                            }
                                         }
-                                    }
                                 }
                             }
                         }

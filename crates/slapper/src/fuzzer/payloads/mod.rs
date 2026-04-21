@@ -116,9 +116,9 @@ pub struct Payload {
 
 pub use crate::types::Severity;
 
-static PAYLOAD_CACHE: LazyLock<std::collections::HashMap<PayloadType, Vec<Payload>>> =
+static PAYLOAD_CACHE: LazyLock<rustc_hash::FxHashMap<PayloadType, Vec<Payload>>> =
     LazyLock::new(|| {
-        let mut map = std::collections::HashMap::new();
+        let mut map = rustc_hash::FxHashMap::default();
         for pt in PayloadType::all_variants() {
             map.insert(*pt, get_payloads(*pt));
         }

@@ -5206,6 +5206,7 @@ dependencies = [
  "futures",
  "magnus",
  "pyo3",
+ "regex",
  "serde",
  "serde_json",
  "tracing",

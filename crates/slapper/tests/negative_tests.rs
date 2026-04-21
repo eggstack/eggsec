@@ -77,6 +77,7 @@ fn test_parse_ports_whitespace() {
 fn test_parse_ports_large_range() {
     // Very large range - should either work or fail gracefully
     let result = parse_ports("1-65535");
+    assert!(result.is_ok(), "Large port range should parse successfully");
     if let Ok(ports) = result {
         assert_eq!(ports.len(), 65535, "Should contain all 65535 ports");
     }
@@ -208,5 +209,5 @@ fn test_scope_cidr_edge_cases() {
 
     // IP outside range
     let result = scope.is_target_allowed("11.0.0.1");
-    assert!(result.is_ok());
+    assert!(result.is_err());
 }
