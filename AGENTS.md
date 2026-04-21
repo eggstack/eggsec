@@ -166,7 +166,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1064 passing | Verified after Wave A-G |
+| Tests | 1065 passing | Verified after Wave A-G |
 | Build | Clean compilation | |
 | Clippy | 1 warning | Pre-existing (scan_ports 8 args) |
 | Doctests | 19 pass, 0 fail | All passing |
@@ -185,13 +185,11 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Current improvement plan. **Status: COMPLETED**
-- `plans/plan-archive.md` — Historical execution details
-- `plans/plan-current.md` — Backup of plan before archival
+- `plans/plan.md` — Current improvement plan
 
-### Wave-Based Execution
+### Completed Work (Waves A-G)
 
-Improvements were organized into 7 parallel tracks (Waves A-G). All items have been completed.
+All items in Waves A-G have been completed:
 
 | Wave | Track | Items | Status |
 |------|-------|-------|--------|
@@ -203,7 +201,17 @@ Improvements were organized into 7 parallel tracks (Waves A-G). All items have b
 | F | LLM/AI Provider | 10 | ✅ COMPLETED |
 | G | CLI Architecture | 13 | ✅ COMPLETED |
 
-See `plans/plan.md` for the current plan status and `plans/plan-archive.md` for execution history.
+### Pending Work (Waves H-N)
+
+New improvement work is organized into phases:
+
+| Phase | Waves | Focus | Status |
+|-------|-------|-------|--------|
+| 1 | H | Security Foundations (dependencies, NSE sandbox) | PENDING |
+| 2 | I, J, K | Core Improvements (code quality, performance, plugins) | PENDING |
+| 3 | L, M, N | Feature Expansion (AI testing, tools, TUI/attacks) | PENDING |
+
+See `plans/plan.md` for detailed item breakdown and parallelization strategy.
 
 ## Lessons Learned
 
