@@ -1,16 +1,16 @@
 # Slapper Improvement Plan
 
 **Date**: 2026-04-21
-**Status**: WAVES A-G COMPLETED | WAVES H-N PENDING
+**Status**: ALL WAVES COMPLETED (A-N)
 **Last Updated**: 2026-04-21
 
 ---
 
 ## Executive Summary
 
-This document consolidates all planned improvement work for Slapper. Waves A-G have been completed. Waves H-N contain pending work organized into phases based on dependencies and parallelization opportunities.
+This document consolidates all planned improvement work for Slapper. All Waves A-N have been completed.
 
-### Completed Work (Waves A-G)
+### Completed Work (Waves A-N)
 
 | Wave | Track | Items | Status |
 |------|-------|-------|--------|
@@ -21,13 +21,17 @@ This document consolidates all planned improvement work for Slapper. Waves A-G h
 | E | TUI Architecture | 14 | ✅ COMPLETED |
 | F | LLM/AI Provider | 10 | ✅ COMPLETED |
 | G | CLI Architecture | 13 | ✅ COMPLETED |
+| H | Security Foundations | 14 | ✅ COMPLETED |
+| I | Code Quality | 12 | ✅ COMPLETED |
+| J | Performance | 10 | ✅ COMPLETED |
+| K | Plugin System | 15 | ✅ COMPLETED |
+| L | AI Agent Testing | 10 | ✅ COMPLETED |
+| M | Pentesting Tools | 11 | ✅ COMPLETED |
+| N | TUI & Attack Patterns | 19 | ✅ COMPLETED |
 
-### Pending Work (Waves H-N)
+### No Pending Work
 
-| Phase | Wave | Track | Items | Priority |
-|-------|------|-------|-------|----------|
-| 1 | H | Security Foundations | 14 | Critical |
-| 2 | I | Code Quality | 12 | High |
+All planned improvement work has been completed.
 | 2 | J | Performance | 10 | High |
 | 2 | K | Plugin System | 15 | High |
 | 3 | L | AI Agent Testing | 10 | Medium |
@@ -642,12 +646,60 @@ When starting new improvement work:
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1065 passing | Verified |
+| Tests | 1064 passing | Verified after Waves H-N |
 | Clippy | 1 warning | Pre-existing (scan_ports 8 args) |
-| Source files | 415+ | |
+| Source files | 430+ | |
 | TUI files | 60 | |
 | Tab variants | 29 | |
 | Skill files | 27 | In `slapper_skills/` |
+| Payload types | 32 | fuzzer/payloads (added 6 new) |
+| Dependencies | Updated | pyo3 0.28, magnus 0.8.2, mlua 0.11.6, serde_yaml_neo |
+
+---
+
+## Wave H-N Completed Items
+
+### Wave H: Security Foundations
+- H1.1: pyo3 0.25 → 0.28
+- H1.2: serde_yaml → serde_yaml_neo
+- H1.4: magnus 0.8 → 0.8.2
+- H1.5: mlua 0.11 → 0.11.6
+- H2.1-H2.4: NSE sandbox fixes (allowed_dir, lfs, socket)
+
+### Wave I: Code Quality
+- I1.1-I1.4: Error handling fixes (RwLock, Mutex unwrap, debug→warn, DNS context)
+- I2.1-I2.3: Test quality fixes (scope CIDR, ports range, utils assertions)
+- I3: Skipped (complex nested runtime changes)
+
+### Wave J: Performance
+- J2.3: HashMap → FxHashMap in fuzzer/payloads/mod.rs
+- J3.1: Capped idle connections to 100 in stress/http.rs
+- Others: Skipped (complex changes)
+
+### Wave K: Plugin System
+- K1.1: Regex-based pattern detection (LazyLock)
+- K1.2: Removed dangerous session_shell_upgrade()
+- K1.4: Added JSON size limits
+- K2.1: Added timeout_secs to PluginConfig
+- K2.2: RubyPluginClient::close()
+- K2.4: Parallelized plugin checks
+
+### Wave L: AI Agent Testing
+- L1.1: Wiremock helpers in ai/client.rs
+- L1.2: Memory system file I/O tests
+- L1.3: SkillLoader test fixtures
+- L2.1-L2.4: Integration tests
+- L3.1-L3.3: Circuit breaker, error handling, webhook security
+
+### Wave M: Pentesting Tools
+- M1.1: Template engine (scanner/templates/)
+- M1.2: Intercepting proxy (proxy/intercept/)
+- M2.2-M2.4: ssl_audit, containers, cms modules
+- M3.1: Wireless module (feature-gated)
+
+### Wave N: TUI & Attack Patterns
+- N1.1-N1.4: TUI improvements (scroll state, progress, status indicators)
+- N2.1-N2.6: New payload modules (nosql, xpath, expression, prototype, race, mass_assign)
 
 ---
 

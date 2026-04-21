@@ -26,15 +26,23 @@ Slapper supports Python and Ruby plugins with built-in security features to prev
 
 `validate_python_plugin(content: &str, block_suspicious_plugins: bool)` in `crates/slapper-plugin/src/python.rs`:
 
+Uses regex-based pattern detection with word-boundary awareness for more robust matching:
+
 **Suspicious Patterns Detected:**
-- `os.system` - arbitrary command execution
-- `subprocess` - process spawning
-- `socket` - network connections
-- `eval(` - dynamic code execution
-- `exec` - dynamic code execution
-- `fork` - process forking
-- `__import__` - dynamic import
-- `open(` - file access
+- `r"\bos\.system\b"` - arbitrary command execution
+- `r"\bsubprocess\b"` - process spawning
+- `r"\bsocket\b"` - network connections
+- `r"\beval\("` - dynamic code execution
+- `r"\bexec\b"` - dynamic code execution
+- `r"\bfork\b"` - process forking
+- `r"\b__import__\b"` - dynamic import
+- `r"\bopen\s*\("` - file access
+
+Uses `LazyLock<Regex>` for compiled patterns to avoid repeated compilation.
+
+### Deserialization DoS Prevention
+
+JSON parsing is size-limited via `MAX_JSON_SIZE_BYTES = 100_000` to prevent DoS attacks during plugin result parsing.
 
 ### Configuration
 
@@ -43,6 +51,8 @@ pub struct PluginConfig {
     pub enabled: bool,
     pub config: HashMap<String, serde_json::Value>,
     pub block_suspicious_plugins: bool,  // default: true
+    pub timeout_secs: u64,               // default: 300
+    pub max_file_size_bytes: usize,      // default: 1,000,000
 }
 ```
 

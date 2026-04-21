@@ -667,6 +667,30 @@ impl AlertRouter {
 
 ## Code Quality Patterns
 
+### serde_yaml_neo Replacement
+
+When updating from `serde_yaml` (deprecated), use `serde_yaml_neo` as drop-in replacement:
+```toml
+# Cargo.toml
+serde_yaml_neo = "0.11"
+
+# imports
+use serde_yaml_neo::Value;  // instead of serde_yaml::Value
+```
+
+### pyo3 0.28 Migration
+
+When upgrading pyo3 0.26+:
+- `Python::with_gil` → `Python::attach`
+- For `Vec<&str>` patterns, use `suspicious_found.push(*pattern)` not `push(pattern)`
+
+### Plugin System Patterns
+
+- `timeout_secs` in PluginConfig defaults to 300 seconds
+- `max_file_size_bytes` for plugin validation (default 1MB)
+- Use `LazyLock<Regex>` for compiled regex pattern detection
+- `PluginRegistry::unregister()` removes plugin by name
+
 ### Test Feature Gating
 
 Always gate integration tests with `#[cfg(feature = "...")]` when they depend on optional features.
