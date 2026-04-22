@@ -101,6 +101,11 @@ cargo build --release --features "rest-api ai-integration"
 | `autonomous_security_agent.md` | Agent configuration and usage | agent |
 | `agent_thread_safety.md` | Thread safety patterns | agent |
 
+### NSE (Nmap Scripting Engine)
+| Skill | Description | Tools |
+|-------|-------------|-------|
+| `nse_sandbox.md` | NSE sandbox configuration and limitations | nse |
+
 ## Usage
 
 ### Loading Skills

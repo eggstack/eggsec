@@ -187,7 +187,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
 | Payload types | 38 | Added 6 new (nosql, xpath, expression, prototype, race, mass_assign) |
-| Skill files | 27 | In `slapper_skills/` |
+| Skill files | 28 | In `slapper_skills/` |
 | ADRs | 5 | In `docs/adr/` |
 
 ## Planning
@@ -544,11 +544,11 @@ The `initialize` method bypass may be protocol-required, but auth MUST be enforc
 
 Default to `enabled: true` - security by default over convenience.
 
-**Important**: The `socket` library is NOT sandboxed even when `nse-sandbox` is enabled. Scripts can still make arbitrary network connections. The `lfs` library IS sandboxed with path restrictions. See `docs/NSE_SCRIPTS.md` for details.
+**Important**: The `socket` library is **NOT sandboxed** even when `nse-sandbox` is enabled. Scripts can still make arbitrary network connections. The `lfs` library IS sandboxed with path restrictions. See `docs/NSE_SCRIPTS.md` and `slapper_skills/nse_sandbox.md` for details.
 
 ### Path Validation Pattern
 
-Use `canonicalize()` to resolve symlinks, then check if result starts with allowed prefix.
+Use `canonicalize()` to resolve symlinks, then check if result starts with allowed prefix. **Fail-secure**: If canonicalization fails (including symlink cycles), block the path rather than falling back to the unresolved path.
 
 ### ReDoS Prevention
 
