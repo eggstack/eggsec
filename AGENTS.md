@@ -192,20 +192,11 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Historical improvement plan (reference for completed work)
+- `plans/plan.md` — Consolidated improvement plan (all planned work, organized by waves)
 
-For new improvement work, create a new plan file rather than modifying the historical plan.
+For new improvement work, add to the consolidated plan.md rather than creating new plan files.
 
 ## Lessons Learned
-
-### Parallelization Strategy
-
-When executing improvements across multiple tracks:
-
-1. **Always verify implementation** - don't assume items marked "completed" are actually implemented
-2. **Sub-tracks within waves can parallelize** - use multiple agents for independent work
-3. **Use 6 parallel agents** for maximum throughput
-4. **Verify each wave independently** before declaring complete
 
 ### Configuration
 
