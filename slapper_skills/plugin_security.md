@@ -135,11 +135,14 @@ The NSE `io` library is sandboxed:
 
 ### Path Validation Pattern
 
-All file operations use `canonicalize()` to resolve symlinks before checking:
+All file operations use `canonicalize()` to resolve symlinks before checking. Symlink cycles and canonicalization failures are blocked (fail-secure):
 
 ```rust
 if sandbox_enabled {
-    let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
+    let canonical = match path_buf.canonicalize() {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Path could not be resolved: {} - blocked", e)),
+    };
     if !canonical.starts_with(allowed_dir) {
         return Err("Path blocked by sandbox");
     }
