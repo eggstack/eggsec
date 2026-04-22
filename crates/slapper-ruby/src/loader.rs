@@ -26,6 +26,7 @@ pub struct PluginLoader {
     client: Arc<RubyPluginClient>,
     plugin_dirs: Vec<PathBuf>,
     loaded_plugins: Vec<RubyPlugin>,
+    info: PluginInfo,
 }
 
 impl PluginLoader {
@@ -42,6 +43,14 @@ impl PluginLoader {
             client,
             plugin_dirs: dirs,
             loaded_plugins: Vec::new(),
+            info: PluginInfo {
+                name: "ruby-plugin-loader".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                description: "Ruby plugin loader backend".to_string(),
+                author: "Slapper".to_string(),
+                tags: vec!["ruby".to_string()],
+                language: PluginLanguage::Ruby,
+            },
         })
     }
 
@@ -110,6 +119,121 @@ impl PluginLoader {
 impl Default for PluginLoader {
     fn default() -> Self {
         Self::new(vec![]).expect("Failed to create plugin loader")
+    }
+}
+
+#[async_trait]
+impl Plugin for PluginLoader {
+    fn info(&self) -> &PluginInfo {
+        &self.info
+    }
+
+    fn language(&self) -> PluginLanguage {
+        PluginLanguage::Ruby
+    }
+
+    fn list_checks(&self) -> Vec<PluginCheck> {
+        self.loaded_plugins
+            .iter()
+            .map(|p| PluginCheck {
+                name: p.name.clone(),
+                check_type: "ruby".to_string(),
+                target: None,
+                description: p.description.clone(),
+            })
+            .collect()
+    }
+
+    async fn run_check(&self, check_name: &str, target: &str) -> Result<PluginResult> {
+        let start = Instant::now();
+
+        let plugin = self
+            .loaded_plugins
+            .iter()
+            .find(|p| p.name == check_name)
+            .ok_or_else(|| anyhow!("Plugin not found: {}", check_name))?;
+
+        let ruby_result = self.client.run_plugin(plugin, target)?;
+
+        for finding in &ruby_result.findings {
+            if let Some(ref evidence) = finding.evidence {
+                check_json_size(evidence)?;
+            }
+        }
+
+        let execution_time_ms = start.elapsed().as_millis() as u64;
+
+        let findings = ruby_result
+            .findings
+            .into_iter()
+            .map(|f| slapper_plugin::PluginFinding {
+                title: f.description.clone(),
+                severity: f.severity,
+                description: f.description,
+                location: f.location,
+                evidence: f.evidence,
+                cve_ids: Vec::new(),
+            })
+            .collect();
+
+        let errors = if let Some(err) = ruby_result.error {
+            vec![err]
+        } else {
+            Vec::new()
+        };
+
+        Ok(PluginResult {
+            plugin_name: self.info.name.clone(),
+            success: ruby_result.success,
+            findings,
+            errors,
+            execution_time_ms,
+        })
+    }
+
+    async fn run(&self, target: &str, _config: &PluginConfig) -> Result<PluginResult> {
+        let start = Instant::now();
+        let mut all_findings = Vec::new();
+        let mut all_errors = Vec::new();
+
+        for plugin in &self.loaded_plugins {
+            match self.client.run_plugin(plugin, target) {
+                Ok(ruby_result) => {
+                    for finding in &ruby_result.findings {
+                        if let Some(ref evidence) = finding.evidence {
+                            if let Err(e) = check_json_size(evidence) {
+                                all_errors.push(format!("{}: {}", plugin.name, e));
+                                continue;
+                            }
+                        }
+                        all_findings.push(slapper_plugin::PluginFinding {
+                            title: finding.description.clone(),
+                            severity: finding.severity.clone(),
+                            description: finding.description.clone(),
+                            location: finding.location.clone(),
+                            evidence: finding.evidence.clone(),
+                            cve_ids: Vec::new(),
+                        });
+                    }
+                    if let Some(err) = ruby_result.error {
+                        all_errors.push(format!("{}: {}", plugin.name, err));
+                    }
+                }
+                Err(e) => {
+                    all_errors.push(format!("{}: {}", plugin.name, e));
+                }
+            }
+        }
+
+        let execution_time_ms = start.elapsed().as_millis() as u64;
+
+        Ok(PluginResult {
+            plugin_name: self.info.name.clone(),
+            success: all_errors.is_empty(),
+            findings: all_findings,
+            errors: all_errors,
+            execution_time_ms,
+        })
     }
 }
 

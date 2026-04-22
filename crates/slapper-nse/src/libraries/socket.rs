@@ -3,6 +3,7 @@
 //! Low-level socket operations for NSE scripts.
 //! Based on Nmap's socket library concepts.
 
+use ipnetwork::IpNetwork;
 use mlua::{Lua, Result as LuaResult, UserData, UserDataMethods, Value};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
@@ -246,6 +247,7 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
 
     let sandbox_enabled = sandbox.enabled;
     let log_violations = sandbox.log_violations;
+    let allowed_networks = sandbox.allowed_networks.clone();
 
     let socket = lua.create_table()?;
 
@@ -273,35 +275,81 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
     })?;
     socket.set("sctp", sctp_fn)?;
 
-    let tcp_connect_fn = lua.create_function(move |lua, (host, port): (String, u16)| {
-        if sandbox_enabled && log_violations {
-            tracing::info!("[NSE Sandbox] TCP connect: {}:{} (sandbox enabled)", host, port);
-        }
-        let mut sock = SocketHandle::new();
-        sock.connect(&host, port)
-            .map_err(|e| mlua::Error::RuntimeError(e))?;
+    let tcp_connect_fn = lua.create_function({
+        let allowed_networks = allowed_networks.clone();
+        move |lua, (host, port): (String, u16)| {
+            if sandbox_enabled && log_violations {
+                tracing::info!("[NSE Sandbox] TCP connect: {}:{} (sandbox enabled)", host, port);
+            }
 
-        let result = lua.create_table()?;
-        result.set("host", host)?;
-        result.set("port", port)?;
-        result.set("status", "connected")?;
-        Ok(result)
+            if !allowed_networks.is_empty() {
+                let addr = format!("{}:0", host);
+                if let Ok(socket_addrs) = addr.to_socket_addrs() {
+                    let all_allowed = socket_addrs.clone().all(|sa| {
+                        allowed_networks.iter().any(|net| net.contains(sa.ip()))
+                    });
+                    if !all_allowed {
+                        let msg = format!(
+                            "[NSE Sandbox] Network violation: {} is not in allowed networks (sandbox enabled)",
+                            host
+                        );
+                        if log_violations {
+                            tracing::warn!("{}", msg);
+                        }
+                        return Err(mlua::Error::RuntimeError(msg));
+                    }
+                }
+            }
+
+            let mut sock = SocketHandle::new();
+            sock.connect(&host, port)
+                .map_err(|e| mlua::Error::RuntimeError(e))?;
+
+            let result = lua.create_table()?;
+            result.set("host", host)?;
+            result.set("port", port)?;
+            result.set("status", "connected")?;
+            Ok(result)
+        }
     })?;
     socket.set("tcp_connect", tcp_connect_fn)?;
 
-    let connect_fn = lua.create_function(move |lua, (host, port): (String, u16)| {
-        if sandbox_enabled && log_violations {
-            tracing::info!("[NSE Sandbox] Socket connect: {}:{} (sandbox enabled)", host, port);
-        }
-        let mut sock = SocketHandle::new();
-        sock.connect(&host, port)
-            .map_err(|e| mlua::Error::RuntimeError(e))?;
+    let connect_fn = lua.create_function({
+        let allowed_networks = allowed_networks.clone();
+        move |lua, (host, port): (String, u16)| {
+            if sandbox_enabled && log_violations {
+                tracing::info!("[NSE Sandbox] Socket connect: {}:{} (sandbox enabled)", host, port);
+            }
 
-        let result = lua.create_table()?;
-        result.set("host", host)?;
-        result.set("port", port)?;
-        result.set("status", "connected")?;
-        Ok(result)
+            if !allowed_networks.is_empty() {
+                let addr = format!("{}:0", host);
+                if let Ok(socket_addrs) = addr.to_socket_addrs() {
+                    let all_allowed = socket_addrs.clone().all(|sa| {
+                        allowed_networks.iter().any(|net| net.contains(sa.ip()))
+                    });
+                    if !all_allowed {
+                        let msg = format!(
+                            "[NSE Sandbox] Network violation: {} is not in allowed networks (sandbox enabled)",
+                            host
+                        );
+                        if log_violations {
+                            tracing::warn!("{}", msg);
+                        }
+                        return Err(mlua::Error::RuntimeError(msg));
+                    }
+                }
+            }
+
+            let mut sock = SocketHandle::new();
+            sock.connect(&host, port)
+                .map_err(|e| mlua::Error::RuntimeError(e))?;
+
+            let result = lua.create_table()?;
+            result.set("host", host)?;
+            result.set("port", port)?;
+            result.set("status", "connected")?;
+            Ok(result)
+        }
     })?;
     socket.set("connect", connect_fn)?;
 
@@ -447,65 +495,131 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
     socket.set("receive_from", receive_from_fn)?;
 
     // Async TCP connect
-    let async_tcp_connect_fn = lua.create_function(|lua, (host, port): (String, u16)| {
-        let addr = format!("{}:{}", host, port);
-
-        let result = tokio::runtime::Handle::current().block_on(async {
-            match tokio::net::TcpStream::connect(&addr).await {
-                Ok(_stream) => {
-                    let r = lua.create_table()?;
-                    r.set("host", host)?;
-                    r.set("port", port)?;
-                    r.set("status", "connected")?;
-                    Ok(r)
+    let async_tcp_connect_fn = lua.create_function({
+        let allowed_networks = allowed_networks.clone();
+        move |lua, (host, port): (String, u16)| {
+            if !allowed_networks.is_empty() {
+                let addr = format!("{}:0", host);
+                if let Ok(socket_addrs) = addr.to_socket_addrs() {
+                    let all_allowed = socket_addrs.clone().all(|sa| {
+                        allowed_networks.iter().any(|net| net.contains(sa.ip()))
+                    });
+                    if !all_allowed {
+                        let msg = format!(
+                            "[NSE Sandbox] Network violation: {} is not in allowed networks (sandbox enabled)",
+                            host
+                        );
+                        if log_violations {
+                            tracing::warn!("{}", msg);
+                        }
+                        return Err(mlua::Error::RuntimeError(msg));
+                    }
                 }
-                Err(e) => Err(mlua::Error::RuntimeError(e.to_string())),
             }
-        });
 
-        result
+            let addr = format!("{}:{}", host, port);
+
+            let result = tokio::runtime::Handle::current().block_on(async {
+                match tokio::net::TcpStream::connect(&addr).await {
+                    Ok(_stream) => {
+                        let r = lua.create_table()?;
+                        r.set("host", host)?;
+                        r.set("port", port)?;
+                        r.set("status", "connected")?;
+                        Ok(r)
+                    }
+                    Err(e) => Err(mlua::Error::RuntimeError(e.to_string())),
+                }
+            });
+
+            result
+        }
     })?;
     socket.set("tcp_connect_async", async_tcp_connect_fn)?;
 
     // Async connect (generic)
-    let async_connect_fn = lua.create_function(|lua, (host, port): (String, u16)| {
-        let addr = format!("{}:{}", host, port);
-
-        let result = tokio::runtime::Handle::current().block_on(async {
-            match tokio::net::TcpStream::connect(&addr).await {
-                Ok(_stream) => {
-                    let r = lua.create_table()?;
-                    r.set("host", host)?;
-                    r.set("port", port)?;
-                    r.set("status", "connected")?;
-                    Ok(r)
+    let async_connect_fn = lua.create_function({
+        let allowed_networks = allowed_networks.clone();
+        move |lua, (host, port): (String, u16)| {
+            if !allowed_networks.is_empty() {
+                let addr = format!("{}:0", host);
+                if let Ok(socket_addrs) = addr.to_socket_addrs() {
+                    let all_allowed = socket_addrs.clone().all(|sa| {
+                        allowed_networks.iter().any(|net| net.contains(sa.ip()))
+                    });
+                    if !all_allowed {
+                        let msg = format!(
+                            "[NSE Sandbox] Network violation: {} is not in allowed networks (sandbox enabled)",
+                            host
+                        );
+                        if log_violations {
+                            tracing::warn!("{}", msg);
+                        }
+                        return Err(mlua::Error::RuntimeError(msg));
+                    }
                 }
-                Err(e) => Err(mlua::Error::RuntimeError(e.to_string())),
             }
-        });
 
-        result
+            let addr = format!("{}:{}", host, port);
+
+            let result = tokio::runtime::Handle::current().block_on(async {
+                match tokio::net::TcpStream::connect(&addr).await {
+                    Ok(_stream) => {
+                        let r = lua.create_table()?;
+                        r.set("host", host)?;
+                        r.set("port", port)?;
+                        r.set("status", "connected")?;
+                        Ok(r)
+                    }
+                    Err(e) => Err(mlua::Error::RuntimeError(e.to_string())),
+                }
+            });
+
+            result
+        }
     })?;
     socket.set("connect_async", async_connect_fn)?;
 
-    // Async DNS resolve
-    let async_resolve_fn = lua.create_function(|lua, host: String| {
-        let result = tokio::runtime::Handle::current().block_on(async {
-            match tokio::net::lookup_host(&format!("{}:0", host)).await {
-                Ok(addrs) => {
-                    let r = lua.create_table()?;
-                    let mut index = 1;
-                    for addr in addrs {
-                        r.set(index, addr.ip().to_string())?;
-                        index += 1;
+    // Async DNS resolve - also needs network check since it reveals internal network info
+    let async_resolve_fn = lua.create_function({
+        let allowed_networks = allowed_networks.clone();
+        move |lua, host: String| {
+            if !allowed_networks.is_empty() {
+                let addr = format!("{}:0", host);
+                if let Ok(socket_addrs) = addr.to_socket_addrs() {
+                    let all_allowed = socket_addrs.clone().all(|sa| {
+                        allowed_networks.iter().any(|net| net.contains(sa.ip()))
+                    });
+                    if !all_allowed {
+                        let msg = format!(
+                            "[NSE Sandbox] Network violation: DNS resolution for {} is not in allowed networks (sandbox enabled)",
+                            host
+                        );
+                        if log_violations {
+                            tracing::warn!("{}", msg);
+                        }
+                        return Err(mlua::Error::RuntimeError(msg));
                     }
-                    Ok(r)
                 }
-                Err(e) => Err(mlua::Error::RuntimeError(e.to_string())),
             }
-        });
 
-        result
+            let result = tokio::runtime::Handle::current().block_on(async {
+                match tokio::net::lookup_host(&format!("{}:0", host)).await {
+                    Ok(addrs) => {
+                        let r = lua.create_table()?;
+                        let mut index = 1;
+                        for addr in addrs {
+                            r.set(index, addr.ip().to_string())?;
+                            index += 1;
+                        }
+                        Ok(r)
+                    }
+                    Err(e) => Err(mlua::Error::RuntimeError(e.to_string())),
+                }
+            });
+
+            result
+        }
     })?;
     socket.set("resolve_async", async_resolve_fn)?;
 

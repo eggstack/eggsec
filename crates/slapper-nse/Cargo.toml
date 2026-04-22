@@ -34,6 +34,7 @@ mlua-luau-scheduler = { version = "0.2", optional = true }
 openssl = { version = "0.10", features = ["vendored"], optional = true }
 des = { version = "0.8", optional = true }
 ssh2 = { version = "0.9", optional = true }
+ipnetwork = "0.20"
 
 [features]
 default = []

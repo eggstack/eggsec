@@ -4,6 +4,7 @@
 //! This wrapper uses the Rust regex crate under the hood for compatibility.
 
 use mlua::{Lua, Result as LuaResult};
+use regex::RegexBuilder;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -27,7 +28,10 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
                 pattern
             };
 
-            match regex::Regex::new(&regex_pattern) {
+            match RegexBuilder::new(&regex_pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 Ok(re) => {
                     let mut results = Vec::new();
 
@@ -61,7 +65,10 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
                 pattern
             };
 
-            match regex::Regex::new(&regex_pattern) {
+            match RegexBuilder::new(&regex_pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 Ok(re) => {
                     if let Some(cap) = re.captures(&subject) {
                         let mut results = Vec::new();
@@ -92,7 +99,10 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
             pattern
         };
 
-        match regex::Regex::new(&regex_pattern) {
+        match RegexBuilder::new(&regex_pattern)
+            .size_limit(100_000)
+            .build()
+        {
             Ok(re) => {
                 let mut counter = REGEX_COUNTER.lock().unwrap();
                 let id = *counter;
@@ -144,7 +154,10 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
                 pattern
             };
 
-            match regex::Regex::new(&regex_pattern) {
+            match RegexBuilder::new(&regex_pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 Ok(re) => {
                     let result = re.replace_all(&subject, replacement.as_str()).to_string();
                     Ok(result)
@@ -159,7 +172,10 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
         |_lua, (pattern, subject, max): (String, String, Option<usize>)| {
             let regex_pattern = pattern;
 
-            match regex::Regex::new(&regex_pattern) {
+            match RegexBuilder::new(&regex_pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 Ok(re) => {
                     let parts: Vec<String> = re.split(&subject).map(|s| s.to_string()).collect();
                     let max = max.unwrap_or(parts.len());

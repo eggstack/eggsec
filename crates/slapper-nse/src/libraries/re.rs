@@ -42,6 +42,7 @@ fn build_regex(pattern: &str, options: &str) -> Result<Regex, String> {
     RegexBuilder::new(&regex_pattern)
         .multi_line(multiline)
         .case_insensitive(case_insensitive)
+        .size_limit(100_000)
         .build()
         .map_err(|e| e.to_string())
 }

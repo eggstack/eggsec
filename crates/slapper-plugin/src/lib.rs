@@ -11,7 +11,6 @@ pub mod python;
 #[cfg(feature = "python-plugins")]
 pub use python::PythonPluginManager;
 
-#[cfg(feature = "python-plugins")]
 use futures::future::join_all;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,83 +148,43 @@ impl PluginRegistry {
 
     /// Run a check on all plugins that have it.
     pub async fn run_check(&self, check_name: &str, target: &str) -> Result<Vec<PluginResult>> {
-        #[cfg(feature = "python-plugins")]
-        {
-            let futures: Vec<_> = self
-                .plugins
-                .iter()
-                .filter(|p| p.list_checks().iter().any(|c| c.name == check_name))
-                .map(|plugin| plugin.run_check(check_name, target))
-                .collect();
+        let futures: Vec<_> = self
+            .plugins
+            .iter()
+            .filter(|p| p.list_checks().iter().any(|c| c.name == check_name))
+            .map(|plugin| plugin.run_check(check_name, target))
+            .collect();
 
-            let results = join_all(futures).await;
-            let mut successful = Vec::new();
-            for result in results {
-                match result {
-                    Ok(r) => successful.push(r),
-                    Err(e) => {
-                        tracing::warn!(
-                            error = %e,
-                            "Plugin check failed"
-                        );
-                    }
+        let results = join_all(futures).await;
+        let mut successful = Vec::new();
+        for result in results {
+            match result {
+                Ok(r) => successful.push(r),
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "Plugin check failed"
+                    );
                 }
             }
-            Ok(successful)
         }
-        #[cfg(not(feature = "python-plugins"))]
-        {
-            let mut results = Vec::new();
-            for plugin in &self.plugins {
-                let checks = plugin.list_checks();
-                if checks.iter().any(|c| c.name == check_name) {
-                    match plugin.run_check(check_name, target).await {
-                        Ok(result) => results.push(result),
-                        Err(e) => {
-                            tracing::warn!(
-                                plugin = %plugin.info().name,
-                                check = %check_name,
-                                error = %e,
-                                "Plugin check failed"
-                            );
-                        }
-                    }
-                }
-            }
-            Ok(results)
-        }
+        Ok(successful)
     }
 
     /// Run all plugins against a target.
     pub async fn run_all(&self, target: &str, config: &PluginConfig) -> Result<Vec<PluginResult>> {
-        #[cfg(feature = "python-plugins")]
-        {
-            let futures: Vec<_> = self.plugins.iter().map(|plugin| plugin.run(target, config)).collect();
-            let results = join_all(futures).await;
-            let mut successful = Vec::new();
-            for result in results {
-                match result {
-                    Ok(r) => successful.push(r),
-                    Err(e) => {
-                        tracing::warn!(error = %e, "Plugin execution failed");
-                    }
+        let futures: Vec<_> = self.plugins.iter().map(|plugin| plugin.run(target, config)).collect();
+        let results = join_all(futures).await;
+        let mut successful = Vec::new();
+        for result in results {
+            match result {
+                Ok(r) => successful.push(r),
+                Err(e) => {
+                    tracing::warn!(error = %e, "Plugin execution failed");
                 }
             }
-            Ok(successful)
         }
-        #[cfg(not(feature = "python-plugins"))]
-        {
-            let mut results = Vec::new();
-            for plugin in &self.plugins {
-                match plugin.run(target, config).await {
-                    Ok(result) => results.push(result),
-                    Err(e) => {
-                        tracing::warn!(plugin = %plugin.info().name, error = %e, "Plugin execution failed");
-                    }
-                }
-            }
-            Ok(results)
-        }
+        Ok(successful)
     }
 
     /// Returns the number of registered plugins.

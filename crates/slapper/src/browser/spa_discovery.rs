@@ -1,9 +1,10 @@
 use crate::browser::BrowserConfig;
 use crate::error::Result;
+use headless_chrome::Browser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SpaRoute {
     pub path: String,
     pub method: String,
@@ -11,7 +12,7 @@ pub struct SpaRoute {
     pub discovered_via: DiscoveryMethod,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum DiscoveryMethod {
     Crawl,
     XhrInterception,
@@ -19,76 +20,157 @@ pub enum DiscoveryMethod {
     RouteParsing,
 }
 
+impl std::fmt::Display for DiscoveryMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DiscoveryMethod::Crawl => write!(f, "Crawl"),
+            DiscoveryMethod::XhrInterception => write!(f, "XHR Interception"),
+            DiscoveryMethod::FetchInterception => write!(f, "Fetch Interception"),
+            DiscoveryMethod::RouteParsing => write!(f, "Route Parsing"),
+        }
+    }
+}
+
 pub async fn discover_routes(target: &str, config: &BrowserConfig) -> Result<Vec<SpaRoute>> {
-    let mut routes = HashSet::new();
+    let browser = Browser::default()?;
+    let tab = browser.new_tab()?;
 
-    routes.extend(discover_static_routes(target).await?);
-    routes.extend(discover_dynamic_routes(target).await?);
-    routes.extend(discover_api_endpoints(target).await?);
+    tab.set_default_timeout(std::time::Duration::from_millis(config.timeout_ms));
 
-    Ok(routes.into_iter().collect())
-}
+    tab.navigate_to(target)?.wait_until_navigated()?;
 
-async fn discover_static_routes(target: &str) -> Result<Vec<SpaRoute>> {
-    let mut routes = Vec::new();
+    let js_script = r#"
+        (function() {
+            const routes = new Set();
+            const apiEndpoints = new Set();
 
-    let common_routes = vec![
-        "/", "/home", "/about", "/contact", "/login", "/logout",
-        "/register", "/signup", "/signin", "/dashboard", "/profile",
-        "/settings", "/admin", "/api", "/docs", "/help",
-    ];
+            const interceptXhr = () => {
+                const originalXhrOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(method, url) {
+                    try {
+                        const parsed = new URL(url, window.location.origin);
+                        if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/rest/')) {
+                            apiEndpoints.add(parsed.pathname);
+                        }
+                    } catch(e) {}
+                    return originalXhrOpen.apply(this, arguments);
+                };
+            };
 
-    for route in common_routes {
-        routes.push(SpaRoute {
-            path: route.to_string(),
+            const interceptFetch = () => {
+                const originalFetch = window.fetch;
+                window.fetch = function(url, options) {
+                    try {
+                        const parsed = new URL(url, window.location.origin);
+                        if (parsed.pathname.startsWith('/api/') || parsed.pathname.startsWith('/rest/')) {
+                            apiEndpoints.add(parsed.pathname);
+                        }
+                    } catch(e) {}
+                    return originalFetch.apply(this, arguments);
+                };
+            };
+
+            const extractRoutesFromDom = () => {
+                const links = document.querySelectorAll('a[href]');
+                links.forEach(link => {
+                    const href = link.getAttribute('href');
+                    if (href && (href.startsWith('/') || href.startsWith('#'))) {
+                        const path = href.split('?')[0].split('#')[0];
+                        if (path && path !== '/' && path !== '#') {
+                            routes.add(path);
+                        }
+                    }
+                });
+
+                const forms = document.querySelectorAll('form[action]');
+                forms.forEach(form => {
+                    const action = form.getAttribute('action');
+                    if (action && action.startsWith('/')) {
+                        routes.add(action.split('?')[0]);
+                    }
+                });
+            };
+
+            const extractRoutesFromJs = () => {
+                const scripts = document.querySelectorAll('script');
+                scripts.forEach(script => {
+                    const text = script.textContent || '';
+                    const routePatterns = [
+                        /router(?:\.push|\.replace|\.navigate)?\(['"]([^'")]+)['"]/g,
+                        /path:\s*['"]([^'")]+)['"]/g,
+                        /url:\s*['"]([^'")]+)['"]/g,
+                        /route:\s*['"]([^'")]+)['"]/g,
+                    ];
+
+                    routePatterns.forEach(pattern => {
+                        let match;
+                        while ((match = pattern.exec(text)) !== null) {
+                            if (match[1] && match[1].startsWith('/')) {
+                                routes.add(match[1].split('?')[0]);
+                            }
+                        }
+                    });
+                });
+            };
+
+            interceptXhr();
+            interceptFetch();
+            extractRoutesFromDom();
+            extractRoutesFromJs();
+
+            return {
+                routes: Array.from(routes),
+                apiEndpoints: Array.from(apiEndpoints)
+            };
+        })()
+    "#;
+
+    let result = tab.evaluate(js_script, true)?;
+
+    let data: HashSet<String> = result.value
+        .as_ref()
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    let discovered_routes: Vec<SpaRoute> = data.iter()
+        .filter(|path| path.starts_with('/') && !path.starts_with("/api/") && !path.starts_with("/rest/"))
+        .map(|path| SpaRoute {
+            path: path.clone(),
             method: "GET".to_string(),
-            parameters: vec![],
+            parameters: extract_parameters(path),
             discovered_via: DiscoveryMethod::Crawl,
-        });
-    }
+        })
+        .collect();
 
-    Ok(routes)
-}
-
-async fn discover_dynamic_routes(target: &str) -> Result<Vec<SpaRoute>> {
-    let mut routes = Vec::new();
-
-    let dynamic_patterns = vec![
-        "/user/{id}", "/product/{id}", "/order/{id}", "/post/{slug}",
-        "/item/{id}", "/page/{slug}", "/category/{name}", "/tag/{tag}",
-    ];
-
-    for pattern in dynamic_patterns {
-        routes.push(SpaRoute {
-            path: pattern.to_string(),
+    let api_routes: Vec<SpaRoute> = data.iter()
+        .filter(|path| path.starts_with("/api/") || path.starts_with("/rest/"))
+        .map(|path| SpaRoute {
+            path: path.clone(),
             method: "GET".to_string(),
-            parameters: vec!["id".to_string()],
-            discovered_via: DiscoveryMethod::RouteParsing,
-        });
-    }
-
-    Ok(routes)
-}
-
-async fn discover_api_endpoints(target: &str) -> Result<Vec<SpaRoute>> {
-    let mut routes = Vec::new();
-
-    let api_patterns = vec![
-        "/api/users", "/api/users/{id}", "/api/products", "/api/products/{id}",
-        "/api/orders", "/api/orders/{id}", "/api/auth/login", "/api/auth/logout",
-        "/api/auth/register", "/api/search", "/api/upload", "/api/download",
-    ];
-
-    for pattern in api_patterns {
-        routes.push(SpaRoute {
-            path: pattern.to_string(),
-            method: "GET".to_string(),
-            parameters: vec![],
+            parameters: extract_parameters(path),
             discovered_via: DiscoveryMethod::XhrInterception,
-        });
+        })
+        .collect();
+
+    let mut all_routes = discovered_routes;
+    all_routes.extend(api_routes);
+
+    Ok(all_routes)
+}
+
+fn extract_parameters(path: &str) -> Vec<String> {
+    let mut params = Vec::new();
+    let segments: Vec<&str> = path.split('/').collect();
+
+    for segment in segments {
+        if segment.starts_with('{') && segment.ends_with('}') {
+            params.push(segment[1..segment.len()-1].to_string());
+        } else if segment.starts_with(':') {
+            params.push(segment[1..].to_string());
+        }
     }
 
-    Ok(routes)
+    params
 }
 
 #[cfg(test)]

@@ -60,7 +60,7 @@ pub struct SlackChannel {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PagerDutyChannel {
-    pub routing_key: String,
+    pub routing_key: crate::types::SensitiveString,
     pub severity: String,
 }
 
@@ -251,7 +251,7 @@ impl AlertRouter {
         };
 
         let payload = serde_json::json!({
-            "routing_key": config.routing_key,
+            "routing_key": config.routing_key.expose_secret(),
             "event_action": "trigger",
             "dedup_key": self.make_dedup_key(alert),
             "payload": {
@@ -400,7 +400,7 @@ mod tests {
     fn test_alert_router_add_pagerduty_channel() {
         let router = AlertRouter::new();
         let config = PagerDutyChannel {
-            routing_key: "routing-key-123".to_string(),
+            routing_key: crate::types::SensitiveString::from("routing-key-123".to_string()),
             severity: "critical".to_string(),
         };
         router.add_channel(AlertChannel::PagerDuty(config));

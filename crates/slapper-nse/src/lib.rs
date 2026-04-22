@@ -4,6 +4,8 @@
 //! It leverages mlua (Lua 5.4) and wraps existing Slapper functionality
 //! to provide NSE-compatible libraries.
 
+use ipnetwork::IpNetwork;
+use std::net::IpAddr;
 use std::path::PathBuf;
 
 /// Configuration for running NSE scripts.
@@ -51,6 +53,9 @@ pub struct SandboxConfig {
     pub allowed_commands: Vec<String>,
     /// Whether to log sandbox violations instead of blocking them.
     pub log_violations: bool,
+    /// If non-empty, only network connections to these CIDR ranges are allowed.
+    /// If empty and sandbox is enabled, socket connections are allowed but a warning is logged.
+    pub allowed_networks: Vec<IpNetwork>,
 }
 
 impl Default for SandboxConfig {
@@ -60,6 +65,7 @@ impl Default for SandboxConfig {
             allowed_dir: Some(PathBuf::from("/tmp/slapper-nse")),
             allowed_commands: Vec::new(),
             log_violations: true,
+            allowed_networks: Vec::new(),
         }
     }
 }
@@ -110,6 +116,51 @@ impl SandboxConfig {
 
         let cmd_name = cmd.split_whitespace().next().unwrap_or(cmd);
         self.allowed_commands.iter().any(|allowed| cmd_name == allowed)
+    }
+
+    /// Check if a network target IP is allowed under the sandbox.
+    ///
+    /// Returns `true` if:
+    /// - Sandbox is disabled
+    /// - `allowed_networks` is empty (allow all with warning)
+    /// - The IP matches any network in `allowed_networks`
+    ///
+    /// Returns `false` if the IP does not match any allowed network.
+    pub fn is_network_allowed(&self, ip: IpAddr) -> bool {
+        if !self.enabled {
+            return true;
+        }
+
+        if self.allowed_networks.is_empty() {
+            return true;
+        }
+
+        self.allowed_networks.iter().any(|network| network.contains(ip))
+    }
+
+    /// Check if a network target host is allowed.
+    ///
+    /// This resolves the hostname and checks the resulting IP against allowed networks.
+    /// Returns `true` if resolution fails (fail-open for compatibility).
+    pub fn is_host_allowed(&self, host: &str) -> bool {
+        use std::net::ToSocketAddrs;
+
+        if !self.enabled {
+            return true;
+        }
+
+        if self.allowed_networks.is_empty() {
+            return true;
+        }
+
+        let addr: std::net::SocketAddr = format!("{}:0", host)
+            .to_socket_addrs()
+            .map(|mut addrs| addrs.next())
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "0.0.0.0:0".parse().unwrap());
+
+        self.is_network_allowed(addr.ip())
     }
 }
 

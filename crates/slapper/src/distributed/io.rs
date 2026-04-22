@@ -216,6 +216,33 @@ impl TlsClient {
     }
 }
 
+/// WARNING: This verifier accepts ALL certificates without validation.
+///
+/// This is EXTREMELY INSECURE and should only be used in isolated testing
+/// environments where certificate verification is not required. Using this
+/// verifier in production exposes connections to man-in-the-middle attacks,
+/// as any certificate—including self-signed, expired, or fraudulent certificates—
+/// will be accepted as valid.
+///
+/// # Security Implications
+///
+/// - No verification that the server certificate is trusted
+/// - No verification that the certificate matches the requested hostname
+/// - No verification of certificate expiration or validity period
+/// - Susceptible to DNS spoofing attacks where an attacker presents any certificate
+///
+/// # When to Use
+///
+/// Only use in:
+/// - Local testing with self-signed certificates
+/// - Isolated lab environments with no external network access
+/// - Development environments where TLS is required but cert verification is not
+///
+/// # Alternatives
+///
+/// For production use, configure proper certificate verification or use
+/// a custom `ServerCertVerifier` that performs appropriate validation based
+/// on your security requirements.
 #[derive(Debug)]
 #[cfg(feature = "insecure-tls")]
 struct NoVerifier;

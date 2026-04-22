@@ -156,7 +156,20 @@ impl AiClient {
             return Err(AiError::CircuitBreakerOpen {});
         }
 
-        let request = self.apply_auth(self.client.post(self.api_url()).json(body));
+        let (request_body, needs_anthropic_format) = if self.provider == Provider::Anthropic {
+            let transformed = self.transform_to_anthropic_format(body)?;
+            (transformed, true)
+        } else {
+            (body.clone(), false)
+        };
+
+        let mut request_builder = self.client.post(self.api_url()).json(&request_body);
+
+        if needs_anthropic_format {
+            request_builder = request_builder.header("anthropic-version", "2023-06-01");
+        }
+
+        let request = self.apply_auth(request_builder);
 
         match request.send().await {
             Ok(response) => {
@@ -181,6 +194,52 @@ impl AiClient {
                 Err(AiError::RequestFailed(e.to_string()))
             }
         }
+    }
+
+    fn transform_to_anthropic_format(&self, body: &serde_json::Value) -> Result<serde_json::Value> {
+        let model = body.get("model")
+            .and_then(|v| v.as_str())
+            .unwrap_or(self.model());
+
+        let max_tokens = body.get("max_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(2048) as u64;
+
+        let messages = body.get("messages")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut system_message = String::new();
+        let mut anthropic_messages = Vec::new();
+
+        for msg in messages {
+            let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("user");
+            let content = msg.get("content").and_then(|v| v.as_str()).unwrap_or("");
+
+            match role {
+                "system" => {
+                    if !system_message.is_empty() {
+                        system_message.push('\n');
+                    }
+                    system_message.push_str(content);
+                }
+                "user" | "assistant" => {
+                    anthropic_messages.push(serde_json::json!({
+                        "role": role,
+                        "content": content
+                    }));
+                }
+                _ => {}
+            }
+        }
+
+        Ok(serde_json::json!({
+            "model": model,
+            "max_tokens": max_tokens,
+            "system": system_message,
+            "messages": anthropic_messages
+        }))
     }
 
     fn extract_content(&self, result: &serde_json::Value, filter_fn: fn(&str) -> bool) -> Vec<String> {

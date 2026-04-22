@@ -50,7 +50,7 @@ impl CertGenerator {
         params.subject = vec![(DnType::CommonName, host.into())];
         params.issuer = vec![(DnType::CommonName, "Slapper Proxy CA".into())];
 
-        params.is_ca = BasicConstraints::Unconstrained;
+        params.is_ca = BasicConstraints::Constrained(0);
 
         params.key_usages = vec![
             rcgen::KeyUsage::DigitalSignature,

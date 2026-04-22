@@ -120,6 +120,22 @@ impl PythonPluginManager {
         }
     }
 
+    pub fn from_config(config: &PluginConfig) -> Self {
+        Self {
+            plugins: Vec::new(),
+            info: PluginInfo {
+                name: "python-plugin-manager".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                description: "Python plugin backend".to_string(),
+                author: "Slapper".to_string(),
+                tags: vec!["python".to_string()],
+                language: PluginLanguage::Python,
+            },
+            block_suspicious_plugins: config.block_suspicious_plugins,
+            checks_cache: std::sync::OnceLock::new(),
+        }
+    }
+
     pub fn with_block_suspicious_plugins(block: bool) -> Self {
         Self {
             plugins: Vec::new(),
@@ -246,6 +262,7 @@ impl PythonPluginManager {
         py: Python<'_>,
         class_plugin: &ClassPlugin,
         target: &str,
+        config: &serde_json::Value,
     ) -> Result<Vec<serde_json::Value>> {
         let instance = class_plugin
             .class
@@ -253,6 +270,27 @@ impl PythonPluginManager {
             .map_err(|e| anyhow::anyhow!("Failed to instantiate plugin '{}': {}", class_plugin.name, e))?;
 
         let config_dict = PyDict::new(py);
+        if let Some(obj) = config.as_object() {
+            for (k, v) in obj {
+                let py_val: Py<PyAny> = match v {
+                    serde_json::Value::String(s) => s.clone().into_py(py),
+                    serde_json::Value::Number(n) => {
+                        if let Some(i) = n.as_i64() {
+                            i.into_py(py)
+                        } else if let Some(f) = n.as_f64() {
+                            f.into_py(py)
+                        } else {
+                            n.to_string().into_py(py)
+                        }
+                    }
+                    serde_json::Value::Bool(b) => (*b).into_py(py),
+                    serde_json::Value::Null => pyo3::PyNone::new(py).into_py_any(py)?,
+                    serde_json::Value::Array(arr) => arr.into_py(py),
+                    serde_json::Value::Object(_) => v.to_string().into_py(py),
+                };
+                config_dict.set_item(k, py_val)?;
+            }
+        }
 
         let result = instance
             .call_method1(py, "run", (target, config_dict))
@@ -353,7 +391,7 @@ impl PythonPluginManager {
             .clone()
     }
 
-    pub fn run_check_direct(&self, check_name: &str, target: &str) -> Result<Vec<serde_json::Value>> {
+    pub fn run_check_direct(&self, check_name: &str, target: &str, config: &serde_json::Value) -> Result<Vec<serde_json::Value>> {
         Python::attach(|py| {
             let mut all_results = Vec::new();
 
@@ -385,7 +423,7 @@ impl PythonPluginManager {
                 // Try class-based plugins
                 for class_plugin in &plugin.class_plugins {
                     if class_plugin.name == check_name {
-                        match Self::run_class_plugin(py, class_plugin, target) {
+                        match Self::run_class_plugin(py, class_plugin, target, config) {
                             Ok(results) => all_results.extend(results),
                             Err(e) => {
                                 tracing::warn!(
@@ -426,7 +464,7 @@ impl Plugin for PythonPluginManager {
 
     async fn run_check(&self, check_name: &str, target: &str) -> Result<PluginResult> {
         let start = Instant::now();
-        let json_results = self.run_check_direct(check_name, target)?;
+        let json_results = self.run_check_direct(check_name, target, &serde_json::Value::Object(serde_json::Map::new()))?;
         let execution_time_ms = start.elapsed().as_millis() as u64;
 
         let findings = json_results
@@ -479,14 +517,18 @@ impl Plugin for PythonPluginManager {
         })
     }
 
-    async fn run(&self, target: &str, _config: &PluginConfig) -> Result<PluginResult> {
+    async fn run(&self, target: &str, config: &PluginConfig) -> Result<PluginResult> {
         let start = Instant::now();
         let checks = self.get_checks();
         let mut findings = Vec::new();
         let mut errors = Vec::new();
 
+        let config_json = serde_json::Value::Object(
+            config.config.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        );
+
         for check in &checks {
-            match self.run_check_direct(&check.name, target) {
+            match self.run_check_direct(&check.name, target, &config_json) {
                 Ok(json_results) => {
                     for v in json_results {
                         if let Some(title) = v.get("title").and_then(|t| t.as_str()) {

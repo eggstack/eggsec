@@ -5177,6 +5177,7 @@ dependencies = [
  "hex",
  "hickory-resolver",
  "hostname",
+ "ipnetwork 0.20.0",
  "md-5",
  "mlua",
  "mlua-luau-scheduler",

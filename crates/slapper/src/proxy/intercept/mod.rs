@@ -17,7 +17,7 @@ pub use rules::{InterceptRule, RuleAction, RuleSet};
 use crate::error::{Result, SlapperError};
 use parking_lot::RwLock;
 use rcgen::{Certificate, KeyPair};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -83,6 +83,38 @@ impl ProxyServer {
     }
 }
 
+fn validate_target(host: &str, port: u16) -> Result<()> {
+    let ip: IpAddr = host.parse().map_err(|_| {
+        SlapperError::ScopeViolation(format!("Invalid host address: {}", host))
+    })?;
+
+    let is_blocked = match ip {
+        IpAddr::V4(ipv4) => {
+            let octets = ipv4.octets();
+            octets[0] == 10
+                || (octets[0] == 172 && (15..=31).contains(&octets[1]))
+                || (octets[0] == 192 && octets[1] == 168)
+                || octets[0] == 127
+                || octets[0] == 0
+        }
+        IpAddr::V6(ipv6) => {
+            let segments = ipv6.segments();
+            (segments[0] & 0xfe00) == 0xfe80
+                || ((segments[0] & 0xfe00) == 0xfc00)
+                || ipv6.is_loopback()
+        }
+    };
+
+    if is_blocked {
+        return Err(SlapperError::ScopeViolation(format!(
+            "Connection to private/internal address blocked: {}:{}",
+            host, port
+        )));
+    }
+
+    Ok(())
+}
+
 async fn handle_connection(
     stream: TcpStream,
     client_addr: SocketAddr,
@@ -137,6 +169,8 @@ async fn handle_connect_request(
         }
         RuleAction::Monitor | RuleAction::Allow => {}
     }
+
+    validate_target(host, port)?;
 
     let upstream = TcpStream::connect(format!("{}:{}", host, port)).await
         .map_err(|e| SlapperError::Network(format!("Failed to connect to upstream: {}", e)))?;

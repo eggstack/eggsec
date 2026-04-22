@@ -16,12 +16,12 @@ dirs = { version = "5", optional = true }
 pyo3 = { version = "0.28", features = ["auto-initialize"], optional = true }
 magnus = { version = "0.8.2", optional = true }
 regex = { version = "1", optional = true }
-futures = { version = "0.3", optional = true }
+futures = "0.3"
 
 [dev-dependencies]
 futures = "0.3"
 
 [features]
 default = []
-python-plugins = ["dep:pyo3", "dep:dirs", "dep:regex", "dep:futures"]
+python-plugins = ["dep:pyo3", "dep:dirs", "dep:regex"]
 ruby-plugins = ["dep:magnus"]
