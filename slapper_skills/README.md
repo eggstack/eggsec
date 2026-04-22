@@ -36,6 +36,8 @@ cargo build --release --features "rest-api ai-integration"
 | `subdomain_enumeration.md` | Subdomain discovery | recon |
 | `web_search_integration.md` | CVE and vulnerability research | search |
 | `wireless_security_testing.md` | WiFi reconnaissance and analysis | wireless |
+| `oauth_oidc_testing.md` | OAuth/OIDC security assessment | recon |
+| `security_compliance_checks.md` | Compliance verification (PCI-DSS, SOC2) | scanner |
 
 ### Scanning
 | Skill | Description | Tools |
@@ -58,6 +60,10 @@ cargo build --release --features "rest-api ai-integration"
 | `nosql_injection.md` | NoSQL injection (MongoDB, Redis, etc.) | fuzzer |
 | `xpath_injection.md` | XPath injection for XML APIs | fuzzer |
 | `expression_injection.md` | Expression language injection (Spring EL, OGNL, etc.) | fuzzer |
+| `mass_assignment.md` | Mass assignment vulnerability testing | fuzzer |
+| `prototype_pollution.md` | JavaScript prototype pollution | fuzzer |
+| `race_condition.md` | Race condition / TOCTOU testing | fuzzer |
+| `graphql_security_testing.md` | GraphQL security testing | fuzzer |
 | `prototype_pollution.md` | JavaScript prototype pollution | fuzzer |
 | `race_condition.md` | Race condition and TOCTOU testing | fuzzer |
 | `mass_assignment.md` | Mass assignment vulnerabilities | fuzzer |

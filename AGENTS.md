@@ -175,7 +175,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 |--------|-------|------|
 | Tests | 1104 passing | |
 | Build | Clean compilation | |
-| Clippy | 1 warning | Pre-existing (scan_ports 8 args) |
+| Clippy | ~4 warnings | Pre-existing (scan_ports 8 args, collapsible_if) |
 | Doctests | 19 pass, 0 fail | All passing |
 | `SlapperError` variants | 23 | |
 | `once_cell` in slapper | 0 | Replaced with `std::sync::LazyLock` |
@@ -183,7 +183,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | `thiserror` | 2.x | |
 | Ruby plugins | Zero warnings | With `--features ruby-plugins` |
 | Largest file | `tui/app/mod.rs` (897 lines) | Decomposed from 1665 (46% reduction) |
-| Source files | 430+ `.rs` files | |
+| Source files | 450+ `.rs` files | |
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
 | Payload types | 38 | Added 6 new (nosql, xpath, expression, prototype, race, mass_assign) |
@@ -486,6 +486,49 @@ Feature gate: `#[cfg(feature = "rest-api")]` in `tool/protocol/mod.rs`.
 #### AI Output Schema
 
 - `output/ai_schema.rs` — `AiOutput`, `AiFinding`, `AiEvidence`, `AiRemediation`, `AiSummary` types
+
+#### OAST Integration
+
+- `tool/implementations/oast.rs` — `OastTool` for Out-of-Band Application Security Testing
+- Integrates with Interactsh API for blind vulnerability detection
+- Feature gate: `#[cfg(feature = "rest-api")]`
+
+#### Runtime Scripting Engine
+
+- `tool/scripting.rs` — `ScriptEngine` trait for dynamic script execution
+- Uses existing `pyo3` and `magnus` for plugin languages
+- Implements sandbox restrictions for untrusted scripts
+- Feature gate: `#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]`
+
+#### Template Signing
+
+- `scanner/templates/verify.rs` — Ed25519 signature verification for community templates
+- `Template::verify(public_key)` checks signature before execution
+- Prevents malicious template execution from untrusted sources
+
+#### Session Management
+
+- `tool/session.rs` — Extended `AgentSession` with auth methods, CSRF tokens, login sequences
+- `AuthMethod` enum: `Basic`, `Bearer`, `OAuth2`, `APIKey`
+- `AuthMethod::apply_to_request()` for flexible auth handling
+- Feature gate: `#[cfg(feature = "rest-api")]`
+
+#### Report Templating
+
+- `output/template.rs` — `ReportTemplate` using `handlebars` crate
+- Supports compliance templates (PCI-DSS, SOC2, HIPAA)
+- CLI: `report render --template <path>`
+
+#### Multi-Agent Communication
+
+- `tool/agents/communication.rs` — `InterAgentChannel` for agent-to-agent messaging
+- `AgentInfo` with health metrics and capability advertising
+- Capability-based agent lookup and delegation
+
+#### Network Utilities
+
+- `utils/network.rs` — Helper functions for TCP connections with `TCP_NODELAY`
+- `connect_with_nodelay()` and `connect_with_nodelay_timeout()` for efficient networking
 
 ## Security Patterns
 
