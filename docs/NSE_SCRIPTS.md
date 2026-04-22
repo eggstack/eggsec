@@ -48,9 +48,10 @@ end
 | `nmap` | Nmap state and functions | None |
 | `http` | HTTP client | None |
 | `dns` | DNS resolution | None |
-| `socket` | TCP/UDP sockets | None |
+| `socket` | TCP/UDP sockets | **NOT sandboxed** - allows network connections |
 | `sslcert` | SSL certificate handling | None |
 | `shortport` | Port rule helpers | None |
+| `lfs` | LuaFileSystem | Path restrictions when sandboxed |
 | `io` | File I/O | `io.popen` (command execution) |
 | `os` | OS operations | `os.setenv`, `os.remove`, `os.rename` |
 
@@ -60,10 +61,13 @@ When built with `--features nse-sandbox`, dangerous operations are restricted:
 
 - `io.popen`: Blocked by default (returns error). Can allow specific commands via config.
 - `io.open`: Path traversal blocked. Can restrict to a specific directory.
+- `lfs`: Path restrictions enforced (attributes, dir, mkdir, rmdir, remove, rename, chdir, touch all checked).
 - `os.getenv`: Returns empty string (no credential leakage).
 - `os.setenv` / `os.unsetenv`: Blocked (uses unsafe code).
 - `os.remove` / `os.rename`: Restricted to sandbox directory.
 - `os.chdir`: Restricted to sandbox directory.
+
+**Important**: The `socket` library is **NOT sandboxed**. Even when sandbox mode is enabled, scripts can still make arbitrary network connections. This is a known limitation - the socket library only logs when sandbox is enabled but does not enforce restrictions.
 
 ### Sandbox Configuration
 
