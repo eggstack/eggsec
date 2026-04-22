@@ -111,7 +111,7 @@ Single canonical definition in `types.rs`. All other modules re-export from it:
 | `output::agent::Severity` | `pub use crate::types::Severity` |
 | `output::trend::Severity` | `pub use crate::types::Severity` |
 
-The `tool/response.rs` module uses a separate `ResponseSeverity` enum with an extra `None` variant for API compatibility. **Note**: This is being phased out in favor of `Option<Severity>` - see Wave F item F4 in `plans/plan.md`.
+The `tool/response.rs` module uses a separate `ResponseSeverity` enum with an extra `None` variant for API compatibility. **Note**: This is being phased out in favor of `Option<Severity>`.
 
 **When adding new code:** re-export from `crate::types::Severity`. Do not create a new definition.
 
@@ -173,7 +173,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1104 passing | After post-verification fixes |
+| Tests | 1104 passing | |
 | Build | Clean compilation | |
 | Clippy | 1 warning | Pre-existing (scan_ports 8 args) |
 | Doctests | 19 pass, 0 fail | All passing |
@@ -192,9 +192,9 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Historical improvement plan (all Waves A-N completed)
+- `plans/plan.md` — Historical improvement plan (reference for completed work)
 
-All planned improvement work (Waves A-N) has been completed and verified. See `plans/plan.md` for the implementation timeline.
+For new improvement work, create a new plan file rather than modifying the historical plan.
 
 ## Lessons Learned
 
@@ -543,6 +543,8 @@ The `initialize` method bypass may be protocol-required, but auth MUST be enforc
 ### NSE Sandbox
 
 Default to `enabled: true` - security by default over convenience.
+
+**Important**: The `socket` library is NOT sandboxed even when `nse-sandbox` is enabled. Scripts can still make arbitrary network connections. The `lfs` library IS sandboxed with path restrictions. See `docs/NSE_SCRIPTS.md` for details.
 
 ### Path Validation Pattern
 
