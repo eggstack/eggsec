@@ -268,6 +268,12 @@ pub struct ProxyConfig {
     #[serde(default)]
     pub test_url: Option<String>,
 
+    #[serde(default)]
+    pub health_check_url: Option<String>,
+
+    #[serde(default = "default_health_interval")]
+    pub health_check_check_interval_secs: u64,
+
     #[serde(default = "default_max_failures")]
     pub max_failures_before_disable: u32,
 
@@ -286,6 +292,8 @@ impl Default for ProxyConfig {
             health_check_interval_secs: default_health_interval(),
             health_check_timeout_ms: default_health_timeout(),
             test_url: Some("https://api.ipify.org?format=json".to_string()),
+            health_check_url: None,
+            health_check_check_interval_secs: default_health_interval(),
             max_failures_before_disable: default_max_failures(),
             chain_proxies: false,
             max_chain_length: 3,
@@ -346,11 +354,12 @@ impl From<&ProxyConfig> for HealthCheckConfig {
     fn from(config: &ProxyConfig) -> Self {
         Self {
             enabled: config.health_check_enabled,
-            interval_secs: config.health_check_interval_secs,
+            interval_secs: config.health_check_check_interval_secs,
             timeout_ms: config.health_check_timeout_ms,
             test_url: config
-                .test_url
+                .health_check_url
                 .clone()
+                .or_else(|| config.test_url.clone())
                 .unwrap_or_else(|| "https://api.ipify.org".to_string()),
             max_failures: config.max_failures_before_disable,
         }

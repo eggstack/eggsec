@@ -62,12 +62,14 @@ pub mod loader;
 pub mod marketplace;
 pub mod matcher;
 pub mod models;
+pub mod verify;
 
 pub use executor::{TemplateEngine, TemplateExecutionResult, TemplateExecutor};
 pub use loader::TemplateLoader;
 pub use marketplace::{TemplateMarketplace, MarketplaceTemplate, MarketplaceListing};
 pub use matcher::{MatchResult, TemplateMatcher};
 pub use models::{Matcher, VulnerabilityTemplate};
+pub use verify::{SignedTemplate, SignerInfo, TemplateSigner, TemplateVerifier, VerificationResult};
 
 use std::path::PathBuf;
 

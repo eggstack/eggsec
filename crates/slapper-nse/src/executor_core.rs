@@ -12,6 +12,25 @@ use std::sync::Arc;
 
 use crate::libraries::shared;
 
+#[derive(Debug, Clone)]
+pub struct SandboxMetrics {
+    pub io_handles: usize,
+    pub io_violations: usize,
+    pub lfs_violations: usize,
+    pub os_violations: usize,
+}
+
+impl Default for SandboxMetrics {
+    fn default() -> Self {
+        Self {
+            io_handles: 0,
+            io_violations: 0,
+            lfs_violations: 0,
+            os_violations: 0,
+        }
+    }
+}
+
 /// Core Lua VM state shared between sync and async executors.
 ///
 /// Owns the Lua VM, target, script paths, output buffer, and registry.
@@ -128,6 +147,16 @@ impl ExecutorCore {
 
     pub fn get_output(&self) -> Vec<String> {
         self.output.lock().clone()
+    }
+
+    pub fn get_sandbox_metrics(&self) -> SandboxMetrics {
+        let (io_handles, io_violations) = crate::libraries::io::get_io_sandbox_metrics();
+        SandboxMetrics {
+            io_handles,
+            io_violations,
+            lfs_violations: crate::libraries::lfs::LFS_SANDBOX_VIOLATIONS.load(std::sync::atomic::Ordering::SeqCst),
+            os_violations: crate::libraries::os::OS_SANDBOX_VIOLATIONS.load(std::sync::atomic::Ordering::SeqCst),
+        }
     }
 
     pub fn get_script_output(&self) -> Result<String, String> {

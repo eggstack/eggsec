@@ -16,6 +16,106 @@ use super::metrics::StressMetrics;
 #[cfg(feature = "stress-testing")]
 use super::{StressConfig, StressStats};
 
+#[cfg(all(feature = "stress-testing", unix))]
+mod raw_udp {
+    use std::net::Ipv4Addr;
+
+    pub fn build_udp_packet(
+        src_ip: Ipv4Addr,
+        src_port: u16,
+        dst_ip: Ipv4Addr,
+        dst_port: u16,
+        payload: &[u8],
+    ) -> Vec<u8> {
+        let udp_len = 8 + payload.len();
+        let total_len = 20 + udp_len;
+
+        let mut packet = vec![0u8; total_len];
+
+        packet[0] = 0x45;
+        packet[1] = 0;
+        packet[2] = (total_len >> 8) as u8;
+        packet[3] = (total_len & 0xff) as u8;
+        packet[4] = 0;
+        packet[5] = 0;
+        packet[6] = 0x40;
+        packet[7] = 0;
+        packet[8] = 64;
+        packet[9] = 17;
+
+        packet[12..16].copy_from_slice(&src_ip.octets());
+        packet[16..20].copy_from_slice(&dst_ip.octets());
+
+        let checksum = calculate_udp_checksum(
+            src_ip, dst_ip,
+            src_port, dst_port,
+            payload, udp_len as u16
+        );
+
+        packet[20 + 0] = (src_port >> 8) as u8;
+        packet[20 + 1] = (src_port & 0xff) as u8;
+        packet[20 + 2] = (dst_port >> 8) as u8;
+        packet[20 + 3] = (dst_port & 0xff) as u8;
+        packet[20 + 4] = (udp_len >> 8) as u8;
+        packet[20 + 5] = (udp_len & 0xff) as u8;
+        packet[20 + 6] = (checksum >> 8) as u8;
+        packet[20 + 7] = (checksum & 0xff) as u8;
+
+        packet[20 + 8..].copy_from_slice(payload);
+
+        let ip_checksum = calculate_ip_checksum(&packet[..20]);
+        packet[10] = (ip_checksum >> 8) as u8;
+        packet[11] = (ip_checksum & 0xff) as u8;
+
+        packet
+    }
+
+    fn calculate_ip_checksum(header: &[u8]) -> u16 {
+        let mut sum: u32 = 0;
+        for i in (0..header.len()).step_by(2) {
+            let word = ((header[i] as u32) << 8) | (header[i + 1] as u32);
+            sum += word;
+        }
+        while sum > 0xffff {
+            sum = (sum & 0xffff) + (sum >> 16);
+        }
+        !sum as u16
+    }
+
+    fn calculate_udp_checksum(
+        src_ip: Ipv4Addr,
+        dst_ip: Ipv4Addr,
+        src_port: u16,
+        dst_port: u16,
+        payload: &[u8],
+        len: u16,
+    ) -> u16 {
+        let mut pseudo = vec![0u8; 12 + payload.len()];
+        pseudo[0..4].copy_from_slice(&src_ip.octets());
+        pseudo[4..8].copy_from_slice(&dst_ip.octets());
+        pseudo[9] = 17;
+        pseudo[10] = (len >> 8) as u8;
+        pseudo[11] = (len & 0xff) as u8;
+        pseudo[12..14].copy_from_slice(&src_port.to_be_bytes());
+        pseudo[14..16].copy_from_slice(&dst_port.to_be_bytes());
+        pseudo[16..].copy_from_slice(payload);
+
+        let mut sum: u32 = 0;
+        for i in (0..pseudo.len()).step_by(2) {
+            if i + 1 < pseudo.len() {
+                let word = ((pseudo[i] as u32) << 8) | (pseudo[i + 1] as u32);
+                sum += word;
+            } else {
+                sum += (pseudo[i] as u32) << 8;
+            }
+        }
+        while sum > 0xffff {
+            sum = (sum & 0xffff) + (sum >> 16);
+        }
+        !sum as u16
+    }
+}
+
 #[cfg(feature = "stress-testing")]
 pub async fn run_udp_flood(config: &StressConfig, metrics: &StressMetrics) -> Result<StressStats> {
     let target_ip = resolve_target(&config.target).await?;

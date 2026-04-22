@@ -4,12 +4,18 @@
 
 use mlua::{Lua, Result as LuaResult, Table};
 use std::env;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::SandboxConfig;
 
 static EXIT_CODE: AtomicI32 = AtomicI32::new(0);
+
+pub static OS_SANDBOX_VIOLATIONS: AtomicUsize = AtomicUsize::new(0);
+
+pub fn get_os_sandbox_metrics() -> usize {
+    OS_SANDBOX_VIOLATIONS.load(Ordering::SeqCst)
+}
 
 pub fn get_exit_code() -> i32 {
     EXIT_CODE.load(Ordering::SeqCst)
@@ -100,6 +106,7 @@ pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     let sandbox_for_setenv = sandbox.clone();
     let setenv_fn = lua.create_function(move |_lua, (name, value): (String, String)| {
         if sandbox_for_setenv.enabled {
+            OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
             if sandbox_for_setenv.log_violations {
                 tracing::warn!(var = %name, "Sandbox: blocked os.setenv call");
             }
@@ -118,6 +125,7 @@ pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     let sandbox_for_unsetenv = sandbox.clone();
     let unsetenv_fn = lua.create_function(move |_lua, name: String| {
         if sandbox_for_unsetenv.enabled {
+            OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
             if sandbox_for_unsetenv.log_violations {
                 tracing::warn!(var = %name, "Sandbox: blocked os.unsetenv call");
             }
@@ -146,6 +154,7 @@ pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     let remove_fn = lua.create_function(move |_lua, filename: String| {
         if sandbox_for_remove.enabled {
             if !sandbox_for_remove.is_path_allowed(&filename) {
+                OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                 if sandbox_for_remove.log_violations {
                     tracing::warn!(path = %filename, "Sandbox: blocked os.remove call");
                 }
@@ -165,6 +174,7 @@ pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
             if !sandbox_for_rename.is_path_allowed(&oldname)
                 || !sandbox_for_rename.is_path_allowed(&newname)
             {
+                OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                 if sandbox_for_rename.log_violations {
                     tracing::warn!(old = %oldname, new = %newname, "Sandbox: blocked os.rename call");
                 }
@@ -188,6 +198,7 @@ pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     let chdir_fn = lua.create_function(move |_lua, path: String| {
         if sandbox_for_chdir.enabled {
             if !sandbox_for_chdir.is_path_allowed(&path) {
+                OS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                 if sandbox_for_chdir.log_violations {
                     tracing::warn!(path = %path, "Sandbox: blocked os.chdir call");
                 }

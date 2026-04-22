@@ -100,6 +100,10 @@ impl InterceptProxy {
     pub fn modify_request(&self, request: &mut InterceptRequest, modification: &RequestModification) {
         if let Some(ref headers) = modification.headers {
             for (k, v) in headers {
+                if !validate_header_value(&k) || !validate_header_value(v) {
+                    tracing::warn!("Blocked CRLF injection attempt in header: {}={}", k, v);
+                    continue;
+                }
                 request.headers.insert(k.clone(), v.clone());
             }
         }
@@ -193,6 +197,10 @@ impl Default for ResponseModification {
     }
 }
 
+fn validate_header_value(value: &str) -> bool {
+    !value.contains('\r') && !value.contains('\n') && !value.contains('\0')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,5 +223,25 @@ mod tests {
 
         assert!(proxy.should_intercept("example.com", "/admin"));
         assert!(!proxy.should_intercept("example.com", "/public"));
+    }
+
+    #[test]
+    fn test_validate_header_value() {
+        assert!(validate_header_value("normal value"));
+        assert!(validate_header_value(""));
+        assert!(validate_header_value("value with spaces"));
+    }
+
+    #[test]
+    fn test_validate_header_value_rejects_crlf() {
+        assert!(!validate_header_value("value\r\nmalicious"));
+        assert!(!validate_header_value("value\rnext"));
+        assert!(!validate_header_value("value\nnext"));
+    }
+
+    #[test]
+    fn test_validate_header_value_rejects_null() {
+        assert!(!validate_header_value("value\0null"));
+        assert!(!validate_header_value("\0start"));
     }
 }

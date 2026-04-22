@@ -302,6 +302,283 @@ impl AlertRouter {
         let mut recent_alerts = self.recent_alerts.lock().await;
         recent_alerts.retain(|_, last_sent| last_sent.elapsed() < cutoff);
     }
+
+    pub async fn aggregate_findings(&self, alerts: &[Alert]) -> AggregatedAlert {
+        let mut severity_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut all_finding_ids = Vec::new();
+        let mut targets: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        for alert in alerts {
+            *severity_counts.entry(alert.severity.as_str().to_string()).or_insert(0) += 1;
+            all_finding_ids.extend(alert.finding_ids.clone());
+            targets.insert(alert.target.clone());
+        }
+
+        let max_severity = severity_counts
+            .iter()
+            .max_by_key(|(sev, _)| {
+                match sev.as_str() {
+                    "critical" => 5,
+                    "high" => 4,
+                    "medium" => 3,
+                    "low" => 2,
+                    _ => 1,
+                }
+            })
+            .map(|(sev, _)| sev.clone())
+            .unwrap_or_else(|| "info".to_string());
+
+        AggregatedAlert {
+            total_count: alerts.len(),
+            severity_counts,
+            all_finding_ids,
+            affected_targets: targets.into_iter().collect(),
+            max_severity,
+            timestamp: Utc::now(),
+        }
+    }
+
+    pub fn generate_scan_report(
+        &self,
+        target: &str,
+        alerts: &[Alert],
+        findings: &[crate::tool::response::Finding],
+    ) -> ScanReport {
+        let critical_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::Critical).count();
+        let high_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::High).count();
+        let medium_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::Medium).count();
+        let low_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::Low).count();
+        let info_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::Info).count();
+
+        ScanReport {
+            id: uuid::Uuid::new_v4().to_string(),
+            target: target.to_string(),
+            generated_at: Utc::now(),
+            summary: ReportSummary {
+                total_findings: findings.len(),
+                critical_count,
+                high_count,
+                medium_count,
+                low_count,
+                info_count,
+                risk_score: (critical_count * 10 + high_count * 7 + medium_count * 4 + low_count * 1) as f64,
+            },
+            findings: findings.to_vec(),
+            alerts: alerts.to_vec(),
+            recommendations: self.generate_recommendations(findings),
+        }
+    }
+
+    fn generate_recommendations(&self, findings: &[crate::tool::response::Finding]) -> Vec<String> {
+        let mut recommendations = Vec::new();
+
+        let mut vuln_types: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for finding in findings {
+            vuln_types.insert(format!("{:?}", finding.finding_type));
+        }
+
+        if vuln_types.contains("SqlInjection") {
+            recommendations.push("Implement parameterized queries or use an ORM".to_string());
+        }
+        if vuln_types.contains("Xss") {
+            recommendations.push("Implement Content Security Policy and output encoding".to_string());
+        }
+        if vuln_types.contains("Ssrf") {
+            recommendations.push("Validate and sanitize all user-supplied URLs".to_string());
+        }
+
+        if recommendations.is_empty() {
+            recommendations.push("Continue regular security scanning and patch management".to_string());
+        }
+
+        recommendations
+    }
+
+    pub async fn escalate_alert(&self, alert: &Alert, escalation_level: EscalationLevel) -> Result<()> {
+        match escalation_level {
+            EscalationLevel::Warning => {
+                tracing::warn!("Alert escalated to Warning: {}", alert.title);
+            }
+            EscalationLevel::Urgent => {
+                let channels = self.channels.lock().await.clone();
+                for channel in &channels {
+                    if matches!(channel, AlertChannel::Slack(_)) {
+                        self.send_to_channel(channel, alert).await?;
+                    }
+                }
+            }
+            EscalationLevel::Critical => {
+                let channels = self.channels.lock().await.clone();
+                for channel in &channels {
+                    self.send_to_channel(channel, alert).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AggregatedAlert {
+    pub total_count: usize,
+    pub severity_counts: std::collections::HashMap<String, usize>,
+    pub all_finding_ids: Vec<String>,
+    pub affected_targets: Vec<String>,
+    pub max_severity: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScanReport {
+    pub id: String,
+    pub target: String,
+    pub generated_at: chrono::DateTime<chrono::Utc>,
+    pub summary: ReportSummary,
+    pub findings: Vec<crate::tool::response::Finding>,
+    pub alerts: Vec<Alert>,
+    pub recommendations: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReportSummary {
+    pub total_findings: usize,
+    pub critical_count: usize,
+    pub high_count: usize,
+    pub medium_count: usize,
+    pub low_count: usize,
+    pub info_count: usize,
+    pub risk_score: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum EscalationLevel {
+    Warning,
+    Urgent,
+    Critical,
+}
+
+pub struct AlertTemplate {
+    pub name: String,
+    pub slack_template: SlackTemplate,
+    pub pagerduty_template: PagerDutyTemplate,
+    pub email_template: EmailTemplate,
+}
+
+#[derive(Debug, Clone)]
+pub struct SlackTemplate {
+    pub title_format: String,
+    pub body_format: String,
+    pub color_by_severity: std::collections::HashMap<String, String>,
+}
+
+impl SlackTemplate {
+    pub fn default_templates() -> Self {
+        let mut colors = std::collections::HashMap::new();
+        colors.insert("critical".to_string(), "#dc3545".to_string());
+        colors.insert("high".to_string(), "#fd7e14".to_string());
+        colors.insert("medium".to_string(), "#ffc107".to_string());
+        colors.insert("low".to_string(), "#0dcaf0".to_string());
+        colors.insert("info".to_string(), "#6c757d".to_string());
+
+        Self {
+            title_format: "[{{severity}}] {{title}}".to_string(),
+            body_format: "Target: {{target}}\n{{message}}\nFindings: {{finding_count}}".to_string(),
+            color_by_severity: colors,
+        }
+    }
+
+    pub fn format(&self, alert: &Alert, finding_count: usize) -> SlackFormattedAlert {
+        let title = self.title_format
+            .replace("{{severity}}", &alert.severity.as_str().to_uppercase())
+            .replace("{{title}}", &alert.title);
+
+        let body = self.body_format
+            .replace("{{target}}", &alert.target)
+            .replace("{{message}}", &alert.message)
+            .replace("{{finding_count}}", &finding_count.to_string());
+
+        let color = self.color_by_severity
+            .get(alert.severity.as_str())
+            .cloned()
+            .unwrap_or_else(|| "#6c757d".to_string());
+
+        SlackFormattedAlert {
+            title,
+            body,
+            color,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SlackFormattedAlert {
+    pub title: String,
+    pub body: String,
+    pub color: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct PagerDutyTemplate {
+    pub severity_mapping: std::collections::HashMap<String, String>,
+}
+
+impl PagerDutyTemplate {
+    pub fn default_template() -> Self {
+        let mut mapping = std::collections::HashMap::new();
+        mapping.insert("critical".to_string(), "critical".to_string());
+        mapping.insert("high".to_string(), "error".to_string());
+        mapping.insert("medium".to_string(), "warning".to_string());
+        mapping.insert("low".to_string(), "info".to_string());
+        mapping.insert("info".to_string(), "info".to_string());
+
+        Self {
+            severity_mapping: mapping,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EmailTemplate {
+    pub subject_format: String,
+    pub body_format: String,
+}
+
+impl EmailTemplate {
+    pub fn default_template() -> Self {
+        Self {
+            subject_format: "[Slapper] {{severity}}: {{title}}".to_string(),
+            body_format: "Security Alert: {{title}}\n\n\
+                Target: {{target}}\n\
+                Severity: {{severity}}\n\n\
+                {{message}}\n\n\
+                Recommended Actions:\n\
+                {{actions}}".to_string(),
+        }
+    }
+
+    pub fn format(&self, alert: &Alert) -> EmailFormattedAlert {
+        let subject = self.subject_format
+            .replace("{{severity}}", &alert.severity.as_str().to_uppercase())
+            .replace("{{title}}", &alert.title);
+
+        let body = self.body_format
+            .replace("{{target}}", &alert.target)
+            .replace("{{title}}", &alert.title)
+            .replace("{{message}}", &alert.message)
+            .replace("{{severity}}", &alert.severity.as_str().to_uppercase())
+            .replace("{{actions}}", &alert.recommended_actions.join("\n"));
+
+        EmailFormattedAlert {
+            subject,
+            body,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EmailFormattedAlert {
+    pub subject: String,
+    pub body: String,
 }
 
 impl Default for AlertRouter {

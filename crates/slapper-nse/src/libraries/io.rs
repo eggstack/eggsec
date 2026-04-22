@@ -7,14 +7,36 @@ use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use crate::SandboxConfig;
 
-static FILE_HANDLES: std::sync::LazyLock<Mutex<HashMap<i32, File>>> =
+struct FileHandle {
+    file: File,
+    fd: i32,
+}
+
+impl Drop for FileHandle {
+    fn drop(&mut self) {
+        if let Err(e) = self.file.sync_all() {
+            tracing::warn!("Failed to sync file on close: {}", e);
+        }
+    }
+}
+
+static FILE_HANDLES: std::sync::LazyLock<Mutex<HashMap<i32, FileHandle>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 static NEXT_FD: std::sync::LazyLock<Mutex<i32>> = std::sync::LazyLock::new(|| Mutex::new(100));
+
+pub static IO_SANDBOX_VIOLATIONS: AtomicUsize = AtomicUsize::new(0);
+
+pub fn get_io_sandbox_metrics() -> (usize, usize) {
+    let handles = FILE_HANDLES.lock().map(|h| h.len()).unwrap_or(0);
+    let violations = IO_SANDBOX_VIOLATIONS.load(Ordering::SeqCst);
+    (handles, violations)
+}
 
 pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> {
     let globals = lua.globals();
@@ -32,18 +54,21 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
                     let canonical = match path_buf.canonicalize() {
                         Ok(c) => c,
                         Err(e) => {
+                            IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                             let result = lua.create_table()?;
                             result.set("error", format!("Path '{}' could not be resolved: {} - blocked by sandbox", filename, e))?;
                             return Ok(result);
                         }
                     };
                     if !canonical.starts_with(dir) {
+                        IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                         let result = lua.create_table()?;
                         result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
                         return Ok(result);
                     }
                 }
                 if filename.contains("..") {
+                    IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                     let result = lua.create_table()?;
                     result.set("error", "Path traversal blocked by sandbox")?;
                     return Ok(result);
@@ -97,7 +122,7 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
                     let mut handles = FILE_HANDLES.lock().map_err(|_| {
                         std::io::Error::new(std::io::ErrorKind::Other, "lock error")
                     })?;
-                    handles.insert(fd, f);
+                    handles.insert(fd, FileHandle { file: f, fd });
 
                     let result = lua.create_table()?;
                     result.set("fd", fd)?;
@@ -133,9 +158,9 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
             let size = size.unwrap_or(4096);
 
             if let Ok(mut handles) = FILE_HANDLES.lock() {
-                if let Some(f) = handles.get_mut(&fd) {
+                if let Some(handle) = handles.get_mut(&fd) {
                     let mut buffer = vec![0u8; size];
-                    match f.read(&mut buffer) {
+                    match handle.file.read(&mut buffer) {
                         Ok(n) => {
                             buffer.truncate(n);
                             let content = String::from_utf8_lossy(&buffer).to_string();
@@ -155,8 +180,8 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
             let fd: i32 = file.get("fd").unwrap_or(-1);
 
             if let Ok(mut handles) = FILE_HANDLES.lock() {
-                if let Some(f) = handles.get_mut(&fd) {
-                    match f.write_all(content.as_bytes()) {
+                if let Some(handle) = handles.get_mut(&fd) {
+                    match handle.file.write_all(content.as_bytes()) {
                         Ok(()) => return Ok(content.len()),
                         Err(_) => return Ok(0),
                     }
@@ -172,8 +197,8 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
             let fd: i32 = file.get("fd").unwrap_or(-1);
 
             if let Ok(mut handles) = FILE_HANDLES.lock() {
-                if let Some(f) = handles.get_mut(&fd) {
-                    let _ = f.flush();
+                if let Some(handle) = handles.get_mut(&fd) {
+                    let _ = handle.file.flush();
                 }
             }
             Ok(true)
@@ -186,9 +211,9 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
             let fd: i32 = file.get("fd").unwrap_or(-1);
 
             if let Ok(mut handles) = FILE_HANDLES.lock() {
-                if let Some(f) = handles.get_mut(&fd) {
+                if let Some(handle) = handles.get_mut(&fd) {
                     use std::io::Seek;
-                    if let Ok(pos) = f.seek(std::io::SeekFrom::Start(offset as u64)) {
+                    if let Ok(pos) = handle.file.seek(std::io::SeekFrom::Start(offset as u64)) {
                         return Ok(pos as i64);
                     }
                 }
@@ -351,13 +376,30 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
         })?,
     )?;
 
+    let sandbox_for_tmpfile = sandbox.clone();
     io.set(
         "tmpfile",
-        lua.create_function(|lua, _: ()| {
+        lua.create_function(move |lua, _: ()| {
             use std::fs;
-            let temp_dir = std::env::temp_dir();
+            let temp_dir = if sandbox_for_tmpfile.enabled {
+                sandbox_for_tmpfile.allowed_dir.clone()
+                    .unwrap_or_else(std::env::temp_dir)
+            } else {
+                std::env::temp_dir()
+            };
+
             let filename = format!("slapper_tmp_{}.tmp", std::process::id());
             let path = temp_dir.join(&filename);
+
+            if sandbox_for_tmpfile.enabled {
+                if let Some(ref allowed) = sandbox_for_tmpfile.allowed_dir {
+                    if !path.starts_with(allowed) {
+                        let result = lua.create_table()?;
+                        result.set("error", "Temp file path blocked by sandbox")?;
+                        return Ok(result);
+                    }
+                }
+            }
 
             match fs::File::create(&path) {
                 Ok(_file) => {

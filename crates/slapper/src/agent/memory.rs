@@ -290,6 +290,188 @@ impl LongitudinalMemory {
             unchanged_count: findings.len(),
         })
     }
+
+    pub fn detect_cross_target_patterns(&self) -> Result<Vec<CrossTargetPattern>> {
+        let mut patterns: HashMap<String, CrossTargetPatternBuilder> = HashMap::new();
+        let targets_dir = self.storage_dir.join("targets");
+
+        if !targets_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let entries = fs::read_dir(&targets_dir)?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "json") {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(memory) = serde_json::from_str::<TargetMemory>(&content) {
+                        for scan in &memory.scans {
+                            for finding in &scan.findings {
+                                let pattern_key = format!(
+                                    "{}:{}",
+                                    finding.finding_type,
+                                    finding.severity.as_str()
+                                );
+
+                                let builder = patterns.entry(pattern_key.clone()).or_insert_with(|| {
+                                    CrossTargetPatternBuilder {
+                                        pattern_type: format!("{:?}", finding.finding_type),
+                                        description: format!(
+                                            "{} with severity {}",
+                                            finding.finding_type,
+                                            finding.severity.as_str()
+                                        ),
+                                        affected_targets: Vec::new(),
+                                        first_seen: scan.timestamp,
+                                        last_seen: scan.timestamp,
+                                        total_occurrences: 0,
+                                        severity: finding.severity,
+                                    }
+                                });
+
+                                if !pattern_builder.affected_targets.contains(&memory.target) {
+                                    pattern_builder.affected_targets.push(memory.target.clone());
+                                }
+                                pattern_builder.last_seen = scan.timestamp;
+                                pattern_builder.total_occurrences += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let cross_patterns: Vec<CrossTargetPattern> = patterns
+            .into_values()
+            .filter(|p| p.affected_targets.len() > 1)
+            .map(|p| p.into())
+            .collect();
+
+        Ok(cross_patterns)
+    }
+
+    pub fn analyze_temporal_patterns(&self, target: &str) -> Result<TemporalAnalysis> {
+        let history = self.get_target_history(target)?;
+
+        let mut findings_by_day: HashMap<String, Vec<&Finding>> = HashMap::new();
+        let mut severity_trend: Vec<(String, HashMap<String, usize>)> = Vec::new();
+
+        for scan in &history {
+            let day = scan.timestamp.format("%Y-%m-%d").to_string();
+            let day_findings = findings_by_day.entry(day.clone()).or_insert_with(Vec::new);
+
+            for finding in &scan.findings {
+                day_findings.push(finding);
+            }
+        }
+
+        let mut current_day = String::new();
+        let mut current_counts: HashMap<String, usize> = HashMap::new();
+
+        let mut sorted_days: Vec<String> = findings_by_day.keys().cloned().collect();
+        sorted_days.sort();
+
+        for day in sorted_days {
+            if current_day.is_empty() {
+                current_day = day.clone();
+            }
+
+            let day_severities: HashMap<String, usize> = findings_by_day[&day]
+                .iter()
+                .fold(HashMap::new(), |mut acc, f| {
+                    *acc.entry(f.severity.as_str().to_string()).or_insert(0) += 1;
+                    acc
+                });
+
+            if day != current_day {
+                severity_trend.push((current_day.clone(), current_counts.clone()));
+                current_day = day.clone();
+            }
+            current_counts = day_severities;
+        }
+
+        if !current_counts.is_empty() {
+            severity_trend.push((current_day, current_counts));
+        }
+
+        Ok(TemporalAnalysis {
+            target: target.to_string(),
+            findings_by_day: severity_trend,
+            total_scans: history.len(),
+        })
+    }
+
+    pub fn cleanup_old_patterns(&self, ttl_days: u64) -> Result<usize> {
+        let patterns_path = self.get_patterns_path();
+
+        if !patterns_path.exists() {
+            return Ok(0);
+        }
+
+        let content = fs::read_to_string(&patterns_path)?;
+        let patterns: Vec<PatternEntry> = serde_json::from_str(&content)?;
+
+        let cutoff = chrono::Utc::now() - chrono::Duration::days(ttl_days as i64);
+        let original_count = patterns.len();
+
+        let filtered: Vec<PatternEntry> = patterns
+            .into_iter()
+            .filter(|p| p.last_seen > cutoff)
+            .collect();
+
+        let removed_count = original_count - filtered.len();
+
+        if removed_count > 0 {
+            let content = serde_json::to_string(&filtered)?;
+            fs::write(&patterns_path, content)?;
+        }
+
+        Ok(removed_count)
+    }
+}
+
+struct CrossTargetPatternBuilder {
+    pattern_type: String,
+    description: String,
+    affected_targets: Vec<String>,
+    first_seen: chrono::DateTime<Utc>,
+    last_seen: chrono::DateTime<Utc>,
+    total_occurrences: usize,
+    severity: crate::types::Severity,
+}
+
+#[derive(Clone, Debug)]
+pub struct CrossTargetPattern {
+    pub pattern_type: String,
+    pub description: String,
+    pub affected_targets: Vec<String>,
+    pub target_count: usize,
+    pub first_seen: chrono::DateTime<Utc>,
+    pub last_seen: chrono::DateTime<Utc>,
+    pub total_occurrences: usize,
+    pub severity: crate::types::Severity,
+}
+
+impl From<CrossTargetPatternBuilder> for CrossTargetPattern {
+    fn from(builder: CrossTargetPatternBuilder) -> Self {
+        Self {
+            pattern_type: builder.pattern_type,
+            description: builder.description,
+            affected_targets: builder.affected_targets.clone(),
+            target_count: builder.affected_targets.len(),
+            first_seen: builder.first_seen,
+            last_seen: builder.last_seen,
+            total_occurrences: builder.total_occurrences,
+            severity: builder.severity,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TemporalAnalysis {
+    pub target: String,
+    pub findings_by_day: Vec<(String, HashMap<String, usize>)>,
+    pub total_scans: usize,
 }
 
 #[derive(Clone, Debug)]

@@ -1,7 +1,7 @@
 #[cfg(all(feature = "stress-testing", unix))]
 use crate::error::{Result, SlapperError};
 #[cfg(all(feature = "stress-testing", unix))]
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 #[cfg(all(feature = "stress-testing", unix))]
 use std::time::{Duration, Instant};
 
@@ -28,12 +28,6 @@ pub async fn run_syn_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
     let interface = get_network_interface()?;
     let (mut tx, _rx) = create_channel(&interface)?;
 
-    let src_ip = if config.spoof_source {
-        get_spoofed_source(&config.spoof_range)?
-    } else {
-        get_local_ip(&interface)?
-    };
-
     metrics.start();
 
     let start_time = Instant::now();
@@ -50,13 +44,24 @@ pub async fn run_syn_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
             src_port = src_port.wrapping_add(1);
         }
 
-        let packet = build_syn_packet(
-            src_ip,
-            src_port,
-            target_addr.ip(),
-            target_addr.port(),
-            seq_num,
-        )?;
+        let packet = match target_addr.ip() {
+            IpAddr::V4(dst_ip) => {
+                let src_ip = if config.spoof_source {
+                    get_spoofed_source(&config.spoof_range)?
+                } else {
+                    get_local_ip(&interface)?
+                };
+                build_syn_packet_v4(src_ip, src_port, dst_ip, target_addr.port(), seq_num)?
+            }
+            IpAddr::V6(dst_ip) => {
+                let src_ip = if config.spoof_source {
+                    get_spoofed_source_v6(&config.spoof_range)?
+                } else {
+                    get_local_ip_v6(&interface)?
+                };
+                build_syn_packet_v6(src_ip, src_port, dst_ip, target_addr.port(), seq_num)?
+            }
+        };
 
         match tx.send_to(&packet, Some(interface.clone())) {
             Some(Ok(_)) => {
@@ -82,10 +87,10 @@ pub async fn run_syn_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
-fn build_syn_packet(
+fn build_syn_packet_v4(
     src_ip: Ipv4Addr,
     src_port: u16,
-    dst_ip: IpAddr,
+    dst_ip: Ipv4Addr,
     dst_port: u16,
     seq: u32,
 ) -> Result<Vec<u8>> {
@@ -103,16 +108,47 @@ fn build_syn_packet(
     ipv4_packet.set_ttl(64);
     ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Tcp);
     ipv4_packet.set_source(src_ip);
-    ipv4_packet.set_destination(match dst_ip {
-        IpAddr::V4(ip) => ip,
-        IpAddr::V6(_) => {
-            return Err(SlapperError::Runtime(
-                "IPv6 not supported for SYN flood".to_string(),
-            ))
-        }
-    });
+    ipv4_packet.set_destination(dst_ip);
 
     let mut tcp_packet = MutableTcpPacket::new(&mut buffer[20..])
+        .ok_or_else(|| SlapperError::Runtime("Failed to create TCP packet".to_string()))?;
+
+    tcp_packet.set_source(src_port);
+    tcp_packet.set_destination(dst_port);
+    tcp_packet.set_sequence(seq);
+    tcp_packet.set_acknowledgement(0);
+    tcp_packet.set_data_offset(5);
+    tcp_packet.set_flags(TcpFlags::SYN);
+    tcp_packet.set_window(65535);
+    tcp_packet.set_checksum(0);
+
+    Ok(buffer)
+}
+
+#[cfg(all(feature = "stress-testing", unix))]
+fn build_syn_packet_v6(
+    src_ip: Ipv6Addr,
+    src_port: u16,
+    dst_ip: Ipv6Addr,
+    dst_port: u16,
+    seq: u32,
+) -> Result<Vec<u8>> {
+    use pnet_packet::ipv6::MutableIpv6Packet;
+    use pnet_packet::tcp::MutableTcpPacket;
+
+    let mut buffer = vec![0u8; 40 + 20];
+
+    let mut ipv6_packet = MutableIpv6Packet::new(&mut buffer[..40])
+        .ok_or_else(|| SlapperError::Runtime("Failed to create IPv6 packet".to_string()))?;
+
+    ipv6_packet.set_version(6);
+    ipv6_packet.set_payload_length(20);
+    ipv6_packet.set_hop_limit(64);
+    ipv6_packet.set_next_header(IpNextHeaderProtocols::Tcp);
+    ipv6_packet.set_source(src_ip);
+    ipv6_packet.set_destination(dst_ip);
+
+    let mut tcp_packet = MutableTcpPacket::new(&mut buffer[40..])
         .ok_or_else(|| SlapperError::Runtime("Failed to create TCP packet".to_string()))?;
 
     tcp_packet.set_source(src_port);
@@ -182,6 +218,18 @@ fn get_local_ip(interface: &NetworkInterface) -> Result<Ipv4Addr> {
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
+fn get_local_ip_v6(interface: &NetworkInterface) -> Result<Ipv6Addr> {
+    interface
+        .ips
+        .iter()
+        .find_map(|ip| match ip.ip() {
+            IpAddr::V6(ip) => Some(ip),
+            _ => None,
+        })
+        .ok_or_else(|| SlapperError::Runtime("No IPv6 address found on interface".to_string()))
+}
+
+#[cfg(all(feature = "stress-testing", unix))]
 fn get_spoofed_source(range: &Option<String>) -> Result<Ipv4Addr> {
     let mut rng = rand::thread_rng();
 
@@ -204,6 +252,52 @@ fn get_spoofed_source(range: &Option<String>) -> Result<Ipv4Addr> {
         rng.gen_range(0..254),
         rng.gen_range(0..254),
         rng.gen_range(1..254),
+    ))
+}
+
+#[cfg(all(feature = "stress-testing", unix))]
+fn get_spoofed_source_v6(range: &Option<String>) -> Result<Ipv6Addr> {
+    let mut rng = rand::thread_rng();
+
+    if let Some(range_str) = range {
+        let parts: Vec<&str> = range_str.split('/').collect();
+        if parts.len() == 2 {
+            let base: Ipv6Addr = parts[0].parse()?;
+            let prefix: u8 = parts[1].parse()?;
+
+            let base_segments = base.segments();
+            let host_bits = 128 - prefix;
+            let offset_lo = rng.gen_range(1..u16::MAX);
+            let offset_hi = if host_bits > 16 {
+                rng.gen_range(0..(1u16 << (host_bits - 16).min(16)))
+            } else {
+                0
+            };
+
+            let new_lo = base_segments[7] | offset_lo;
+            let new_hi = base_segments[6] | offset_hi;
+            return Ok(Ipv6Addr::new(
+                base_segments[0],
+                base_segments[1],
+                base_segments[2],
+                base_segments[3],
+                base_segments[4],
+                base_segments[5],
+                new_hi,
+                new_lo,
+            ));
+        }
+    }
+
+    Ok(Ipv6Addr::new(
+        0xfe80,
+        0,
+        0,
+        0,
+        rng.gen_range(0..0xffff),
+        rng.gen_range(0..0xffff),
+        rng.gen_range(0..0xffff),
+        rng.gen_range(1..0xffff),
     ))
 }
 

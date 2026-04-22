@@ -45,6 +45,7 @@ pub mod ratelimit;
 pub mod registry;
 pub mod request;
 pub mod response;
+pub mod scripting;
 pub mod state;
 pub mod traits;
 

@@ -38,6 +38,35 @@ impl Default for Priority {
     }
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ScanDepth {
+    Shallow,
+    Deep,
+}
+
+impl ScanDepth {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ScanDepth::Shallow => "shallow",
+            ScanDepth::Deep => "deep",
+        }
+    }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            ScanDepth::Shallow => "Quick scan with essential checks only",
+            ScanDepth::Deep => "Comprehensive scan with all payload types",
+        }
+    }
+}
+
+impl Default for ScanDepth {
+    fn default() -> Self {
+        ScanDepth::Shallow
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScanRecord {
     pub scan_id: String,
@@ -58,6 +87,7 @@ pub struct TargetConfig {
     pub scan_history: Vec<ScanRecord>,
     pub baseline_findings: Vec<String>,
     pub enabled: bool,
+    pub scan_depth: ScanDepth,
 }
 
 impl Default for TargetConfig {
@@ -72,6 +102,7 @@ impl Default for TargetConfig {
             scan_history: Vec::new(),
             baseline_findings: Vec::new(),
             enabled: true,
+            scan_depth: ScanDepth::default(),
         }
     }
 }

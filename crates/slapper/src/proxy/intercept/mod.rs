@@ -30,6 +30,7 @@ pub struct ProxyServer {
     cert_generator: CertGenerator,
     rules: Arc<RwLock<RuleSet>>,
     mode: InterceptMode,
+    client_cert: Option<rustls::Certificate>,
 }
 
 impl ProxyServer {
@@ -39,6 +40,7 @@ impl ProxyServer {
             cert_generator: CertGenerator::new(),
             rules: Arc::new(RwLock::new(RuleSet::default())),
             mode: InterceptMode::Monitor,
+            client_cert: None,
         })
     }
 
@@ -49,6 +51,11 @@ impl ProxyServer {
 
     pub fn with_cert_generator(mut self, gen: CertGenerator) -> Self {
         self.cert_generator = gen;
+        self
+    }
+
+    pub fn with_client_cert(mut self, cert: rustls::Certificate) -> Self {
+        self.client_cert = Some(cert);
         self
     }
 
@@ -69,9 +76,10 @@ impl ProxyServer {
                     let rules = Arc::clone(&self.rules);
                     let mode = self.mode.clone();
                     let cert_gen = self.cert_generator.clone();
+                    let client_cert = self.client_cert.clone();
 
                     tokio::spawn(async move {
-                        if let Err(e) = handle_connection(stream, client_addr, rules, mode, cert_gen).await {
+                        if let Err(e) = handle_connection(stream, client_addr, rules, mode, cert_gen, client_cert).await {
                             tracing::debug!("Connection error: {}", e);
                         }
                     });
@@ -122,6 +130,7 @@ async fn handle_connection(
     rules: Arc<RwLock<RuleSet>>,
     mode: InterceptMode,
     cert_gen: CertGenerator,
+    client_cert: Option<rustls::Certificate>,
 ) -> Result<()> {
     let mut buf = [0u8; 8192];
     let n = tokio::io::BufReader::new(&stream).read(&mut buf).await?;
@@ -129,7 +138,7 @@ async fn handle_connection(
     let request = String::from_utf8_lossy(&buf[..n]);
 
     if request.starts_with("CONNECT") {
-        handle_connect_request(stream, &request, rules, cert_gen).await
+        handle_connect_request(stream, &request, rules, cert_gen, client_cert).await
     } else {
         handle_http_request(stream, &buf[..n], rules).await
     }
@@ -140,6 +149,7 @@ async fn handle_connect_request(
     request: &str,
     rules: Arc<RwLock<RuleSet>>,
     cert_gen: CertGenerator,
+    client_cert: Option<rustls::Certificate>,
 ) -> Result<()> {
     let host_port = request
         .lines()
@@ -181,7 +191,7 @@ async fn handle_connect_request(
     let cert = cert_gen.generate_for_host(host)
         .map_err(|e| SlapperError::Proxy(format!("Cert generation failed: {}", e)))?;
 
-    let tls_acceptor = create_tls_acceptor(&cert)
+    let tls_acceptor = create_tls_acceptor(&cert, client_cert.as_ref())
         .map_err(|e| SlapperError::Proxy(format!("TLS config failed: {}", e)))?;
 
     let mut client_stream = match tls_acceptor.accept(stream).await {
@@ -247,7 +257,7 @@ fn parse_request_line(request: &str) -> (&str, &str) {
         .unwrap_or(("", ""))
 }
 
-fn create_tls_acceptor(cert: &Certificate) -> Result<TlsAcceptor> {
+fn create_tls_acceptor(cert: &Certificate, client_cert: Option<&rustls::Certificate>) -> Result<TlsAcceptor> {
     let cert_der = cert.serialize_der()
         .map_err(|e| SlapperError::Proxy(format!("Cert serialization failed: {}", e)))?;
 
@@ -258,7 +268,13 @@ fn create_tls_acceptor(cert: &Certificate) -> Result<TlsAcceptor> {
     let cert_parsed = rustls::Certificate(cert_der);
     let key_parsed = rustls::PrivateKey(key_pair.serialize_der());
 
-    let mut config = ServerConfig::new(NoClientAuth::new());
+    let mut config = if let Some(client_cert) = client_cert {
+        let verifier = rustls::AllowAnyAuthenticatedClient::new(vec![client_cert.clone()])
+            .map_err(|e| SlapperError::Proxy(format!("Client cert verifier failed: {}", e)))?;
+        ServerConfig::new(verifier)
+    } else {
+        ServerConfig::new(rustls::NoClientAuth::new())
+    };
     config.set_single_cert(vec![cert_parsed], key_parsed)
         .map_err(|e| SlapperError::Proxy(format!("Cert configuration failed: {}", e)))?;
 

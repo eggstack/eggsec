@@ -18,7 +18,7 @@ pub fn escape_csv(s: &str) -> String {
     let starts_with_formula = s
         .chars()
         .next()
-        .map(|c| formula_chars.contains(&c))
+        .map(|c| c.is_ascii() && formula_chars.contains(&c))
         .unwrap_or(false);
     if s.contains(',') || s.contains('"') || s.contains('\n') || starts_with_formula {
         format!("\"{}\"", s.replace('"', "\"\""))

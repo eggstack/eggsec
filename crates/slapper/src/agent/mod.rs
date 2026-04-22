@@ -164,9 +164,15 @@ impl Agent {
         for (target_id, config) in targets {
             if let Some(ref schedule) = config.schedule {
                 if self.scheduler.should_run_for(schedule, &now) {
-                    tracing::info!("Triggering scheduled scan for {}", target_id);
+                    tracing::info!(
+                        "Triggering {} scan for {}",
+                        config.scan_depth.as_str(),
+                        target_id
+                    );
 
-                    let result = self.execute_scan(&config.target, "pipeline").await;
+                    let result = self
+                        .execute_scan_with_depth(&config.target, "pipeline", config.scan_depth)
+                        .await;
 
                     if let Ok(ref response) = result {
                         self.memory.store_scan_results(&config.target, response)?;
@@ -185,7 +191,40 @@ impl Agent {
         Ok(())
     }
 
-    pub async fn execute_scan(&self, target: &str, scan_type: &str) -> Result<ToolResponse> {
+    pub async fn execute_scan(
+        &self,
+        target: &str,
+        scan_type: &str,
+    ) -> Result<ToolResponse> {
+        self.execute_scan_with_depth(target, scan_type, crate::agent::portfolio::ScanDepth::Shallow)
+            .await
+    }
+
+    pub async fn execute_scan_with_depth(
+        &self,
+        target: &str,
+        scan_type: &str,
+        depth: crate::agent::portfolio::ScanDepth,
+    ) -> Result<ToolResponse> {
+        let params = match depth {
+            crate::agent::portfolio::ScanDepth::Shallow => {
+                serde_json::json!({
+                    "concurrency": 5,
+                    "timeout_ms": 30000,
+                    "payload_types": "xss,sqli",
+                })
+            }
+            crate::agent::portfolio::ScanDepth::Deep => {
+                serde_json::json!({
+                    "concurrency": 20,
+                    "timeout_ms": 120000,
+                    "payload_types": "xss,sqli,ssrf,command,ssti,xxe,nosql,ldap",
+                    "mutate": true,
+                    "mutation_count": 5,
+                })
+            }
+        };
+
         let request = ToolRequest {
             id: uuid::Uuid::new_v4().to_string(),
             tool: scan_type.to_string(),
@@ -194,12 +233,15 @@ impl Agent {
                 target_type: crate::tool::TargetType::Url,
                 scope: None,
             },
-            params: serde_json::json!({}),
+            params,
             options: Default::default(),
             cancellation_token: None,
         };
 
-        self.dispatcher.dispatch(request).await.map_err(|e| anyhow::anyhow!("{:?}", e))
+        self.dispatcher
+            .dispatch(request)
+            .await
+            .map_err(|e| anyhow::anyhow!("{:?}", e))
     }
 
     fn process_findings(&self, response: &ToolResponse) -> Vec<crate::tool::response::Finding> {

@@ -82,6 +82,11 @@ impl ProxyManager {
             .select_with_stats(&healthy, &|key| pool_ref.get_stats(key))
     }
 
+    pub async fn get_all_healthy_proxies(&self) -> Vec<ProxyEntry> {
+        let pool = self.pool.read().await;
+        pool.get_healthy()
+    }
+
     pub async fn get_highest_priority_proxy(&self, min_priority: u8) -> Option<ProxyEntry> {
         let pool = self.pool.read().await;
         let by_priority = pool.get_by_priority(min_priority);
