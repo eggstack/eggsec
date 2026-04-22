@@ -98,6 +98,17 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 ## Codebase Health
 
+### Current Metrics
+
+| Metric | Value | Note |
+|--------|-------|------|
+| Tests | 1106 passing | 1 failing (test_scope_cidr_edge_cases) |
+| Clippy | ~9 warnings | Pre-existing |
+| Source files | 450+ | |
+| Payload types | 38 | |
+| Tabs | 29 | |
+| Skill files | 28 | |
+
 ### Severity Enum (Unified)
 
 Single canonical definition in `types.rs`. All other modules re-export from it:
@@ -211,14 +222,15 @@ For new improvement work, add to the consolidated plan.md rather than creating n
 
 ### Common Pitfalls
 
-1. **Type mismatches**: `ScopeRule::new()` takes `String`, not `&str`
-2. **Option types**: `decoy_count` is `Option<usize>`, not `usize`
-3. **Unused imports**: Move feature-gated imports inside `#[cfg(...)]` blocks
-4. **Feature-gated dead code**: Functions used only under `#[cfg(feature = "...")]` appear as dead code to the compiler. Gate the module declaration itself, not just callers.
-5. **Clippy redundant closures**: `.map(|arr| func(arr))` should be `.map(func)` when the argument is passed directly
-6. **Clippy needless borrows**: `.post(&format!(...))` should be `.post(format!(...))` when the format result implements the required traits
-7. **`default_value = "None"` on Options**: Never use `#[arg(default_value = "None")]` on `Option<T>` fields — clap assigns the string `"None"` instead of `None`. Omit `default_value` entirely; `Option` defaults to `None` automatically.
-8. **`fingerprint_services` signature**: Takes 5 args: `host`, `ports`, `timeout`, `tui_mode`, `concurrency` — don't forget `concurrency`
+1. **ScopeRule CIDR handling**: `ScopeRule::new()` creates rule with `pattern` but NOT `cidr`. CIDR matching only works via `ScopeRule::with_cidr()`. Using `ScopeRule::new("10.0.0.0/8")` will NOT match IPs correctly — use `with_cidr()` instead.
+2. **Type mismatches**: `ScopeRule::new()` takes `String`, not `&str`
+3. **Option types**: `decoy_count` is `Option<usize>`, not `usize`
+4. **Unused imports**: Move feature-gated imports inside `#[cfg(...)]` blocks
+5. **Feature-gated dead code**: Functions used only under `#[cfg(feature = "...")]` appear as dead code to the compiler. Gate the module declaration itself, not just callers.
+6. **Clippy redundant closures**: `.map(|arr| func(arr))` should be `.map(func)` when the argument is passed directly
+7. **Clippy needless borrows**: `.post(&format!(...))` should be `.post(format!(...))` when the format result implements the required traits
+8. **`default_value = "None"` on Options**: Never use `#[arg(default_value = "None")]` on `Option<T>` fields — clap assigns the string `"None"` instead of `None`. Omit `default_value` entirely; `Option` defaults to `None` automatically.
+9. **`fingerprint_services` signature**: Takes 5 args: `host`, `ports`, `timeout`, `tui_mode`, `concurrency` — don't forget `concurrency`
 
 ### Severity Enum
 
@@ -751,8 +763,10 @@ Code after an early return that can never execute is a security risk - remove it
 - Use `rg` to confirm file paths, line numbers, and patterns exist
 - Run `cargo test --lib -p slapper` after each change to catch regressions
 - Use `cargo clippy --lib -p slapper` to verify no new warnings
-- Check test counts with `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`
-- Count source files with `find crates/slapper/src -name '*.rs' | wc -l`
+- Check test counts: `cargo test --lib -p slapper -- --list 2>/dev/null | wc -l`
+- Count source files: `find crates/slapper/src -name '*.rs' | wc -l`
+- Run specific failing test: `cargo test --test negative_tests -- test_scope_cidr_edge_cases`
+- Verify CLI build: `cargo build --release -p slapper && ./target/release/slapper --help`
 
 ## Architecture Decision Records
 
