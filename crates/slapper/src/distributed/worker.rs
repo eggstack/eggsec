@@ -54,7 +54,7 @@ impl Worker {
                 last_heartbeat_secs: chrono::Utc::now().timestamp(),
             },
             receiver: None,
-            client: reqwest::Client::new(),
+            client: crate::utils::get_shared_http_client(),
             heartbeat_handle: None,
             task_processor_handle: None,
         }

@@ -2,6 +2,14 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use std::time::Duration;
 
+use super::client_pool::ClientPool;
+
+static HTTP_CLIENT_POOL: std::sync::LazyLock<ClientPool> =
+    std::sync::LazyLock::new(|| ClientPool::new(10, Duration::from_secs(30), false, None, None));
+
+static INSECURE_HTTP_CLIENT_POOL: std::sync::LazyLock<ClientPool> =
+    std::sync::LazyLock::new(|| ClientPool::new(10, Duration::from_secs(30), true, None, None));
+
 pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
     Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
@@ -10,6 +18,29 @@ pub fn create_http_client(timeout_secs: u64) -> Result<Client> {
         .tcp_nodelay(true)
         .build()
         .context("Failed to create HTTP client")
+}
+
+pub fn get_shared_http_client() -> Client {
+    HTTP_CLIENT_POOL.get().unwrap_or_else(|| {
+        Client::builder()
+            .pool_max_idle_per_host(20)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_nodelay(true)
+            .build()
+            .expect("Failed to create shared HTTP client")
+    })
+}
+
+pub fn get_shared_insecure_http_client() -> Client {
+    INSECURE_HTTP_CLIENT_POOL.get().unwrap_or_else(|| {
+        Client::builder()
+            .pool_max_idle_per_host(20)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_nodelay(true)
+            .danger_accept_invalid_certs(true)
+            .build()
+            .expect("Failed to create shared insecure HTTP client")
+    })
 }
 
 /// Creates an HTTP client that accepts invalid TLS certificates.

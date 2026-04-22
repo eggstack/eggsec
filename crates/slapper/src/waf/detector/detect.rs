@@ -151,7 +151,7 @@ mod tests {
 
     fn test_detector() -> WafDetector {
         WafDetector {
-            client: reqwest::Client::new(),
+            client: crate::utils::get_shared_http_client(),
             signatures: HashMap::new(),
             signatures_lower: HashMap::new(),
         }

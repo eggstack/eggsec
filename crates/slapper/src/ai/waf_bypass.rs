@@ -14,6 +14,8 @@ pub struct WafBypassEntry {
     pub bypass_payload: String,
     pub technique: String,
     pub success: bool,
+    #[serde(default)]
+    pub failed_attempts: usize,
 }
 
 pub struct SmartWafBypass {
@@ -21,10 +23,15 @@ pub struct SmartWafBypass {
     cache: Arc<AiCache>,
     knowledge_base: Vec<WafBypassEntry>,
     persist_path: PathBuf,
+    max_bypasses: usize,
 }
 
 impl SmartWafBypass {
     pub fn new(client: AiClient) -> Self {
+        Self::with_config(client, 10)
+    }
+
+    pub fn with_config(client: AiClient, max_bypasses: usize) -> Self {
         let persist_path = directories::ProjectDirs::from("com", "slapper", "slapper")
             .map(|d| d.config_dir().join("waf_bypasses.json"))
             .unwrap_or_else(|| PathBuf::from("waf_bypasses.json"));
@@ -43,6 +50,7 @@ impl SmartWafBypass {
             cache: Arc::new(AiCache::new(50, Duration::from_secs(1800))),
             knowledge_base,
             persist_path,
+            max_bypasses,
         }
     }
 
@@ -61,6 +69,13 @@ impl SmartWafBypass {
         for entry in &self.knowledge_base {
             if entry.waf_name == waf && entry.original_payload == blocked_payload && entry.success {
                 return Ok(Some(entry.bypass_payload.clone()));
+            }
+            if entry.waf_name == waf && entry.original_payload == blocked_payload && !entry.success {
+                tracing::debug!(
+                    "Skipping WAF bypass query for {}/{} - previously failed {} attempts",
+                    waf, blocked_payload, entry.failed_attempts
+                );
+                return Ok(None);
             }
         }
 
@@ -88,7 +103,7 @@ impl SmartWafBypass {
             return Err(AiError::invalid_config("waf name cannot be empty"));
         }
 
-        for _ in 0..max_iterations.min(10) {
+        for _ in 0..max_iterations.min(self.max_bypasses) {
             let suggestions = self.client.suggest_waf_bypass(waf, &payload).await?;
             if let Some(new_payload) = suggestions.first() {
                 payload = new_payload.clone();
@@ -100,13 +115,38 @@ impl SmartWafBypass {
     }
 
     pub fn record_success(&mut self, waf: &str, original: &str, bypass: &str, technique: &str) {
-        self.knowledge_base.push(WafBypassEntry {
-            waf_name: waf.to_string(),
-            original_payload: original.to_string(),
-            bypass_payload: bypass.to_string(),
-            technique: technique.to_string(),
-            success: true,
-        });
+        if let Some(entry) = self.knowledge_base.iter_mut().find(|e| e.waf_name == waf && e.original_payload == original) {
+            entry.bypass_payload = bypass.to_string();
+            entry.technique = technique.to_string();
+            entry.success = true;
+            entry.failed_attempts = 0;
+        } else {
+            self.knowledge_base.push(WafBypassEntry {
+                waf_name: waf.to_string(),
+                original_payload: original.to_string(),
+                bypass_payload: bypass.to_string(),
+                technique: technique.to_string(),
+                success: true,
+                failed_attempts: 0,
+            });
+        }
+        self.persist();
+    }
+
+    pub fn record_failure(&mut self, waf: &str, original: &str) {
+        if let Some(entry) = self.knowledge_base.iter_mut().find(|e| e.waf_name == waf && e.original_payload == original) {
+            entry.failed_attempts += 1;
+            entry.success = false;
+        } else {
+            self.knowledge_base.push(WafBypassEntry {
+                waf_name: waf.to_string(),
+                original_payload: original.to_string(),
+                bypass_payload: String::new(),
+                technique: String::new(),
+                success: false,
+                failed_attempts: 1,
+            });
+        }
         self.persist();
     }
 
@@ -127,6 +167,7 @@ impl Clone for SmartWafBypass {
             cache: Arc::clone(&self.cache),
             knowledge_base: self.knowledge_base.clone(),
             persist_path: self.persist_path.clone(),
+            max_bypasses: self.max_bypasses,
         }
     }
 }
@@ -145,6 +186,8 @@ mod tests {
             base_url: None,
             max_tokens: Some(2048),
             temperature: Some(0.7),
+            max_payloads: 50,
+            max_bypasses: 10,
         })
     }
 

@@ -21,11 +21,7 @@ pub async fn run_graphql(
     let start = Instant::now();
     let _ = progress_tx.send((0, 100)).await;
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_millis(timeout))
-        .danger_accept_invalid_certs(true)
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+    let client = crate::utils::get_shared_insecure_http_client();
 
     let mut fuzzer = GraphQLFuzzer::new(url.clone())
         .with_introspection(do_introspection)
@@ -198,11 +194,7 @@ pub async fn run_oauth(
     let _ = progress_tx.send((0, 100)).await;
 
     let start_time = std::time::Instant::now();
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(timeout))
-        .danger_accept_invalid_certs(true)
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+    let client = crate::utils::get_shared_insecure_http_client();
 
     let default_client_id = client_id.clone().unwrap_or_else(|| "test_client".to_string());
     let default_redirect_uri = redirect_uri

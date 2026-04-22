@@ -47,7 +47,7 @@ pub async fn run_compliance_task(
 
     let mut findings = Vec::new();
 
-    if let Ok(resp) = reqwest::Client::new()
+    if let Ok(resp) = crate::utils::get_shared_http_client()
         .get(&target)
         .timeout(std::time::Duration::from_secs(10))
         .send()

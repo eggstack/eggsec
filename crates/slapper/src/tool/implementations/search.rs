@@ -98,7 +98,7 @@ impl SearchTool {
     }
 
     async fn search_osv(&self, query: &str) -> Result<Vec<CveSearchResult>, String> {
-        let client = reqwest::Client::new();
+        let client = crate::utils::get_shared_http_client();
         
         let response = client
             .get("https://api.osv.dev/v1/query")
@@ -151,7 +151,7 @@ impl SearchTool {
     }
 
     async fn search_nvd(&self, query: &str) -> Result<Vec<CveSearchResult>, String> {
-        let client = reqwest::Client::new();
+        let client = crate::utils::get_shared_http_client();
         
         let url = format!(
             "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={}",

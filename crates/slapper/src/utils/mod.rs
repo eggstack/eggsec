@@ -56,6 +56,7 @@ pub use client_pool::{ClientPool, OptimizedClientPool};
 pub use http::{
     create_http_client, create_http_client_with_options, create_http_client_with_proxy,
     create_insecure_client_with_options, create_insecure_http_client,
+    get_shared_http_client, get_shared_insecure_http_client,
 };
 pub use output::{
     print_error, print_info, print_json, print_json_compact, print_success, print_warning,
