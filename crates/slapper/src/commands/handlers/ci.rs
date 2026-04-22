@@ -5,6 +5,29 @@ use crate::output::agent::{AgentFinding, FindingSummary};
 use crate::types::Severity;
 use crate::output::baseline::BaselineComparison;
 
+#[derive(Debug)]
+pub enum CiError {
+    NewFindingsDetected,
+    FindingsExceedMaximum(usize, usize),
+    SeverityThresholdExceeded(usize),
+}
+
+impl std::fmt::Display for CiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CiError::NewFindingsDetected => write!(f, "New findings detected"),
+            CiError::FindingsExceedMaximum(actual, max) => {
+                write!(f, "{} findings exceed maximum of {}", actual, max)
+            }
+            CiError::SeverityThresholdExceeded(count) => {
+                write!(f, "{} findings at or above severity threshold", count)
+            }
+        }
+    }
+}
+
+impl std::error::Error for CiError {}
+
 pub async fn handle_ci(_ctx: &CommandContext, args: CiArgs) -> Result<()> {
     let fail_severity = Severity::parse_or_default(&args.fail_on);
     
@@ -35,7 +58,7 @@ pub async fn handle_ci(_ctx: &CommandContext, args: CiArgs) -> Result<()> {
             if !args.quiet {
                 eprintln!("FAIL: New findings detected");
             }
-            std::process::exit(1);
+            return Err(anyhow::anyhow!(CiError::NewFindingsDetected));
         }
     }
     
@@ -50,7 +73,7 @@ pub async fn handle_ci(_ctx: &CommandContext, args: CiArgs) -> Result<()> {
             if !args.quiet {
                 eprintln!("FAIL: {} findings exceed maximum of {}", findings.len(), max);
             }
-            std::process::exit(1);
+            return Err(anyhow::anyhow!(CiError::FindingsExceedMaximum(findings.len(), max)));
         }
     }
     
@@ -100,7 +123,7 @@ pub async fn handle_ci(_ctx: &CommandContext, args: CiArgs) -> Result<()> {
             eprintln!("FAIL: {} findings at or above {} severity", 
                 findings_above_threshold.len(), args.fail_on);
         }
-        std::process::exit(1);
+        return Err(anyhow::anyhow!(CiError::SeverityThresholdExceeded(findings_above_threshold.len())));
     }
     
     if !args.quiet {

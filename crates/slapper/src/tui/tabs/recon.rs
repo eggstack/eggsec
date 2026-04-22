@@ -358,16 +358,13 @@ impl TabRender for ReconTab {
             .constraints(vec![Constraint::Length(2); 8])
             .split(option_chunks[1]);
 
+        let is_options_focused = self.focus_area == ReconFocusArea::Options;
         for (i, cb) in self.option_checkboxes.iter().enumerate().take(8) {
-            let mut checkbox = cb.clone();
-            checkbox.focused = self.focus_area == ReconFocusArea::Options;
-            checkbox.render(f, left_options[i]);
+            cb.render_with_focus(is_options_focused, f, left_options[i]);
         }
 
         for (i, cb) in self.option_checkboxes.iter().enumerate().skip(8) {
-            let mut checkbox = cb.clone();
-            checkbox.focused = self.focus_area == ReconFocusArea::Options;
-            checkbox.render(f, right_options[i - 8]);
+            cb.render_with_focus(is_options_focused, f, right_options[i - 8]);
         }
 
         if self.state == AppState::Running {

@@ -3,11 +3,14 @@ use crate::tui::workers::TaskResult;
 
 impl super::App {
     pub(super) fn update(&mut self) {
+        let mut dirty = false;
+
         if let Some(ref mut rx) = self.progress_rx {
             use tokio::sync::mpsc;
             match rx.try_recv() {
                 Ok((completed, total)) => {
                     self.update_progress(completed, total);
+                    dirty = true;
                 }
                 Err(mpsc::error::TryRecvError::Empty) => {}
                 Err(mpsc::error::TryRecvError::Disconnected) => {
@@ -21,12 +24,17 @@ impl super::App {
             match rx.try_recv() {
                 Ok(result) => {
                     self.handle_result(result);
+                    dirty = true;
                 }
                 Err(mpsc::error::TryRecvError::Empty) => {}
                 Err(mpsc::error::TryRecvError::Disconnected) => {
                     self.result_rx = None;
                 }
             }
+        }
+
+        if dirty {
+            self.needs_redraw = true;
         }
     }
 

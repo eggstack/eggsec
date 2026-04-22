@@ -5,7 +5,7 @@ use crate::error::{Result, SlapperError};
 use base64::{engine::general_purpose, Engine as _};
 use std::net::SocketAddr;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
@@ -116,31 +116,41 @@ impl HttpConnectProxy {
 
     async fn read_response(&self, stream: &mut TcpStream) -> Result<String> {
         let mut response = String::new();
-        let mut buf = [0u8; 1];
+        let mut reader = BufReader::with_capacity(8192, stream);
+        let mut buf = [0u8; 8192];
         let mut seen_cr_lf_cr_lf = 0;
 
         loop {
-            stream.read_exact(&mut buf).await?;
-            let ch = buf[0] as char;
-            response.push(ch);
+            let bytes_read = reader.read(&mut buf).await?;
+            if bytes_read == 0 {
+                if response.is_empty() {
+                    return Err(SlapperError::Proxy("Empty response from proxy".to_string()));
+                }
+                break;
+            }
 
-            match ch {
-                '\r' => {
-                    if seen_cr_lf_cr_lf == 0 || seen_cr_lf_cr_lf == 2 {
-                        seen_cr_lf_cr_lf += 1;
-                    } else {
-                        seen_cr_lf_cr_lf = 1;
+            for &byte in &buf[..bytes_read] {
+                let ch = byte as char;
+                response.push(ch);
+
+                match ch {
+                    '\r' => {
+                        if seen_cr_lf_cr_lf == 0 || seen_cr_lf_cr_lf == 2 {
+                            seen_cr_lf_cr_lf += 1;
+                        } else {
+                            seen_cr_lf_cr_lf = 1;
+                        }
                     }
-                }
-                '\n' => {
-                    if seen_cr_lf_cr_lf == 1 {
-                        seen_cr_lf_cr_lf = 2;
-                    } else if seen_cr_lf_cr_lf == 3 {
-                        break;
+                    '\n' => {
+                        if seen_cr_lf_cr_lf == 1 {
+                            seen_cr_lf_cr_lf = 2;
+                        } else if seen_cr_lf_cr_lf == 3 {
+                            return Ok(response);
+                        }
                     }
-                }
-                _ => {
-                    seen_cr_lf_cr_lf = 0;
+                    _ => {
+                        seen_cr_lf_cr_lf = 0;
+                    }
                 }
             }
         }

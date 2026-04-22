@@ -136,6 +136,7 @@ pub struct App {
     pub command_palette: Option<CommandPalette>,
     pub help_context: HelpContext,
     pub pending_action: Option<PendingAction>,
+    pub needs_redraw: bool,
 }
 
 impl App {
@@ -199,6 +200,7 @@ impl App {
             command_palette: None,
             help_context: HelpContext::Normal,
             pending_action: None,
+            needs_redraw: true,
         }
     }
 

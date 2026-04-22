@@ -295,7 +295,11 @@ impl Checkbox {
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
-        let style = if self.focused {
+        self.render_with_focus(self.focused, f, area);
+    }
+
+    pub fn render_with_focus(&self, focused: bool, f: &mut Frame, area: Rect) {
+        let style = if focused {
             Style::default().fg(Color::Yellow)
         } else {
             Style::default().fg(Color::Gray)

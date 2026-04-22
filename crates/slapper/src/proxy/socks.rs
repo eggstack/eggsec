@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use crate::error::{Result, SlapperError};
+use crate::utils::connect_with_nodelay_timeout;
 use std::net::{IpAddr, SocketAddr};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -65,9 +66,8 @@ impl SocksProxy {
     }
 
     async fn connect_socks4(&self, target: SocketAddr) -> Result<TcpStream> {
-        let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
+        let mut stream = connect_with_nodelay_timeout(&self.proxy_addr, self.timeout)
             .await
-            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
             .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         let ip = match target.ip() {
@@ -100,9 +100,8 @@ impl SocksProxy {
     }
 
     async fn connect_socks4a(&self, domain: &str, port: u16) -> Result<TcpStream> {
-        let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
+        let mut stream = connect_with_nodelay_timeout(&self.proxy_addr, self.timeout)
             .await
-            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
             .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         let mut request = vec![
@@ -135,9 +134,8 @@ impl SocksProxy {
     }
 
     async fn connect_socks5(&self, target: SocketAddr) -> Result<TcpStream> {
-        let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
+        let mut stream = connect_with_nodelay_timeout(&self.proxy_addr, self.timeout)
             .await
-            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
             .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         self.socks5_handshake(&mut stream).await?;
@@ -148,9 +146,8 @@ impl SocksProxy {
     }
 
     async fn connect_socks5_domain(&self, domain: &str, port: u16) -> Result<TcpStream> {
-        let mut stream = timeout(self.timeout, TcpStream::connect(self.proxy_addr))
+        let mut stream = connect_with_nodelay_timeout(&self.proxy_addr, self.timeout)
             .await
-            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
             .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
 
         self.socks5_handshake(&mut stream).await?;
@@ -391,13 +388,9 @@ pub async fn chain_connect(proxies: &[ProxyEntry], target: SocketAddr) -> Result
 
         let _stream = match current_stream.take() {
             Some(existing) => existing,
-            _ => timeout(
-                Duration::from_millis(proxy.timeout_ms),
-                TcpStream::connect(proxy_addr),
-            )
-            .await
-            .map_err(|e| SlapperError::Proxy(format!("Connection timeout: {}", e)))?
-            .map_err(|e| SlapperError::Proxy(format!("Failed to connect to first proxy: {}", e)))?,
+            _ => connect_with_nodelay_timeout(&proxy_addr, Duration::from_millis(proxy.timeout_ms))
+                .await
+                .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?,
         };
 
         let socks = SocksProxy::new(SocksVersion::V5, proxy_addr)

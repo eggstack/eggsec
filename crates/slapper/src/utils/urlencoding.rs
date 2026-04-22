@@ -1,7 +1,7 @@
 use crate::error::{Result, SlapperError};
 
 pub fn encode(s: &str) -> String {
-    let mut encoded = String::new();
+    let mut encoded = String::with_capacity(s.len() * 3);
     for c in s.chars() {
         match c {
             'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => {
@@ -9,7 +9,8 @@ pub fn encode(s: &str) -> String {
             }
             _ => {
                 for byte in c.to_string().as_bytes() {
-                    encoded.push_str(&format!("%{:02X}", byte));
+                    use std::fmt::Write;
+                    let _ = write!(&mut encoded, "%{:02X}", byte);
                 }
             }
         }

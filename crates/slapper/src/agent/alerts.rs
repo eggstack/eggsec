@@ -4,7 +4,7 @@
 //! with rate limiting and deduplication.
 
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use parking_lot::Mutex;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -235,7 +235,14 @@ impl AlertRouter {
         let response = request.send().await?;
 
         if !response.status().is_success() {
-            tracing::warn!("Webhook failed with status: {}", response.status());
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            tracing::warn!(
+                "Webhook failed with status: {}, body: {}",
+                status,
+                body
+            );
+            return Err(anyhow::anyhow!("Webhook failed with status: {}", status));
         }
 
         Ok(())

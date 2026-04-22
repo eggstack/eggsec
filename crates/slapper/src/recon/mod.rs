@@ -150,7 +150,7 @@ where
             let mut spinner = Spinner::new(stop_clone, stage_clone);
             while !spinner.stop.load(Ordering::Relaxed) {
                 spinner.tick();
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                tokio::runtime::Handle::current().block_on(tokio::time::sleep(std::time::Duration::from_millis(100)));
             }
             spinner.stop();
         });
@@ -257,7 +257,7 @@ pub async fn run_cli(args: ReconArgs, config: &SlapperConfig) -> Result<()> {
             let mut spinner = Spinner::new(stop_clone, stage_clone);
             while !spinner.stop.load(Ordering::Relaxed) {
                 spinner.tick();
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                tokio::runtime::Handle::current().block_on(tokio::time::sleep(std::time::Duration::from_millis(100)));
             }
             spinner.stop();
         });

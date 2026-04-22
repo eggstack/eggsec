@@ -7,7 +7,7 @@ use super::models::{HttpMatcher, Matcher, SearchPattern, VulnerabilityTemplate};
 use crate::error::Result;
 use crate::types::Severity;
 use reqwest::Response;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone)]
 pub struct MatchResult {
@@ -20,12 +20,14 @@ pub struct MatchResult {
 
 pub struct TemplateMatcher {
     interactsh_urls: Vec<String>,
+    regex_cache: FxHashMap<String, regex::Regex>,
 }
 
 impl TemplateMatcher {
     pub fn new() -> Self {
         Self {
             interactsh_urls: Vec::new(),
+            regex_cache: FxHashMap::default(),
         }
     }
 
@@ -157,9 +159,10 @@ impl TemplateMatcher {
         match search.mode {
             super::models::MatchMode::Word => text.contains(&search.pattern),
             super::models::MatchMode::Regex => {
-                regex::Regex::new(&search.pattern)
-                    .map(|re| re.is_match(text))
-                    .unwrap_or(false)
+                self.regex_cache
+                    .entry(search.pattern.clone())
+                    .or_insert_with(|| regex::Regex::new(&search.pattern).unwrap_or_else(|_| regex::Regex::new("").unwrap()))
+                    .is_match(text)
             }
             super::models::MatchMode::Binary => {
                 let decoded: Vec<u8> = if search.encoding == "base64" {

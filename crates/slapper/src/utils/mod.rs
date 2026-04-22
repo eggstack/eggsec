@@ -34,6 +34,7 @@ pub mod client_pool;
 pub mod formatting;
 pub mod http;
 pub mod logging;
+pub mod network;
 pub mod output;
 pub mod parsing;
 pub mod progress;
@@ -58,6 +59,7 @@ pub use http::{
     create_insecure_client_with_options, create_insecure_http_client,
     get_shared_http_client, get_shared_insecure_http_client,
 };
+pub use network::{connect_with_nodelay, connect_with_nodelay_timeout};
 pub use output::{
     print_error, print_info, print_json, print_json_compact, print_success, print_warning,
 };

@@ -4,6 +4,7 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use crate::utils::connect_with_nodelay;
 use rustls::pki_types::{CertificateDer, ServerName};
 use rustls::server::ServerConfig;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader as TokioBufReader};
@@ -355,7 +356,7 @@ mod tests {
             writer.write_line("hello").await.unwrap();
         });
 
-        let client = TcpStream::connect(addr).await?;
+        let client = connect_with_nodelay(&addr).await?;
         let mut reader = TokioBufReader::new(client);
         let mut line = String::new();
         reader.read_line(&mut line).await?;
@@ -379,7 +380,7 @@ mod tests {
             }
         });
 
-        let client = TcpStream::connect(addr).await?;
+        let client = connect_with_nodelay(&addr).await?;
         let mut writer = LineWriter::new(StreamWrapper::plain(client));
 
         writer.write_line("test").await?;

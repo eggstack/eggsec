@@ -21,6 +21,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::time::{timeout, Duration};
 use tokio_rustls::rustls::{ServerConfig, NoClientAuth};
 use tokio_rustls::TlsAcceptor;
 
@@ -172,7 +173,9 @@ async fn handle_connect_request(
 
     validate_target(host, port)?;
 
-    let upstream = TcpStream::connect(format!("{}:{}", host, port)).await
+    let upstream = timeout(Duration::from_secs(30), TcpStream::connect(format!("{}:{}", host, port)))
+        .await
+        .map_err(|e| SlapperError::Network(format!("Connection timeout to upstream: {}", e)))?
         .map_err(|e| SlapperError::Network(format!("Failed to connect to upstream: {}", e)))?;
 
     let cert = cert_gen.generate_for_host(host)

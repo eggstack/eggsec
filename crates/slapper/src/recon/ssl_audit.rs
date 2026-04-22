@@ -6,6 +6,7 @@
 
 use crate::error::{Result, SlapperError};
 use crate::types::Severity;
+use crate::utils::create_insecure_http_client;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -70,11 +71,7 @@ pub struct SslAuditor {
 
 impl SslAuditor {
     pub fn new() -> Result<Self> {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .danger_accept_invalid_certs(true)
-            .build()
-            .map_err(|e| SlapperError::Config(format!("Failed to create HTTP client: {}", e)))?;
+        let client = create_insecure_http_client(30)?;
 
         Ok(Self {
             timeout: Duration::from_secs(30),

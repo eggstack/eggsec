@@ -133,7 +133,10 @@ where
     B::Error: Send + Sync + 'static,
 {
     loop {
-        terminal.draw(|f| ui::draw(f, app))?;
+        if app.needs_redraw {
+            terminal.draw(|f| ui::draw(f, app))?;
+            app.needs_redraw = false;
+        }
 
         if event::poll(std::time::Duration::from_millis(100))? {
             let event = event::read()?;
@@ -423,10 +426,13 @@ where
                     }
                     _ => {}
                 }
+
+                app.needs_redraw = true;
             }
 
             if let Event::Mouse(mouse_event) = event {
                 handle_mouse_event(mouse_event, app);
+                app.needs_redraw = true;
             }
         }
 

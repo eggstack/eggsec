@@ -9,6 +9,7 @@ use crate::scanner::spoof::{format_spoof_warning, SpoofConfig, SpoofStats};
 use crate::utils::parsing::{parse_ports, resolve_host};
 use crate::utils::strip_controls;
 use crate::utils::sanitize_for_logging;
+use crate::utils::connect_with_nodelay_timeout;
 use crate::output::escape::escape_xml;
 use crate::error::Result;
 use futures::future::join_all;
@@ -487,10 +488,10 @@ pub async fn scan_ports(
 
         let handle = tokio::spawn(async move {
             let socket_addr = std::net::SocketAddr::new(addr, port);
-            let result = timeout(timeout_dur, TcpStream::connect(&socket_addr)).await;
+            let result = connect_with_nodelay_timeout(&socket_addr, timeout_dur).await;
 
             match result {
-                Ok(Ok(_)) => {
+                Ok(_) => {
                     let should_insert = match max_results {
                         Some(limit) => {
                             let count = *results_count.lock().await;
@@ -511,27 +512,6 @@ pub async fn scan_ports(
                         });
                     }
                 }
-                Ok(Err(_)) => {
-                    let should_insert = match max_results {
-                        Some(limit) => {
-                            let count = *results_count.lock().await;
-                            if count >= limit {
-                                false
-                            } else {
-                                *results_count.lock().await += 1;
-                                true
-                            }
-                        }
-                        None => true,
-                    };
-                    if should_insert {
-                        results.insert(port, PortResult {
-                            port,
-                            status: "closed".to_string(),
-                            service: get_service_name(port),
-                        });
-                    }
-                }
                 Err(_) => {
                     let should_insert = match max_results {
                         Some(limit) => {
@@ -548,7 +528,7 @@ pub async fn scan_ports(
                     if should_insert {
                         results.insert(port, PortResult {
                             port,
-                            status: "filtered".to_string(),
+                            status: "closed".to_string(),
                             service: get_service_name(port),
                         });
                     }

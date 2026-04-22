@@ -29,6 +29,8 @@ pub struct HistoryTab {
     pub details_view: ScrollableText,
     pub next_id: usize,
     pub details_focused: bool,
+    pub scroll_offset: usize,
+    pub visible_rows: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -53,6 +55,8 @@ impl HistoryTab {
             details_view: ScrollableText::new("Details"),
             next_id: 1,
             details_focused: false,
+            scroll_offset: 0,
+            visible_rows: 20,
         }
     }
 
@@ -86,6 +90,7 @@ impl HistoryTab {
         if let Some(idx) = self.selected {
             if idx < self.entries.len().saturating_sub(1) {
                 self.selected = Some(idx + 1);
+                self.ensure_visible();
                 self.update_details_view();
             }
         } else if !self.entries.is_empty() {
@@ -98,7 +103,18 @@ impl HistoryTab {
         if let Some(idx) = self.selected {
             if idx > 0 {
                 self.selected = Some(idx - 1);
+                self.ensure_visible();
                 self.update_details_view();
+            }
+        }
+    }
+
+    fn ensure_visible(&mut self) {
+        if let Some(idx) = self.selected {
+            if idx < self.scroll_offset {
+                self.scroll_offset = idx;
+            } else if idx >= self.scroll_offset + self.visible_rows {
+                self.scroll_offset = idx.saturating_sub(self.visible_rows - 1);
             }
         }
     }
@@ -120,6 +136,7 @@ impl HistoryTab {
         self.entries.clear();
         self.selected = None;
         self.details_view.clear();
+        self.scroll_offset = 0;
     }
 
     pub fn get_selected_entry(&self) -> Option<&HistoryEntry> {
@@ -300,8 +317,9 @@ impl TabRender for HistoryTab {
             )),
         ];
 
-        for (idx, entry) in self.entries.iter().enumerate() {
-            let is_selected = Some(idx) == self.selected;
+        for (display_idx, entry) in self.entries.iter().enumerate().skip(self.scroll_offset).take(self.visible_rows) {
+            let real_idx = self.scroll_offset + display_idx;
+            let is_selected = Some(real_idx) == self.selected;
             let style = if is_selected {
                 Style::default()
                     .fg(Color::Black)

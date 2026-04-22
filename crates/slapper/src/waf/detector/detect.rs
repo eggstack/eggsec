@@ -39,6 +39,21 @@ impl WafDetector {
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 
+        let headers_lower: Vec<(String, String)> = headers
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.as_str().to_lowercase(),
+                    value.to_str().unwrap_or("").to_lowercase(),
+                )
+            })
+            .collect();
+
+        let cookie_header_lower = headers
+            .get("set-cookie")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_lowercase());
+
         for (sig_key, signature) in self.signatures.iter() {
             let sig_lower = &self.signatures_lower[sig_key];
             let mut score = 0u8;
@@ -47,31 +62,25 @@ impl WafDetector {
             let mut sig_matched_patterns = Vec::new();
 
             for header_pattern_lower in &sig_lower.headers {
-                for (header_name, header_value) in headers.iter() {
-                    let name_lower = header_name.as_str().to_lowercase();
-                    let value_lower = header_value.to_str().unwrap_or("").to_lowercase();
-
+                for (name_lower, value_lower) in &headers_lower {
                     if name_lower.contains(header_pattern_lower.as_str())
                         || value_lower.contains(header_pattern_lower.as_str())
                     {
                         score += waf::HEADER_MATCH_SCORE;
                         sig_matched_headers.push(format!(
                             "{}: {}",
-                            header_name,
-                            header_value.to_str().unwrap_or("")
+                            name_lower,
+                            value_lower
                         ));
                     }
                 }
             }
 
             for cookie_pattern_lower in &sig_lower.cookies {
-                if let Some(cookie_header) = headers.get("set-cookie") {
-                    if let Ok(cookie_str) = cookie_header.to_str() {
-                        let cookie_lower = cookie_str.to_lowercase();
-                        if cookie_lower.contains(cookie_pattern_lower.as_str()) {
-                            score += waf::COOKIE_MATCH_SCORE;
-                            sig_matched_cookies.push(signature.cookies[sig_lower.cookies.iter().position(|c| c == cookie_pattern_lower).unwrap_or(0)].clone());
-                        }
+                if let Some(ref cookie_lower) = cookie_header_lower {
+                    if cookie_lower.contains(cookie_pattern_lower.as_str()) {
+                        score += waf::COOKIE_MATCH_SCORE;
+                        sig_matched_cookies.push(signature.cookies[sig_lower.cookies.iter().position(|c| c == cookie_pattern_lower).unwrap_or(0)].clone());
                     }
                 }
             }

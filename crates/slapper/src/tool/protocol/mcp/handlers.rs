@@ -1,7 +1,7 @@
 use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::time::{Duration, Interval};
 
 use crate::tool::{
@@ -24,8 +24,8 @@ pub struct McpServer {
     api_key: Option<String>,
     rate_limiter: RateLimiter,
     session_manager: Option<SessionManager>,
-    pending_cancellations: Arc<Mutex<HashMap<String, CancellationToken>>>,
-    completed_results: Arc<Mutex<HashMap<String, ToolResponse>>>,
+    pending_cancellations: Arc<RwLock<HashMap<String, CancellationToken>>>,
+    completed_results: Arc<RwLock<HashMap<String, ToolResponse>>>,
     stream_events: Arc<tokio::sync::broadcast::Sender<StreamEvent>>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
@@ -36,8 +36,8 @@ impl McpServer {
         let dispatcher = ToolDispatcher::new(registry.clone());
         let (stream_events, _) = tokio::sync::broadcast::channel(1000);
         
-        let pending_cancellations = Arc::new(Mutex::new(HashMap::new()));
-        let completed_results = Arc::new(Mutex::new(HashMap::new()));
+        let pending_cancellations = Arc::new(RwLock::new(HashMap::new()));
+        let completed_results = Arc::new(RwLock::new(HashMap::new()));
         
         let server = Self {
             registry,
@@ -115,7 +115,7 @@ impl McpServer {
                 const ENTRY_TTL_SECS: i64 = 300;
 
                 {
-                    let mut pending = pending_cancellations.lock().await;
+                    let mut pending = pending_cancellations.write().await;
                     pending.retain(|_, token| {
                         !token.is_cancelled()
                     });
@@ -123,7 +123,7 @@ impl McpServer {
 
                 let mut to_remove: Vec<String> = Vec::new();
                 {
-                    let mut results = completed_results.lock().await;
+                    let mut results = completed_results.write().await;
                     let now = Utc::now();
                     for (id, response) in results.iter() {
                         let age = now.signed_duration_since(response.metadata.completed_at);
@@ -747,7 +747,7 @@ impl McpServer {
             None => return req.error_response(McpError::invalid_params("Missing request_id")),
         };
 
-        if let Some(cancellation) = self.pending_cancellations.lock().await.remove(request_id) {
+        if let Some(cancellation) = self.pending_cancellations.write().await.remove(request_id) {
             cancellation.cancel();
             let result = serde_json::json!({
                 "cancelled": true,

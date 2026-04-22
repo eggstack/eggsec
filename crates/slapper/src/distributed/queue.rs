@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
@@ -23,7 +24,7 @@ pub struct TaskResult {
 
 pub struct TaskQueue {
     pending: Arc<RwLock<VecDeque<Task>>>,
-    in_progress: Arc<RwLock<std::collections::HashMap<String, Task>>>,
+    in_progress: Arc<RwLock<FxHashMap<String, Task>>>,
     completed: Arc<RwLock<VecDeque<TaskResult>>>,
     max_size: usize,
 }
@@ -32,7 +33,7 @@ impl TaskQueue {
     pub fn new(max_size: usize) -> Self {
         Self {
             pending: Arc::new(RwLock::new(VecDeque::new())),
-            in_progress: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            in_progress: Arc::new(RwLock::new(FxHashMap::default())),
             completed: Arc::new(RwLock::new(VecDeque::new())),
             max_size,
         }

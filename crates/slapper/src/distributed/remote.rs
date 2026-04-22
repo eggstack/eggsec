@@ -12,6 +12,7 @@ use tokio::sync::{broadcast, RwLock};
 use crate::distributed::command::{CommandExecutor, CommandMessage, ResponseMessage};
 use crate::distributed::io::{LineWriter, StreamWrapper, TlsClient, TlsServer};
 use crate::error::{Result, SlapperError};
+use crate::utils::connect_with_nodelay_timeout;
 
 const MAX_CONNECTIONS: usize = 100;
 const RATE_LIMIT_PER_MINUTE: u32 = 60;
@@ -424,9 +425,8 @@ impl RemoteClient {
             .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
 
         let connect_timeout = std::time::Duration::from_secs(5);
-        let stream = tokio::time::timeout(connect_timeout, TcpStream::connect(addr))
+        let stream = connect_with_nodelay_timeout(&addr, connect_timeout)
             .await
-            .map_err(|_| SlapperError::Network("Connection timed out after 5 seconds".to_string()))?
             .map_err(|e| SlapperError::Network(format!("Failed to connect: {}", e)))?;
 
         let stream = match &self.tls {

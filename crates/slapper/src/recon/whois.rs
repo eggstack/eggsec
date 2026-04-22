@@ -1,5 +1,6 @@
 use crate::error::{Result, SlapperError};
 use crate::utils::extract_target_from_url;
+use crate::utils::connect_with_nodelay;
 use serde::{Deserialize, Serialize};
 use std::net::ToSocketAddrs;
 use std::time::Duration;
@@ -139,7 +140,7 @@ async fn lookup_whois(domain: &str, server: &str) -> Result<String> {
         .next()
         .ok_or_else(|| SlapperError::Network(format!("No address found for {}", server)))?;
 
-    let stream = tokio::net::TcpStream::connect(socket_addr).await?;
+    let stream = connect_with_nodelay(&socket_addr).await?;
 
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
