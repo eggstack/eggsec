@@ -29,14 +29,20 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
             if sandbox_enabled {
                 let path_buf = PathBuf::from(&filename);
                 if let Some(ref dir) = allowed_dir_for_open {
-                    let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
+                    let canonical = match path_buf.canonicalize() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            let result = lua.create_table()?;
+                            result.set("error", format!("Path '{}' could not be resolved: {} - blocked by sandbox", filename, e))?;
+                            return Ok(result);
+                        }
+                    };
                     if !canonical.starts_with(dir) {
                         let result = lua.create_table()?;
                         result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
                         return Ok(result);
                     }
                 }
-                // Block paths containing ".." when sandboxed
                 if filename.contains("..") {
                     let result = lua.create_table()?;
                     result.set("error", "Path traversal blocked by sandbox")?;
@@ -211,7 +217,14 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
             if sandbox_enabled {
                 let path_buf = PathBuf::from(&filename);
                 if let Some(ref dir) = allowed_dir_for_lines {
-                    let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
+                    let canonical = match path_buf.canonicalize() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            let result = lua.create_table()?;
+                            result.set("error", format!("Path '{}' could not be resolved: {} - blocked by sandbox", filename, e))?;
+                            return Ok(result);
+                        }
+                    };
                     if !canonical.starts_with(dir) {
                         let result = lua.create_table()?;
                         result.set("error", format!("Path '{}' blocked by sandbox", filename))?;

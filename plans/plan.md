@@ -44,11 +44,17 @@ The following items have known limitations that are documented but not fully res
 
 ### H2.4: Symlink Cycle Detection
 
-**File**: `crates/slapper-nse/src/libraries/io.rs`
+**File**: `crates/slapper-nse/src/libraries/io.rs`, `crates/slapper-nse/src/libraries/lfs.rs`
 
 **Issue**: Path validation uses `canonicalize()` which resolves symlinks, but doesn't explicitly detect symlink cycles. If canonicalize fails on a cycle, it falls back to the original path.
 
-**Status**: Partial - canonicalization is attempted, but cycle detection is incomplete.
+**Status**: ✅ **COMPLETED** (2026-04-22)
+
+**Fix**: Changed `unwrap_or_else(|_| path_buf.clone())` to fail-secure behavior:
+- In `io.rs`: `io.open` and `io.lines` now return an error table if canonicalize fails
+- In `lfs.rs`: `is_path_allowed()` and `check_path()` now return `false` if canonicalize fails
+
+This ensures that symlink cycles and other canonicalization failures are blocked rather than falling through with the unresolved path.
 
 ### H3.2: NSE Socket Library Not Sandboxed
 

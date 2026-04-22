@@ -15,7 +15,10 @@ fn is_path_allowed(path: &str, sandbox: &SandboxConfig) -> bool {
     }
     if let Some(ref allowed_dir) = sandbox.allowed_dir {
         let path_buf = PathBuf::from(path);
-        let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf);
+        let canonical = match path_buf.canonicalize() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
         if !canonical.starts_with(allowed_dir) {
             return false;
         }
@@ -37,7 +40,10 @@ pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()>
         }
         if let Some(ref dir) = allowed_dir {
             let path_buf = PathBuf::from(path);
-            let canonical = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
+            let canonical = match path_buf.canonicalize() {
+                Ok(c) => c,
+                Err(_) => return false,
+            };
             if !canonical.starts_with(dir) {
                 return false;
             }
