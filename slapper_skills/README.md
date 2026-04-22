@@ -32,15 +32,17 @@ cargo build --release --features "rest-api ai-integration"
 | Skill | Description | Tools |
 |-------|-------------|-------|
 | `dns_reconnaissance.md` | DNS lookup and enumeration | recon |
-| `ssl_tls_analysis.md` | Certificate and TLS analysis | recon |
+| `ssl_tls_audit.md` | TestSSL-like TLS auditing with grading | recon, ssl_audit |
 | `subdomain_enumeration.md` | Subdomain discovery | recon |
 | `web_search_integration.md` | CVE and vulnerability research | search |
+| `wireless_security_testing.md` | WiFi reconnaissance and analysis | wireless |
 
 ### Scanning
 | Skill | Description | Tools |
 |-------|-------------|-------|
 | `port_scanning.md` | Network port and service scanning | scanner |
 | `endpoint_discovery.md` | Web path and directory discovery | scanner |
+| `template_based_scanning.md` | Nuclei-style template scanning | scanner, templates |
 
 ### Fuzzing
 | Skill | Description | Tools |
@@ -67,6 +69,11 @@ cargo build --release --features "rest-api ai-integration"
 | `oauth_oidc_testing.md` | OAuth/OIDC security | fuzzer |
 | `cors_security_testing.md` | CORS misconfiguration | fuzzer |
 | `authentication_security_testing.md` | Auth mechanism testing | auth_test |
+
+### Proxy
+| Skill | Description | Tools |
+|-------|-------------|-------|
+| `intercepting_proxy.md` | HTTP/HTTPS MITM proxy | proxy, intercept |
 
 ### Protection
 | Skill | Description | Tools |
