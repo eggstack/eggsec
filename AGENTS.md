@@ -101,12 +101,12 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 ### Current Metrics
 
 | Metric | Value | Note |
-|--------|-------|------|
+|--------|-------|-------|
 | Tests | 1113 passing | Basic tests |
 | Tests | 1262 passing | With rest-api feature |
-| Clippy | ~5 warnings | Pre-existing conditional dead code |
-| Source files | 470+ | |
-| Payload types | 39 | |
+| Clippy | 0 warnings | All warnings fixed |
+| Source files | 470+ |
+| Payload types | 39 |
 | Tabs | 29 | |
 
 ### Severity Enum (Unified)
@@ -188,11 +188,11 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ### Current Codebase Metrics
 
 | Metric | Value | Note |
-|--------|-------|------|
+|--------|-------|-------|
 | Tests | 1113 passing | Basic tests |
 | Tests | 1262 passing | With rest-api feature |
 | Build | Clean compilation | |
-| Clippy | ~5 warnings | Pre-existing conditional dead code |
+| Clippy | 0 warnings | All warnings fixed |
 | Doctests | 19 pass, 0 fail | All passing |
 | `SlapperError` variants | 23 | |
 | `once_cell` in slapper | 0 | Replaced with `std::sync::LazyLock` |
@@ -204,7 +204,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
 | Skill files | 28 | |
-| Payload types | 38 | Added 6 new (nosql, xpath, expression, prototype, race, mass_assign) |
+| Payload types | 39 | Added 6 new (nosql, xpath, expression, prototype, race, mass_assign) |
 | Skill files | 28 | In `slapper_skills/` |
 | ADRs | 5 | In `docs/adr/` |
 

@@ -5,42 +5,9 @@
 
 use crate::error::{Result, SlapperError};
 use std::time::Duration;
-use std::sync::LazyLock;
-use rustc_hash::FxHashMap;
 
 use crate::scanner::spoof::SpoofConfig;
 use super::PortScanResults;
-
-static COMMON_PORTS_MAP: LazyLock<FxHashMap<u16, &'static str>> = LazyLock::new(|| {
-    let mut m = FxHashMap::default();
-    m.insert(21, "FTP");
-    m.insert(22, "SSH");
-    m.insert(23, "Telnet");
-    m.insert(25, "SMTP");
-    m.insert(53, "DNS");
-    m.insert(80, "HTTP");
-    m.insert(110, "POP3");
-    m.insert(143, "IMAP");
-    m.insert(443, "HTTPS");
-    m.insert(445, "SMB");
-    m.insert(993, "IMAPS");
-    m.insert(995, "POP3S");
-    m.insert(1433, "MSSQL");
-    m.insert(1521, "Oracle");
-    m.insert(3306, "MySQL");
-    m.insert(3389, "RDP");
-    m.insert(5432, "PostgreSQL");
-    m.insert(5900, "VNC");
-    m.insert(6379, "Redis");
-    m.insert(8080, "HTTP-Alt");
-    m.insert(8443, "HTTPS-Alt");
-    m.insert(27017, "MongoDB");
-    m
-});
-
-fn get_service_name(port: u16) -> &'static str {
-    COMMON_PORTS_MAP.get(&port).copied().unwrap_or("unknown")
-}
 
 #[cfg(all(feature = "stress-testing", unix))]
 fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
@@ -145,7 +112,7 @@ pub(crate) async fn scan_ports_spoofed(
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
-    use super::{get_service_name, PortResult};
+    use super::PortResult;
 
     let target_ip = resolve_host(host)?;
     let target_ipv4 = match target_ip {

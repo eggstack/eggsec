@@ -128,7 +128,7 @@ impl CvssScore {
             if impact == 0.0 {
                 0.0
             } else {
-                let mut score = min!(impact + exploitability, 10.0);
+                let score = min!(impact + exploitability, 10.0);
                 f32::floor(score * 10.0) / 10.0
             }
         } else {
@@ -137,7 +137,7 @@ impl CvssScore {
             if impact == 0.0 {
                 0.0
             } else {
-                let mut score = min!(1.08 * (impact + exploitability), 10.0);
+                let score = min!(1.08 * (impact + exploitability), 10.0);
                 f32::floor(score * 10.0) / 10.0
             }
         }

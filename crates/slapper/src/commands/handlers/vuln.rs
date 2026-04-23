@@ -1,6 +1,6 @@
 use crate::cli::vuln::{VulnArgs, VulnCommand};
 use crate::commands::handlers::CommandContext;
-use crate::vuln::{CvssScore, ExploitInfo, PriorityLevel, Remediation, RiskScore, TriageResult};
+use crate::vuln::{CvssScore, ExploitInfo, Remediation, RiskScore, TriageResult};
 use anyhow::Result;
 
 pub async fn handle_vuln(_ctx: &CommandContext, args: VulnArgs) -> Result<()> {
