@@ -45,34 +45,31 @@ This plan consolidates all planned improvement work for Slapper. Most items have
 
 #### 2.1: REST API WebSocket Support (NOT IMPLEMENTED)
 
-**File**: `tool/protocol/mcp/streaming.rs`, `tool/protocol/mcp/routes.rs`
+**File**: `crates/slapper/src/tool/protocol/mcp/streaming.rs`, `crates/slapper/src/tool/protocol/mcp/routes.rs`
 
-**Problem**: MCP uses SSE for streaming. WebSocket would provide lower latency but would require:
-1. Adding `tokio-tungstenite` dependency
-2. Implementing WebSocket handler without breaking existing SSE
-3. Adding `/mcp/ws` route
+**Status**: VERIFIED - SSE implemented, WebSocket not implemented.
 
-**Status**: Not implemented - SSE works adequately for most use cases.
+SSE streaming works correctly for all use cases. WebSocket would provide lower latency but adds complexity. This is an enhancement for future consideration.
 
 ---
 
-#### 2.2: REST API Rate Limiting Improvements (STUB)
+#### 2.2: REST API Rate Limiting Improvements (NOT IMPLEMENTED)
 
-**File**: `tool/ratelimit.rs`
+**File**: `crates/slapper/src/tool/ratelimit.rs:12-16`
 
-**Problem**: `RateLimitConfig` has `requests_per_minute`, `concurrent_scans`, `burst_size` but NOT `per_endpoint` and `global_limit` fields as specified.
+**Status**: VERIFIED - Basic rate limiting works but per-endpoint configuration not implemented.
 
-**Status**: Partial implementation - basic rate limiting works but not configurable per-endpoint.
+`RateLimitConfig` has `requests_per_minute`, `concurrent_scans`, `burst_size`. Missing fields: `per_endpoint` (HashMap<String, RateLimitConfig>), `global_limit` (u32). Enhancement for future consideration.
 
 ---
 
-#### 2.3: REST API TLS Configuration (STUB)
+#### 2.3: REST API TLS Configuration (NOT IMPLEMENTED)
 
-**File**: `tool/protocol/rest.rs`
+**File**: `crates/slapper/src/tool/protocol/rest.rs:17-22`
 
-**Problem**: `cli/misc.rs` has `tls_cert` and `tls_key` options but no centralized TLS configuration struct in `RestState`.
+**Status**: VERIFIED - TLS not wired up in RestState.
 
-**Status**: Partial - CLI options exist but TLS configuration is not wired up.
+CLI options `tls_cert` and `tls_key` exist but `RestState` doesn't have TLS configuration fields. Enhancement for future consideration.
 
 ---
 
