@@ -77,11 +77,11 @@ CLI options `tls_cert` and `tls_key` exist but `RestState` doesn't have TLS conf
 
 #### 3.6: Improve ReCon Secrets Regex Error Handling (DEFERRED)
 
-**File**: `crates/slapper/src/recon/secrets.rs:110-302`
+**File**: `crates/slapper/src/recon/secrets.rs:103-310`
 
-**Problem**: 20+ `.expect()` calls on precompiled regex patterns. These are compile-time validated patterns, so the `.expect()` is technically safe but could be improved.
+**Status**: VERIFIED - Working as designed.
 
-**Status**: Deferred - working as designed (compile-time validated).
+Single `.expect()` at line 309 wrapping entire `PATTERNS` initialization. All 28+ individual regex patterns use `.map_err()` for descriptive error messages. Patterns are hardcoded literals, so the `.expect()` is technically safe. Deferred - no improvement needed.
 
 ---
 
