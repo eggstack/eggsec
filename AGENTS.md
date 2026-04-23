@@ -203,7 +203,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | Source files | 470+ `.rs` files | |
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
-| Skill files | 28 | |
+| Skill files | 41 | In `slapper_skills/` |
 | Payload types | 39 | Added 6 new (nosql, xpath, expression, prototype, race, mass_assign) |
 | ADRs | 5 | In `docs/adr/` |
 

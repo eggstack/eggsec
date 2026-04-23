@@ -103,6 +103,8 @@ cargo build --release --features "rest-api ai-integration"
 |-------|-------------|-------|
 | `autonomous_security_agent.md` | Agent configuration and usage | agent |
 | `agent_thread_safety.md` | Thread safety patterns | agent |
+| `alert_notification.md` | Alert and webhook notifications | notify, alert |
+| `vulnerability_management.md` | CVSS scoring, triage, remediation | vuln |
 
 ### NSE (Nmap Scripting Engine)
 | Skill | Description | Tools |
