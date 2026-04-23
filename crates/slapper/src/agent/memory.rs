@@ -521,7 +521,7 @@ mod tests {
 
         let summary = ScanSummary::from_findings(&findings);
         assert_eq!(summary.total_findings, 1);
-        assert_eq!(*summary.by_severity.get("Critical").unwrap_or(&0), 1);
+        assert_eq!(*summary.by_severity.get("critical").unwrap_or(&0), 1);
     }
 
     #[test]

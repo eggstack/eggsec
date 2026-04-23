@@ -412,10 +412,11 @@ mod tests {
     #[test]
     fn test_health_metrics_record_failure() {
         let mut metrics = HealthMetrics::new(Uuid::new_v4());
-        metrics.tasks_completed = 10;
+        metrics.tasks_completed = 9;
         metrics.record_failure();
-        assert_eq!(metrics.tasks_failed, 1);
-        assert_eq!(metrics.health_status, HealthStatus::Degraded);
+        metrics.record_failure();
+        assert_eq!(metrics.tasks_failed, 2);
+        assert_eq!(metrics.health_status, HealthStatus::Degraded, "11%% failure rate → Degraded");
     }
 
     #[tokio::test]

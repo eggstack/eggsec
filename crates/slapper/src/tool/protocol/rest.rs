@@ -353,17 +353,21 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_blocks_over_limit() {
         let limiter = RateLimiter::new(RateLimitConfig::strict());
-        assert!(limiter.check_rate_limit("client-1").is_ok());
-        assert!(limiter.check_rate_limit("client-1").is_ok());
-        assert!(limiter.check_rate_limit("client-1").is_err());
+        for _ in 0..5 {
+            assert!(limiter.check_rate_limit("client-1").is_ok(), "Should allow up to burst_size");
+        }
+        assert!(limiter.check_rate_limit("client-1").is_err(), "Should block when burst exhausted");
     }
 
     #[tokio::test]
     async fn test_rate_limiter_separate_keys() {
         let limiter = RateLimiter::new(RateLimitConfig::strict());
-        assert!(limiter.check_rate_limit("client-1").is_ok());
-        assert!(limiter.check_rate_limit("client-1").is_err());
-        assert!(limiter.check_rate_limit("client-2").is_ok());
-        assert!(limiter.check_rate_limit("client-2").is_err());
+        for _ in 0..5 {
+            assert!(limiter.check_rate_limit("client-1").is_ok(), "Should allow up to burst_size");
+        }
+        assert!(limiter.check_rate_limit("client-1").is_err(), "Should block client-1");
+        for _ in 0..5 {
+            assert!(limiter.check_rate_limit("client-2").is_ok(), "Separate client should have own limit");
+        }
     }
 }

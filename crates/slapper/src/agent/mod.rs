@@ -424,8 +424,12 @@ mod tests {
     #[test]
     fn test_cron_scheduler_should_run_for_valid_expression() {
         let scheduler = CronScheduler::new();
-        let now = chrono::Utc::now();
-        assert!(scheduler.should_run_for("0 0 * * *", &now));
+        let test_time = chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap()
+            .and_utc();
+        assert!(scheduler.should_run_for("0 * * * *", &test_time), "At minute 0 should match");
     }
 
     #[test]
