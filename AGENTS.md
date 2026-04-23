@@ -141,6 +141,11 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 - `Debug` and `Display` show `[REDACTED]`
 - Constant-time equality (via `subtle::ConstantTimeEq`)
 - Serializes transparently for config file compatibility
+- `len()` returns the length of the inner string
+- `as_bytes()` returns raw bytes (for proxy auth encoding)
+- `is_empty()` checks if empty
+
+**Note:** Proxy credentials (`SocksProxy`, `HttpConnectProxy`) now use `SensitiveString` for secure storage.
 
 ### Circuit Breaker
 
