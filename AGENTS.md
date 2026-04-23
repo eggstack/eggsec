@@ -102,12 +102,12 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1107 passing | |
-| Clippy | ~4 warnings | Pre-existing |
+| Tests | 1113 passing | Basic tests |
+| Tests | 1262 passing | With rest-api feature |
+| Clippy | ~5 warnings | Pre-existing conditional dead code |
 | Source files | 470+ | |
-| Payload types | 39 | Added OAST |
-| Tabs | 29 | + 10 new stubs |
-| Skill files | 28 | |
+| Payload types | 39 | |
+| Tabs | 29 | |
 
 ### Severity Enum (Unified)
 
@@ -189,16 +189,17 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1107 passing | |
+| Tests | 1113 passing | Basic tests |
+| Tests | 1262 passing | With rest-api feature |
 | Build | Clean compilation | |
-| Clippy | ~4 warnings | Pre-existing (scan_ports 8 args, collapsible_if) |
+| Clippy | ~5 warnings | Pre-existing conditional dead code |
 | Doctests | 19 pass, 0 fail | All passing |
 | `SlapperError` variants | 23 | |
 | `once_cell` in slapper | 0 | Replaced with `std::sync::LazyLock` |
 | MSRV | 1.80 | |
 | `thiserror` | 2.x | |
 | Ruby plugins | Zero warnings | With `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (883 lines) | Decomposed from 1665 (46% reduction) |
+| Largest file | `tui/app/mod.rs` (883 lines) | Decomposed |
 | Source files | 470+ `.rs` files | |
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
@@ -237,6 +238,7 @@ For new improvement work, add to the consolidated plan.md rather than creating n
 7. **Clippy needless borrows**: `.post(&format!(...))` should be `.post(format!(...))` when the format result implements the required traits
 8. **`default_value = "None"` on Options**: Never use `#[arg(default_value = "None")]` on `Option<T>` fields — clap assigns the string `"None"` instead of `None`. Omit `default_value` entirely; `Option` defaults to `None` automatically.
 9. **`fingerprint_services` signature**: Takes 5 args: `host`, `ports`, `timeout`, `tui_mode`, `concurrency` — don't forget `concurrency`
+10. **Test assertion logic**: Always verify tests actually exercise the expected code path. Use specific assertions and test documentation to verify behavior.
 
 ### Severity Enum
 
