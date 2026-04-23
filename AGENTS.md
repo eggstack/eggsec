@@ -102,11 +102,11 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1106 passing | 1 failing (test_scope_cidr_edge_cases) |
-| Clippy | ~9 warnings | Pre-existing |
-| Source files | 450+ | |
-| Payload types | 38 | |
-| Tabs | 29 | |
+| Tests | 1107 passing | |
+| Clippy | ~4 warnings | Pre-existing |
+| Source files | 470+ | |
+| Payload types | 39 | Added OAST |
+| Tabs | 29 | + 10 new stubs |
 | Skill files | 28 | |
 
 ### Severity Enum (Unified)
@@ -184,7 +184,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1104 passing | |
+| Tests | 1107 passing | |
 | Build | Clean compilation | |
 | Clippy | ~4 warnings | Pre-existing (scan_ports 8 args, collapsible_if) |
 | Doctests | 19 pass, 0 fail | All passing |
@@ -193,10 +193,11 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | MSRV | 1.80 | |
 | `thiserror` | 2.x | |
 | Ruby plugins | Zero warnings | With `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (897 lines) | Decomposed from 1665 (46% reduction) |
-| Source files | 450+ `.rs` files | |
+| Largest file | `tui/app/mod.rs` (883 lines) | Decomposed from 1665 (46% reduction) |
+| Source files | 470+ `.rs` files | |
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
+| Skill files | 28 | |
 | Payload types | 38 | Added 6 new (nosql, xpath, expression, prototype, race, mass_assign) |
 | Skill files | 28 | In `slapper_skills/` |
 | ADRs | 5 | In `docs/adr/` |
