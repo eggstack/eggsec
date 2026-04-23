@@ -123,13 +123,13 @@ Conversion to DashMap would require careful testing to ensure lock-free semantic
 
 ### Wave 6: Advanced Capabilities
 
-#### 6.17: UDP IP Spoofing (DEFERRED)
+#### 6.17: UDP IP Spoofing (RAW MODULE EXISTS, NOT USED)
 
-**File**: `stress/udp.rs`
+**File**: `crates/slapper/src/stress/udp.rs:19-117, 120-184`
 
-**Problem**: UDP flood uses standard `tokio::net::UdpSocket` without `IP_HDRINCL` for raw socket IP spoofing.
+**Status**: VERIFIED - Deferred.
 
-**Status**: Deferred - requires platform-specific raw socket support.
+`raw_udp` module (lines 19-117) provides full raw socket capability with `build_udp_packet()` for IP/UDP header crafting and proper checksums. However, `run_udp_flood()` (lines 120-184) uses standard `tokio::net::UdpSocket` which does not support IP spoofing. Raw socket module is not called. Deferred - requires platform-specific raw socket support and integration into main flood function.
 
 ---
 
@@ -137,9 +137,9 @@ Conversion to DashMap would require careful testing to ensure lock-free semantic
 
 **File**: `crates/slapper/src/output/escape.rs:17-27`
 
-**Problem**: Formula injection check uses `starts_with` at character level but only handles ASCII. Fullwidth variants (U+FF1D) of formula characters could potentially bypass.
+**Status**: VERIFIED - Deferred.
 
-**Status**: Deferred - check exists but may not handle all Unicode edge cases.
+`escape_csv()` checks for formula injection with `is_ascii()` constraint. Fullwidth Unicode variants (e.g., U+FF1D for '=') could potentially bypass. Enhancement for future consideration - would need Unicode normalization for full protection.
 
 ---
 
