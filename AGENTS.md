@@ -432,8 +432,11 @@ Feature gate: `#[cfg(feature = "ai-integration")]` in `lib.rs`.
 The agent module provides multi-agent orchestration:
 - `tool/agents/registry.rs` — `AgentRegistry` with Arc<RwLock<HashMap>> for async CRUD
 - `tool/agents/delegation.rs` — `DelegationRequest`/`DelegationResponse` types
+- `tool/agents/communication.rs` — Multi-agent communication with `HealthStatus` enum
 
 Feature gate: `#[cfg(feature = "rest-api")]` in `tool/mod.rs`.
+
+**Note:** `HealthStatus` enum must derive `Copy, PartialEq, Eq` for use in test assertions.
 
 #### MCP Prompts & Sampling
 
@@ -453,17 +456,30 @@ crates/slapper/src/agent/
 ├── portfolio.rs    # TargetPortfolio for multi-target management
 ├── memory.rs       # LongitudinalMemory for file-based persistence
 ├── events.rs       # Event system with EventHandler trait
-├── alerts.rs       # AlertRouter with webhook support and HMAC signing
-└── skills.rs       # SkillLoader and SkillRegistry (ai-integration)
 ```
 
 **Key Types:**
 - `Agent` — Main orchestrator with `run()`, `stop()`, `execute_scan()`, `trigger_scan()`
 - `AgentConfig` — Configuration with `portfolio_path`, `memory_dir`, `poll_interval_secs`
 - `TargetPortfolio` — CRUD for monitored targets with scheduling support
-- `TargetConfig` — Per-target settings (schedule, priority, alert_channels, baseline)
+- `TargetConfig` — Per-target settings (schedule, priority, alert_channels, baseline, scan_depth, off_peak_window)
 - `LongitudinalMemory` — File-based storage in `~/.config/slapper/memory/`
 - `AlertRouter` — Routes alerts via webhook with HMAC signing
+- `EventHandler` — Trait for custom event handlers with `handles()` and `handle()`
+
+**Trait Signature for Custom Handlers:**
+```rust
+impl EventHandler for MyHandler {
+    fn handles(&self, event: &SecurityEvent) -> bool { true }
+    fn handle<'a>(
+        &'a self,
+        event: &'a SecurityEvent,
+        agent: &'a mut Agent,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a> {
+        Box::pin(async move { Ok(()) })
+    }
+}
+```
 
 **CLI Commands:**
 ```bash

@@ -1821,4 +1821,22 @@ The following items were verified, fixed, or implemented during the 2026-04-23 i
 - TUI enhancements (Wave 4)
 - Advanced capabilities (Wave 6)
 
+---
+
+## 2026-04-23 (Afternoon) Additional Fixes
+
+The following were fixed to correct compilation errors with `rest-api` feature:
+
+### Compilation Fixes:
+- **HealthStatus PartialEq**: Added `Copy, PartialEq, Eq` derive to `HealthStatus` enum in `tool/agents/communication.rs`
+- **Missing Pin/Future imports**: Added imports to test module in `agent/mod.rs`
+- **TargetConfig missing fields**: Added `scan_depth` and `off_peak_window` to test in `agent/portfolio.rs`
+- **router() test argument**: Added missing `api_key: None` argument in `tool/protocol/agent_routes.rs`
+- **EventHandler trait signature**: Test handler now returns correct `Pin<Box<dyn Future...>>` type
+
+### Verification:
+- `cargo test --lib -p slapper`: 1113 tests pass ✅
+- `cargo clippy --lib -p slapper`: 0 warnings ✅
+- `cargo check --lib -p slapper --features rest-api`: Compiles ✅
+
 (End of file)

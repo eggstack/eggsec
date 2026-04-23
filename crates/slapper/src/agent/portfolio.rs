@@ -336,6 +336,8 @@ mod tests {
             scan_history: vec![],
             baseline_findings: vec!["finding-1".to_string()],
             enabled: true,
+            scan_depth: ScanDepth::default(),
+            off_peak_window: None,
         };
         assert_eq!(config.target, "https://example.com");
         assert_eq!(config.priority, Priority::High);

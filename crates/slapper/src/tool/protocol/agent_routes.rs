@@ -381,6 +381,6 @@ mod tests {
     fn test_router_creation() {
         let registry = AgentRegistry::new();
         let scheduler = TaskScheduler::new();
-        let _router = router(registry, scheduler);
+        let _router = router(registry, scheduler, None);
     }
 }

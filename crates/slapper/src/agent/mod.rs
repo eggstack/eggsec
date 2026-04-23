@@ -337,6 +337,8 @@ impl CronScheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::pin::Pin;
+    use std::future::Future;
 
     #[tokio::test]
     async fn test_agent_creation() {
@@ -407,8 +409,12 @@ mod tests {
             fn handles(&self, _event: &SecurityEvent) -> bool {
                 true
             }
-            async fn handle(&self, _event: &SecurityEvent, _agent: &mut Agent) -> anyhow::Result<()> {
-                Ok(())
+            fn handle<'a>(
+                &'a self,
+                _event: &'a SecurityEvent,
+                _agent: &'a mut Agent,
+            ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+                Box::pin(async { Ok(()) })
             }
         }
         agent.register_handler(Box::new(TestHandler));
