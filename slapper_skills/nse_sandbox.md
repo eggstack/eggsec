@@ -70,9 +70,14 @@ All lfs operations validate paths against `allowed_dir`.
 
 ## Known Limitations
 
-### socket Library NOT Sandboxed
+### socket Library (Network Access)
 
-**The `socket` library is NOT sandboxed** even when `nse-sandbox` is enabled. Scripts can still make arbitrary TCP/UDP connections.
+**The `socket` library has conditional network restrictions:**
+
+| Configuration | Behavior |
+|---------------|----------|
+| `allowed_networks` not set | Socket operations proceed normally (warning logged if sandbox enabled) |
+| `allowed_networks` configured | Connections validated against CIDR blocklist, blocked if outside allowed ranges |
 
 **Affected functions:**
 - `socket.tcp()` - TCP socket creation
@@ -81,7 +86,16 @@ All lfs operations validate paths against `allowed_dir`.
 - `socket.send(sock, data)` - Send data
 - `socket.recv(sock, size)` - Receive data
 
-**Current behavior:** Socket operations only log when sandbox is enabled but proceed unconditionally. This is a documented limitation.
+**Example configuration:**
+```rust
+pub struct SandboxConfig {
+    pub enabled: bool,
+    pub allowed_dir: Option<PathBuf>,
+    pub allowed_commands: Vec<String>,
+    pub allowed_networks: Vec<CidrNetmask>, // Optional CIDR blocklist
+    pub log_violations: bool,
+}
+```
 
 ### Symlink Cycles (RESOLVED)
 
@@ -92,7 +106,7 @@ Previously, symlink cycle detection was incomplete - if `canonicalize()` failed,
 1. **Enable sandbox by default** - `SandboxConfig { enabled: true, ... }`
 2. **Set specific allowed_dir** - Restrict filesystem access to minimal directory
 3. **Use allowlist for io.popen** - Only permit known-safe commands
-4. **Monitor socket usage** - The socket library is NOT sandboxed; consider network filtering at infrastructure level
+4. **Use allowed_networks** - Configure CIDR blocklist to restrict socket connections to expected network ranges
 
 ## Path Validation Pattern
 

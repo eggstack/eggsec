@@ -27,15 +27,17 @@ This plan consolidates all planned improvement work for Slapper. Most items have
 
 ### Wave 1: Critical Security & API Fixes
 
-#### 1.9: NSE Socket Library Network Restrictions (DEFERRED)
+#### 1.9: NSE Socket Library Network Restrictions (PARTIALLY IMPLEMENTED)
 
-**File**: `crates/slapper-nse/src/libraries/socket.rs:244-517`
+**File**: `crates/slapper-nse/src/libraries/socket.rs:244-631`
 
-**Status**: Known limitation - Documented in `docs/NSE_SCRIPTS.md` and `slapper_skills/nse_sandbox.md`.
+**Status**: Conditional restrictions available via `allowed_networks` configuration.
 
-**Problem**: Socket library allows connections to ANY host even when `nse-sandbox` enabled.
+**Behavior**:
+- `allowed_networks` NOT configured → socket operations proceed (with warning log)
+- `allowed_networks` configured → connections validated against CIDR blocklist
 
-**Note**: The `socket` library is NOT sandboxed even when `nse-sandbox` is enabled. Scripts can make arbitrary network connections. The `lfs` library IS sandboxed with path restrictions.
+**Documentation**: Updated in `docs/NSE_SCRIPTS.md` and `slapper_skills/nse_sandbox.md` to accurately reflect this capability.
 
 ---
 

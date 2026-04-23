@@ -67,7 +67,7 @@ When built with `--features nse-sandbox`, dangerous operations are restricted:
 - `os.remove` / `os.rename`: Restricted to sandbox directory.
 - `os.chdir`: Restricted to sandbox directory.
 
-**Important**: The `socket` library is **NOT sandboxed**. Even when sandbox mode is enabled, scripts can still make arbitrary network connections. This is a known limitation - the socket library only logs when sandbox is enabled but does not enforce restrictions.
+**Important**: The `socket` library has **conditional network restrictions**. By default, socket operations proceed normally (with a warning log when sandbox is enabled). However, when `allowed_networks` is configured in `SandboxConfig`, connections are validated against the CIDR blocklist and blocked if outside allowed ranges.
 
 ### Sandbox Configuration
 
@@ -78,6 +78,7 @@ let sandbox = SandboxConfig {
     enabled: true,
     allowed_dir: Some("/tmp/slapper-nse".into()),
     allowed_commands: vec!["curl".to_string(), "dig".to_string()],
+    allowed_networks: vec!["10.0.0.0/8".parse().unwrap(), "192.168.0.0/16".parse().unwrap()], // Optional: restrict socket connections
     log_violations: true,
 };
 ```
