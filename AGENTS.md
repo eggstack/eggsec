@@ -39,28 +39,35 @@ crates/slapper/
 │   ├── config/        # Configuration (SlapperConfig, PathsConfig, Scope)
 │   ├── constants.rs   # Centralized constants (WAF, HTTP, scan, etc.)
 │   ├── types.rs       # Shared types (Severity, SensitiveString)
-│   ├── fuzzer/        # Fuzzing engine (22+ payload types)
+│   ├── fuzzer/        # Fuzzing engine (39 payload types)
+│   │   ├── chain.rs   # ChainExecutor (regex caching needed - see plan 4.6)
+│   │   ├── detection/ # TimingAnalyzer (lock contention - see plan 4.4)
 │   │   └── payloads/
 │   │       └── macros.rs  # payload_vec! macro
 │   ├── scanner/       # Port scanning, endpoint discovery
+│   │   ├── templates/ # Nuclei-style template engine
 │   │   └── ports/     # Port scanning (mod.rs + spoofed.rs)
 │   ├── waf/           # WAF detection and bypass
 │   ├── recon/         # Reconnaissance modules
-│   │   └── auth/      # Multi-protocol auth testing (ssh_auth, ftp_auth, smtp_auth)
+│   │   ├── auth/      # Multi-protocol auth testing (ssh_auth, ftp_auth, smtp_auth)
+│   │   └── dependency_scan.rs  # Large file (1051 lines, see plan 3.4)
 │   ├── output/        # Report generation (JSON, HTML, SARIF, JUnit)
 │   ├── wireless/      # Wireless security testing (WiFi scanning, auth testing)
 │   ├── tool/          # Tool abstraction layer
 │   │   ├── implementations/  # Tool implementations (recon, scanner, fuzzer, waf, search, etc.)
 │   │   └── protocol/
-│   │       └── mcp/   # MCP server (mod.rs, handlers.rs, routes.rs, types.rs, auth.rs, streaming.rs)
-│   ├── scanner/       # Port scanning, endpoint discovery
-│   │   ├── templates/ # Nuclei-style template engine
-│   │   └── ports/     # Port scanning (mod.rs + spoofed.rs)
-│   ├── proxy/         # Proxy modules
+│   │       ├── mcp/   # MCP server (mod.rs, handlers.rs, routes.rs, types.rs, auth.rs, streaming.rs)
+│   │       ├── openai/  # OpenAI-compatible chat completions
+│   │       ├── rest.rs  # REST API (scope validation missing - see plan 2.5)
+│   │       └── grpc.rs  # gRPC service
+│   ├── proxy/         # Proxy modules (to_url() exposes credentials - see plan 2.8)
 │   │   └── intercept/ # Intercepting proxy with dynamic SSL certs
-│   ├── fuzzer/        # Fuzzing engine (32+ payload types)
-│   │   └── payloads/
-│   │       └── macros.rs  # payload_vec! macro
+│   ├── stress/        # Stress testing (raw_udp module unused - see plan 6.4)
+│   ├── tui/           # Terminal UI (ratatui 0.30 + crossterm 0.29)
+│   │   ├── app/       # App struct (899 lines), split into submodules
+│   │   ├── tabs/      # 29 tab implementations
+│   │   └── workers/   # Background task workers
+│   └── utils/         # Utilities (circuit_breaker, http, formatting, network)
 ├── tests/             # Integration tests
 └── Cargo.toml
 ```
@@ -199,7 +206,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | MSRV | 1.80 | |
 | `thiserror` | 2.x | |
 | Ruby plugins | Zero warnings | With `--features ruby-plugins` |
-| Largest file | `tui/app/mod.rs` (883 lines) | Decomposed |
+| Largest file | `tui/app/mod.rs` (899 lines) | Decomposed |
 | Source files | 470+ `.rs` files | |
 | TUI files | 60 `.rs` files | |
 | Tab variants | 29 | |
@@ -232,7 +239,7 @@ The consolidated plan is organized into 9 waves. Items within the same wave can 
 ### Sub-Agent Assignment Example
 
 ```
-Agent 1: Security Fixes (Wave 1) - items 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9
+Agent 1: Security Fixes (Wave 1) - items 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8
 Agent 2: High-Priority Security (Wave 2) - items 2.1-2.10
 Agent 3: Large File Refactoring (Wave 3) - items 3.1-3.6
 Agent 4: Performance (Wave 4) - items 4.1-4.8
@@ -285,12 +292,12 @@ Agent 7: TUI Improvements (Wave 8) - items 8.1-8.9
 ### TUI-Specific Patterns
 
 - `tui/app/runner.rs` contains the main event loop (`run_app`)
-- `tui/app/mod.rs` contains the `App` struct (883 lines); split into submodules: `dispatch.rs`, `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
+- `tui/app/mod.rs` contains the `App` struct (899 lines); split into submodules: `dispatch.rs`, `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
 - `tui/workers/` directory contains 8 files: `runner.rs`, `scanner.rs`, `fuzzer.rs`, `network.rs`, `api.rs`, `recon.rs`, `security.rs`, `pipeline.rs`
 - Tab dispatch uses match statements across ~18+ methods (29-arm matches)
 - TUI uses ratatui 0.30 + crossterm 0.29 with immediate-mode rendering
 - 29 tab variants exist (Recon=0 through Vuln=28); all 29 are fully functional
-- `tui/app/mod.rs` contains 883 lines - uses `TabDispatcher` for tab delegation
+- `tui/app/mod.rs` contains 899 lines - uses `TabDispatcher` for tab delegation
 - `tui/app/dispatch.rs` has `TabDispatcher` wrapper with 17 methods
 - `tui/app/task_management.rs` contains `TaskBuilder` trait for task building logic
 - Tab cfg attributes: `Nse` and `Plugin` variants are always present in the Tab enum; use both `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]` arms for feature-gated dispatch
@@ -602,6 +609,8 @@ When adding auth to new endpoints:
 2. Create local `require_auth` function using constant-time comparison (`subtle::ConstantTimeEq`)
 3. Apply to all handlers
 
+**Constant-time comparison**: Use `bool::from(key.as_bytes().ct_eq(v.as_bytes()))` instead of `.unwrap_u8() == 1`. The `unwrap_u8()` pattern degrades `Choice` to `u8` which enables side-channel attacks through branch prediction.
+
 ### Formula Injection Prevention
 
 Check for unsafe prefixes at START of string (`starts_with`) not just anywhere in string (`contains`):
@@ -838,33 +847,37 @@ When fixing failing tests in integration scenarios:
 - **WAF bypass knowledge_base**: Pre-populated from `~/.config/slapper/waf_bypasses.json` - tests may have non-empty state. Use unique identifiers for test payloads to avoid collisions.
 - **Skills extract_triggers**: Pattern matching is case-insensitive. Line must contain "trigger", "keyword", or "example" AND ":" for YAML frontmatter format, or start with these words for other formats.
 
-### Common Issues Identified in Plans
-
-During plan consolidation, these issues were identified and should be addressed:
-
-1. **TUI Plugin Tab Compile Error**: `TaskResult::PluginsLoaded` variant is referenced in `tui/workers/plugin.rs:11` but may not exist in `TaskResult` enum. Verify and add missing variant.
-
-2. **git_secrets Test Flakiness**: Test at `recon/git_secrets.rs:397-403` depends on working directory state. The assertion `assert!(result.is_ok())` can fail if git commands return errors.
-
-3. **Port Scanner Race Condition**: Check-then-act pattern in `scanner/ports/mod.rs:543-572` uses separate mutex acquisitions for `count >= limit` check and `+= 1` increment. Use `AtomicU64::fetch_add` for atomic check-and-increment.
-
-4. **Plugin Timeout Not Enforced**: `timeout_secs` in `PluginConfig` (default 300s) is never passed to plugin execution. Python and Ruby plugins can run indefinitely.
-
-5. **Path Traversal in Plugin Loading**: Plugin directories are read without canonicalization. Use `validate_path()` pattern from `utils/validation.rs`.
-
-6. **DashMap::clone() Performance**: `DashMap::clone()` performs deep clone. Use `Arc::try_unwrap()` + `DashMap::into_iter()` after async tasks complete.
-
-7. **TimingAnalyzer Mutex Contention**: Single `tokio::sync::Mutex` serializes 100+ concurrent tasks in `fuzzer/detection/analyzer.rs`. Consider lock-free queue approach.
-
-8. **Dedup Key Collision**: `AlertRouter::make_dedup_key()` doesn't include `finding_ids` hash - different finding sets produce same key.
-
 ### Large File Reference
 
 | File | Lines | Should Split? |
 |------|-------|---------------|
-| `tui/app/mod.rs` | 967 | Yes |
-| `tool/protocol/mcp/handlers.rs` | 1081 | Yes |
+| `tui/app/mod.rs` | 899 | Yes |
+| `tool/protocol/mcp/handlers.rs` | 1069 | Yes |
 | `recon/dependency_scan.rs` | 1051 | Yes |
-| `tui/tabs/mod.rs` | 859 | Partial |
+| `tui/tabs/mod.rs` | 655 | Partial |
 | `tui/tabs/settings.rs` | 798 | Yes |
 | `tui/tabs/packet.rs` | 743 | Yes |
+
+### Additional Lessons Learned
+
+1. **Proxy `to_url()` exposes credentials**: Despite `SensitiveString` storage, `to_url()` calls `expose_secret()`. Use `to_log_key()` for any non-connection use (logging, display, DashMap keys). Also affects `proxy/health.rs`, `proxy/rotator.rs`, and `commands/handlers/stress.rs:93`.
+
+2. **Plugin loading has no canonicalization**: All three plugin loaders (`python.rs`, `lib.rs`, `loader.rs`) read from `read_dir()` without `canonicalize()`. Use `validate_plugin_path()` when implementing plugin loading changes.
+
+3. **`PluginConfig.timeout_secs` is never enforced**: The field exists (default 300s) but is never passed to execution. Python uses `join_all`, Ruby uses `rx.recv()` — both block indefinitely.
+
+4. **`CircuitBreakerRegistry` is dead code**: Defined at `utils/circuit_breaker.rs:125`, never instantiated anywhere. Only referenced in its own file and the `utils/mod.rs` re-export.
+
+5. **TimingAnalyzer bottleneck location**: The lock contention is in `fuzzer/engine/utils.rs:198-199` (not `fuzzer/detection/analyzer.rs`). `TimingAnalyzer.record()` takes `&mut self` due to `Vec<f64>` samples, forcing `Arc<Mutex<>>` wrapper.
+
+6. **Rate limiter already uses `parking_lot::RwLock`**: The `tool/ratelimit.rs` file already imports `parking_lot::RwLock` (not `std::sync`). Basic per-client rate limiting exists; what's missing is per-endpoint and IP-based limiting.
+
+7. **`ValidationResult` IS used**: The struct in `tui/components/input.rs:8-12` is used by `scan_ports.rs:153,163` with methods `validate_ip()`, `validate_port_range()`. Only visual feedback (red border) is missing.
+
+8. **Basic `Plugin` trait already exists**: At `slapper-plugin/src/lib.rs:98-113` with `info()`, `language()`, `list_checks()`, `run_check()`, `run()`. Plan items about lifecycle methods are additions to this trait, not a new trait.
+
+9. **`raw_udp` module is dead code**: Defined at `stress/udp.rs:20-117` with complete packet builder + IP spoofing. Zero references from outside the module. `run_udp_flood()` uses standard `UdpSocket` instead.
+
+10. **Formula injection has partial defense**: `escape_csv()` checks `!c.is_ascii()` on first char (variable name `first_char_is_control` is misleading). Fullwidth Unicode chars DO get quoted, but protection relies solely on CSV quoting. Explicit NFKC normalization is still recommended.
+
+11. **TUI Plugin Tab blocked by pyo3 errors**: The `TaskResult::PluginsLoaded` missing variant error is masked by pyo3 deprecated API errors in `slapper-plugin` (8 errors: `into_py`, `PyNone`). Fix pyo3 first, then the TUI compile error surfaces.
