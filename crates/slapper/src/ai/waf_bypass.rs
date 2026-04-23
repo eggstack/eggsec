@@ -238,6 +238,7 @@ mod tests {
             bypass_payload: "bypassed".to_string(),
             technique: "encoding".to_string(),
             success: true,
+            failed_attempts: 0,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let deserialized: WafBypassEntry = serde_json::from_str(&json).unwrap();
@@ -246,6 +247,7 @@ mod tests {
         assert_eq!(deserialized.bypass_payload, entry.bypass_payload);
         assert_eq!(deserialized.technique, entry.technique);
         assert_eq!(deserialized.success, entry.success);
+        assert_eq!(deserialized.failed_attempts, 0);
     }
 
     #[test]

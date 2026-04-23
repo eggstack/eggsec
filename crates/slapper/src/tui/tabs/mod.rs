@@ -52,7 +52,7 @@ pub use nse::NseTab;
 pub use oauth::OAuthTab;
 pub use packet::PacketTab;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-pub use plugin::PluginTab;
+pub use plugin::{PluginTab, PluginInfo};
 pub use proxy::ProxyTab;
 pub use recon::ReconTab;
 pub use report::ReportTab;

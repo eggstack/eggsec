@@ -9,6 +9,7 @@ pub mod wordpress;
 
 use crate::error::Result;
 use crate::types::Severity;
+use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -148,7 +149,10 @@ impl CmsScanner {
         ];
 
         for pattern in &version_patterns {
-            if let Ok(re) = regex::Regex::new(pattern) {
+            if let Ok(re) = RegexBuilder::new(pattern)
+                .size_limit(100_000)
+                .build()
+            {
                 if let Some(caps) = re.captures(html) {
                     if let Some(version) = caps.get(1) {
                         return Some(version.as_str().to_string());

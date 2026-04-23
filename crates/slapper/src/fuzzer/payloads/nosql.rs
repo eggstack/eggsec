@@ -70,11 +70,10 @@ pub fn get_payloads() -> Vec<Payload> {
     );
 
     for p in &mut payloads {
-        if !p.tags.contains(&"mongodb".to_string()) && !p.tags.contains(&"nosql".to_string()) {
-            if p.payload.contains("redis") || p.payload.contains("couch") || p.payload.contains("elastic") {
+        if !p.tags.contains(&"mongodb".to_string()) && !p.tags.contains(&"nosql".to_string())
+            && (p.payload.contains("redis") || p.payload.contains("couch") || p.payload.contains("elastic")) {
                 p.tags.push("nosql".to_string());
             }
-        }
     }
 
     payloads

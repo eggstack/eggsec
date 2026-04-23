@@ -40,7 +40,9 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
             if !crate::commands::webhook::has_any_webhook(&test_config) {
                 crate::commands::webhook::print_webhook_usage();
             } else {
-                crate::commands::webhook::send_webhook_notifications(&test_config, &test_payload, None).await;
+                if let Err(e) = crate::commands::webhook::send_webhook_notifications(&test_config, &test_payload, None).await {
+                    tracing::warn!("Failed to send test webhook notifications: {}", e);
+                }
             }
         }
         NotifyCommand::Send(send_args) => {
@@ -74,7 +76,9 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
                 println!("Configure webhooks in config file or use:");
                 println!("  slapper notify send --slack <url> --message 'your message'");
             } else {
-                crate::commands::webhook::send_webhook_notifications(&send_config, &payload, None).await;
+                if let Err(e) = crate::commands::webhook::send_webhook_notifications(&send_config, &payload, None).await {
+                    tracing::warn!("Failed to send webhook notifications: {}", e);
+                }
             }
         }
     }

@@ -25,8 +25,8 @@ This plan consolidates all planned improvement work for Slapper, organized into 
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1106 passing | 1 failing (test_scope_cidr_edge_cases) |
-| Clippy | ~9 warnings | Pre-existing issues |
+| Tests | 1104 passing | |
+| Clippy | ~4 warnings | Pre-existing issues |
 | Source files | 450+ | |
 | Payload types | 38 | |
 | Tabs | 29 | |

@@ -20,7 +20,14 @@ pub fn escape_csv(s: &str) -> String {
         .next()
         .map(|c| c.is_ascii() && formula_chars.contains(&c))
         .unwrap_or(false);
-    if s.contains(',') || s.contains('"') || s.contains('\n') || starts_with_formula {
+
+    let first_char_is_control = s
+        .chars()
+        .next()
+        .map(|c| !c.is_ascii())
+        .unwrap_or(false);
+
+    if first_char_is_control || s.contains(',') || s.contains('"') || s.contains('\n') || starts_with_formula {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
         s.to_string()

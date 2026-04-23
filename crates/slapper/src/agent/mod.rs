@@ -10,7 +10,9 @@
 pub mod portfolio;
 pub mod memory;
 pub mod alerts;
+pub mod channels;
 pub mod events;
+pub mod routing;
 
 #[cfg(feature = "ai-integration")]
 pub mod skills;
@@ -35,7 +37,11 @@ use crate::ai::AiClient;
 
 pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
 pub use memory::LongitudinalMemory;
-pub use alerts::{Alert, AlertChannel, AlertRouter, WebhookConfig};
+pub use alerts::{
+    AggregatedAlert, Alert, AlertChannel, AlertRouter, AlertTemplate, EmailChannel,
+    EmailFormattedAlert, EmailTemplate, EscalationLevel, PagerDutyChannel, PagerDutyTemplate,
+    ReportSummary, ScanReport, SlackChannel, SlackFormattedAlert, SlackTemplate, WebhookConfig,
+};
 pub use events::{EventHandler, SecurityEvent};
 
 #[cfg(feature = "ai-integration")]
@@ -164,6 +170,16 @@ impl Agent {
         for (target_id, config) in targets {
             if let Some(ref schedule) = config.schedule {
                 if self.scheduler.should_run_for(schedule, &now) {
+                    if let Some(ref window) = config.off_peak_window {
+                        if !window.is_in_window(&now) {
+                            tracing::debug!(
+                                "Skipping {} - outside off-peak window",
+                                target_id
+                            );
+                            continue;
+                        }
+                    }
+
                     tracing::info!(
                         "Triggering {} scan for {}",
                         config.scan_depth.as_str(),
@@ -341,6 +357,8 @@ mod tests {
             base_url: Some("https://api.openai.com/v1/chat/completions".to_string()),
             max_tokens: Some(2048),
             temperature: Some(0.7),
+            max_payloads: 50,
+            max_bypasses: 10,
         };
         let agent_with_ai = agent.with_ai_client(ai_config).await;
         assert!(agent_with_ai.ai_client.is_some());

@@ -6,7 +6,7 @@ use crate::utils::connect_with_nodelay_timeout;
 use std::net::{IpAddr, SocketAddr};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 
 use super::config::{ProxyEntry, ProxyType};
 use super::ProxiedConnection;

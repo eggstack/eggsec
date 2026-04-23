@@ -1,4 +1,5 @@
 use std::time::Duration;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 #[derive(Debug, Clone)]
 pub struct TimingResult {
@@ -8,13 +9,37 @@ pub struct TimingResult {
     pub anomaly_factor: f64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TimingAnalyzer {
     baseline_ms: Option<f64>,
     samples: Vec<f64>,
     spike_threshold: f64,
     redos_threshold_ms: u64,
     min_samples_for_baseline: usize,
+    total_requests: AtomicU64,
+    total_response_time: AtomicU64,
+    min_response_time: AtomicU64,
+    max_response_time: AtomicU64,
+    anomaly_count: AtomicUsize,
+    redos_count: AtomicUsize,
+}
+
+impl Clone for TimingAnalyzer {
+    fn clone(&self) -> Self {
+        Self {
+            baseline_ms: self.baseline_ms,
+            samples: self.samples.clone(),
+            spike_threshold: self.spike_threshold,
+            redos_threshold_ms: self.redos_threshold_ms,
+            min_samples_for_baseline: self.min_samples_for_baseline,
+            total_requests: AtomicU64::new(self.total_requests.load(Ordering::Relaxed)),
+            total_response_time: AtomicU64::new(self.total_response_time.load(Ordering::Relaxed)),
+            min_response_time: AtomicU64::new(self.min_response_time.load(Ordering::Relaxed)),
+            max_response_time: AtomicU64::new(self.max_response_time.load(Ordering::Relaxed)),
+            anomaly_count: AtomicUsize::new(self.anomaly_count.load(Ordering::Relaxed)),
+            redos_count: AtomicUsize::new(self.redos_count.load(Ordering::Relaxed)),
+        }
+    }
 }
 
 impl Default for TimingAnalyzer {
@@ -25,6 +50,12 @@ impl Default for TimingAnalyzer {
             spike_threshold: 3.0,
             redos_threshold_ms: 5000,
             min_samples_for_baseline: 20,
+            total_requests: AtomicU64::new(0),
+            total_response_time: AtomicU64::new(0),
+            min_response_time: AtomicU64::new(u64::MAX),
+            max_response_time: AtomicU64::new(0),
+            anomaly_count: AtomicUsize::new(0),
+            redos_count: AtomicUsize::new(0),
         }
     }
 }
@@ -41,22 +72,57 @@ impl TimingAnalyzer {
             spike_threshold,
             redos_threshold_ms,
             min_samples_for_baseline: 20,
+            total_requests: AtomicU64::new(0),
+            total_response_time: AtomicU64::new(0),
+            min_response_time: AtomicU64::new(u64::MAX),
+            max_response_time: AtomicU64::new(0),
+            anomaly_count: AtomicUsize::new(0),
+            redos_count: AtomicUsize::new(0),
+        }
+    }
+
+    fn update_atomic_stats(&self, response_time_ms: u64) {
+        self.total_requests.fetch_add(1, Ordering::Relaxed);
+        self.total_response_time.fetch_add(response_time_ms, Ordering::Relaxed);
+        
+        let current_min = self.min_response_time.load(Ordering::Relaxed);
+        while response_time_ms < current_min {
+            if self.min_response_time.compare_exchange(current_min, response_time_ms, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+                break;
+            }
+        }
+        
+        let current_max = self.max_response_time.load(Ordering::Relaxed);
+        while response_time_ms > current_max {
+            if self.max_response_time.compare_exchange(current_max, response_time_ms, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+                break;
+            }
         }
     }
 
     pub fn record(&mut self, duration: Duration) -> TimingResult {
-        let response_time_ms = duration.as_millis() as f64;
-        self.samples.push(response_time_ms);
+        let response_time_ms = duration.as_millis() as u64;
+        self.update_atomic_stats(response_time_ms);
+        
+        let response_time_f = response_time_ms as f64;
+        self.samples.push(response_time_f);
 
         if self.samples.len() >= self.min_samples_for_baseline {
             self.update_baseline();
         }
 
-        let (is_anomaly, anomaly_factor) = self.check_anomaly(response_time_ms);
-        let is_redos_suspected = response_time_ms as u64 >= self.redos_threshold_ms;
+        let (is_anomaly, anomaly_factor) = self.check_anomaly(response_time_f);
+        let is_redos_suspected = response_time_ms >= self.redos_threshold_ms;
+        
+        if is_anomaly {
+            self.anomaly_count.fetch_add(1, Ordering::Relaxed);
+        }
+        if is_redos_suspected {
+            self.redos_count.fetch_add(1, Ordering::Relaxed);
+        }
 
         TimingResult {
-            response_time_ms: response_time_ms as u64,
+            response_time_ms,
             is_anomaly,
             is_redos_suspected,
             anomaly_factor,
@@ -102,7 +168,7 @@ impl TimingAnalyzer {
         self.baseline_ms
     }
 
-    pub fn get_stats(&self) -> Option<TimingStats> {
+    pub fn get_histogram(&self) -> Option<TimingStats> {
         if self.samples.is_empty() {
             return None;
         }
@@ -133,6 +199,27 @@ impl TimingAnalyzer {
             p99: sorted.get(p99_idx).copied().unwrap_or(max_val),
             sample_count: len,
         })
+    }
+
+    pub fn get_stats(&self) -> TimingStats {
+        if let Some(stats) = self.get_histogram() {
+            stats
+        } else {
+            let total = self.total_requests.load(Ordering::Relaxed);
+            let total_time = self.total_response_time.load(Ordering::Relaxed);
+            let min = self.min_response_time.load(Ordering::Relaxed);
+            let max = self.max_response_time.load(Ordering::Relaxed);
+            let avg = if total > 0 { total_time / total } else { 0 };
+            TimingStats {
+                min: min as f64,
+                max: max as f64,
+                mean: avg as f64,
+                median: avg as f64,
+                p90: avg as f64,
+                p99: avg as f64,
+                sample_count: total as usize,
+            }
+        }
     }
 }
 

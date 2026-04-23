@@ -146,11 +146,11 @@ where
     if has_spinner {
         let stop_clone = stop.clone();
         let stage_clone = stage.clone();
-        tokio::task::spawn_blocking(move || {
+        std::thread::spawn(move || {
             let mut spinner = Spinner::new(stop_clone, stage_clone);
             while !spinner.stop.load(Ordering::Relaxed) {
                 spinner.tick();
-                tokio::runtime::Handle::current().block_on(tokio::time::sleep(std::time::Duration::from_millis(100)));
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
             spinner.stop();
         });
@@ -253,11 +253,11 @@ pub async fn run_cli(args: ReconArgs, config: &SlapperConfig) -> Result<()> {
     if has_spinner {
         let stop_clone = stop.clone();
         let stage_clone = stage.clone();
-        tokio::task::spawn_blocking(move || {
+        std::thread::spawn(move || {
             let mut spinner = Spinner::new(stop_clone, stage_clone);
             while !spinner.stop.load(Ordering::Relaxed) {
                 spinner.tick();
-                tokio::runtime::Handle::current().block_on(tokio::time::sleep(std::time::Duration::from_millis(100)));
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
             spinner.stop();
         });

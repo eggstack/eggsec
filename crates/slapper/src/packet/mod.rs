@@ -2,14 +2,19 @@ pub mod capture;
 pub mod craft;
 pub mod hexdump;
 pub mod parse;
+pub mod parse_impl;
+pub mod types;
+pub mod validation;
 pub mod traceroute;
 
 pub use capture::{CaptureBuilder, CaptureConfig, CaptureStats, PacketCapture};
 pub use craft::PacketBuilder;
 pub use hexdump::{hexdump, hexdump_with_offset};
-pub use parse::{
-    AppLayer, DnsRecord, EthernetFrame, HttpHeader, IpPacket, ParsedPacket, TcpHeader,
-    TlsHandshake, TransportProtocol, UdpHeader,
+pub use parse::ParsedPacket;
+pub use types::{
+    AppLayer, DnsAnswer, DnsQuestion, DnsRecord, EthernetFrame, HttpHeader, HttpRequest,
+    HttpResponse, IcmpHeader, IpFlags, IpOption, IpPacket, TcpFlags, TcpHeader, TcpOption,
+    TlsClientHello, TlsHandshake, TlsServerHello, TransportProtocol, UdpHeader,
 };
 pub use traceroute::{TracerouteConfig, TracerouteHop, TracerouteResult};
 

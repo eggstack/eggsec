@@ -72,6 +72,7 @@
 //! - Network connectivity issues occur
 
 pub mod bypass;
+pub mod data;
 pub mod detector;
 pub mod output;
 pub mod payloads;

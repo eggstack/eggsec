@@ -91,7 +91,7 @@ pub mod icmp_probe;
 
 pub use endpoints::{scan_endpoints, EndpointResult, EndpointScanConfig, EndpointScanResults};
 pub use fingerprint::{fingerprint_services, FingerprintResults, ServiceFingerprint};
-pub use ports::{scan_ports, PortResult, PortScanResults};
+pub use ports::{scan_ports, PortResult, PortScanConfig, PortScanResults, MAX_SCAN_RESULTS, COMMON_PORTS};
 pub use spoof::{format_spoof_warning, random_ip_from_cidr, SpoofConfig, SpoofStats};
 pub use timing::{PortPriority, TimingConfig, TimingPreset};
 pub use udp_fingerprint::{

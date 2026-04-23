@@ -151,6 +151,18 @@ pub struct AiConfig {
     pub max_tokens: Option<usize>,
     #[serde(default)]
     pub temperature: Option<f64>,
+    #[serde(default = "default_max_payloads")]
+    pub max_payloads: usize,
+    #[serde(default = "default_max_bypasses")]
+    pub max_bypasses: usize,
+}
+
+fn default_max_payloads() -> usize {
+    50
+}
+
+fn default_max_bypasses() -> usize {
+    10
 }
 
 fn default_search_cache_ttl() -> u64 {
@@ -386,6 +398,8 @@ impl Default for AiConfig {
             base_url: None,
             max_tokens: Some(4096),
             temperature: Some(0.7),
+            max_payloads: 50,
+            max_bypasses: 10,
         }
     }
 }

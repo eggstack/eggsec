@@ -184,7 +184,7 @@ pub async fn run_oauth(
     state_test: bool,
     grant_test: bool,
     _concurrency: usize,
-    timeout: u64,
+    _timeout: u64,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {

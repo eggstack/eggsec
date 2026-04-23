@@ -1,3 +1,4 @@
+use crate::error::{Result, SlapperError};
 use crate::notify::{WebhookNotifier, NotificationPayload, WebhookConfig, WebhookEvent};
 use crate::types::SensitiveString;
 
@@ -9,47 +10,42 @@ pub struct WebhookTestConfig {
     pub secret: Option<String>,
 }
 
-fn print_send_result(result: Result<(), String>, provider: &str) {
-    match result {
-        Ok(_) => println!("  ✓ {} notification sent successfully!", provider),
-        Err(e) => println!("  ✗ {} failed: {}", provider, e),
-    }
-}
-
 pub async fn send_webhook_notifications(
     config: &WebhookTestConfig,
     payload: &NotificationPayload,
     custom_webhooks: Option<Vec<WebhookConfig>>,
-) {
-    let notifier = WebhookNotifier::new(custom_webhooks.unwrap_or_default()).ok();
+) -> Result<()> {
+    let notifier = WebhookNotifier::new(custom_webhooks.unwrap_or_default())?;
+
+    let mut errors = Vec::new();
 
     if let Some(ref slack_url) = config.slack {
         println!("Sending test to Slack: {}", slack_url);
-        if let Some(ref n) = notifier {
-            let result = n.notify_slack(slack_url, payload).await;
-            print_send_result(result, "Slack");
+        if let Err(e) = notifier.notify_slack(slack_url, payload).await {
+            println!("  ✗ Slack failed: {}", e);
+            errors.push("Slack");
         } else {
-            println!("  ✗ Failed to create notifier");
+            println!("  ✓ Slack notification sent successfully!");
         }
     }
 
     if let Some(ref discord_url) = config.discord {
         println!("Sending test to Discord: {}", discord_url);
-        if let Some(ref n) = notifier {
-            let result = n.notify_discord(discord_url, payload).await;
-            print_send_result(result, "Discord");
+        if let Err(e) = notifier.notify_discord(discord_url, payload).await {
+            println!("  ✗ Discord failed: {}", e);
+            errors.push("Discord");
         } else {
-            println!("  ✗ Failed to create notifier");
+            println!("  ✓ Discord notification sent successfully!");
         }
     }
 
     if let Some(ref teams_url) = config.teams {
         println!("Sending test to Teams: {}", teams_url);
-        if let Some(ref n) = notifier {
-            let result = n.notify_teams(teams_url, payload).await;
-            print_send_result(result, "Teams");
+        if let Err(e) = notifier.notify_teams(teams_url, payload).await {
+            println!("  ✗ Teams failed: {}", e);
+            errors.push("Teams");
         } else {
-            println!("  ✗ Failed to create notifier");
+            println!("  ✓ Teams notification sent successfully!");
         }
     }
 
@@ -62,13 +58,21 @@ pub async fn send_webhook_notifications(
             headers: std::collections::HashMap::new(),
             events: vec![WebhookEvent::ScanComplete],
         }];
-        if let Ok(notifier) = WebhookNotifier::new(webhook_config) {
-            match notifier.notify(payload).await.first() {
-                Some(Ok(_)) => println!("  ✓ Test notification sent successfully!"),
-                Some(Err(e)) => println!("  ✗ Failed: {}", e),
-                None => println!("  No webhooks configured"),
+        let notifier = WebhookNotifier::new(webhook_config)?;
+        match notifier.notify(payload).await.first() {
+            Some(Ok(_)) => println!("  ✓ Test notification sent successfully!"),
+            Some(Err(e)) => {
+                println!("  ✗ Failed: {}", e);
+                errors.push("Webhook");
             }
+            None => println!("  No webhooks configured"),
         }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(SlapperError::Config(format!("Failed to send notifications to: {}", errors.join(", "))))
     }
 }
 

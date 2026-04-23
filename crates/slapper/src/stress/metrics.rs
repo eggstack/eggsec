@@ -174,14 +174,157 @@ pub struct PacketBatch {
     pub total_size: u64,
 }
 
-impl PacketBatch {
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            packets: Vec::with_capacity(capacity),
-            total_size: 0,
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_stress_metrics_new() {
+        let metrics = StressMetrics::new();
+        assert_eq!(metrics.packets_sent(), 0);
+        assert_eq!(metrics.bytes_sent(), 0);
+        assert_eq!(metrics.errors(), 0);
     }
 
+    #[test]
+    fn test_stress_metrics_record_packet() {
+        let metrics = StressMetrics::new();
+        metrics.record_packet(64);
+        assert_eq!(metrics.packets_sent(), 1);
+        assert_eq!(metrics.bytes_sent(), 64);
+    }
+
+    #[test]
+    fn test_stress_metrics_record_multiple() {
+        let metrics = StressMetrics::new();
+        metrics.record_packet(64);
+        metrics.record_packet(128);
+        metrics.record_packet(256);
+        assert_eq!(metrics.packets_sent(), 3);
+        assert_eq!(metrics.bytes_sent(), 448);
+    }
+
+    #[test]
+    fn test_stress_metrics_record_error() {
+        let metrics = StressMetrics::new();
+        metrics.record_error();
+        assert_eq!(metrics.errors(), 1);
+    }
+
+    #[test]
+    fn test_stress_metrics_to_stats() {
+        let metrics = StressMetrics::new();
+        metrics.record_packet(100);
+        metrics.record_packet(200);
+        let stats = metrics.to_stats();
+        assert_eq!(stats.packets_sent, 2);
+        assert_eq!(stats.bytes_sent, 300);
+    }
+
+    #[test]
+    fn test_stress_metrics_clone() {
+        let metrics = StressMetrics::new();
+        metrics.record_packet(100);
+        let cloned = metrics.clone();
+        cloned.record_packet(200);
+        assert_eq!(metrics.packets_sent(), 1);
+        assert_eq!(cloned.packets_sent(), 1);
+    }
+
+    #[test]
+    fn test_stress_stats_avg_rate_pps() {
+        let stats = StressStats {
+            duration_ms: 1000,
+            packets_sent: 1000,
+            bytes_sent: 64000,
+            errors: 0,
+        };
+        assert_eq!(stats.avg_rate_pps(), 1000);
+    }
+
+    #[test]
+    fn test_stress_stats_avg_rate_pps_zero_duration() {
+        let stats = StressStats {
+            duration_ms: 0,
+            packets_sent: 100,
+            bytes_sent: 6400,
+            errors: 0,
+        };
+        assert_eq!(stats.avg_rate_pps(), 0);
+    }
+
+    #[test]
+    fn test_stress_stats_avg_bandwidth_mbps() {
+        let stats = StressStats {
+            duration_ms: 1000,
+            packets_sent: 1000,
+            bytes_sent: 125000, // 1 Mb
+            errors: 0,
+        };
+        assert_eq!(stats.avg_bandwidth_mbps(), 1.0);
+    }
+
+    #[test]
+    fn test_stress_stats_merge() {
+        let mut stats1 = StressStats {
+            duration_ms: 1000,
+            packets_sent: 100,
+            bytes_sent: 6400,
+            errors: 5,
+        };
+        let stats2 = StressStats {
+            duration_ms: 2000,
+            packets_sent: 200,
+            bytes_sent: 12800,
+            errors: 3,
+        };
+        stats1.merge(&stats2);
+        assert_eq!(stats1.duration_ms, 2000);
+        assert_eq!(stats1.packets_sent, 300);
+        assert_eq!(stats1.bytes_sent, 19200);
+        assert_eq!(stats1.errors, 8);
+    }
+
+    #[test]
+    fn test_packet_batch_new() {
+        let batch = PacketBatch::new(10);
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+    }
+
+    #[test]
+    fn test_packet_batch_add() {
+        let mut batch = PacketBatch::new(10);
+        batch.add(vec![1, 2, 3, 4]);
+        assert!(!batch.is_empty());
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch.total_size, 4);
+    }
+
+    #[test]
+    fn test_packet_batch_clear() {
+        let mut batch = PacketBatch::new(10);
+        batch.add(vec![1, 2]);
+        batch.add(vec![3, 4]);
+        batch.clear();
+        assert!(batch.is_empty());
+        assert_eq!(batch.total_size, 0);
+    }
+
+    #[test]
+    fn test_rate_limiter_new() {
+        let limiter = RateLimiter::new(100);
+        assert_eq!(limiter.interval_ns, 10_000_000);
+    }
+
+    #[test]
+    fn test_rate_limiter_zero_pps() {
+        let limiter = RateLimiter::new(0);
+        assert_eq!(limiter.interval_ns, 0);
+    }
+}
+
+impl PacketBatch {
     pub fn add(&mut self, packet: Vec<u8>) {
         self.total_size += packet.len() as u64;
         self.packets.push(packet);

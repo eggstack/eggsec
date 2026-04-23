@@ -194,10 +194,14 @@ async fn handle_connect_request(
     let tls_acceptor = create_tls_acceptor(&cert, client_cert.as_ref())
         .map_err(|e| SlapperError::Proxy(format!("TLS config failed: {}", e)))?;
 
-    let mut client_stream = match tls_acceptor.accept(stream).await {
-        Ok(s) => s,
-        Err(e) => {
+    let mut client_stream = match timeout(Duration::from_secs(30), tls_acceptor.accept(stream)).await {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => {
             tracing::debug!("TLS accept failed: {}", e);
+            return Ok(());
+        }
+        Err(_) => {
+            tracing::debug!("TLS accept timeout");
             return Ok(());
         }
     };
@@ -205,10 +209,14 @@ async fn handle_connect_request(
     let (mut client_read, mut client_write) = client_stream.split();
     let (mut upstream_read, mut upstream_write) = tokio::io::split(upstream);
 
-    tokio::io::copy(&mut client_read, &mut upstream_write).await?;
-    tokio::io::copy(&mut upstream_read, &mut client_write).await?;
+    let client_to_upstream = tokio::io::copy(&mut client_read, &mut upstream_write);
+    let upstream_to_client = tokio::io::copy(&mut upstream_read, &mut client_write);
 
-    Ok(())
+    match timeout(Duration::from_secs(30), client_to_upstream.join(upstream_to_client)).await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(SlapperError::Proxy(format!("Proxy IO error: {}", e))),
+        Err(_) => Ok(()),
+    }
 }
 
 async fn handle_http_request(

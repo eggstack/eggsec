@@ -204,13 +204,15 @@ async fn process_port_scan(task: Task) -> Result<serde_json::Value> {
 
     let results = crate::scanner::ports::scan_ports(
         target,
-        parsed_ports,
-        concurrency,
-        std::time::Duration::from_secs(timeout),
-        false,
-        crate::scanner::spoof::SpoofConfig::default(),
-        None,
-        None,
+        crate::scanner::ports::PortScanConfig {
+            ports: parsed_ports,
+            concurrency,
+            timeout_duration: std::time::Duration::from_secs(timeout),
+            tui_mode: false,
+            spoof_config: crate::scanner::spoof::SpoofConfig::default(),
+            progress_tx: None,
+            max_results: None,
+        },
     )
     .await?;
 

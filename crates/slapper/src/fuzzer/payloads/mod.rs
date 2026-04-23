@@ -16,6 +16,7 @@ pub mod macros;
 pub mod mass_assign;
 pub mod nosql;
 pub mod oauth;
+pub mod oast;
 pub mod prototype;
 pub mod race;
 pub mod redirect;
@@ -65,6 +66,7 @@ pub enum PayloadType {
     Prototype,
     Race,
     MassAssign,
+    Oast,
 }
 
 impl std::fmt::Display for PayloadType {
@@ -99,6 +101,7 @@ impl std::fmt::Display for PayloadType {
             PayloadType::Prototype => write!(f, "Prototype Pollution"),
             PayloadType::Race => write!(f, "Race Condition"),
             PayloadType::MassAssign => write!(f, "Mass Assignment"),
+            PayloadType::Oast => write!(f, "OAST"),
         }
     }
 }
@@ -178,6 +181,7 @@ pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
         PayloadType::Prototype => prototype::get_payloads(),
         PayloadType::Race => race::get_payloads(),
         PayloadType::MassAssign => mass_assign::get_payloads(),
+        PayloadType::Oast => oast::get_oast_payloads(),
     }
 }
 

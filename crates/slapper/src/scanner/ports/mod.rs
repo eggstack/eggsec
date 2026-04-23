@@ -17,19 +17,16 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Duration;
-use tokio::net::TcpStream;
-use tokio::time::timeout;
 use dashmap::DashMap;
+use rustc_hash::FxHashMap;
 
 use crate::cli::PortScanArgs;
 use crate::config::SlapperConfig;
 
-const MAX_SCAN_RESULTS: usize = 100_000;
-
-pub use spoofed::init_packet_trace;
-
-static COMMON_PORTS: &[(u16, &str)] = &[
+pub const MAX_SCAN_RESULTS: usize = 10000;
+pub const COMMON_PORTS: &[(u16, &str)] = &[
     (21, "FTP"),
     (22, "SSH"),
     (23, "Telnet"),
@@ -54,13 +51,72 @@ static COMMON_PORTS: &[(u16, &str)] = &[
     (27017, "MongoDB"),
 ];
 
-fn get_service_name(port: u16) -> String {
-    COMMON_PORTS
-        .iter()
-        .find(|(p, _)| *p == port)
-        .map(|(_, name)| name.to_string())
-        .unwrap_or_else(|| "unknown".to_string())
+static COMMON_PORTS_MAP: LazyLock<FxHashMap<u16, &'static str>> = LazyLock::new(|| {
+    let mut m = FxHashMap::default();
+    m.insert(21, "FTP");
+    m.insert(22, "SSH");
+    m.insert(23, "Telnet");
+    m.insert(25, "SMTP");
+    m.insert(53, "DNS");
+    m.insert(80, "HTTP");
+    m.insert(110, "POP3");
+    m.insert(143, "IMAP");
+    m.insert(443, "HTTPS");
+    m.insert(445, "SMB");
+    m.insert(993, "IMAPS");
+    m.insert(995, "POP3S");
+    m.insert(1433, "MSSQL");
+    m.insert(1521, "Oracle");
+    m.insert(3306, "MySQL");
+    m.insert(3389, "RDP");
+    m.insert(5432, "PostgreSQL");
+    m.insert(5900, "VNC");
+    m.insert(6379, "Redis");
+    m.insert(8080, "HTTP-Alt");
+    m.insert(8443, "HTTPS-Alt");
+    m.insert(27017, "MongoDB");
+    m
+});
+
+fn get_service_name(port: u16) -> &'static str {
+    COMMON_PORTS_MAP.get(&port).copied().unwrap_or("unknown")
 }
+
+#[derive(Debug, Clone)]
+pub struct PortScanConfig {
+    pub ports: Vec<u16>,
+    pub concurrency: usize,
+    pub timeout_duration: Duration,
+    pub tui_mode: bool,
+    pub spoof_config: SpoofConfig,
+    pub progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
+    pub max_results: Option<usize>,
+}
+
+impl Default for PortScanConfig {
+    fn default() -> Self {
+        Self {
+            ports: Vec::new(),
+            concurrency: 100,
+            timeout_duration: Duration::from_secs(3),
+            tui_mode: false,
+            spoof_config: SpoofConfig::default(),
+            progress_tx: None,
+            max_results: None,
+        }
+    }
+}
+
+impl PortScanConfig {
+    pub fn new(ports: Vec<u16>) -> Self {
+        Self {
+            ports,
+            ..Default::default()
+        }
+    }
+}
+
+pub use spoofed::init_packet_trace;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortResult {
@@ -190,18 +246,17 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
     }
 
     let ports_count = ports.len();
-
-    let results = scan_ports(
-        &args.host,
+    let port_args = PortScanConfig {
         ports,
-        args.concurrency,
-        Duration::from_secs(timeout_secs),
-        false,
+        concurrency: args.concurrency,
+        timeout_duration: Duration::from_secs(timeout_secs),
+        tui_mode: false,
         spoof_config,
-        None,
-        None,
-    )
-    .await?;
+        progress_tx: None,
+        max_results: None,
+    };
+
+    let results = scan_ports(&args.host, port_args).await?;
 
     if args.verbose {
         eprintln!(
@@ -432,23 +487,17 @@ where
 
 pub async fn scan_ports(
     host: &str,
-    ports: Vec<u16>,
-    concurrency: usize,
-    timeout_duration: Duration,
-    tui_mode: bool,
-    spoof_config: SpoofConfig,
-    progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
-    max_results: Option<usize>,
+    config: PortScanConfig,
 ) -> Result<PortScanResults> {
-    if spoof_config.enabled && spoof_config.use_raw_sockets {
+    if config.spoof_config.enabled && config.spoof_config.use_raw_sockets {
         return spoofed::scan_ports_spoofed(
             host,
-            ports,
-            concurrency,
-            timeout_duration,
-            tui_mode,
-            spoof_config,
-            progress_tx,
+            config.ports,
+            config.concurrency,
+            config.timeout_duration,
+            config.tui_mode,
+            config.spoof_config,
+            config.progress_tx,
         )
         .await;
     }
@@ -457,12 +506,12 @@ pub async fn scan_ports(
     let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(AtomicU64::new(0));
     let results_count = Arc::new(tokio::sync::Mutex::new(0usize));
-    let total_ports = ports.len() as u64;
+    let total_ports = config.ports.len() as u64;
 
-    let progress = if tui_mode {
+    let progress = if config.tui_mode {
         None
     } else {
-        let pb = Arc::new(ProgressBar::new(ports.len() as u64));
+        let pb = Arc::new(ProgressBar::new(config.ports.len() as u64));
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ports ({eta})")
@@ -472,18 +521,18 @@ pub async fn scan_ports(
         Some(pb)
     };
 
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
-    let mut handles = Vec::with_capacity(ports.len());
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(config.concurrency));
+    let mut handles = Vec::with_capacity(config.ports.len());
     let start = std::time::Instant::now();
-    let ports_count = ports.len();
+    let ports_count = config.ports.len();
 
-    for port in ports {
+    for port in config.ports {
         let permit = semaphore.clone().acquire_owned().await?;
         let results = results.clone();
         let progress = progress.clone();
-        let timeout_dur = timeout_duration;
+        let timeout_dur = config.timeout_duration;
         let scanned_count = scanned_count.clone();
-        let progress_tx = progress_tx.clone();
+        let progress_tx = config.progress_tx.clone();
         let results_count = results_count.clone();
 
         let handle = tokio::spawn(async move {
@@ -492,7 +541,7 @@ pub async fn scan_ports(
 
             match result {
                 Ok(_) => {
-                    let should_insert = match max_results {
+                    let should_insert = match config.max_results {
                         Some(limit) => {
                             let count = *results_count.lock().await;
                             if count >= limit {
@@ -508,12 +557,12 @@ pub async fn scan_ports(
                         results.insert(port, PortResult {
                             port,
                             status: "open".to_string(),
-                            service: get_service_name(port),
+                            service: get_service_name(port).to_string(),
                         });
                     }
                 }
                 Err(_) => {
-                    let should_insert = match max_results {
+                    let should_insert = match config.max_results {
                         Some(limit) => {
                             let count = *results_count.lock().await;
                             if count >= limit {
@@ -529,7 +578,7 @@ pub async fn scan_ports(
                         results.insert(port, PortResult {
                             port,
                             status: "closed".to_string(),
-                            service: get_service_name(port),
+                            service: get_service_name(port).to_string(),
                         });
                     }
                 }

@@ -67,6 +67,45 @@ impl Default for ScanDepth {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OffPeakWindow {
+    pub start_hour: u8,
+    pub end_hour: u8,
+    pub timezone: String,
+}
+
+impl OffPeakWindow {
+    pub fn is_in_window(&self, time: &DateTime<Utc>) -> bool {
+        let local = match &self.timezone[..] {
+            "UTC" => time.hour(),
+            _ => {
+                let offset_hours: i32 = self.timezone.trim().parse().unwrap_or(0);
+                let offset_time = *time + chrono::Duration::hours(offset_hours);
+                offset_time.hour() as i32
+            }
+        };
+        let current_hour = local as i32;
+        let start = self.start_hour as i32;
+        let end = self.end_hour as i32;
+
+        if start <= end {
+            current_hour >= start && current_hour < end
+        } else {
+            current_hour >= start || current_hour < end
+        }
+    }
+}
+
+impl Default for OffPeakWindow {
+    fn default() -> Self {
+        Self {
+            start_hour: 0,
+            end_hour: 6,
+            timezone: "UTC".to_string(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScanRecord {
     pub scan_id: String,
@@ -88,6 +127,7 @@ pub struct TargetConfig {
     pub baseline_findings: Vec<String>,
     pub enabled: bool,
     pub scan_depth: ScanDepth,
+    pub off_peak_window: Option<OffPeakWindow>,
 }
 
 impl Default for TargetConfig {
@@ -103,6 +143,7 @@ impl Default for TargetConfig {
             baseline_findings: Vec::new(),
             enabled: true,
             scan_depth: ScanDepth::default(),
+            off_peak_window: None,
         }
     }
 }

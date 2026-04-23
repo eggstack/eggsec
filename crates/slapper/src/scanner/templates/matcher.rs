@@ -161,7 +161,12 @@ impl TemplateMatcher {
             super::models::MatchMode::Regex => {
                 self.regex_cache
                     .entry(search.pattern.clone())
-                    .or_insert_with(|| regex::Regex::new(&search.pattern).unwrap_or_else(|_| regex::Regex::new("").unwrap()))
+                    .or_insert_with(|| {
+                        regex::RegexBuilder::new(&search.pattern)
+                            .size_limit(100_000)
+                            .build()
+                            .unwrap_or_else(|_| regex::Regex::new("").unwrap())
+                    })
                     .is_match(text)
             }
             super::models::MatchMode::Binary => {

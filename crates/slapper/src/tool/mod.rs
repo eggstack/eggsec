@@ -38,6 +38,7 @@
 
 pub mod convert;
 pub mod dispatcher;
+pub mod finding;
 pub mod history;
 pub mod openapi;
 pub mod planner;
@@ -47,6 +48,7 @@ pub mod request;
 pub mod response;
 pub mod scripting;
 pub mod state;
+pub mod tool_error;
 pub mod traits;
 
 pub mod implementations;
@@ -67,8 +69,8 @@ pub use request::{
     CancellationToken, CancellationTokenHandle, RequestOptions, Target, TargetType, ToolRequest,
 };
 pub use response::{
-    ProgressUpdate, ResponseMetadata, ResponseStatus, StreamEvent, StreamEventType, ToolError,
-    ToolErrorType, ToolResponse,
+    Finding, FindingType, ProgressUpdate, ResponseMetadata, ResponseSeverity, ResponseStatus,
+    StreamEvent, StreamEventType, ToolError, ToolErrorType, ToolResponse,
 };
 pub use state::{AgentSession, ScanContext, SessionManager, SessionStatus};
 pub use traits::{

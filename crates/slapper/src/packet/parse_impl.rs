@@ -1,12 +1,4 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EthernetFrame {
-    pub dst_mac: String,
-    pub src_mac: String,
-    pub ether_type: u16,
-    pub ether_type_name: String,
-}
+use crate::packet::types::*;
 
 impl EthernetFrame {
     pub fn parse(data: &[u8]) -> Option<Self> {
@@ -39,53 +31,9 @@ impl EthernetFrame {
             ether_type_name,
         })
     }
-
-    pub fn header_len() -> usize {
-        14
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IpPacket {
-    pub version: u8,
-    pub header_len: u8,
-    pub total_len: u16,
-    pub ttl: u8,
-    pub protocol: u8,
-    pub protocol_name: String,
-    pub src_ip: String,
-    pub dst_ip: String,
-    pub payload: Vec<u8>,
-    pub options: Vec<IpOption>,
-    pub identification: u16,
-    pub flags: IpFlags,
-    pub checksum: u16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct IpFlags {
-    pub reserved: bool,
-    pub dont_fragment: bool,
-    pub more_fragments: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IpOption {
-    pub code: u8,
-    pub name: String,
-    pub length: Option<u8>,
-    pub data: Option<Vec<u8>>,
 }
 
 impl IpPacket {
-    pub fn src_ip(&self) -> &str {
-        &self.src_ip
-    }
-
-    pub fn dst_ip(&self) -> &str {
-        &self.dst_ip
-    }
-
     pub fn parse_ipv4(data: &[u8]) -> Option<Self> {
         if data.len() < 20 {
             return None;
@@ -225,8 +173,8 @@ impl IpPacket {
         let next_header = data[6];
         let hop_limit = data[7];
 
-        let src_ip = format_ipv6(&data[8..24]);
-        let dst_ip = format_ipv6(&data[24..40]);
+        let src_ip = super::validation::format_ipv6(&data[8..24]);
+        let dst_ip = super::validation::format_ipv6(&data[24..40]);
 
         let protocol_name = match next_header {
             6 => "TCP".to_string(),
@@ -257,108 +205,6 @@ impl IpPacket {
             checksum: 0,
         })
     }
-
-    pub fn parse(data: &[u8]) -> Option<Self> {
-        if data.is_empty() {
-            return None;
-        }
-        let version = (data[0] >> 4) & 0x0f;
-        match version {
-            4 => Self::parse_ipv4(data),
-            6 => Self::parse_ipv6(data),
-            _ => None,
-        }
-    }
-}
-
-fn format_ipv6(bytes: &[u8]) -> String {
-    let parts: Vec<String> = (0..8)
-        .map(|i| format!("{:x}", u16::from_be_bytes([bytes[i * 2], bytes[i * 2 + 1]])))
-        .collect();
-    parts.join(":")
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct TcpFlags {
-    pub fin: bool,
-    pub syn: bool,
-    pub rst: bool,
-    pub psh: bool,
-    pub ack: bool,
-    pub urg: bool,
-    pub ece: bool,
-    pub cwr: bool,
-}
-
-impl TcpFlags {
-    pub fn from_bits(bits: u8) -> Self {
-        Self {
-            fin: (bits & 0x01) != 0,
-            syn: (bits & 0x02) != 0,
-            rst: (bits & 0x04) != 0,
-            psh: (bits & 0x08) != 0,
-            ack: (bits & 0x10) != 0,
-            urg: (bits & 0x20) != 0,
-            ece: (bits & 0x40) != 0,
-            cwr: (bits & 0x80) != 0,
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        let mut flags = Vec::new();
-        if self.cwr {
-            flags.push("CWR");
-        }
-        if self.ece {
-            flags.push("ECE");
-        }
-        if self.urg {
-            flags.push("URG");
-        }
-        if self.ack {
-            flags.push("ACK");
-        }
-        if self.psh {
-            flags.push("PSH");
-        }
-        if self.rst {
-            flags.push("RST");
-        }
-        if self.syn {
-            flags.push("SYN");
-        }
-        if self.fin {
-            flags.push("FIN");
-        }
-        if flags.is_empty() {
-            "None".to_string()
-        } else {
-            flags.join(", ")
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TcpHeader {
-    pub src_port: u16,
-    pub dst_port: u16,
-    pub seq_num: u32,
-    pub ack_num: u32,
-    pub data_offset: u8,
-    pub flags: TcpFlags,
-    pub window_size: u16,
-    pub checksum: u16,
-    pub urgent_ptr: u16,
-    pub payload: Vec<u8>,
-    pub options: Vec<TcpOption>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TcpOption {
-    pub kind: u8,
-    pub name: String,
-    pub length: Option<u8>,
-    pub data: Option<Vec<u8>>,
 }
 
 impl TcpHeader {
@@ -476,15 +322,6 @@ impl TcpHeader {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UdpHeader {
-    pub src_port: u16,
-    pub dst_port: u16,
-    pub length: u16,
-    pub checksum: u16,
-    pub payload: Vec<u8>,
-}
-
 impl UdpHeader {
     pub fn parse(data: &[u8]) -> Option<Self> {
         if data.len() < 8 {
@@ -506,14 +343,6 @@ impl UdpHeader {
             payload,
         })
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IcmpHeader {
-    pub icmp_type: u8,
-    pub icmp_code: u8,
-    pub checksum: u16,
-    pub payload: Vec<u8>,
 }
 
 impl IcmpHeader {
@@ -550,38 +379,6 @@ impl IcmpHeader {
             payload,
         })
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TransportProtocol {
-    Tcp(TcpHeader),
-    Udp(UdpHeader),
-    Icmp(IcmpHeader),
-    Unknown(Vec<u8>),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HttpRequest {
-    pub method: String,
-    pub uri: String,
-    pub version: String,
-    pub headers: Vec<HttpHeader>,
-    pub body: Option<Vec<u8>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HttpResponse {
-    pub version: String,
-    pub status_code: u16,
-    pub reason_phrase: String,
-    pub headers: Vec<HttpHeader>,
-    pub body: Option<Vec<u8>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HttpHeader {
-    pub name: String,
-    pub value: String,
 }
 
 impl HttpRequest {
@@ -690,30 +487,6 @@ impl HttpResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DnsRecord {
-    pub transaction_id: u16,
-    pub flags: String,
-    pub query_type: String,
-    pub questions: Vec<DnsQuestion>,
-    pub answers: Vec<DnsAnswer>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DnsQuestion {
-    pub name: String,
-    pub query_type: String,
-    pub class: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DnsAnswer {
-    pub name: String,
-    pub record_type: String,
-    pub ttl: u32,
-    pub data: String,
-}
-
 impl DnsRecord {
     pub fn parse(data: &[u8]) -> Option<Self> {
         if data.len() < 12 {
@@ -750,7 +523,7 @@ impl DnsRecord {
         let mut offset = 12;
 
         for _ in 0..questions_count {
-            if let Some((name, new_offset)) = parse_dns_name(data, offset) {
+            if let Some((name, new_offset)) = super::validation::parse_dns_name(data, offset) {
                 if new_offset + 4 > data.len() {
                     break;
                 }
@@ -759,7 +532,7 @@ impl DnsRecord {
 
                 questions.push(DnsQuestion {
                     name,
-                    query_type: dns_type_to_string(qtype),
+                    query_type: super::validation::dns_type_to_string(qtype),
                     class: format!("{}", qclass),
                 });
                 offset = new_offset + 4;
@@ -769,7 +542,7 @@ impl DnsRecord {
         }
 
         for _ in 0..answers_count {
-            if let Some((name, new_offset)) = parse_dns_name(data, offset) {
+            if let Some((name, new_offset)) = super::validation::parse_dns_name(data, offset) {
                 if new_offset + 10 > data.len() {
                     break;
                 }
@@ -784,14 +557,14 @@ impl DnsRecord {
                 let rdlen = u16::from_be_bytes([data[new_offset + 8], data[new_offset + 9]]);
 
                 let rdata = if new_offset + 10 + rdlen as usize <= data.len() {
-                    parse_dns_rdata(data, new_offset + 10, atype, rdlen as usize)
+                    super::validation::parse_dns_rdata(data, new_offset + 10, atype, rdlen as usize)
                 } else {
                     String::new()
                 };
 
                 answers.push(DnsAnswer {
                     name,
-                    record_type: dns_type_to_string(atype),
+                    record_type: super::validation::dns_type_to_string(atype),
                     ttl,
                     data: rdata,
                 });
@@ -809,132 +582,6 @@ impl DnsRecord {
             answers,
         })
     }
-}
-
-fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
-    let mut name = String::new();
-    let mut pos = offset;
-    let mut jumped = false;
-    let mut jumps = 0;
-    let original_offset = offset;
-
-    while pos < data.len() {
-        let length = data[pos] as usize;
-
-        if length == 0 {
-            if !jumped {
-                return Some((name, pos + 1));
-            }
-            return Some((name, original_offset));
-        }
-
-        if (length & 0xc0) == 0xc0 {
-            if pos + 1 >= data.len() {
-                return None;
-            }
-            let new_offset = ((length & 0x3f) as usize) << 8 | data[pos + 1] as usize;
-            if jumps == 0 {
-                jumps = pos - original_offset + 2;
-            }
-            pos = new_offset;
-            jumped = true;
-            jumps += 1;
-            if jumps > 10 {
-                return None;
-            }
-            continue;
-        }
-
-        if !name.is_empty() {
-            name.push('.');
-        }
-
-        let label_start = pos + 1;
-        let label_end = label_start + length;
-        if label_end > data.len() {
-            return None;
-        }
-
-        let label = String::from_utf8_lossy(&data[label_start..label_end]).to_string();
-        name.push_str(&label);
-        pos = label_end;
-    }
-
-    Some((name, pos + 1))
-}
-
-fn parse_dns_rdata(data: &[u8], offset: usize, rtype: u16, _rdlen: usize) -> String {
-    match rtype {
-        1 => {
-            if offset + 4 <= data.len() {
-                format!(
-                    "{}.{}.{}.{}",
-                    data[offset],
-                    data[offset + 1],
-                    data[offset + 2],
-                    data[offset + 3]
-                )
-            } else {
-                String::new()
-            }
-        }
-        2 | 5 | 12 | 15 | 16 => {
-            if let Some((name, _)) = parse_dns_name(data, offset) {
-                name
-            } else {
-                String::new()
-            }
-        }
-        28 => {
-            if offset + 16 <= data.len() {
-                format_ipv6(&data[offset..offset + 16])
-            } else {
-                String::new()
-            }
-        }
-        _ => {
-            format!("{} bytes", _rdlen)
-        }
-    }
-}
-
-fn dns_type_to_string(qtype: u16) -> String {
-    match qtype {
-        1 => "A".to_string(),
-        2 => "NS".to_string(),
-        5 => "CNAME".to_string(),
-        6 => "SOA".to_string(),
-        12 => "PTR".to_string(),
-        15 => "MX".to_string(),
-        16 => "TXT".to_string(),
-        28 => "AAAA".to_string(),
-        33 => "SRV".to_string(),
-        _ => format!("TYPE{}", qtype),
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TlsHandshake {
-    pub handshake_type: String,
-    pub version: String,
-    pub client_hello: Option<TlsClientHello>,
-    pub server_hello: Option<TlsServerHello>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TlsClientHello {
-    pub session_id: Vec<u8>,
-    pub cipher_suites: Vec<String>,
-    pub compression_methods: Vec<String>,
-    pub server_name: Option<String>,
-    pub supported_versions: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TlsServerHello {
-    pub version: String,
-    pub session_id: Vec<u8>,
-    pub cipher_suite: String,
 }
 
 impl TlsHandshake {
@@ -979,22 +626,6 @@ impl TlsHandshake {
             server_hello: None,
         })
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AppLayer {
-    Http(HttpRequest),
-    Dns(DnsRecord),
-    Tls(TlsHandshake),
-    Unknown,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParsedPacket {
-    pub ethernet: Option<EthernetFrame>,
-    pub ip: Option<IpPacket>,
-    pub transport: Option<TransportProtocol>,
-    pub app: Option<AppLayer>,
 }
 
 impl ParsedPacket {

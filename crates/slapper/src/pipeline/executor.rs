@@ -235,13 +235,15 @@ impl Pipeline {
 
         let results = crate::scanner::ports::scan_ports(
             &self.target,
-            ports,
-            self.concurrency,
-            std::time::Duration::from_secs(2),
-            self.tui_mode,
-            self.spoof_config.clone(),
-            None,
-            None,
+            crate::scanner::ports::PortScanConfig {
+                ports,
+                concurrency: self.concurrency,
+                timeout_duration: std::time::Duration::from_secs(2),
+                tui_mode: self.tui_mode,
+                spoof_config: self.spoof_config.clone(),
+                progress_tx: None,
+                max_results: None,
+            },
         )
         .await?;
 

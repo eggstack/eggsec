@@ -366,6 +366,8 @@ mod tests {
             base_url: Some("https://api.openai.com/v1/chat/completions".to_string()),
             max_tokens: Some(2048),
             temperature: Some(0.7),
+            max_payloads: 50,
+            max_bypasses: 10,
         }
     }
 
@@ -388,6 +390,8 @@ mod tests {
             base_url: None,
             max_tokens: Some(2048),
             temperature: Some(0.7),
+            max_payloads: 50,
+            max_bypasses: 10,
         };
         let client = AiClient::new(config);
         assert_eq!(client.api_url(), "https://api.openai.com/v1/chat/completions");

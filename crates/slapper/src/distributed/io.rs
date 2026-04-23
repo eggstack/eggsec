@@ -4,7 +4,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use crate::utils::connect_with_nodelay;
 use rustls::pki_types::{CertificateDer, ServerName};
 use rustls::server::ServerConfig;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader as TokioBufReader};
@@ -12,6 +11,8 @@ use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream as ServerTlsStream;
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls::TlsConnector;
+
+use crate::utils::connect_with_nodelay;
 
 pub enum StreamWrapper {
     Plain(InnerStream),

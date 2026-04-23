@@ -20,13 +20,15 @@ pub async fn run_port_scan(
 
     let results = scan_ports(
         &target,
-        port_list,
-        concurrency,
-        timeout,
-        true,
-        SpoofConfig::default(),
-        Some(progress_tx.clone()),
-        None,
+        crate::scanner::ports::PortScanConfig {
+            ports: port_list,
+            concurrency,
+            timeout_duration: timeout,
+            tui_mode: true,
+            spoof_config: SpoofConfig::default(),
+            progress_tx: Some(progress_tx.clone()),
+            max_results: None,
+        },
     )
     .await?;
 
