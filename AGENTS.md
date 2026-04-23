@@ -101,9 +101,9 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 ### Current Metrics
 
 | Metric | Value | Note |
-|--------|-------|-------|
-| Tests | 1113 passing | Basic tests |
-| Tests | 1262 passing | With rest-api feature |
+|--------|-------|------|
+| Tests | 1148 passing | Basic tests |
+| Tests | 1411 passing | With rest-api,ai-integration |
 | Clippy | 0 warnings | All warnings fixed |
 | Source files | 470+ |
 | Payload types | 39 |
@@ -189,8 +189,8 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 | Metric | Value | Note |
 |--------|-------|-------|
-| Tests | 1113 passing | Basic tests |
-| Tests | 1262 passing | With rest-api feature |
+| Tests | 1148 passing | Basic tests |
+| Tests | 1411 passing | With rest-api,ai-integration |
 | Build | Clean compilation | |
 | Clippy | 0 warnings | All warnings fixed |
 | Doctests | 19 pass, 0 fail | All passing |
@@ -205,7 +205,6 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 | Tab variants | 29 | |
 | Skill files | 28 | |
 | Payload types | 39 | Added 6 new (nosql, xpath, expression, prototype, race, mass_assign) |
-| Skill files | 28 | In `slapper_skills/` |
 | ADRs | 5 | In `docs/adr/` |
 
 ## Planning
@@ -801,3 +800,25 @@ Located in `docs/adr/`:
 - ADR-004: Error type separation
 
 When making significant architectural decisions, document them here using the ADR template.
+
+## Implementation Notes (2026-04-23)
+
+### Test Behavior Notes
+
+When fixing failing tests in integration scenarios:
+- **Circuit breaker tests**: The breaker requires BOTH failure_threshold (5) AND success_threshold (3) transitions to close. After 5 failures, one success only moves to HalfOpen, not Closed. Tests should reflect actual state machine behavior.
+- **WAF bypass knowledge_base**: Pre-populated from `~/.config/slapper/waf_bypasses.json` - tests may have non-empty state. Use unique identifiers for test payloads to avoid collisions.
+- **AI planner learning cache**: Cache key is `format!("{}:{}", plan.total_tools, outcome.target)` - same target can update existing entries.
+- **Skills extract_triggers**: Pattern matching is case-insensitive. Line must contain "trigger", "keyword", or "example" AND ":" for YAML frontmatter format, or start with these words for other formats.
+
+### Common Test Fixes
+
+1. When test assertions don't match implementation behavior, verify:
+   - Actual state values (use debug output)
+   - Pre-populated state from persistence files
+   - Async runtime behavior differences
+
+2. When fixing tests:
+   - Prefer assertions that verify behavior rather than specific values
+   - Use unique identifiers to avoid collision with pre-populated state
+   - Account for state machine transitions (HalfOpen is an intermediate state)
