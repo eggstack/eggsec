@@ -64,9 +64,6 @@ cargo build --release --features "rest-api ai-integration"
 | `prototype_pollution.md` | JavaScript prototype pollution | fuzzer |
 | `race_condition.md` | Race condition / TOCTOU testing | fuzzer |
 | `graphql_security_testing.md` | GraphQL security testing | fuzzer |
-| `prototype_pollution.md` | JavaScript prototype pollution | fuzzer |
-| `race_condition.md` | Race condition and TOCTOU testing | fuzzer |
-| `mass_assignment.md` | Mass assignment vulnerabilities | fuzzer |
 
 ### API Testing
 | Skill | Description | Tools |
