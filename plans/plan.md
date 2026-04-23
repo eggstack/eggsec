@@ -87,37 +87,37 @@ Single `.expect()` at line 309 wrapping entire `PATTERNS` initialization. All 28
 
 ### Wave 5: Performance Optimizations
 
-#### 5.3: Timing Analyzer Lock Contention (STUB)
+#### 5.3: Timing Analyzer Lock Contention (IMPLEMENTED CORRECTLY)
 
-**File**: `crates/slapper/src/fuzzer/engine/core.rs:92`
+**File**: `crates/slapper/src/fuzzer/detection/analyzer.rs:12-25`
 
-**Problem**: `TimingAnalyzer` uses `AtomicU64` counters (`total_requests`, `total_response_time`, etc.) but `Mutex` still needed for `samples: Vec<f64>` and `baseline_ms: Option<f64>`.
+**Status**: VERIFIED - Correct implementation.
 
-**Status**: Partial - atomic counters used where possible, mutex still needed for compound types.
+AtomicU64 used correctly for counters: `total_requests`, `total_response_time`, `min_response_time`, `max_response_time`, `anomaly_count`, `redos_count`. `baseline_ms: Option<f64>` and `samples: Vec<f64>` stored directly (not wrapped in Mutex). No unnecessary lock contention.
 
 ---
 
 #### 5.7: Arc<RwLock<HashMap>> → DashMap (NOT CONVERTED)
 
 **Files**:
-- `crates/slapper/src/agent/alerts/routing.rs:19`
-- `crates/slapper/src/agent/alerts/mod.rs:46`
-- `crates/slapper/src/utils/circuit_breaker.rs:126`
-- `crates/slapper/src/tool/protocol/mcp/handlers.rs:27-28`
+- `crates/slapper/src/agent/alerts/routing.rs:19` - uses `Arc<Mutex<HashMap<...>>>`
+- `crates/slapper/src/agent/alerts/mod.rs:46` - uses `Arc<RwLock<HashMap<...>>>`
+- `crates/slapper/src/utils/circuit_breaker.rs:126` - uses `Arc<Mutex<HashMap<...>>>`
+- `crates/slapper/src/tool/protocol/mcp/handlers.rs:27-28` - uses `Arc<RwLock<HashMap<...>>>`
 
-**Problem**: These modules still use `Arc<RwLock<HashMap>>` instead of `DashMap`.
+**Status**: VERIFIED - Not converted. Uses `parking_lot::Mutex` or `parking_lot::RwLock` with `std::collections::HashMap`.
 
-**Status**: Not converted - conversion would require careful testing to ensure lock-free semantics are correct.
+Conversion to DashMap would require careful testing to ensure lock-free semantics are correct. Enhancement for future consideration.
 
 ---
 
-#### 5.11: std::thread::sleep in Async Context (STUB)
+#### 5.11: std::thread::sleep in Async Context (IMPLEMENTED CORRECTLY)
 
 **File**: `crates/slapper/src/recon/mod.rs:153,260`
 
-**Problem**: `std::thread::sleep` is used inside `std::thread::spawn` blocks (separate OS threads), NOT directly in async context.
+**Status**: VERIFIED - Correct implementation.
 
-**Status**: Technically correct - separate thread for spinner avoids blocking async runtime. Could be optimized but not harmful.
+`std::thread::sleep` is used inside `std::thread::spawn` blocks (separate OS threads for spinner UI). Not in async context. `tokio::time::sleep` used correctly for async code (lines 164, 271). No blocking.
 
 ---
 
