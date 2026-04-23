@@ -172,6 +172,14 @@ impl ScopeRule {
                 return true;
             }
 
+            if self.pattern.contains('/') {
+                if let Some(ref ip) = target.ip {
+                    if let Ok(network) = IpNetwork::from_str(&self.pattern) {
+                        return network.contains(*ip);
+                    }
+                }
+            }
+
             if self.pattern.starts_with("*.") {
                 let suffix = &self.pattern[1..];
                 return target.host.ends_with(suffix) || target.host == self.pattern[2..];
@@ -385,5 +393,39 @@ mod tests {
             .push(ScopeRule::new("internal.example.com".to_string()));
 
         assert!(!scope.is_target_allowed("internal.example.com").unwrap());
+    }
+
+    #[test]
+    fn test_scope_rule_cidr_from_pattern() {
+        let rule = ScopeRule::new("10.0.0.0/8".to_string());
+
+        let target1 = TargetScope {
+            host: "10.255.255.255".to_string(),
+            ip: Some("10.255.255.255".parse().unwrap()),
+        };
+        assert!(rule.matches(&target1), "10.255.255.255 should be in 10.0.0.0/8");
+
+        let target2 = TargetScope {
+            host: "11.0.0.1".to_string(),
+            ip: Some("11.0.0.1".parse().unwrap()),
+        };
+        assert!(!rule.matches(&target2), "11.0.0.1 should NOT be in 10.0.0.0/8");
+    }
+
+    #[test]
+    fn test_scope_rule_cidr_explicit() {
+        let rule = ScopeRule::with_cidr("10.0.0.0/8".to_string()).unwrap();
+
+        let target1 = TargetScope {
+            host: "10.255.255.255".to_string(),
+            ip: Some("10.255.255.255".parse().unwrap()),
+        };
+        assert!(rule.matches(&target1), "10.255.255.255 should be in 10.0.0.0/8");
+
+        let target2 = TargetScope {
+            host: "11.0.0.1".to_string(),
+            ip: Some("11.0.0.1".parse().unwrap()),
+        };
+        assert!(!rule.matches(&target2), "11.0.0.1 should NOT be in 10.0.0.0/8");
     }
 }

@@ -11,6 +11,8 @@ pub mod packet;
 pub mod plan;
 pub mod scan;
 pub mod stress;
+pub mod vuln;
+pub mod storage;
 
 pub use ci::*;
 pub use cluster::*;
@@ -20,6 +22,8 @@ pub use misc::*;
 pub use packet::*;
 pub use plan::*;
 pub use scan::*;
+pub use vuln::*;
+pub use storage::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -106,6 +110,8 @@ pub enum Commands {
     Plan(PlanArgs),
     #[command(about = "Run security checks in CI/CD mode")]
     Ci(CiArgs),
+    #[command(about = "Validate configuration files", long_about = CONFIG_ABOUT)]
+    Config(ConfigArgs),
     #[cfg(feature = "sbom")]
     #[command(about = "Generate SBOM and check supply chain security")]
     Sbom(SbomArgs),
@@ -123,6 +129,10 @@ pub enum Commands {
     Plugin(PluginArgs),
     #[command(about = "Convert and generate security scan reports")]
     Report(ReportArgs),
+    #[command(about = "Vulnerability management tools (CVSS scoring, triage, remediation)", long_about = VULN_ABOUT)]
+    Vuln(VulnArgs),
+    #[command(about = "Database storage and query operations", long_about = STORAGE_ABOUT)]
+    Storage(StorageArgs),
 
     // --- Stress testing operations ---
     #[cfg(feature = "stress-testing")]

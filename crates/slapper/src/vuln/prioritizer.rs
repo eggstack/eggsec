@@ -39,6 +39,18 @@ impl RiskScore {
             priority_level,
         }
     }
+
+    pub fn new(cvss: f32, asset_criticality: f32, exploitability: f32) -> Self {
+        Self::calculate(cvss, exploitability, asset_criticality)
+    }
+
+    pub fn total(&self) -> f32 {
+        self.combined_score
+    }
+
+    pub fn priority(&self) -> &PriorityLevel {
+        &self.priority_level
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -103,9 +103,8 @@ impl SecurityTool for PipelineTool {
 
         let config = crate::config::load_config(None::<&str>).unwrap_or_default();
         let result = crate::pipeline::run_cli_with_callback(args, &config, move |f| {
-            if let Ok(mut findings) = findings_clone.lock() {
-                findings.push(f);
-            }
+            let mut findings = findings_clone.lock();
+            findings.push(f);
         })
         .await;
 

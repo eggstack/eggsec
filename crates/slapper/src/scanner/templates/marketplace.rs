@@ -4,6 +4,7 @@
 //! and managing community-contributed vulnerability templates.
 
 use crate::error::{Result, SlapperError};
+use crate::scanner::templates::verify::TemplateVerifier;
 use crate::scanner::templates::{TemplateEngine, TemplateExecutor, TemplateLoader, VulnerabilityTemplate};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -34,6 +35,8 @@ pub struct TemplateMarketplace {
     base_url: String,
     http_client: reqwest::Client,
     local_cache: PathBuf,
+    verifier: Option<TemplateVerifier>,
+    verify_downloaded: bool,
 }
 
 impl TemplateMarketplace {
@@ -49,7 +52,19 @@ impl TemplateMarketplace {
             local_cache: directories::ProjectDirs::from("com", "slapper", "slapper")
                 .map(|d| d.cache_dir().join("template_marketplace"))
                 .unwrap_or_else(|| PathBuf::from(".template_cache")),
+            verifier: None,
+            verify_downloaded: true,
         })
+    }
+
+    pub fn with_verifier(mut self, verifier: TemplateVerifier) -> Self {
+        self.verifier = Some(verifier);
+        self
+    }
+
+    pub fn with_verify_downloaded(mut self, verify: bool) -> Self {
+        self.verify_downloaded = verify;
+        self
     }
 
     pub fn with_cache_dir(mut self, cache_dir: PathBuf) -> Self {
@@ -112,11 +127,55 @@ impl TemplateMarketplace {
             .map_err(|e| SlapperError::Network(format!("Failed to read template content: {}", e)))?;
 
         let loader = TemplateLoader::default();
-        let template = loader.parse_template(&content)?;
+        
+        let unsigned_template = loader.parse_template(&content)?;
+        
+        if self.verify_downloaded {
+            if let Some(verifier) = &self.verifier {
+                let signed = crate::scanner::templates::verify::SignedTemplate {
+                    template: unsigned_template.clone(),
+                    signature: String::new(),
+                    public_key: String::new(),
+                    signer_info: crate::scanner::templates::verify::SignerInfo {
+                        name: String::new(),
+                        email: None,
+                        organization: None,
+                        timestamp: chrono::Utc::now(),
+                    },
+                };
+                
+                match verifier.verify(&signed) {
+                   Ok(result) => {
+                        if !result.valid {
+                            tracing::warn!(
+                                "Template {} failed signature verification",
+                                template_id
+                            );
+                            return Err(SlapperError::Security(format!(
+                                "Template {} has invalid signature",
+                                template_id
+                            )));
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Could not verify template {} signature: {}",
+                            template_id,
+                            e
+                        );
+                    }
+                }
+            } else {
+                tracing::warn!(
+                    "Template {} downloaded but no verifier configured - signature not verified",
+                    template_id
+                );
+            }
+        }
 
         self.save_to_cache(template_id, &content)?;
 
-        Ok(template)
+        Ok(unsigned_template)
     }
 
     fn save_to_cache(&self, template_id: &str, content: &str) -> Result<()> {

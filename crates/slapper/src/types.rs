@@ -132,6 +132,18 @@ impl SensitiveString {
         Self(s.into())
     }
 
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Borrow the inner secret.
     pub fn expose_secret(&self) -> &str {
         &self.0

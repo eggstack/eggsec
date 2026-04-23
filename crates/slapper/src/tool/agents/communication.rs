@@ -310,6 +310,7 @@ impl MultiAgentCoordinator {
             sender_id: self.local_agent_id,
             recipient_id: None,
             message_type: MessageType::Delegation(request),
+            payload: serde_json::Value::Null,
             timestamp: chrono::Utc::now(),
             ttl_seconds: 300,
         };
@@ -340,6 +341,7 @@ impl MultiAgentCoordinator {
             sender_id: self.local_agent_id,
             recipient_id: None,
             message_type: MessageType::CapabilityAdvertisement(advertisement),
+            payload: serde_json::Value::Null,
             timestamp: chrono::Utc::now(),
             ttl_seconds: 600,
         };
@@ -356,6 +358,7 @@ impl MultiAgentCoordinator {
             sender_id: self.local_agent_id,
             recipient_id: None,
             message_type: MessageType::HealthUpdate(metrics),
+            payload: serde_json::Value::Null,
             timestamp: chrono::Utc::now(),
             ttl_seconds: 60,
         };

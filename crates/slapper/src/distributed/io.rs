@@ -12,6 +12,7 @@ use tokio_rustls::server::TlsStream as ServerTlsStream;
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls::TlsConnector;
 
+#[cfg(test)]
 use crate::utils::connect_with_nodelay;
 
 pub enum StreamWrapper {

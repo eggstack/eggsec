@@ -88,9 +88,36 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
 
 #[cfg(feature = "rest-api")]
 pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) -> Result<()> {
-    eprintln!("[STUB] REST API server is not yet implemented.");
-    eprintln!("  Bind: {}", args.bind);
-    eprintln!("  Port: {}", args.port);
+    use std::net::SocketAddr;
+    use tokio::net::TcpListener;
+    use axum::serve;
+    use crate::tool::{create_default_registry, protocol::rest::create_router};
+
+    let registry = create_default_registry();
+    let router = create_router(registry, args.api_key.clone());
+
+    let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Invalid address {}:{} - {}", args.bind, args.port, e))?;
+
+    let listener = TcpListener::bind(addr)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
+
+    if args.tls_cert.is_some() {
+        tracing::warn!(
+            "HTTPS not yet supported directly. Config options accepted.\n\
+            For HTTPS, use a reverse proxy: caddy reverse-proxy --from :8443 --to :8080"
+        );
+    }
+
+    tracing::info!("Starting HTTP server on {}", addr);
+
+    let make_service = router.into_make_service();
+    serve(listener, make_service)
+        .await
+        .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
+
     Ok(())
 }
 

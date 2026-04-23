@@ -45,7 +45,7 @@ pub async fn chat_completions(
 }
 
 async fn streaming_response(
-    registry: ToolRegistry,
+    registry: Arc<ToolRegistry>,
     req: ChatCompletionRequest,
 ) -> Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>> {
     let id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
@@ -119,7 +119,7 @@ async fn streaming_response(
 }
 
 async fn non_streaming_response(
-    registry: ToolRegistry,
+    registry: Arc<ToolRegistry>,
     req: ChatCompletionRequest,
 ) -> ChatCompletionResponse {
     let model = req.model.clone();

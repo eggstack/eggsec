@@ -1,4 +1,4 @@
-use axum::{routing::get, routing::post, routing::delete, extract::State, response::IntoResponse, Json, Router, http::HeaderMap};
+use axum::{routing::get, routing::post, routing::delete, extract::{State, Path}, response::{IntoResponse, Response}, Json, Router, http::{HeaderMap, StatusCode}};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use subtle::ConstantTimeEq;
@@ -77,7 +77,7 @@ async fn get_agent(
     }
     match state.registry.get(id).await {
         Some(agent) => Ok(axum::Json(agent)),
-        None => Err(StatusCode::NOT_FOUND),
+        None => Err((StatusCode::NOT_FOUND, "Agent not found")),
     }
 }
 

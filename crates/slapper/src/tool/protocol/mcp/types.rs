@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::utils::error::sanitize_error_message;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpRequest {
     #[serde(rename = "jsonrpc")]
@@ -85,7 +87,7 @@ impl McpError {
     pub fn internal(msg: &str) -> Self {
         Self {
             code: -32603,
-            message: msg.to_string(),
+            message: sanitize_error_message(msg),
             data: None,
         }
     }
@@ -101,7 +103,7 @@ impl McpError {
     pub fn rate_limited(msg: &str) -> Self {
         Self {
             code: -32002,
-            message: format!("Rate limit exceeded: {}", msg),
+            message: format!("Rate limit exceeded: {}", crate::utils::error::sanitize_error_message(msg)),
             data: None,
         }
     }

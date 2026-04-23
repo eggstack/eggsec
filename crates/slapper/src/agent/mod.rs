@@ -12,7 +12,6 @@ pub mod memory;
 pub mod alerts;
 pub mod channels;
 pub mod events;
-pub mod routing;
 
 #[cfg(feature = "ai-integration")]
 pub mod skills;
@@ -38,9 +37,10 @@ use crate::ai::AiClient;
 pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
 pub use memory::LongitudinalMemory;
 pub use alerts::{
-    AggregatedAlert, Alert, AlertChannel, AlertRouter, AlertTemplate, EmailChannel,
+    AggregatedAlert, Alert, AlertChannel, AlertRouter, AlertRoutingRules, AlertTemplate, EmailChannel,
     EmailFormattedAlert, EmailTemplate, EscalationLevel, PagerDutyChannel, PagerDutyTemplate,
-    ReportSummary, ScanReport, SlackChannel, SlackFormattedAlert, SlackTemplate, WebhookConfig,
+    ReportSummary, ScanReport, SlackChannel, SlackFormattedAlert, SlackTemplate, TimeBasedRouting, TimeRange,
+    WebhookConfig,
 };
 pub use events::{EventHandler, SecurityEvent};
 

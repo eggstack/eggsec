@@ -11,6 +11,10 @@ pub mod report;
 pub mod stress;
 pub mod notify;
 pub mod auth_test;
+pub mod vuln;
+pub mod storage;
+pub mod config;
+pub use config::*;
 #[cfg(feature = "sbom")]
 pub mod sbom;
 #[cfg(feature = "rest-api")]
@@ -34,6 +38,8 @@ pub use notify::*;
 #[cfg(feature = "sbom")]
 pub use sbom::*;
 pub use auth_test::*;
+pub use vuln::*;
+pub use storage::*;
 #[cfg(feature = "rest-api")]
 pub use agent::*;
 
@@ -103,6 +109,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Recon(args)) => handle_recon(ctx, args).await,
         Some(Commands::Plan(args)) => handle_plan(ctx, args).await,
         Some(Commands::Ci(args)) => handle_ci(ctx, args).await,
+        Some(Commands::Config(args)) => handle_config(ctx, args).await,
         Some(Commands::Graphql(args)) => handle_graphql(ctx, args).await,
         Some(Commands::OAuth(args)) => handle_oauth(ctx, args).await,
         Some(Commands::AuthTest(args)) => handle_auth_test(ctx, args).await,
@@ -134,6 +141,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Agent(args)) => handle_agent(ctx, args).await,
         #[cfg(feature = "ai-integration")]
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(args).await,
+        Some(Commands::Vuln(args)) => handle_vuln(ctx, args).await,
+        Some(Commands::Storage(args)) => handle_storage(ctx, args).await,
     }
 }
 

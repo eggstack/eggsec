@@ -4,7 +4,7 @@
 //! across multiple scans of the same targets.
 
 use std::collections::{HashMap, HashSet};
-use tokio::fs;
+use std::fs;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -325,15 +325,15 @@ impl LongitudinalMemory {
                                         first_seen: scan.timestamp,
                                         last_seen: scan.timestamp,
                                         total_occurrences: 0,
-                                        severity: finding.severity,
+                                        severity: finding.severity.to_agent_severity(),
                                     }
                                 });
 
-                                if !pattern_builder.affected_targets.contains(&memory.target) {
-                                    pattern_builder.affected_targets.push(memory.target.clone());
+                                if !builder.affected_targets.contains(&memory.target) {
+                                    builder.affected_targets.push(memory.target.clone());
                                 }
-                                pattern_builder.last_seen = scan.timestamp;
-                                pattern_builder.total_occurrences += 1;
+                                builder.last_seen = scan.timestamp;
+                                builder.total_occurrences += 1;
                             }
                         }
                     }
@@ -506,13 +506,15 @@ mod tests {
     fn test_scan_summary_with_findings() {
         let finding = Finding {
             id: "test-1".to_string(),
-            finding_type: crate::tool::response::FindingType::SqlInjection,
-            severity: crate::types::Severity::Critical,
+            finding_type: crate::tool::response::FindingType::Vulnerability,
+            severity: crate::tool::response::ResponseSeverity::Critical,
             title: "SQL Injection".to_string(),
             description: "SQL injection detected".to_string(),
-            evidence: vec![],
-            remediation: vec![],
-            confidence: 0.9,
+            location: "https://example.com/login".to_string(),
+            evidence: None,
+            cve_ids: vec![],
+            remediation: Some("Use parameterized queries".to_string()),
+            references: vec![],
             metadata: Default::default(),
         };
         let findings = vec![finding];
@@ -542,12 +544,17 @@ mod tests {
         let tool_response = crate::tool::ToolResponse {
             request_id: "scan-123".to_string(),
             tool_id: "recon".to_string(),
-            findings: vec![],
-            metadata: crate::tool::response::ToolResponseMetadata {
+            status: crate::tool::response::ResponseStatus::Success,
+            results: serde_json::json!({}),
+            metadata: crate::tool::response::ResponseMetadata {
                 started_at: chrono::Utc::now(),
                 completed_at: chrono::Utc::now(),
                 duration_ms: 100,
+                targets_scanned: 1,
+                findings_count: 0,
             },
+            errors: vec![],
+            findings: vec![],
         };
 
         let result = memory.store_scan_results("https://example.com", &tool_response);
@@ -578,12 +585,17 @@ mod tests {
             let tool_response = crate::tool::ToolResponse {
                 request_id: format!("scan-{}", i),
                 tool_id: "recon".to_string(),
-                findings: vec![],
-                metadata: crate::tool::response::ToolResponseMetadata {
+                status: crate::tool::response::ResponseStatus::Success,
+                results: serde_json::json!({}),
+                metadata: crate::tool::response::ResponseMetadata {
                     started_at: chrono::Utc::now(),
                     completed_at: chrono::Utc::now(),
                     duration_ms: 100,
+                    targets_scanned: 1,
+                    findings_count: 0,
                 },
+                errors: vec![],
+                findings: vec![],
             };
             memory.store_scan_results("https://example.com", &tool_response).unwrap();
         }
@@ -605,12 +617,17 @@ mod tests {
         let tool_response = crate::tool::ToolResponse {
             request_id: "scan-1".to_string(),
             tool_id: "recon".to_string(),
-            findings: vec![],
-            metadata: crate::tool::response::ToolResponseMetadata {
+            status: crate::tool::response::ResponseStatus::Success,
+            results: serde_json::json!({}),
+            metadata: crate::tool::response::ResponseMetadata {
                 started_at: chrono::Utc::now(),
                 completed_at: chrono::Utc::now(),
                 duration_ms: 100,
+                targets_scanned: 1,
+                findings_count: 0,
             },
+            errors: vec![],
+            findings: vec![],
         };
         memory.store_scan_results("https://example.com", &tool_response).unwrap();
 
@@ -628,13 +645,15 @@ mod tests {
 
         let new_finding = Finding {
             id: "new-finding-1".to_string(),
-            finding_type: crate::tool::response::FindingType::SqlInjection,
-            severity: crate::types::Severity::Critical,
+            finding_type: crate::tool::response::FindingType::Vulnerability,
+            severity: crate::tool::response::ResponseSeverity::Critical,
             title: "SQL Injection".to_string(),
             description: "SQL injection detected".to_string(),
-            evidence: vec![],
-            remediation: vec![],
-            confidence: 0.9,
+            location: "https://example.com/login".to_string(),
+            evidence: None,
+            cve_ids: vec![],
+            remediation: Some("Use parameterized queries".to_string()),
+            references: vec![],
             metadata: Default::default(),
         };
 

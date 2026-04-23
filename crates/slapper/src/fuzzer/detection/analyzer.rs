@@ -85,15 +85,21 @@ impl TimingAnalyzer {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
         self.total_response_time.fetch_add(response_time_ms, Ordering::Relaxed);
         
-        let current_min = self.min_response_time.load(Ordering::Relaxed);
-        while response_time_ms < current_min {
+        loop {
+            let current_min = self.min_response_time.load(Ordering::Relaxed);
+            if response_time_ms >= current_min {
+                break;
+            }
             if self.min_response_time.compare_exchange(current_min, response_time_ms, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
                 break;
             }
         }
         
-        let current_max = self.max_response_time.load(Ordering::Relaxed);
-        while response_time_ms > current_max {
+        loop {
+            let current_max = self.max_response_time.load(Ordering::Relaxed);
+            if response_time_ms <= current_max {
+                break;
+            }
             if self.max_response_time.compare_exchange(current_max, response_time_ms, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
                 break;
             }

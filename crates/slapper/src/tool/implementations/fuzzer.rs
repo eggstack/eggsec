@@ -161,9 +161,8 @@ impl SecurityTool for FuzzerTool {
             std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
         let findings_clone = findings.clone();
         let result = crate::fuzzer::run_cli_with_callback(args, move |finding| {
-            if let Ok(mut f) = findings_clone.lock() {
-                f.push(finding);
-            }
+            let mut f = findings_clone.lock();
+            f.push(finding);
         })
         .await;
         let findings = std::sync::Arc::try_unwrap(findings)

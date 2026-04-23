@@ -9,6 +9,42 @@ Examples:
   slapper notify test --webhook https://example.com/hook
   slapper notify send --finding 'SQL Injection found'";
 
+pub(crate) const CONFIG_ABOUT: &str = "Validate and inspect configuration
+
+Validates configuration files for syntax errors and consistency.
+Shows effective configuration when used with --show.
+
+Examples:
+  slapper config validate
+  slapper config validate --config /path/to/config.toml
+  slapper config show";
+
+#[derive(clap::Args)]
+pub struct ConfigArgs {
+    #[command(subcommand)]
+    pub command: ConfigCommand,
+}
+
+#[derive(clap::Subcommand)]
+pub enum ConfigCommand {
+    #[command(about = "Validate configuration file syntax")]
+    Validate(ConfigValidateArgs),
+    #[command(about = "Show effective configuration")]
+    Show(ConfigShowArgs),
+}
+
+#[derive(clap::Args)]
+pub struct ConfigValidateArgs {
+    #[arg(long, help = "Configuration file path")]
+    pub config: Option<String>,
+}
+
+#[derive(clap::Args)]
+pub struct ConfigShowArgs {
+    #[arg(long, help = "Configuration file path")]
+    pub config: Option<String>,
+}
+
 #[derive(clap::Args)]
 pub struct NotifyArgs {
     #[command(subcommand)]
@@ -252,6 +288,10 @@ pub struct ServeArgs {
     pub bind: String,
     #[arg(long, help = "API key for authentication")]
     pub api_key: Option<String>,
+    #[arg(long, help = "TLS certificate file (PEM format)")]
+    pub tls_cert: Option<String>,
+    #[arg(long, help = "TLS private key file (PEM format)")]
+    pub tls_key: Option<String>,
 }
 
 #[cfg(feature = "rest-api")]

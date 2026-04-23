@@ -60,10 +60,11 @@ impl Remediation {
                 RemediationPriority::Medium,
             ),
             Severity::Low => (
-                40.0,
+                24.0,
                 vec![
-                    "Add to technical debt backlog".to_string(),
-                    "Address in next release cycle".to_string(),
+                    "Review and understand the finding".to_string(),
+                    "Plan fix for future release".to_string(),
+                    "Implement and test".to_string(),
                 ],
                 vec![],
                 RemediationPriority::Low,
@@ -85,6 +86,29 @@ impl Remediation {
             references,
             priority,
         }
+    }
+
+    pub fn from_severity(severity: &str) -> Self {
+        let sev = match severity.to_lowercase().as_str() {
+            "critical" => Severity::Critical,
+            "high" => Severity::High,
+            "medium" => Severity::Medium,
+            "low" => Severity::Low,
+            _ => Severity::Info,
+        };
+Self::for_finding("default", "Finding", sev)
+    }
+
+    pub fn priority(&self) -> &RemediationPriority {
+        &self.priority
+    }
+
+    pub fn effort(&self) -> f32 {
+        self.effort_hours
+    }
+
+    pub fn steps(&self) -> &[String] {
+        &self.steps
     }
 }
 

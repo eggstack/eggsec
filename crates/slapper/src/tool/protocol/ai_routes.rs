@@ -411,15 +411,13 @@ async fn validate_config(
 
 #[cfg(feature = "ai-integration")]
 pub fn router(ai_config: Option<crate::config::AiConfig>) -> Router {
-    let api_key = ai_config.as_ref().and_then(|c| c.api_key.clone()).map(|k| k.expose_secret().clone());
-    let state = Arc::new(AiState::new(api_key));
+    let api_key = ai_config.as_ref().and_then(|c| c.api_key.clone()).map(|k| k.expose_secret().to_string());
+    let mut state = AiState::new(api_key);
 
-    let state = if let Some(config) = ai_config {
+    if let Some(config) = ai_config {
         let client = AiClient::new(config);
-        state.with_ai_client(client)
-    } else {
-        state
-    };
+        state = state.with_ai_client(client);
+    }
 
     Router::new()
         .route("/api/v1/ai/analyze", post(analyze_findings))
@@ -428,7 +426,7 @@ pub fn router(ai_config: Option<crate::config::AiConfig>) -> Router {
         .route("/api/v1/ai/scan-strategy", post(scan_strategy))
         .route("/api/v1/ai/circuit-breaker", get(circuit_breaker_status))
         .route("/api/v1/ai/validate-config", post(validate_config))
-        .with_state(state)
+        .with_state(Arc::new(state))
 }
 
 #[cfg(not(feature = "ai-integration"))]

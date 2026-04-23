@@ -201,13 +201,15 @@ fn test_scope_cidr_edge_cases() {
     let mut scope = Scope::default();
     scope
         .allowed_targets
-        .push(ScopeRule::new("10.0.0.0/8".to_string()));
+        .push(ScopeRule::with_cidr("10.0.0.0/8".to_string()).expect("valid CIDR"));
 
     // Valid IP in range
     let result = scope.is_target_allowed("10.255.255.255");
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "Should succeed: {:?}", result);
+    assert!(result.unwrap(), "10.255.255.255 should be allowed in 10.0.0.0/8");
 
-    // IP outside range
+    // IP outside range - returns Ok(false), not Err
     let result = scope.is_target_allowed("11.0.0.1");
-    assert!(result.is_err());
+    assert!(result.is_ok(), "Should succeed: {:?}", result);
+    assert!(!result.unwrap(), "11.0.0.1 should NOT be allowed in 10.0.0.0/8");
 }

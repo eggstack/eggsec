@@ -413,17 +413,16 @@ where
 
     let ports_count = ports.len();
 
-    let results = scan_ports(
-        &args.host,
+    let config = PortScanConfig {
         ports,
-        args.concurrency,
-        Duration::from_secs(timeout_secs),
-        false,
+        concurrency: args.concurrency,
+        timeout_duration: Duration::from_secs(timeout_secs),
+        tui_mode: false,
         spoof_config,
-        None,
-        None,
-    )
-    .await?;
+        progress_tx: None,
+        max_results: None,
+    };
+    let results = scan_ports(&args.host, config).await?;
 
     if args.verbose {
         eprintln!(

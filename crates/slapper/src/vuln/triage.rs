@@ -11,10 +11,26 @@ pub struct TriageResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TriageStatus {
+    New,
     TruePositive,
     FalsePositive,
     NeedsReview,
     Duplicate,
+}
+
+impl TriageResult {
+    pub fn new(finding_id: Option<String>, status: TriageStatus) -> Self {
+        Self {
+            finding_id: finding_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            triage_status: status,
+            confidence: 0.5,
+            reason: "Initial triage".to_string(),
+        }
+    }
+
+    pub fn status(&self) -> &TriageStatus {
+        &self.triage_status
+    }
 }
 
 pub fn triage_finding(

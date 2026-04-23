@@ -39,12 +39,12 @@ impl AlertRouter {
     }
 
     pub fn add_channel(&self, channel: AlertChannel) {
-        self.channels.lock().unwrap().push(channel);
+        self.channels.lock().push(channel);
     }
 
     pub async fn send(&self, alert: &Alert) -> Result<()> {
         {
-            let recent_alerts = self.recent_alerts.lock().await;
+            let recent_alerts = self.recent_alerts.lock();
             if recent_alerts.len() > 1000 {
                 drop(recent_alerts);
                 self.cleanup_stale_entries();
@@ -53,7 +53,7 @@ impl AlertRouter {
 
         let dedup_key = self.make_dedup_key(alert);
         {
-            let recent_alerts = self.recent_alerts.lock().await;
+            let recent_alerts = self.recent_alerts.lock();
             if let Some(last_sent) = recent_alerts.get(&dedup_key) {
                 if last_sent.elapsed() < Duration::from_secs(self.dedup_window_secs) {
                     tracing::debug!("Duplicate alert suppressed: {}", dedup_key);
@@ -62,13 +62,13 @@ impl AlertRouter {
             }
         }
 
-        let channels = self.channels.lock().await.clone();
+        let channels = self.channels.lock().clone();
         for channel in &channels {
             self.send_to_channel(channel, alert).await?;
         }
 
         {
-            let mut recent_alerts = self.recent_alerts.lock().await;
+            let mut recent_alerts = self.recent_alerts.lock();
             recent_alerts.insert(dedup_key, Instant::now());
         }
         Ok(())
@@ -245,7 +245,7 @@ impl AlertRouter {
 
     async fn cleanup_stale_entries(&self) {
         let cutoff = Duration::from_secs(self.dedup_window_secs * 2);
-        let mut recent_alerts = self.recent_alerts.lock().await;
+        let mut recent_alerts = self.recent_alerts.lock();
         recent_alerts.retain(|_, last_sent| last_sent.elapsed() < cutoff);
     }
 
@@ -346,7 +346,7 @@ impl AlertRouter {
                 tracing::warn!("Alert escalated to Warning: {}", alert.title);
             }
             EscalationLevel::Urgent => {
-                let channels = self.channels.lock().await.clone();
+                let channels = self.channels.lock().clone();
                 for channel in &channels {
                     if matches!(channel, AlertChannel::Slack(_)) {
                         self.send_to_channel(channel, alert).await?;
@@ -354,7 +354,7 @@ impl AlertRouter {
                 }
             }
             EscalationLevel::Critical => {
-                let channels = self.channels.lock().await.clone();
+                let channels = self.channels.lock().clone();
                 for channel in &channels {
                     self.send_to_channel(channel, alert).await?;
                 }

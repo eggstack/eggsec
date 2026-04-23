@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, Timelike};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -77,14 +77,14 @@ pub struct OffPeakWindow {
 impl OffPeakWindow {
     pub fn is_in_window(&self, time: &DateTime<Utc>) -> bool {
         let local = match &self.timezone[..] {
-            "UTC" => time.hour(),
+            "UTC" => time.hour() as i32,
             _ => {
-                let offset_hours: i32 = self.timezone.trim().parse().unwrap_or(0);
+                let offset_hours: i64 = self.timezone.trim().parse().unwrap_or(0);
                 let offset_time = *time + chrono::Duration::hours(offset_hours);
                 offset_time.hour() as i32
             }
         };
-        let current_hour = local as i32;
+        let current_hour = local;
         let start = self.start_hour as i32;
         let end = self.end_hour as i32;
 

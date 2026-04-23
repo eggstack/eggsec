@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use crate::error::{Result, SlapperError};
+use crate::types::SensitiveString;
 use base64::{engine::general_purpose, Engine as _};
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -14,8 +15,8 @@ use super::ProxiedConnection;
 
 pub struct HttpConnectProxy {
     proxy_addr: SocketAddr,
-    username: Option<String>,
-    password: Option<String>,
+    username: Option<SensitiveString>,
+    password: Option<SensitiveString>,
     use_ssl: bool,
     timeout: Duration,
 }
@@ -32,8 +33,8 @@ impl HttpConnectProxy {
     }
 
     pub fn with_auth(mut self, username: String, password: String) -> Self {
-        self.username = Some(username);
-        self.password = Some(password);
+        self.username = Some(SensitiveString::new(username));
+        self.password = Some(SensitiveString::new(password));
         self
     }
 
@@ -87,7 +88,7 @@ impl HttpConnectProxy {
         );
 
         if let (Some(user), Some(pass)) = (&self.username, &self.password) {
-            let credentials = general_purpose::STANDARD.encode(format!("{}:{}", user, pass));
+            let credentials = general_purpose::STANDARD.encode(format!("{}:{}", user.expose_secret(), pass.expose_secret()));
             request.push_str(&format!("Proxy-Authorization: Basic {}\r\n", credentials));
         }
 
@@ -104,7 +105,7 @@ impl HttpConnectProxy {
         );
 
         if let (Some(user), Some(pass)) = (&self.username, &self.password) {
-            let credentials = general_purpose::STANDARD.encode(format!("{}:{}", user, pass));
+            let credentials = general_purpose::STANDARD.encode(format!("{}:{}", user.expose_secret(), pass.expose_secret()));
             request.push_str(&format!("Proxy-Authorization: Basic {}\r\n", credentials));
         }
 
@@ -309,7 +310,7 @@ mod tests {
 
         assert_eq!(proxy.use_ssl, true);
         assert_eq!(proxy.timeout, Duration::from_secs(10));
-        assert_eq!(proxy.username, Some("admin".to_string()));
-        assert_eq!(proxy.password, Some("secret".to_string()));
+        assert!(proxy.username.is_some());
+        assert!(proxy.password.is_some());
     }
 }

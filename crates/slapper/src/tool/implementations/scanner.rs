@@ -128,9 +128,8 @@ impl SecurityTool for ScannerTool {
                 };
                 let config = crate::config::load_config(None::<&str>).unwrap_or_default();
                 crate::scanner::ports::run_cli_with_callback(args, &config, move |f| {
-                    if let Ok(mut findings) = findings_clone.lock() {
-                        findings.push(f);
-                    }
+                    let mut findings = findings_clone.lock();
+                    findings.push(f);
                 })
                 .await
             }
@@ -148,9 +147,8 @@ impl SecurityTool for ScannerTool {
                 };
                 let config = crate::config::load_config(None::<&str>).unwrap_or_default();
                 crate::scanner::fingerprint::run_cli_with_callback(args, &config, move |f| {
-                    if let Ok(mut findings) = findings_clone.lock() {
-                        findings.push(f);
-                    }
+                    let mut findings = findings_clone.lock();
+                    findings.push(f);
                 })
                 .await
             }
@@ -176,9 +174,8 @@ impl SecurityTool for ScannerTool {
                 };
                 let config = crate::config::load_config(None::<&str>).unwrap_or_default();
                 crate::scanner::endpoints::run_cli_with_callback(args, &config, move |f| {
-                    if let Ok(mut findings) = findings_clone.lock() {
-                        findings.push(f);
-                    }
+                    let mut findings = findings_clone.lock();
+                    findings.push(f);
                 })
                 .await
             }

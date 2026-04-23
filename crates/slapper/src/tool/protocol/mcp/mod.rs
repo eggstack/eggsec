@@ -1,4 +1,5 @@
 mod auth;
+mod constraints;
 mod handlers;
 #[cfg(feature = "rest-api")]
 pub mod prompts;
@@ -7,6 +8,7 @@ pub mod routes;
 mod streaming;
 mod types;
 
+pub use constraints::McpConstraintContext;
 pub use handlers::McpServer;
 pub use routes::{create_mcp_router, run_stdio};
 pub use streaming::StreamEvent;

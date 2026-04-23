@@ -1,56 +1,47 @@
-use crate::cli::ConfigArgs;
+use crate::cli::{ConfigArgs, ConfigCommand};
 use crate::commands::handlers::CommandContext;
-use crate::config::loader;
+use crate::config::load_config;
 use anyhow::Result;
 
 pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()> {
-    use crate::cli::ConfigCommand;
-
     match args.command {
         ConfigCommand::Validate(validate_args) => {
             let config_path = validate_args.config.as_deref();
-
-            match loader::load_config(config_path) {
-                Ok(config) => {
-                    println!("Configuration is valid");
-                    println!("  Config file: {:?}", config_path
-                        .map(String::from)
-                        .or_else(|| loader::find_config_file(None).map(|p: std::path::PathBuf| p.to_string_lossy().to_string()))
-                        .unwrap_or_else(|| "default".to_string()));
-                    println!("  HTTP timeout: {}s", config.http.timeout_secs);
-                    println!("  Scan concurrency: {}", config.scan.default_concurrency);
-                    println!("  Port timeout: {}s", config.scan.port_timeout_secs);
-                    Ok(())
+            
+            match load_config(config_path) {
+                Ok(_) => {
+                    println!("✓ Configuration is valid");
+                    println!("  Config file: {}", config_path.unwrap_or("~/.config/slapper/config.toml"));
                 }
                 Err(e) => {
-                    println!("Configuration validation failed:");
-                    println!("  Error: {}", e);
-                    anyhow::bail!("Invalid configuration");
+                    eprintln!("✗ Configuration validation failed:");
+                    eprintln!("  {}", e);
+                    std::process::exit(1);
                 }
             }
         }
         ConfigCommand::Show(show_args) => {
-            if show_args.defaults {
-                let default_config = crate::config::SlapperConfig::default();
-                println!("Default Configuration:");
-                println!();
-                println!("{}", serde_json::to_string_pretty(&default_config).unwrap_or_default());
-            } else {
-                match loader::load_config(None) {
-                    Ok(config) => {
-                        println!("Effective Configuration:");
-                        println!();
-                        println!("{}", serde_json::to_string_pretty(&config).unwrap_or_default());
+            let config_path = show_args.config.as_deref();
+            
+            match load_config(config_path) {
+                Ok(config) => {
+                    if let Some(ref path) = show_args.config {
+                        println!("# Configuration from: {}", path);
+                    } else {
+                        println!("# Default configuration");
                     }
-                    Err(e) => {
-                        println!("Could not load configuration: {}", e);
-                        println!("\nUsing defaults:");
-                        let default_config = crate::config::SlapperConfig::default();
-                        println!("{}", serde_json::to_string_pretty(&default_config).unwrap_or_default());
+                    println!();
+                    match toml::to_string_pretty(&config) {
+                        Ok(toml_str) => println!("{}", toml_str),
+                        Err(e) => eprintln!("Failed to serialize config: {}", e),
                     }
                 }
+                Err(e) => {
+                    eprintln!("✗ Failed to load configuration: {}", e);
+                    std::process::exit(1);
+                }
             }
-            Ok(())
         }
     }
+    Ok(())
 }

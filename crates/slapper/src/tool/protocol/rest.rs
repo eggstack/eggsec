@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 
 use crate::error::SlapperError;
 use crate::tool::ratelimit::{RateLimiter, RateLimitConfig};
@@ -92,8 +93,7 @@ pub struct ToolDetailResponse {
 }
 
 pub fn create_router(registry: ToolRegistry, api_key: Option<String>) -> Router {
-    let ai_key = api_key.clone();
-    let state = Arc::new(RestState::new(registry, api_key));
+    let state = Arc::new(RestState::new(registry, api_key.clone()));
 
     let mut router = Router::new()
         .route("/health", get(health_check))
@@ -105,14 +105,15 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>) -> Router 
 
     #[cfg(feature = "ai-integration")]
     {
-        router = router.merge(super::ai_routes::router(ai_key));
+        router = router.merge(super::ai_routes::router(None));
     }
 
+    #[cfg(feature = "ai-integration")]
     {
         use crate::tool::agents::{AgentRegistry, TaskScheduler};
         let agent_registry = AgentRegistry::new();
         let scheduler = TaskScheduler::new();
-        router = router.merge(super::agent_routes::router(agent_registry, scheduler));
+        router = router.merge(super::agent_routes::router(agent_registry, scheduler, api_key));
     }
 
     router

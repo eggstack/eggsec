@@ -642,7 +642,7 @@ impl McpServer {
         let request_id_for_response = request_id.clone();
 
         self.pending_cancellations
-            .lock()
+            .write()
             .await
             .insert(request_id.clone(), cancellation_token_clone);
 
@@ -673,7 +673,7 @@ impl McpServer {
 
             let result = dispatcher.dispatch(request).await;
             pending_cancellations
-                .lock()
+                .write()
                 .await
                 .remove(&request_id_for_result);
             
@@ -689,7 +689,7 @@ impl McpServer {
                         }),
                     });
                     completed_results
-                        .lock()
+                        .write()
                         .await
                         .insert(request_id_for_result, response);
                 }
@@ -721,7 +721,7 @@ impl McpServer {
                         findings: vec![],
                     };
                     completed_results
-                        .lock()
+                        .write()
                         .await
                         .insert(request_id_for_result, error_response);
                 }
@@ -775,7 +775,7 @@ impl McpServer {
             None => return req.error_response(McpError::invalid_params("Missing request_id")),
         };
 
-        if let Some(response) = self.completed_results.lock().await.remove(request_id) {
+        if let Some(response) = self.completed_results.write().await.remove(request_id) {
             let result = serde_json::json!({
                 "request_id": request_id,
                 "status": "completed",
@@ -784,7 +784,7 @@ impl McpServer {
             req.success_response(result)
         } else if self
             .pending_cancellations
-            .lock()
+            .write()
             .await
             .contains_key(request_id)
         {

@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use crate::error::{Result, SlapperError};
+use crate::types::SensitiveString;
 use crate::utils::connect_with_nodelay_timeout;
 use std::net::{IpAddr, SocketAddr};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -21,8 +22,8 @@ pub enum SocksVersion {
 pub struct SocksProxy {
     version: SocksVersion,
     proxy_addr: SocketAddr,
-    username: Option<String>,
-    password: Option<String>,
+    username: Option<SensitiveString>,
+    password: Option<SensitiveString>,
     timeout: Duration,
 }
 
@@ -38,8 +39,8 @@ impl SocksProxy {
     }
 
     pub fn with_auth(mut self, username: String, password: String) -> Self {
-        self.username = Some(username);
-        self.password = Some(password);
+        self.username = Some(SensitiveString::new(username));
+        self.password = Some(SensitiveString::new(password));
         self
     }
 
@@ -426,21 +427,13 @@ mod tests {
         assert_eq!(proxy.timeout, Duration::from_secs(30));
     }
 
-    #[test]
+#[test]
     fn test_socks_proxy_with_auth() {
         let addr: SocketAddr = "127.0.0.1:1080".parse().unwrap();
         let proxy = SocksProxy::new(SocksVersion::V5, addr)
             .with_auth("user".to_string(), "pass".to_string());
-        assert_eq!(proxy.username, Some("user".to_string()));
-        assert_eq!(proxy.password, Some("pass".to_string()));
-    }
-
-    #[test]
-    fn test_socks_proxy_with_timeout() {
-        let addr: SocketAddr = "127.0.0.1:1080".parse().unwrap();
-        let proxy = SocksProxy::new(SocksVersion::V5, addr)
-            .with_timeout(Duration::from_secs(10));
-        assert_eq!(proxy.timeout, Duration::from_secs(10));
+        assert!(proxy.username.is_some());
+        assert!(proxy.password.is_some());
     }
 
     #[test]
@@ -449,8 +442,16 @@ mod tests {
         let proxy = SocksProxy::new(SocksVersion::V4, addr)
             .with_auth("u".to_string(), "p".to_string())
             .with_timeout(Duration::from_millis(5000));
-        assert_eq!(proxy.username, Some("u".to_string()));
+        assert!(proxy.username.is_some());
         assert_eq!(proxy.timeout, Duration::from_millis(5000));
+    }
+
+    #[test]
+    fn test_socks_proxy_with_timeout() {
+        let addr: SocketAddr = "127.0.0.1:1080".parse().unwrap();
+        let proxy = SocksProxy::new(SocksVersion::V5, addr)
+            .with_timeout(Duration::from_secs(10));
+        assert_eq!(proxy.timeout, Duration::from_secs(10));
     }
 
     #[test]

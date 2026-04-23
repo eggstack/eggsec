@@ -31,6 +31,25 @@ impl CvssScore {
         })
     }
 
+    pub fn base_score(&self) -> f32 {
+        self.base_score
+    }
+
+    pub fn severity(&self) -> &'static str {
+        match self.base_score as u8 {
+            0 => "NONE",
+            1..=3 => "LOW",
+            4..=6 => "MEDIUM",
+            7..=8 => "HIGH",
+            9..=10 => "CRITICAL",
+            _ => "UNKNOWN",
+        }
+    }
+
+    pub fn temporal_score(&self) -> f32 {
+        self.temporal_score
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn calculate_base(
         attack_vector: &str,
@@ -110,8 +129,7 @@ impl CvssScore {
                 0.0
             } else {
                 let mut score = min!(impact + exploitability, 10.0);
-                score = f32::floor(score * 10.0) / 10.0;
-                score
+                f32::floor(score * 10.0) / 10.0
             }
         } else {
             let impact = 7.52 * (iss - 0.029) - 3.25 * (iss - 0.02).powf(15.0);
@@ -120,8 +138,7 @@ impl CvssScore {
                 0.0
             } else {
                 let mut score = min!(1.08 * (impact + exploitability), 10.0);
-                score = f32::floor(score * 10.0) / 1.0;
-                score
+                f32::floor(score * 10.0) / 10.0
             }
         }
     }

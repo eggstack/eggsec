@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentStatus {
     Active,
@@ -64,6 +64,47 @@ impl AgentRegistry {
         if let Some(agent) = self.agents.write().await.get_mut(&id) {
             agent.status = status;
         }
+    }
+
+    pub async fn find_by_capability(&self, capability: &str) -> Vec<AgentInfo> {
+        let capability_lower = capability.to_lowercase();
+        self.agents
+            .read()
+            .await
+            .values()
+            .filter(|agent| {
+                agent
+                    .capabilities
+                    .iter()
+                    .any(|c| c.to_lowercase().contains(&capability_lower))
+            })
+            .cloned()
+            .collect()
+    }
+
+    pub async fn find_by_status(&self, status: AgentStatus) -> Vec<AgentInfo> {
+        self.agents
+            .read()
+            .await
+            .values()
+            .filter(|agent| agent.status == status)
+            .cloned()
+            .collect()
+    }
+
+    pub async fn list_active(&self) -> Vec<AgentInfo> {
+        let cutoff = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .saturating_sub(60);
+        self.agents
+            .read()
+            .await
+            .values()
+            .filter(|agent| agent.last_heartbeat >= cutoff)
+            .cloned()
+            .collect()
     }
 }
 

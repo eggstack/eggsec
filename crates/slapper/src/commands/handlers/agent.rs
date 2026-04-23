@@ -146,6 +146,8 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs) -> Result<()> {
                 scan_history: Vec::new(),
                 baseline_findings: Vec::new(),
                 enabled: true,
+                scan_depth: crate::agent::portfolio::ScanDepth::default(),
+                off_peak_window: None,
             };
 
             let mut portfolio = TargetPortfolio::new();
@@ -167,7 +169,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs) -> Result<()> {
         }
         crate::cli::agent::TargetsCommand::Enable { id } => {
             let mut portfolio = TargetPortfolio::new();
-            if let Some(target) = portfolio.get_mut_target(&id) {
+            if let Some(mut target) = portfolio.get_mut_target(&id) {
                 target.enabled = true;
                 portfolio.save()?;
                 println!("Target {} enabled", id);
@@ -178,7 +180,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs) -> Result<()> {
         }
         crate::cli::agent::TargetsCommand::Disable { id } => {
             let mut portfolio = TargetPortfolio::new();
-            if let Some(target) = portfolio.get_mut_target(&id) {
+            if let Some(mut target) = portfolio.get_mut_target(&id) {
                 target.enabled = false;
                 portfolio.save()?;
                 println!("Target {} disabled", id);

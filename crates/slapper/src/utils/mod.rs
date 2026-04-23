@@ -31,6 +31,7 @@ pub mod auth;
 pub mod cache;
 pub mod circuit_breaker;
 pub mod client_pool;
+pub mod error;
 pub mod formatting;
 pub mod http;
 pub mod logging;
