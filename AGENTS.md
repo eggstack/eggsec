@@ -209,9 +209,37 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan (all planned work, organized by waves)
+- `plans/plan.md` — Consolidated improvement plan (all planned work, organized by waves for parallel sub-agent execution)
 
 For new improvement work, add to the consolidated plan.md rather than creating new plan files.
+
+### Wave-Based Sub-Agent Execution
+
+The consolidated plan is organized into 9 waves. Items within the same wave can be executed in parallel by different sub-agents:
+
+| Wave | Focus | Can Parallelize? |
+|------|-------|------------------|
+| 1 | CRITICAL Security Fixes | Yes (within quick fixes and plugin security) |
+| 2 | HIGH Priority Security | Yes (patterns, scope validation, agent AI) |
+| 3 | Large File Refactoring | Yes (TUI, MCP, dependency scan splits) |
+| 4 | Performance Optimization | Yes (HashMap, Mutex, watch channels) |
+| 5 | Agent System | Yes (all 9 items independent) |
+| 6 | REST API & Integrations | Yes (all 5 items independent) |
+| 7 | Dependency Updates | No (sequential, highest risk) |
+| 8 | TUI Improvements | Yes (all 9 items independent) |
+| 9 | Plugin Unification | Long term |
+
+### Sub-Agent Assignment Example
+
+```
+Agent 1: Security Fixes (Wave 1) - items 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9
+Agent 2: High-Priority Security (Wave 2) - items 2.1-2.10
+Agent 3: Large File Refactoring (Wave 3) - items 3.1-3.6
+Agent 4: Performance (Wave 4) - items 4.1-4.8
+Agent 5: Agent System (Wave 5) - items 5.1-5.9
+Agent 6: API & Integrations (Wave 6) - items 6.1-6.5
+Agent 7: TUI Improvements (Wave 8) - items 8.1-8.9
+```
 
 ## Lessons Learned
 
@@ -809,3 +837,34 @@ When fixing failing tests in integration scenarios:
 - **Circuit breaker tests**: The breaker requires BOTH failure_threshold (5) AND success_threshold (3) transitions to close. After 5 failures, one success only moves to HalfOpen, not Closed. Tests should reflect actual state machine behavior.
 - **WAF bypass knowledge_base**: Pre-populated from `~/.config/slapper/waf_bypasses.json` - tests may have non-empty state. Use unique identifiers for test payloads to avoid collisions.
 - **Skills extract_triggers**: Pattern matching is case-insensitive. Line must contain "trigger", "keyword", or "example" AND ":" for YAML frontmatter format, or start with these words for other formats.
+
+### Common Issues Identified in Plans
+
+During plan consolidation, these issues were identified and should be addressed:
+
+1. **TUI Plugin Tab Compile Error**: `TaskResult::PluginsLoaded` variant is referenced in `tui/workers/plugin.rs:11` but may not exist in `TaskResult` enum. Verify and add missing variant.
+
+2. **git_secrets Test Flakiness**: Test at `recon/git_secrets.rs:397-403` depends on working directory state. The assertion `assert!(result.is_ok())` can fail if git commands return errors.
+
+3. **Port Scanner Race Condition**: Check-then-act pattern in `scanner/ports/mod.rs:543-572` uses separate mutex acquisitions for `count >= limit` check and `+= 1` increment. Use `AtomicU64::fetch_add` for atomic check-and-increment.
+
+4. **Plugin Timeout Not Enforced**: `timeout_secs` in `PluginConfig` (default 300s) is never passed to plugin execution. Python and Ruby plugins can run indefinitely.
+
+5. **Path Traversal in Plugin Loading**: Plugin directories are read without canonicalization. Use `validate_path()` pattern from `utils/validation.rs`.
+
+6. **DashMap::clone() Performance**: `DashMap::clone()` performs deep clone. Use `Arc::try_unwrap()` + `DashMap::into_iter()` after async tasks complete.
+
+7. **TimingAnalyzer Mutex Contention**: Single `tokio::sync::Mutex` serializes 100+ concurrent tasks in `fuzzer/detection/analyzer.rs`. Consider lock-free queue approach.
+
+8. **Dedup Key Collision**: `AlertRouter::make_dedup_key()` doesn't include `finding_ids` hash - different finding sets produce same key.
+
+### Large File Reference
+
+| File | Lines | Should Split? |
+|------|-------|---------------|
+| `tui/app/mod.rs` | 967 | Yes |
+| `tool/protocol/mcp/handlers.rs` | 1081 | Yes |
+| `recon/dependency_scan.rs` | 1051 | Yes |
+| `tui/tabs/mod.rs` | 859 | Partial |
+| `tui/tabs/settings.rs` | 798 | Yes |
+| `tui/tabs/packet.rs` | 743 | Yes |
