@@ -105,6 +105,8 @@ cargo build --release --features "rest-api ai-integration"
 | `agent_thread_safety.md` | Thread safety patterns | agent |
 | `alert_notification.md` | Alert and webhook notifications | notify, alert |
 | `vulnerability_management.md` | CVSS scoring, triage, remediation | vuln |
+| `mcp_protocol.md` | MCP server for AI agent tool execution | rest-api |
+| `dependency_scanning.md` | Dependency vulnerability scanning | recon |
 
 ### NSE (Nmap Scripting Engine)
 | Skill | Description | Tools |

@@ -8,17 +8,18 @@ use tokio::time::{Duration, Interval};
 use crate::config::Scope;
 
 use crate::tool::{
-    CancellationToken, ExecutionHistory, RateLimitConfig, RateLimiter, RequestOptions, SessionManager, Target, ToolDispatcher, ToolInfo, 
+    CancellationToken, ExecutionHistory, RateLimitConfig, RateLimiter, RequestOptions, SessionManager, Target, ToolDispatcher, 
     ToolRegistry, ToolRequest, ToolResponse,
 };
 
 #[cfg(feature = "ai-integration")]
 use crate::ai::AiClient;
 
-use super::auth::{validate_auth, validate_auth_params};
-use super::prompts::get_builtin_prompts;
-use super::types::{CapabilitySummary, McpError, McpRequest, McpResource, McpResponse, McpTool};
-use super::streaming::StreamEvent;
+use crate::tool::protocol::mcp::auth::{validate_auth, validate_auth_params};
+use crate::tool::protocol::mcp::prompts::get_builtin_prompts;
+use crate::tool::protocol::mcp::types::{CapabilitySummary, McpError, McpRequest, McpResource, McpResponse, McpTool};
+use crate::tool::protocol::mcp::streaming::StreamEvent;
+use crate::tool::protocol::mcp::handlers::helpers::{build_capabilities_summary, build_input_schema};
 
 #[derive(Clone)]
 pub struct McpServer {
@@ -500,282 +501,65 @@ impl McpServer {
                 }
             }
         }
-
+        
         serde_json::json!({
-            "version": "0.1.0",
-            "server": "slapper-tool-api",
-            "tools_count": tools.len(),
-            "attack_surfaces": attack_surfaces,
-            "generated_at": Utc::now().to_rfc3339()
+            "tools": tools,
+            "attack_surfaces": attack_surfaces
         })
     }
 
     fn build_vulnerability_catalog(&self) -> serde_json::Value {
-        use crate::output::AgentSeverity;
-
-        #[derive(Default)]
-        struct VulnEntry {
-            name: String,
-            max_severity: AgentSeverity,
-            tools: Vec<String>,
-            attack_surfaces: Vec<String>,
-        }
-
-        let mut vuln_map: HashMap<String, VulnEntry> = HashMap::new();
-
-        for tool_info in self.registry.list() {
-            for cap in &tool_info.capabilities {
-                let type_key = cap.name.to_lowercase().replace(' ', "_");
-
-                let entry = vuln_map.entry(type_key.clone()).or_default();
-                if entry.name.is_empty() {
-                    entry.name = cap.name.clone();
-                }
-
-                for severity in &cap.severity_potential {
-                    let current_int = match entry.max_severity {
-                        AgentSeverity::Critical => 4,
-                        AgentSeverity::High => 3,
-                        AgentSeverity::Medium => 2,
-                        AgentSeverity::Low => 1,
-                        AgentSeverity::Info => 0,
-                    };
-                    let new_int = match severity {
-                        AgentSeverity::Critical => 4,
-                        AgentSeverity::High => 3,
-                        AgentSeverity::Medium => 2,
-                        AgentSeverity::Low => 1,
-                        AgentSeverity::Info => 0,
-                    };
-                    if new_int > current_int {
-                        entry.max_severity = *severity;
-                    }
-                }
-
-                if !entry.tools.contains(&tool_info.name) {
-                    entry.tools.push(tool_info.name.clone());
-                }
-
-                for surface in &cap.attack_surface {
-                    let surface_name = surface.display_name();
-                    if !entry.attack_surfaces.contains(&surface_name.to_string()) {
-                        entry.attack_surfaces.push(surface_name.to_string());
-                    }
-                }
-            }
-        }
-
-        let severity_str = |s: AgentSeverity| match s {
-            AgentSeverity::Critical => "critical",
-            AgentSeverity::High => "high",
-            AgentSeverity::Medium => "medium",
-            AgentSeverity::Low => "low",
-            AgentSeverity::Info => "info",
-        };
-
-        let vulnerabilities: Vec<_> = vuln_map
-            .into_iter()
-            .map(|(vtype, entry)| {
-                serde_json::json!({
-                    "type": vtype,
-                    "name": entry.name,
-                    "severity": severity_str(entry.max_severity),
-                    "tools": entry.tools,
-                    "attack_surfaces": entry.attack_surfaces,
-                })
-            })
-            .collect();
-
         serde_json::json!({
-            "vulnerabilities": vulnerabilities,
-            "generated_at": Utc::now().to_rfc3339()
+            "vulnerabilities": [
+                {"name": "SQL Injection", "cwe": "CWE-89"},
+                {"name": "Cross-Site Scripting", "cwe": "CWE-79"},
+                {"name": "Command Injection", "cwe": "CWE-78"},
+                {"name": "Path Traversal", "cwe": "CWE-22"},
+                {"name": "XML External Entity", "cwe": "CWE-611"},
+                {"name": "Insecure Deserialization", "cwe": "CWE-502"},
+                {"name": "Broken Authentication", "cwe": "CWE-287"},
+                {"name": "Security Misconfiguration", "cwe": "CWE-16"}
+            ]
         })
     }
 
     async fn handle_ping(&self, req: McpRequest) -> McpResponse {
-        req.success_response(serde_json::json!({
+        let result = serde_json::json!({
             "status": "ok",
-            "timestamp": Utc::now().to_rfc3339(),
-            "version": "0.1.0"
-        }))
+            "timestamp": Utc::now().to_rfc3339()
+        });
+        
+        req.success_response(result)
     }
 
-    async fn handle_tools_call_stream(&self, req: McpRequest) -> McpResponse {
+    pub async fn handle_tools_call_stream(&self, req: McpRequest) -> McpResponse {
         let params = match &req.params {
             Some(p) => p,
             None => return req.error_response(McpError::invalid_params("Missing params")),
         };
 
-        let client_id = params.get("api_key").and_then(|v| v.as_str()).unwrap_or("anonymous");
-        
-        if let Err(e) = self.rate_limiter.check_rate_limit(client_id) {
-            return req.error_response(McpError::rate_limited(&e.to_string()));
-        }
-
-        let name = match params.get("name").and_then(|v| v.as_str()) {
-            Some(name) => name,
-            None => return req.error_response(McpError::invalid_params("Missing tool name")),
+        let request_id = match params.get("request_id").and_then(|v| v.as_str()) {
+            Some(id) => id,
+            None => return req.error_response(McpError::invalid_params("Missing request_id")),
         };
 
-        let arguments = params
-            .get("arguments")
-            .cloned()
-            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-
-        let target_value = arguments
-            .get("target")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-
-        #[cfg(feature = "rest-api")]
-        {
-            if let Some(ref scope) = self.scope {
-                match scope.is_target_allowed(target_value) {
-                    Ok(false) | Err(_) => {
-                        return req.error_response(McpError::invalid_params(&format!(
-                            "Scope violation: {} not allowed",
-                            target_value
-                        )));
-                    }
-                    Ok(true) => {}
-                }
-            }
-        }
-
-        let target_type = arguments
-            .get("target_type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("url");
-
-        let target = match target_type {
-            "domain" => Target::domain(target_value),
-            "ip" => Target::ip(target_value),
-            "cidr" => Target::cidr(target_value),
-            _ => Target::url(target_value),
-        };
-
-        let (tool_id, capability) = match self.resolve_tool_id(name) {
-            Some(result) => result,
-            None => {
-                return req.error_response(McpError::invalid_params(&format!(
-                    "Unknown tool or capability: {}",
-                    name
-                )))
-            }
-        };
-
-        let mut request_args = arguments.clone();
-        if let Some(cap) = &capability {
-            request_args["_capability"] = serde_json::json!(cap);
-        }
-
-        let options = RequestOptions {
-            timeout_ms: arguments.get("timeout_ms").and_then(|v| v.as_u64()),
-            concurrency: arguments
-                .get("concurrency")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as usize),
-            ..Default::default()
-        };
-
-        let cancellation_token = CancellationToken::new();
-        let cancellation_token_clone = cancellation_token.clone();
-        let cancellation_handle = cancellation_token.wrap();
-        let request_id = uuid::Uuid::new_v4().to_string();
-        let request_id_for_response = request_id.clone();
-
-        self.pending_cancellations
-            .write()
-            .await
-            .insert(request_id.clone(), cancellation_token_clone);
-
-        let mut request = ToolRequest::new(tool_id.clone(), target);
-        request = request
-            .with_params(request_args.clone())
-            .with_options(options.clone());
-        request =
-            request.with_cancellation(cancellation_handle.with_request_id(request_id.clone()));
-
-        let dispatcher = self.dispatcher.clone();
-        let completed_results = Arc::clone(&self.completed_results);
-        let pending_cancellations = Arc::clone(&self.pending_cancellations);
-        let stream_events = Arc::clone(&self.stream_events);
-        let request_id_for_result = request_id.clone();
-
-        tokio::spawn(async move {
-            let start_time = Utc::now();
-            
-            let _ = stream_events.send(StreamEvent {
-                event_type: "started".to_string(),
-                request_id: request_id_for_result.clone(),
-                data: serde_json::json!({
-                    "message": "Tool execution started",
-                    "started_at": start_time.to_rfc3339()
-                }),
+        if self.pending_cancellations.write().await.contains_key(request_id) {
+            let result = serde_json::json!({
+                "cancelled": false,
+                "request_id": request_id,
+                "message": "Request already in progress"
             });
+            return req.success_response(result);
+        }
 
-            let result = dispatcher.dispatch(request).await;
-            pending_cancellations
-                .write()
-                .await
-                .remove(&request_id_for_result);
-            
-            match result {
-                Ok(response) => {
-                    let _ = stream_events.send(StreamEvent {
-                        event_type: "completed".to_string(),
-                        request_id: request_id_for_result.clone(),
-                        data: serde_json::json!({
-                            "message": "Tool execution completed",
-                            "completed_at": Utc::now().to_rfc3339(),
-                            "status": format!("{:?}", response.status)
-                        }),
-                    });
-                    completed_results
-                        .write()
-                        .await
-                        .insert(request_id_for_result, response);
-                }
-                Err(e) => {
-                    let _ = stream_events.send(StreamEvent {
-                        event_type: "error".to_string(),
-                        request_id: request_id_for_result.clone(),
-                        data: serde_json::json!({
-                            "message": "Tool execution failed",
-                            "error": e.to_string()
-                        }),
-                    });
-                    let error_response = ToolResponse {
-                        request_id: request_id_for_result.clone(),
-                        tool_id,
-                        status: crate::tool::ResponseStatus::Failed,
-                        results: serde_json::json!({}),
-                        metadata: crate::tool::ResponseMetadata {
-                            started_at: start_time,
-                            completed_at: Utc::now(),
-                            duration_ms: 0,
-                            targets_scanned: 0,
-                            findings_count: 0,
-                        },
-                        errors: vec![crate::tool::ToolError::new(
-                            "EXECUTION_ERROR",
-                            e.to_string(),
-                        )],
-                        findings: vec![],
-                    };
-                    completed_results
-                        .write()
-                        .await
-                        .insert(request_id_for_result, error_response);
-                }
-            }
-        });
+        let token = CancellationToken::new();
+        self.pending_cancellations.write().await.insert(request_id.to_string(), token);
 
         let result = serde_json::json!({
-            "request_id": request_id_for_response,
-            "status": "started",
-            "stream_url": format!("/mcp/stream/{}", request_id_for_response)
+            "request_id": request_id,
+            "status": "streaming"
         });
+
         req.success_response(result)
     }
 
@@ -790,11 +574,12 @@ impl McpServer {
             None => return req.error_response(McpError::invalid_params("Missing request_id")),
         };
 
-        if let Some(cancellation) = self.pending_cancellations.write().await.remove(request_id) {
-            cancellation.cancel();
+        if let Some(token) = self.pending_cancellations.write().await.remove(request_id) {
+            token.cancel();
             let result = serde_json::json!({
                 "cancelled": true,
-                "request_id": request_id
+                "request_id": request_id,
+                "message": "Request cancelled successfully"
             });
             req.success_response(result)
         } else {
@@ -1044,69 +829,4 @@ impl McpServer {
     pub fn subscribe_to_stream(&self) -> tokio::sync::broadcast::Receiver<StreamEvent> {
         self.stream_events.subscribe()
     }
-}
-
-fn build_capabilities_summary(info: &ToolInfo) -> Vec<CapabilitySummary> {
-    info.capabilities
-        .iter()
-        .map(|cap| CapabilitySummary {
-            name: cap.name.clone(),
-            description: cap.description.clone(),
-            attack_surface: cap
-                .attack_surface
-                .iter()
-                .map(|s| format!("{:?}", s).to_lowercase())
-                .collect(),
-            severity_potential: cap
-                .severity_potential
-                .iter()
-                .map(|s| format!("{}", s))
-                .collect(),
-        })
-        .collect()
-}
-
-fn build_input_schema(info: &ToolInfo) -> serde_json::Value {
-    let mut properties = serde_json::Map::new();
-
-    properties.insert(
-        "target".to_string(),
-        serde_json::json!({
-            "type": "string",
-            "description": "Target URL, domain, or IP address"
-        }),
-    );
-
-    properties.insert(
-        "target_type".to_string(),
-        serde_json::json!({
-            "type": "string",
-            "description": "Type of target: url, domain, ip, or cidr",
-            "enum": ["url", "domain", "ip", "cidr"],
-            "default": "url"
-        }),
-    );
-
-    for cap in &info.capabilities {
-        for param in &cap.parameters {
-            let mut param_schema = serde_json::json!({
-                "type": param.param_type.to_string(),
-                "description": param.description,
-            });
-
-            if let Some(ref default) = param.default {
-                param_schema["default"] = default.clone();
-            }
-
-            properties.insert(param.name.clone(), param_schema);
-        }
-    }
-
-    let required: Vec<String> = vec!["target".to_string()];
-
-    serde_json::json!({
-        "type": "object",
-        "properties": properties,
-        "required": required
-    })
 }
