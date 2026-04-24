@@ -1,19 +1,27 @@
 use anyhow::{anyhow, Context, Result};
 use base64::{engine::general_purpose, Engine as _};
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use super::module::{ModuleExecutionResult, ModuleInfo};
-use super::session::Session;
+use super::session::{Session, SessionInfo};
 use super::types::{ModuleType, MsfError, MsfResponse};
 use super::{MsfConfig, MsfConnection};
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SessionCache {
+    pub sessions: HashMap<String, SessionInfo>,
+    pub last_updated: Option<String>,
+}
 
 pub struct MsfClient {
     client: Client,
     config: MsfConfig,
     connection: Option<MsfConnection>,
+    session_cache: SessionCache,
 }
 
 impl MsfClient {
@@ -28,6 +36,7 @@ impl MsfClient {
             client,
             config,
             connection: None,
+            session_cache: SessionCache::default(),
         })
     }
 
@@ -108,6 +117,41 @@ impl MsfClient {
 
     pub fn connection(&self) -> Option<&MsfConnection> {
         self.connection.as_ref()
+    }
+
+    pub fn get_cached_sessions(&self) -> &HashMap<String, SessionInfo> {
+        &self.session_cache.sessions
+    }
+
+    pub fn get_session_cache(&self) -> &SessionCache {
+        &self.session_cache
+    }
+
+    pub fn invalidate_session_cache(&mut self) {
+        self.session_cache = SessionCache::default();
+    }
+
+    pub fn persist_session_cache(&self, path: &PathBuf) -> Result<()> {
+        let json = serde_json::to_string_pretty(&self.session_cache)
+            .context("Failed to serialize session cache")?;
+        std::fs::write(path, json)
+            .context("Failed to write session cache to file")?;
+        tracing::info!("Session cache persisted to {:?}", path);
+        Ok(())
+    }
+
+    pub fn load_session_cache(&mut self, path: &PathBuf) -> Result<()> {
+        if !path.exists() {
+            tracing::debug!("No session cache file found at {:?}", path);
+            return Ok(());
+        }
+        let content = std::fs::read_to_string(path)
+            .context("Failed to read session cache file")?;
+        let cache: SessionCache = serde_json::from_str(&content)
+            .context("Failed to parse session cache")?;
+        tracing::info!("Loaded {} sessions from cache", cache.sessions.len());
+        self.session_cache = cache;
+        Ok(())
     }
 
     async fn request<T: for<'de> Deserialize<'de>>(
@@ -208,9 +252,20 @@ impl MsfClient {
         .await
     }
 
-    pub async fn list_sessions(&self) -> Result<HashMap<String, Session>> {
+    pub async fn list_sessions(&mut self) -> Result<HashMap<String, Session>> {
         let response: SessionsResponse =
             self.request("session.list", serde_json::json!({})).await?;
+
+        self.session_cache.sessions.clear();
+        for (id, session) in &response.sessions {
+            self.session_cache.sessions.insert(
+                id.clone(),
+                session.to_info(id),
+            );
+        }
+        self.session_cache.last_updated = Some(
+            chrono::Utc::now().to_rfc3339()
+        );
 
         Ok(response.sessions)
     }
@@ -248,12 +303,16 @@ impl MsfClient {
         Ok(response.output)
     }
 
-    pub async fn kill_session(&self, session_id: &str) -> Result<()> {
+    pub async fn kill_session(&mut self, session_id: &str) -> Result<()> {
         self.request(
             "session.stop",
             serde_json::json!({ "session_id": session_id }),
         )
-        .await
+        .await?;
+
+        self.session_cache.sessions.remove(session_id);
+
+        Ok(())
     }
 
     pub async fn generate_payload(

@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::utils::create_insecure_client_with_options;
 
 use super::WafDetector;
 use super::types::ResponseDiff;
@@ -9,17 +10,12 @@ impl WafDetector {
         normal_req: &str,
         malicious_req: &str,
     ) -> Result<ResponseDiff> {
-        tracing::warn!(
-            "TLS certificate verification disabled for response comparison. This is insecure and should \
-             only be used in isolated testing environments."
-        );
         let ua = crate::waf::bypass::headers::get_random_ua().to_string();
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .danger_accept_invalid_certs(true)
-            .redirect(reqwest::redirect::Policy::limited(5))
-            .user_agent(ua)
-            .build()?;
+        let client = create_insecure_client_with_options(15, |builder| {
+            builder
+                .redirect(reqwest::redirect::Policy::limited(5))
+                .user_agent(ua)
+        })?;
 
         let normal_response = client.get(url).query(&[("q", normal_req)]).send().await?;
 

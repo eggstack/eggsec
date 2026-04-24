@@ -82,6 +82,7 @@ strum = { version = "0.26", default-features = false, features = ["derive"] }
 smallvec = "1"
 ed25519-dalek = "2"
 handlebars = "6"
+arboard = "3.4"
 
 # Workspace crates
 slapper-plugin = { path = "../slapper-plugin", optional = true }

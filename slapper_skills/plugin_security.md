@@ -1,190 +1,112 @@
 ---
 name: plugin_security
-description: "Plugin security patterns for Slapper including suspicious pattern detection and blocking"
+description: "Plugin security patterns - validation and suspicious pattern detection"
 triggers:
   - plugin security
-  - block_suspicious_plugins
-  - validate_python_plugin
-  - validate_ruby_plugin
-  - plugin validation
-  - python plugin
-  - ruby plugin
   - suspicious patterns
+  - plugin validation
+  - plugin loading
 metadata:
-  category: security
-  tools: [plugin]
-  scope: internal
+  category: Security
+  tools: [plugin, python, ruby]
+  scope: targets
 ---
 
 ## Overview
 
-Slapper supports Python and Ruby plugins with built-in security features to prevent malicious plugins from executing dangerous operations.
+Slapper's plugin system includes security validation to prevent malicious or dangerous plugins from executing. Both Python and Ruby plugins are validated against suspicious patterns.
 
 ## Python Plugin Security
 
-### Validation Function
+The `validate_python_plugin()` function in `slapper-plugin/src/security.rs` checks for:
 
-`validate_python_plugin(content: &str, block_suspicious_plugins: bool)` in `crates/slapper-plugin/src/python.rs`:
+**Dangerous Patterns Detected:**
+1. `os.system` - Shell command execution
+2. `subprocess` - Process spawning
+3. `socket` - Network connections
+4. `eval(` - Code evaluation
+5. `\bexec\b` - Command execution (regex)
+6. `\bfork\b` - Process forking
+7. `__import__` - Dynamic module loading
+8. `\bopen\(` - File access
+9. `pty.spawn` - PTY spawning
+10. `os.popen` - Shell command execution
+11. `multiprocessing.Process` - Process creation
+12. `ctypes` - C library bindings
+13. `importlib` - Dynamic imports
+14. `getattr(` - Attribute access
+15. `chr(` - Character encoding
+16. Hex escapes (`\x[0-9a-fA-F]{2}`)
+17. Unicode escapes (`\u[0-9a-fA-F]{4}`)
+18. Octal escapes (`\[0-7]{3,}`)
 
-Uses regex-based pattern detection with word-boundary awareness for more robust matching:
+Patterns use case-insensitive matching (`(?i)` flag).
 
-**Suspicious Patterns Detected:**
-- `r"\bos\.system\b"` - arbitrary command execution
-- `r"\bsubprocess\b"` - process spawning
-- `r"\bsocket\b"` - network connections
-- `r"\beval\("` - dynamic code execution
-- `r"\bexec\b"` - dynamic code execution
-- `r"\bfork\b"` - process forking
-- `r"\b__import__\b"` - dynamic import
-- `r"\bopen\s*\("` - file access
-- `r"pty\.spawn"` - PTY spawning
-- `r"os\.popen"` - OS command pipe
-- `r"multiprocessing\.Process"` - Process threads
-- `r"\bctypes\b"` - C FFI
-- `r"\bimportlib\b"` - dynamic imports
-- `r"\bgetattr\("` - attribute access
-- `r"\bchr\("` - character encoding
-- `r"\\x[0-9a-fA-F]{2}"` - hex escape
-- `r"\\u[0-9a-fA-F]{4}"` - unicode escape
-- `r"\\[0-7]{3,}"` - octal escape
+## Ruby Plugin Security
 
-Uses `LazyLock<Regex>` for compiled patterns to avoid repeated compilation.
+The `validate_ruby_plugin()` function checks for:
 
-### Deserialization DoS Prevention
+**Dangerous Patterns Detected:**
+1. `\beval\(` - Code evaluation
+2. `\bexec\(` - Command execution
+3. `\bsystem\(` - Shell commands
+4. `` ` `` - Backtick command execution
+5. `IO.popen` - Process I/O
+6. `Process.spawn` - Process spawning
+7. `File.read(` - File reading
+8. `File.write(` - File writing
+9. `File.open(` - File operations
+10. `Net::HTTP` - HTTP requests
+11. `Socket.open` - Network sockets
+12. `TCPSocket` - TCP connections
+13. `UDPSocket` - UDP connections
+14. `Open3.` - Process capture
+15. `Shellwords.escape` - Shell argument manipulation
+16. `Kernel.exec` - Direct command execution
+17. `\bopen\b` - File/popen access
+18. `\beval\b` - Eval without parentheses
 
-JSON parsing is size-limited via `MAX_JSON_SIZE_BYTES = 100_000` to prevent DoS attacks during plugin result parsing.
+## Configuration
 
-### Configuration
+Plugin security is controlled by `block_suspicious_plugins` in `PluginConfig`:
 
 ```rust
 pub struct PluginConfig {
     pub enabled: bool,
     pub config: HashMap<String, serde_json::Value>,
     pub block_suspicious_plugins: bool,  // default: true
-    pub timeout_secs: u64,               // default: 300
-    pub max_file_size_bytes: usize,      // default: 1,000,000
 }
 ```
 
-### Timeout Enforcement
+When `true` (default), plugins matching suspicious patterns are rejected.
 
-Plugin execution is time-limited via `timeout_secs` (default: 300 seconds):
-- Python: Uses `tokio::time::timeout` wrapper around plugin execution
-- Ruby: Uses `rx.recv_timeout()` with the configured duration
-- If timeout occurs, execution is cancelled and an error is returned
+## Shared Security Module
+
+`slapper-plugin/src/security.rs` provides consolidated security validation:
+- `validate_python_plugin(content, block_suspicious_plugins) -> Result<(), String>`
+- `get_max_plugin_size_bytes() -> usize` (default 1MB)
+
+## Safe Ruby APIs
+
+After the sandbox security fix (Wave 2.1), Ruby plugins only have safe reporting methods:
+- `Slapper::Report.finding()`
+- `Slapper::Report.vulnerability()`
+- `Slapper::Report.info()`
+- `Slapper::Report.success()`
+- `Slapper::Report.warning()`
+- `Slapper::Report.error()`
+
+Dangerous APIs removed: HTTP, Scanner, Fuzzer, Metasploit, Encoder, Session
+
+## Implementation
+
+- `slapper-plugin/src/security.rs` - Shared security patterns
+- `slapper-plugin/src/python.rs` - Python plugin validation
+- `slapper-ruby/src/bridge.rs` - Ruby plugin validation
+
+## Verification
+
+```bash
+cargo test --lib -p slapper-plugin --features python-plugins
+cargo test --lib -p slapper-ruby --features ruby-plugins
 ```
-
-### Usage
-
-```rust
-// Create manager with blocking enabled (default)
-let manager = PythonPluginManager::new();  // block_suspicious_plugins = true
-
-// Or disable blocking (not recommended)
-let manager = PythonPluginManager::with_block_suspicious_plugins(false);
-
-// Load plugins
-manager.load_plugins(&plugin_dir)?;
-```
-
-## Ruby Plugin Security
-
-### Validation Function
-
-`validate_ruby_plugin(content: &str, block_suspicious_plugins: bool)` in `crates/slapper-ruby/src/bridge.rs`:
-
-**Suspicious Patterns Detected:**
-- `eval(` - dynamic code execution
-- `exec(` - command execution
-- `system(` - command execution
-- `` ` `` - command execution
-- `IO.popen` - process pipes
-- `Process.spawn` - process spawning
-- `File.read(` - file reading
-- `File.write(` - file writing
-- `File.open(` - file access
-- `Net::HTTP` - HTTP connections
-- `Socket.open` - socket creation
-- `TCPSocket` / `UDPSocket` - network sockets
-- `Open3.` - process spawning
-- `Shellwords.escape` - shell escaping
-- `Kernel.exec` - direct exec call
-- `\bopen\b` - generic open (matches `open("|cmd")`)
-- `\beval\b` - eval without parens
-
-### Configuration
-
-The Ruby bridge stores `block_suspicious_plugins` as a setting:
-
-```rust
-pub struct RubyBridge {
-    ruby: Ruby,
-    loaded: bool,
-    block_suspicious_plugins: bool,  // default: true
-}
-```
-
-## Security Best Practices
-
-1. **Keep blocking enabled** - `block_suspicious_plugins: true` is the default for a reason
-2. **Review plugin sources** - Even with blocking disabled, warnings are logged
-3. **Use isolated environments** - Run plugins in sandboxed environments when possible
-
-## NSE Sandbox
-
-Slapper's NSE (Nmap Scripting Engine) support includes sandboxing for Lua scripts:
-
-### Sandbox Configuration
-
-```rust
-pub struct SandboxConfig {
-    pub enabled: bool,           // Default: true
-    pub allowed_dir: Option<PathBuf>,  // Restrict file access
-    pub allowed_commands: Vec<String>, // Allowed commands for io.popen
-    pub log_violations: bool,    // Log instead of block
-}
-```
-
-### NSE io Library
-
-The NSE `io` library is sandboxed:
-
-- `io.open()` - Path validation with canonicalization
-- `io.lines()` - Path validation (blocks traversal attempts)
-- `io.popen()` - Command validation via `is_command_allowed()`
-- `io.tmpfile()` - Creates files in system temp directory
-
-### Path Validation Pattern
-
-All file operations use `canonicalize()` to resolve symlinks before checking. Symlink cycles and canonicalization failures are blocked (fail-secure):
-
-```rust
-if sandbox_enabled {
-    let canonical = match path_buf.canonicalize() {
-        Ok(c) => c,
-        Err(e) => return Err(format!("Path could not be resolved: {} - blocked", e)),
-    };
-    if !canonical.starts_with(allowed_dir) {
-        return Err("Path blocked by sandbox");
-    }
-}
-```
-
-## Feature Flags
-
-- `python-plugins` - Enable Python plugin support
-- `ruby-plugins` - Enable Ruby plugin support
-- `nse` - Enable NSE script support
-- `nse-sandbox` - Enable NSE sandbox mode (default: enabled)
-
-## Triggers
-
-Keywords: plugin security, block_suspicious_plugins, validate_python_plugin, validate_ruby_plugin, plugin validation, python plugin, ruby plugin, suspicious patterns, plugin blocking, plugin allowlist, NSE sandbox, io.lines, io.popen
-
-## References
-
-- `crates/slapper-plugin/src/python.rs` - Python plugin manager
-- `crates/slapper-plugin/src/lib.rs` - PluginConfig definition
-- `crates/slapper-ruby/src/bridge.rs` - Ruby plugin bridge
-- `crates/slapper-nse/src/libraries/io.rs` - NSE io library with sandbox
-- `crates/slapper-nse/src/lib.rs` - SandboxConfig definition

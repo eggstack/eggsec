@@ -1,10 +1,13 @@
 mod app;
 mod components;
 mod help;
-mod search;
-mod state;
+pub mod search;
+mod session;
+pub mod state;
 pub mod tabs;
-mod ui;
+mod theme;
+pub mod ui;
+pub mod utils;
 mod workers;
 
 pub use app::*;

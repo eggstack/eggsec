@@ -8,6 +8,7 @@ use std::sync::Arc;
 #[cfg(feature = "python-plugins")]
 pub mod python;
 
+pub mod security;
 pub mod validation;
 
 #[cfg(feature = "python-plugins")]
@@ -69,6 +70,23 @@ impl Default for PluginConfig {
     }
 }
 
+impl PluginConfig {
+    pub fn filtered_config(&self) -> HashMap<String, serde_json::Value> {
+        let sensitive_keys = [
+            "api_key", "apikey", "api-key", "password", "passwd", "secret",
+            "token", "auth", "credential", "private_key", "private-key",
+        ];
+        self.config
+            .iter()
+            .filter(|(k, _)| {
+                let key_lower = k.to_lowercase();
+                !sensitive_keys.iter().any(|s| key_lower.contains(s))
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginResult {
     pub plugin_name: String,
@@ -88,18 +106,13 @@ pub struct PluginFinding {
     pub cve_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum HealthStatus {
+    #[default]
+    Unknown,
     Healthy,
     Degraded,
     Unhealthy,
-    Unknown,
-}
-
-impl Default for HealthStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -405,6 +418,36 @@ impl PluginManager {
 
     pub fn get_plugin_config(&self, name: &str) -> Option<&PluginConfig> {
         self.configs.get(name)
+    }
+
+    pub fn reload_plugin(&mut self, name: &str) -> Result<Option<PluginInfo>> {
+        if let Some(existing_info) = self.plugins.get(name).cloned() {
+            self.plugins.remove(name);
+            for dir in &self.plugin_dirs {
+                if !dir.exists() {
+                    continue;
+                }
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.extension().map(|e| e == "py").unwrap_or(false) {
+                            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                                if stem == name {
+                                    if let Some(info) = self.load_python_plugin(&path) {
+                                        self.plugins.insert(name.to_string(), info.clone());
+                                        return Ok(Some(info));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            self.plugins.insert(name.to_string(), existing_info);
+            anyhow::bail!("Plugin '{}' not found in any plugin directory", name);
+        } else {
+            Ok(None)
+        }
     }
 }
 

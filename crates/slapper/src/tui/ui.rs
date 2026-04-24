@@ -710,16 +710,25 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         match app.mode {
             super::InputMode::Normal => {
                 let mut help = if area.width < 80 {
-                    " [h/l]Tab [j/k]Nav [Space]Help [i]Insert [q]Quit [e]Export ".to_string()
+                    format!(
+                        " [h/l]Tab [j/k]Nav [Ctrl+F]Search [Ctrl+Z]{} [i]Insert [q]Quit",
+                        if app.is_paused() { "[Paused]" } else { "" }
+                    )
                 } else {
-                    " [h/l] Tab | [j/k] Nav | [w/b] Word | [1-9] Jump | [Space] Help | [i] Insert | [q] Quit | [Enter] Start | [e] Export ".to_string()
+                    format!(
+                        " [h/l] Tab | [j/k] Nav | [/] Search | [Ctrl+F] Global | [Ctrl+Z]{} | [1-9] Jump | [Space] Help | [i] Insert | [q] Quit | [b] Bookmark",
+                        if app.is_paused() { " Resume" } else { " Pause" }
+                    )
                 };
                 if let Some(palette) = app.get_command_palette() {
                     if palette.visible {
-                        help.push_str("[Ctrl+P] Close ");
+                        help.push_str(" [Ctrl+P] Close");
                     } else {
-                        help.push_str("[Ctrl+P] Open ");
+                        help.push_str(" [Ctrl+P] Palette");
                     }
+                }
+                if !app.get_bookmarked_tabs().is_empty() {
+                    help.push_str(&format!(" [{}]", app.get_bookmarked_tabs().len()));
                 }
                 help
             }

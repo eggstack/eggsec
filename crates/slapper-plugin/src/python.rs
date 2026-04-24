@@ -4,74 +4,20 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use pyo3::IntoPyObjectExt;
 use std::path::Path;
-use std::sync::LazyLock;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use regex::Regex;
-
+use super::security::validate_python_plugin;
 use super::validation::validate_plugin_path;
 use super::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult, HealthStatus};
 
 #[cfg(feature = "python-plugins")]
 use tokio::time::timeout;
 
-const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
 const MAX_JSON_SIZE_BYTES: usize = 100_000;
 
-static SUSPICIOUS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
-    vec![
-        Regex::new(r"os\.system").unwrap(),
-        Regex::new(r"subprocess").unwrap(),
-        Regex::new(r"socket").unwrap(),
-        Regex::new(r"eval\(").unwrap(),
-        Regex::new(r"\bexec\b").unwrap(),
-        Regex::new(r"\bfork\b").unwrap(),
-        Regex::new(r"__import__").unwrap(),
-        Regex::new(r"\bopen\(").unwrap(),
-        Regex::new(r"pty\.spawn").unwrap(),
-        Regex::new(r"os\.popen").unwrap(),
-        Regex::new(r"multiprocessing\.Process").unwrap(),
-        Regex::new(r"ctypes").unwrap(),
-        Regex::new(r"importlib").unwrap(),
-        Regex::new(r"getattr\(").unwrap(),
-        Regex::new(r"chr\(").unwrap(),
-        Regex::new(r"\\x[0-9a-fA-F]{2}").unwrap(),
-        Regex::new(r"\\u[0-9a-fA-F]{4}").unwrap(),
-        Regex::new(r"\\[0-7]{3,}").unwrap(),
-    ]
-});
-
-fn validate_python_plugin(content: &str, block_suspicious_plugins: bool) -> Result<()> {
-    if content.len() > MAX_PLUGIN_SIZE_BYTES {
-        anyhow::bail!("Plugin exceeds maximum size of {} bytes", MAX_PLUGIN_SIZE_BYTES);
-    }
-
-    let mut suspicious_found = Vec::new();
-    for pattern in SUSPICIOUS_PATTERNS.iter() {
-        if pattern.is_match(content) {
-            suspicious_found.push(pattern.as_str());
-        }
-    }
-
-    if !suspicious_found.is_empty() {
-        if block_suspicious_plugins {
-            anyhow::bail!(
-                "Plugin contains suspicious patterns and blocking is enabled: {}",
-                suspicious_found.join(", ")
-            );
-        } else {
-            tracing::warn!(
-                "Plugin contains suspicious patterns (allowing due to config): {}",
-                suspicious_found.join(", ")
-            );
-        }
-    }
-
-    Ok(())
-}
-
 pub struct PythonPluginManager {
-    plugins: Vec<LoadedPlugin>,
+    plugins: Mutex<Vec<LoadedPlugin>>,
     info: PluginInfo,
     block_suspicious_plugins: bool,
     checks_cache: std::sync::OnceLock<Vec<PluginCheck>>,
@@ -121,7 +67,7 @@ fn py_value_to_json(_py: Python<'_>, val: &pyo3::Bound<'_, pyo3::PyAny>) -> serd
 impl PythonPluginManager {
     pub fn new() -> Self {
         Self {
-            plugins: Vec::new(),
+            plugins: Mutex::new(Vec::new()),
             info: PluginInfo {
                 name: "python-plugin-manager".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
@@ -137,7 +83,7 @@ impl PythonPluginManager {
 
     pub fn from_config(config: &PluginConfig) -> Self {
         Self {
-            plugins: Vec::new(),
+            plugins: Mutex::new(Vec::new()),
             info: PluginInfo {
                 name: "python-plugin-manager".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
@@ -153,7 +99,7 @@ impl PythonPluginManager {
 
     pub fn with_block_suspicious_plugins(block: bool) -> Self {
         Self {
-            plugins: Vec::new(),
+            plugins: Mutex::new(Vec::new()),
             info: PluginInfo {
                 name: "python-plugin-manager".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
@@ -219,11 +165,14 @@ impl PythonPluginManager {
                                 Ok(module) => {
                                     let class_plugins =
                                         Self::extract_class_plugins(py, &module, module_name);
-                                    self.plugins.push(LoadedPlugin {
+                                    let loaded = LoadedPlugin {
                                         name: module_name.to_string(),
                                         module: module.into(),
                                         class_plugins,
-                                    });
+                                    };
+                                    if let Ok(mut plugins) = self.plugins.lock() {
+                                        plugins.push(loaded);
+                                    }
                                 }
                                 Err(e) => {
                                     tracing::warn!(
@@ -266,7 +215,7 @@ impl PythonPluginManager {
                             .unwrap_or_else(|_| module_name.to_string());
 
                         class_plugins.push(ClassPlugin {
-                            name,
+                            name: format!("Slapper_{}", name),
                             class: item.into(),
                         });
                     }
@@ -331,7 +280,8 @@ impl PythonPluginManager {
                 Python::attach(|py| {
                     let mut checks = Vec::new();
 
-                    for plugin in &self.plugins {
+                    let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner());
+                    for plugin in plugins.iter() {
                         // Collect checks from function-based plugins
                         if let Ok(module) = plugin.module.bind(py).downcast::<PyModule>() {
                             if let Ok(register_func) = module.getattr("register_checks") {
@@ -399,7 +349,8 @@ impl PythonPluginManager {
         Python::attach(|py| {
             let mut all_results = Vec::new();
 
-            for plugin in &self.plugins {
+            let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner());
+            for plugin in plugins.iter() {
                 // Try function-based plugins
                 if let Ok(module) = plugin.module.bind(py).downcast::<PyModule>() {
                     if let Ok(run_func) = module.getattr("run_check") {
@@ -642,7 +593,7 @@ impl Plugin for PythonPluginManager {
     }
 
     fn health_check(&self) -> Result<HealthStatus> {
-        let plugin_count = self.plugins.len();
+        let plugin_count = self.plugins.lock().unwrap_or_else(|e| e.into_inner()).len();
         if plugin_count == 0 {
             Ok(HealthStatus::Degraded)
         } else {

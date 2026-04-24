@@ -53,7 +53,7 @@ pub mod privilege;
 pub use auth::constant_time_eq;
 pub use formatting::{preserve_all, strip_controls};
 pub use logging::sanitize_for_logging;
-pub use circuit_breaker::{CircuitBreaker, CircuitBreakerRegistry, CircuitState};
+pub use circuit_breaker::{CircuitBreaker, CircuitState};
 pub use client_pool::{ClientPool, OptimizedClientPool};
 pub use http::{
     create_http_client, create_http_client_with_options, create_http_client_with_proxy,

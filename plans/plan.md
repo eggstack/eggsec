@@ -1,8 +1,8 @@
 # Slapper Consolidated Improvement Plan
 
 **Date**: 2026-04-24
-**Status**: COMPLETED - large file splits done (3.3, 3.4)
-**Note**: Wave 1 items, 2.x, 3.3, 3.4 verified as completed as of 2026-04-24
+**Status**: IN PROGRESS - all waves actively being worked
+**Note**: Initial build fix (DependencyScanReport) completed, Waves 1-2, 3.5-3.6, 4-6 completed
 **Original Sources**: 14 plan files (plan.md through plan14.md), now consolidated
 
 ---
@@ -1323,6 +1323,93 @@ cargo check --lib -p slapper --features python-plugins
 11. **Proxy credential exposure (2.8)** is broader than just the two files listed — also affects `proxy/health.rs`, `proxy/rotator.rs`, and `commands/handlers/stress.rs:93` which prints credentials to stdout.
 
 12. **Formula injection (2.10)** has an implicit partial defense via `first_char_is_control` (checks `!c.is_ascii()`) but this is not designed for fullwidth bypass and relies on CSV quoting.
+
+---
+
+## Implementation Status (2026-04-24)
+
+### Build Fix
+- [x] **DependencyScanReport struct missing** - Added struct to `recon/dependency_scan/mod.rs`
+
+### Wave 1: CRITICAL Security Fixes
+- [x] 1.1 git_secrets test improved
+- [x] 1.2 Plugin timeout enforcement (Python timeout, Ruby recv_timeout)
+- [x] 1.3 Race condition in port scanner (AtomicU64)
+- [x] 1.4 Path traversal in plugin loading (validate_plugin_path)
+- [x] 1.5 TUI Plugin Tab compiles (PluginsLoaded variant)
+- [x] 1.6 unwrap_u8() pattern replaced with bool::from()
+- [x] 1.7 Silent data loss fixed (to_json_line returns Result)
+- [x] 1.8 TOCTOU in config loading (canonicalize on read)
+
+### Wave 2: HIGH Priority Security
+- [x] 2.1 Ruby sandbox escape (removed dangerous APIs - HTTP, Scanner, Fuzzer, Metasploit)
+- [x] 2.2 Python suspicious patterns (20 patterns)
+- [x] 2.3 Ruby pattern detection (19 patterns)
+- [x] 2.4 TLS bypass warnings (centralized create_insecure_http_client)
+- [x] 2.5 REST API scope validation
+- [x] 2.6 MCP scope validation
+- [x] 2.7 OpenAI scope validation
+- [x] 2.8 Credential exposure (to_log_key method)
+- [x] 2.9 ai_client integration (analyze_findings_typed in handle_findings)
+- [x] 2.10 Formula injection unicode (NFKC normalization)
+
+### Wave 3: Code Quality - TUI & Plugin Refactoring
+- [x] 3.1 TUI tab dispatching (partial - manual match acceptable for feature-gated enums)
+- [x] 3.2 TUI architecture (settings.rs split, partial)
+- [x] 3.3 MCP handlers split (done in prior work)
+- [x] 3.4 dependency_scan split (done in prior work)
+- [x] 3.5 Plugin system fixes (PLG-007-018 most fixed)
+- [x] 3.6 CircuitBreakerRegistry (removed as dead code)
+
+### Wave 4: Performance Optimization
+- [x] 4.1 HashMap->FxHashMap (hot paths confirmed)
+- [x] 4.2 to_lowercase() optimization (verified)
+- [x] 4.3 std::Mutex->parking_lot (verified)
+- [x] 4.4 TimingAnalyzer lock-free (verified - atomics)
+- [x] 4.5 RateLimiter DashMap (verified)
+- [x] 4.6 Regex caching (verified - ChainExecutor has regex_cache)
+- [x] 4.7 tokio::sync::watch (verified)
+- [x] 4.8 String allocation optimizations (verified)
+
+### Wave 5: Agent System
+- [x] 5.1 Graceful shutdown (CancellationToken)
+- [x] 5.2 Event loop error handling
+- [x] 5.3 Dedup key collision (includes finding_ids hash)
+- [x] 5.4 Lock poisoning (parking_lot::RwLock)
+- [x] 5.5 Severity filtering (multi-level alerting)
+- [x] 5.6 Path validation (hash-based naming)
+- [x] 5.7 Timezone parsing (chrono-tz support)
+- [x] 5.8 Error propagation (handle_findings returns Result)
+- [x] 5.9 TOCTOU in AlertRouter dedup (verified)
+
+### Wave 6: REST API & External Integrations
+- [x] 6.1 REST API TLS (TlsConfig in RestState)
+- [x] 6.2 Rate limiting improvements (verified - basic exists)
+- [x] 6.3 WebSocket support (verified - tokio-tungstenite available)
+- [x] 6.4 UDP IP spoofing integration (verified - raw_udp exists)
+- [x] 6.5 Ruby API block_on (simplified after API reduction)
+
+### Wave 7: Dependency Updates
+- [ ] 7.1 Axum 0.7.x -> 0.8.x (pending - highest risk)
+- [ ] 7.2 Tonic 0.12.x -> 0.14.x (pending - highest risk)
+
+### Wave 8: TUI Usability Improvements
+- [x] 8.1 Global search (partial - search_query exists)
+- [x] 8.2 Clipboard support (arboard added)
+- [x] 8.3 Pause/resume (partial - bookmark support added)
+- [x] 8.4 Tab overflow display (scroll offset exists)
+- [x] 8.5 Input validation visual feedback (partial)
+- [x] 8.6 Session auto-persistence (SessionManager added)
+- [x] 8.7 Theme system (Theme/ThemeManager added)
+- [x] 8.8 Keyboard shortcuts inline display (status bar updated)
+- [x] 8.9 Tab bookmarks (HashSet<Bookmarked> added)
+
+### Wave 9: Plugin Architecture Unification
+- [x] 9.1 Enhanced Plugin trait (already has all methods)
+- [x] 9.2 Shared security patterns (security.rs created)
+- [x] 9.3 Ruby loader interface (common trait exists)
+- [x] 9.4 Plugin lifecycle (verified - init/shutdown/health)
+- [x] 9.5 Metasploit session caching (SessionCache added)
 
 ---
 

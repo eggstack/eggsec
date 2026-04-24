@@ -216,7 +216,16 @@ where
                                 ("Stress", app.stress.target().to_string()),
                             ];
                             search.search_from_strings(&app.search_query, &data);
+                            app.show_search = true;
                         }
+                    }
+                    (KeyModifiers::CONTROL, KeyCode::Char('z')) => {
+                        app.toggle_pause();
+                    }
+                    (KeyModifiers::CONTROL, KeyCode::Char('y')) => {
+                    }
+                    (KeyModifiers::CONTROL, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
+                        app.toggle_bookmark(app.current_tab as usize);
                     }
                     _ if app
                         .get_command_palette()

@@ -139,6 +139,8 @@ pub struct App {
     pub pending_action: Option<PendingAction>,
     pub needs_redraw: bool,
     pub tab_scroll_offset: u16,
+    pub bookmarks: std::collections::HashSet<usize>,
+    pub paused: bool,
 }
 
 impl App {
@@ -205,6 +207,8 @@ impl App {
             help_context: HelpContext::Normal,
             pending_action: None,
             needs_redraw: true,
+            bookmarks: std::collections::HashSet::new(),
+            paused: false,
         }
     }
 
@@ -723,6 +727,38 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
             return;
         }
         self.dispatcher_mut().handle_bottom();
+    }
+
+    pub fn toggle_bookmark(&mut self, tab_index: usize) {
+        if self.bookmarks.contains(&tab_index) {
+            self.bookmarks.remove(&tab_index);
+        } else {
+            self.bookmarks.insert(tab_index);
+        }
+    }
+
+    pub fn is_bookmarked(&self, tab_index: usize) -> bool {
+        self.bookmarks.contains(&tab_index)
+    }
+
+    pub fn get_bookmarked_tabs(&self) -> Vec<usize> {
+        self.bookmarks.iter().cloned().collect()
+    }
+
+    pub fn toggle_pause(&mut self) {
+        self.paused = !self.paused;
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused
+    }
+
+    pub fn pause(&mut self) {
+        self.paused = true;
+    }
+
+    pub fn resume(&mut self) {
+        self.paused = false;
     }
 }
 

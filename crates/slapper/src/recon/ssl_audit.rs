@@ -6,7 +6,7 @@
 
 use crate::error::{Result, SlapperError};
 use crate::types::Severity;
-use crate::utils::create_insecure_http_client;
+use crate::utils::create_insecure_client_with_options;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -141,22 +141,15 @@ impl SslAuditor {
     }
 
     async fn probe_protocol(&self, url: &str, protocol: &str) -> bool {
-        tracing::warn!(
-            "TLS certificate verification disabled for protocol probe. This is insecure and should \
-             only be used in isolated testing environments."
-        );
-        let client = reqwest::Client::builder()
-            .timeout(self.timeout)
-            .danger_accept_invalid_certs(true)
-            .use_rustls_tls()
-            .build();
+        let client = match create_insecure_client_with_options(self.timeout.as_secs() as u64, |builder| {
+            builder.use_rustls_tls()
+        }) {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
 
-        if let Ok(client) = client {
-            let result = client.get(url).send().await;
-            result.is_ok()
-        } else {
-            false
-        }
+        let result = client.get(url).send().await;
+        result.is_ok()
     }
 
     async fn check_cipher_suites(&self, target: &str, port: u16) -> Result<SslCheck> {

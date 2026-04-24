@@ -1,9 +1,8 @@
-
 use crate::error::Result;
-use std::time::{Duration, Instant};
+use crate::utils::create_insecure_client_with_options;
+use std::time::Instant;
 
 use super::config::{HealthCheckConfig, ProxyEntry};
-use crate::utils::create_insecure_http_client;
 
 #[derive(Debug, Clone)]
 pub struct HealthCheckResult {
@@ -39,7 +38,7 @@ pub struct HealthChecker {
 impl HealthChecker {
     pub fn new(config: HealthCheckConfig) -> Result<Self> {
         let timeout_secs = (config.timeout_ms / 1000).max(1);
-        let client = create_insecure_http_client(timeout_secs)?;
+        let client = create_insecure_client_with_options(timeout_secs, |builder| builder)?;
 
         Ok(Self { config, client })
     }
@@ -94,15 +93,10 @@ impl HealthChecker {
             reqwest::Proxy::all(&proxy_url)?
         };
 
-        tracing::warn!(
-            "Creating HTTP client with disabled TLS certificate verification for proxy health check. \
-             This is insecure and should only be used in isolated testing environments."
-        );
-        let client = reqwest::Client::builder()
-            .proxy(reqwest_proxy)
-            .timeout(Duration::from_millis(self.config.timeout_ms))
-            .danger_accept_invalid_certs(true)
-            .build()?;
+        let timeout_secs = (self.config.timeout_ms as u64) / 1000;
+        let client = create_insecure_client_with_options(timeout_secs, |builder| {
+            builder.proxy(reqwest_proxy)
+        })?;
 
         let response = client.get(&self.config.test_url).send().await?;
 

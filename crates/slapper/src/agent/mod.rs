@@ -280,6 +280,23 @@ impl Agent {
     }
 
     async fn handle_findings(&mut self, target: &str, findings: Vec<crate::tool::response::Finding>) -> Result<()> {
+        #[cfg(feature = "ai-integration")]
+        if let Some(ref client) = self.ai_client {
+            let finding_values: Vec<serde_json::Value> = findings
+                .iter()
+                .map(|f| serde_json::to_value(f).unwrap_or_default())
+                .collect();
+
+            if let Ok(analysis) = client.analyze_findings_typed(&finding_values).await {
+                tracing::debug!(
+                    "AI analysis: reassessed_severity={}, confidence={}, exploitability={}",
+                    analysis.reassessed_severity,
+                    analysis.confidence,
+                    analysis.exploitability
+                );
+            }
+        }
+
         self.process_findings_by_severity(target, &findings).await
     }
 

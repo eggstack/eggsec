@@ -64,6 +64,7 @@ struct ParsedDependency {
 }
 
 pub struct DependencyScanner {
+    #[allow(dead_code)]
     client: reqwest::Client,
 }
 

@@ -4,7 +4,7 @@ mod payload;
 mod session;
 mod types;
 
-pub use client::MsfClient;
+pub use client::{MsfClient, SessionCache};
 pub use module::{ModuleExecutionResult, ModuleInfo};
 pub use payload::PayloadInfo;
 pub use session::{Session, SessionInfo};

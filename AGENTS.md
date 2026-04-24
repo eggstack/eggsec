@@ -883,3 +883,23 @@ When fixing failing tests in integration scenarios:
 10. **Formula injection defense**: `escape_csv()` uses NFKC normalization to normalize Unicode fullwidth characters before checking for formula prefixes. This prevents fullwidth bypass attacks.
 
 11. **TUI Plugin Tab compiles**: The `TaskResult::PluginsLoaded` variant is present, and plugins feature compiles successfully.
+
+12. **Ruby sandbox is now secure**: Dangerous APIs (HTTP, Scanner, Fuzzer, Metasploit) removed from `slapper-ruby/src/api.rs`. Only safe reporting methods remain.
+
+13. **AI client integration**: `ai_client` in `Agent` now analyzes findings via `analyze_findings_typed()` when `ai-integration` feature is enabled.
+
+14. **Shared security patterns**: `slapper-plugin/src/security.rs` provides consolidated suspicious pattern validation for Python and Ruby plugins.
+
+15. **Metasploit session caching**: `MsfClient` now caches sessions with `SessionCache` for persistence and invalidation support.
+
+16. **TUI theme system**: `tui/theme.rs` provides `Theme`, `ThemeColors`, `ThemeManager` with dark/light presets. Use `theme!()` and `tc!()` macros.
+
+17. **TUI clipboard support**: `tui/utils/clipboard.rs` provides `Clipboard` utility using `arboard` crate.
+
+18. **TUI session persistence**: `tui/session.rs` provides `SessionManager` for auto-saving/restoring session state.
+
+19. **Plugin reload support**: `reload_plugin()` method added to `PluginManager` for hot reload of plugins.
+
+20. **Plugin namespace isolation**: Python plugin classes prefixed with `Slapper_` to avoid collisions.
+
+21. **Settings split**: `tui/tabs/settings.rs` split into `settings/main.rs`, `settings/render.rs`, `settings/input.rs`.

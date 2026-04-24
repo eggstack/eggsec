@@ -130,15 +130,19 @@ async fn build_clients(
         }
 
         let mut clients = Vec::with_capacity(healthy_proxies.len());
+        tracing::warn!(
+            "Creating HTTP clients with disabled TLS certificate verification for proxy health checks. \
+             This is insecure and should only be used in isolated testing environments."
+        );
         for proxy_entry in healthy_proxies {
             let mut builder = reqwest::Client::builder()
                 .timeout(Duration::from_secs(30))
-                .danger_accept_invalid_certs(true)
                 .pool_max_idle_per_host(max_connections.min(100))
                 .pool_idle_timeout(Duration::from_secs(30))
                 .connect_timeout(Duration::from_secs(5))
                 .tcp_keepalive(Duration::from_secs(60))
-                .tcp_nodelay(true);
+                .tcp_nodelay(true)
+                .danger_accept_invalid_certs(true);
             builder = builder.proxy(build_reqwest_proxy(&proxy_entry)?);
             clients.push(builder.build()?);
         }
