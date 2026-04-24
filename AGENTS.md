@@ -40,8 +40,8 @@ crates/slapper/
 │   ├── constants.rs   # Centralized constants (WAF, HTTP, scan, etc.)
 │   ├── types.rs       # Shared types (Severity, SensitiveString)
 │   ├── fuzzer/        # Fuzzing engine (39 payload types)
-│   │   ├── chain.rs   # ChainExecutor (regex caching needed - see plan 4.6)
-│   │   ├── detection/ # TimingAnalyzer (lock contention - see plan 4.4)
+│   │   ├── chain.rs   # ChainExecutor (with regex caching)
+│   │   ├── detection/ # TimingAnalyzer (lock-free redesign)
 │   │   └── payloads/
 │   │       └── macros.rs  # payload_vec! macro
 │   ├── scanner/       # Port scanning, endpoint discovery
@@ -58,11 +58,11 @@ crates/slapper/
 │   │   └── protocol/
 │   │       ├── mcp/   # MCP server (mod.rs, handlers.rs, routes.rs, types.rs, auth.rs, streaming.rs)
 │   │       ├── openai/  # OpenAI-compatible chat completions
-│   │       ├── rest.rs  # REST API (scope validation missing - see plan 2.5)
+│   │       ├── rest.rs  # REST API (scope validation implemented)
 │   │       └── grpc.rs  # gRPC service
-│   ├── proxy/         # Proxy modules (to_url() exposes credentials - see plan 2.8)
+│   ├── proxy/         # Proxy modules (to_log_key() for safe logging)
 │   │   └── intercept/ # Intercepting proxy with dynamic SSL certs
-│   ├── stress/        # Stress testing (raw_udp module unused - see plan 6.4)
+│   ├── stress/        # Stress testing (raw_udp module integrated with spoofed)
 │   ├── tui/           # Terminal UI (ratatui 0.30 + crossterm 0.29)
 │   │   ├── app/       # App struct (899 lines), split into submodules
 │   │   ├── tabs/      # 29 tab implementations
@@ -216,7 +216,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan (all planned work, organized by waves for parallel sub-agent execution)
+- `plans/plan.md` — Consolidated improvement plan (waves 1-9 completed)
 
 For new improvement work, add to the consolidated plan.md rather than creating new plan files.
 
