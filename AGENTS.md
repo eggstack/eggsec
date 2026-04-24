@@ -80,7 +80,7 @@ crates/slapper/
 - `PathsConfig` - Directory paths (flattened into SlapperConfig)
 - `SpoofConfig` - IP spoofing settings
 - `FuzzEngine` - Main fuzzing engine (returns `Result`)
-- `PayloadType` - Enum of 39 payload categories
+- `PayloadType` - Enum of 30 payload categories
 - `Severity` - Canonical severity rating (in `types.rs`, re-exported everywhere)
 - `SensitiveString` - Zeroized credential wrapper (in `types.rs`)
 
@@ -113,7 +113,7 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 | Tests | 1411 passing | With rest-api,ai-integration |
 | Clippy | ~29 warnings | TUI-specific warnings acceptable |
 | Source files | 470+ |
-| Payload types | 39 |
+| Payload types | 30 |
 | Tabs | 29 |
 
 ### Severity Enum (Unified)
@@ -192,7 +192,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 `scanner/ports/spoofed.rs` contains raw socket scanning (feature-gated). `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled. Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing.
 
-**Note:** The `raw_udp` module in `stress/udp.rs:20-117` exists but is NOT integrated — `run_udp_flood()` uses standard `UdpSocket` instead.
+**Note:** The `raw_udp` module in `stress/udp.rs:20-117` is integrated — `run_udp_flood()` calls `run_udp_flood_spoofed()` which uses `raw_udp::build_udp_packet` when IP spoofing is enabled on Unix.
 
 ## Planning
 
@@ -896,7 +896,7 @@ When fixing failing tests in integration scenarios:
 
 8. **Basic `Plugin` trait already exists**: At `slapper-plugin/src/lib.rs:98-113` with `info()`, `language()`, `list_checks()`, `run_check()`, `run()`. Plan items about lifecycle methods are additions to this trait, not a new trait.
 
-9. **`raw_udp` module is dead code**: Defined at `stress/udp.rs:20-117` with complete packet builder + IP spoofing. Zero references from outside the module. `run_udp_flood()` uses standard `UdpSocket` instead.
+9. **`raw_udp` module is integrated**: Defined at `stress/udp.rs:20-117` with complete packet builder + IP spoofing. `run_udp_flood_spoofed()` uses `raw_udp::build_udp_packet` when spoofing is enabled on Unix.
 
 10. **Formula injection defense**: `escape_csv()` uses NFKC normalization to normalize Unicode fullwidth characters before checking for formula prefixes. This prevents fullwidth bypass attacks.
 
@@ -928,7 +928,7 @@ When fixing failing tests in integration scenarios:
 
 24. **AlertRouter channel persistence**: AlertRouter and AlertRoutingRules exist but no config file format for channel persistence. Agent cannot send alerts without configuring channels.
 
-25. **Dedup key collision**: `make_dedup_key()` in AlertRouter doesn't include `finding_ids` hash. Different findings with same target/severity/title produce same dedup key.
+25. **Dedup key collision**: `make_dedup_key()` in AlertRouter ALREADY includes `finding_ids` hash (routing.rs:237-254). The fix is already implemented.
 
 ---
 

@@ -1129,11 +1129,12 @@ if let Err(e) = self.process_scheduled_scans().await {
 
 ### 5.11: Dedup Key Collision in AlertRouter
 
-**File**: `agent/alerts/routing.rs:237-244`
+**File**: `agent/alerts/routing.rs:237-254`
 
-**Issue**: `make_dedup_key()` doesn't include `finding_ids` hash. Alerts with same target/severity/title but different findings produce same key.
+**Status**: ✅ COMPLETE - Already implemented.
 
-**Fix**: Include hash of finding_ids:
+The `make_dedup_key()` function ALREADY includes `finding_ids` hash:
+
 ```rust
 fn make_dedup_key(&self, alert: &Alert) -> String {
     let mut hasher = DefaultHasher::new();
@@ -1144,6 +1145,8 @@ fn make_dedup_key(&self, alert: &Alert) -> String {
     format!("{}:{}:{}:{:016x}", alert.target, alert.severity.as_str(), alert.title, finding_hash)
 }
 ```
+
+**Action**: No changes needed - item is already complete.
 
 ---
 
@@ -1328,25 +1331,9 @@ Wave 6 depends on Wave 1 being complete. Waves 5 and 6 can run in parallel with 
 
 **File**: `slapper-ruby/src/api.rs`
 
-**Issue**: 35 instances of `rt.block_on()` confirmed. Classic deadlock risk — if Ruby plugin callback invoked from tokio async context, calling `block_on()` on same runtime handle panics.
+**Status**: ✅ NOT APPLICABLE - No `block_on` usage in slapper-ruby. All 91 `block_on` matches found are in `slapper-nse` and `slapper-plugin` crates, not slapper-ruby.
 
-**Fix**: Use dedicated blocking thread pool:
-```rust
-static ASYNC_POOL: std::sync::OnceLock<tokio::runtime::Runtime> =
-    std::sync::OnceLock::new();
-
-fn get_blocking_runtime() -> &'static tokio::runtime::Runtime {
-    ASYNC_POOL.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .thread_name("ruby-async")
-            .build()
-            .unwrap()
-    })
-}
-```
-
-Then replace `get_runtime().block_on(...)` with `get_blocking_runtime().block_on(...)`.
+**Note**: The issue was initially reported but verification shows slapper-ruby does not contain block_on patterns.
 
 ---
 
@@ -1811,7 +1798,7 @@ cargo check --lib -p slapper --features python-plugins
 - [ ] 5.8 SkillRegistry wired into Agent (pending)
 - [ ] 5.9 Graceful shutdown (pending)
 - [ ] 5.10 Event loop error handling (pending)
-- [ ] 5.11 Dedup key collision (pending)
+- [x] 5.11 Dedup key collision (✅ COMPLETE - already implemented in routing.rs:237-254)
 - [ ] 5.12 Lock poisoning (pending)
 - [ ] 5.13 TOCTOU in AlertRouter dedup (pending)
 - [ ] 5.14 Memory TTL cleanup (pending)
@@ -1824,8 +1811,8 @@ cargo check --lib -p slapper --features python-plugins
 - [ ] 6.1 REST API TLS (pending)
 - [ ] 6.2 Rate limiting improvements (pending)
 - [ ] 6.3 WebSocket support (pending)
-- [ ] 6.4 UDP IP spoofing integration (pending)
-- [ ] 6.5 Ruby API block_on (pending)
+- [x] 6.4 UDP IP spoofing integration (✅ COMPLETE - raw_udp integrated via run_udp_flood_spoofed)
+- [x] 6.5 Ruby API block_on (✅ NOT APPLICABLE - no block_on in slapper-ruby)
 - [ ] 6.6 SessionManager integration (pending)
 - [ ] 6.7 ThemeManager integration (pending)
 - [ ] 6.8 Clipboard integration (pending)
