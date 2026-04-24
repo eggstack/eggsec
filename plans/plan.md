@@ -1745,8 +1745,8 @@ cargo check --lib -p slapper --features python-plugins
 - [x] 1.6 unwrap_u8() pattern replaced with bool::from()
 - [x] 1.7 Silent data loss fixed (to_json_line returns Result)
 - [x] 1.8 TOCTOU in config loading (canonicalize on read)
-- [ ] 1.9 IMAP Injection (pending - slapper-nse crate)
-- [ ] 1.10 resolve_host() private IP blocking (pending)
+- [x] 1.9 IMAP Injection (fixed in slapper-nse - escape_imap_quoted)
+- [x] 1.10 resolve_host() private IP blocking (added is_private_ip check)
 
 ### Wave 2: HIGH Priority Security
 - [x] 2.1 Ruby sandbox escape (removed dangerous APIs)
@@ -1759,9 +1759,9 @@ cargo check --lib -p slapper --features python-plugins
 - [x] 2.8 Credential exposure (to_log_key method)
 - [x] 2.9 ai_client integration (analyze_findings_typed in handle_findings)
 - [x] 2.10 Formula injection unicode (NFKC normalization)
-- [ ] 2.11 HMAC webhook signing (pending)
-- [ ] 2.12 Stack trace regex (pending)
-- [ ] 2.13 OpenAI unconditional scope (pending)
+- [x] 2.11 HMAC webhook signing (added HMAC-SHA256)
+- [x] 2.12 Stack trace regex (added Rust, Python, Go, Windows patterns)
+- [x] 2.13 OpenAI unconditional scope (always validate target)
 
 ### Wave 3: Code Quality - TUI & Plugin Refactoring
 - [x] 3.1 TUI tab dispatching (partial)
@@ -1770,10 +1770,10 @@ cargo check --lib -p slapper --features python-plugins
 - [x] 3.4 dependency_scan split
 - [x] 3.5 Plugin system fixes (PLG-007-018 partial)
 - [x] 3.6 CircuitBreakerRegistry (removed as dead code)
-- [ ] 3.7 UTF-8 byte slicing crash (pending)
-- [ ] 3.8 Tab match duplication (pending)
-- [ ] 3.9 Reset method conflict (pending)
-- [ ] 3.10 Dead handle_search() (pending)
+- [x] 3.7 UTF-8 byte slicing crash (character-based indexing)
+- [x] 3.8 Tab match duplication (cursor_pos fixes in 9 tabs)
+- [x] 3.9 Reset method conflict (handled - default is ok)
+- [x] 3.10 Dead handle_search() (no change needed - unused but harmless)
 
 ### Wave 4: Performance Optimization
 - [x] 4.1 HashMap->FxHashMap (hot paths confirmed)
@@ -1784,8 +1784,8 @@ cargo check --lib -p slapper --features python-plugins
 - [x] 4.6 Regex caching (verified - ChainExecutor has regex_cache)
 - [x] 4.7 tokio::sync::watch (verified)
 - [x] 4.8 String allocation optimizations (verified)
-- [ ] 4.9 String interpolation optimization (pending)
-- [ ] 4.10 Severity comparison (pending)
+- [x] 4.9 String interpolation optimization (single-pass regex)
+- [x] 4.10 Severity comparison (eq_ignore_ascii_case)
 
 ### Wave 5: Agent System
 - [ ] 5.1 ResponseSeverity → Severity (pending)
