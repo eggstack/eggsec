@@ -2,23 +2,23 @@
 
 **Date**: 2026-04-24
 **Status**: IN PROGRESS - all waves actively being worked
-**Note**: Initial build fix (DependencyScanReport) completed, Waves 1-2, 3.5-3.6, 4-6 completed
-**Original Sources**: 14 plan files (plan.md through plan14.md), now consolidated
+**Note**: See Implementation Status at bottom for completed items. Individual plan files (plan2.md-plan10.md) are superseded by this consolidated plan.
+**Source**: Consolidated from 10 plan files (plan.md through plan10.md)
 
 ---
 
 ## Overview
 
-This document consolidates all improvement items into a single coherent plan with wave-based parallelization for sub-agent execution. Every item has been verified against the actual codebase for accuracy.
+This document consolidates all improvement items into a single coherent plan with wave-based parallelization for sub-agent execution. Every item has been verified against the actual codebase.
 
 ### Priority Summary
 
 | Priority | Items | Wave |
 |----------|-------|------|
-| CRITICAL | 8 | Wave 1 |
-| HIGH | 10 | Wave 2 |
-| MEDIUM | 12 | Waves 3-4 |
-| LOW | 24+ | Waves 5-9 |
+| CRITICAL | 10 | Wave 1 |
+| HIGH | 15 | Wave 2 |
+| MEDIUM | 20 | Waves 3-4 |
+| LOW | 30+ | Waves 5-9 |
 
 ---
 
@@ -34,11 +34,11 @@ Run `cargo test --lib -p slapper` and `cargo clippy --lib -p slapper` before and
 
 ### 1.1: Failing Test - `git_secrets::test_scan_current_directory`
 
-**File**: `crates/slapper/src/recon/git_secrets.rs:397-403`
+**File**: `recon/git_secrets.rs:397-403`
 
-**Verified**: Yes, issue present. Test calls `scan_directory(".")` which is fragile — depends on CWD being a valid git repo with readable history. Fails in CI with shallow clones or detached HEAD.
+**Issue**: Test calls `scan_directory(".")` which is fragile — depends on CWD being a valid git repo with readable history. Fails in CI with shallow clones or detached HEAD.
 
-**Current code (line 400)**:
+**Current code**:
 ```rust
 assert!(result.is_ok());
 ```
@@ -51,27 +51,24 @@ assert!(report.commits_scanned >= 0 && report.commits_scanned <= 100,
     "Expected 0-100 commits, got {}", report.commits_scanned);
 ```
 
-**After fixing**: Run `cargo test --lib -p slapper -- git_secrets::test_scan_current_directory` to verify.
+**Verification**: `cargo test --lib -p slapper -- git_secrets::test_scan_current_directory`
 
 ---
 
 ### 1.2: Plugin Timeout Not Enforced
 
 **Files**:
-- `crates/slapper-plugin/src/lib.rs:175-188` — `run_all()` uses `join_all` with no timeout
-- `crates/slapper-plugin/src/python.rs:520-582` — `run()` trait impl, `_config` received but `timeout_secs` never used
-- `crates/slapper-ruby/src/loader.rs:330-332` — `run()` trait impl, `_config` explicitly unused
-- `crates/slapper-ruby/src/bridge.rs:144-155` — `run_plugin()` uses `rx.recv()` with no timeout
+- `slapper-plugin/src/lib.rs:175-188` — `run_all()` uses `join_all` with no timeout
+- `slapper-plugin/src/python.rs:520-582` — `run()` trait impl, `_config` received but `timeout_secs` never used
+- `slapper-ruby/src/loader.rs:330-332` — `run()` trait impl, `_config` explicitly unused
+- `slapper-ruby/src/bridge.rs:144-155` — `run_plugin()` uses `rx.recv()` with no timeout
 
-**Verified**: Yes, issue present at all four locations. `PluginConfig.timeout_secs` (default 300s) is defined at `lib.rs:39-40` but never enforced anywhere in the execution chain.
+**Issue**: `PluginConfig.timeout_secs` (default 300s) is defined but never enforced anywhere in the execution chain.
 
-**Root Cause**: `timeout_secs` configuration is never passed to async task executing plugins.
-
-**Fix - Python** (`python.rs`, in the `run()` method at line 520):
+**Fix - Python** (`python.rs`, in the `run()` method):
 ```rust
 async fn run(&self, target: &str, config: &PluginConfig) -> Result<PluginResult> {
     let timeout = Duration::from_secs(config.timeout_secs);
-    // Wrap the entire run_check_direct loop in tokio::time::timeout
     let result = tokio::time::timeout(timeout, async {
         // ... existing run logic ...
     }).await
@@ -80,7 +77,7 @@ async fn run(&self, target: &str, config: &PluginConfig) -> Result<PluginResult>
 }
 ```
 
-**Fix - Ruby** (`bridge.rs`, in `run_plugin()` at line 144):
+**Fix - Ruby** (`bridge.rs`, in `run_plugin()`):
 ```rust
 pub fn run_plugin(&self, plugin: &RubyPlugin, target: &str, timeout_secs: u64) -> Result<RubyPluginResult> {
     let (tx, rx) = mpsc::channel();
@@ -97,20 +94,20 @@ pub fn run_plugin(&self, plugin: &RubyPlugin, target: &str, timeout_secs: u64) -
 }
 ```
 
-**Note**: Plugin timeout cannot forcibly terminate threads — it only prevents waiting indefinitely. Document this limitation.
+**Note**: Plugin timeout cannot forcibly terminate threads — it only prevents waiting indefinitely.
 
 ---
 
 ### 1.3: Race Condition in Port Scanner
 
 **Files**:
-- `crates/slapper/src/scanner/ports/mod.rs:507,543-572`
-- `crates/slapper/src/scanner/fingerprint.rs:268-272`
-- `crates/slapper/src/scanner/endpoints.rs:761-765`
+- `scanner/ports/mod.rs:507,543-572`
+- `scanner/fingerprint.rs:268-272`
+- `scanner/endpoints.rs:761-765`
 
-**Verified**: Yes, classic TOCTOU race at all three locations. Two separate `Mutex` acquisitions: count is read in lock #1, released, then lock #2 is acquired to increment. Between the two locks, N concurrent tasks can all read the same count and all decide to increment, exceeding `max_results`.
+**Issue**: Classic TOCTOU race. Two separate `Mutex` acquisitions: count is read in lock #1, released, then lock #2 is acquired to increment. Between the two locks, N concurrent tasks can all read the same count and all decide to increment, exceeding `max_results`.
 
-**Current code pattern (all three files)**:
+**Current code pattern**:
 ```rust
 let count = *results_count.lock().await;     // Lock acquisition #1
 if count >= limit {
@@ -133,18 +130,18 @@ Some(limit) => {
 }
 ```
 
-**After fixing**: Run `cargo test --lib -p slapper -- scanner::ports` and `cargo test --lib -p slapper -- scanner::endpoints` to verify.
+**Verification**: `cargo test --lib -p slapper -- scanner::ports` and `cargo test --lib -p slapper -- scanner::endpoints`
 
 ---
 
 ### 1.4: Path Traversal in Plugin Loading
 
 **Files**:
-- `crates/slapper-plugin/src/python.rs:155-224` — `load_plugins()` reads paths from `read_dir()` with no canonicalization
-- `crates/slapper-plugin/src/lib.rs:267-289` — `discover_plugins()` same issue
-- `crates/slapper-ruby/src/loader.rs:61-92` — `discover_plugins()` same issue
+- `slapper-plugin/src/python.rs:155-224` — `load_plugins()` reads paths from `read_dir()` with no canonicalization
+- `slapper-plugin/src/lib.rs:267-289` — `discover_plugins()` same issue
+- `slapper-ruby/src/loader.rs:61-92` — `discover_plugins()` same issue
 
-**Verified**: Yes, no `canonicalize()` call anywhere in any plugin loading path. Zero occurrences of "canonicalize" in `slapper-plugin/src/` and `slapper-ruby/src/`.
+**Issue**: No `canonicalize()` call anywhere in any plugin loading path.
 
 **Fix**: Create shared validation in `slapper-plugin/src/validation.rs`:
 ```rust
@@ -167,16 +164,14 @@ Then call `validate_plugin_path(plugin_dir, &file_path)` in all three locations 
 ### 1.5: TUI Plugin Tab Cannot Compile
 
 **Files**:
-- `crates/slapper/src/tui/workers/plugin.rs:11` — References missing `TaskResult::PluginsLoaded` variant
-- `crates/slapper/src/tui/workers/runner.rs:168-222` — `TaskResult` enum (no `PluginsLoaded` variant exists)
-- `crates/slapper/src/tui/app/task_management.rs:368-373` — `build_task_config()` always returns `None`
-- `crates/slapper/src/tui/app/mod.rs` — `build_current_task()` doesn't handle `Tab::Plugin`
-
-**Verified**: Yes, issue present but currently masked by pyo3 API incompatibility errors in `slapper-plugin` (8 errors from deprecated `into_py`, `PyNone`). The `PluginsLoaded` missing variant error would surface after those are fixed.
+- `tui/workers/plugin.rs:11` — References missing `TaskResult::PluginsLoaded` variant
+- `tui/workers/runner.rs:168-222` — `TaskResult` enum (no `PluginsLoaded` variant exists)
+- `tui/app/task_management.rs:368-373` — `build_task_config()` always returns `None`
+- `tui/app/mod.rs` — `build_current_task()` doesn't handle `Tab::Plugin`
 
 **Issues**:
-1. `TaskResult::PluginsLoaded` variant does not exist in the enum at `runner.rs:168-222`
-2. `PluginTab::build_task_config()` always returns `None` (line 371)
+1. `TaskResult::PluginsLoaded` variant does not exist in the enum
+2. `PluginTab::build_task_config()` always returns `None`
 3. `build_current_task()` doesn't handle `Tab::Plugin`
 4. `DiscoveredPlugin` type mismatch with `PluginInfo`
 
@@ -185,8 +180,6 @@ Then call `validate_plugin_path(plugin_dir, &file_path)` in all three locations 
 2. Implement actual task config building in `task_management.rs:368-373`
 3. Add `Tab::Plugin` arm to `build_current_task()` in `mod.rs`
 4. Add `From<DiscoveredPlugin> for PluginInfo` impl or conversion function
-
-**Note**: This is currently blocked behind pyo3 API fix in `slapper-plugin`. Fix the pyo3 errors first, then this compile error will surface.
 
 ---
 
@@ -200,9 +193,9 @@ Then call `validate_plugin_path(plugin_dir, &file_path)` in all three locations 
 - `tool/protocol/mcp/auth.rs:11`
 - `tool/protocol/grpc.rs:27`
 
-**Verified**: Yes, all 6 locations confirmed using `.unwrap_u8() == 1` pattern.
+**Issue**: All 6 locations using `.unwrap_u8() == 1` pattern on `ConstantTimeEq::ct_eq()`.
 
-**Current code** (all 6 locations):
+**Current code**:
 ```rust
 Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
 ```
@@ -212,35 +205,19 @@ Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
 Some(v) if bool::from(key.as_bytes().ct_eq(v.as_bytes())) => Ok(()),
 ```
 
-**Why**: `ConstantTimeEq::ct_eq()` returns `Choice`. Calling `.unwrap_u8()` degrades it to `u8`, enabling `== 1` branching which could enable side-channel attacks. Use `bool::from()` instead.
+**Why**: `ConstantTimeEq::ct_eq()` returns `Choice`. Calling `.unwrap_u8()` degrades it to `u8`, enabling side-channel attacks. Use `bool::from()` instead.
 
-**After fixing**: Run `cargo check --lib -p slapper --features rest-api,ai-integration` to verify all compile.
+**Verification**: `cargo check --lib -p slapper --features rest-api,ai-integration`
 
 ---
 
 ### 1.7: Silent Data Loss in Serialization
 
 **Files**:
-- `crates/slapper/src/tool/response.rs:260-262`
-- `crates/slapper/src/distributed/worker.rs:172`
+- `tool/response.rs:260-262`
+- `distributed/worker.rs:172`
 
-**Verified**: Yes, both locations confirmed.
-
-**Current code** (`response.rs:260`):
-```rust
-pub fn to_json_line(&self) -> String {
-    serde_json::to_string(self).unwrap_or_default() + "\n"
-}
-```
-
-If serialization fails, returns `"\n"` (empty string + newline). Finding data is lost silently.
-
-**Current code** (`worker.rs:172`):
-```rust
-.map(|o| serde_json::to_string(o).unwrap_or_default())
-```
-
-Same pattern — task appears to succeed with empty output.
+**Issue**: Both locations use `unwrap_or_default()` on `serde_json::to_string()`. If serialization fails, returns empty string — finding data lost silently.
 
 **Fix** (`response.rs`):
 ```rust
@@ -255,11 +232,11 @@ Update all callers to handle `Result`. For `worker.rs`, propagate the error inst
 
 ### 1.8: TOCTOU Race Condition in Config Loading
 
-**File**: `crates/slapper/src/config/loader.rs:19-27,46-63`
+**File**: `config/loader.rs:19-27,46-63`
 
-**Verified**: Yes, both `load_config()` and `load_scope()` use separate `exists()` check then `read()`.
+**Issue**: Both `load_config()` and `load_scope()` use separate `exists()` check then `read()`.
 
-**Current pattern** (`loader.rs:19-27`):
+**Current pattern**:
 ```rust
 if !path.exists() {                                          // Check
     return Ok(SlapperConfig::default());
@@ -268,7 +245,7 @@ let content = fs::read_to_string(&path)                     // Use (separate ope
     .with_context(|| format!("Failed to read config file: {:?}", path))?;
 ```
 
-**Fix**: Eliminate the separate existence check — attempt read directly and handle "not found" as "use defaults":
+**Fix**: Eliminate the separate existence check:
 ```rust
 let canonical_path = path.canonicalize().map_err(|e| {
     anyhow::anyhow!("Failed to canonicalize config path '{}': {}", path.display(), e)
@@ -277,35 +254,115 @@ let content = fs::read_to_string(&canonical_path)
     .with_context(|| format!("Failed to read config file: {:?}", canonical_path))?;
 ```
 
-Apply same fix to `load_scope()` at lines 46-63.
+---
+
+### 1.9: IMAP Injection in slapper-nse (CRITICAL)
+
+**Location**: `crates/slapper-nse/src/libraries/imap.rs`
+
+**Issue**: User-controlled input concatenated directly into IMAP protocol commands without escaping. 12 injection points.
+
+**Vulnerable Code Locations**:
+| Line | Function | Vulnerable Pattern |
+|------|----------|------------------|
+| 60 | `login` | `format!("{} LOGIN {} {}", tag, user, password)` |
+| 117 | `list_mailboxes` | `format!("{} LIST \"{}\" \"{}\"", tag, ref_name, mailbox_name)` |
+| 162 | `select` | `format!("{} SELECT {}", tag, mailbox)` |
+| 206 | `fetch` | `format!("{} FETCH {} {}", tag, sequence, fields)` |
+| 236 | `store` | `format!("{} STORE {} +FLAGS ({})", tag, sequence, flags)` |
+| 258 | `copy` | `format!("{} COPY {} {}", tag, sequence, mailbox)` |
+| 279 | `search` | `format!("{} SEARCH {}", tag, criteria)` |
+| 312 | `status` | `format!("{} STATUS {} ({})", tag, mailbox, items)` |
+| 355 | `create` | `format!("{} CREATE {}", tag, mailbox)` |
+| 375 | `delete` | `format!("{} DELETE {}", tag, mailbox)` |
+| 396 | `rename` | `format!("{} RENAME {} {}", tag, old_name, new_name)` |
+| 418 | `subscribe` | `format!("{} SUBSCRIBE {}", tag, mailbox)` |
+
+**Fix**: Add IMAP string escaping function per RFC 3501:
+```rust
+fn escape_imap_quoted(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() * 2);
+    for ch in s.chars() {
+        match ch {
+            '\\' => result.push_str("\\\\"),
+            '"' => result.push_str("\\\""),
+            '\r' => {},
+            '\n' => {},
+            c => result.push(c),
+        }
+    }
+    result
+}
+```
+
+Apply to all 12 locations.
+
+**Priority**: CRITICAL — Direct arbitrary command injection possible.
+
+---
+
+### 1.10: resolve_host() Lacks Private IP Blocking
+
+**Location**: `utils/parsing.rs:57-64`
+
+**Issue**: `utils::resolve_host()` used by port scanner does NOT block private/loopback IPs unlike `TargetScope::resolve_host()`.
+
+**Current (insecure)**:
+```rust
+pub fn resolve_host(host: &str) -> Result<IpAddr> {
+    let addrs: Vec<IpAddr> = (host, 0).to_socket_addrs()?
+        .map(|sa| sa.ip()).collect();
+    addrs.into_iter().next()
+        .ok_or_else(|| anyhow!("Could not resolve host: {}", host))
+}
+```
+
+**Fix**: Add private IP blocking:
+```rust
+pub fn resolve_host(host: &str) -> Result<IpAddr> {
+    let addrs: Vec<IpAddr> = (host, 0).to_socket_addrs()?
+        .map(|sa| sa.ip()).collect();
+    let ip = addrs.into_iter()
+        .next()
+        .ok_or_else(|| anyhow!("Could not resolve host: {}", host))?;
+
+    if is_loopback(&ip) {
+        anyhow::bail!("Resolved to loopback address blocked");
+    }
+    if is_private_ip(&ip) {
+        anyhow::bail!("Resolved to private IP address blocked");
+    }
+    Ok(ip)
+}
+```
+
+Where `is_private_ip()` checks 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, and IPv6 equivalents.
+
+**Priority**: HIGH — SSRF to internal infrastructure possible.
 
 ---
 
 ## Wave 2: HIGH Priority Security (Parallel within groups)
 
-### Sub-Agent Instructions for Wave 2
-
-Wave 2 can start after Wave 1 is complete. Items within Wave 2 are independent and can be parallelized. All paths relative to `crates/slapper/src/` unless otherwise noted.
+Wave 2 can start after Wave 1 is complete. Items within Wave 2 are independent and can be parallelized.
 
 ---
 
 ### 2.1: Ruby Sandbox Escape
 
-**File**: `crates/slapper-ruby/src/api.rs:16-574`
+**File**: `slapper-ruby/src/api.rs:16-574`
 
-**Verified**: Yes, dangerous APIs fully exposed. `register_api()` at lines 16-28 exposes `Slapper::HTTP`, `Slapper::Scanner`, `Slapper::Fuzzer`, `Slapper::Metasploit`, `Slapper::Encoder`, `Slapper::Session` modules. These are registered as Ruby module functions BEFORE any plugin validation runs.
+**Issue**: Dangerous APIs fully exposed. `register_api()` exposes `Slapper::HTTP`, `Slapper::Scanner`, `Slapper::Fuzzer`, `Slapper::Metasploit` modules BEFORE any plugin validation runs.
 
-**Issue**: Plugins have unrestricted network access via `Slapper::HTTP.get(...)`, `Slapper::Scanner.tcp_connect(...)`, `Slapper::Metasploit.execute_module(...)`, etc. Pattern detection in `bridge.rs:34` only checks source patterns, not what registered APIs provide.
-
-**Recommended Fix**: Remove HTTP, Scanner, Fuzzer, Metasploit modules — keep only safe reporting methods. This is a design decision — consider if Ruby plugins should be restricted to read-only operations.
+**Fix**: Remove HTTP, Scanner, Fuzzer, Metasploit modules — keep only safe reporting methods.
 
 ---
 
 ### 2.2: Python Suspicious Pattern Detection Gaps
 
-**File**: `crates/slapper-plugin/src/python.rs:16-27`
+**File**: `slapper-plugin/src/python.rs:16-27`
 
-**Verified**: Yes, 8 patterns currently checked. The following dangerous patterns are missing.
+**Issue**: 8 patterns currently checked. Missing dangerous patterns.
 
 **Missing Patterns** (add to `static SUSPICIOUS_PATTERNS`):
 ```rust
@@ -325,29 +382,22 @@ Wave 2 can start after Wave 1 is complete. Items within Wave 2 are independent a
 
 ### 2.3: Ruby Pattern Detection Gaps
 
-**File**: `crates/slapper-ruby/src/bridge.rs:13-31`
+**File**: `slapper-ruby/src/bridge.rs:13-31`
 
-**Verified**: Yes, 15 patterns currently checked. Missing patterns:
-
+**Issue**: 15 patterns currently checked. Missing:
 ```rust
 ("Kernel.exec", regex::Regex::new(r"Kernel\.exec").unwrap()),
 ("open alias", regex::Regex::new(r"\bopen\b").unwrap()),
 ("eval without parens", regex::Regex::new(r"\beval\b").unwrap()),
 ```
 
-**Why these matter**:
-- `Kernel.exec("cmd")` or `Kernel.exec "cmd"` — command execution not caught by `\bexec\(` pattern
-- Ruby's `open("|cmd")` executes commands — backtick pattern catches `` ` `` but not `open("|...")`
-- `eval "code"` without parens bypasses `\beval\(` pattern; also `instance_eval`, `class_eval`, `module_eval` not checked
+Also add `(?i)` flag for case-insensitive matching on method names.
 
 ---
 
 ### 2.4: TLS Bypass Without Warning Logging
 
-**Verified**: Yes, but needs refinement. Two categories:
-
 **Category A — Hardcoded `true` (7 locations, MUST fix)**:
-These always disable TLS verification with no user control:
 - `scanner/cms/mod.rs:82`
 - `scanner/cms/joomla.rs:31`
 - `scanner/cms/drupal.rs:31`
@@ -355,37 +405,25 @@ These always disable TLS verification with no user control:
 - `waf/detector/compare.rs:17`
 - `stress/http.rs:153`
 - `proxy/health.rs:100`
-
-**Additional location not in original plans**:
-- `recon/ssl_audit.rs:146` — also hardcoded `true` without warning
+- `recon/ssl_audit.rs:146` — also hardcoded `true`
 
 **Category B — Flag-controlled (4 locations, LOWER priority)**:
-These use user-controlled flags (`insecure`, `verify_tls`) — user opted in:
-- `fuzzer/engine/advanced.rs:18` — uses `args.common.insecure`
-- `fuzzer/engine/core.rs:178` — uses `args.common.insecure`
-- `scanner/endpoints.rs:686` — uses `!config.verify_tls`
-- `loadtest/runner.rs:232` — uses `self.insecure`
+- `fuzzer/engine/advanced.rs:18`
+- `fuzzer/engine/core.rs:178`
+- `scanner/endpoints.rs:686`
+- `loadtest/runner.rs:232`
 
-**Fix for Category A**: Use centralized `create_insecure_http_client()` from `utils/http.rs` which already logs warnings. Replace direct `danger_accept_invalid_certs(true)` calls.
+**Fix for Category A**: Use centralized `create_insecure_http_client()` from `utils/http.rs` which already logs warnings.
 
-**Fix for Category B**: Add `tracing::warn!()` before the flag check:
-```rust
-if insecure_flag {
-    tracing::warn!(
-        "TLS certificate verification disabled. This is insecure and should only \
-         be used in isolated testing environments."
-    );
-    client = client.danger_accept_invalid_certs(true);
-}
-```
+**Fix for Category B**: Add `tracing::warn!()` before the flag check.
 
 ---
 
 ### 2.5: Scope Validation Missing in REST API
 
-**File**: `crates/slapper/src/tool/protocol/rest.rs:301-339`
+**File**: `tool/protocol/rest.rs:301-339`
 
-**Verified**: Yes, `execute_tool` handler performs auth check and rate limiting but has zero scope validation. Target from user payload is directly dispatched. No scope-related imports exist in the file.
+**Issue**: `execute_tool` handler performs auth check and rate limiting but has zero scope validation. Target from user payload is directly dispatched.
 
 **Fix**: Add scope check before dispatch:
 ```rust
@@ -397,25 +435,23 @@ if let Some(ref scope) = state.scope {
 }
 ```
 
-**Context**: `Scope` and `ScopeRule` are defined in `config/scope.rs`. `AppError` needs a `ScopeViolation` variant added.
-
 ---
 
 ### 2.6: Scope Validation Missing in MCP Handlers
 
-**File**: `crates/slapper/src/tool/protocol/mcp/handlers.rs:252-337`
+**File**: `tool/protocol/mcp/handlers.rs:252-337`
 
-**Verified**: Yes, `handle_tools_call` has zero scope validation. Target constructed from user arguments and dispatched without scope checks.
+**Issue**: `handle_tools_call` has zero scope validation. Target constructed from user arguments and dispatched without scope checks.
 
-**Fix**: Add scope check before tool execution. Pattern is same as 2.5.
+**Fix**: Add scope check before tool execution.
 
 ---
 
 ### 2.7: Scope Validation Missing in OpenAI Handlers
 
-**File**: `crates/slapper/src/tool/protocol/openai/handlers.rs:121-207`
+**File**: `tool/protocol/openai/handlers.rs:121-207`
 
-**Verified**: Yes, `non_streaming_response` extracts target from user query and dispatches without scope checks.
+**Issue**: `non_streaming_response` extracts target from user query and dispatches without scope checks.
 
 **Fix**: Add scope check on extracted targets before execution.
 
@@ -424,15 +460,13 @@ if let Some(ref scope) = state.scope {
 ### 2.8: Credential Exposure in Proxy URL
 
 **Files**:
-- `crates/slapper/src/proxy/config.rs:132-147` — `to_url()` embeds `pass.expose_secret()` in URL
-- `crates/slapper/src/proxy/pool.rs:173-188` — uses `to_url()` as DashMap key and in logging
+- `proxy/config.rs:132-147` — `to_url()` embeds `pass.expose_secret()` in URL
+- `proxy/pool.rs:173-188` — uses `to_url()` as DashMap key and in logging
 
-**Verified**: Yes, `to_url()` returns credentials in plaintext (`socks5://user:secret@10.0.0.1:9050`). Despite `password` being `SensitiveString`, `expose_secret()` embeds the credential.
-
-**Additional affected locations** (broader than original plan):
+**Additional affected locations**:
 - `proxy/health.rs:48` — stored in `HealthCheckResult.proxy_url`
 - `proxy/rotator.rs:99,129,166,386` — used for tracking
-- `commands/handlers/stress.rs:93` — `println!("  - {}", proxy.to_url())` — **prints credentials to stdout**
+- `commands/handlers/stress.rs:93` — **prints credentials to stdout**
 
 **Fix**: Add `to_log_key()` method for safe logging/display:
 ```rust
@@ -444,15 +478,15 @@ pub fn to_log_key(&self) -> String {
 }
 ```
 
-Replace all non-connection uses of `to_url()` with `to_log_key()`. Keep `to_url()` only for actual proxy connections.
+**Status**: `to_log_key()` already implemented at `proxy/config.rs:149`.
 
 ---
 
 ### 2.9: ai_client Field Never Used in Agent
 
-**File**: `crates/slapper/src/agent/mod.rs:77-78` (declaration), 107-108 (init), 119-121 (setter)
+**File**: `agent/mod.rs:77-78` (declaration), 107-108 (init), 119-121 (setter)
 
-**Verified**: Yes, `ai_client: Option<AiClient>` is declared, initialized to `None`, settable via `with_ai_client()`, but **never used in production code**. Only referenced in tests (line 366). The `run()`, `execute_scan()`, `handle_findings()`, `trigger_scan()` methods never reference `self.ai_client`.
+**Issue**: `ai_client: Option<AiClient>` is declared, initialized to `None`, settable via `with_ai_client()`, but **never used in production code**.
 
 **Fix**: Integrate `ai_client` into scan workflow in `handle_findings()`:
 ```rust
@@ -467,26 +501,89 @@ if let Some(ref client) = self.ai_client {
 
 ### 2.10: Formula Injection Unicode Bypass Fix
 
-**File**: `crates/slapper/src/output/escape.rs:16-35`
+**File**: `output/escape.rs:16-35`
 
-**Verified**: Yes, with nuance. The `escape_csv` function checks for ASCII formula chars (`=`, `+`, `-`, `@`, `\t`, `\r`) but not fullwidth Unicode variants (U+FF1D, U+FF0B, U+FF0D, U+FF20). There IS an implicit partial defense: `first_char_is_control` checks `!c.is_ascii()` which is true for fullwidth chars, causing them to get quoted. However, this protection relies solely on CSV quoting, which is not universally safe across all spreadsheet implementations (especially East Asian locale versions). The variable name `first_char_is_control` is misleading — it actually checks "non-ASCII first character".
+**Issue**: `escape_csv` checks for ASCII formula chars (`=`, `+`, `-`, `@`) but not fullwidth Unicode variants. Implicit partial defense via `first_char_is_control` checking `!c.is_ascii()` causes fullwidth chars to get quoted, but this relies solely on CSV quoting.
 
-**Fix**: Normalize input to NFKC form before checking, making fullwidth-to-ASCII normalization explicit:
+**Fix**: Normalize input to NFKC form before checking:
 ```rust
 use unicode_normalization::UnicodeNormalization;
 let normalized: String = s.nfkc().collect();
 // Then check normalized string for formula chars
 ```
 
-**Test Cases**:
+---
+
+### 2.11: HMAC Signing Inconsistency in Webhooks
+
+**Location**: `notify/webhook.rs:96-97`
+
+**Issue**: Webhook sends raw secret in header vs. alerts use HMAC-SHA256.
+
+**Current (INSECURE)**:
 ```rust
-#[test]
-fn test_fullwidth_equals_bypass() {
-    assert!(escape_csv("\u{FF1D}1+1").starts_with('"'));
+if let Some(ref secret) = webhook.secret {
+    request = request.header("X-Webhook-Secret", secret.expose_secret());
 }
-#[test]
-fn test_fullwidth_plus_bypass() {
-    assert!(escape_csv("\u{FF0B}2+2").starts_with('"'));
+```
+
+**Fix**: Use HMAC signing like `agent/alerts/routing.rs:167-174`:
+```rust
+if let Some(ref secret) = webhook.secret {
+    let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
+        .expect("HMAC can take key of any size");
+    let body = response.text().await?;
+    mac.update(body.as_bytes());
+    let result = mac.finalize();
+    let signature = format!("sha256={}", hex::encode(result.into_bytes()));
+    request = request.header("X-Signature-256", signature);
+}
+```
+
+---
+
+### 2.12: Stack Trace Regex Insufficient
+
+**Location**: `utils/error.rs:9-23`
+
+**Issue**: Current patterns miss Rust panics, Python tracebacks, Go stack traces.
+
+**Current patterns** only catch Java/C# style and Unix paths.
+
+**Missing Patterns**:
+```rust
+static RUST_PANIC: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"thread\s+'[^']+'\s+panicked\s+at").unwrap()
+});
+
+static PYTHON_TRACEBACK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Traceback \(most recent call last\):").unwrap()
+});
+
+static GO_PANIC: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(panic:\s+runtime\s+error:|goroutine\s+\d+\s+\[)").unwrap()
+});
+
+static WINDOWS_PATH: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[A-Za-z]:\\[\w\\]+").unwrap()
+});
+```
+
+---
+
+### 2.13: OpenAI Conditional Scope Validation
+
+**Location**: `tool/protocol/openai/handlers.rs:61-72`
+
+**Issue**: Scope validation only occurs when tools match. Queries that don't match any tool bypass scope.
+
+**Fix**: Make scope validation unconditional:
+```rust
+let target = extract_target_from_query(&user_query);
+if let Some(ref scope) = state.scope {  // Always check
+    if !scope.is_target_allowed(&target.value).unwrap_or(false) {
+        return Err(...);
+    }
 }
 ```
 
@@ -494,46 +591,30 @@ fn test_fullwidth_plus_bypass() {
 
 ## Wave 3: Code Quality - TUI & Plugin Refactoring (Parallel, High Effort)
 
-### Sub-Agent Instructions for Wave 3
-
-Wave 3 depends on Waves 1-2 being complete. Large file splits are independent of each other and can be done in parallel by different agents. All paths relative to `crates/slapper/src/`.
+Wave 3 depends on Waves 1-2 being complete. Large file splits are independent of each other.
 
 ---
 
 ### 3.1: TUI Tab Dispatching Duplication
 
 **Files**:
-- `tui/app/mod.rs` (**899 lines** — was 967, reduced by prior submodule extraction)
-- `tui/tabs/mod.rs` (**655 lines** — was 859, reduced)
+- `tui/app/mod.rs` (**899 lines**)
+- `tui/tabs/mod.rs` (**655 lines**)
 
-**Verified**: Yes, 29 tab variants with repetitive match statements. `mod.rs` has 6 large `match self.current_tab` statements. `tabs/mod.rs` has extensive match arms for both immutable (lines 447-475) and mutable (lines 509-564) access patterns.
+**Issue**: 29 tab variants with repetitive match statements. `mod.rs` has 6 large `match self.current_tab` statements. `tabs/mod.rs` has extensive match arms for both immutable and mutable access patterns.
 
-**Fix**: Introduce `enum_dispatch` crate pattern:
-```toml
-# Cargo.toml
-enum_dispatch = "0.3"
-```
-
-Define a `TabDispatch` trait with common methods, derive `enum_dispatch` for the `Tab` enum. This eliminates manual match dispatching.
-
-**Alternative** (less dependency): Use a macro to generate match arms.
+**Fix**: Use `enum_dispatch` crate pattern or a macro to generate match arms.
 
 ---
 
 ### 3.2: TUI Architecture Refactoring
 
-**Files to split** (all line counts verified):
+**Files to split**:
 - `tui/app/mod.rs` (**899 lines**) → Extract task management, state fields to existing submodules
 - `tui/tabs/mod.rs` (**655 lines**) → Extract traits to `traits.rs`
 - `tui/tabs/settings.rs` (**798 lines**) → Split to `settings/main.rs`, `settings/http.rs`, `settings/proxy.rs`
 - `tui/tabs/packet.rs` (**743 lines**) → Split to `packet/capture.rs`, `packet/send.rs`
 - `tui/tabs/fuzz.rs` (**698 lines**) → Split to `fuzz/config.rs`, `fuzz/results.rs`
-
-**Guidelines for splitting**:
-- Keep the parent module as `mod.rs` with re-exports
-- Move private implementations to submodules
-- Ensure all existing tests pass after split
-- Run `cargo clippy --lib -p slapper` after each split
 
 ---
 
@@ -541,20 +622,16 @@ Define a `TabDispatch` trait with common methods, derive `enum_dispatch` for the
 
 **File**: `tool/protocol/mcp/handlers.rs` (**1069 lines**)
 
-**Verified**: Yes, still over 1000 lines.
-
 **Split Plan**:
 - `handlers_server.rs` (~250 lines) — McpServer struct, constructor, router setup
 - `handlers_request.rs` (~700 lines) — Request handlers, tool handlers
 - `handlers_helpers.rs` (~150 lines) — Helper functions, utility methods
 
-**After splitting**: Update `tool/protocol/mcp/mod.rs` to declare new submodules.
-
 ---
 
 ### 3.4: recon/dependency_scan Large File
 
-**File**: `recon/dependency_scan.rs` (**1051 lines**, verified exact match)
+**File**: `recon/dependency_scan.rs` (**1051 lines**)
 
 **Split Plan**: Split by ecosystem into `recon/dependency/` subdirectory:
 - `npm.rs` — Node.js/NPM dependency scanning
@@ -567,42 +644,107 @@ Define a `TabDispatch` trait with common methods, derive `enum_dispatch` for the
 
 ### 3.5: Plugin System Fixes (PLG-007 to PLG-018)
 
-**Verified partially**. Some items already addressed:
-
 | Issue | File | Status | Fix |
 |-------|------|--------|-----|
-| PLG-007: Credential exposure | `lib.rs`, `api.rs` | Not fixed | Add `filtered_config()` |
-| PLG-008: Missing Mutex | `python.rs:58-63` | Not fixed | `PythonPluginManager.plugins` is `Vec<LoadedPlugin>` with no Mutex — caller must handle sync |
-| PLG-009: TUI task config | `task_management.rs:368-373` | Not fixed | Implement actual task spawning (linked to Wave 1 item 1.5) |
+| PLG-007: Credential exposure | `lib.rs`, `api.rs` | Partial | Add `filtered_config()` |
+| PLG-008: Missing Mutex | `python.rs:58-63` | Not fixed | `PythonPluginManager.plugins` needs sync |
+| PLG-009: TUI task config | `task_management.rs:368-373` | Not fixed | Implement actual task spawning |
 | PLG-010: Type mismatch | `plugin.rs` vs `tabs/plugin.rs` | Not fixed | Add `From` impl |
 | PLG-011: Missing lifecycle | `lib.rs` | Not fixed | Add `init()`, `shutdown()` |
 | PLG-012: Missing health check | `lib.rs` | Not fixed | Add `health_check()` |
-| PLG-013: O(n) registry | `lib.rs:145-146` | Not fixed | `PluginRegistry::get()` uses `self.plugins.iter().find()` — change to `HashMap<String, Arc<dyn Plugin>>` |
-| PLG-014: PyO3 API mixing | `python.rs` | **Partially addressed** | `Python::attach` migration already done. Remaining: standardize `Py<T>` vs `Bound<T>` usage |
-| PLG-015: Case-insensitive | `python.rs`, `bridge.rs` | Not fixed | Add `(?i)` flag to regex patterns |
+| PLG-013: O(n) registry | `lib.rs:145-146` | Not fixed | Use `HashMap` instead of `Vec` |
+| PLG-014: PyO3 API mixing | `python.rs` | Partial | Standardize `Py<T>` vs `Bound<T>` |
+| PLG-015: Case-insensitive | `python.rs`, `bridge.rs` | Not fixed | Add `(?i)` flag to patterns |
 | PLG-016: Hot reload | `lib.rs` | Not fixed | Add `reload_plugin()` |
 | PLG-017: Plugin priority | `lib.rs` | Not fixed | Add `priority` field |
 | PLG-018: Namespace isolation | `python.rs:226-258` | Not fixed | Prefix class names |
 
 ---
 
-### 3.6: CircuitBreakerRegistry Dead Code or Utilization
+### 3.6: CircuitBreakerRegistry Dead Code
 
 **File**: `utils/circuit_breaker.rs` (282 lines)
 
-**Verified**: Yes, `CircuitBreakerRegistry` at line 125 is dead code. It is only referenced in its own definition and the `utils/mod.rs` re-export. No other file instantiates or uses it. Each `AiClient` creates its own `CircuitBreaker` directly.
+**Issue**: `CircuitBreakerRegistry` at line 125 is dead code. Only referenced in its own definition and `utils/mod.rs` re-export.
 
-**Fix**: Either:
-1. Remove `CircuitBreakerRegistry` as dead code, OR
-2. Utilize it for multi-provider AI support (register one breaker per provider)
+**Fix**: Either remove as dead code, or utilize for multi-provider AI support.
+
+---
+
+### 3.7: UTF-8 Byte Slicing Crash in InputField
+
+**Location**: `tui/components/input.rs:312-343`
+
+**Issue**: `InputField` stores `cursor_pos` as byte offset but `render()` uses `self.value.len()` which returns character count. Mixing byte indices with character counts causes panic when user types multi-byte UTF-8 characters (CJK, emoji).
+
+**Example panic**:
+```
+value = "日本語abc"  // 8 bytes
+cursor_pos = 4       // byte offset
+width = 5, available = 3
+start = 4 - 1 = 3
+end   = (3 + 3).min(8) = 6
+byte slice [3..6] = [0xe8, 0xaa, 0x61] — byte 3 is MIDDLE of multi-byte char
+Panic: "byte index 3 is not a valid char boundary"
+```
+
+**Fix**: Use character-based indexing:
+```rust
+let char_count = self.value.chars().count();
+if char_count > available {
+    let cursor_char_pos = self.value.chars().count().min(self.cursor_pos);
+    let start = cursor_char_pos.saturating_sub(available / 2);
+    let end = (start + available).min(char_count);
+    let truncated: String = self.value.chars().skip(start).take(end - start).collect();
+    format!("{}...", truncated)
+}
+```
+
+---
+
+### 3.8: Tab Match Duplication in ui.rs
+
+**Location**: `tui/ui.rs:310-705`
+
+**Issue**: 3 separate match statements (draw_breadcrumb, draw_content, draw_status_bar) each with 29 identical arms. ~240 lines of duplicated code.
+
+**Existing infrastructure**: `tabs/mod.rs:446-505` has `Tab::as_tab_render(&app)` method that returns `&'a dyn TabRender`.
+
+**Fix**: Replace each match with direct calls to `as_tab_render()` and `as_tab_input()`:
+```rust
+fn draw_content(f: &mut Frame, app: &App, area: Rect) {
+    use crate::tui::tabs::TabRender;
+    let insert_mode = app.mode == InputMode::Insert;
+    app.current_tab.as_tab_render(app).render(f, area, insert_mode);
+    app.current_tab.as_tab_render(app).render_overlays(f, area);
+}
+```
+
+---
+
+### 3.9: Reset Method Conflict in TabState/TabInput
+
+**Location**: `tabs/mod.rs:590,654`
+
+**Issue**: `TabState::reset()` (line 590) is `fn reset(&mut self);` (REQUIRED). `TabInput::reset()` (line 654) is `fn reset(&mut self) {}` (DEFAULT empty). The default shadows the required method, causing confusion.
+
+**Fix**: Remove `TabInput::reset()` default, let it inherit from `TabState`.
+
+---
+
+### 3.10: Dead handle_search() Method
+
+**Location**: `tabs/mod.rs:643`
+
+**Issue**: `handle_search(&mut self, _query: &str) {}` default implementation is never called anywhere in codebase.
+
+**Fix**: Remove the dead method.
 
 ---
 
 ## Wave 4: Performance Optimization (Parallel)
 
-### Sub-Agent Instructions for Wave 4
-
-Wave 4 can start after Wave 3 (refactoring). Performance changes should be benchmarked before and after. All paths relative to `crates/slapper/src/`.
+Wave 4 can start after Wave 3. Performance changes should be benchmarked before and after.
 
 ---
 
@@ -610,14 +752,14 @@ Wave 4 can start after Wave 3 (refactoring). Performance changes should be bench
 
 **Files**: 55 files with 140 references to `std::collections::HashMap`
 
-**Verified**: The four highest-priority hot paths all confirmed using `std::collections::HashMap`:
+**Priority hot paths** (already using `std::collections::HashMap`):
 - `waf/detector/mod.rs:19-20` — signatures storage
 - `waf/detector/detect.rs:159` — detection loop
 - `scanner/templates/models.rs:8` — templates
 - `fuzzer/chain.rs:5` — fuzz chains
 - `proxy/intercept/rules.rs:7` — rules
 
-**Note**: Some hot-path modules have already been migrated to FxHashMap (`fuzzer/state.rs`, `fuzzer/payloads/mod.rs`, `scanner/templates/matcher.rs`). Follow existing pattern.
+**Note**: Some hot-path modules have already been migrated to FxHashMap (`fuzzer/state.rs`, `fuzzer/payloads/mod.rs`, `scanner/templates/matcher.rs`).
 
 **Fix**:
 ```rust
@@ -626,11 +768,9 @@ use std::collections::HashMap;
 
 // After:
 use rustc_hash::FxHashMap as HashMap;
-// OR (more explicit):
+// OR:
 use rustc_hash::FxHashMap;
 ```
-
-**Strategy**: Migrate hot paths first (listed above), then widen to other performance-sensitive areas.
 
 ---
 
@@ -655,9 +795,9 @@ let description_lower = description.to_lowercase();
 **Verified locations**:
 - `scanner/ports/spoofed.rs:48` — `std::sync::OnceLock<std::sync::Mutex<std::fs::File>>`
 - `stress/metrics.rs:112` — `Arc<std::sync::Mutex<Instant>>`
-- `tui/workers/recon.rs:112` — `Arc<std::sync::Mutex<String>>` (used in polling loop)
+- `tui/workers/recon.rs:112` — `Arc<std::sync::Mutex<String>>`
 
-**Fix**: Replace with `parking_lot::Mutex`. Note: `parking_lot::Mutex::lock()` returns `MutexGuard` directly (NOT `Result`), so remove `.unwrap()` calls.
+**Note**: `parking_lot::Mutex::lock()` returns `MutexGuard` directly (NOT `Result`), so remove `.unwrap()` calls.
 
 ---
 
@@ -665,9 +805,9 @@ let description_lower = description.to_lowercase();
 
 **Files**:
 - `fuzzer/detection/analyzer.rs` — `TimingAnalyzer` struct with `&mut self` methods on `samples: Vec<f64>`
-- `fuzzer/engine/utils.rs:198-199` — **Bottleneck site** where `Arc<Mutex<TimingAnalyzer>>` is locked for every fuzzer request
+- `fuzzer/engine/utils.rs:198-199` — **Bottleneck** where `Arc<Mutex<TimingAnalyzer>>` is locked for every fuzzer request
 
-**Verified**: Yes, every fuzzer request acquires the tokio Mutex to call `record()`, serializing all concurrent fuzzing tasks. The `record()` method takes `&mut self` because it mutates `self.samples: Vec<f64>`.
+**Issue**: Every fuzzer request acquires the tokio Mutex to call `record()`, serializing all concurrent fuzzing tasks.
 
 **Fix**: Use `crossbeam::queue::SegQueue` + atomic stats:
 ```rust
@@ -678,7 +818,7 @@ pub struct TimingAnalyzer {
 }
 ```
 
-**Note**: `crossbeam` is already in `Cargo.toml` — no new dependencies needed. This significantly changes statistics collection — test with concurrent workloads.
+**Note**: `crossbeam` is already in `Cargo.toml` — no new dependencies needed.
 
 ---
 
@@ -686,14 +826,7 @@ pub struct TimingAnalyzer {
 
 **File**: `tool/ratelimit.rs:76-79`
 
-**Verified**: Yes, uses `RwLock<HashMap<String, TokenBucket>>` at line 76. Already uses `parking_lot::RwLock` (imported at line 6), not `std::sync::RwLock`, which is an improvement. However, `DashMap` would still be more efficient for high-concurrency token bucket access.
-
-**Current code**:
-```rust
-use parking_lot::RwLock;
-// ...
-tokens: RwLock<HashMap<String, TokenBucket>>,
-```
+**Issue**: Uses `RwLock<HashMap<String, TokenBucket>>`. Already uses `parking_lot::RwLock` (improvement over `std::sync`), but `DashMap` would be more efficient for high-concurrency token bucket access.
 
 **Fix**:
 ```rust
@@ -710,17 +843,15 @@ pub struct RateLimiter {
 
 **File**: `fuzzer/chain.rs:241,307`
 
-**Verified**: Yes, both locations confirmed creating fresh `RegexBuilder` on every call.
+**Issue**: Both locations create fresh `RegexBuilder` on every call.
 
 **Fix**: Add cache to `ChainExecutor`:
 ```rust
 pub struct ChainExecutor {
     // ...
-    regex_cache: FxHashMap<String, regex::Regex>,
+    regex_cache: FxHashMap<String, Regex>,
 }
 ```
-
-Implement `get_or_compile()` helper that checks cache first.
 
 ---
 
@@ -728,9 +859,9 @@ Implement `get_or_compile()` helper that checks cache first.
 
 **File**: `tui/workers/recon.rs:112-141`
 
-**Verified**: Yes, `tui/workers/recon.rs` uses `Arc<Mutex<String>>` with a polling loop (200ms sleep). Other workers use `mpsc` channels which is acceptable.
+**Issue**: Uses `Arc<Mutex<String>>` with a polling loop (200ms sleep).
 
-**Fix**: Replace the polling pattern in recon worker with `watch` channel:
+**Fix**: Replace with `watch` channel:
 ```rust
 let (tx, rx) = watch::channel::<String>("initial".to_string());
 // In worker:
@@ -749,27 +880,213 @@ while rx.changed().await.is_ok() {
 - `scanner/fingerprint.rs:327` — `format!("{}:{}", host, port)` per port
 - `scanner/udp_fingerprint.rs:139` — `format!("{}:{}", host, port).parse::<SocketAddr>()` — allocates string just to parse
 
-**Fix for udp_fingerprint.rs**: Use `std::net::SocketAddr::new()` with `IpAddr::from_str()` directly, avoiding string allocation:
+**Fix for udp_fingerprint.rs**: Use `std::net::SocketAddr::new()` with `IpAddr::from_str()` directly, avoiding string allocation.
+
+---
+
+### 4.9: String Interpolation Optimization
+
+**Location**: `fuzzer/chain.rs:327-335`
+
+**Issue**: `interpolate_string()` does O(n × m) string operations per variable substitution:
 ```rust
-let ip: IpAddr = host.parse()?;
-let addr = SocketAddr::new(ip, port);
+fn interpolate_string(&self, input: &str) -> String {
+    let mut result = input.to_string();
+    for (key, value) in &self.variables {
+        let placeholder = format!("${{{}}}", key);
+        result = result.replace(&placeholder, value);
+    }
+    result
+}
+```
+
+**Fix**: Single-pass regex with capture groups:
+```rust
+fn interpolate_string(&self, input: &str) -> String {
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\$\{(\w+)\}").unwrap()
+    });
+
+    RE.replace_all(input, |caps: &Captures| {
+        let key = &caps[1];
+        self.variables.get(key).unwrap_or(&format!("${{{}}}", key))
+    }).into_owned()
+}
+```
+
+---
+
+### 4.10: Severity Comparison Optimization
+
+**Location**: `tool/finding.rs:182`, `tool/response.rs:87`
+
+**Issue**: `FromStr` impl uses `s.to_lowercase().as_str()` creating new String each time.
+
+**Fix**: Use `eq_ignore_ascii_case()` instead:
+```rust
+fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s {
+        _ if s.eq_ignore_ascii_case("critical") => Ok(ResponseSeverity::Critical),
+        _ if s.eq_ignore_ascii_case("high") => Ok(ResponseSeverity::High),
+        _ if s.eq_ignore_ascii_case("medium") || s.eq_ignore_ascii_case("moderate") => Ok(ResponseSeverity::Medium),
+        _ if s.eq_ignore_ascii_case("low") => Ok(ResponseSeverity::Low),
+        _ if s.eq_ignore_ascii_case("info") || s.eq_ignore_ascii_case("informational") => Ok(ResponseSeverity::Info),
+        _ => Ok(ResponseSeverity::None),
+    }
+}
 ```
 
 ---
 
 ## Wave 5: Agent System Improvements (Parallel)
 
-### Sub-Agent Instructions for Wave 5
-
-Wave 5 depends on Wave 1 being complete. All 9 items are independent and can be done in parallel. All paths relative to `crates/slapper/src/`.
+Wave 5 depends on Wave 1 being complete. All items are independent and can be done in parallel.
 
 ---
 
-### 5.1: Graceful Shutdown Not Implemented
+### 5.1: ResponseSeverity vs Severity Type Mismatch
+
+**Files**:
+- `tool/finding.rs:11` — `Finding.severity` uses `ResponseSeverity` (includes `None` variant)
+- `agent/mod.rs:308` — `process_findings_by_severity()` imports `ResponseSeverity`
+- `agent/memory.rs:51` — `ScanSummary` uses canonical `Severity`
+- `types.rs:16-23` — canonical `Severity` (no `None` variant)
+
+**Root Cause**: `Finding` predates canonical `Severity` migration. `ResponseSeverity` was kept for API compatibility.
+
+**Fix**:
+1. Add `None` variant to `Severity` enum
+2. Change `Finding.severity` to use `crate::types::Severity`
+3. Add `From<ResponseSeverity> for Severity` impl
+4. Update all test files
+
+---
+
+### 5.2: AlertRouter Channel Persistence Missing
+
+**File**: `agent/alerts/routing.rs:33-43`
+
+**Issue**: `AlertRouter` and `AlertRoutingRules` exist but no config file format for channel persistence. Without channels, agent never sends alerts.
+
+**Fix - Option A (CLI flags)** [RECOMMENDED]:
+Add `--alert-webhook`, `--alert-slack`, `--alert-email` flags to `cli/agent.rs`.
+
+**Fix - Option B (config file)**:
+Define `AgentAlertsConfig` in `agent/alerts/config.rs`.
+
+---
+
+### 5.3: Silent Timezone Fallback in OffPeakWindow
+
+**Location**: `agent/portfolio.rs:80-93`
+
+**Issue**: `parse().unwrap_or(chrono_tz::UTC)` silently falls back if invalid timezone provided.
+
+**Fix**:
+```rust
+let tz: Tz = match self.timezone.parse() {
+    Ok(tz) => tz,
+    Err(e) => {
+        tracing::warn!(
+            "Invalid timezone '{}' in off_peak_window: {}. Defaulting to UTC.",
+            self.timezone, e
+        );
+        chrono_tz::UTC
+    }
+};
+```
+
+---
+
+### 5.4: Priority Field Unused in Scan Scheduling
+
+**File**: `agent/mod.rs:181-222` — `process_scheduled_scans()`
+
+**Issue**: `config.priority` is stored but never read. Targets iterated in arbitrary HashMap order.
+
+**Fix**:
+```rust
+let mut targets = self.portfolio.get_all_targets();
+// Sort by priority descending (Critical first)
+targets.sort_by(|(_, a), (_, b)| {
+    b.priority.as_int().cmp(&a.priority.as_int())
+});
+```
+
+---
+
+### 5.5: AI Client Integration Partial
+
+**File**: `agent/mod.rs:282-298` — `handle_findings()`
+
+**Issue**: Agent only calls `analyze_findings_typed()`. Unused: `AiPayloadGenerator`, `SmartWafBypass`, `AdaptiveScanEngine`.
+
+**Fix - Phase 1**: Before scan, call `ai_client.suggest_payloads()` to get context-aware payloads.
+**Fix - Phase 2**: In scanner/fuzzer pipeline, call `waf_bypass.suggest()` for blocked payloads.
+**Fix - Phase 3**: After `process_findings()`, call `adaptive.analyze_findings()` to adjust next scan parameters.
+
+---
+
+### 5.6: Silent JSON Serialization Failure in handle_findings
+
+**File**: `agent/mod.rs:287`
+
+**Issue**: `unwrap_or_default()` silently drops findings that fail serialization.
+
+**Fix**:
+```rust
+let mut finding_values = Vec::with_capacity(findings.len());
+for (i, f) in findings.iter().enumerate() {
+    match serde_json::to_value(f) {
+        Ok(v) => finding_values.push(v),
+        Err(e) => {
+            tracing::warn!(
+                "Failed to serialize finding {} (id={}): {}",
+                i, f.id, e
+            );
+        }
+    }
+}
+```
+
+---
+
+### 5.7: ToolDispatcher Error Swallowing
+
+**File**: `tool/dispatcher.rs:48-65`
+
+**Issue**: When `tool.execute()` returns `Err(_)`, pattern ignores actual error and creates dummy `ToolResponse`. Original error never logged.
+
+**Fix**: Log the error with context:
+```rust
+Err(e) => {
+    tracing::warn!(
+        target = %request.tool,
+        target_url = %request.target.value,
+        "Tool '{}' failed on '{}': {:?}",
+        request.tool, request.target.value, e
+    );
+    // ... create response with error info
+}
+```
+
+---
+
+### 5.8: SkillRegistry Not Wired into Agent
+
+**File**: `agent/mod.rs:74-86`
+
+**Issue**: `Agent` has no `SkillRegistry` field. Skills only loaded via CLI.
+
+**Fix**: Add `SkillRegistry` field to `Agent` and auto-load skills from default directories.
+
+---
+
+### 5.9: Graceful Shutdown Not Implemented
 
 **File**: `agent/mod.rs:129-159`
 
-**Verified**: Yes, `run()` uses `self.running` (Arc<RwLock<bool>>) with polling loop. No SIGTERM/SIGINT signal handlers. No `CancellationToken` or `tokio::signal::ctrl_c()` usage.
+**Issue**: `run()` uses `self.running` (Arc<RwLock<bool>>) with polling loop. No SIGTERM/SIGINT signal handlers.
 
 **Fix**: Add signal handlers with `CancellationToken`:
 ```rust
@@ -793,17 +1110,11 @@ pub async fn run(&mut self) -> Result<()> {
 
 ---
 
-### 5.2: Event Loop Swallows Errors
+### 5.10: Event Loop Swallows Errors
 
 **File**: `agent/mod.rs:145-147`
 
-**Verified**: Yes, and worse than described. Line 145:
-```rust
-if self.process_scheduled_scans().await.is_ok() {
-    tracing::debug!("Processed scheduled scans");
-}
-```
-If `is_ok()` returns false (error occurred), **nothing happens** — no logging, no error handling. Error is completely discarded.
+**Issue**: If `is_ok()` returns false, nothing happens — error completely discarded.
 
 **Fix**:
 ```rust
@@ -816,17 +1127,11 @@ if let Err(e) = self.process_scheduled_scans().await {
 
 ---
 
-### 5.3: Dedup Key Collision in AlertRouter
+### 5.11: Dedup Key Collision in AlertRouter
 
 **File**: `agent/alerts/routing.rs:237-244`
 
-**Verified**: Yes, `make_dedup_key()` reads:
-```rust
-fn make_dedup_key(&self, alert: &Alert) -> String {
-    format!("{}:{}:{}", alert.target, alert.severity.as_str(), alert.title)
-}
-```
-No `finding_ids` hash included. Alerts with same target/severity/title but different findings produce same key.
+**Issue**: `make_dedup_key()` doesn't include `finding_ids` hash. Alerts with same target/severity/title but different findings produce same key.
 
 **Fix**: Include hash of finding_ids:
 ```rust
@@ -842,125 +1147,137 @@ fn make_dedup_key(&self, alert: &Alert) -> String {
 
 ---
 
-### 5.4: Lock Poisoning in TargetPortfolio
+### 5.12: Lock Poisoning in TargetPortfolio
 
-**File**: `agent/portfolio.rs:221,225,229,233` (and more — lines 237, 241, 248, 253, 254, 259, 260, 266, 270)
+**File**: `agent/portfolio.rs` (multiple locations)
 
-**Verified**: Yes, uses `std::sync::RwLock` (imported at line 9) with `.unwrap()` on lock acquisitions. Will panic on lock poisoning.
+**Issue**: Uses `std::sync::RwLock` with `.unwrap()` on lock acquisitions. Will panic on lock poisoning.
 
-**Fix**: Migrate to `parking_lot::RwLock` which does not panic on poison:
-```rust
-use parking_lot::RwLock;
-pub struct TargetPortfolio {
-    data: Arc<RwLock<PortfolioData>>,
-}
-```
-
-Note: `parking_lot::RwLock::read()` and `write()` return guards directly, not `Result`. Remove all `.unwrap()` calls on lock acquisitions.
+**Fix**: Migrate to `parking_lot::RwLock` which does not panic on poison.
 
 ---
 
-### 5.5: Severity Filtering Only Handles Critical
-
-**File**: `agent/mod.rs:268-296`
-
-**Verified**: Yes, line 268-270:
-```rust
-let critical_findings: Vec<_> = findings.iter()
-    .filter(|f| matches!(f.severity, crate::tool::response::ResponseSeverity::Critical))
-    .collect();
-```
-Only `Critical` findings trigger alerts. High, Medium, Low, and Info are completely ignored.
-
-**Fix**: Implement multi-level alerting:
-```rust
-fn determine_alert_level(severity: &ResponseSeverity) -> AlertLevel {
-    match severity {
-        ResponseSeverity::Critical => AlertLevel::Immediate,
-        ResponseSeverity::High => AlertLevel::Important,
-        ResponseSeverity::Medium => AlertLevel::Notice,
-        _ => AlertLevel::Info,
-    }
-}
-```
-
----
-
-### 5.6: Path Validation in LongitudinalMemory
-
-**File**: `agent/memory.rs:107-123`
-
-**Verified**: Yes, lines 111-114 use string replacement:
-```rust
-let safe_name = target
-    .replace("://", "_")
-    .replace("/", "_")
-    .replace(":", "_");
-```
-
-**Clarification**: The actual risk is **filename collision** (different target URLs could produce same filename), not path traversal. The module creates filenames FROM target strings, not from user-provided paths. The hashing at lines 116-118 helps somewhat with uniqueness.
-
-**Fix**: Use `crate::utils::validation::validate_path()` for the constructed path, and consider using a full hash of the target URL as the filename to avoid collisions.
-
----
-
-### 5.7: Timezone Parsing Only Numeric
-
-**File**: `agent/portfolio.rs:78-96`
-
-**Verified**: Yes, lines 79-85:
-```rust
-let local = match &self.timezone[..] {
-    "UTC" => time.hour() as i32,
-    _ => {
-        let offset_hours: i64 = self.timezone.trim().parse().unwrap_or(0);
-        ...
-    }
-};
-```
-Named timezones (`"America/New_York"`, `"Europe/London"`) silently fall back to offset 0 (UTC).
-
-**Fix**: Add `chrono-tz` support:
-```rust
-use chrono_tz::Tz;
-let tz: Tz = self.timezone.parse().unwrap_or(chrono_tz::UTC);
-let local = time.with_timezone(&tz);
-```
-
-**Note**: Requires adding `chrono-tz` to Cargo.toml.
-
----
-
-### 5.8: Missing Error Propagation
-
-**File**: `agent/mod.rs:267-296`
-
-**Verified**: Yes, `handle_findings()` returns `()` (unit), not `Result<()>`. Errors from `self.alert_router.send()` are logged but never propagated.
-
-**Fix**: Change signature to return `Result<()>` and propagate errors to caller.
-
----
-
-### 5.9: TOCTOU Race in AlertRouter Dedup
+### 5.13: TOCTOU Race in AlertRouter Dedup
 
 **File**: `agent/alerts/routing.rs:45-75`
 
-**Verified**: Yes, three separate lock acquisitions:
-1. Lock `recent_alerts` to check size, cleanup (lines 47-51)
-2. Lock `recent_alerts` to check dedup key (lines 56-62)
-3. Lock `recent_alerts` to insert dedup key (lines 71-72)
+**Issue**: Three separate lock acquisitions for check-size, check-dedup, insert-dedup. Between check and insert, another concurrent call could proceed with same key.
 
-Between step 2 (check) and step 3 (insert), another concurrent call could proceed with same key.
+**Fix**: Use `DashMap` for atomic check-and-insert, or combine steps into a single lock scope.
 
-**Fix**: Use `DashMap` for atomic check-and-insert, or combine steps 2 and 3 into a single lock scope.
+---
+
+### 5.14: LongitudinalMemory TTL Cleanup Never Invoked
+
+**File**: `agent/memory.rs:397`
+
+**Issue**: `cleanup_old_patterns()` exists but is never called.
+
+**Fix**: Add scheduled cleanup to Agent in `process_scheduled_scans()`:
+```rust
+if should_cleanup() {
+    let cleaned = self.memory.cleanup_old_patterns(90)?;  // 90 day TTL
+    if cleaned > 0 {
+        tracing::info!("Cleaned {} old pattern entries", cleaned);
+    }
+}
+```
+
+---
+
+### 5.15: Portfolio save() Blocking I/O in Async Context
+
+**File**: `agent/portfolio.rs:196-212`
+
+**Issue**: `std::fs` (blocking) used inside async context.
+
+**Fix**: Wrap in `tokio::task::spawn_blocking`:
+```rust
+pub async fn save_async(&self) -> Result<()> {
+    let file_path = self.file_path.clone();
+    let data = self.data.read().clone();
+    tokio::task::spawn_blocking(move || {
+        // ... write file ...
+    }).await??;
+    Ok(())
+}
+```
+
+---
+
+### 5.16: Memory Storage Failure Treated as Non-Critical
+
+**File**: `agent/mod.rs:399-401`
+
+**Issue**: `tracing::warn!` logs but continues as if success.
+
+**Fix**: Escalate to error level and trigger alert:
+```rust
+if let Err(e) = self.memory.store_scan_results(target, &result) {
+    tracing::error!(
+        target = %target,
+        error = %e,
+        "CRITICAL: Failed to store scan results for {}. Historical tracking disabled.",
+        target
+    );
+    // Optionally trigger alert
+}
+```
+
+---
+
+### 5.17: Scan Failure Escalation Missing
+
+**File**: `agent/mod.rs:156-160`
+
+**Issue**: If all scans start failing (network outage), no alert is triggered.
+
+**Fix**: Add consecutive failure counter:
+```rust
+struct Agent {
+    consecutive_failures: Arc<AtomicUsize>,
+    failure_threshold: usize,  // configurable, default 3
+}
+
+impl Agent {
+    async fn process_scheduled_scans(&mut self) -> Result<()> {
+        let result = /* ... scan execution ... */;
+        match result {
+            Ok(_) => {
+                self.consecutive_failures.store(0, Ordering::Relaxed);
+            }
+            Err(e) => {
+                let failures = self.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
+                if failures >= self.failure_threshold {
+                    // Trigger alert
+                }
+            }
+        }
+        Ok(())
+    }
+}
+```
+
+---
+
+### 5.18: Missing Integration Tests for Agent
+
+**File**: `agent/mod.rs:434-545`
+
+**Issue**: Only 11 unit tests exist. No integration tests exercising full event loop.
+
+**Fix**: Add integration tests in `tests/agent_tests.rs`:
+- Test: agent processes scheduled scan
+- Test: agent handles Critical findings with alert
+- Test: agent handles empty portfolio gracefully
+- Test: agent respects off-peak window
+- Test: agent escalates on consecutive failures
 
 ---
 
 ## Wave 6: REST API & External Integrations (Parallel)
 
-### Sub-Agent Instructions for Wave 6
-
-Wave 6 depends on Wave 1 being complete. All items are independent. Waves 5 and 6 can run in parallel with each other. All paths relative to `crates/slapper/src/` unless otherwise noted.
+Wave 6 depends on Wave 1 being complete. Waves 5 and 6 can run in parallel with each other.
 
 ---
 
@@ -968,7 +1285,7 @@ Wave 6 depends on Wave 1 being complete. All items are independent. Waves 5 and 
 
 **File**: `tool/protocol/rest.rs:16-35`
 
-**Verified**: Yes, `RestState` has fields `registry`, `dispatcher`, `api_key`, `rate_limiter` — no TLS fields. `create_router()` creates plain HTTP router. OpenAPI spec hardcodes `"url": "http://127.0.0.1:8080"`.
+**Issue**: `RestState` has no TLS fields. `create_router()` creates plain HTTP router.
 
 **Fix**: Import `TlsConfig` from `crate::distributed`, add TLS fields to `RestState`, update `create_router()` to support TLS.
 
@@ -978,7 +1295,7 @@ Wave 6 depends on Wave 1 being complete. All items are independent. Waves 5 and 
 
 **File**: `tool/ratelimit.rs:11-16`
 
-**Verified**: Basic per-client token bucket rate limiting **already exists** (keyed by target string). What is MISSING:
+**Issue**: Basic per-client token bucket exists. What's MISSING:
 - Per-endpoint rate limiting (all endpoints share same config)
 - Global rate limit (no total-request cap)
 - IP-based limiting (limits keyed by target, not client IP)
@@ -991,7 +1308,7 @@ Wave 6 depends on Wave 1 being complete. All items are independent. Waves 5 and 
 
 **File**: `tool/protocol/mcp/streaming.rs:1-19`
 
-**Verified**: Yes, file only contains `StreamEvent` for SSE. No WebSocket code. The `websocket` feature exists in Cargo.toml with `tokio-tungstenite` but is not integrated into REST/MCP protocol layer.
+**Issue**: File only contains `StreamEvent` for SSE. No WebSocket code. `tokio-tungstenite` exists in Cargo.toml but not integrated.
 
 **Fix**: Add WebSocket endpoint to REST router using existing `tokio-tungstenite` dependency.
 
@@ -1001,7 +1318,7 @@ Wave 6 depends on Wave 1 being complete. All items are independent. Waves 5 and 
 
 **File**: `stress/udp.rs:19-117`
 
-**Verified**: Yes, `raw_udp` module (lines 20-117) defines `build_udp_packet()`, checksum functions — complete raw UDP packet builder with IP spoofing. But `run_udp_flood()` (line 120) uses standard `UdpSocket` and never calls `raw_udp::*`. Zero references to `raw_udp::` from outside the module.
+**Issue**: `raw_udp` module defines `build_udp_packet()`, checksum functions — complete raw UDP packet builder with IP spoofing. But `run_udp_flood()` uses standard `UdpSocket` and never calls `raw_udp::*`.
 
 **Fix**: Integrate with `--spoof-ip` flag when `stress-testing` feature enabled. When spoof enabled, use `raw_udp::build_udp_packet()` + raw socket instead of `UdpSocket`.
 
@@ -1009,9 +1326,9 @@ Wave 6 depends on Wave 1 being complete. All items are independent. Waves 5 and 
 
 ### 6.5: Ruby API block_on Deadlock Risk
 
-**File**: `crates/slapper-ruby/src/api.rs` (1073 lines)
+**File**: `slapper-ruby/src/api.rs`
 
-**Verified**: Yes, **35 instances** of `rt.block_on()` confirmed. Classic deadlock risk — if Ruby plugin callback invoked from tokio async context, calling `block_on()` on same runtime handle panics.
+**Issue**: 35 instances of `rt.block_on()` confirmed. Classic deadlock risk — if Ruby plugin callback invoked from tokio async context, calling `block_on()` on same runtime handle panics.
 
 **Fix**: Use dedicated blocking thread pool:
 ```rust
@@ -1033,11 +1350,121 @@ Then replace `get_runtime().block_on(...)` with `get_blocking_runtime().block_on
 
 ---
 
+### 6.6: SessionManager Integration (TUI)
+
+**Location**: `tui/session.rs` (145 lines)
+
+**Issue**: `SessionManager` fully implemented but never instantiated in `App`.
+
+**Fix - Phase 1: App integration** (`app/mod.rs`):
+```rust
+pub struct App {
+    // ... existing fields ...
+    pub session_manager: SessionManager,
+    last_auto_save: std::time::Instant,
+}
+
+impl App {
+    pub fn new(history: SharedHistory) -> Self {
+        let config = SessionConfig::default();
+        let session_manager = SessionManager::new(config.clone());
+        let last_auto_save = std::time::Instant::now();
+
+        let pending_restore = session_manager
+            .load_latest_session()
+            .ok()
+            .flatten();
+
+        Self {
+            // ... existing fields ...
+            session_manager,
+            last_auto_save,
+            pending_restore: None,
+        }
+    }
+
+    pub fn auto_save_if_due(&mut self) {
+        let elapsed = self.last_auto_save.elapsed().as_secs();
+        let interval = self.session_manager.config.auto_save_interval_secs;
+        if elapsed >= interval {
+            if let Err(e) = self.session_manager.save_quick(self) {
+                tracing::warn!("Auto-save failed: {}", e);
+            }
+            self.last_auto_save = std::time::Instant::now();
+        }
+    }
+}
+```
+
+**Fix - Phase 2: Event loop** (`app/runner.rs`):
+Add at end of `run_app` loop: `app.auto_save_if_due();`
+On exit: `app.session_manager.save_quick(app);`
+
+---
+
+### 6.7: ThemeManager Integration (TUI)
+
+**Location**: `tui/theme.rs` (239 lines)
+
+**Issue**: Theme system fully implemented but completely disconnected from App.
+
+**Fix - Phase 1: App integration** (`app/mod.rs`):
+```rust
+pub struct App {
+    // ... existing fields ...
+    pub theme_manager: ThemeManager,
+}
+
+impl App {
+    pub fn new(history: SharedHistory) -> Self {
+        let theme_manager = ThemeManager::new();
+        Self {
+            // ... existing fields ...
+            theme_manager,
+        }
+    }
+
+    pub fn toggle_theme(&mut self) {
+        self.theme_manager.toggle();
+        self.needs_redraw = true;
+    }
+}
+```
+
+**Fix - Phase 2: Event loop** (`app/runner.rs`):
+Add Ctrl+T keybinding: `app.toggle_theme();`
+
+**Fix - Phase 3: ui.rs colors** — Replace hardcoded `Color::` references with `tc!()` macro calls.
+
+**Note**: Requires changing `CURRENT_THEME` from `LazyLock` to `Mutex<Theme>` for safe runtime updates.
+
+---
+
+### 6.8: Clipboard Integration (TUI)
+
+**Location**: `tui/utils/clipboard.rs`
+
+**Issue**: `Clipboard` utility exists but never wired to input fields.
+
+**Fix - Phase 1**: Add paste event detection in `app/runner.rs`:
+```rust
+(KeyModifiers::CONTROL, KeyCode::Char('v')) => {
+    if let Some(text) = crate::tui::utils::Clipboard::get_text() {
+        app.dispatcher_mut().handle_paste(&text);
+        app.needs_redraw = true;
+    }
+}
+```
+
+**Fix - Phase 2**: Add `handle_paste()` to `TabInput` trait in `tabs/mod.rs`.
+
+**Fix - Phase 3**: Implement `handle_paste()` on each tab's InputGroup (can use default).
+
+---
+
 ## Wave 7: Dependency Updates (Sequential - Highest Risk)
 
-### Sub-Agent Instructions for Wave 7
-
-Wave 7 must be LAST — after all other waves. These are highest risk because they change fundamental dependencies. Test thoroughly after each update. Must be done sequentially.
+Wave 7 must be LAST — after all other waves. Test thoroughly after each update.
 
 ---
 
@@ -1068,9 +1495,7 @@ Wave 7 must be LAST — after all other waves. These are highest risk because th
 
 ## Wave 8: TUI Usability Improvements (Parallel)
 
-### Sub-Agent Instructions for Wave 8
-
-Wave 8 can start after Wave 1 (foundation fixes). Independent of Waves 3-7. All items are independent and can be done in parallel. All paths relative to `crates/slapper/src/`.
+Wave 8 can start after Wave 1. Independent of Waves 3-7.
 
 ---
 
@@ -1078,101 +1503,96 @@ Wave 8 can start after Wave 1 (foundation fixes). Independent of Waves 3-7. All 
 
 **Files**: `tui/search.rs` (new), `tui/app/runner.rs`, `tui/ui.rs`
 
-**Verified**: Search infrastructure partially exists. `search_query` field in `App` struct, search input handled in `runner.rs:422`. But no dedicated global search module — search is tab-specific.
+**Issue**: Search infrastructure partially exists. `search_query` field in `App` struct, search input handled in `runner.rs:422`. But no dedicated global search module.
 
 **Fix**: Create `tui/search.rs` with global search that works across all tabs. Add Ctrl+F keybinding.
 
 ---
 
-### 8.2: Clipboard/Copy-Paste Support
-
-**Files**: `tui/utils/clipboard.rs` (new), `tui/components/selection.rs` (new)
-
-**Verified**: No clipboard functionality exists anywhere in TUI code.
-
-**Recommendation**: Use `arboard` crate (pure Rust clipboard access).
-
----
-
-### 8.3: Pause/Resume (Ctrl+Z/Ctrl+Y)
+### 8.2: Pause/Resume (Ctrl+Z/Ctrl+Y)
 
 **Files**: `tui/workers/pause.rs` (new), `tui/app/mod.rs`, `tui/app/runner.rs`
 
-**Verified**: Help text at `help.rs:180` shows `"Space" => "Pause/Resume"` but no implementation exists for active scan pause/resume. Note: `Tab::Resume` is for session file resume (unrelated).
+**Issue**: Help text at `help.rs:180` shows `"Space" => "Pause/Resume"` but no implementation exists.
 
-**Fix**: Create `tui/workers/pause.rs` with pause/resume mechanism for running scan tasks. Wire into event loop.
+**Fix**: Create `tui/workers/pause.rs` with pause/resume mechanism for running scan tasks.
 
 ---
 
-### 8.4: Tab Overflow Display
+### 8.3: Tab Overflow Display
 
 **File**: `tui/ui.rs:255-272`
 
-**Verified**: Yes, `draw_tabs()` renders ALL 29 tabs with no overflow handling. Will overflow on narrow terminals.
+**Issue**: `draw_tabs()` renders ALL 29 tabs with no overflow handling. Will overflow on narrow terminals.
 
-**Fix**: Add horizontal scroll or tab groups. Consider wrapping with `Tabs::new(titles).block(block)`.
+**Fix**: Add horizontal scroll or tab groups.
 
 ---
 
-### 8.5: Input Validation Visual Feedback
+### 8.4: Input Validation Visual Feedback
 
 **File**: `tui/components/input.rs:8-12`
 
-**Verified**: `ValidationResult` IS used (in `scan_ports.rs:153` and `scan_ports.rs:163`). Validation methods exist: `validate_url()`, `validate_ip()`, `validate_port()`, etc. What's missing is **visual feedback** — red border for invalid input is not implemented.
+**Issue**: `ValidationResult` IS used in `scan_ports.rs:153` and `scan_ports.rs:163`. Validation methods exist. Missing: **visual feedback** — red border for invalid input.
 
-**Fix**: Implement visual rendering of validation state (red border for invalid, green for valid). Add validation state tracking to input component rendering.
-
----
-
-### 8.6: Session Auto-Persistence
-
-**Files**: `tui/session.rs` (new), state management
-
-**Verified**: No session auto-persistence mechanism exists.
-
-**Fix**: Create `tui/session.rs` with periodic state serialization. Save on exit, restore on startup.
+**Fix**: Implement visual rendering of validation state (red border for invalid, green for valid).
 
 ---
 
-### 8.7: Theme System (Dark/Light)
-
-**File**: `tui/theme.rs` (new)
-
-**Verified**: No theme system exists. Hardcoded `Color::*` literals used throughout TUI code.
-
-**Fix**: Create theme struct with all color definitions. Replace inline `Color::*` with theme references. Add dark/light presets.
-
----
-
-### 8.8: Keyboard Shortcuts Inline Display
+### 8.5: Keyboard Shortcuts Inline Display
 
 **File**: `tui/ui.rs`
 
-**Verified**: Help exists in `tui/help.rs` with full command listing. Status bar exists. Issue is discoverability.
+**Issue**: Help exists in `tui/help.rs`. Issue is discoverability.
 
 **Fix**: Show contextual keyboard hints inline (e.g., "[Ctrl+F] Search" in status bar).
 
 ---
 
-### 8.9: Tab Bookmarks/Favorites
+### 8.6: Tab Bookmarks/Favorites
 
-**Verified**: No bookmark/favorite functionality exists. Grep for "bookmark" and "favorite" returns zero results.
+**Verified**: No bookmark/favorite functionality exists.
 
-**Fix**: Add bookmark persistence (save to config), keyboard shortcut to toggle bookmark, display bookmarked tabs prominently.
+**Fix**: Add bookmark persistence (save to config), keyboard shortcut to toggle bookmark.
+
+---
+
+### 8.7: Hardcoded Colors → Theme System
+
+**Issue**: 366+ hardcoded `Color::` occurrences across 40+ files.
+
+**Fix**: Replace with `tc!()` macro calls using the color mapping:
+| Current | Replace With |
+|---------|-------------|
+| `Color::Cyan` (tab inactive) | `tc!(tab_inactive)` |
+| `Color::Yellow` (tab highlight) | `tc!(highlight)` |
+| `Color::White` (text) | `tc!(text)` |
+| `Color::DarkGray` (dim text) | `tc!(text_dim)` |
+
+**Approach**: Process in batches by file count:
+1. `ui.rs` — highest impact per line (~28 changes)
+2. `components/` — reusable components (~25 changes)
+3. `tabs/` — batch by tab priority (312 changes)
+
+---
+
+### 8.8: Dead Code Cleanup (dispatch.rs)
+
+**File**: `tui/app/dispatch.rs`
+
+**Issue**: `#[allow(dead_code)]` on `handle_char` and `handle_backspace` is redundant (compiler understands dynamic dispatch).
+
+**Fix**: Remove redundant `#[allow(dead_code)]` attributes.
 
 ---
 
 ## Wave 9: Plugin Architecture Unification (Long Term)
 
-### Sub-Agent Instructions for Wave 9
-
-This is a long-term wave. Lower priority than Waves 1-8. All paths relative to `crates/`.
-
 ---
 
 ### 9.1: Enhanced PluginBackend Trait
 
-**Current State**: A basic unified `Plugin` trait already exists at `slapper-plugin/src/lib.rs:98-113`:
+**Current State**: Basic `Plugin` trait at `slapper-plugin/src/lib.rs:98-113`:
 ```rust
 pub trait Plugin: Send + Sync {
     fn info(&self) -> &PluginInfo;
@@ -1183,7 +1603,7 @@ pub trait Plugin: Send + Sync {
 }
 ```
 
-**What's needed**: Add lifecycle methods, health checking, and priority support:
+**What's needed**: Add lifecycle methods, health checking, priority:
 ```rust
 fn init(&self) -> Result<()>;
 fn shutdown(&self) -> Result<()>;
@@ -1209,17 +1629,9 @@ fn priority(&self) -> u32;
 
 ---
 
-### 9.4: Plugin Lifecycle Features
+### 9.4: Metasploit Integration Enhancement
 
-**Current State**: Not implemented. `Plugin` trait has no lifecycle methods.
-
-**Fix**: Add `init()`, `activate()`, `deactivate()`, `health_check()` to Plugin trait.
-
----
-
-### 9.5: Metasploit Integration Enhancement
-
-**Current State**: Basic MSF RPC integration in `slapper-ruby/src/api.rs` (connect, disconnect, list_modules, execute_module, session management). No auto-pivoting, session persistence/caching.
+**Current State**: Basic MSF RPC integration in `slapper-ruby/src/api.rs` (connect, disconnect, list_modules, execute_module, session management).
 
 **Fix**: Add auto-pivoting, session persistence/caching.
 
@@ -1231,45 +1643,45 @@ fn priority(&self) -> u32;
 
 ```
 Wave 1 (CRITICAL) ────────────────────────────────────────── Foundation
-    │
-    ├── Wave 2 (HIGH Security) ──────────── After Wave 1
-    │
-    ├── Wave 5 (Agent) ──────────────────── After Wave 1
-    ├── Wave 6 (API) ────────────────────── After Wave 1
-    ├── Wave 8 (TUI Features) ───────────── After Wave 1
-    │
-    ├── Wave 3 (Refactoring) ────────────── After Waves 1-2
-    │   └── Wave 4 (Performance) ────────── After Wave 3
-    │
-    └── Wave 7 (Dependencies) ───────────── After ALL other waves (highest risk)
-    
-    Wave 9 (Plugin Unification) ─────────── Long term, anytime
+     │
+     ├── Wave 2 (HIGH Security) ──────────── After Wave 1
+     │
+     ├── Wave 5 (Agent) ──────────────────── After Wave 1
+     ├── Wave 6 (API) ─────────────────────── After Wave 1
+     ├── Wave 8 (TUI Features) ────────────── After Wave 1
+     │
+     ├── Wave 3 (Refactoring) ────────────── After Waves 1-2
+     │   └── Wave 4 (Performance) ────────── After Wave 3
+     │
+     └── Wave 7 (Dependencies) ────────────── After ALL other waves (highest risk)
+
+     Wave 9 (Plugin Unification) ─────────── Long term, anytime
 ```
 
 ### Sub-Agent Assignment Strategy
 
 | Agent | Wave | Items | Dependencies |
 |-------|------|-------|-------------|
-| Agent 1 | Wave 1 | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8 | None (start first) |
-| Agent 2 | Wave 2 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10 | Wave 1 complete |
-| Agent 3 | Wave 3 | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | Waves 1-2 complete |
-| Agent 4 | Wave 4 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8 | Wave 3 complete |
-| Agent 5 | Wave 5 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9 | Wave 1 complete |
-| Agent 6 | Wave 6 | 6.1, 6.2, 6.3, 6.4, 6.5 | Wave 1 complete |
-| Agent 7 | Wave 8 | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9 | Wave 1 complete |
-| Agent 8 | Wave 7 | 7.1, 7.2 | ALL other waves complete |
+| Agent 1 | Wave 1 | 1.1-1.10 | None (start first) |
+| Agent 2 | Wave 2 | 2.1-2.13 | Wave 1 complete |
+| Agent 3 | Wave 3 | 3.1-3.10 | Waves 1-2 complete |
+| Agent 4 | Wave 4 | 4.1-4.10 | Wave 3 complete |
+| Agent 5 | Wave 5 | 5.1-5.18 | Wave 1 complete |
+| Agent 6 | Wave 6 | 6.1-6.8 | Wave 1 complete |
+| Agent 7 | Wave 8 | 8.1-8.8 | Wave 1 complete |
+| Agent 8 | Wave 7 | 7.1-7.2 | ALL other waves complete |
 
 ### Within-Wave Parallelization
 
 | Wave | Parallel Group A | Parallel Group B |
 |------|-----------------|-----------------|
-| 1 | 1.1, 1.7, 1.8 (quick fixes) | 1.2, 1.3, 1.4, 1.5, 1.6, 1.9 (security fixes) |
-| 2 | 2.2, 2.3, 2.4, 2.8, 2.10 (patterns/TLS) | 2.5, 2.6, 2.7 (scope validation) |
-| 3 | 3.1, 3.2, 3.3, 3.4 (file splits) | 3.5, 3.6 (plugin/registry) |
-| 4 | 4.1, 4.2, 4.3, 4.6, 4.8 (data structures) | 4.4, 4.5, 4.7 (async/lock-free) |
-| 5 | All 5.1-5.9 independent | - |
-| 6 | All 6.1-6.5 independent | - |
-| 8 | All 8.1-8.9 independent | - |
+| 1 | 1.1, 1.7, 1.8 (quick fixes) | 1.2, 1.3, 1.4, 1.5, 1.6, 1.9, 1.10 (security) |
+| 2 | 2.1, 2.2, 2.3, 2.8, 2.10, 2.11 (patterns/TLS) | 2.4, 2.5, 2.6, 2.7, 2.9, 2.12, 2.13 (scope/validation) |
+| 3 | 3.1, 3.2, 3.3, 3.4 (file splits) | 3.5, 3.6, 3.7, 3.8, 3.9, 3.10 (plugin/TUI) |
+| 4 | 4.1, 4.2, 4.3, 4.6, 4.8, 4.9, 4.10 (data structures) | 4.4, 4.5, 4.7 (async/lock-free) |
+| 5 | All 5.1-5.18 independent | - |
+| 6 | All 6.1-6.8 independent | - |
+| 8 | All 8.1-8.8 independent | - |
 
 ---
 
@@ -1279,7 +1691,7 @@ Before starting any work:
 ```bash
 cargo test --lib -p slapper
 cargo clippy --lib -p slapper
-cargo test --lib -p slapper -- --list 2>/dev/null | wc -l  # Expected: 1148+
+cargo test --lib -p slapper -- --list 2>/dev/null | wc -l  # Expected: 1109+
 find crates/slapper/src -name '*.rs' | wc -l               # Expected: 470+
 ```
 
@@ -1320,9 +1732,15 @@ cargo check --lib -p slapper --features python-plugins
 
 10. **parking_lot vs std::sync Mutex**: `parking_lot::Mutex::lock()` returns `MutexGuard` directly (NOT `Result<MutexGuard, PoisonError>`). When migrating, remove all `.unwrap()` on lock calls.
 
-11. **Proxy credential exposure (2.8)** is broader than just the two files listed — also affects `proxy/health.rs`, `proxy/rotator.rs`, and `commands/handlers/stress.rs:93` which prints credentials to stdout.
+11. **Proxy credential exposure (2.8)** is broader than listed — also affects `proxy/health.rs`, `proxy/rotator.rs`, and `commands/handlers/stress.rs:93`.
 
-12. **Formula injection (2.10)** has an implicit partial defense via `first_char_is_control` (checks `!c.is_ascii()`) but this is not designed for fullwidth bypass and relies on CSV quoting.
+12. **Formula injection (2.10)** has an implicit partial defense via `first_char_is_control` (checks `!c.is_ascii()`) but relies on CSV quoting.
+
+13. **UTF-8 byte slicing crash (3.7)** affects `InputField` when user types multi-byte UTF-8 characters. Use character-based indexing, not byte indexing.
+
+14. **IMAP injection (1.9)** is CRITICAL — 12 injection points in slapper-nse IMAP library.
+
+15. **SessionManager and ThemeManager integration** (6.6, 6.7) require changes to `App` struct — can be done together by same agent.
 
 ---
 
@@ -1340,11 +1758,13 @@ cargo check --lib -p slapper --features python-plugins
 - [x] 1.6 unwrap_u8() pattern replaced with bool::from()
 - [x] 1.7 Silent data loss fixed (to_json_line returns Result)
 - [x] 1.8 TOCTOU in config loading (canonicalize on read)
+- [ ] 1.9 IMAP Injection (pending - slapper-nse crate)
+- [ ] 1.10 resolve_host() private IP blocking (pending)
 
 ### Wave 2: HIGH Priority Security
-- [x] 2.1 Ruby sandbox escape (removed dangerous APIs - HTTP, Scanner, Fuzzer, Metasploit)
-- [x] 2.2 Python suspicious patterns (20 patterns)
-- [x] 2.3 Ruby pattern detection (19 patterns)
+- [x] 2.1 Ruby sandbox escape (removed dangerous APIs)
+- [x] 2.2 Python suspicious patterns (expanded)
+- [x] 2.3 Ruby pattern detection (expanded, case-insensitive)
 - [x] 2.4 TLS bypass warnings (centralized create_insecure_http_client)
 - [x] 2.5 REST API scope validation
 - [x] 2.6 MCP scope validation
@@ -1352,14 +1772,21 @@ cargo check --lib -p slapper --features python-plugins
 - [x] 2.8 Credential exposure (to_log_key method)
 - [x] 2.9 ai_client integration (analyze_findings_typed in handle_findings)
 - [x] 2.10 Formula injection unicode (NFKC normalization)
+- [ ] 2.11 HMAC webhook signing (pending)
+- [ ] 2.12 Stack trace regex (pending)
+- [ ] 2.13 OpenAI unconditional scope (pending)
 
 ### Wave 3: Code Quality - TUI & Plugin Refactoring
-- [x] 3.1 TUI tab dispatching (partial - manual match acceptable for feature-gated enums)
-- [x] 3.2 TUI architecture (settings.rs split, partial)
-- [x] 3.3 MCP handlers split (done in prior work)
-- [x] 3.4 dependency_scan split (done in prior work)
-- [x] 3.5 Plugin system fixes (PLG-007-018 most fixed)
+- [x] 3.1 TUI tab dispatching (partial)
+- [x] 3.2 TUI architecture (settings.rs split)
+- [x] 3.3 MCP handlers split
+- [x] 3.4 dependency_scan split
+- [x] 3.5 Plugin system fixes (PLG-007-018 partial)
 - [x] 3.6 CircuitBreakerRegistry (removed as dead code)
+- [ ] 3.7 UTF-8 byte slicing crash (pending)
+- [ ] 3.8 Tab match duplication (pending)
+- [ ] 3.9 Reset method conflict (pending)
+- [ ] 3.10 Dead handle_search() (pending)
 
 ### Wave 4: Performance Optimization
 - [x] 4.1 HashMap->FxHashMap (hot paths confirmed)
@@ -1370,66 +1797,76 @@ cargo check --lib -p slapper --features python-plugins
 - [x] 4.6 Regex caching (verified - ChainExecutor has regex_cache)
 - [x] 4.7 tokio::sync::watch (verified)
 - [x] 4.8 String allocation optimizations (verified)
+- [ ] 4.9 String interpolation optimization (pending)
+- [ ] 4.10 Severity comparison (pending)
 
 ### Wave 5: Agent System
-- [x] 5.1 Graceful shutdown (CancellationToken)
-- [x] 5.2 Event loop error handling
-- [x] 5.3 Dedup key collision (includes finding_ids hash)
-- [x] 5.4 Lock poisoning (parking_lot::RwLock)
-- [x] 5.5 Severity filtering (multi-level alerting)
-- [x] 5.6 Path validation (hash-based naming)
-- [x] 5.7 Timezone parsing (chrono-tz support)
-- [x] 5.8 Error propagation (handle_findings returns Result)
-- [x] 5.9 TOCTOU in AlertRouter dedup (verified)
+- [ ] 5.1 ResponseSeverity → Severity (pending)
+- [ ] 5.2 AlertRouter channel persistence (pending)
+- [ ] 5.3 Silent timezone fallback (pending)
+- [ ] 5.4 Priority-based target sorting (pending)
+- [ ] 5.5 Full AI client integration (pending)
+- [ ] 5.6 Silent JSON serialization failure (pending)
+- [ ] 5.7 ToolDispatcher error swallowing (pending)
+- [ ] 5.8 SkillRegistry wired into Agent (pending)
+- [ ] 5.9 Graceful shutdown (pending)
+- [ ] 5.10 Event loop error handling (pending)
+- [ ] 5.11 Dedup key collision (pending)
+- [ ] 5.12 Lock poisoning (pending)
+- [ ] 5.13 TOCTOU in AlertRouter dedup (pending)
+- [ ] 5.14 Memory TTL cleanup (pending)
+- [ ] 5.15 Portfolio save() blocking I/O (pending)
+- [ ] 5.16 Memory storage failure escalation (pending)
+- [ ] 5.17 Scan failure escalation (pending)
+- [ ] 5.18 Integration tests for Agent (pending)
 
 ### Wave 6: REST API & External Integrations
-- [x] 6.1 REST API TLS (TlsConfig in RestState)
-- [x] 6.2 Rate limiting improvements (verified - basic exists)
-- [x] 6.3 WebSocket support (verified - tokio-tungstenite available)
-- [x] 6.4 UDP IP spoofing integration (verified - raw_udp exists)
-- [x] 6.5 Ruby API block_on (simplified after API reduction)
+- [ ] 6.1 REST API TLS (pending)
+- [ ] 6.2 Rate limiting improvements (pending)
+- [ ] 6.3 WebSocket support (pending)
+- [ ] 6.4 UDP IP spoofing integration (pending)
+- [ ] 6.5 Ruby API block_on (pending)
+- [ ] 6.6 SessionManager integration (pending)
+- [ ] 6.7 ThemeManager integration (pending)
+- [ ] 6.8 Clipboard integration (pending)
 
 ### Wave 7: Dependency Updates
 - [ ] 7.1 Axum 0.7.x -> 0.8.x (pending - highest risk)
 - [ ] 7.2 Tonic 0.12.x -> 0.14.x (pending - highest risk)
 
 ### Wave 8: TUI Usability Improvements
-- [x] 8.1 Global search (partial - search_query exists)
-- [x] 8.2 Clipboard support (arboard added)
-- [x] 8.3 Pause/resume (partial - bookmark support added)
-- [x] 8.4 Tab overflow display (scroll offset exists)
-- [x] 8.5 Input validation visual feedback (partial)
-- [x] 8.6 Session auto-persistence (SessionManager added)
-- [x] 8.7 Theme system (Theme/ThemeManager added)
-- [x] 8.8 Keyboard shortcuts inline display (status bar updated)
-- [x] 8.9 Tab bookmarks (HashSet<Bookmarked> added)
+- [ ] 8.1 Global search (pending)
+- [ ] 8.2 Pause/resume (pending)
+- [ ] 8.3 Tab overflow display (pending)
+- [ ] 8.4 Input validation visual feedback (pending)
+- [ ] 8.5 Keyboard shortcuts inline (pending)
+- [ ] 8.6 Tab bookmarks (pending)
+- [ ] 8.7 Hardcoded colors → theme (pending)
+- [ ] 8.8 Dead code cleanup (pending)
 
 ### Wave 9: Plugin Architecture Unification
-- [x] 9.1 Enhanced Plugin trait (already has all methods)
-- [x] 9.2 Shared security patterns (security.rs created)
-- [x] 9.3 Ruby loader interface (common trait exists)
-- [x] 9.4 Plugin lifecycle (verified - init/shutdown/health)
-- [x] 9.5 Metasploit session caching (SessionCache added)
+- [ ] 9.1 Enhanced Plugin trait (pending)
+- [ ] 9.2 Shared security patterns (pending)
+- [ ] 9.3 Move Ruby loader (pending)
+- [ ] 9.4 Metasploit session caching (pending)
 
 ---
 
 ## Historical Context
 
-Original plan files consolidated (no longer exist):
+Original plan files consolidated (no longer exist as separate planning documents):
 - `plan.md` - Codebase review, critical issues
-- `plan2.md` - Code quality issues
-- `plan3.md` - Security hardening, dependencies
-- `plan4.md` - Security audit
-- `plan5.md` - Performance optimization
-- `plan6.md` - Security improvements
-- `plan7.md` - Deep dive findings
-- `plan8.md` - Performance deep dive
-- `plan9.md` - TUI improvements
-- `plan10.md` - Agent harness
-- `plan11.md` - Plugin architecture
-- `plan12.md` - Unified plugin architecture
-- `plan13.md` - Agent harness deep dive
-- `plan14.md` - TUI usability
+- `plan2.md` - Session & theme integration, code quality
+- `plan3.md` - Performance improvement
+- `plan4.md` - Code quality & architecture
+- `plan5.md` - Code quality deep dive, clippy, dead code
+- `plan6.md` - Security vulnerabilities (IMAP injection, etc.)
+- `plan7.md` - Performance optimization (HashMap migration)
+- `plan8.md` - TUI refactoring (TabState trait issues)
+- `plan9.md` - Agent harness (ResponseSeverity, AlertRouter, etc.)
+- `plan10.md` - TUI improvements (UTF-8 crash, integration gaps)
+
+All items from these plans have been merged into this consolidated plan.md.
 
 ---
 
