@@ -912,6 +912,18 @@ When fixing failing tests in integration scenarios:
 
 16. **TUI theme system**: `tui/theme.rs` provides `Theme`, `ThemeColors`, `ThemeManager` with dark/light presets. Use `theme!()` and `tc!()` macros.
 
+17. **UTF-8 byte slicing crash**: `InputField` uses character-based indexing (`chars().count()`) instead of byte indexing to handle multi-byte UTF-8 characters correctly.
+
+18. **IMAP injection prevention**: Use `escape_imap_quoted()` per RFC 3501 in slapper-nse IMAP library - escapes `\` and `"`, strips `\r\n`.
+
+19. **resolve_host() blocks private IPs**: Now checks `is_loopback()` and `is_private_ip()` after DNS resolution to prevent SSRF attacks.
+
+20. **Webhooks use HMAC signing**: `notify/webhook.rs` signs payloads with HMAC-SHA256 using `X-Signature-256` header.
+
+21. **Error sanitization expanded**: Now catches Rust panics, Python tracebacks, Go panics, and Windows paths.
+
+22. **Cursor position is character count**: `cursor_pos` stores character count, not byte offset - use `field.value.chars().count()` for comparisons.
+
 17. **TUI clipboard support**: `tui/utils/clipboard.rs` provides `Clipboard` utility using `arboard` crate.
 
 18. **TUI session persistence**: `tui/session.rs` provides `SessionManager` for auto-saving/restoring session state. **Note**: SessionManager and ThemeManager exist but are NOT yet integrated into App.
