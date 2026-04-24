@@ -110,6 +110,7 @@ pub struct App {
     pub show_http_options: bool,
     pub show_search: bool,
     pub search_query: String,
+    pub global_search: Option<crate::tui::search::GlobalSearch>,
     pub search_backup: Option<std::collections::VecDeque<crate::tui::tabs::history::HistoryEntry>>,
     pub pending_key: Option<KeyCode>,
     pub dashboard: tabs::DashboardTab,
@@ -137,6 +138,7 @@ pub struct App {
     pub help_context: HelpContext,
     pub pending_action: Option<PendingAction>,
     pub needs_redraw: bool,
+    pub tab_scroll_offset: u16,
 }
 
 impl App {
@@ -145,6 +147,7 @@ impl App {
             current_tab: Tab::Recon,
             should_quit: false,
             mode: InputMode::Normal,
+            tab_scroll_offset: 0,
             recon: tabs::ReconTab::new(),
             load: tabs::LoadTab::new(),
             scan_ports: tabs::ScanPortsTab::new(),
@@ -189,6 +192,7 @@ impl App {
             show_http_options: false,
             show_search: false,
             search_query: String::new(),
+            global_search: Some(crate::tui::search::GlobalSearch::new()),
             search_backup: None,
             pending_key: None,
             export_format: OutputFormat::Json,

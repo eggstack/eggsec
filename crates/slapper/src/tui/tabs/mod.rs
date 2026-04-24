@@ -13,7 +13,7 @@ pub mod nse;
 pub mod oauth;
 pub mod packet;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-mod plugin;
+pub mod plugin;
 pub mod proxy;
 pub mod recon;
 mod report;

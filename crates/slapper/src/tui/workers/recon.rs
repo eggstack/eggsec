@@ -109,22 +109,18 @@ pub async fn run_recon(
     let base_delay_secs = 2u64;
 
     for attempt in 1..=max_retries {
-        let stage = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-        let stage_clone = stage.clone();
+        let stage = std::sync::Arc::new(parking_lot::Mutex::new(String::new()));
+        let (stage_tx, mut stage_rx) = tokio::sync::watch::channel("initial".to_string());
         let ptx = progress_tx.clone();
 
         let progress_handle = tokio::spawn(async move {
-            let mut last_stage = String::new();
+            let mut last_stage = stage_rx.borrow().clone();
             let stages = [
                 "resolving", "recon (parallel)", "takeover", "cve", "done",
             ];
             let total_stages = stages.len() as u64;
-            loop {
-                let current = stage_clone.lock().map(|s| s.clone()).unwrap_or_default();
-                if current.is_empty() && last_stage.is_empty() {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                    continue;
-                }
+            while stage_rx.changed().await.is_ok() {
+                let current = stage_rx.borrow().clone();
                 if current != last_stage {
                     last_stage.clone_from(&current);
                     let completed = stages.iter().take_while(|&&s| {
@@ -136,7 +132,20 @@ pub async fn run_recon(
                 if current.is_empty() && !last_stage.is_empty() {
                     break;
                 }
-                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            }
+        });
+
+        let watch_sender = stage_tx.clone();
+        let stage_for_thread = stage.clone();
+        std::thread::spawn(move || {
+            let mut last = String::new();
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                let current = stage_for_thread.lock().clone();
+                if current != last {
+                    last = current.clone();
+                    let _ = watch_sender.send(current);
+                }
             }
         });
 

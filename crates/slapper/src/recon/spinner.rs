@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use parking_lot::Mutex;
 
 pub struct Spinner {
     chars: &'static [&'static str],
@@ -20,10 +21,9 @@ impl Spinner {
 
     pub fn tick(&mut self) {
         if !self.stop.load(Ordering::Relaxed) {
-            if let Ok(stage) = self.stage.lock() {
-                eprint!("\r{} {}", self.chars[self.idx], stage);
-                self.idx = (self.idx + 1) % self.chars.len();
-            }
+            let stage = self.stage.lock();
+            eprint!("\r{} {}", self.chars[self.idx], stage);
+            self.idx = (self.idx + 1) % self.chars.len();
         }
     }
 

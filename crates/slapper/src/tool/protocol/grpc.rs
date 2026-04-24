@@ -24,7 +24,7 @@ impl GrpcService {
 
     pub fn validate_api_key(&self, key: &str) -> Result<(), String> {
         if let Some(ref expected) = self.api_key {
-            if expected.as_bytes().ct_eq(key.as_bytes()).unwrap_u8() != 1 {
+            if !bool::from(expected.as_bytes().ct_eq(key.as_bytes())) {
                 return Err("Invalid or missing API key".to_string());
             }
         }

@@ -504,7 +504,7 @@ pub async fn scan_ports(
     let addr = resolve_host(host)?;
     let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(AtomicU64::new(0));
-    let results_count = Arc::new(tokio::sync::Mutex::new(0usize));
+    let results_count = Arc::new(AtomicU64::new(0));
     let total_ports = config.ports.len() as u64;
 
     let progress = if config.tui_mode {
@@ -541,15 +541,10 @@ pub async fn scan_ports(
             match result {
                 Ok(_) => {
                     let should_insert = match config.max_results {
-                        Some(limit) => {
-                            let count = *results_count.lock().await;
-                            if count >= limit {
-                                false
-                            } else {
-                                *results_count.lock().await += 1;
-                                true
-                            }
-                        }
+Some(limit) => {
+                    let old = results_count.fetch_add(1, Ordering::Relaxed);
+                    old < limit as u64
+                }
                         None => true,
                     };
                     if should_insert {
@@ -562,15 +557,10 @@ pub async fn scan_ports(
                 }
                 Err(_) => {
                     let should_insert = match config.max_results {
-                        Some(limit) => {
-                            let count = *results_count.lock().await;
-                            if count >= limit {
-                                false
-                            } else {
-                                *results_count.lock().await += 1;
-                                true
-                            }
-                        }
+Some(limit) => {
+                    let old = results_count.fetch_add(1, Ordering::Relaxed);
+                    old < limit as u64
+                }
                         None => true,
                     };
                     if should_insert {

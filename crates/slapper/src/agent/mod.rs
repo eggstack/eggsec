@@ -24,6 +24,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use tokio::sync::RwLock;
 use tokio::time::interval;
+use tokio_util::sync::CancellationToken;
 
 use crate::output::schedule::CronScheduler;
 use crate::tool::{
@@ -137,12 +138,24 @@ impl Agent {
 
         tracing::info!("Starting autonomous security agent");
 
+        let token = CancellationToken::new();
+        let token_clone = token.clone();
+
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c().await.ok();
+            tracing::info!("Received shutdown signal");
+            token_clone.cancel();
+        });
+
         let mut poll_interval = interval(Duration::from_secs(self.config.poll_interval_secs));
 
         loop {
             tokio::select! {
+                _ = token.cancelled() => break,
                 _ = poll_interval.tick() => {
-                    if self.process_scheduled_scans().await.is_ok() {
+                    if let Err(e) = self.process_scheduled_scans().await {
+                        tracing::warn!(error = %e, "Scheduled scan failed");
+                    } else {
                         tracing::debug!("Processed scheduled scans");
                     }
                 }
@@ -150,6 +163,8 @@ impl Agent {
 
             let running = self.running.read().await;
             if !*running {
+                drop(running);
+                token.cancel();
                 break;
             }
         }
@@ -195,7 +210,7 @@ impl Agent {
 
                         let findings = self.process_findings(response);
                         if !findings.is_empty() {
-                            self.handle_findings(&config.target, findings).await;
+                            self.handle_findings(&config.target, findings).await?;
                         }
                     }
 
@@ -264,35 +279,99 @@ impl Agent {
         response.findings.clone()
     }
 
-    async fn handle_findings(&mut self, target: &str, findings: Vec<crate::tool::response::Finding>) {
+    async fn handle_findings(&mut self, target: &str, findings: Vec<crate::tool::response::Finding>) -> Result<()> {
+        self.process_findings_by_severity(target, &findings).await
+    }
+
+    async fn process_findings_by_severity(
+        &mut self,
+        target: &str,
+        findings: &[crate::tool::response::Finding],
+    ) -> Result<()> {
+        use crate::tool::response::ResponseSeverity;
+
         let critical_findings: Vec<_> = findings.iter()
-            .filter(|f| matches!(f.severity, crate::tool::response::ResponseSeverity::Critical))
+            .filter(|f| matches!(f.severity, ResponseSeverity::Critical))
+            .collect();
+
+        let high_findings: Vec<_> = findings.iter()
+            .filter(|f| matches!(f.severity, ResponseSeverity::High))
+            .collect();
+
+        let medium_findings: Vec<_> = findings.iter()
+            .filter(|f| matches!(f.severity, ResponseSeverity::Medium))
+            .collect();
+
+        let low_findings: Vec<_> = findings.iter()
+            .filter(|f| matches!(f.severity, ResponseSeverity::Low))
+            .collect();
+
+        let info_findings: Vec<_> = findings.iter()
+            .filter(|f| matches!(f.severity, ResponseSeverity::Info))
             .collect();
 
         if !critical_findings.is_empty() {
-            let critical_count = critical_findings.len();
-            let alert_severity = critical_findings.first()
-                .map(|f| f.severity.to_agent_severity())
-                .unwrap_or(crate::types::Severity::Critical);
+            let count = critical_findings.len();
+            let alert_severity = crate::types::Severity::Critical;
             let alert = Alert {
                 severity: alert_severity,
-                title: format!("{} critical findings on {}", critical_count, target),
-                message: format!(
-                    "Detected {} critical severity findings during scan of {}",
-                    critical_count, target
-                ),
+                title: format!("{} critical findings on {}", count, target),
+                message: format!("Detected {} critical severity findings during scan of {}", count, target),
                 target: target.to_string(),
                 finding_ids: findings.iter().map(|f| f.id.clone()).collect(),
                 recommended_actions: vec![
-                    "Review findings immediately".to_string(),
-                    "Consider initiating emergency response".to_string(),
+                    "Review immediately".to_string(),
+                    "Consider emergency response".to_string(),
                 ],
             };
-
-            if let Err(e) = self.alert_router.send(&alert).await {
-                tracing::error!("Failed to send alert: {}", e);
-            }
+            self.alert_router.send(&alert).await?;
         }
+
+        if !high_findings.is_empty() {
+            let count = high_findings.len();
+            let alert = Alert {
+                severity: crate::types::Severity::High,
+                title: format!("{} high-severity findings on {}", count, target),
+                message: format!("Detected {} high-severity findings during scan of {}", count, target),
+                target: target.to_string(),
+                finding_ids: high_findings.iter().map(|f| f.id.clone()).collect(),
+                recommended_actions: vec!["Review within 24 hours".to_string()],
+            };
+            self.alert_router.send(&alert).await?;
+        }
+
+        if !medium_findings.is_empty() {
+            let count = medium_findings.len();
+            let alert = Alert {
+                severity: crate::types::Severity::Medium,
+                title: format!("{} medium-severity findings on {}", count, target),
+                message: format!("Detected {} medium-severity findings during scan of {}", count, target),
+                target: target.to_string(),
+                finding_ids: medium_findings.iter().map(|f| f.id.clone()).collect(),
+                recommended_actions: vec!["Review in weekly triage".to_string()],
+            };
+            self.alert_router.send(&alert).await?;
+        }
+
+        if !low_findings.is_empty() {
+            let count = low_findings.len();
+            let alert = Alert {
+                severity: crate::types::Severity::Low,
+                title: format!("{} low-severity findings on {}", count, target),
+                message: format!("Detected {} low-severity findings during scan of {}", count, target),
+                target: target.to_string(),
+                finding_ids: low_findings.iter().map(|f| f.id.clone()).collect(),
+                recommended_actions: vec!["Add to remediation backlog".to_string()],
+            };
+            self.alert_router.send(&alert).await?;
+        }
+
+        if !info_findings.is_empty() {
+            let count = info_findings.len();
+            tracing::info!("{} info-level findings on {} - no alert triggered", count, target);
+        }
+
+        Ok(())
     }
 
     pub async fn trigger_scan(&mut self, target: &str, scan_type: &str) -> Result<ToolResponse> {

@@ -2,13 +2,18 @@ use anyhow::Result;
 use async_trait::async_trait;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
+use pyo3::IntoPyObjectExt;
 use std::path::Path;
 use std::sync::LazyLock;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use regex::Regex;
 
-use super::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult};
+use super::validation::validate_plugin_path;
+use super::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult, HealthStatus};
+
+#[cfg(feature = "python-plugins")]
+use tokio::time::timeout;
 
 const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
 const MAX_JSON_SIZE_BYTES: usize = 100_000;
@@ -23,6 +28,16 @@ static SUSPICIOUS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r"\bfork\b").unwrap(),
         Regex::new(r"__import__").unwrap(),
         Regex::new(r"\bopen\(").unwrap(),
+        Regex::new(r"pty\.spawn").unwrap(),
+        Regex::new(r"os\.popen").unwrap(),
+        Regex::new(r"multiprocessing\.Process").unwrap(),
+        Regex::new(r"ctypes").unwrap(),
+        Regex::new(r"importlib").unwrap(),
+        Regex::new(r"getattr\(").unwrap(),
+        Regex::new(r"chr\(").unwrap(),
+        Regex::new(r"\\x[0-9a-fA-F]{2}").unwrap(),
+        Regex::new(r"\\u[0-9a-fA-F]{4}").unwrap(),
+        Regex::new(r"\\[0-7]{3,}").unwrap(),
     ]
 });
 
@@ -172,6 +187,11 @@ impl PythonPluginManager {
                 let file_path = entry.path();
 
                 if file_path.extension().map(|e| e == "py").unwrap_or(false) {
+                    if let Err(e) = validate_plugin_path(plugin_dir, &file_path) {
+                        tracing::warn!(path = %file_path.display(), error = %e, "Path validation failed");
+                        continue;
+                    }
+
                     if let Some(stem) = file_path.file_stem() {
                         if let Some(module_name) = stem.to_str() {
                             let plugin_content = match std::fs::read_to_string(&file_path) {
@@ -272,23 +292,7 @@ impl PythonPluginManager {
         let config_dict = PyDict::new(py);
         if let Some(obj) = config.as_object() {
             for (k, v) in obj {
-                let py_val: Py<PyAny> = match v {
-                    serde_json::Value::String(s) => s.clone().into_py(py),
-                    serde_json::Value::Number(n) => {
-                        if let Some(i) = n.as_i64() {
-                            i.into_py(py)
-                        } else if let Some(f) = n.as_f64() {
-                            f.into_py(py)
-                        } else {
-                            n.to_string().into_py(py)
-                        }
-                    }
-                    serde_json::Value::Bool(b) => (*b).into_py(py),
-                    serde_json::Value::Null => pyo3::PyNone::new(py).into_py_any(py)?,
-                    serde_json::Value::Array(arr) => arr.into_py(py),
-                    serde_json::Value::Object(_) => v.to_string().into_py(py),
-                };
-                config_dict.set_item(k, py_val)?;
+                config_dict.set_item(k, json_value_to_py(py, v)?)?;
             }
         }
 
@@ -448,6 +452,98 @@ impl Default for PythonPluginManager {
     }
 }
 
+impl PythonPluginManager {
+    fn run_impl(&self, target: &str, config: &PluginConfig) -> Result<PluginResult> {
+        let start = Instant::now();
+        let checks = self.get_checks();
+        let mut findings = Vec::new();
+        let mut errors = Vec::new();
+
+        let config_json = serde_json::Value::Object(
+            config.config.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        );
+
+        for check in &checks {
+            match self.run_check_direct(&check.name, target, &config_json) {
+                Ok(json_results) => {
+                    for v in json_results {
+                        if let Some(title) = v.get("title").and_then(|t| t.as_str()) {
+                            findings.push(super::PluginFinding {
+                                title: title.to_string(),
+                                severity: v
+                                    .get("severity")
+                                    .and_then(|s| s.as_str())
+                                    .unwrap_or("info")
+                                    .to_string(),
+                                description: v
+                                    .get("description")
+                                    .and_then(|d| d.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                location: v
+                                    .get("location")
+                                    .and_then(|l| l.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                evidence: v
+                                    .get("evidence")
+                                    .and_then(|e| e.as_str())
+                                    .map(String::from),
+                                cve_ids: v
+                                    .get("cve_ids")
+                                    .and_then(|c| c.as_array())
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|id| id.as_str().map(String::from))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default(),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    errors.push(format!("Check '{}' failed: {}", check.name, e));
+                }
+            }
+        }
+
+        Ok(PluginResult {
+            plugin_name: self.info.name.clone(),
+            success: errors.is_empty(),
+            findings,
+            errors,
+            execution_time_ms: start.elapsed().as_millis() as u64,
+        })
+    }
+}
+
+fn json_value_to_py(py: Python<'_>, v: &serde_json::Value) -> PyResult<Py<PyAny>> {
+    let result = match v {
+        serde_json::Value::String(s) => s.clone().into_bound_py_any(py)?,
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                i.into_bound_py_any(py)?
+            } else if let Some(f) = n.as_f64() {
+                f.into_bound_py_any(py)?
+            } else {
+                n.to_string().into_bound_py_any(py)?
+            }
+        }
+        serde_json::Value::Bool(b) => (*b).into_bound_py_any(py)?,
+        serde_json::Value::Null => py.None().into_bound_py_any(py)?,
+        serde_json::Value::Array(arr) => {
+            let items: Vec<Py<PyAny>> = arr.iter()
+                .map(|item| json_value_to_py(py, item))
+                .collect::<Result<Vec<_>, _>>()?;
+            let list = PyList::new(py, &items)?;
+            list.into_any()
+        }
+        serde_json::Value::Object(_) => v.to_string().into_bound_py_any(py)?,
+    };
+    Ok(result.unbind())
+}
+
 #[async_trait]
 impl Plugin for PythonPluginManager {
     fn info(&self) -> &PluginInfo {
@@ -518,66 +614,43 @@ impl Plugin for PythonPluginManager {
     }
 
     async fn run(&self, target: &str, config: &PluginConfig) -> Result<PluginResult> {
-        let start = Instant::now();
-        let checks = self.get_checks();
-        let mut findings = Vec::new();
-        let mut errors = Vec::new();
+        let timeout_duration = Duration::from_secs(config.timeout_secs);
 
-        let config_json = serde_json::Value::Object(
-            config.config.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-        );
+        let result = timeout(timeout_duration, async {
+            self.run_impl(target, config)
+        }).await;
 
-        for check in &checks {
-            match self.run_check_direct(&check.name, target, &config_json) {
-                Ok(json_results) => {
-                    for v in json_results {
-                        if let Some(title) = v.get("title").and_then(|t| t.as_str()) {
-                            findings.push(super::PluginFinding {
-                                title: title.to_string(),
-                                severity: v
-                                    .get("severity")
-                                    .and_then(|s| s.as_str())
-                                    .unwrap_or("info")
-                                    .to_string(),
-                                description: v
-                                    .get("description")
-                                    .and_then(|d| d.as_str())
-                                    .unwrap_or("")
-                                    .to_string(),
-                                location: v
-                                    .get("location")
-                                    .and_then(|l| l.as_str())
-                                    .unwrap_or("")
-                                    .to_string(),
-                                evidence: v
-                                    .get("evidence")
-                                    .and_then(|e| e.as_str())
-                                    .map(String::from),
-                                cve_ids: v
-                                    .get("cve_ids")
-                                    .and_then(|c| c.as_array())
-                                    .map(|arr| {
-                                        arr.iter()
-                                            .filter_map(|id| id.as_str().map(String::from))
-                                            .collect()
-                                    })
-                                    .unwrap_or_default(),
-                            });
-                        }
-                    }
-                }
-                Err(e) => {
-                    errors.push(format!("Check '{}' failed: {}", check.name, e));
-                }
+        match result {
+            Ok(inner_result) => inner_result,
+            Err(_) => {
+                anyhow::bail!(
+                    "Plugin execution timed out after {} seconds",
+                    config.timeout_secs
+                )
             }
         }
+    }
 
-        Ok(PluginResult {
-            plugin_name: self.info.name.clone(),
-            success: errors.is_empty(),
-            findings,
-            errors,
-            execution_time_ms: start.elapsed().as_millis() as u64,
-        })
+    fn init(&self) -> Result<()> {
+        tracing::info!("Initializing Python plugin manager");
+        Ok(())
+    }
+
+    fn shutdown(&self) -> Result<()> {
+        tracing::info!("Shutting down Python plugin manager");
+        Ok(())
+    }
+
+    fn health_check(&self) -> Result<HealthStatus> {
+        let plugin_count = self.plugins.len();
+        if plugin_count == 0 {
+            Ok(HealthStatus::Degraded)
+        } else {
+            Ok(HealthStatus::Healthy)
+        }
+    }
+
+    fn priority(&self) -> u32 {
+        50
     }
 }

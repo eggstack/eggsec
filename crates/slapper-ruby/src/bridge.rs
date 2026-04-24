@@ -4,10 +4,12 @@ use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 
 use super::{RubyPlugin, RubyPluginResult};
 
 const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
+const DEFAULT_TIMEOUT_SECS: u64 = 300;
 
 #[cfg(feature = "ruby-plugins")]
 static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
@@ -27,6 +29,9 @@ static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| 
         regex::Regex::new(r"UDPSocket").unwrap(),
         regex::Regex::new(r"Open3\.").unwrap(),
         regex::Regex::new(r"Shellwords\.escape").unwrap(),
+        regex::Regex::new(r"Kernel\.exec").unwrap(),
+        regex::Regex::new(r"\bopen\b").unwrap(),
+        regex::Regex::new(r"\beval\b").unwrap(),
     ]
 });
 
@@ -141,7 +146,7 @@ impl RubyPluginClient {
             .map_err(|_| anyhow!("Ruby VM thread did not respond"))?
     }
 
-    pub fn run_plugin(&self, plugin: &RubyPlugin, target: &str) -> Result<RubyPluginResult> {
+    pub fn run_plugin(&self, plugin: &RubyPlugin, target: &str, timeout_secs: u64) -> Result<RubyPluginResult> {
         let (tx, rx) = mpsc::channel();
         self.tx
             .send(RubyRequest::RunPlugin {
@@ -150,12 +155,26 @@ impl RubyPluginClient {
                 resp: tx,
             })
             .map_err(|_| anyhow!("Ruby VM thread has shut down"))?;
-        rx.recv()
-            .map_err(|_| anyhow!("Ruby VM thread did not respond"))?
+        match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+            Ok(result) => result,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                anyhow::bail!(
+                    "Plugin execution timed out after {} seconds",
+                    timeout_secs
+                )
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                anyhow::bail!("Ruby VM thread has shut down")
+            }
+        }
     }
 
     pub fn close(&self) {
         drop(&self.tx);
+    }
+
+    pub fn get_timeout(&self) -> u64 {
+        DEFAULT_TIMEOUT_SECS
     }
 }
 

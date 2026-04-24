@@ -23,6 +23,7 @@ exclude = [
 
 [dependencies]
 tokio = { workspace = true }
+tokio-util = "0.7"
 tokio-rustls = "0.26"
 rustls = { version = "0.23", features = ["ring"] }
 pem = "3"
@@ -37,6 +38,7 @@ serde_yaml_neo = "0.11"
 toml = "0.8"
 anyhow.workspace = true
 thiserror.workspace = true
+unicode-normalization = "0.1"
 hdrhistogram = "7"
 indicatif = "0.17"
 futures = "0.3"
@@ -44,6 +46,7 @@ async-channel = "2"
 async-stream = { version = "0.3", optional = true }
 parking_lot.workspace = true
 chrono.workspace = true
+chrono-tz.workspace = true
 aho-corasick = "1"
 flate2.workspace = true
 rand.workspace = true

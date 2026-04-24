@@ -7,7 +7,7 @@ use rcgen::{
     BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose,
     KeyPair, SanType,
 };
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::RwLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

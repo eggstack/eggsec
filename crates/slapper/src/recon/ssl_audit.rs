@@ -141,6 +141,10 @@ impl SslAuditor {
     }
 
     async fn probe_protocol(&self, url: &str, protocol: &str) -> bool {
+        tracing::warn!(
+            "TLS certificate verification disabled for protocol probe. This is insecure and should \
+             only be used in isolated testing environments."
+        );
         let client = reqwest::Client::builder()
             .timeout(self.timeout)
             .danger_accept_invalid_certs(true)

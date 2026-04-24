@@ -135,3 +135,40 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
 
     Ok(())
 }
+
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+pub fn discover_all_plugins() -> Vec<crate::tui::tabs::plugin::PluginInfo> {
+    use crate::tui::tabs::plugin::PluginInfo;
+
+    let plugin_dirs = slapper_plugin::PluginManager::default_plugin_dirs(None);
+    let mut all_plugins = Vec::new();
+
+    #[cfg(feature = "python-plugins")]
+    {
+        let mut manager = slapper_plugin::PluginManager::new();
+        let discovered = manager.discover_plugins();
+        for info in discovered {
+            all_plugins.push(PluginInfo::from(info));
+        }
+    }
+
+    #[cfg(feature = "ruby-plugins")]
+    {
+        if let Ok(loader) = crate::ruby::PluginLoader::new(plugin_dirs) {
+            if let Ok(discovered) = loader.discover_plugins() {
+                for plugin in discovered {
+                    all_plugins.push(PluginInfo {
+                        name: plugin.name,
+                        version: plugin.version,
+                        description: plugin.description.unwrap_or_default(),
+                        author: plugin.author.unwrap_or_default(),
+                        tags: vec![],
+                        language: "Ruby".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    all_plugins
+}

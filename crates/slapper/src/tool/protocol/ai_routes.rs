@@ -37,7 +37,7 @@ fn require_auth(state: &Arc<AiState>, headers: &HeaderMap) -> Result<(), &'stati
             .and_then(|v| v.to_str().ok());
 
         match auth {
-            Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
+            Some(v) if bool::from(key.as_bytes().ct_eq(v.as_bytes())) => Ok(()),
             _ => Err("Invalid or missing API key"),
         }
     } else {
@@ -330,7 +330,7 @@ async fn circuit_breaker_status(
     require_auth(&state, &headers)?;
 
     if let Some(ref client) = state.ai_client {
-        let cb_state = client.circuit_breaker_state().await;
+        let cb_state = client.circuit_breaker_state();
         let (state_str, description) = match cb_state {
             crate::utils::circuit_breaker::CircuitState::Closed => ("closed", "Circuit breaker is closed. Requests are allowed."),
             crate::utils::circuit_breaker::CircuitState::Open => ("open", "Circuit breaker is open. Requests are being rejected due to failures."),

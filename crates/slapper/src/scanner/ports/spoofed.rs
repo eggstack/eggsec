@@ -45,13 +45,13 @@ fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
     }
 }
 
-static PACKET_TRACE_FILE: std::sync::OnceLock<std::sync::Mutex<std::fs::File>> =
+static PACKET_TRACE_FILE: std::sync::OnceLock<parking_lot::Mutex<std::fs::File>> =
     std::sync::OnceLock::new();
 
 #[cfg(all(feature = "stress-testing", unix))]
 fn log_packet_trace(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16, scan_type: &str) {
     if let Some(file) = PACKET_TRACE_FILE.get() {
-        if let Ok(mut guard) = file.lock() {
+        let mut guard = file.lock();
             use std::io::Write;
             let timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -62,7 +62,6 @@ fn log_packet_trace(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16, sc
                 "{},{},{},{},{},{}",
                 timestamp, src_ip, src_port, dst_ip, dst_port, scan_type
             );
-        }
     }
 }
 
@@ -82,7 +81,7 @@ pub fn init_packet_trace(path: &str) -> Result<()> {
         let _ = writeln!(f, "timestamp,src_ip,src_port,dst_ip,dst_port,scan_type");
     }
 
-    PACKET_TRACE_FILE.set(std::sync::Mutex::new(file))
+    PACKET_TRACE_FILE.set(parking_lot::Mutex::new(file))
         .map_err(|_| SlapperError::Runtime("Packet trace file already initialized".to_string()))?;
     Ok(())
 }

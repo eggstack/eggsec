@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_extract_asn_generic_pattern() {
-        let (asn, org) = extract_asn_from_hostname("as15169.google.com");
+        let (asn, _org) = extract_asn_from_hostname("as15169.google.com");
         assert_eq!(asn, Some("AS15169".to_string()));
     }
 

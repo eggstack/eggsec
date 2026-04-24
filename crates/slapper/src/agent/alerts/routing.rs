@@ -235,11 +235,21 @@ impl AlertRouter {
     }
 
     fn make_dedup_key(&self, alert: &Alert) -> String {
+        use std::hash::{Hash, Hasher};
+        use std::collections::hash_map::DefaultHasher;
+        let mut hasher = DefaultHasher::new();
+        let mut sorted_ids = alert.finding_ids.clone();
+        sorted_ids.sort();
+        for id in &sorted_ids {
+            id.hash(&mut hasher);
+        }
+        let finding_hash = hasher.finish();
         format!(
-            "{}:{}:{}",
+            "{}:{}:{}:{:016x}",
             alert.target,
             alert.severity.as_str(),
-            alert.title
+            alert.title,
+            finding_hash
         )
     }
 

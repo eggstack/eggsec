@@ -276,7 +276,7 @@ fn require_auth(api_key: &Option<String>, headers: &HeaderMap) -> Result<(), &'s
             .and_then(|v| v.to_str().ok());
 
         match auth {
-            Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
+            Some(v) if bool::from(key.as_bytes().ct_eq(v.as_bytes())) => Ok(()),
             _ => Err("Invalid or missing API key"),
         }
     } else {

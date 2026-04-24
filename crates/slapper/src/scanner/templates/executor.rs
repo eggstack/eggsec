@@ -18,13 +18,11 @@ pub struct TemplateExecutor {
     timeout: Duration,
 }
 
+use crate::utils::create_insecure_http_client;
+
 impl TemplateExecutor {
     pub fn new(loader: TemplateLoader) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .danger_accept_invalid_certs(true)
-            .build()
-            .map_err(|e| SlapperError::Config(format!("Failed to create HTTP client: {}", e)))?;
+        let client = create_insecure_http_client(30)?;
 
         Ok(Self {
             client,

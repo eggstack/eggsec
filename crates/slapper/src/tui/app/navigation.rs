@@ -2,17 +2,35 @@ impl super::App {
     pub(super) fn next_tab(&mut self) {
         self.clear_search_on_tab_switch();
         self.current_tab = self.current_tab.next();
+        self.adjust_tab_scroll();
     }
 
     pub(super) fn prev_tab(&mut self) {
         self.clear_search_on_tab_switch();
         self.current_tab = self.current_tab.prev();
+        self.adjust_tab_scroll();
     }
 
     pub(super) fn select_tab(&mut self, index: usize) {
         self.clear_search_on_tab_switch();
         if let Some(tab) = super::tabs::Tab::from_index(index) {
             self.current_tab = tab;
+            self.adjust_tab_scroll();
+        }
+    }
+
+    fn adjust_tab_scroll(&mut self) {
+        use super::tabs::Tab;
+        let titles: Vec<&str> = Tab::all().iter().map(|t| t.title()).collect();
+        let tab_index = titles.iter().position(|t| *t == self.current_tab.title());
+        if let Some(idx) = tab_index {
+            let visible_count = 10usize;
+            let current_start = self.tab_scroll_offset as usize;
+            if idx < current_start {
+                self.tab_scroll_offset = idx as u16;
+            } else if idx >= current_start + visible_count {
+                self.tab_scroll_offset = (idx.saturating_sub(visible_count) + 1) as u16;
+            }
         }
     }
 

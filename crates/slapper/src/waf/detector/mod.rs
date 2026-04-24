@@ -10,14 +10,15 @@ pub use types::{WafDetectionResult, ResponseDiff};
 
 use crate::error::Result;
 use crate::utils::create_insecure_client_with_options;
+use rustc_hash::FxHashMap;
 
 use super::waf_patterns::{get_waf_signatures, WafSignature};
 use types::WafSignatureLower;
 
 pub struct WafDetector {
     client: reqwest::Client,
-    signatures: std::collections::HashMap<String, WafSignature>,
-    signatures_lower: std::collections::HashMap<String, WafSignatureLower>,
+    signatures: FxHashMap<String, WafSignature>,
+    signatures_lower: FxHashMap<String, WafSignatureLower>,
 }
 
 impl WafDetector {

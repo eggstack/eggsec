@@ -75,16 +75,11 @@ pub struct CmsScanner {
     http_client: reqwest::Client,
 }
 
+use crate::utils::create_insecure_http_client;
+
 impl CmsScanner {
     pub fn new() -> Result<Self> {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .danger_accept_invalid_certs(true)
-            .build()
-            .map_err(|e| crate::error::SlapperError::Config(format!(
-                "Failed to create HTTP client: {}",
-                e
-            )))?;
+        let client = create_insecure_http_client(30)?;
 
         Ok(Self {
             http_client: client,

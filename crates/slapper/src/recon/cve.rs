@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_cve_mapping_totals() {
-        let mut mapping = CveMapping {
+        let mapping = CveMapping {
             tech_stack: TechStack::default(),
             vulnerabilities: vec![
                 VulnerabilityInfo {

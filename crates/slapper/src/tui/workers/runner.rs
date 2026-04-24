@@ -218,6 +218,8 @@ pub enum TaskResult {
     },
     Workflow(crate::workflow::WorkflowReport),
     Vuln(crate::vuln::VulnAssessment),
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+    PluginsLoaded(Vec<crate::tui::tabs::plugin::PluginInfo>),
     Error(String),
 }
 

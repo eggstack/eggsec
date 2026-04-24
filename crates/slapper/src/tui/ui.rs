@@ -59,6 +59,14 @@ pub fn draw(f: &mut Frame, app: &App) {
         draw_search_popup(f, app);
     }
 
+    if app.show_search && !app.search_query.is_empty() {
+        if let Some(ref search) = app.global_search {
+            if !search.is_empty() {
+                crate::tui::search::draw_search_results(f, app);
+            }
+        }
+    }
+
     if app.show_http_options {
         draw_http_options_popup(f, app);
     }
@@ -256,11 +264,35 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
     use crate::tui::tabs::Tab;
     use ratatui::text::Line;
 
-    let titles: Vec<Line> = Tab::all().iter().map(|t| Line::from(t.title())).collect();
+    use std::sync::LazyLock;
+    static TAB_TITLES: LazyLock<Vec<Line>> = LazyLock::new(|| {
+        Tab::all().iter().map(|t| Line::from(t.title())).collect()
+    });
 
-    let tabs = Tabs::new(titles)
-        .block(Block::default().borders(Borders::ALL).title("Slapper"))
-        .select(app.current_tab as usize)
+    let visible_width = (area.width as usize).saturating_sub(2);
+    let min_tab_width = 8_usize;
+    let max_visible = (visible_width / min_tab_width).max(1).min(TAB_TITLES.len());
+
+    let start_idx = (app.tab_scroll_offset as usize).min(TAB_TITLES.len().saturating_sub(max_visible));
+    let visible_titles: Vec<Line> = TAB_TITLES[start_idx..]
+        .iter()
+        .take(max_visible)
+        .cloned()
+        .collect();
+
+    let adjusted_select = (app.current_tab as usize).saturating_sub(start_idx).min(max_visible.saturating_sub(1));
+
+    let has_prev = start_idx > 0;
+    let has_next = start_idx + max_visible < TAB_TITLES.len();
+    let title_suffix = if has_prev || has_next {
+        format!(" [{}/{}]", start_idx + 1, TAB_TITLES.len())
+    } else {
+        String::new()
+    };
+
+    let tabs = Tabs::new(visible_titles)
+        .block(Block::default().borders(Borders::ALL).title(format!("Slapper{}", title_suffix)))
+        .select(adjusted_select)
         .style(Style::default().fg(Color::Cyan))
         .highlight_style(
             Style::default()

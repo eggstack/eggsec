@@ -203,6 +203,21 @@ where
                     (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
                         app.toggle_command_palette();
                     }
+                    (KeyModifiers::CONTROL, KeyCode::Char('f')) => {
+                        if let Some(ref mut search) = app.global_search {
+                            let data = vec![
+                                ("Recon", app.recon.target().to_string()),
+                                ("Fingerprint", app.fingerprint.target().to_string()),
+                                ("Fuzz", app.fuzz.target().to_string()),
+                                ("WAF", app.waf.target().to_string()),
+                                ("Scan", app.scan.target().to_string()),
+                                ("Scan Endpoints", app.scan_endpoints.target().to_string()),
+                                ("Scan Ports", app.scan_ports.target().to_string()),
+                                ("Stress", app.stress.target().to_string()),
+                            ];
+                            search.search_from_strings(&app.search_query, &data);
+                        }
+                    }
                     _ if app
                         .get_command_palette()
                         .map(&|cp: &CommandPalette| cp.visible)

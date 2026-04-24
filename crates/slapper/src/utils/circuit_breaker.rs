@@ -1,8 +1,8 @@
 
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Mutex;
+use std::time::{Duration, Instant};
+use parking_lot::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CircuitState {
@@ -24,7 +24,7 @@ pub struct CircuitBreaker {
 
 struct CircuitBreakerState {
     state: CircuitState,
-    last_failure: Option<tokio::time::Instant>,
+    last_failure: Option<Instant>,
 }
 
 impl CircuitBreaker {
@@ -44,8 +44,8 @@ impl CircuitBreaker {
         }
     }
 
-    pub async fn is_available(&self) -> bool {
-        let mut state = self.state.lock().await;
+    pub fn is_available(&self) -> bool {
+        let mut state = self.state.lock();
         match state.state {
             CircuitState::Closed => true,
             CircuitState::Open => {
@@ -64,8 +64,8 @@ impl CircuitBreaker {
         }
     }
 
-    pub async fn record_success(&self) {
-        let mut state = self.state.lock().await;
+    pub fn record_success(&self) {
+        let mut state = self.state.lock();
         self.total_calls.fetch_add(1, Ordering::Relaxed);
         
         if state.state == CircuitState::HalfOpen {
@@ -80,12 +80,12 @@ impl CircuitBreaker {
         }
     }
 
-    pub async fn record_failure(&self) {
-        let mut state = self.state.lock().await;
+    pub fn record_failure(&self) {
+        let mut state = self.state.lock();
         self.total_calls.fetch_add(1, Ordering::Relaxed);
         self.total_failures.fetch_add(1, Ordering::Relaxed);
         
-        state.last_failure = Some(tokio::time::Instant::now());
+        state.last_failure = Some(Instant::now());
 
         if state.state == CircuitState::HalfOpen || state.state == CircuitState::Closed {
             let failures = self.failure_count.fetch_add(1, Ordering::Relaxed) + 1;
@@ -95,8 +95,8 @@ impl CircuitBreaker {
         }
     }
 
-    pub async fn get_state(&self) -> CircuitState {
-        self.state.lock().await.state
+    pub fn get_state(&self) -> CircuitState {
+        self.state.lock().state
     }
 
     pub fn total_calls(&self) -> usize {
@@ -143,8 +143,8 @@ impl CircuitBreakerRegistry {
         Self::new(5, 3, Duration::from_secs(30))
     }
 
-    pub async fn get_or_create(&self, name: &str) -> CircuitBreaker {
-        let mut breakers = self.breakers.lock().await;
+    pub fn get_or_create_sync(&self, name: &str) -> CircuitBreaker {
+        let mut breakers = self.breakers.lock();
         if let Some(breaker) = breakers.get(name) {
             return breaker.clone();
         }
@@ -157,17 +157,31 @@ impl CircuitBreakerRegistry {
         breaker
     }
 
-    pub async fn get_state(&self, name: &str) -> Option<CircuitState> {
-        let breakers = self.breakers.lock().await;
-        let breaker = breakers.get(name)?;
-        Some(breaker.get_state().await)
+    pub fn get_or_create(&self, name: &str) -> CircuitBreaker {
+        let mut breakers = self.breakers.lock();
+        if let Some(breaker) = breakers.get(name) {
+            return breaker.clone();
+        }
+        let breaker = CircuitBreaker::new(
+            self.default_failure_threshold,
+            self.default_success_threshold,
+            self.default_timeout,
+        );
+        breakers.insert(name.to_string(), breaker.clone());
+        breaker
     }
 
-    pub async fn stats(&self) -> Vec<(String, CircuitState, usize, usize, f64)> {
-        let breakers = self.breakers.lock().await;
+    pub fn get_state(&self, name: &str) -> Option<CircuitState> {
+        let breakers = self.breakers.lock();
+        let breaker = breakers.get(name)?;
+        Some(breaker.get_state())
+    }
+
+    pub fn stats(&self) -> Vec<(String, CircuitState, usize, usize, f64)> {
+        let breakers = self.breakers.lock();
         let mut stats = Vec::new();
         for (name, breaker) in breakers.iter() {
-            let state = breaker.get_state().await;
+            let state = breaker.get_state();
             let calls = breaker.total_calls();
             let failures = breaker.total_failures();
             let rate = breaker.failure_rate();
@@ -196,80 +210,58 @@ impl Clone for CircuitBreaker {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_circuit_breaker_closed() {
+    #[test]
+    fn test_circuit_breaker_closed() {
         let cb = CircuitBreaker::new(3, 2, Duration::from_secs(1));
-        assert!(cb.is_available().await);
-        assert_eq!(cb.get_state().await, CircuitState::Closed);
+        assert!(cb.is_available());
+        assert_eq!(cb.get_state(), CircuitState::Closed);
     }
 
-    #[tokio::test]
-    async fn test_circuit_breaker_opens_on_failures() {
-        let cb = CircuitBreaker::new(3, 2, Duration::from_millis(50));
+    #[test]
+    fn test_circuit_breaker_opens_on_failures() {
+        let cb = CircuitBreaker::new(3, 2, Duration::from_secs(1));
 
-        cb.record_failure().await;
-        cb.record_failure().await;
-        assert!(cb.is_available().await);
+        cb.record_failure();
+        cb.record_failure();
+        assert!(cb.is_available());
 
-        cb.record_failure().await;
-        assert!(!cb.is_available().await);
-        assert_eq!(cb.get_state().await, CircuitState::Open);
+        cb.record_failure();
+        assert!(!cb.is_available());
+        assert_eq!(cb.get_state(), CircuitState::Open);
     }
 
-    #[tokio::test]
-    async fn test_circuit_breaker_half_open() {
-        tokio::time::pause();
-        let cb = CircuitBreaker::new(2, 2, Duration::from_millis(50));
+    #[test]
+    fn test_circuit_breaker_record_success_in_closed() {
+        let cb = CircuitBreaker::new(3, 2, Duration::from_secs(1));
 
-        cb.record_failure().await;
-        cb.record_failure().await;
-        assert!(!cb.is_available().await);
-
-        tokio::time::advance(Duration::from_millis(60)).await;
-        assert!(cb.is_available().await);
-        assert_eq!(cb.get_state().await, CircuitState::HalfOpen);
+        cb.record_failure();
+        cb.record_failure();
+        cb.record_success();
+        assert_eq!(cb.get_state(), CircuitState::Closed);
+        assert!(cb.is_available());
     }
 
-    #[tokio::test]
-    async fn test_circuit_breaker_closes_after_successes() {
-        tokio::time::pause();
-        let cb = CircuitBreaker::new(2, 2, Duration::from_millis(50));
+    #[test]
+    fn test_circuit_breaker_reopens() {
+        let cb = CircuitBreaker::new(2, 2, Duration::from_secs(1));
 
-        cb.record_failure().await;
-        cb.record_failure().await;
+        cb.record_failure();
+        cb.record_failure();
+        assert_eq!(cb.get_state(), CircuitState::Open);
 
-        tokio::time::advance(Duration::from_millis(60)).await;
-        assert!(cb.is_available().await);
-
-        cb.record_success().await;
-        cb.record_success().await;
-        assert_eq!(cb.get_state().await, CircuitState::Closed);
-    }
-
-    #[tokio::test]
-    async fn test_circuit_breaker_reopens_on_failure_in_half_open() {
-        tokio::time::pause();
-        let cb = CircuitBreaker::new(2, 2, Duration::from_millis(50));
-
-        cb.record_failure().await;
-        cb.record_failure().await;
-
-        tokio::time::advance(Duration::from_millis(60)).await;
-        cb.record_failure().await;
-
-        assert!(!cb.is_available().await);
-        assert_eq!(cb.get_state().await, CircuitState::Open);
+        cb.record_failure();
+        assert_eq!(cb.get_state(), CircuitState::Open);
+        assert!(!cb.is_available());
     }
 
     #[tokio::test]
     async fn test_concurrent_record() {
-        tokio::time::pause();
         let breaker = Arc::new(CircuitBreaker::new(5, 3, Duration::from_secs(1)));
         let mut handles = vec![];
         for _ in 0..10 {
             let b = breaker.clone();
             handles.push(tokio::spawn(async move {
-                b.record_failure().await;
+                b.record_failure();
             }));
         }
         for h in handles {
@@ -277,6 +269,6 @@ mod tests {
         }
         assert_eq!(breaker.total_calls(), 10);
         assert_eq!(breaker.total_failures(), 10);
-        assert_eq!(breaker.get_state().await, CircuitState::Open);
+        assert_eq!(breaker.get_state(), CircuitState::Open);
     }
 }

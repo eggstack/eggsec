@@ -16,26 +16,36 @@ pub fn load_config(config_path: Option<&str>) -> Result<SlapperConfig> {
         .or_else(|| find_config_file(None))
         .unwrap_or_else(default_config_path);
 
-    if !path.exists() {
-        tracing::debug!("No config file found at {:?}, using defaults", path);
-        return Ok(SlapperConfig::default());
-    }
+    let canonical_path = match path.canonicalize() {
+        Ok(p) => p,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            tracing::debug!("No config file found at {:?}, using defaults", path);
+            return Ok(SlapperConfig::default());
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "Failed to canonicalize config path '{}': {}",
+                path.display(),
+                e
+            ));
+        }
+    };
 
-    tracing::info!("Loading configuration from {:?}", path);
+    tracing::info!("Loading configuration from {:?}", canonical_path);
 
-    let content = fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read config file: {:?}", path))?;
+    let content = fs::read_to_string(&canonical_path)
+        .with_context(|| format!("Failed to read config file: {:?}", canonical_path))?;
 
-    let config: SlapperConfig = if path
+    let config: SlapperConfig = if canonical_path
         .extension()
         .map(|e| e == "yaml" || e == "yml")
         .unwrap_or(false)
     {
         serde_yaml_neo::from_str(&content)
-            .with_context(|| format!("Failed to parse YAML config: {:?}", path))?
+            .with_context(|| format!("Failed to parse YAML config: {:?}", canonical_path))?
     } else {
         toml::from_str(&content)
-            .with_context(|| format!("Failed to parse TOML config: {:?}", path))?
+            .with_context(|| format!("Failed to parse TOML config: {:?}", canonical_path))?
     };
 
     config.validate().map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -49,16 +59,26 @@ pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
         .or_else(|| find_scope_file(None))
         .unwrap_or_else(default_scope_path);
 
-    if !path.exists() {
-        tracing::debug!("No scope file found at {:?}, allowing all targets", path);
-        return Ok(Scope::default());
-    }
+    let canonical_path = match path.canonicalize() {
+        Ok(p) => p,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            tracing::debug!("No scope file found at {:?}, allowing all targets", path);
+            return Ok(Scope::default());
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!(
+                "Failed to canonicalize scope path '{}': {}",
+                path.display(),
+                e
+            ));
+        }
+    };
 
-    tracing::info!("Loading scope from {:?}", path);
+    tracing::info!("Loading scope from {:?}", canonical_path);
 
-    let path_str = path
+    let path_str = canonical_path
         .to_str()
-        .ok_or_else(|| anyhow::anyhow!("Scope file path contains invalid UTF-8: {:?}", path))?;
+        .ok_or_else(|| anyhow::anyhow!("Scope file path contains invalid UTF-8: {:?}", canonical_path))?;
     Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))
 }
 

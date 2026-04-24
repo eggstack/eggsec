@@ -5,7 +5,8 @@ use crate::recon::{cloud, content, cors, cve, dns_records, email, geolocation, j
 use crate::types::SensitiveString;
 use crate::utils::sanitize_for_logging;
 use crate::utils::target::strip_url_protocol;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use parking_lot::Mutex;
 
 /// Resolves the target domain to an IP address.
 ///
@@ -494,9 +495,8 @@ pub async fn run_full_recon(
 }
 
 pub fn set_stage(stage: &Arc<Mutex<String>>, text: &str) {
-    if let Ok(mut s) = stage.lock() {
-        *s = text.to_string();
-    }
+    let mut s = stage.lock();
+    *s = text.to_string();
 }
 
 pub fn print_recon_results_string(recon: &FullReconResult) -> String {

@@ -5,7 +5,7 @@
 
 use crate::types::Severity;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VulnerabilityTemplate {

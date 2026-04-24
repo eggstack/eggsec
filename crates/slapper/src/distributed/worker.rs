@@ -166,11 +166,10 @@ async fn process_task(task: Task) -> Result<TaskResult> {
 
     let duration = start_time.elapsed();
     let success = result.is_ok();
-    let output = result
-        .as_ref()
-        .ok()
-        .map(|o| serde_json::to_string(o).unwrap_or_default())
-        .unwrap_or_default();
+    let output = match result.as_ref() {
+        Ok(o) => serde_json::to_string(o)?,
+        Err(_) => String::new(),
+    };
     let error = result.err().map(|e| e.to_string());
 
     Ok(TaskResult {

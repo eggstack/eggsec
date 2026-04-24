@@ -8,7 +8,7 @@ pub fn validate_auth_internal(
 ) -> Result<(), McpError> {
     if let Some(ref key) = api_key {
         match key_input {
-            Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
+            Some(v) if bool::from(key.as_bytes().ct_eq(v.as_bytes())) => Ok(()),
             _ => Err(McpError::unauthorized()),
         }
     } else {

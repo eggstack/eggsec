@@ -4,6 +4,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{Duration, Interval};
 
+#[cfg(feature = "rest-api")]
+use crate::config::Scope;
+
 use crate::tool::{
     CancellationToken, ExecutionHistory, RateLimitConfig, RateLimiter, RequestOptions, SessionManager, Target, ToolDispatcher, ToolInfo, 
     ToolRegistry, ToolRequest, ToolResponse,
@@ -29,10 +32,16 @@ pub struct McpServer {
     stream_events: Arc<tokio::sync::broadcast::Sender<StreamEvent>>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
+    #[cfg(feature = "rest-api")]
+    scope: Option<Scope>,
 }
 
 impl McpServer {
     pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
+        Self::with_scope(registry, api_key, None)
+    }
+
+    pub fn with_scope(registry: ToolRegistry, api_key: Option<String>, scope: Option<Scope>) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
         let (stream_events, _) = tokio::sync::broadcast::channel(1000);
         
@@ -50,6 +59,8 @@ impl McpServer {
             stream_events: Arc::new(stream_events),
             #[cfg(feature = "ai-integration")]
             ai_client: None,
+            #[cfg(feature = "rest-api")]
+            scope,
         };
         
         server.start_hashmap_reaper(60);
@@ -80,6 +91,8 @@ impl McpServer {
             stream_events: self.stream_events,
             #[cfg(feature = "ai-integration")]
             ai_client: self.ai_client,
+            #[cfg(feature = "rest-api")]
+            scope: self.scope,
         }
     }
 
@@ -263,6 +276,21 @@ impl McpServer {
             .get("target")
             .and_then(|v| v.as_str())
             .unwrap_or("");
+
+        #[cfg(feature = "rest-api")]
+        {
+            if let Some(ref scope) = self.scope {
+                match scope.is_target_allowed(target_value) {
+                    Ok(false) | Err(_) => {
+                        return req.error_response(McpError::invalid_params(&format!(
+                            "Scope violation: {} not allowed",
+                            target_value
+                        )));
+                    }
+                    Ok(true) => {}
+                }
+            }
+        }
 
         let target_type = arguments
             .get("target_type")
@@ -598,6 +626,21 @@ impl McpServer {
             .get("target")
             .and_then(|v| v.as_str())
             .unwrap_or("");
+
+        #[cfg(feature = "rest-api")]
+        {
+            if let Some(ref scope) = self.scope {
+                match scope.is_target_allowed(target_value) {
+                    Ok(false) | Err(_) => {
+                        return req.error_response(McpError::invalid_params(&format!(
+                            "Scope violation: {} not allowed",
+                            target_value
+                        )));
+                    }
+                    Ok(true) => {}
+                }
+            }
+        }
 
         let target_type = arguments
             .get("target_type")

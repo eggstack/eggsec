@@ -1,19 +1,21 @@
 use crate::error::Result;
-use std::time::Duration;
 
 use super::WafDetector;
 use super::types::ResponseDiff;
 
 impl WafDetector {
     pub async fn compare_responses(
-        &self,
         url: &str,
         normal_req: &str,
         malicious_req: &str,
     ) -> Result<ResponseDiff> {
+        tracing::warn!(
+            "TLS certificate verification disabled for response comparison. This is insecure and should \
+             only be used in isolated testing environments."
+        );
         let ua = crate::waf::bypass::headers::get_random_ua().to_string();
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(15))
+            .timeout(std::time::Duration::from_secs(15))
             .danger_accept_invalid_certs(true)
             .redirect(reqwest::redirect::Policy::limited(5))
             .user_agent(ua)

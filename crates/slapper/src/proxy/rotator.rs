@@ -96,7 +96,7 @@ impl ProxyRotator {
         let mut least_used_proxy: Option<(&ProxyEntry, u64)> = None;
 
         for proxy in proxies {
-            let key = proxy.to_url();
+            let key = proxy.to_log_key();
             if let Some(proxy_stats) = stats_fn(&key) {
                 let usage = proxy_stats.total_requests;
                 match least_used_proxy {
@@ -126,7 +126,7 @@ impl ProxyRotator {
         let mut lowest_latency_proxy: Option<(&ProxyEntry, u64)> = None;
 
         for proxy in proxies {
-            let key = proxy.to_url();
+            let key = proxy.to_log_key();
             if let Some(proxy_stats) = stats_fn(&key) {
                 let latency = proxy_stats.avg_latency_ms();
                 match lowest_latency_proxy {
@@ -163,7 +163,7 @@ impl ProxyRotator {
 
         for _ in 0..chain_length {
             if let Some(proxy) = self.select(&available) {
-                available.retain(|p| p.to_url() != proxy.to_url());
+                available.retain(|p| p.to_log_key() != proxy.to_log_key());
                 chain.push(proxy);
             }
         }
@@ -383,7 +383,7 @@ mod tests {
         let chain = rotator.select_chain(&proxies, 3).unwrap();
         assert_eq!(chain.len(), 3);
 
-        let urls: Vec<_> = chain.iter().map(|p| p.to_url()).collect();
+        let urls: Vec<_> = chain.iter().map(|p| p.to_log_key()).collect();
         let unique: std::collections::HashSet<_> = urls.iter().collect();
         assert_eq!(unique.len(), 3);
     }

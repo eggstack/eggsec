@@ -4,16 +4,18 @@ pub mod types;
 
 use axum::{routing::post, Router};
 use std::sync::Arc;
+use crate::config::Scope;
 use crate::tool::registry::ToolRegistry;
 
 #[derive(Clone)]
 pub struct OpenAiState {
     pub registry: Arc<ToolRegistry>,
     pub api_key: Option<String>,
+    pub scope: Option<Scope>,
 }
 
-pub fn router(registry: Arc<ToolRegistry>, api_key: Option<String>) -> Router {
-    let state: Arc<OpenAiState> = Arc::new(OpenAiState { registry, api_key });
+pub fn router(registry: Arc<ToolRegistry>, api_key: Option<String>, scope: Option<Scope>) -> Router {
+    let state: Arc<OpenAiState> = Arc::new(OpenAiState { registry, api_key, scope });
 
     Router::new()
         .route("/v1/chat/completions", post(handlers::chat_completions))

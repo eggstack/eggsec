@@ -281,6 +281,10 @@ impl super::App {
             }
             #[cfg(not(feature = "vuln-management"))]
             TaskResult::Vuln(_) => {}
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            TaskResult::PluginsLoaded(plugins) => {
+                self.plugin.plugin_list = plugins;
+            }
             TaskResult::Error(msg) => {
                 self.set_error_for_current_tab(msg);
             }

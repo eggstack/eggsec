@@ -12,6 +12,7 @@ use subtle::ConstantTimeEq;
 
 use super::types::*;
 use super::OpenAiState;
+use crate::config::Scope;
 use crate::tool::registry::ToolRegistry;
 use crate::tool::request::{Target, ToolRequest};
 
@@ -23,7 +24,7 @@ fn require_auth(state: &Arc<OpenAiState>, headers: &HeaderMap) -> Result<(), &'s
             .and_then(|v| v.to_str().ok());
 
         match auth {
-            Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
+            Some(v) if bool::from(key.as_bytes().ct_eq(v.as_bytes())) => Ok(()),
             _ => Err("Invalid or missing API key"),
         }
     } else {
@@ -38,14 +39,15 @@ pub async fn chat_completions(
 ) -> Result<Response, &'static str> {
     require_auth(&state, &headers)?;
     if req.stream.unwrap_or(false) {
-        Ok(streaming_response(state.registry.clone(), req).await.into_response())
+        Ok(streaming_response(state.registry.clone(), state.scope.clone(), req).await.into_response())
     } else {
-        Ok(Json(non_streaming_response(state.registry.clone(), req).await).into_response())
+        Ok(Json(non_streaming_response(state.registry.clone(), state.scope.clone(), req).await).into_response())
     }
 }
 
 async fn streaming_response(
     registry: Arc<ToolRegistry>,
+    scope: Option<Scope>,
     req: ChatCompletionRequest,
 ) -> Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>> {
     let id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
@@ -55,6 +57,19 @@ async fn streaming_response(
 
     let available_tools = registry.list();
     let matched_tools = find_matching_tools(&user_query, &available_tools);
+
+    if !matched_tools.is_empty() {
+        let target = extract_target_from_query(&user_query);
+        if let Some(ref scope) = scope {
+            if !scope.is_target_allowed(&target.value).unwrap_or(false) {
+                let events: Vec<Result<axum::response::sse::Event, Infallible>> = vec![Ok(
+                    axum::response::sse::Event::default()
+                        .data(format!(r#"{{"error": "Scope violation: {} not allowed"}}"#, target.value))
+                )];
+                return Sse::new(stream::iter(events));
+            }
+        }
+    }
 
     let mut events: Vec<Result<axum::response::sse::Event, Infallible>> = Vec::new();
 
@@ -120,6 +135,7 @@ async fn streaming_response(
 
 async fn non_streaming_response(
     registry: Arc<ToolRegistry>,
+    scope: Option<Scope>,
     req: ChatCompletionRequest,
 ) -> ChatCompletionResponse {
     let model = req.model.clone();
@@ -135,6 +151,32 @@ async fn non_streaming_response(
 
     let content = if !matched_tools.is_empty() && req.tools.is_some() {
         let target = extract_target_from_query(&user_query);
+
+        if let Some(ref scope) = scope {
+            if !scope.is_target_allowed(&target.value).unwrap_or(false) {
+                return ChatCompletionResponse {
+                    id,
+                    object: "chat.completion".to_string(),
+                    created,
+                    model,
+                    choices: vec![Choice {
+                        index: 0,
+                        message: ChatMessage {
+                            role: "assistant".to_string(),
+                            content: Some(format!("Scope violation: {} not allowed", target.value)),
+                            tool_calls: None,
+                        },
+                        finish_reason: "stop".to_string(),
+                    }],
+                    usage: Some(Usage {
+                        prompt_tokens: user_query.len() / 4,
+                        completion_tokens: 20,
+                        total_tokens: (user_query.len() / 4) + 20,
+                    }),
+                };
+            }
+        }
+
         let mut results = Vec::with_capacity(matched_tools.len().min(3));
 
         for tool_info in matched_tools.iter().take(3) {

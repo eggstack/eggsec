@@ -2,7 +2,7 @@
 use regex::RegexBuilder;
 use reqwest::{Client, Method};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChainAction {
@@ -16,7 +16,7 @@ pub enum ChainAction {
 pub struct RequestTemplate {
     pub method: String,
     pub url: String,
-    pub headers: HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
     pub body: Option<String>,
     pub follow_redirects: bool,
 }
@@ -60,7 +60,7 @@ pub struct ChainResult {
     pub success: bool,
     pub status_code: Option<u16>,
     pub response_time_ms: u64,
-    pub extracted_vars: HashMap<String, String>,
+    pub extracted_vars: FxHashMap<String, String>,
     pub error: Option<String>,
 }
 
@@ -70,22 +70,36 @@ pub struct ChainExecutionResult {
     pub total_actions: usize,
     pub successful_actions: usize,
     pub chain_results: Vec<ChainResult>,
-    pub final_variables: HashMap<String, String>,
+    pub final_variables: FxHashMap<String, String>,
 }
 
 pub struct ChainExecutor {
     client: Client,
-    variables: HashMap<String, String>,
+    variables: FxHashMap<String, String>,
     results: Vec<ChainResult>,
+    regex_cache: FxHashMap<String, regex::Regex>,
 }
 
 impl ChainExecutor {
     pub fn new(client: Client) -> Self {
         Self {
             client,
-            variables: HashMap::new(),
+            variables: FxHashMap::default(),
             results: Vec::new(),
+            regex_cache: FxHashMap::default(),
         }
+    }
+
+    fn get_or_compile_regex(&mut self, pattern: &str) -> Option<regex::Regex> {
+        if let Some(cached) = self.regex_cache.get(pattern) {
+            return Some(cached.clone());
+        }
+        let re = RegexBuilder::new(pattern)
+            .size_limit(100_000)
+            .build()
+            .ok()?;
+        self.regex_cache.insert(pattern.to_string(), re.clone());
+        Some(re)
     }
 
     pub async fn execute(&mut self, actions: Vec<ChainAction>) -> ChainExecutionResult {
@@ -141,7 +155,7 @@ impl ChainExecutor {
                     success: true,
                     status_code: None,
                     response_time_ms: duration,
-                    extracted_vars: HashMap::new(),
+                    extracted_vars: FxHashMap::default(),
                     error: None,
                 }
             }
@@ -197,7 +211,7 @@ impl ChainExecutor {
                     success: is_success,
                     status_code: Some(status),
                     response_time_ms: elapsed,
-                    extracted_vars: HashMap::new(),
+                    extracted_vars: FxHashMap::default(),
                     error: None,
                 }
             }
@@ -206,7 +220,7 @@ impl ChainExecutor {
                 success: false,
                 status_code: None,
                 response_time_ms: start.elapsed().as_millis() as u64,
-                extracted_vars: HashMap::new(),
+                extracted_vars: FxHashMap::default(),
                 error: Some(e.to_string()),
             },
         }
@@ -238,28 +252,20 @@ impl ChainExecutor {
 
         let pattern = self.interpolate_string(&rule.pattern);
 
-        let value = match RegexBuilder::new(&pattern)
-            .size_limit(100_000)
-            .build()
-        {
-            Ok(re) => {
-                if let Some(caps) = re.captures(&source) {
-                    if let Some(group) = rule.group {
-                        caps.get(group).map(|m| m.as_str().to_string())
-                    } else {
-                        caps.get(0).map(|m| m.as_str().to_string())
-                    }
+        let value = if let Some(re) = self.get_or_compile_regex(&pattern) {
+            if let Some(caps) = re.captures(&source) {
+                if let Some(group) = rule.group {
+                    caps.get(group).map(|m| m.as_str().to_string())
                 } else {
-                    None
+                    caps.get(0).map(|m| m.as_str().to_string())
                 }
+            } else {
+                None
             }
-            _ => {
-                if source.contains(&pattern) {
-                    Some(pattern)
-                } else {
-                    None
-                }
-            }
+        } else if source.contains(&pattern) {
+            Some(pattern)
+        } else {
+            None
         };
 
         if let Some(val) = value {
@@ -278,13 +284,13 @@ impl ChainExecutor {
                 success: false,
                 status_code: None,
                 response_time_ms: 0,
-                extracted_vars: HashMap::new(),
+                extracted_vars: FxHashMap::default(),
                 error: Some("Pattern not found".to_string()),
             }
         }
     }
 
-    async fn check_condition(&self, check: &ConditionCheck) -> bool {
+    async fn check_condition(&mut self, check: &ConditionCheck) -> bool {
         match check {
             ConditionCheck::StatusCode(code) => self
                 .variables
@@ -303,11 +309,9 @@ impl ChainExecutor {
                 .map(|body| body.contains(needle))
                 .unwrap_or(false),
             ConditionCheck::RegexMatch(pattern) => {
-                if let Some(body) = self.variables.get("_last_body") {
-                    RegexBuilder::new(pattern)
-                        .size_limit(100_000)
-                        .build()
-                        .map(|re| re.is_match(body))
+                if let Some(body) = self.variables.get("_last_body").cloned() {
+                    self.get_or_compile_regex(pattern)
+                        .map(|re| re.is_match(&body))
                         .unwrap_or(false)
                 } else {
                     false
@@ -360,7 +364,7 @@ impl AutoExploiter {
             ChainAction::Request(RequestTemplate {
                 method: "GET".to_string(),
                 url: "http://${internal_ip}/admin".to_string(),
-                headers: HashMap::new(),
+                headers: FxHashMap::default(),
                 body: None,
                 follow_redirects: true,
             }),
@@ -373,7 +377,7 @@ impl AutoExploiter {
         let _actions = [ChainAction::Request(RequestTemplate {
             method: "GET".to_string(),
             url: format!("{}${{}}", injection_point),
-            headers: HashMap::new(),
+            headers: FxHashMap::default(),
             body: None,
             follow_redirects: false,
         })];

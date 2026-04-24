@@ -8,6 +8,7 @@ use reqwest::{Client, Method};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
+use tracing;
 
 use super::metrics::{LoadTestResults, Metrics};
 use crate::cli::{CommonHttpArgs, LoadArgs};
@@ -227,6 +228,12 @@ impl LoadTestRunner {
     }
 
     pub async fn run(&self) -> Result<LoadTestResults> {
+        if self.insecure {
+            tracing::warn!(
+                "TLS certificate verification disabled. This is insecure and should only \
+                 be used in isolated testing environments."
+            );
+        }
         let mut client_builder = Client::builder()
             .timeout(self.timeout)
             .danger_accept_invalid_certs(self.insecure);

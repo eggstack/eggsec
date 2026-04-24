@@ -96,7 +96,8 @@ use crate::config::SlapperConfig;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use parking_lot::Mutex;
 
 pub use spinner::Spinner;
 

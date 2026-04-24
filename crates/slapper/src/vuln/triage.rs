@@ -43,13 +43,16 @@ pub fn triage_finding(
     let duplicate_keywords = ["test", "example", "demo", "sample", "localhost"];
     let false_positive_keywords = ["information", "low", "informational", "no risk"];
 
+    let title_lower = title.to_lowercase();
+    let description_lower = description.to_lowercase();
+
     let is_duplicate = duplicate_keywords
         .iter()
-        .any(|kw| title.to_lowercase().contains(kw) || description.to_lowercase().contains(kw));
+        .any(|kw| title_lower.contains(kw) || description_lower.contains(kw));
 
     let is_false_positive = false_positive_keywords
         .iter()
-        .any(|kw| title.to_lowercase().contains(kw) && severity == Severity::Info);
+        .any(|kw| title_lower.contains(kw) && severity == Severity::Info);
 
     let (status, confidence, reason) = if is_duplicate {
         (

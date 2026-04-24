@@ -108,18 +108,11 @@ impl LongitudinalMemory {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
-        let safe_name = target
-            .replace("://", "_")
-            .replace("/", "_")
-            .replace(":", "_");
-
         let mut hasher = DefaultHasher::new();
         target.hash(&mut hasher);
-        let hash = format!("{:x}", hasher.finish());
+        let hash = format!("{:016x}", hasher.finish());
 
-        self.storage_dir
-            .join("targets")
-            .join(format!("{}_{}.json", safe_name, hash))
+        self.storage_dir.join("targets").join(format!("{}.json", hash))
     }
 
     fn get_patterns_path(&self) -> PathBuf {

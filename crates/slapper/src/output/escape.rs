@@ -14,23 +14,34 @@ pub fn escape_html(s: &str) -> String {
 }
 
 pub fn escape_csv(s: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    let normalized: String = s.nfkc().collect();
     let formula_chars = ['=', '+', '-', '@', '\t', '\r'];
-    let starts_with_formula = s
+    let starts_with_formula = normalized
         .chars()
         .next()
         .map(|c| c.is_ascii() && formula_chars.contains(&c))
         .unwrap_or(false);
 
-    let first_char_is_control = s
-        .chars()
-        .next()
-        .map(|c| !c.is_ascii())
-        .unwrap_or(false);
-
-    if first_char_is_control || s.contains(',') || s.contains('"') || s.contains('\n') || starts_with_formula {
-        format!("\"{}\"", s.replace('"', "\"\""))
+    if s.contains(',') || s.contains('"') || s.contains('\n') || starts_with_formula {
+        format!("\"{}\"", normalized.replace('"', "\"\""))
     } else {
-        s.to_string()
+        normalized
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fullwidth_equals_bypass() {
+        assert!(escape_csv("\u{FF1D}1+1").starts_with('"'));
+    }
+
+    #[test]
+    fn test_fullwidth_plus_bypass() {
+        assert!(escape_csv("\u{FF0B}2+2").starts_with('"'));
     }
 }
 

@@ -8,6 +8,7 @@ use std::time::Instant;
 use slapper_plugin::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult};
 
 use super::bridge::RubyPluginClient;
+use super::validation::validate_plugin_path;
 use super::{RubyPlugin, RubyPluginResult};
 
 const MAX_JSON_SIZE_BYTES: usize = 100_000;
@@ -74,6 +75,11 @@ impl PluginLoader {
                 let path = entry.path();
 
                 if path.extension().map(|e| e == "rb").unwrap_or(false) {
+                    if let Err(e) = validate_plugin_path(dir, &path) {
+                        tracing::warn!(path = %path.display(), error = %e, "Path validation failed");
+                        continue;
+                    }
+
                     if let Ok(plugin) = self.client.load_plugin(&path) {
                         tracing::info!(
                             name = %plugin.name,
@@ -97,14 +103,14 @@ impl PluginLoader {
         Ok(plugin)
     }
 
-    pub fn run_plugin(&self, name: &str, target: &str) -> Result<RubyPluginResult> {
+    pub fn run_plugin(&self, name: &str, target: &str, timeout_secs: u64) -> Result<RubyPluginResult> {
         let plugin = self
             .loaded_plugins
             .iter()
             .find(|p| p.name == name)
             .ok_or_else(|| anyhow!("Plugin not found: {}", name))?;
 
-        self.client.run_plugin(plugin, target)
+        self.client.run_plugin(plugin, target, timeout_secs)
     }
 
     pub fn list_plugins(&self) -> &[RubyPlugin] {
@@ -153,7 +159,7 @@ impl Plugin for PluginLoader {
             .find(|p| p.name == check_name)
             .ok_or_else(|| anyhow!("Plugin not found: {}", check_name))?;
 
-        let ruby_result = self.client.run_plugin(plugin, target)?;
+        let ruby_result = self.client.run_plugin(plugin, target, self.client.get_timeout())?;
 
         for finding in &ruby_result.findings {
             if let Some(ref evidence) = finding.evidence {
@@ -197,7 +203,7 @@ impl Plugin for PluginLoader {
         let mut all_errors = Vec::new();
 
         for plugin in &self.loaded_plugins {
-            match self.client.run_plugin(plugin, target) {
+            match self.client.run_plugin(plugin, target, self.client.get_timeout()) {
                 Ok(ruby_result) => {
                     for finding in &ruby_result.findings {
                         if let Some(ref evidence) = finding.evidence {
@@ -234,6 +240,29 @@ impl Plugin for PluginLoader {
             errors: all_errors,
             execution_time_ms,
         })
+    }
+
+    fn init(&self) -> Result<()> {
+        tracing::info!("Initializing Ruby plugin loader");
+        Ok(())
+    }
+
+    fn shutdown(&self) -> Result<()> {
+        tracing::info!("Shutting down Ruby plugin loader");
+        Ok(())
+    }
+
+    fn health_check(&self) -> Result<slapper_plugin::HealthStatus> {
+        let plugin_count = self.loaded_plugins.len();
+        if plugin_count == 0 {
+            Ok(slapper_plugin::HealthStatus::Degraded)
+        } else {
+            Ok(slapper_plugin::HealthStatus::Healthy)
+        }
+    }
+
+    fn priority(&self) -> u32 {
+        50
     }
 }
 
@@ -289,7 +318,7 @@ impl Plugin for RubyPluginAdapter {
             anyhow::bail!("Unknown check: {}", check_name);
         }
 
-        let ruby_result = self.client.run_plugin(&self.plugin, target)?;
+        let ruby_result = self.client.run_plugin(&self.plugin, target, self.client.get_timeout())?;
 
         for finding in &ruby_result.findings {
             if let Some(ref evidence) = finding.evidence {
@@ -329,5 +358,23 @@ impl Plugin for RubyPluginAdapter {
 
     async fn run(&self, target: &str, _config: &PluginConfig) -> Result<PluginResult> {
         self.run_check(&self.plugin.name, target).await
+    }
+
+    fn init(&self) -> Result<()> {
+        tracing::info!("Initializing Ruby plugin adapter: {}", self.plugin.name);
+        Ok(())
+    }
+
+    fn shutdown(&self) -> Result<()> {
+        tracing::info!("Shutting down Ruby plugin adapter: {}", self.plugin.name);
+        Ok(())
+    }
+
+    fn health_check(&self) -> Result<slapper_plugin::HealthStatus> {
+        Ok(slapper_plugin::HealthStatus::Healthy)
+    }
+
+    fn priority(&self) -> u32 {
+        50
     }
 }

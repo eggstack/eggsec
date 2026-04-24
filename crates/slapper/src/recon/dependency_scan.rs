@@ -852,9 +852,10 @@ impl DependencyScanner {
             for item in items.iter().take(5) {
                 let title = item.get("title").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string();
                 let html_url = item.get("html_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let severity = if title.to_lowercase().contains("critical") || title.to_lowercase().contains("rce") {
+                let title_lower = title.to_lowercase();
+                let severity = if title_lower.contains("critical") || title_lower.contains("rce") {
                     Severity::Critical
-                } else if title.to_lowercase().contains("high") || title.to_lowercase().contains("overflow") {
+                } else if title_lower.contains("high") || title_lower.contains("overflow") {
                     Severity::High
                 } else {
                     Severity::Medium

@@ -173,6 +173,12 @@ impl FuzzEngine {
     fn build_client(args: &FuzzArgs) -> Result<Client> {
         let concurrency = args.concurrency.clamp(1, 500);
 
+        if args.common.insecure {
+            tracing::warn!(
+                "TLS certificate verification disabled. This is insecure and should only \
+                 be used in isolated testing environments."
+            );
+        }
         let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(args.timeout))
             .danger_accept_invalid_certs(args.common.insecure)

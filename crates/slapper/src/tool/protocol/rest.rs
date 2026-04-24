@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use subtle::ConstantTimeEq;
 
+use crate::distributed::TlsConfig;
+use crate::config::Scope;
 use crate::error::SlapperError;
 use crate::tool::ratelimit::{RateLimiter, RateLimitConfig};
 use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse};
@@ -19,10 +21,12 @@ pub struct RestState {
     pub dispatcher: ToolDispatcher,
     pub api_key: Option<String>,
     pub rate_limiter: RateLimiter,
+    pub scope: Option<Scope>,
+    pub tls_config: Option<TlsConfig>,
 }
 
 impl RestState {
-    pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
+    pub fn new(registry: ToolRegistry, api_key: Option<String>, scope: Option<Scope>, tls_config: Option<TlsConfig>) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
         let rate_limiter = RateLimiter::new(RateLimitConfig::standard());
         Self {
@@ -30,6 +34,8 @@ impl RestState {
             dispatcher,
             api_key,
             rate_limiter,
+            scope,
+            tls_config,
         }
     }
 }
@@ -45,6 +51,7 @@ impl IntoResponse for SlapperError {
         let (status, error_response) = match &self {
             SlapperError::Config(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             SlapperError::InvalidTarget(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            SlapperError::ScopeViolation(msg) => (StatusCode::FORBIDDEN, msg.clone()),
             SlapperError::Network(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg.clone()),
             SlapperError::Timeout { .. } => (StatusCode::REQUEST_TIMEOUT, self.to_string()),
             _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
@@ -92,8 +99,8 @@ pub struct ToolDetailResponse {
     pub protocols: Vec<String>,
 }
 
-pub fn create_router(registry: ToolRegistry, api_key: Option<String>) -> Router {
-    let state = Arc::new(RestState::new(registry, api_key.clone()));
+pub fn create_router(registry: ToolRegistry, api_key: Option<String>, scope: Option<Scope>, tls_config: Option<TlsConfig>) -> Router {
+    let state = Arc::new(RestState::new(registry, api_key.clone(), scope, tls_config.clone()));
 
     let mut router = Router::new()
         .route("/health", get(health_check))
@@ -102,6 +109,10 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>) -> Router 
         .route("/api/v1/tools/:tool_id", get(get_tool))
         .route("/api/v1/tools/:tool_id/execute", post(execute_tool))
         .with_state(state);
+
+    if tls_config.is_some() {
+        tracing::info!("REST API running with TLS enabled");
+    }
 
     #[cfg(feature = "ai-integration")]
     {
@@ -134,7 +145,7 @@ fn require_auth(state: &Arc<RestState>, headers: &HeaderMap) -> Result<(), Slapp
             .and_then(|v| v.to_str().ok());
 
         match auth {
-            Some(v) if key.as_bytes().ct_eq(v.as_bytes()).unwrap_u8() == 1 => Ok(()),
+            Some(v) if bool::from(key.as_bytes().ct_eq(v.as_bytes())) => Ok(()),
             _ => Err(SlapperError::Config(
                 "Invalid or missing API key".to_string(),
             )),
@@ -313,6 +324,16 @@ async fn execute_tool(
         return Err(SlapperError::Config(
             "Rate limit exceeded for this target".to_string(),
         ));
+    }
+
+    let target_url = &payload.target;
+    if let Some(ref scope) = state.scope {
+        match scope.is_target_allowed(target_url) {
+            Ok(false) | Err(_) => {
+                return Err(SlapperError::ScopeViolation(target_url.clone()));
+            }
+            Ok(true) => {}
+        }
     }
 
     let target_type = payload.target_type.as_deref().unwrap_or("url");

@@ -13,6 +13,12 @@ use super::core::FuzzEngine;
 impl FuzzEngine {
     pub(crate) async fn run_advanced_fuzzer(&self, fuzzer_type: &str) -> Result<Vec<FuzzResult>> {
         let insecure = self.args.common.insecure;
+        if insecure {
+            tracing::warn!(
+                "TLS certificate verification disabled. This is insecure and should only \
+                 be used in isolated testing environments."
+            );
+        }
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(self.args.timeout))
             .danger_accept_invalid_certs(insecure)

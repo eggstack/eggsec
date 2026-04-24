@@ -2,9 +2,28 @@
 use magnus::{prelude::*, Error, Ruby};
 
 #[cfg(feature = "ruby-plugins")]
-fn get_runtime() -> &'static tokio::runtime::Handle {
+fn get_blocking_handle() -> &'static tokio::runtime::Handle {
     static HANDLE: std::sync::OnceLock<tokio::runtime::Handle> = std::sync::OnceLock::new();
     HANDLE.get_or_init(|| tokio::runtime::Handle::current())
+}
+
+#[cfg(feature = "ruby-plugins")]
+static BLOCKING_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+
+#[cfg(feature = "ruby-plugins")]
+fn get_blocking_runtime() -> &'static tokio::runtime::Runtime {
+    BLOCKING_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .thread_name("ruby-async")
+            .build()
+            .unwrap()
+    })
+}
+
+#[cfg(feature = "ruby-plugins")]
+fn get_blocking_handle() -> tokio::runtime::Handle {
+    get_blocking_runtime().handle().clone()
 }
 
 #[cfg(feature = "ruby-plugins")]
@@ -79,7 +98,7 @@ fn register_reporting_api(_ruby: &Ruby, slapper: &magnus::RModule) -> Result<(),
 
 #[cfg(feature = "ruby-plugins")]
 fn http_get(ruby: &Ruby, url: String) -> Result<magnus::RHash, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let response = rt
         .block_on(async { reqwest::get(&url).await })
         .map_err(|e| runtime_error(ruby, e.to_string()))?;
@@ -96,7 +115,7 @@ fn http_get(ruby: &Ruby, url: String) -> Result<magnus::RHash, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn http_post(ruby: &Ruby, url: String, body: String) -> Result<magnus::RHash, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let client = reqwest::Client::new();
 
     let response = rt
@@ -115,7 +134,7 @@ fn http_post(ruby: &Ruby, url: String, body: String) -> Result<magnus::RHash, Er
 
 #[cfg(feature = "ruby-plugins")]
 fn http_put(ruby: &Ruby, url: String, body: String) -> Result<magnus::RHash, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let client = reqwest::Client::new();
 
     let response = rt
@@ -134,7 +153,7 @@ fn http_put(ruby: &Ruby, url: String, body: String) -> Result<magnus::RHash, Err
 
 #[cfg(feature = "ruby-plugins")]
 fn http_delete(ruby: &Ruby, url: String) -> Result<magnus::RHash, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let client = reqwest::Client::new();
 
     let response = rt
@@ -153,7 +172,7 @@ fn http_delete(ruby: &Ruby, url: String) -> Result<magnus::RHash, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn http_request(ruby: &Ruby, method: String, url: String) -> Result<magnus::RHash, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let client = reqwest::Client::new();
 
     let request = match method.to_uppercase().as_str() {
@@ -191,7 +210,7 @@ fn tcp_connect(ruby: &Ruby, host: String, port: u16) -> Result<bool, Error> {
         .next()
         .ok_or_else(|| runtime_error(ruby, "Failed to resolve host"))?;
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let connected = rt
         .block_on(async {
             tokio::time::timeout(
@@ -212,7 +231,7 @@ fn scan_port(ruby: &Ruby, host: String, port: u16) -> Result<bool, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn grab_banner(ruby: &Ruby, host: String, port: u16) -> Result<String, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
 
     let banner = rt.block_on(async {
         use tokio::io::AsyncReadExt;
@@ -248,7 +267,7 @@ fn fuzz_param(
 ) -> Result<magnus::RArray, Error> {
     let results = ruby.ary_new();
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let client = reqwest::Client::new();
 
     let payload_vec: Vec<String> = payloads
@@ -306,7 +325,7 @@ fn fuzz_header(
 ) -> Result<magnus::RArray, Error> {
     let results = ruby.ary_new();
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let client = reqwest::Client::new();
 
     let payload_vec: Vec<String> = payloads
@@ -358,7 +377,7 @@ fn fuzz_cookie(
 ) -> Result<magnus::RArray, Error> {
     let results = ruby.ary_new();
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let client = reqwest::Client::new();
 
     let payload_vec: Vec<String> = payloads
@@ -404,7 +423,7 @@ fn fuzz_cookie(
 fn fuzz_path(ruby: &Ruby, url: String, paths: magnus::RArray) -> Result<magnus::RArray, Error> {
     let results = ruby.ary_new();
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     let client = reqwest::Client::new();
 
     let base_url = url.trim_end_matches('/');
@@ -590,7 +609,7 @@ fn get_msf_client() -> &'static tokio::sync::Mutex<Option<MsfClientState>> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_connect(_ruby: &Ruby, url: String, username: String, password: String) -> Result<bool, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
 
     let config = crate::msf::MsfConfig {
         url: url.clone(),
@@ -611,7 +630,7 @@ fn msf_connect(_ruby: &Ruby, url: String, username: String, password: String) ->
     match result {
         Ok(()) => {
             let state = MsfClientState { client, _url: url };
-            let rt = get_runtime();
+            let rt = get_blocking_handle();
             rt.block_on(async {
                 let mut guard = get_msf_client().lock().await;
                 *guard = Some(state);
@@ -624,7 +643,7 @@ fn msf_connect(_ruby: &Ruby, url: String, username: String, password: String) ->
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_connect_with_token(_ruby: &Ruby, url: String, token: String) -> Result<bool, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
 
     let config = crate::msf::MsfConfig {
         url: url.clone(),
@@ -651,7 +670,7 @@ fn msf_connect_with_token(_ruby: &Ruby, url: String, token: String) -> Result<bo
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_connected(_ruby: &Ruby) -> Result<bool, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         Ok(guard.is_some())
@@ -660,7 +679,7 @@ fn msf_connected(_ruby: &Ruby) -> Result<bool, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_disconnect(_ruby: &Ruby) -> Result<bool, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let mut guard = get_msf_client().lock().await;
         *guard = None;
@@ -670,7 +689,7 @@ fn msf_disconnect(_ruby: &Ruby) -> Result<bool, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_version(_ruby: &Ruby) -> Result<String, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -696,7 +715,7 @@ fn msf_list_modules(_ruby: &Ruby, module_type: String) -> Result<Vec<String>, Er
         _ => return Err(runtime_error(_ruby, "Invalid module type")),
     };
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -724,7 +743,7 @@ fn msf_module_info(ruby: &Ruby, module_type: String, module_name: String) -> Res
 
     let hash = ruby.hash_new();
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -786,7 +805,7 @@ fn msf_execute_module(
         })
         .collect();
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -826,7 +845,7 @@ fn msf_generate_payload(_ruby: &Ruby, payload_name: String, options: magnus::RAr
         })
         .collect();
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -847,7 +866,7 @@ fn msf_generate_payload(_ruby: &Ruby, payload_name: String, options: magnus::RAr
 fn msf_list_sessions(ruby: &Ruby) -> Result<magnus::RArray, Error> {
     let results = ruby.ary_new();
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -882,7 +901,7 @@ fn msf_list_sessions(ruby: &Ruby) -> Result<magnus::RArray, Error> {
 fn msf_session_info(ruby: &Ruby, session_id: String) -> Result<magnus::RHash, Error> {
     let hash = ruby.hash_new();
 
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -911,7 +930,7 @@ fn msf_session_info(ruby: &Ruby, session_id: String) -> Result<magnus::RHash, Er
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_session_write(_ruby: &Ruby, session_id: String, command: String) -> Result<String, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -931,7 +950,7 @@ fn msf_session_write(_ruby: &Ruby, session_id: String, command: String) -> Resul
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_session_read(_ruby: &Ruby, session_id: String) -> Result<String, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {
@@ -947,7 +966,7 @@ fn msf_session_read(_ruby: &Ruby, session_id: String) -> Result<String, Error> {
 
 #[cfg(feature = "ruby-plugins")]
 fn msf_session_stop(_ruby: &Ruby, session_id: String) -> Result<bool, Error> {
-    let rt = get_runtime();
+    let rt = get_blocking_handle();
     rt.block_on(async {
         let guard = get_msf_client().lock().await;
         if let Some(ref state) = *guard {

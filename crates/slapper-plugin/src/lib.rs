@@ -8,10 +8,13 @@ use std::sync::Arc;
 #[cfg(feature = "python-plugins")]
 pub mod python;
 
+pub mod validation;
+
 #[cfg(feature = "python-plugins")]
 pub use python::PythonPluginManager;
 
 use futures::future::join_all;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
@@ -85,6 +88,20 @@ pub struct PluginFinding {
     pub cve_ids: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HealthStatus {
+    Healthy,
+    Degraded,
+    Unhealthy,
+    Unknown,
+}
+
+impl Default for HealthStatus {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PluginCheck {
     pub name: String,
@@ -110,6 +127,18 @@ pub trait Plugin: Send + Sync {
 
     /// Runs the plugin with full configuration.
     async fn run(&self, target: &str, config: &PluginConfig) -> Result<PluginResult>;
+
+    /// Initialize the plugin (called when plugin is loaded).
+    fn init(&self) -> Result<()>;
+
+    /// Shutdown the plugin (called when plugin is unloaded).
+    fn shutdown(&self) -> Result<()>;
+
+    /// Check the health status of the plugin.
+    fn health_check(&self) -> Result<HealthStatus>;
+
+    /// Returns the priority of this plugin (higher = executed first).
+    fn priority(&self) -> u32;
 }
 
 /// Registry that holds all loaded plugin backends.
@@ -172,6 +201,37 @@ impl PluginRegistry {
     }
 
     /// Run all plugins against a target.
+    ///
+    /// **Timeout handling**: Each plugin execution is subject to `config.timeout_secs`.
+    /// Note: Timeouts prevent indefinite waiting but cannot forcibly terminate
+    /// plugin threads. A plugin that times out will return an error, but the
+    /// plugin thread itself may continue running (limited by the runtime).
+    #[cfg(feature = "python-plugins")]
+    pub async fn run_all(&self, target: &str, config: &PluginConfig) -> Result<Vec<PluginResult>> {
+        use tokio::time::timeout as async_timeout;
+        let timeout_duration = Duration::from_secs(config.timeout_secs);
+        let mut successful = Vec::new();
+
+        for plugin in &self.plugins {
+            let result = async_timeout(timeout_duration, plugin.run(target, config)).await;
+            match result {
+                Ok(inner_result) => {
+                    match inner_result {
+                        Ok(r) => successful.push(r),
+                        Err(e) => {
+                            tracing::warn!(plugin = %plugin.info().name, error = %e, "Plugin execution failed");
+                        }
+                    }
+                }
+                Err(_) => {
+                    tracing::warn!(plugin = %plugin.info().name, timeout = config.timeout_secs, "Plugin execution timed out");
+                }
+            }
+        }
+        Ok(successful)
+    }
+
+    #[cfg(not(feature = "python-plugins"))]
     pub async fn run_all(&self, target: &str, config: &PluginConfig) -> Result<Vec<PluginResult>> {
         let futures: Vec<_> = self.plugins.iter().map(|plugin| plugin.run(target, config)).collect();
         let results = join_all(futures).await;
@@ -265,6 +325,8 @@ impl PluginManager {
     }
 
     pub fn discover_plugins(&mut self) -> Vec<PluginInfo> {
+        use crate::validation::validate_plugin_path;
+        
         let mut discovered = Vec::new();
 
         for dir in &self.plugin_dirs {
@@ -277,6 +339,10 @@ impl PluginManager {
                     let path = entry.path();
 
                     if path.extension().map(|e| e == "py").unwrap_or(false) {
+                        if let Err(e) = validate_plugin_path(dir, &path) {
+                            tracing::warn!(path = %path.display(), error = %e, "Path validation failed");
+                            continue;
+                        }
                         if let Some(info) = self.load_python_plugin(&path) {
                             self.plugins.insert(info.name.clone(), info.clone());
                             discovered.push(info);
@@ -429,6 +495,22 @@ mod tests {
                 errors: vec![],
                 execution_time_ms: 5,
             })
+        }
+
+        fn init(&self) -> Result<()> {
+            Ok(())
+        }
+
+        fn shutdown(&self) -> Result<()> {
+            Ok(())
+        }
+
+        fn health_check(&self) -> Result<HealthStatus> {
+            Ok(HealthStatus::Healthy)
+        }
+
+        fn priority(&self) -> u32 {
+            100
         }
     }
 

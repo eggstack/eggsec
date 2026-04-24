@@ -1,4 +1,5 @@
 use crate::error::{Result, SlapperError};
+use crate::utils::create_insecure_http_client;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng;
@@ -124,38 +125,28 @@ async fn build_clients(
     if let Some(manager) = proxy_manager {
         let healthy_proxies = manager.get_all_healthy_proxies().await;
         if healthy_proxies.is_empty() {
-            let client = build_base_client(max_connections)?;
+            let client = create_insecure_http_client(30)?;
             return Ok(vec![client]);
         }
 
         let mut clients = Vec::with_capacity(healthy_proxies.len());
         for proxy_entry in healthy_proxies {
-            let mut builder = build_base_client_builder(max_connections);
+            let mut builder = reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .danger_accept_invalid_certs(true)
+                .pool_max_idle_per_host(max_connections.min(100))
+                .pool_idle_timeout(Duration::from_secs(30))
+                .connect_timeout(Duration::from_secs(5))
+                .tcp_keepalive(Duration::from_secs(60))
+                .tcp_nodelay(true);
             builder = builder.proxy(build_reqwest_proxy(&proxy_entry)?);
             clients.push(builder.build()?);
         }
         Ok(clients)
     } else {
-        let client = build_base_client(max_connections)?;
+        let client = create_insecure_http_client(30)?;
         Ok(vec![client])
     }
-}
-
-fn build_base_client(max_connections: usize) -> Result<reqwest::Client> {
-    build_base_client_builder(max_connections).build().map_err(|e| {
-        SlapperError::Runtime(format!("Failed to build HTTP client: {}", e))
-    })
-}
-
-fn build_base_client_builder(max_connections: usize) -> reqwest::ClientBuilder {
-    reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .danger_accept_invalid_certs(true)
-        .pool_max_idle_per_host(max_connections.min(100))
-        .pool_idle_timeout(Duration::from_secs(30))
-        .connect_timeout(Duration::from_secs(5))
-        .tcp_keepalive(Duration::from_secs(60))
-        .tcp_nodelay(true)
 }
 
 fn build_reqwest_proxy(proxy: &ProxyEntry) -> Result<reqwest::Proxy> {
@@ -177,17 +168,24 @@ fn build_reqwest_proxy(proxy: &ProxyEntry) -> Result<reqwest::Proxy> {
     Ok(reqwest_proxy)
 }
 
+fn generate_random_path(size: usize) -> String {
+    let charset: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        .chars()
+        .collect();
+    let mut rng = rand::thread_rng();
+    (0..size)
+        .map(|_| charset[rng.gen_range(0..charset.len())])
+        .collect()
+}
+
 fn random_user_agent() -> String {
-    let user_agents = [
+    let agents = vec![
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36",
     ];
-
     let mut rng = rand::thread_rng();
-    user_agents[rng.gen_range(0..user_agents.len())].to_string()
+    agents[rng.gen_range(0..agents.len())].to_string()
 }
 
 fn random_ip() -> String {
@@ -197,17 +195,6 @@ fn random_ip() -> String {
         rng.gen_range(1..255),
         rng.gen_range(0..255),
         rng.gen_range(0..255),
-        rng.gen_range(1..255)
+        rng.gen_range(1..254)
     )
-}
-
-fn generate_random_path(length: usize) -> String {
-    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        .chars()
-        .collect();
-    let mut rng = rand::thread_rng();
-
-    (0..length)
-        .map(|_| chars[rng.gen_range(0..chars.len())])
-        .collect()
 }

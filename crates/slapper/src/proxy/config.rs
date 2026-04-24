@@ -146,6 +146,16 @@ impl ProxyEntry {
         }
     }
 
+    pub fn to_log_key(&self) -> String {
+        let scheme = self.proxy_type.to_string();
+        match (&self.username, &self.password) {
+            (Some(user), Some(_)) => {
+                format!("{}://{}:***@{}:{}", scheme, user, self.address, self.port)
+            }
+            _ => format!("{}://{}:{}", scheme, self.address, self.port),
+        }
+    }
+
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<Self>> {
         let content = fs::read_to_string(&path).map_err(|e| {
             SlapperError::Proxy(format!(

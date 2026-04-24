@@ -292,6 +292,8 @@ pub struct ServeArgs {
     pub tls_cert: Option<String>,
     #[arg(long, help = "TLS private key file (PEM format)")]
     pub tls_key: Option<String>,
+    #[arg(long, help = "Scope file for target validation")]
+    pub scope_file: Option<String>,
 }
 
 #[cfg(feature = "rest-api")]

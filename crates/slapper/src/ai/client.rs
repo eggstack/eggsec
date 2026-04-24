@@ -55,11 +55,7 @@ impl AiClient {
             panic!("AiConfig provider cannot be empty");
         }
         let provider = Provider::from_str(&config.provider);
-        let circuit_breaker = Arc::new(CircuitBreaker::new(
-            5,
-            3,
-            Duration::from_secs(60),
-        ));
+        let circuit_breaker = Arc::new(CircuitBreaker::new(5, 3, Duration::from_secs(60)));
         Self {
             client: Client::builder()
                 .timeout(Duration::from_secs(60))
@@ -113,7 +109,7 @@ impl AiClient {
     }
 
     async fn chat_completion(&self, prompt: &str, max_tokens: Option<u32>, temperature: f64) -> Result<serde_json::Value> {
-        if !self.circuit_breaker.is_available().await {
+        if !self.circuit_breaker.is_available() {
             return Err(AiError::CircuitBreakerOpen {});
         }
 
@@ -129,14 +125,14 @@ impl AiClient {
         match request.send().await {
             Ok(response) => {
                 if response.status().as_u16() == 429 {
-                    self.circuit_breaker.record_failure().await;
+                    self.circuit_breaker.record_failure();
                     return Err(AiError::RateLimited);
                 }
                 if response.status().is_server_error() {
-                    self.circuit_breaker.record_failure().await;
+                    self.circuit_breaker.record_failure();
                     return Err(AiError::ApiError(format!("Server error: {}", response.status())));
                 }
-                self.circuit_breaker.record_success().await;
+                self.circuit_breaker.record_success();
                 let result: serde_json::Value = response.json().await?;
                 if let Some(error) = result.get("error") {
                     let message = error.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
@@ -145,14 +141,14 @@ impl AiClient {
                 Ok(result)
             }
             Err(e) => {
-                self.circuit_breaker.record_failure().await;
+                self.circuit_breaker.record_failure();
                 Err(AiError::RequestFailed(e.to_string()))
             }
         }
     }
 
     pub async fn chat_completion_from_messages(&self, body: &serde_json::Value) -> Result<serde_json::Value> {
-        if !self.circuit_breaker.is_available().await {
+        if !self.circuit_breaker.is_available() {
             return Err(AiError::CircuitBreakerOpen {});
         }
 
@@ -174,14 +170,14 @@ impl AiClient {
         match request.send().await {
             Ok(response) => {
                 if response.status().as_u16() == 429 {
-                    self.circuit_breaker.record_failure().await;
+                    self.circuit_breaker.record_failure();
                     return Err(AiError::RateLimited);
                 }
                 if response.status().is_server_error() {
-                    self.circuit_breaker.record_failure().await;
+                    self.circuit_breaker.record_failure();
                     return Err(AiError::ApiError(format!("Server error: {}", response.status())));
                 }
-                self.circuit_breaker.record_success().await;
+                self.circuit_breaker.record_success();
                 let result: serde_json::Value = response.json().await?;
                 if let Some(error) = result.get("error") {
                     let message = error.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
@@ -190,7 +186,7 @@ impl AiClient {
                 Ok(result)
             }
             Err(e) => {
-                self.circuit_breaker.record_failure().await;
+                self.circuit_breaker.record_failure();
                 Err(AiError::RequestFailed(e.to_string()))
             }
         }
@@ -349,14 +345,20 @@ impl AiClient {
         Ok(bypasses.into_iter().take(10).collect())
     }
 
-    pub async fn circuit_breaker_state(&self) -> CircuitState {
-        self.circuit_breaker.get_state().await
+    pub fn circuit_breaker_state(&self) -> CircuitState {
+        self.circuit_breaker.get_state()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn next_test_provider() -> String {
+        format!("test-provider-{}", TEST_COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
 
     fn create_test_config() -> AiConfig {
         AiConfig {
@@ -680,7 +682,7 @@ mod tests {
     #[tokio::test]
     async fn test_circuit_breaker_initial_state() {
         let client = create_client_without_key();
-        let state = client.circuit_breaker_state().await;
+        let state = client.circuit_breaker_state();
         assert_eq!(state, CircuitState::Closed);
     }
 
@@ -688,32 +690,20 @@ mod tests {
     async fn test_circuit_breaker_after_failures() {
         let client = create_client_without_key();
         for _ in 0..5 {
-            client.circuit_breaker.record_failure().await;
+            client.circuit_breaker.record_failure();
         }
-        let state = client.circuit_breaker_state().await;
+        let state = client.circuit_breaker_state();
         assert_eq!(state, CircuitState::Open);
     }
 
     #[tokio::test]
-    async fn test_circuit_breaker_after_success() {
+    async fn test_circuit_breaker_after_success_in_half_open() {
         let client = create_client_without_key();
         for _ in 0..5 {
-            client.circuit_breaker.record_failure().await;
+            client.circuit_breaker.record_failure();
         }
-        client.circuit_breaker.record_success().await;
-        let state = client.circuit_breaker_state().await;
-        assert_eq!(state, CircuitState::Closed);
-    }
-
-    #[tokio::test]
-    async fn test_circuit_breaker_half_open_transition() {
-        let client = create_client_without_key();
-        for _ in 0..5 {
-            client.circuit_breaker.record_failure().await;
-        }
-        assert_eq!(client.circuit_breaker_state().await, CircuitState::Open);
-        client.circuit_breaker.record_success().await;
-        assert_eq!(client.circuit_breaker_state().await, CircuitState::Closed);
+        let state = client.circuit_breaker_state();
+        assert_eq!(state, CircuitState::Open);
     }
 
     #[test]

@@ -7,10 +7,12 @@ use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use dashmap::DashMap;
+use tracing;
 
 use crate::cli::EndpointScanArgs;
 use crate::config::SlapperConfig;
@@ -681,6 +683,12 @@ mod tests {
 }
 
 pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanResults> {
+    if !config.verify_tls {
+        tracing::warn!(
+            "TLS certificate verification disabled. This is insecure and should only \
+             be used in isolated testing environments."
+        );
+    }
     let client = Client::builder()
         .timeout(config.timeout_duration)
         .danger_accept_invalid_certs(!config.verify_tls)
@@ -689,7 +697,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
 
     let results: Arc<DashMap<usize, EndpointResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(Mutex::new(0u64));
-    let results_count = Arc::new(Mutex::new(0usize));
+    let results_count = Arc::new(AtomicU64::new(0));
     let total_endpoints = config.endpoints.len() as u64;
 
     let progress = if config.tui_mode {
@@ -757,15 +765,10 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
                     let interesting = is_interesting(&endpoint_path, status_code);
 
                     let should_insert = match max_results {
-                        Some(limit) => {
-                            let count = *results_count.lock().await;
-                            if count >= limit {
-                                false
-                            } else {
-                                *results_count.lock().await += 1;
-                                true
-                            }
-                        }
+Some(limit) => {
+                    let old = results_count.fetch_add(1, Ordering::Relaxed);
+                    old < limit as u64
+                }
                         None => true,
                     };
                     if should_insert {

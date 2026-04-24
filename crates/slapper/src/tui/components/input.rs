@@ -18,6 +18,7 @@ pub struct InputField {
     pub cursor_pos: usize,
     pub width: Option<usize>,
     pub autocomplete: Option<Vec<&'static str>>,
+    pub validation: Option<ValidationResult>,
 }
 
 impl InputField {
@@ -29,6 +30,7 @@ impl InputField {
             cursor_pos: 0,
             width: None,
             autocomplete: None,
+            validation: None,
         }
     }
 
@@ -46,6 +48,11 @@ impl InputField {
 
     pub fn with_autocomplete(mut self, completions: Vec<&'static str>) -> Self {
         self.autocomplete = Some(completions);
+        self
+    }
+
+    pub fn with_validation(mut self, result: ValidationResult) -> Self {
+        self.validation = Some(result);
         self
     }
 
@@ -285,8 +292,14 @@ impl InputField {
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        let style = if self.focused {
+        let border_style = if self.focused {
             Style::default().fg(Color::Yellow)
+        } else if let Some(ref validation) = self.validation {
+            if validation.valid {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::Red)
+            }
         } else {
             Style::default().fg(Color::Gray)
         };
@@ -294,7 +307,7 @@ impl InputField {
         let block = Block::default()
             .title(self.label.as_str())
             .borders(Borders::ALL)
-            .border_style(style);
+            .border_style(border_style);
 
         let display_value = if let Some(w) = self.width {
             let available = w.saturating_sub(2);

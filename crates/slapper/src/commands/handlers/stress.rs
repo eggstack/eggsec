@@ -90,7 +90,7 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
 
             println!("Loaded {} proxies from {} and saved to config", count, add_args.file);
             for proxy in proxies.iter().take(5) {
-                println!("  - {}", proxy.to_url());
+                println!("  - {}", proxy.to_log_key());
             }
             if count > 5 {
                 println!("  ... and {} more", count - 5);

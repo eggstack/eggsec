@@ -1,5 +1,5 @@
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
 use crate::error::Result;
@@ -136,7 +136,8 @@ async fn fingerprint_udp_port(
     port: u16,
     timeout_duration: Duration,
 ) -> Option<UdpServiceFingerprint> {
-    let addr: SocketAddr = format!("{}:{}", host, port).parse().ok()?;
+    let ip: IpAddr = host.parse().ok()?;
+    let addr = SocketAddr::new(ip, port);
 
     let socket = match UdpSocket::bind("0.0.0.0:0").await {
         Ok(s) => s,

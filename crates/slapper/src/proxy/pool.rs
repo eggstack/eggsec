@@ -171,7 +171,7 @@ impl ProxyPool {
     }
 
     pub fn record_failure(&self, proxy: &ProxyEntry) {
-        let key = proxy.to_url();
+        let key = proxy.to_log_key();
         if let Some(mut stats) = self.stats.get_mut(&key) {
             stats.total_requests += 1;
             stats.failed_requests += 1;

@@ -109,7 +109,7 @@ pub struct RateLimiter {
     target_pps: u64,
     interval_ns: u64,
     tokens: Arc<AtomicU64>,
-    last_refill: Arc<std::sync::Mutex<Instant>>,
+    last_refill: Arc<parking_lot::Mutex<Instant>>,
 }
 
 impl RateLimiter {
@@ -124,7 +124,7 @@ impl RateLimiter {
             target_pps,
             interval_ns,
             tokens: Arc::new(AtomicU64::new(target_pps)),
-            last_refill: Arc::new(std::sync::Mutex::new(Instant::now())),
+            last_refill: Arc::new(parking_lot::Mutex::new(Instant::now())),
         }
     }
 
@@ -150,13 +150,7 @@ impl RateLimiter {
     }
 
     pub fn refill(&self) {
-        let mut last = match self.last_refill.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                tracing::warn!("Rate limiter mutex was poisoned, recovering");
-                poisoned.into_inner()
-            }
-        };
+        let mut last = self.last_refill.lock();
         let now = Instant::now();
         let elapsed_ns = now.duration_since(*last).as_nanos() as u64;
 

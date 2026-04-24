@@ -6,10 +6,13 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc, Timelike};
+use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -76,15 +79,9 @@ pub struct OffPeakWindow {
 
 impl OffPeakWindow {
     pub fn is_in_window(&self, time: &DateTime<Utc>) -> bool {
-        let local = match &self.timezone[..] {
-            "UTC" => time.hour() as i32,
-            _ => {
-                let offset_hours: i64 = self.timezone.trim().parse().unwrap_or(0);
-                let offset_time = *time + chrono::Duration::hours(offset_hours);
-                offset_time.hour() as i32
-            }
-        };
-        let current_hour = local;
+        let tz: Tz = self.timezone.parse().unwrap_or(chrono_tz::UTC);
+        let local = time.with_timezone(&tz);
+        let current_hour = local.hour() as i32;
         let start = self.start_hour as i32;
         let end = self.end_hour as i32;
 
@@ -207,10 +204,7 @@ impl TargetPortfolio {
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            let data = self.data.read().map_err(|_| std::io::Error::new(
-                std::io::ErrorKind::WouldBlock,
-                "Failed to acquire read lock on portfolio data"
-            ))?;
+            let data = self.data.read();
             let content = serde_json::to_string(&*data)?;
             fs::write(path, content)?;
         }
@@ -218,25 +212,24 @@ impl TargetPortfolio {
     }
 
     pub fn add_target(&self, id: String, config: TargetConfig) {
-        self.data.write().unwrap().targets.insert(id, config);
+        self.data.write().targets.insert(id, config);
     }
 
     pub fn remove_target(&self, id: &str) -> bool {
-        self.data.write().unwrap().targets.remove(id).is_some()
+        self.data.write().targets.remove(id).is_some()
     }
 
     pub fn get_target(&self, id: &str) -> Option<TargetConfig> {
-        self.data.read().unwrap().targets.get(id).cloned()
+        self.data.read().targets.get(id).cloned()
     }
 
     pub fn get_mut_target(&self, id: &str) -> Option<TargetConfig> {
-        self.data.read().unwrap().targets.get(id).cloned()
+        self.data.read().targets.get(id).cloned()
     }
 
     pub fn get_all_targets(&self) -> Vec<(String, TargetConfig)> {
         self.data
             .read()
-            .unwrap()
             .targets
             .iter()
             .filter(|(_, c)| c.enabled)
@@ -245,29 +238,29 @@ impl TargetPortfolio {
     }
 
     pub fn update_last_scan(&self, id: &str, timestamp: &DateTime<Utc>) {
-        if let Some(target) = self.data.write().unwrap().targets.get_mut(id) {
+        if let Some(target) = self.data.write().targets.get_mut(id) {
             target.last_scan = Some(*timestamp);
         }
     }
 
     pub fn add_scan_record(&self, id: &str, record: ScanRecord) {
-        if let Some(target) = self.data.write().unwrap().targets.get_mut(id) {
+        if let Some(target) = self.data.write().targets.get_mut(id) {
             target.scan_history.push(record);
         }
     }
 
     pub fn set_baseline(&self, id: &str, finding_ids: Vec<String>) {
-        if let Some(target) = self.data.write().unwrap().targets.get_mut(id) {
+        if let Some(target) = self.data.write().targets.get_mut(id) {
             target.baseline_findings = finding_ids;
         }
     }
 
     pub fn targets_count(&self) -> usize {
-        self.data.read().unwrap().targets.len()
+        self.data.read().targets.len()
     }
 
     pub fn enabled_count(&self) -> usize {
-        self.data.read().unwrap().targets.values().filter(|t| t.enabled).count()
+        self.data.read().targets.values().filter(|t| t.enabled).count()
     }
 }
 

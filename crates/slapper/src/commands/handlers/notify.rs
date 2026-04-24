@@ -91,27 +91,41 @@ pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) ->
     use std::net::SocketAddr;
     use tokio::net::TcpListener;
     use axum::serve;
+    use std::path::PathBuf;
+    use crate::config::Scope;
+    use crate::distributed::TlsConfig;
     use crate::tool::{create_default_registry, protocol::rest::create_router};
 
+    let scope = if let Some(ref scope_file) = args.scope_file {
+        Some(Scope::from_file(scope_file)?)
+    } else {
+        None
+    };
+
+    let tls_config = match (&args.tls_cert, &args.tls_key) {
+        (Some(ref cert), Some(ref key)) => Some(TlsConfig {
+            cert_path: PathBuf::from(cert),
+            key_path: PathBuf::from(key),
+        }),
+        _ => None,
+    };
+
     let registry = create_default_registry();
-    let router = create_router(registry, args.api_key.clone());
+    let router = create_router(registry, args.api_key.clone(), scope, tls_config.clone());
 
     let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid address {}:{} - {}", args.bind, args.port, e))?;
 
+    if tls_config.is_some() {
+        tracing::info!("Starting HTTPS server on {}", addr);
+    } else {
+        tracing::info!("Starting HTTP server on {}", addr);
+    }
+
     let listener = TcpListener::bind(addr)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
-
-    if args.tls_cert.is_some() {
-        tracing::warn!(
-            "HTTPS not yet supported directly. Config options accepted.\n\
-            For HTTPS, use a reverse proxy: caddy reverse-proxy --from :8443 --to :8080"
-        );
-    }
-
-    tracing::info!("Starting HTTP server on {}", addr);
 
     let make_service = router.into_make_service();
     serve(listener, make_service)

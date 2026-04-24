@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
@@ -10,8 +10,8 @@ pub struct WafSignature {
     pub ip_ranges: Vec<String>,
 }
 
-static WAF_SIGNATURES: LazyLock<HashMap<String, WafSignature>> = LazyLock::new(|| {
-    let mut signatures = HashMap::new();
+static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new(|| {
+    let mut signatures = FxHashMap::default();
 
     signatures.insert(
         "cloudflare".to_string(),
@@ -515,6 +515,6 @@ static WAF_SIGNATURES: LazyLock<HashMap<String, WafSignature>> = LazyLock::new(|
     signatures
 });
 
-pub fn get_waf_signatures() -> HashMap<String, WafSignature> {
+pub fn get_waf_signatures() -> FxHashMap<String, WafSignature> {
     WAF_SIGNATURES.clone()
 }

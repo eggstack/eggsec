@@ -156,13 +156,13 @@ impl WafDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
 
     fn test_detector() -> WafDetector {
         WafDetector {
             client: crate::utils::get_shared_http_client(),
-            signatures: HashMap::new(),
-            signatures_lower: HashMap::new(),
+            signatures: FxHashMap::default(),
+            signatures_lower: FxHashMap::default(),
         }
     }
 

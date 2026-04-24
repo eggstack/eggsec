@@ -23,14 +23,12 @@ const JOOMLA_VULNERABILITIES: &[(&str, &str, Severity, &str, Option<&str>)] = &[
     ),
 ];
 
+use crate::utils::create_insecure_http_client;
+
 pub async fn enumerate_extensions(url: &str) -> Option<Vec<String>> {
     let extensions_url = format!("{}/administrator/components", url.trim_end_matches('/'));
 
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .danger_accept_invalid_certs(true)
-        .build()
-        .ok()?;
+    let client = create_insecure_http_client(10)?;
 
     match client.get(&extensions_url).send().await {
         Ok(resp) => {

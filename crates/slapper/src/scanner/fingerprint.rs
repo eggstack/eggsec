@@ -6,6 +6,8 @@ use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
+use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -230,7 +232,7 @@ pub async fn fingerprint_services(
 ) -> Result<FingerprintResults> {
     let results: Arc<DashMap<u16, ServiceFingerprint>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
-    let results_count = Arc::new(tokio::sync::Mutex::new(0usize));
+    let results_count = Arc::new(AtomicU64::new(0));
     let total_ports = ports.len() as u64;
 
     let progress = if tui_mode {
@@ -264,15 +266,10 @@ pub async fn fingerprint_services(
         let handle = tokio::spawn(async move {
             if let Some(fp) = fingerprint_port(&host, port, timeout_dur).await {
                 let should_insert = match max_results {
-                    Some(limit) => {
-                        let count = *results_count.lock().await;
-                        if count >= limit {
-                            false
-                        } else {
-                            *results_count.lock().await += 1;
-                            true
-                        }
-                    }
+Some(limit) => {
+                let old = results_count.fetch_add(1, Ordering::Relaxed);
+                old < limit as u64
+            }
                     None => true,
                 };
                 if should_insert {
@@ -324,7 +321,8 @@ async fn fingerprint_port(
     port: u16,
     timeout_duration: Duration,
 ) -> Option<ServiceFingerprint> {
-    let addr = format!("{}:{}", host, port);
+    let ip: IpAddr = host.parse().ok()?;
+    let addr = SocketAddr::new(ip, port);
 
     #[allow(unreachable_patterns)]
     let probes_to_try: Vec<(&str, &[u8], &str)> = match port {
