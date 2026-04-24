@@ -115,7 +115,7 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 | Metric | Value | Note |
 |--------|-------|-------|
 | Tests | 1107 passing | Library tests |
-| Tests | 1411 passing | With rest-api,ai-integration |
+| Tests | 1345 passing | With rest-api,ai-integration (9 pre-existing AI test failures) |
 | Clippy | ~19 warnings | TUI-specific warnings acceptable |
 | Source files | 470+ |
 | Payload types | 30 |
@@ -191,6 +191,11 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 - `TlsClient::new(domain)` — creates client with `NoVerifier` (insecure, for internal use)
 - `recon/ssl.rs` uses `rustls_pki_types::CertificateDer` for cert extraction
 
+**Dependency Versions (as of 2026-04-24):**
+- axum: 0.8.x
+- tonic: 0.14.x
+- prost: 0.14.x
+
 **Exception:** `slapper-nse` retains `native-tls` (OpenSSL) for Nmap NSE script compatibility. This is intentional — Nmap scripts expect OpenSSL-based TLS behavior. Do not migrate `slapper-nse` to `rustls`.
 
 ### Spoofed Scanner
@@ -201,7 +206,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan (Wave 7 deferred pending coordinated dependency updates)
+- `plans/plan.md` — Consolidated improvement plan (All waves complete)
 
 ## Lessons Learned
 
