@@ -85,9 +85,10 @@ Keywords: csv injection, formula injection, spreadsheet, excel, =cmd, hyperlink,
 
 1. **Identify export points**: Look for `/export`, `/download`, `/report`, `/data` endpoints
 2. **Test formula prefixes**: Inject `=`, `+`, `-`, `@` at start of input
-3. **Check XML endpoints**: Test for XXE in XML-generating endpoints
-4. **Verify output encoding**: Ensure `escape_csv()` and `escape_xml()` are applied
-5. **Test blind vectors**: Some formula injection requires opening in actual spreadsheet
+3. **Check Unicode bypass**: Test fullwidth variants (U+FF1D, U+FF0B, U+FF0D, U+FF20) - these are normalized by NFKC before checking
+4. **Check XML endpoints**: Test for XXE in XML-generating endpoints
+5. **Verify output encoding**: Ensure `escape_csv()` and `escape_xml()` are applied
+6. **Test blind vectors**: Some formula injection requires opening in actual spreadsheet
 
 ## Security Headers
 

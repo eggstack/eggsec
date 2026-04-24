@@ -37,6 +37,16 @@ Uses regex-based pattern detection with word-boundary awareness for more robust 
 - `r"\bfork\b"` - process forking
 - `r"\b__import__\b"` - dynamic import
 - `r"\bopen\s*\("` - file access
+- `r"pty\.spawn"` - PTY spawning
+- `r"os\.popen"` - OS command pipe
+- `r"multiprocessing\.Process"` - Process threads
+- `r"\bctypes\b"` - C FFI
+- `r"\bimportlib\b"` - dynamic imports
+- `r"\bgetattr\("` - attribute access
+- `r"\bchr\("` - character encoding
+- `r"\\x[0-9a-fA-F]{2}"` - hex escape
+- `r"\\u[0-9a-fA-F]{4}"` - unicode escape
+- `r"\\[0-7]{3,}"` - octal escape
 
 Uses `LazyLock<Regex>` for compiled patterns to avoid repeated compilation.
 
@@ -54,6 +64,14 @@ pub struct PluginConfig {
     pub timeout_secs: u64,               // default: 300
     pub max_file_size_bytes: usize,      // default: 1,000,000
 }
+```
+
+### Timeout Enforcement
+
+Plugin execution is time-limited via `timeout_secs` (default: 300 seconds):
+- Python: Uses `tokio::time::timeout` wrapper around plugin execution
+- Ruby: Uses `rx.recv_timeout()` with the configured duration
+- If timeout occurs, execution is cancelled and an error is returned
 ```
 
 ### Usage
@@ -90,6 +108,9 @@ manager.load_plugins(&plugin_dir)?;
 - `TCPSocket` / `UDPSocket` - network sockets
 - `Open3.` - process spawning
 - `Shellwords.escape` - shell escaping
+- `Kernel.exec` - direct exec call
+- `\bopen\b` - generic open (matches `open("|cmd")`)
+- `\beval\b` - eval without parens
 
 ### Configuration
 
