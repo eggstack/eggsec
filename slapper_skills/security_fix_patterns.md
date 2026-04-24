@@ -139,6 +139,78 @@ pub fn to_log_key(&self) -> String {
 ```rust
 use unicode_normalization::UnicodeNormalization;
 let normalized: String = s.nfkc().collect();
+if normalized.starts_with('=') || normalized.starts_with('+') { ... }
+```
+
+### 8. IMAP Injection Prevention
+
+**Issue**: User input concatenated directly into IMAP commands without escaping.
+
+**Pattern**: Use per-RFC 3501 escaping function.
+
+```rust
+fn escape_imap_quoted(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() * 2);
+    for ch in s.chars() {
+        match ch {
+            '\\' => result.push_str("\\\\"),
+            '"' => result.push_str("\\\""),
+            '\r' | '\n' => {},  // Strip these
+            c => result.push(c),
+        }
+    }
+    result
+}
+```
+
+**Files**: `slapper-nse/src/libraries/imap.rs`
+
+### 9. HMAC Signing for Webhooks
+
+**Issue**: Webhooks send raw secret in header instead of HMAC signature.
+
+**Pattern**: Use HMAC-SHA256 signing like agent alerts.
+
+```rust
+type HmacSha256 = Hmac<Sha256>;
+let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
+    .map_err(|e| format!("HMAC error: {}", e))?;
+let canonical_json = serde_json::to_string(payload).map_err(...)?;
+mac.update(canonical_json.as_bytes());
+let result = mac.finalize();
+let signature = format!("sha256={}", hex::encode(result.into_bytes()));
+request = request.header("X-Signature-256", signature);
+```
+
+**Files**: `notify/webhook.rs`, `agent/alerts/routing.rs`
+
+### 10. Error Sanitization Expansion
+
+**Issue**: Stack trace patterns miss Rust panics, Python tracebacks, Go panics, Windows paths.
+
+**Pattern**: Add language-specific patterns:
+
+```rust
+static RUST_PANIC: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"thread\s+'[^']+'\s+panicked\s+at").unwrap()
+});
+
+static PYTHON_TRACEBACK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Traceback \(most recent call last\):").unwrap()
+});
+
+static GO_PANIC: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(panic:\s+runtime\s+error:|goroutine\s+\d+\s+\[)").unwrap()
+});
+
+static WINDOWS_PATH: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[A-Za-z]:\\[\w\\]+").unwrap()
+});
+```
+
+**Files**: `utils/error.rs`
+use unicode_normalization::UnicodeNormalization;
+let normalized: String = s.nfkc().collect();
 // Then check normalized string for formula chars (=, +, -, @)
 ```
 

@@ -10,6 +10,8 @@ triggers:
   - cloud metadata
   - aws metadata
   - gcp metadata
+  - private ip blocking
+  - loopback blocking
 metadata:
   category: fuzzing
   tools: [fuzzer]
@@ -24,11 +26,21 @@ SSRF testing finds vulnerabilities where server-side applications can be induced
 
 - Basic SSRF detection
 - Cloud metadata service access (AWS, GCP, Azure)
-- Port scanning via SSRf
+- Port scanning via SSRF
 - Internal service enumeration
 - Data exfiltration testing
 - Blind SSRF detection via timing
 - Filter bypass techniques
+
+## Internal Protection (Built-in)
+
+Slapper includes automatic SSRF prevention in `resolve_host()`:
+- Blocks loopback addresses (127.0.0.0/8)
+- Blocks private IPs (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+- Blocks link-local (169.254.0.0/16)
+- IPv6 equivalents (fc00::/7, fe80::/10)
+
+This prevents accidental SSRF when parsing user-provided hostnames in port scanning and other tools.
 
 ## Usage
 
