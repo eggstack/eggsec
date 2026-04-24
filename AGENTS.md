@@ -862,13 +862,15 @@ When fixing failing tests in integration scenarios:
 
 1. **Proxy `to_url()` exposes credentials**: Despite `SensitiveString` storage, `to_url()` calls `expose_secret()`. Use `to_log_key()` for any non-connection use (logging, display, DashMap keys). Also affects `proxy/health.rs`, `proxy/rotator.rs`, and `commands/handlers/stress.rs:93`.
 
-2. **Plugin loading has no canonicalization**: All three plugin loaders (`python.rs`, `lib.rs`, `loader.rs`) read from `read_dir()` without `canonicalize()`. Use `validate_plugin_path()` when implementing plugin loading changes.
+2. **Plugin loading path validation**: Use `validate_plugin_path()` from `slapper-plugin/src/validation.rs` for safe path handling in plugin loading.
 
-3. **`PluginConfig.timeout_secs` is never enforced**: The field exists (default 300s) but is never passed to execution. Python uses `join_all`, Ruby uses `rx.recv()` — both block indefinitely.
+3. **Plugin timeout enforcement**: Python and Ruby plugins now enforce `timeout_secs` from `PluginConfig`:
+   - Python: uses `tokio::time::timeout` wrapper
+   - Ruby: uses `rx.recv_timeout()` with duration
 
-4. **`CircuitBreakerRegistry` is dead code**: Defined at `utils/circuit_breaker.rs:125`, never instantiated anywhere. Only referenced in its own file and the `utils/mod.rs` re-export.
+4. **CircuitBreakerRegistry**: Available but optional - each AI client creates its own circuit breaker directly. Use when managing multiple providers.
 
-5. **TimingAnalyzer bottleneck location**: The lock contention is in `fuzzer/engine/utils.rs:198-199` (not `fuzzer/detection/analyzer.rs`). `TimingAnalyzer.record()` takes `&mut self` due to `Vec<f64>` samples, forcing `Arc<Mutex<>>` wrapper.
+5. **TimingAnalyzer uses atomics**: Now uses `AtomicU64` and `AtomicUsize` for lock-free stats (no longer needs Arc<Mutex>). Still uses `Vec<f64>` for samples requiring `&mut self` in record() method.
 
 6. **Rate limiter already uses `parking_lot::RwLock`**: The `tool/ratelimit.rs` file already imports `parking_lot::RwLock` (not `std::sync`). Basic per-client rate limiting exists; what's missing is per-endpoint and IP-based limiting.
 
@@ -878,6 +880,6 @@ When fixing failing tests in integration scenarios:
 
 9. **`raw_udp` module is dead code**: Defined at `stress/udp.rs:20-117` with complete packet builder + IP spoofing. Zero references from outside the module. `run_udp_flood()` uses standard `UdpSocket` instead.
 
-10. **Formula injection has partial defense**: `escape_csv()` checks `!c.is_ascii()` on first char (variable name `first_char_is_control` is misleading). Fullwidth Unicode chars DO get quoted, but protection relies solely on CSV quoting. Explicit NFKC normalization is still recommended.
+10. **Formula injection defense**: `escape_csv()` uses NFKC normalization to normalize Unicode fullwidth characters before checking for formula prefixes. This prevents fullwidth bypass attacks.
 
-11. **TUI Plugin Tab blocked by pyo3 errors**: The `TaskResult::PluginsLoaded` missing variant error is masked by pyo3 deprecated API errors in `slapper-plugin` (8 errors: `into_py`, `PyNone`). Fix pyo3 first, then the TUI compile error surfaces.
+11. **TUI Plugin Tab compiles**: The `TaskResult::PluginsLoaded` variant is present, and plugins feature compiles successfully.
