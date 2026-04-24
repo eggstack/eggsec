@@ -35,11 +35,7 @@ fn runtime_error(ruby: &Ruby, msg: impl Into<std::borrow::Cow<'static, str>>) ->
 pub fn register_api(ruby: &Ruby) -> Result<(), Error> {
     let slapper = ruby.define_module("Slapper")?;
 
-    register_http_api(ruby, &slapper)?;
-    register_scanner_api(ruby, &slapper)?;
-    register_fuzzer_api(ruby, &slapper)?;
     register_reporting_api(ruby, &slapper)?;
-    register_metasploit_api(ruby, &slapper)?;
     register_encoder_api(ruby, &slapper)?;
     register_session_api(ruby, &slapper)?;
 
