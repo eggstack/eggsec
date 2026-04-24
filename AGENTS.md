@@ -942,6 +942,22 @@ When fixing failing tests in integration scenarios:
 
 25. **Dedup key collision**: `make_dedup_key()` in AlertRouter ALREADY includes `finding_ids` hash (routing.rs:237-254). The fix is already implemented.
 
+26. **SessionManager integration**: `SessionManager` now integrated into `App` struct with `auto_save_if_due()` method. Auto-saves every 30 seconds.
+
+27. **ThemeManager integration**: `ThemeManager` integrated into `App` with `toggle_theme()` method and Ctrl+T keybinding. `tc!()` macro now uses thread-local.
+
+28. **WebSocket support**: Added `ws-api` feature with WebSocket endpoint at `/ws` in REST router for pub/sub.
+
+29. **Clipboard paste**: Ctrl+V now pastes from system clipboard into active input field.
+
+30. **Alert CLI flags**: Added `--alert-webhook`, `--alert-slack`, `--alert-email` flags to agent CLI.
+
+31. **AI client full integration**: Agent now uses AiPayloadGenerator, SmartWafBypass, and AdaptiveScanEngine for context-aware scanning.
+
+32. **Memory TTL cleanup**: `cleanup_old_patterns()` called in `process_scheduled_scans()` with 90-day TTL.
+
+33. **Scan failure escalation**: Agent uses consecutive failure counter; alerts triggered after 3 consecutive failures.
+
 ---
 
 *End of AGENTS.md*

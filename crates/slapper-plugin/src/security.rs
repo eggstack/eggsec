@@ -1,3 +1,4 @@
+#[cfg(feature = "python-plugins")]
 use std::sync::LazyLock;
 
 #[cfg(feature = "python-plugins")]
@@ -25,6 +26,30 @@ static SUSPICIOUS_PYTHON_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r"(?i)\\x[0-9a-fA-F]{2}").unwrap(),
         Regex::new(r"(?i)\\u[0-9a-fA-F]{4}").unwrap(),
         Regex::new(r"(?i)\\[0-7]{3,}").unwrap(),
+    ]
+});
+
+#[cfg(feature = "ruby-plugins")]
+static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+    vec![
+        regex::Regex::new(r"(?i)\beval\(").unwrap(),
+        regex::Regex::new(r"(?i)\bexec\(").unwrap(),
+        regex::Regex::new(r"(?i)\bsystem\(").unwrap(),
+        regex::Regex::new(r"(?i)`").unwrap(),
+        regex::Regex::new(r"(?i)IO\.popen").unwrap(),
+        regex::Regex::new(r"(?i)Process\.spawn").unwrap(),
+        regex::Regex::new(r"(?i)File\.read\(").unwrap(),
+        regex::Regex::new(r"(?i)File\.write\(").unwrap(),
+        regex::Regex::new(r"(?i)File\.open\(").unwrap(),
+        regex::Regex::new(r"(?i)Net::HTTP").unwrap(),
+        regex::Regex::new(r"(?i)Socket\.open").unwrap(),
+        regex::Regex::new(r"(?i)TCPSocket").unwrap(),
+        regex::Regex::new(r"(?i)UDPSocket").unwrap(),
+        regex::Regex::new(r"(?i)Open3\.").unwrap(),
+        regex::Regex::new(r"(?i)Shellwords\.escape").unwrap(),
+        regex::Regex::new(r"(?i)Kernel\.exec").unwrap(),
+        regex::Regex::new(r"(?i)\bopen\b").unwrap(),
+        regex::Regex::new(r"(?i)\beval\b").unwrap(),
     ]
 });
 
@@ -68,6 +93,39 @@ pub fn validate_python_plugin(content: &str, block_suspicious_plugins: bool) -> 
 #[cfg(not(feature = "python-plugins"))]
 pub fn validate_python_plugin(_content: &str, _block_suspicious_plugins: bool) -> anyhow::Result<()> {
     anyhow::bail!("Python plugins support is not enabled");
+}
+
+#[cfg(feature = "ruby-plugins")]
+pub fn validate_ruby_plugin(content: &str, block_suspicious_plugins: bool) -> anyhow::Result<()> {
+    if content.len() > MAX_PLUGIN_SIZE_BYTES {
+        anyhow::bail!(
+            "Plugin exceeds maximum size of {} bytes",
+            MAX_PLUGIN_SIZE_BYTES
+        );
+    }
+
+    let mut suspicious_found = Vec::new();
+    for pattern in SUSPICIOUS_RUBY_PATTERNS.iter() {
+        if pattern.is_match(content) {
+            suspicious_found.push(pattern.as_str());
+        }
+    }
+
+    if !suspicious_found.is_empty() {
+        if block_suspicious_plugins {
+            anyhow::bail!(
+                "Plugin contains suspicious patterns and blocking is enabled: {}",
+                suspicious_found.join(", ")
+            );
+        } else {
+            tracing::warn!(
+                "Plugin contains suspicious patterns (allowing due to config): {}",
+                suspicious_found.join(", ")
+            );
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

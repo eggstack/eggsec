@@ -191,6 +191,9 @@ insecure-tls = []
 # REST API server with MCP (Model Context Protocol) for AI agent integration
 rest-api = ["tool-api", "axum", "tower", "async-stream"]
 
+# WebSocket API server support
+ws-api = ["axum/ws"]
+
 # gRPC API server for external tool integration
 grpc-api = ["tool-api", "tonic", "prost", "prost-build"]
 

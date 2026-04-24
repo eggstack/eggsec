@@ -17,6 +17,7 @@ use crate::tui::help::CommandPalette;
 use crate::tui::state;
 use crate::tui::tabs::Tab;
 use crate::tui::ui;
+use crate::tui::utils::Clipboard;
 
 /// Layout constants matching `ui::draw()` — change these if the layout changes.
 const LAYOUT_MARGIN: u16 = 1;
@@ -54,6 +55,10 @@ pub fn run(config_path: Option<String>) -> Result<()> {
         app.settings.set_config_path(path);
     }
     let res = run_app(&mut terminal, &mut app);
+
+    if let Err(e) = app.session_manager.save_quick(&app) {
+        tracing::warn!("Failed to save session on exit: {:?}", e);
+    }
 
     disable_raw_mode()?;
     execute!(
@@ -222,7 +227,18 @@ where
                     (KeyModifiers::CONTROL, KeyCode::Char('z')) => {
                         app.toggle_pause();
                     }
+                    (KeyModifiers::CONTROL, KeyCode::Char('t')) => {
+                        app.toggle_theme();
+                    }
+                    (KeyModifiers::CONTROL, KeyCode::Char('v')) => {
+                        if let Some(text) = Clipboard::get() {
+                            app.dispatcher_mut().handle_paste(&text);
+                        }
+                    }
                     (KeyModifiers::CONTROL, KeyCode::Char('y')) => {
+                        if app.is_paused() {
+                            app.resume();
+                        }
                     }
                     (KeyModifiers::CONTROL, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
                         app.toggle_bookmark(app.current_tab as usize);
@@ -461,5 +477,6 @@ where
         }
 
         app.update();
+        app.auto_save_if_due();
     }
 }

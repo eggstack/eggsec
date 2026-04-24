@@ -611,6 +611,7 @@ pub trait TabInput: TabState {
     fn handle_down(&mut self);
     fn handle_left(&mut self) -> bool;
     fn handle_right(&mut self) -> bool;
+    fn handle_paste(&mut self, _text: &str) {}
     fn handle_word_forward(&mut self) {
         for _ in 0..5 {
             self.handle_right();
