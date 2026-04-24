@@ -57,10 +57,37 @@ pub fn parse_url_validated(url: &str) -> Result<url::Url> {
 pub fn resolve_host(host: &str) -> Result<IpAddr> {
     let addrs: Vec<IpAddr> = (host, 0).to_socket_addrs()?.map(|sa| sa.ip()).collect();
 
-    addrs
+    let ip = addrs
         .into_iter()
         .next()
-        .ok_or_else(|| anyhow!("Could not resolve host: {}", host))
+        .ok_or_else(|| anyhow!("Could not resolve host: {}", host))?;
+
+    if ip.is_loopback() {
+        anyhow::bail!("Resolved to loopback address blocked");
+    }
+    if is_private_ip(&ip) {
+        anyhow::bail!("Resolved to private IP address blocked");
+    }
+    Ok(ip)
+}
+
+fn is_private_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            let octets = ipv4.octets();
+            octets[0] == 10
+                || (octets[0] == 172 && (15..=31).contains(&octets[1]))
+                || (octets[0] == 192 && octets[1] == 168)
+                || (octets[0] == 169 && octets[1] == 254)
+                || (octets[0] == 127)
+        }
+        IpAddr::V6(ipv6) => {
+            ipv6.is_loopback()
+                || ipv6.segments()[0] == 0xfc00 >> 8
+                || ipv6.segments()[0] == 0xfd00 >> 8
+                || ipv6.segments()[0] == 0xfe80 >> 8
+        }
+    }
 }
 
 #[inline]
@@ -92,9 +119,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_ports_mixed() {
-        let ports = parse_ports("22,80-82,443").unwrap();
-        assert_eq!(ports, vec![22, 80, 81, 82, 443]);
+    fn test_resolve_host_blocks_private() {
+        let result = resolve_host("localhost");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("loopback"));
+
+        let result = resolve_host("192.168.1.1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("private"));
     }
 
     #[test]

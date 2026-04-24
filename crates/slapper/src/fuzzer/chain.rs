@@ -1,8 +1,10 @@
 
-use regex::RegexBuilder;
+use regex::{Regex, RegexBuilder};
+use regex::Captures;
 use reqwest::{Client, Method};
-use serde::{Deserialize, Serialize};
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChainAction {
@@ -325,13 +327,20 @@ impl ChainExecutor {
     }
 
     fn interpolate_string(&self, input: &str) -> String {
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"\$\{(\w+)\}").unwrap()
+        });
+
         let mut result = input.to_string();
-
-        for (key, value) in &self.variables {
-            let placeholder = format!("${{{}}}", key);
-            result = result.replace(&placeholder, value);
+        for cap in RE.captures_iter(input) {
+            if let Some(key) = cap.get(1) {
+                let key_str = key.as_str();
+                if let Some(value) = self.variables.get(key_str) {
+                    let placeholder = format!("${{{}}}", key_str);
+                    result = result.replace(&placeholder, value);
+                }
+            }
         }
-
         result
     }
 

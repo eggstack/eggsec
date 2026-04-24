@@ -502,7 +502,7 @@ impl TabInput for HuntTab {
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == HuntFocusArea::Inputs {
             let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.len()
+            field.cursor_pos >= field.value.chars().count()
         } else if self.focus_area == HuntFocusArea::Options {
             self.option_checkboxes.iter().position(|cb| cb.focused)
                 == Some(self.option_checkboxes.len() - 1)

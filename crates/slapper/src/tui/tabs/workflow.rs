@@ -475,7 +475,7 @@ impl TabInput for WorkflowTab {
             }
             WorkflowFocusArea::Inputs => {
                 let f = &self.inputs.fields[0];
-                f.cursor_pos >= f.value.len()
+                f.cursor_pos >= f.value.chars().count()
             }
             _ => true,
         }

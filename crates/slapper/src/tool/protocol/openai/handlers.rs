@@ -58,16 +58,14 @@ async fn streaming_response(
     let available_tools = registry.list();
     let matched_tools = find_matching_tools(&user_query, &available_tools);
 
-    if !matched_tools.is_empty() {
-        let target = extract_target_from_query(&user_query);
-        if let Some(ref scope) = scope {
-            if !scope.is_target_allowed(&target.value).unwrap_or(false) {
-                let events: Vec<Result<axum::response::sse::Event, Infallible>> = vec![Ok(
-                    axum::response::sse::Event::default()
-                        .data(format!(r#"{{"error": "Scope violation: {} not allowed"}}"#, target.value))
-                )];
-                return Sse::new(stream::iter(events));
-            }
+    let target = extract_target_from_query(&user_query);
+    if let Some(ref scope) = scope {
+        if !scope.is_target_allowed(&target.value).unwrap_or(false) {
+            let events: Vec<Result<axum::response::sse::Event, Infallible>> = vec![Ok(
+                axum::response::sse::Event::default()
+                    .data(format!(r#"{{"error": "Scope violation: {} not allowed"}}"#, target.value))
+            )];
+            return Sse::new(stream::iter(events));
         }
     }
 

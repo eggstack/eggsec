@@ -513,7 +513,7 @@ impl TabInput for StorageTab {
         match self.focus_area {
             StorageFocusArea::Config => {
                 let f = &self.config_inputs.fields[0];
-                f.cursor_pos >= f.value.len()
+                f.cursor_pos >= f.value.chars().count()
             }
             StorageFocusArea::Mode => {
                 self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)

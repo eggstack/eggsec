@@ -365,7 +365,7 @@ impl TabInput for ComplianceTab {
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == ComplianceFocusArea::Inputs {
             let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.len()
+            field.cursor_pos >= field.value.chars().count()
         } else if self.focus_area == ComplianceFocusArea::Framework {
             self.framework_selector.selected
                 >= self.framework_selector.items.len().saturating_sub(1)

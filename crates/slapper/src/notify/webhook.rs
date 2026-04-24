@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use crate::types::SensitiveString;
 use crate::utils::create_http_client;
 use anyhow::Result;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationPayload {
@@ -94,7 +96,14 @@ impl WebhookNotifier {
         let mut request = client.post(&webhook.url);
 
         if let Some(ref secret) = webhook.secret {
-            request = request.header("X-Webhook-Secret", secret.expose_secret());
+            type HmacSha256 = Hmac<Sha256>;
+            let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
+                .map_err(|e| format!("HMAC error: {}", e))?;
+            let canonical_json = serde_json::to_string(payload).map_err(|e| format!("JSON error: {}", e))?;
+            mac.update(canonical_json.as_bytes());
+            let result = mac.finalize();
+            let signature = format!("sha256={}", hex::encode(result.into_bytes()));
+            request = request.header("X-Signature-256", signature);
         }
 
         for (key, value) in &webhook.headers {

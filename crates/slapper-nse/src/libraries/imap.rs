@@ -10,6 +10,20 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream as AsyncTcpStream;
 
+fn escape_imap_quoted(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() * 2);
+    for ch in s.chars() {
+        match ch {
+            '\\' => result.push_str("\\\\"),
+            '"' => result.push_str("\\\""),
+            '\r' => {}
+            '\n' => {}
+            c => result.push(c),
+        }
+    }
+    result
+}
+
 fn imap_send(host: &str, port: u16, command: &str) -> std::io::Result<String> {
     let addr = format!("{}:{}", host, port);
     let mut stream = TcpStream::connect_timeout(
@@ -57,7 +71,9 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     let login_fn = lua.create_function(
         |lua, (host, port, user, password): (String, u16, String, String)| {
             let tag = format!("A{:04}", 1);
-            let cmd = format!("{} LOGIN {} {}\r\n", tag, user, password);
+            let escaped_user = escape_imap_quoted(&user);
+            let escaped_password = escape_imap_quoted(&password);
+            let cmd = format!("{} LOGIN {} {}\r\n", tag, escaped_user, escaped_password);
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {
                     let result = lua.create_table()?;
@@ -114,7 +130,9 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
             let ref_name = reference.unwrap_or_else(|| "".to_string());
             let mailbox_name = mailbox.unwrap_or_else(|| "*".to_string());
             let tag = format!("A{:04}", 1);
-            let cmd = format!("{} LIST \"{}\" \"{}\"\r\n", tag, ref_name, mailbox_name);
+            let escaped_ref = escape_imap_quoted(&ref_name);
+            let escaped_mailbox = escape_imap_quoted(&mailbox_name);
+            let cmd = format!("{} LIST \"{}\" \"{}\"\r\n", tag, escaped_ref, escaped_mailbox);
 
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {
@@ -159,7 +177,8 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     // imap.select() - Select a mailbox
     let select_fn = lua.create_function(|lua, (host, port, mailbox): (String, u16, String)| {
         let tag = format!("A{:04}", 1);
-        let cmd = format!("{} SELECT {}\r\n", tag, mailbox);
+        let escaped_mailbox = escape_imap_quoted(&mailbox);
+        let cmd = format!("{} SELECT {}\r\n", tag, escaped_mailbox);
 
         match imap_send(&host, port, &cmd) {
             Ok(response) => {
@@ -203,7 +222,9 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     let fetch_fn = lua.create_function(
         |lua, (host, port, sequence, fields): (String, u16, String, String)| {
             let tag = format!("A{:04}", 1);
-            let cmd = format!("{} FETCH {} {}\r\n", tag, sequence, fields);
+            let escaped_seq = escape_imap_quoted(&sequence);
+            let escaped_fields = escape_imap_quoted(&fields);
+            let cmd = format!("{} FETCH {} {}\r\n", tag, escaped_seq, escaped_fields);
 
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {
@@ -233,7 +254,9 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     let store_fn = lua.create_function(
         |lua, (host, port, sequence, flags): (String, u16, String, String)| {
             let tag = format!("A{:04}", 1);
-            let cmd = format!("{} STORE {} +FLAGS ({})\r\n", tag, sequence, flags);
+            let escaped_seq = escape_imap_quoted(&sequence);
+            let escaped_flags = escape_imap_quoted(&flags);
+            let cmd = format!("{} STORE {} +FLAGS ({})\r\n", tag, escaped_seq, escaped_flags);
 
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {
@@ -255,7 +278,9 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     let copy_fn = lua.create_function(
         |lua, (host, port, sequence, mailbox): (String, u16, String, String)| {
             let tag = format!("A{:04}", 1);
-            let cmd = format!("{} COPY {} {}\r\n", tag, sequence, mailbox);
+            let escaped_seq = escape_imap_quoted(&sequence);
+            let escaped_mailbox = escape_imap_quoted(&mailbox);
+            let cmd = format!("{} COPY {} {}\r\n", tag, escaped_seq, escaped_mailbox);
 
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {
@@ -276,7 +301,8 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     // imap.search() - Search messages
     let search_fn = lua.create_function(|lua, (host, port, criteria): (String, u16, String)| {
         let tag = format!("A{:04}", 1);
-        let cmd = format!("{} SEARCH {}\r\n", tag, criteria);
+        let escaped_criteria = escape_imap_quoted(&criteria);
+        let cmd = format!("{} SEARCH {}\r\n", tag, escaped_criteria);
 
         match imap_send(&host, port, &cmd) {
             Ok(response) => {
@@ -309,7 +335,9 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     let status_fn = lua.create_function(
         |lua, (host, port, mailbox, items): (String, u16, String, String)| {
             let tag = format!("A{:04}", 1);
-            let cmd = format!("{} STATUS {} ({})\r\n", tag, mailbox, items);
+            let escaped_mailbox = escape_imap_quoted(&mailbox);
+            let escaped_items = escape_imap_quoted(&items);
+            let cmd = format!("{} STATUS {} ({})\r\n", tag, escaped_mailbox, escaped_items);
 
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {
@@ -352,7 +380,8 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     // imap.create() - Create mailbox
     let create_fn = lua.create_function(|lua, (host, port, mailbox): (String, u16, String)| {
         let tag = format!("A{:04}", 1);
-        let cmd = format!("{} CREATE {}\r\n", tag, mailbox);
+        let escaped_mailbox = escape_imap_quoted(&mailbox);
+        let cmd = format!("{} CREATE {}\r\n", tag, escaped_mailbox);
 
         match imap_send(&host, port, &cmd) {
             Ok(response) => {
@@ -372,7 +401,8 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     // imap.delete() - Delete mailbox
     let delete_fn = lua.create_function(|lua, (host, port, mailbox): (String, u16, String)| {
         let tag = format!("A{:04}", 1);
-        let cmd = format!("{} DELETE {}\r\n", tag, mailbox);
+        let escaped_mailbox = escape_imap_quoted(&mailbox);
+        let cmd = format!("{} DELETE {}\r\n", tag, escaped_mailbox);
 
         match imap_send(&host, port, &cmd) {
             Ok(response) => {
@@ -393,7 +423,9 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     let rename_fn = lua.create_function(
         |lua, (host, port, old_name, new_name): (String, u16, String, String)| {
             let tag = format!("A{:04}", 1);
-            let cmd = format!("{} RENAME {} {}\r\n", tag, old_name, new_name);
+            let escaped_old = escape_imap_quoted(&old_name);
+            let escaped_new = escape_imap_quoted(&new_name);
+            let cmd = format!("{} RENAME {} {}\r\n", tag, escaped_old, escaped_new);
 
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {
@@ -415,7 +447,8 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
     let subscribe_fn =
         lua.create_function(|lua, (host, port, mailbox): (String, u16, String)| {
             let tag = format!("A{:04}", 1);
-            let cmd = format!("{} SUBSCRIBE {}\r\n", tag, mailbox);
+            let escaped_mailbox = escape_imap_quoted(&mailbox);
+            let cmd = format!("{} SUBSCRIBE {}\r\n", tag, escaped_mailbox);
 
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {

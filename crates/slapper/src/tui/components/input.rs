@@ -311,10 +311,13 @@ impl InputField {
 
         let display_value = if let Some(w) = self.width {
             let available = w.saturating_sub(2);
-            if self.value.len() > available {
-                let start = self.cursor_pos.saturating_sub(available / 2);
-                let end = (start + available).min(self.value.len());
-                format!("{}...", &self.value[start..end])
+            let char_count = self.value.chars().count();
+            if char_count > available {
+                let cursor_char_pos = self.value.chars().count().min(self.cursor_pos);
+                let start = cursor_char_pos.saturating_sub(available / 2);
+                let end = (start + available).min(char_count);
+                let truncated: String = self.value.chars().skip(start).take(end - start).collect();
+                format!("{}...", truncated)
             } else {
                 self.value.clone()
             }
@@ -328,8 +331,10 @@ impl InputField {
         if self.focused && insert_mode {
             let display_cursor = if let Some(w) = self.width {
                 let available = w.saturating_sub(2);
-                if self.value.len() > available {
-                    let start = self.cursor_pos.saturating_sub(available / 2);
+                let char_count = self.value.chars().count();
+                if char_count > available {
+                    let cursor_char_pos = self.value.chars().count().min(self.cursor_pos);
+                    let start = cursor_char_pos.saturating_sub(available / 2);
                     if self.cursor_pos >= start && self.cursor_pos < start + available {
                         (self.cursor_pos - start) as u16
                     } else {

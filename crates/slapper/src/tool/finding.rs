@@ -179,12 +179,12 @@ impl std::str::FromStr for ResponseSeverity {
     type Err = std::convert::Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "critical" => Ok(ResponseSeverity::Critical),
-            "high" => Ok(ResponseSeverity::High),
-            "medium" | "moderate" => Ok(ResponseSeverity::Medium),
-            "low" => Ok(ResponseSeverity::Low),
-            "info" | "informational" => Ok(ResponseSeverity::Info),
+        match s {
+            s if s.eq_ignore_ascii_case("critical") => Ok(ResponseSeverity::Critical),
+            s if s.eq_ignore_ascii_case("high") => Ok(ResponseSeverity::High),
+            s if s.eq_ignore_ascii_case("medium") || s.eq_ignore_ascii_case("moderate") => Ok(ResponseSeverity::Medium),
+            s if s.eq_ignore_ascii_case("low") => Ok(ResponseSeverity::Low),
+            s if s.eq_ignore_ascii_case("info") || s.eq_ignore_ascii_case("informational") => Ok(ResponseSeverity::Info),
             _ => Ok(ResponseSeverity::None),
         }
     }
