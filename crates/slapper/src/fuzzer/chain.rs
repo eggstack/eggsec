@@ -333,10 +333,10 @@ impl ChainExecutor {
 
         let mut result = input.to_string();
         for cap in RE.captures_iter(input) {
-            if let Some(key) = cap.get(1) {
-                let key_str = key.as_str();
-                if let Some(value) = self.variables.get(key_str) {
-                    let placeholder = format!("${{{}}}", key_str);
+            if let Some(matched) = cap.get(1) {
+                let key = matched.as_str();
+                if let Some(value) = self.variables.get(key) {
+                    let placeholder = format!("${{{}}}", key);
                     result = result.replace(&placeholder, value);
                 }
             }

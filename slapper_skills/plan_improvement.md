@@ -16,6 +16,12 @@ metadata:
 
 This skill guides AI agents through complex multi-wave improvement plans with parallel sub-agent execution.
 
+## Current Status
+
+Most waves are complete. Only **Wave 7 (Dependency Updates)** remains deferred:
+- **Wave 1-6, 8-9**: ✅ COMPLETE
+- **Wave 7 (Axum 0.7→0.8, Tonic 0.12→0.14)**: ⏸ DEFERRED (highest risk - must run LAST)
+
 ## Usage
 
 When the user asks to work through a plan file:
@@ -25,16 +31,16 @@ When the user asks to work through a plan file:
 4. Execute fixes in order (Waves 1-2 first as foundational)
 5. Commit after each wave for traceability
 
-## Wave Execution Order
+## Wave Execution Order (Historical)
 
 ```
 Wave 1-2 (Security) ──► Foundation (start first)
-     │
-     ├── Wave 5, 6, 8 (Independent - can parallelize)
-     │
-     ├── Wave 3-4 (Refactoring, Performance)
-     │
-     └── Wave 7 (Dependency Updates - highest risk, LAST)
+      │
+      ├── Wave 5, 6, 8 (Independent - can parallelize)
+      │
+      ├── Wave 3-4 (Refactoring, Performance)
+      │
+      └── Wave 7 (Dependency Updates - highest risk, LAST)
 ```
 
 ## Key Patterns
@@ -44,6 +50,13 @@ Wave 1-2 (Security) ──► Foundation (start first)
 - Commit after each wave
 - Update plan.md with completion status
 
+## Wave 7 Dependency Updates (When Ready)
+
+When executing Wave 7:
+- Test thoroughly after each dependency update
+- Coordinate Axum and Tonic updates (shared transitive dependencies)
+- Breaking changes: Path syntax, Option<T> extractor changes, async_trait removal
+
 ## Triggers
 
 Keywords that activate this skill:
@@ -51,3 +64,4 @@ Keywords that activate this skill:
 - "wave-based parallelization"
 - "plan execution"
 - "subagent assignment"
+- "execute Wave 7"

@@ -147,33 +147,33 @@ async fn non_streaming_response(
     let available_tools = registry.list();
     let matched_tools = find_matching_tools(&user_query, &available_tools);
 
-    let content = if !matched_tools.is_empty() && req.tools.is_some() {
-        let target = extract_target_from_query(&user_query);
-
-        if let Some(ref scope) = scope {
-            if !scope.is_target_allowed(&target.value).unwrap_or(false) {
-                return ChatCompletionResponse {
-                    id,
-                    object: "chat.completion".to_string(),
-                    created,
-                    model,
-                    choices: vec![Choice {
-                        index: 0,
-                        message: ChatMessage {
-                            role: "assistant".to_string(),
-                            content: Some(format!("Scope violation: {} not allowed", target.value)),
-                            tool_calls: None,
-                        },
-                        finish_reason: "stop".to_string(),
-                    }],
-                    usage: Some(Usage {
-                        prompt_tokens: user_query.len() / 4,
-                        completion_tokens: 20,
-                        total_tokens: (user_query.len() / 4) + 20,
-                    }),
-                };
-            }
+    let target = extract_target_from_query(&user_query);
+    if let Some(ref scope) = scope {
+        if !scope.is_target_allowed(&target.value).unwrap_or(false) {
+            return ChatCompletionResponse {
+                id,
+                object: "chat.completion".to_string(),
+                created,
+                model,
+                choices: vec![Choice {
+                    index: 0,
+                    message: ChatMessage {
+                        role: "assistant".to_string(),
+                        content: Some(format!("Scope violation: {} not allowed", target.value)),
+                        tool_calls: None,
+                    },
+                    finish_reason: "stop".to_string(),
+                }],
+                usage: Some(Usage {
+                    prompt_tokens: user_query.len() / 4,
+                    completion_tokens: 20,
+                    total_tokens: (user_query.len() / 4) + 20,
+                }),
+            };
         }
+    }
+
+    let content = if !matched_tools.is_empty() && req.tools.is_some() {
 
         let mut results = Vec::with_capacity(matched_tools.len().min(3));
 

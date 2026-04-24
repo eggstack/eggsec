@@ -106,8 +106,8 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>, scope: Opt
         .route("/health", get(health_check))
         .route("/openapi.json", get(openapi_spec))
         .route("/api/v1/tools", get(list_tools))
-        .route("/api/v1/tools/:tool_id", get(get_tool))
-        .route("/api/v1/tools/:tool_id/execute", post(execute_tool))
+        .route("/api/v1/tools/{tool_id}", get(get_tool))
+        .route("/api/v1/tools/{tool_id}/execute", post(execute_tool))
         .with_state(state);
 
     #[cfg(feature = "ws-api")]

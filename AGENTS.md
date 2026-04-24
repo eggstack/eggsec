@@ -26,6 +26,10 @@ cargo clippy --lib -p slapper
 
 # Build release
 cargo build --release -p slapper
+
+# Test specific features
+cargo check --lib -p slapper --features rest-api,ai-integration
+cargo check --lib -p slapper --features python-plugins,ruby-plugins
 ```
 
 ### Code Organization
@@ -39,9 +43,9 @@ crates/slapper/
 │   ├── config/        # Configuration (SlapperConfig, PathsConfig, Scope)
 │   ├── constants.rs   # Centralized constants (WAF, HTTP, scan, etc.)
 │   ├── types.rs       # Shared types (Severity, SensitiveString)
-│   ├── fuzzer/        # Fuzzing engine (39 payload types)
+│   ├── fuzzer/        # Fuzzing engine (30 payload types)
 │   │   ├── chain.rs   # ChainExecutor (with regex caching)
-│   │   ├── detection/ # TimingAnalyzer (lock-free redesign)
+│   │   ├── detection/ # TimingAnalyzer (lock-free with atomics)
 │   │   └── payloads/
 │   │       └── macros.rs  # payload_vec! macro
 │   ├── scanner/       # Port scanning, endpoint discovery
@@ -50,22 +54,22 @@ crates/slapper/
 │   ├── waf/           # WAF detection and bypass
 │   ├── recon/         # Reconnaissance modules
 │   │   ├── auth/      # Multi-protocol auth testing (ssh_auth, ftp_auth, smtp_auth)
-│   │   └── dependency_scan/  # Split by ecosystem (npm, cargo, go, ruby)
+│   │   └── dependency_scan/  # Split by ecosystem (npm, cargo, go)
 │   ├── output/        # Report generation (JSON, HTML, SARIF, JUnit)
 │   ├── wireless/      # Wireless security testing (WiFi scanning, auth testing)
 │   ├── tool/          # Tool abstraction layer
 │   │   ├── implementations/  # Tool implementations (recon, scanner, fuzzer, waf, search, etc.)
 │   │   └── protocol/
-│   │       ├── mcp/   # MCP server (split into handlers_server, handlers_request, handlers_helpers)
+│   │       ├── mcp/   # MCP server (handlers/server.rs, handlers/helpers.rs)
 │   │       ├── openai/  # OpenAI-compatible chat completions
 │   │       ├── rest.rs  # REST API (scope validation implemented)
 │   │       └── grpc.rs  # gRPC service
 │   ├── proxy/         # Proxy modules (to_log_key() for safe logging)
 │   │   └── intercept/ # Intercepting proxy with dynamic SSL certs
-│   ├── stress/        # Stress testing (raw_udp module exists but not integrated with spoofed)
+│   ├── stress/        # Stress testing (raw_udp module integrated)
 │   ├── tui/           # Terminal UI (ratatui 0.30 + crossterm 0.29)
 │   │   ├── app/       # App struct split into submodules (dispatch, navigation, command, export, state_update, task_management)
-│   │   ├── tabs/      # 29 tab implementations
+│   │   ├── tabs/      # 29 tab implementations (settings/ split into main.rs, render.rs, input.rs)
 │   │   └── workers/   # Background task workers
 │   └── utils/         # Utilities (circuit_breaker, http, formatting, network)
 ├── tests/             # Integration tests
@@ -93,6 +97,7 @@ crates/slapper/
 - `nse` - Nmap NSE script support
 - `nse-sandbox` - NSE sandbox mode (restricts `io.popen`, `os.setenv`, filesystem access)
 - `ai-integration` - AI/LLM features (autonomous agent, skill system, payload generation)
+- `ws-api` - WebSocket support for pub/sub
 - `full` - All features combined
 
 Note: `mcp-server` feature has been removed. Use `rest-api` instead.
@@ -109,9 +114,9 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 | Metric | Value | Note |
 |--------|-------|-------|
-| Tests | 1109 passing | Library tests |
+| Tests | 1107 passing | Library tests |
 | Tests | 1411 passing | With rest-api,ai-integration |
-| Clippy | ~29 warnings | TUI-specific warnings acceptable |
+| Clippy | ~19 warnings | TUI-specific warnings acceptable |
 | Source files | 470+ |
 | Payload types | 30 |
 | Tabs | 29 |
@@ -129,7 +134,7 @@ Single canonical definition in `types.rs`. All other modules re-export from it:
 | `output::agent::Severity` | `pub use crate::types::Severity` |
 | `output::trend::Severity` | `pub use crate::types::Severity` |
 
-The `tool/response.rs` module uses a separate `ResponseSeverity` enum with an extra `None` variant for API compatibility. **Note**: This is being phased out in favor of `Option<Severity>`.
+The `tool/response.rs` module uses a separate `ResponseSeverity` enum with an extra `None` variant for API compatibility.
 
 **When adding new code:** re-export from `crate::types::Severity`. Do not create a new definition.
 
@@ -158,7 +163,7 @@ Credentials (API keys, passwords, PSKs, webhook secrets) use `SensitiveString` f
 
 `utils/circuit_breaker.rs` provides circuit breaker pattern for external API resilience:
 - `CircuitBreaker` - individual breaker with state (Closed/Open/HalfOpen)
-- `CircuitBreakerRegistry` - manages multiple breakers by name (but currently unused - each AI client creates its own breaker directly)
+- `CircuitBreakerRegistry` - manages multiple breakers by name (each AI client creates its own breaker directly)
 - Tracks failure/success counts, total calls, failure rate
 - Exposes `total_calls()`, `total_failures()`, `failure_rate()` methods
 
@@ -196,45 +201,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan (waves 1-9, in progress)
-- Individual plan files (plan2.md-plan10.md) are superseded by the consolidated plan
-
-For new improvement work, add to the consolidated plan.md rather than creating new plan files.
-
-### Wave-Based Sub-Agent Execution
-
-The consolidated plan is organized into 9 waves. Items within the same wave can be executed in parallel by different sub-agents:
-
-| Wave | Focus | Can Parallelize? |
-|------|-------|------------------|
-| 1 | CRITICAL Security Fixes | Yes (quick fixes vs security fixes) |
-| 2 | HIGH Priority Security | Yes (patterns/TLS vs scope/validation) |
-| 3 | Large File Refactoring | Yes (file splits vs plugin/TUI) |
-| 4 | Performance Optimization | Yes (data structures vs async/lock-free) |
-| 5 | Agent System | Yes (all items independent) |
-| 6 | REST API & Integrations | Yes (all items independent) |
-| 7 | Dependency Updates | No (sequential, highest risk) |
-| 8 | TUI Improvements | Yes (all items independent) |
-| 9 | Plugin Unification | Long term |
-
-### Sub-Agent Assignment Example
-
-```
-Agent 1: Wave 1 (CRITICAL Security) - items 1.1-1.10
-Agent 2: Wave 2 (HIGH Priority Security) - items 2.1-2.13
-Agent 3: Wave 3 (Code Quality Refactoring) - items 3.1-3.10
-Agent 4: Wave 4 (Performance) - items 4.1-4.10
-Agent 5: Wave 5 (Agent System) - items 5.1-5.18
-Agent 6: Wave 6 (API & Integrations) - items 6.1-6.8
-Agent 7: Wave 8 (TUI Features) - items 8.1-8.8
-Agent 8: Wave 7 (Dependencies) - items 7.1-7.2 (run LAST)
-```
-
-**Critical dependency order:**
-- Wave 1 must complete before Waves 2-6, 8
-- Wave 2 should complete before Wave 3
-- Wave 3 should complete before Wave 4
-- Wave 7 runs last after all other waves
+- `plans/plan.md` — Consolidated improvement plan (Wave 7 deferred pending coordinated dependency updates)
 
 ## Lessons Learned
 
@@ -261,7 +228,7 @@ Agent 8: Wave 7 (Dependencies) - items 7.1-7.2 (run LAST)
 8. **`default_value = "None"` on Options**: Never use `#[arg(default_value = "None")]` on `Option<T>` fields — clap assigns the string `"None"` instead of `None`. Omit `default_value` entirely; `Option` defaults to `None` automatically.
 9. **`fingerprint_services` signature**: Takes 5 args: `host`, `ports`, `timeout`, `tui_mode`, `concurrency` — don't forget `concurrency`
 10. **Test assertion logic**: Always verify tests actually exercise the expected code path. Use specific assertions and test documentation to verify behavior.
-11. **UTF-8 byte slicing**: `InputField` stores cursor as byte offset but `len()` returns character count. Always use character-based indexing for UTF-8 strings to avoid panics.
+11. **UTF-8 byte slicing**: `InputField` stores cursor as character count (not byte offset). Always use character-based indexing for UTF-8 strings to avoid panics.
 
 ### Severity Enum
 
@@ -270,6 +237,7 @@ Agent 8: Wave 7 (Dependencies) - items 7.1-7.2 (run LAST)
 - `Display` outputs UPPERCASE ("CRITICAL"), `as_str()` outputs lowercase ("critical")
 - `serde` serialization uses lowercase (due to `#[serde(rename_all = "lowercase")]`)
 - `Severity` implements `FromStr` trait; inherent method renamed to `parse_or_default`
+- Use `eq_ignore_ascii_case()` instead of `to_lowercase().as_str()` for comparisons
 
 ### SensitiveString
 
@@ -282,16 +250,14 @@ Agent 8: Wave 7 (Dependencies) - items 7.1-7.2 (run LAST)
 ### TUI-Specific Patterns
 
 - `tui/app/runner.rs` contains the main event loop (`run_app`)
-- `tui/app/mod.rs` contains the `App` struct (899 lines); split into submodules: `dispatch.rs`, `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
+- `tui/app/mod.rs` contains the `App` struct; split into submodules: `dispatch.rs`, `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
 - `tui/workers/` directory contains 8 files: `runner.rs`, `scanner.rs`, `fuzzer.rs`, `network.rs`, `api.rs`, `recon.rs`, `security.rs`, `pipeline.rs`
 - Tab dispatch uses match statements across ~18+ methods (29-arm matches)
 - TUI uses ratatui 0.30 + crossterm 0.29 with immediate-mode rendering
 - 29 tab variants exist (Recon=0 through Vuln=28); all 29 are fully functional
-- `tui/app/mod.rs` contains 899 lines - uses `TabDispatcher` for tab delegation
-- `tui/app/dispatch.rs` has `TabDispatcher` wrapper with 17 methods
+- `tui/app/dispatch.rs` has `TabDispatcher` wrapper with 27 methods for input delegation
 - `tui/app/task_management.rs` contains `TaskBuilder` trait for task building logic
 - Tab cfg attributes: `Nse` and `Plugin` variants are always present in the Tab enum; use both `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]` arms for feature-gated dispatch
-- **UTF-8 byte slicing bug**: `tui/components/input.rs:312-343` has a bug where byte offsets mix with character counts. Always use `.chars().count()` and character-based indexing for multi-byte UTF-8 support.
 
 ### Output Module
 
@@ -326,17 +292,16 @@ Agent 8: Wave 7 (Dependencies) - items 7.1-7.2 (run LAST)
 
 ### Plugin Security (block_suspicious_plugins)
 
-Both Python and Ruby plugins support suspicious pattern detection and blocking:
+Both Python and Ruby plugins support suspicious pattern detection and blocking via consolidated `slapper-plugin/src/security.rs`:
 
-**Python Plugins** (`crates/slapper-plugin/src/python.rs`):
+**Python Plugins**:
 - `validate_python_plugin(content, block_suspicious_plugins)` checks for dangerous patterns
 - Patterns detected: `os.system`, `subprocess`, `socket`, `eval(`, `exec`, `fork`, `__import__`, `open(`, `pty.spawn`, `os.popen`, `multiprocessing.Process`, `ctypes`, `importlib`, `getattr(`, `chr(`, hex/unicode/octal escapes
 - When `block_suspicious_plugins: true` (default), plugins with suspicious patterns are rejected
 
-**Ruby Plugins** (`crates/slapper-ruby/src/bridge.rs`):
+**Ruby Plugins**:
 - `validate_ruby_plugin(content, block_suspicious_plugins)` checks for dangerous patterns
-- Patterns detected: `eval(`, `exec(`, `system(`, `` ` ``, `IO.popen`, `Process.spawn`, `File.read(`, `File.write(`, `File.open(`, `Net::HTTP`, `Socket.open`, `TCPSocket`, `UDPSocket`, `Open3.`, `Shellwords.escape`, `Kernel.exec`, `\bopen\b`, `\beval\b`
-- Uses `(?i)` case-insensitive flag for method name patterns
+- Patterns detected: `eval(`, `exec(`, `system(`, `` ` ``, `IO.popen`, `Process.spawn`, `File.read(`, `File.write(`, `File.open(`, `Net::HTTP`, `Socket.open`, `TCPSocket`, `UDPSocket`, `Open3.`, `Shellwords.escape`, `Kernel.exec`, `\bopen\b`, `(?i)\beval\b`
 - Default behavior blocks suspicious plugins for security
 
 **Configuration** (`PluginConfig`):
@@ -352,6 +317,16 @@ pub struct PluginConfig {
 ### Plugin Path Validation
 
 Use `validate_plugin_path()` from `slapper-plugin/src/validation.rs` for safe path handling in plugin loading. This prevents path traversal attacks by canonicalizing paths and checking they start with the base directory.
+
+### Plugin Lifecycle Methods
+
+The `Plugin` trait (`slapper-plugin/src/lib.rs:144-154`) includes lifecycle methods:
+```rust
+fn init(&self) -> Result<()>;
+fn shutdown(&self) -> Result<()>;
+fn health_check(&self) -> Result<HealthStatus>;
+fn priority(&self) -> u32;
+```
 
 ### Ruby Plugin Thread Safety
 
@@ -621,9 +596,18 @@ if content.starts_with('=') || content.starts_with('+') || content.starts_with('
 }
 ```
 
+Also use NFKC normalization to prevent fullwidth character bypass:
+```rust
+use unicode_normalization::UnicodeNormalization;
+let normalized: String = s.nfkc().collect();
+```
+
 ### Log Sanitization
 
-When changing sanitization behavior, update corresponding tests that assert old behavior.
+`utils/error.rs` sanitizes error messages by removing:
+- Stack traces (Rust panics, Python tracebacks, Go panics)
+- File paths and Windows paths
+- Long error messages (>500 chars truncated)
 
 ### TLS Certificate Verification Bypass
 
@@ -756,7 +740,7 @@ counter.fetch_add(1, Ordering::Relaxed);
 Agent modules use `Arc<Mutex<>>` or `Arc<RwLock<>>` for interior mutability:
 
 - `AlertRouter` uses `Arc<Mutex<Vec<AlertChannel>>>` and `Arc<Mutex<HashMap<...>>>` for thread-safe alert routing
-- `TargetPortfolio` uses `Arc<RwLock<PortfolioData>>` for thread-safe portfolio access
+- `TargetPortfolio` uses `parking_lot::RwLock` (not `std::sync::RwLock`) for thread-safe portfolio access
 - `LongitudinalMemory` methods take `&self` (no internal mutation) for thread-safe memory access
 
 Example pattern:
@@ -814,6 +798,8 @@ When upgrading pyo3 0.26+:
 - `max_file_size_bytes` for plugin validation (default 1MB)
 - Use `LazyLock<Regex>` for compiled regex pattern detection
 - `PluginRegistry::unregister()` removes plugin by name
+- `reload_plugin()` method available for hot reload of plugins
+- Python plugin classes prefixed with `Slapper_` for namespace isolation
 
 ### Test Feature Gating
 
@@ -867,96 +853,36 @@ When fixing failing tests in integration scenarios:
 
 ### Large File Reference
 
-| File | Lines | Should Split? |
-|------|-------|---------------|
-| `tui/app/mod.rs` | 899 | Yes (already split into submodules) |
-| `tool/protocol/mcp/handlers.rs` | 1069 | Yes (split into handlers_server, handlers_request, handlers_helpers) |
-| `recon/dependency_scan.rs` | 1051 | Yes (split into recon/dependency/ subdirectory) |
-| `tui/tabs/mod.rs` | 655 | Partial |
-| `tui/tabs/settings.rs` | 798 | Yes (split into settings/main.rs, settings/render.rs, settings/input.rs) |
-| `tui/tabs/packet.rs` | 743 | Yes |
+| File | Lines | Status |
+|------|-------|--------|
+| `tui/app/mod.rs` | ~900 | Split into submodules |
+| `tool/protocol/mcp/handlers.rs` | ~1000 | Split into handlers/ subdirectory |
+| `recon/dependency_scan.rs` | ~1000 | Split into dependency_scan/ subdirectory |
+| `tui/tabs/settings.rs` | ~800 | Split into settings/ subdirectory |
+| `tui/tabs/packet.rs` | ~743 | Not split |
 
-### Additional Lessons Learned
+### Completed Implementation Items
 
-1. **Proxy `to_url()` exposes credentials**: Despite `SensitiveString` storage, `to_url()` calls `expose_secret()`. Use `to_log_key()` for any non-connection use (logging, display, DashMap keys). Also affects `proxy/health.rs`, `proxy/rotator.rs`, and `commands/handlers/stress.rs:93`.
+The following items have been implemented and verified:
 
-2. **Plugin loading path validation**: Use `validate_plugin_path()` from `slapper-plugin/src/validation.rs` for safe path handling in plugin loading.
-
-3. **Plugin timeout enforcement**: Python and Ruby plugins now enforce `timeout_secs` from `PluginConfig`:
-   - Python: uses `tokio::time::timeout` wrapper
-   - Ruby: uses `rx.recv_timeout()` with duration
-
-4. **CircuitBreakerRegistry**: Available but optional - each AI client creates its own circuit breaker directly. Use when managing multiple providers.
-
-5. **TimingAnalyzer uses atomics**: Now uses `AtomicU64` and `AtomicUsize` for lock-free stats (no longer needs Arc<Mutex>). Still uses `Vec<f64>` for samples requiring `&mut self` in record() method.
-
-6. **Rate limiter already uses `parking_lot::RwLock`**: The `tool/ratelimit.rs` file already imports `parking_lot::RwLock` (not `std::sync`). Basic per-client rate limiting exists; what's missing is per-endpoint and IP-based limiting.
-
-7. **`ValidationResult` IS used**: The struct in `tui/components/input.rs:8-12` is used by `scan_ports.rs:153,163` with methods `validate_ip()`, `validate_port_range()`. Only visual feedback (red border) is missing.
-
-8. **Basic `Plugin` trait already exists**: At `slapper-plugin/src/lib.rs:98-113` with `info()`, `language()`, `list_checks()`, `run_check()`, `run()`. Plan items about lifecycle methods are additions to this trait, not a new trait.
-
-9. **`raw_udp` module is integrated**: Defined at `stress/udp.rs:20-117` with complete packet builder + IP spoofing. `run_udp_flood_spoofed()` uses `raw_udp::build_udp_packet` when spoofing is enabled on Unix.
-
-10. **Formula injection defense**: `escape_csv()` uses NFKC normalization to normalize Unicode fullwidth characters before checking for formula prefixes. This prevents fullwidth bypass attacks.
-
-11. **TUI Plugin Tab compiles**: The `TaskResult::PluginsLoaded` variant is present, and plugins feature compiles successfully.
-
-12. **Ruby sandbox is now secure**: Dangerous APIs (HTTP, Scanner, Fuzzer, Metasploit) removed from `slapper-ruby/src/api.rs`. Only safe reporting methods remain.
-
-13. **AI client integration**: `ai_client` in `Agent` now analyzes findings via `analyze_findings_typed()` when `ai-integration` feature is enabled.
-
-14. **Shared security patterns**: `slapper-plugin/src/security.rs` provides consolidated suspicious pattern validation for Python and Ruby plugins.
-
-15. **Metasploit session caching**: `MsfClient` now caches sessions with `SessionCache` for persistence and invalidation support.
-
-16. **TUI theme system**: `tui/theme.rs` provides `Theme`, `ThemeColors`, `ThemeManager` with dark/light presets. Use `theme!()` and `tc!()` macros.
-
-17. **UTF-8 byte slicing crash**: `InputField` uses character-based indexing (`chars().count()`) instead of byte indexing to handle multi-byte UTF-8 characters correctly.
-
-18. **IMAP injection prevention**: Use `escape_imap_quoted()` per RFC 3501 in slapper-nse IMAP library - escapes `\` and `"`, strips `\r\n`.
-
-19. **resolve_host() blocks private IPs**: Now checks `is_loopback()` and `is_private_ip()` after DNS resolution to prevent SSRF attacks.
-
-20. **Webhooks use HMAC signing**: `notify/webhook.rs` signs payloads with HMAC-SHA256 using `X-Signature-256` header.
-
-21. **Error sanitization expanded**: Now catches Rust panics, Python tracebacks, Go panics, and Windows paths.
-
-22. **Cursor position is character count**: `cursor_pos` stores character count, not byte offset - use `field.value.chars().count()` for comparisons.
-
-17. **TUI clipboard support**: `tui/utils/clipboard.rs` provides `Clipboard` utility using `arboard` crate.
-
-18. **TUI session persistence**: `tui/session.rs` provides `SessionManager` for auto-saving/restoring session state. **Note**: SessionManager and ThemeManager exist but are NOT yet integrated into App.
-
-19. **Plugin reload support**: `reload_plugin()` method added to `PluginManager` for hot reload of plugins.
-
-20. **Plugin namespace isolation**: Python plugin classes prefixed with `Slapper_` to avoid collisions.
-
-21. **Settings split**: `tui/tabs/settings.rs` split into `settings/main.rs`, `settings/render.rs`, `settings/input.rs`.
-
-22. **UTF-8 byte slicing bug**: `tui/components/input.rs:312-343` crashes when user types multi-byte UTF-8 characters. The cursor_pos is stored as byte offset but `len()` returns character count. Use character-based indexing instead.
-
-23. **ResponseSeverity vs Severity**: `tool/finding.rs` uses `ResponseSeverity` (with `None` variant) while canonical `Severity` is in `types.rs`. The `Finding.severity` field needs migration to canonical `Severity`.
-
-24. **AlertRouter channel persistence**: AlertRouter and AlertRoutingRules exist but no config file format for channel persistence. Agent cannot send alerts without configuring channels.
-
-25. **Dedup key collision**: `make_dedup_key()` in AlertRouter ALREADY includes `finding_ids` hash (routing.rs:237-254). The fix is already implemented.
-
-26. **SessionManager integration**: `SessionManager` now integrated into `App` struct with `auto_save_if_due()` method. Auto-saves every 30 seconds.
-
-27. **ThemeManager integration**: `ThemeManager` integrated into `App` with `toggle_theme()` method and Ctrl+T keybinding. `tc!()` macro now uses thread-local.
-
-28. **WebSocket support**: Added `ws-api` feature with WebSocket endpoint at `/ws` in REST router for pub/sub.
-
-29. **Clipboard paste**: Ctrl+V now pastes from system clipboard into active input field.
-
-30. **Alert CLI flags**: Added `--alert-webhook`, `--alert-slack`, `--alert-email` flags to agent CLI.
-
-31. **AI client full integration**: Agent now uses AiPayloadGenerator, SmartWafBypass, and AdaptiveScanEngine for context-aware scanning.
-
-32. **Memory TTL cleanup**: `cleanup_old_patterns()` called in `process_scheduled_scans()` with 90-day TTL.
-
-33. **Scan failure escalation**: Agent uses consecutive failure counter; alerts triggered after 3 consecutive failures.
+1. **Plugin timeout enforcement**: Python uses `tokio::time::timeout`, Ruby uses `rx.recv_timeout()`
+2. **Path traversal prevention**: `validate_plugin_path()` in `slapper-plugin/src/validation.rs`
+3. **TUI Plugin Tab**: `TaskResult::PluginsLoaded` variant and proper integration
+4. **Constant-time comparison**: All auth uses `bool::from(ct_eq())` instead of `unwrap_u8()`
+5. **IMAP injection prevention**: `escape_imap_quoted()` in slapper-nse
+6. **Private IP blocking**: `resolve_host()` blocks loopback and private IPs
+7. **Ruby sandbox**: Only safe reporting methods exposed
+8. **Shared security patterns**: `slapper-plugin/src/security.rs` consolidates pattern detection
+9. **AI client integration**: `analyze_findings_typed()` used in Agent
+10. **HMAC webhook signing**: `X-Signature-256` header with HMAC-SHA256
+11. **Error sanitization**: Rust panics, Python tracebacks, Go panics, Windows paths caught
+12. **UTF-8 handling**: Character-based indexing in InputField
+13. **Theme system**: `ThemeManager` integrated with `tc!()` macro
+14. **Session persistence**: `SessionManager` integrated with `auto_save_if_due()`
+15. **WebSocket support**: `ws-api` feature with `/ws` endpoint
+16. **Clipboard paste**: Ctrl+V integration with `arboard`
+17. **Alert CLI flags**: `--alert-webhook`, `--alert-slack`, `--alert-email`
+18. **Dedup key includes finding_ids**: `make_dedup_key()` in AlertRouter
 
 ---
 

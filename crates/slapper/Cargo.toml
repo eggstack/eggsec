@@ -116,7 +116,7 @@ version = "0.8"
 optional = true
 
 [dependencies.axum]
-version = "0.7"
+version = "0.8"
 optional = true
 
 [dependencies.eventsource-stream]
@@ -133,11 +133,11 @@ features = ["rustls-tls-webpki-roots"]
 optional = true
 
 [dependencies.tonic]
-version = "0.12"
+version = "0.14"
 optional = true
 
 [dependencies.prost]
-version = "0.13"
+version = "0.14"
 optional = true
 
 [dependencies.headless_chrome]
@@ -175,7 +175,7 @@ version = "0.10"
 optional = true
 
 [build-dependencies.prost-build]
-version = "0.13"
+version = "0.14"
 optional = true
 
 [features]
