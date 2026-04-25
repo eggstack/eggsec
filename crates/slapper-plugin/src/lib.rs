@@ -9,6 +9,7 @@ use std::time::Duration;
 #[cfg(feature = "python-plugins")]
 pub mod python;
 
+pub mod process_runner;
 pub mod security;
 pub mod validation;
 
