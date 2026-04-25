@@ -298,7 +298,11 @@ Some(limit) => {
         pb.finish_and_clear();
     }
 
-    let mut results: Vec<ServiceFingerprint> = DashMap::clone(&results).into_iter().map(|(_, v)| v).collect();
+    let mut results: Vec<ServiceFingerprint> = Arc::try_unwrap(results)
+        .expect("all workers completed")
+        .into_iter()
+        .map(|(_, v)| v)
+        .collect();
     results.sort_by_key(|p| p.port);
 
     if results.len() > MAX_SCAN_RESULTS {
@@ -368,7 +372,6 @@ async fn fingerprint_port(
         5666 => vec![("Nagios", b"", "nagios|NRPE")],
         502 | 102 | 44818 => vec![("Modbus/ICS", b"\x00\x00\x00\x05\x00\x00\x00\x00\x00\x39\x00\x03\x00\x00\x00\x05", "\\x00\\x00")],
         47808 => vec![("BACnet", b"\x81\x0a\x00\x11\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", "\\x81")],
-        789 | 7891 | 8082 | 8083 => vec![("RedTeam C2", b"", "")],
         _ => PROBES.to_vec(),
     };
 

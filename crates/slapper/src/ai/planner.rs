@@ -346,7 +346,7 @@ impl AiPlanner {
             for kw in &stage_keywords {
                 if lower.contains(kw) {
                     let parts: Vec<&str> = line.split_whitespace().collect();
-                    for (i, part) in parts.iter().enumerate() {
+                    for (i, _part) in parts.iter().enumerate() {
                         if lower.contains(kw) && i + 1 < parts.len() {
                             return Some(parts[i + 1].trim_matches(|c| c == ':' || c == ',').to_string());
                         }
@@ -360,7 +360,6 @@ impl AiPlanner {
     }
 
     fn extract_sentence_containing(&self, content: &str, keyword: &str) -> String {
-        let content_lower = content.to_lowercase();
         for sentence in content.split(|c| c == '.' || c == '\n') {
             if sentence.to_lowercase().contains(keyword) {
                 return sentence.trim().to_string();

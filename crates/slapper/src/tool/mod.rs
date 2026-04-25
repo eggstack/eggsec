@@ -14,6 +14,9 @@
 //! - [`ToolResponse`] — Response structure with findings and metadata
 //! - [`ToolDispatcher`] — Dispatches requests to registered tools
 //! - [`Target`] — Target specification (URL, IP, domain, CIDR)
+//! - [`SessionState`] — Session state with authentication and CSRF tokens
+//! - [`LoginSequence`] — Recorded login sequence for authenticated scanning
+//! - [`CsrfToken`] — CSRF token with extraction metadata
 //!
 //! # Protocol Adapters
 //!
@@ -47,6 +50,7 @@ pub mod registry;
 pub mod request;
 pub mod response;
 pub mod scripting;
+pub mod session;
 pub mod state;
 pub mod tool_error;
 pub mod traits;
@@ -72,11 +76,13 @@ pub use response::{
     Finding, FindingType, ProgressUpdate, ResponseMetadata, ResponseSeverity, ResponseStatus,
     StreamEvent, StreamEventType, ToolError, ToolErrorType, ToolResponse,
 };
-pub use state::{AgentSession, ScanContext, SessionManager, SessionStatus};
-pub use traits::{
-    validate_parameters, AttackSurface, CapabilityExample, ParameterDef, ParameterType,
-    SecurityTool, ToolCapability, ToolCategory, ToolResult,
+pub use session::{
+    AuthMethod, AuthenticatedSessionManager, CsrfExtractor, CsrfToken, CsrfTokenLocation,
+    FormDetector, LoginExecutor, LoginForm, LoginResult, LoginSequence, LoginStep, MfaConfig,
+    ResponseField, SessionState, SessionStatus, SessionVerification, SessionVerifier,
 };
+pub use state::{AgentSession, ScanContext, SessionManager, SessionStatus as ToolSessionStatus};
+pub use traits::ToolResult;
 
 pub fn create_default_registry() -> ToolRegistry {
     let registry = ToolRegistry::new();

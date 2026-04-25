@@ -590,7 +590,11 @@ Some(limit) => {
         pb.finish_and_clear();
     }
 
-    let mut results: Vec<PortResult> = DashMap::clone(&results).into_iter().map(|(_, v)| v).collect();
+    let mut results: Vec<PortResult> = Arc::try_unwrap(results)
+        .expect("all workers completed")
+        .into_iter()
+        .map(|(_, v)| v)
+        .collect();
     results.sort_by_key(|p| p.port);
 
     if results.len() > MAX_SCAN_RESULTS {

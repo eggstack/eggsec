@@ -128,7 +128,7 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>, scope: Opt
             tokio::spawn(async move {
                 let mut rx = tx_clone.subscribe();
                 while let Ok(msg) = rx.recv().await {
-                    if sender.send(Message::Text(msg)).await.is_err() {
+                    if sender.send(Message::Text(msg.into())).await.is_err() {
                         break;
                     }
                 }

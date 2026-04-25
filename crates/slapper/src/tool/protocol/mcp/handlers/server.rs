@@ -116,6 +116,16 @@ impl McpServer {
         validate_auth_params(&self.api_key, params)
     }
 
+    /// Starts a background task that periodically cleans up expired hashmap entries.
+    ///
+    /// This is a fire-and-forget cleanup routine with no shutdown mechanism because it's
+    /// designed for long-running servers. The reaper runs indefinitely and cleans:
+    /// - Pending cancellations older than their timeout
+    /// - Completed results older than 5 minutes (ENTRY_TTL_SECS)
+    ///
+    /// Memory is bounded because entries are removed, not accumulated.
+    /// This is an intentional design choice - the server is expected to run
+    /// until shutdown, at which point the process exits and OS reclaims memory.
     pub fn start_hashmap_reaper(&self, interval_secs: u64) {
         let pending_cancellations = Arc::clone(&self.pending_cancellations);
         let completed_results = Arc::clone(&self.completed_results);

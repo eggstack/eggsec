@@ -143,7 +143,11 @@ impl FuzzEngine {
         if let Some(ref pb) = progress {
             pb.finish_and_clear();
         }
-        let final_results: Vec<FuzzResult> = <DashMap<usize, FuzzResult> as Clone>::clone(&results).into_iter().map(|(_, v)| v).collect();
+        let final_results: Vec<FuzzResult> = Arc::try_unwrap(results)
+            .expect("all workers completed")
+            .into_iter()
+            .map(|(_, v)| v)
+            .collect();
         Ok(final_results)
     }
 

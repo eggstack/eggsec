@@ -807,7 +807,11 @@ Some(limit) => {
         pb.finish_and_clear();
     }
 
-    let mut results: Vec<EndpointResult> = DashMap::clone(&results).into_iter().map(|(_, v)| v).collect();
+    let mut results: Vec<EndpointResult> = Arc::try_unwrap(results)
+        .expect("all workers completed")
+        .into_iter()
+        .map(|(_, v)| v)
+        .collect();
     results.sort_by(|a, b| {
         b.interesting
             .cmp(&a.interesting)

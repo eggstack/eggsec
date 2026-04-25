@@ -50,6 +50,13 @@ static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| 
         regex::Regex::new(r"(?i)Kernel\.exec").unwrap(),
         regex::Regex::new(r"(?i)\bopen\b").unwrap(),
         regex::Regex::new(r"(?i)\beval\b").unwrap(),
+        regex::Regex::new(r"(?i)(instance_eval|class_eval|module_eval)\(").unwrap(),
+        regex::Regex::new(r"(?i)%x\{").unwrap(),
+        regex::Regex::new(r"(?i)Marshal\.load").unwrap(),
+        regex::Regex::new(r"(?i)RubyVM::InstructionSequence").unwrap(),
+        regex::Regex::new(r"(?i)\brequire\b").unwrap(),
+        regex::Regex::new(r"(?i)\bload\b").unwrap(),
+        regex::Regex::new(r"(?i)\bsend\(").unwrap(),
     ]
 });
 
