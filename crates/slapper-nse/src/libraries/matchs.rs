@@ -4,6 +4,7 @@
 //! Based on Nmap's matchs library.
 
 use mlua::{Lua, Result as LuaResult, Table};
+use regex::RegexBuilder;
 
 pub fn register_matchs_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
@@ -44,7 +45,10 @@ pub fn register_matchs_library(lua: &Lua) -> LuaResult<()> {
             .replace('*', ".*")
             .replace('?', ".");
 
-        match regex::Regex::new(&format!("^{}$", regex_pattern)) { Ok(re) => {
+        match RegexBuilder::new(&format!("^{}$", regex_pattern))
+            .size_limit(50_000)
+            .build()
+        { Ok(re) => {
             Ok(re.is_match(&text))
         } _ => {
             Ok(pattern == text)
@@ -53,7 +57,10 @@ pub fn register_matchs_library(lua: &Lua) -> LuaResult<()> {
     matchs.set("wildcard", wildcard_fn)?;
 
     let regex_fn = lua.create_function(|_lua, (pattern, text): (String, String)| {
-        match regex::Regex::new(&pattern) { Ok(re) => {
+        match RegexBuilder::new(&pattern)
+            .size_limit(50_000)
+            .build()
+        { Ok(re) => {
             Ok(re.is_match(&text))
         } _ => {
             Ok(false)

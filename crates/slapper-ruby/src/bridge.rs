@@ -1,5 +1,3 @@
-use std::sync::LazyLock;
-
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -7,66 +5,9 @@ use std::thread;
 use std::time::Duration;
 
 use super::{RubyPlugin, RubyPluginResult};
+use slapper_plugin::security::validate_ruby_plugin;
 
-const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
 const DEFAULT_TIMEOUT_SECS: u64 = 300;
-
-#[cfg(feature = "ruby-plugins")]
-static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
-    vec![
-        regex::Regex::new(r"\beval\(").unwrap(),
-        regex::Regex::new(r"\bexec\(").unwrap(),
-        regex::Regex::new(r"\bsystem\(").unwrap(),
-        regex::Regex::new(r"`").unwrap(),
-        regex::Regex::new(r"IO\.popen").unwrap(),
-        regex::Regex::new(r"Process\.spawn").unwrap(),
-        regex::Regex::new(r"File\.read\(").unwrap(),
-        regex::Regex::new(r"File\.write\(").unwrap(),
-        regex::Regex::new(r"File\.open\(").unwrap(),
-        regex::Regex::new(r"Net::HTTP").unwrap(),
-        regex::Regex::new(r"Socket\.open").unwrap(),
-        regex::Regex::new(r"TCPSocket").unwrap(),
-        regex::Regex::new(r"UDPSocket").unwrap(),
-        regex::Regex::new(r"Open3\.").unwrap(),
-        regex::Regex::new(r"Shellwords\.escape").unwrap(),
-        regex::Regex::new(r"Kernel\.exec").unwrap(),
-        regex::Regex::new(r"\bopen\b").unwrap(),
-        regex::Regex::new(r"\beval\b").unwrap(),
-    ]
-});
-
-#[cfg(feature = "ruby-plugins")]
-fn validate_ruby_plugin(content: &str, block_suspicious_plugins: bool) -> Result<()> {
-    if content.len() > MAX_PLUGIN_SIZE_BYTES {
-        anyhow::bail!(
-            "Ruby plugin exceeds maximum size of {} bytes",
-            MAX_PLUGIN_SIZE_BYTES
-        );
-    }
-
-    let mut suspicious_found: Vec<&str> = Vec::new();
-    for pattern in SUSPICIOUS_RUBY_PATTERNS.iter() {
-        if pattern.is_match(content) {
-            suspicious_found.push(pattern.as_str());
-        }
-    }
-
-    if !suspicious_found.is_empty() {
-        if block_suspicious_plugins {
-            anyhow::bail!(
-                "Ruby plugin contains suspicious patterns and blocking is enabled: {}",
-                suspicious_found.join(", ")
-            );
-        } else {
-            tracing::warn!(
-                "Ruby plugin contains suspicious patterns (allowing due to config): {}",
-                suspicious_found.join(", ")
-            );
-        }
-    }
-
-    Ok(())
-}
 
 /// Internal bridge that owns the Ruby VM. NOT Send/Sync — lives on one thread only.
 pub struct RubyBridge {

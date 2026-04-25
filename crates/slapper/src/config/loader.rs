@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use super::scope::Scope;
 use super::settings::SlapperConfig;
 use crate::constants::{PROJECT_NAME, PROJECT_QUALIFIER};
+use crate::types::check_config_file_permissions;
 
 pub const DEFAULT_CONFIG_NAME: &str = "slapper.toml";
 pub const SCOPE_FILE_NAME: &str = "scope.toml";
@@ -49,6 +50,7 @@ pub fn load_config(config_path: Option<&str>) -> Result<SlapperConfig> {
     };
 
     config.validate().map_err(|e| anyhow::anyhow!("{}", e))?;
+    check_config_file_permissions(&canonical_path);
 
     Ok(config)
 }
@@ -79,7 +81,9 @@ pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
     let path_str = canonical_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("Scope file path contains invalid UTF-8: {:?}", canonical_path))?;
-    Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))
+    let scope = Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))?;
+    check_config_file_permissions(&canonical_path);
+    Ok(scope)
 }
 
 pub fn find_config_file(base_dir: Option<&Path>) -> Option<PathBuf> {

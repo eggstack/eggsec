@@ -3,6 +3,7 @@
 //! Provides pattern matching functions for portrules.
 
 use mlua::{Lua, Result as LuaResult, Table};
+use regex::RegexBuilder;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -84,7 +85,9 @@ pub fn register_match_library(lua: &Lua) -> LuaResult<()> {
     match_mod.set(
         "regex",
         lua.create_function(
-            |_lua, (regex_pattern, text): (String, String)| match regex::Regex::new(&regex_pattern)
+            |_lua, (regex_pattern, text): (String, String)| match RegexBuilder::new(&regex_pattern)
+                .size_limit(50_000)
+                .build()
             {
                 Ok(re) => {
                     if let Some(m) = re.find(&text) {

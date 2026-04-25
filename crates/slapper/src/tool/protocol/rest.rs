@@ -106,9 +106,44 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>, scope: Opt
         .route("/health", get(health_check))
         .route("/openapi.json", get(openapi_spec))
         .route("/api/v1/tools", get(list_tools))
-        .route("/api/v1/tools/:tool_id", get(get_tool))
-        .route("/api/v1/tools/:tool_id/execute", post(execute_tool))
+        .route("/api/v1/tools/{tool_id}", get(get_tool))
+        .route("/api/v1/tools/{tool_id}/execute", post(execute_tool))
         .with_state(state);
+
+    #[cfg(feature = "ws-api")]
+    {
+        use axum::{extract::ws::{Message, WebSocket, WebSocketUpgrade}, routing::get};
+        use futures::{SinkExt, StreamExt};
+        use tokio::sync::broadcast;
+
+        async fn ws_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
+            ws.on_upgrade(handle_websocket)
+        }
+
+        async fn handle_websocket(socket: WebSocket) {
+            let (mut sender, mut receiver) = socket.split();
+            let (tx, _rx) = broadcast::channel::<String>(100);
+            let tx_clone = tx.clone();
+
+            tokio::spawn(async move {
+                let mut rx = tx_clone.subscribe();
+                while let Ok(msg) = rx.recv().await {
+                    if sender.send(Message::Text(msg.into())).await.is_err() {
+                        break;
+                    }
+                }
+            });
+
+            while let Some(Ok(msg)) = receiver.next().await {
+                if let Message::Text(text) = msg {
+                    tracing::debug!("WS received: {}", text);
+                    let _ = tx.send(text.to_string());
+                }
+            }
+        }
+
+        router = router.route("/ws", get(ws_handler));
+    }
 
     if tls_config.is_some() {
         tracing::info!("REST API running with TLS enabled");

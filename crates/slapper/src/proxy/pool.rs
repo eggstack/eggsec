@@ -131,7 +131,7 @@ impl ProxyPool {
         let mut proxies: Vec<_> = self.get_healthy();
         proxies.sort_by_key(|p| {
             self.stats
-                .get(&p.to_url())
+                .get(&p.to_log_key())
                 .map(|s| s.avg_latency_ms())
                 .unwrap_or(u64::MAX)
         });
@@ -143,12 +143,12 @@ impl ProxyPool {
         proxies.sort_by(|a, b| {
             let rate_a = self
                 .stats
-                .get(&a.to_url())
+                .get(&a.to_log_key())
                 .map(|s| s.success_rate())
                 .unwrap_or(0.0);
             let rate_b = self
                 .stats
-                .get(&b.to_url())
+                .get(&b.to_log_key())
                 .map(|s| s.success_rate())
                 .unwrap_or(0.0);
             rate_b
@@ -159,7 +159,7 @@ impl ProxyPool {
     }
 
     pub fn record_success(&self, proxy: &ProxyEntry, latency_ms: u64) {
-        let key = proxy.to_url();
+        let key = proxy.to_log_key();
         if let Some(mut stats) = self.stats.get_mut(&key) {
             stats.total_requests += 1;
             stats.successful_requests += 1;

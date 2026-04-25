@@ -21,12 +21,10 @@ impl<'a> TabDispatcher<'a> {
         self.0.handle_focus_prev();
     }
 
-    #[allow(dead_code)]
     pub fn handle_char(&mut self, c: char) {
         self.0.handle_char(c);
     }
 
-    #[allow(dead_code)]
     pub fn handle_backspace(&mut self) {
         self.0.handle_backspace();
     }
@@ -79,7 +77,6 @@ impl<'a> TabDispatcher<'a> {
         self.0.handle_autocomplete()
     }
 
-    #[allow(dead_code)]
     pub fn is_input_focused(&self) -> bool {
         self.0.is_input_focused()
     }
@@ -102,6 +99,10 @@ impl<'a> TabDispatcher<'a> {
 
     pub fn page_down(&mut self, page_size: usize) {
         self.0.page_down(page_size);
+    }
+
+    pub fn handle_paste(&mut self, text: &str) {
+        self.0.handle_paste(text);
     }
 
     pub fn reset(&mut self) {

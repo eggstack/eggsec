@@ -4,10 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[cfg(feature = "python-plugins")]
 pub mod python;
 
+pub mod process_runner;
 pub mod security;
 pub mod validation;
 
@@ -15,7 +17,6 @@ pub mod validation;
 pub use python::PythonPluginManager;
 
 use futures::future::join_all;
-use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {

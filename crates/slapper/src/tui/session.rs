@@ -38,7 +38,7 @@ impl SessionConfig {
 
 #[derive(Default)]
 pub struct SessionManager {
-    config: SessionConfig,
+    pub config: SessionConfig,
 }
 
 impl SessionManager {
@@ -100,9 +100,9 @@ impl SessionManager {
         }
     }
 
-    pub fn restore_session(&self, app: &mut App, state: &SessionState) {
-        if Tab::from_index(state.current_tab).is_some() {
-            app.current_tab = Tab::from_index(state.current_tab).unwrap();
+pub fn restore_session(&self, app: &mut App, state: &SessionState) {
+        if let Some(tab) = Tab::from_index(state.current_tab) {
+            app.current_tab = tab;
         }
 
         for &idx in &state.bookmarks {
@@ -141,5 +141,13 @@ impl SessionManager {
 
     pub fn session_dir(&self) -> &PathBuf {
         &self.config.session_dir
+    }
+
+    pub fn auto_save_interval(&self) -> u64 {
+        self.config.auto_save_interval_secs
+    }
+
+    pub fn config(&self) -> &SessionConfig {
+        &self.config
     }
 }

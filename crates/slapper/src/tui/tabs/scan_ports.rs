@@ -1,4 +1,5 @@
 use crate::scanner::ports::PortScanResults;
+use crate::tui::components::ValidationResult;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -197,6 +198,27 @@ impl ScanPortsTab {
     pub fn page_down(&mut self, page_size: usize) {
         self.results_view.page_down(page_size);
     }
+
+    fn update_field_validation(&mut self) {
+        if let Some(ref mut target_field) = self.inputs.fields.get_mut(0) {
+            let validation = if target_field.value.contains('.') || target_field.value.contains(':') {
+                target_field.validate_ip()
+            } else {
+                ValidationResult {
+                    valid: !target_field.value.is_empty(),
+                    message: if target_field.value.is_empty() {
+                        "Target cannot be empty".to_string()
+                    } else {
+                        String::new()
+                    },
+                }
+            };
+            target_field.validation = Some(validation);
+        }
+        if let Some(ref mut port_field) = self.inputs.fields.get_mut(1) {
+            port_field.validation = Some(port_field.validate_port_range());
+        }
+    }
 }
 
 impl Default for ScanPortsTab {
@@ -284,15 +306,33 @@ impl TabInput for ScanPortsTab {
         self.inputs.focus_prev();
     }
 
+    fn handle_up(&mut self) {
+        if !self.inputs.is_focused() && !self.results_view.is_empty() {
+            self.scroll_results_up();
+        } else {
+            self.inputs.focus_prev();
+        }
+    }
+
+    fn handle_down(&mut self) {
+        if !self.inputs.is_focused() && !self.results_view.is_empty() {
+            self.scroll_results_down();
+        } else {
+            self.inputs.focus_next();
+        }
+    }
+
     fn handle_char(&mut self, c: char) {
         if !self.is_running() {
             self.inputs.insert(c);
+            self.update_field_validation();
         }
     }
 
     fn handle_backspace(&mut self) {
         if !self.is_running() {
             self.inputs.backspace();
+            self.update_field_validation();
         }
     }
 
@@ -308,22 +348,6 @@ impl TabInput for ScanPortsTab {
 
     fn handle_escape(&mut self) {
         self.inputs.blur();
-    }
-
-    fn handle_up(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_up();
-        } else {
-            self.inputs.focus_prev();
-        }
-    }
-
-    fn handle_down(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_down();
-        } else {
-            self.inputs.focus_next();
-        }
     }
 
     fn handle_left(&mut self) -> bool {

@@ -322,8 +322,6 @@ impl TaskWorker {
     async fn execute_task_sync(task: ScheduledTask, dispatcher: &ToolDispatcher) -> TaskOutcome {
         let start = Instant::now();
         let task_id = task.id;
-        let task_type = task.task_type.clone();
-        let payload = task.payload.clone();
 
         let request = match Self::task_to_request(task) {
             Ok(req) => req,

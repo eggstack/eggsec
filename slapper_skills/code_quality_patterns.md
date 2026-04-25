@@ -24,6 +24,11 @@ metadata:
 
 This skill documents code quality patterns, error handling best practices, and testing conventions for working on the Slapper security toolkit codebase.
 
+## Recent Updates (2026-04-25)
+
+- Added: Arc::try_unwrap() pattern for DashMap results collection
+- Added: MCP hashmap reaper documentation (fire-and-forget background tasks)
+
 ## Error Type Conversion Patterns
 
 ### Adding From Implementations
@@ -126,6 +131,42 @@ Doc tests must use correct types and signatures:
 3. **Missing arguments**: Ensure all required arguments are provided
 4. **Async/sync mismatch**: Don't use `.await` on sync functions
 5. **Private types**: Use only public API in doc examples
+
+## Background Task Patterns
+
+### Fire-and-Forget Background Tasks
+
+Long-running servers often spawn background cleanup tasks that run until shutdown. These are intentionally fire-and-forget (no JoinHandle returned):
+
+```rust
+/// Starts a background task that periodically cleans up expired hashmap entries.
+///
+/// This is a fire-and-forget cleanup routine with no shutdown mechanism because it's
+/// designed for long-running servers. The reaper runs indefinitely and cleans:
+/// - Pending cancellations older than their timeout
+/// - Completed results older than 5 minutes (ENTRY_TTL_SECS)
+///
+/// Memory is bounded because entries are removed, not accumulated.
+/// This is an intentional design choice - the server is expected to run
+/// until shutdown, at which point the process exits and OS reclaims memory.
+pub fn start_hashmap_reaper(&self, interval_secs: u64) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+        loop {
+            interval.tick().await;
+            // Cleanup logic...
+        }
+    });
+}
+```
+
+**Key documentation requirements**:
+1. Explain why no shutdown mechanism is needed
+2. Document memory bounds (TTL, cleanup frequency)
+3. Clarify it's intentional for long-running servers
+4. Note OS cleanup on process exit
+
+**Example**: `tool/protocol/mcp/handlers/server.rs:start_hashmap_reaper()`
 
 ## URL Encoding Pattern
 

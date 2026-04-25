@@ -17,6 +17,11 @@ metadata:
 
 This skill documents performance optimization patterns implemented across the Slapper codebase. Future agents should follow these patterns for performance-sensitive code.
 
+## Recent Updates (2026-04-25)
+
+- Added: Arc::try_unwrap() for DashMap results collection (replaces costly Clone)
+- Added: MCP hashmap reaper documentation
+
 ## Performance Patterns Implemented
 
 ### 1. FxHashMap for Hot Paths
@@ -196,6 +201,32 @@ old < limit
 ```
 
 **Files**: `scanner/ports/mod.rs`, `scanner/fingerprint.rs`, `scanner/endpoints.rs`
+
+### 9. Arc::try_unwrap() for DashMap Results
+
+**Pattern**: When all workers have completed, use `Arc::try_unwrap()` instead of `DashMap::clone()` to avoid deep copy.
+
+**Before** (slow - deep clone):
+```rust
+let results: Vec<PortResult> = DashMap::clone(&results).into_iter().map(|(_, v)| v).collect();
+```
+
+**After** (fast - ownership transfer):
+```rust
+let results: Vec<PortResult> = Arc::try_unwrap(results)
+    .expect("all workers completed")
+    .into_iter()
+    .map(|(_, v)| v)
+    .collect();
+```
+
+**Files** (2026-04-25):
+- `scanner/ports/mod.rs:593`
+- `scanner/fingerprint.rs:301`
+- `scanner/endpoints.rs:810`
+- `fuzzer/engine/execution.rs:146`
+
+**Prerequisite**: Must ensure all worker tasks have completed (e.g., after `join_all(handles).await`).
 
 ## Verification Commands
 

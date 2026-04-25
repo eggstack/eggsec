@@ -1,5 +1,10 @@
 use ratatui::style::{Color, Modifier, Style};
 use std::collections::HashMap;
+use std::cell::RefCell;
+
+thread_local! {
+    pub static THEME_MANAGER: RefCell<ThemeManager> = RefCell::new(ThemeManager::new());
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeMode {
@@ -221,19 +226,16 @@ impl ThemeManager {
     }
 }
 
-pub static CURRENT_THEME: std::sync::LazyLock<Theme> =
-    std::sync::LazyLock::new(dark_theme);
-
 #[macro_export]
 macro_rules! theme {
     () => {
-        &$crate::tui::theme::CURRENT_THEME
+        &$crate::tui::theme::THEME_MANAGER.with(|tm| tm.borrow().current())
     };
 }
 
 #[macro_export]
 macro_rules! tc {
     ($field:ident) => {
-        $crate::tui::theme::CURRENT_THEME.colors.$field
+        $crate::tui::theme::THEME_MANAGER.with(|tm| tm.borrow().current().colors.$field)
     };
 }

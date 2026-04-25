@@ -24,7 +24,7 @@
 //! this implementation should work as a fallback.
 
 use mlua::{Lua, Result as LuaResult, Table, Value};
-use regex::Regex;
+use regex::RegexBuilder;
 
 pub fn register_lpeg_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
@@ -152,7 +152,10 @@ pub fn register_lpeg_library(lua: &Lua) -> LuaResult<()> {
     let match_fn = lua.create_function(|lua, (pattern, text): (Table, String)| {
         let pat = pattern.get::<String>("pattern").unwrap_or_default();
 
-        match Regex::new(&pat) {
+        match RegexBuilder::new(&pat)
+            .size_limit(50_000)
+            .build()
+        {
             Ok(re) => {
                 if let Some(m) = re.find(&text) {
                     let result = lua.create_table()?;
@@ -176,7 +179,10 @@ pub fn register_lpeg_library(lua: &Lua) -> LuaResult<()> {
             let start = init.unwrap_or(1).saturating_sub(1);
 
             if start < text.len() {
-                match Regex::new(&pat) {
+                match RegexBuilder::new(&pat)
+                    .size_limit(50_000)
+                    .build()
+                {
                     Ok(re) => {
                         let search_text = &text[start..];
                         if let Some(m) = re.find(search_text) {
@@ -199,7 +205,10 @@ pub fn register_lpeg_library(lua: &Lua) -> LuaResult<()> {
 
     // lpeg.gsub(pattern, text, replacement) - Global substitution
     let gsub_fn = lua.create_function(
-        |_lua, (pattern, text, replacement): (String, String, String)| match Regex::new(&pattern) {
+        |_lua, (pattern, text, replacement): (String, String, String)| match RegexBuilder::new(&pattern)
+            .size_limit(50_000)
+            .build()
+        {
             Ok(re) => {
                 let new_str = re.replace_all(&text, replacement.as_str());
                 let count = re.find_iter(&text).count();

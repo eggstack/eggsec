@@ -1,10 +1,12 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::Span,
     widgets::{Block, Borders, Paragraph, Tabs},
     Frame,
 };
+
+use crate::tc;
 
 use super::App;
 use crate::tui::components::{centered_rect, confirm_popup, help_popup_for_tab};
@@ -43,7 +45,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
         let context_paragraph = Paragraph::new(context_help).style(
             Style::default()
-                .fg(Color::Gray)
+                .fg(tc!(text_dim))
                 .add_modifier(Modifier::ITALIC),
         );
         f.render_widget(context_paragraph, context_chunks[1]);
@@ -92,7 +94,7 @@ fn draw_http_options_popup(f: &mut Frame, app: &App) {
     let block = Block::default()
         .title("Global HTTP Options (press h to close)")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(tc!(primary)));
 
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
@@ -139,7 +141,7 @@ fn draw_http_options_popup(f: &mut Frame, app: &App) {
         ),
     ];
 
-    let paragraph = Paragraph::new(content.join("\n")).style(Style::default().fg(Color::White));
+    let paragraph = Paragraph::new(content.join("\n")).style(Style::default().fg(tc!(text)));
     f.render_widget(paragraph, inner);
 }
 
@@ -161,7 +163,7 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
     let block = Block::default()
         .title("Command Palette (Ctrl+P to close, Up/Down to navigate, Enter to select)")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Magenta));
+        .border_style(Style::default().fg(tc!(highlight)));
 
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
@@ -178,7 +180,7 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
 
     // Query input
     let query_paragraph = Paragraph::new(format!("Query: {}", palette.query))
-        .style(Style::default().fg(Color::White).bg(Color::DarkGray));
+        .style(Style::default().fg(tc!(text)).bg(tc!(surface)));
     f.render_widget(query_paragraph, chunks[0]);
 
     // Pagination
@@ -192,7 +194,7 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
         "0/0".to_string()
     };
     let status_paragraph =
-        Paragraph::new(status_text.as_str()).style(Style::default().fg(Color::Gray));
+        Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
     f.render_widget(status_paragraph, chunks[1]);
 
     // Results (only visible items)
@@ -201,11 +203,11 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
         let result = &palette.results[global_idx];
         let style = if global_idx == palette.selected_index {
             Style::default()
-                .fg(Color::Black)
-                .bg(Color::Cyan)
+                .fg(tc!(background))
+                .bg(tc!(highlight))
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::White)
+            Style::default().fg(tc!(text))
         };
 
         let shortcut_text = result
@@ -225,9 +227,9 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Gray)),
+                .border_style(Style::default().fg(tc!(border))),
         )
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(tc!(text)));
     f.render_widget(list, chunks[2]);
 }
 
@@ -245,7 +247,7 @@ fn draw_search_popup(f: &mut Frame, app: &App) {
     let block = Block::default()
         .title("Search (press Esc to close, Enter to search)")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow));
+        .border_style(Style::default().fg(tc!(accent)));
 
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
@@ -256,7 +258,7 @@ fn draw_search_popup(f: &mut Frame, app: &App) {
         format!("Searching: {}", app.search_query)
     };
 
-    let paragraph = Paragraph::new(search_content).style(Style::default().fg(Color::White));
+    let paragraph = Paragraph::new(search_content).style(Style::default().fg(tc!(text)));
     f.render_widget(paragraph, inner);
 }
 
@@ -293,10 +295,10 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
     let tabs = Tabs::new(visible_titles)
         .block(Block::default().borders(Borders::ALL).title(format!("Slapper{}", title_suffix)))
         .select(adjusted_select)
-        .style(Style::default().fg(Color::Cyan))
+        .style(Style::default().fg(tc!(tab_active)))
         .highlight_style(
             Style::default()
-                .fg(Color::Yellow)
+                .fg(tc!(highlight))
                 .add_modifier(Modifier::BOLD),
         );
 
@@ -441,13 +443,13 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
             Line::from(Span::styled(
                 *part,
                 Style::default()
-                    .fg(Color::White)
+                    .fg(tc!(text))
                     .add_modifier(Modifier::BOLD),
             ))
         } else {
             Line::from(vec![
                 Span::raw(" > "),
-                Span::styled(*part, Style::default().fg(Color::Cyan)),
+                Span::styled(*part, Style::default().fg(tc!(primary))),
             ])
         }
     })
@@ -457,11 +459,11 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::NONE)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_style(Style::default().fg(tc!(border)));
 
     let paragraph = Paragraph::new(breadcrumb_line)
         .block(block)
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(tc!(text)));
 
     f.render_widget(paragraph, area);
 }
@@ -619,13 +621,13 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-fn get_tab_status(state: &crate::tui::tabs::AppState) -> (String, Color) {
+fn get_tab_status(state: &crate::tui::tabs::AppState) -> (String, ratatui::style::Color) {
     use crate::tui::tabs::AppState;
     match state {
-        AppState::Idle => ("Ready - Press Enter to start".to_string(), Color::Gray),
-        AppState::Running => ("Running - Ctrl+C to stop".to_string(), Color::Yellow),
-        AppState::Completed => ("Completed".to_string(), Color::Green),
-        AppState::Error(e) => (e.to_string(), Color::Red),
+        AppState::Idle => ("Ready - Press Enter to start".to_string(), tc!(status_idle)),
+        AppState::Running => ("Running - Ctrl+C to stop".to_string(), tc!(status_running)),
+        AppState::Completed => ("Completed".to_string(), tc!(success)),
+        AppState::Error(e) => (e.to_string(), tc!(error)),
     }
 }
 
@@ -645,15 +647,15 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         crate::tui::tabs::Tab::Packet => get_tab_status(&app.packet.state),
         crate::tui::tabs::Tab::Settings => (
             "Press 's' to save settings, 'r' to reset".to_string(),
-            Color::Gray,
+            tc!(status_idle)
         ),
         crate::tui::tabs::Tab::History => (
             "↑↓ Navigate | 'd' Delete | 'r' Clear all".to_string(),
-            Color::Gray,
+            tc!(status_idle)
         ),
         crate::tui::tabs::Tab::Dashboard => (
             "Dashboard - View scan results overview".to_string(),
-            Color::Gray,
+            tc!(status_idle)
         ),
         crate::tui::tabs::Tab::GraphQl => get_tab_status(&app.graphql.state),
         crate::tui::tabs::Tab::OAuth => get_tab_status(&app.oauth.state),
@@ -663,45 +665,45 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         #[cfg(feature = "nse")]
         crate::tui::tabs::Tab::Nse => get_tab_status(&app.nse.state),
         #[cfg(not(feature = "nse"))]
-        crate::tui::tabs::Tab::Nse => ("NSE not available".to_string(), Color::Gray),
+        crate::tui::tabs::Tab::Nse => ("NSE not available".to_string(), tc!(status_idle)),
         #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
         crate::tui::tabs::Tab::Plugin => get_tab_status(&app.plugin.state),
         #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-        crate::tui::tabs::Tab::Plugin => ("Plugins not available".to_string(), Color::Gray),
+        crate::tui::tabs::Tab::Plugin => ("Plugins not available".to_string(), tc!(status_idle)),
         #[cfg(feature = "advanced-hunting")]
         crate::tui::tabs::Tab::Hunt => get_tab_status(&app.hunt.state),
         #[cfg(not(feature = "advanced-hunting"))]
-        crate::tui::tabs::Tab::Hunt => ("Hunting feature not enabled".to_string(), Color::Gray),
+        crate::tui::tabs::Tab::Hunt => ("Hunting feature not enabled".to_string(), tc!(status_idle)),
         #[cfg(feature = "headless-browser")]
         crate::tui::tabs::Tab::Browser => get_tab_status(&app.browser.state),
         #[cfg(not(feature = "headless-browser"))]
-        crate::tui::tabs::Tab::Browser => ("Browser feature not enabled".to_string(), Color::Gray),
+        crate::tui::tabs::Tab::Browser => ("Browser feature not enabled".to_string(), tc!(status_idle)),
         #[cfg(feature = "compliance")]
         crate::tui::tabs::Tab::Compliance => get_tab_status(&app.compliance.state),
         #[cfg(not(feature = "compliance"))]
         crate::tui::tabs::Tab::Compliance => {
-            ("Compliance feature not enabled".to_string(), Color::Gray)
+            ("Compliance feature not enabled".to_string(), tc!(status_idle))
         }
         #[cfg(feature = "database")]
         crate::tui::tabs::Tab::Storage => get_tab_status(&app.storage.state),
         #[cfg(not(feature = "database"))]
-        crate::tui::tabs::Tab::Storage => ("Storage feature not enabled".to_string(), Color::Gray),
+        crate::tui::tabs::Tab::Storage => ("Storage feature not enabled".to_string(), tc!(status_idle)),
         #[cfg(feature = "external-integrations")]
         crate::tui::tabs::Tab::Integrations => get_tab_status(&app.integrations.state),
         #[cfg(not(feature = "external-integrations"))]
         crate::tui::tabs::Tab::Integrations => {
-            ("Integrations feature not enabled".to_string(), Color::Gray)
+            ("Integrations feature not enabled".to_string(), tc!(status_idle))
         }
         #[cfg(feature = "finding-workflow")]
         crate::tui::tabs::Tab::Workflow => get_tab_status(&app.workflow.state),
         #[cfg(not(feature = "finding-workflow"))]
         crate::tui::tabs::Tab::Workflow => {
-            ("Workflow feature not enabled".to_string(), Color::Gray)
+            ("Workflow feature not enabled".to_string(), tc!(status_idle))
         }
         #[cfg(feature = "vuln-management")]
         crate::tui::tabs::Tab::Vuln => get_tab_status(&app.vuln.state),
         #[cfg(not(feature = "vuln-management"))]
-        crate::tui::tabs::Tab::Vuln => ("Vuln management not enabled".to_string(), Color::Gray),
+        crate::tui::tabs::Tab::Vuln => ("Vuln management not enabled".to_string(), tc!(status_idle)),
     };
 
     let help_text = if app.is_help_visible() {
@@ -766,12 +768,14 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         super::InputMode::Insert => "INSERT",
     };
     let mode_color = match app.mode {
-        super::InputMode::Normal => Color::Green,
-        super::InputMode::Insert => Color::Yellow,
+super::InputMode::Normal => tc!(mode_normal),
+
+        super::InputMode::Insert => tc!(mode_insert),
+
     };
     let mode_indicator_widget = ratatui::widgets::Paragraph::new(format!(" {} ", mode_text)).style(
         Style::default()
-            .fg(Color::Black)
+            .fg(tc!(background))
             .bg(mode_color)
             .add_modifier(Modifier::BOLD),
     );
@@ -782,6 +786,6 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(status, chunks[1]);
 
     let help =
-        ratatui::widgets::Paragraph::new(help_text).style(Style::default().fg(Color::DarkGray));
+        ratatui::widgets::Paragraph::new(help_text).style(Style::default().fg(tc!(text_dim)));
     f.render_widget(help, chunks[2]);
 }

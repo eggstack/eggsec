@@ -17,9 +17,11 @@ pub use runner::run;
 use crossterm::event::KeyCode;
 use super::error::make_friendly_error;
 use crate::tui::help::{HelpManager, HelpOverlay, CommandPalette, HelpContext};
+use crate::tui::session::{SessionManager, SessionConfig};
 use crate::tui::state::SharedHistory;
 use crate::tui::tabs;
 use crate::tui::tabs::{Tab, TabInput};
+use crate::tui::theme::ThemeManager;
 use dispatch::TabDispatcher;
 use crate::tui::workers;
 use crate::types::OutputFormat;
@@ -81,6 +83,9 @@ pub struct App {
     pub current_tab: Tab,
     pub should_quit: bool,
     pub mode: InputMode,
+    pub session_manager: crate::tui::session::SessionManager,
+    pub last_auto_save: std::time::Instant,
+    pub theme_manager: crate::tui::theme::ThemeManager,
     pub recon: tabs::ReconTab,
     pub load: tabs::LoadTab,
     pub scan_ports: tabs::ScanPortsTab,
@@ -145,11 +150,24 @@ pub struct App {
 
 impl App {
     pub fn new(history: SharedHistory) -> Self {
-        Self {
-            current_tab: Tab::Recon,
+        let session_manager = SessionManager::new(SessionConfig::default());
+        
+        let restored_state = session_manager.load_latest_session().ok().flatten();
+        let restored_bookmarks: std::collections::HashSet<usize> = restored_state
+            .as_ref()
+            .map(|s| s.bookmarks.iter().cloned().collect())
+            .unwrap_or_default();
+        let restored_current_tab = restored_state.map(|s| s.current_tab);
+        
+        let mut app = Self {
+            current_tab: restored_current_tab
+                .and_then(|t| Tab::from_index(t))
+                .unwrap_or(Tab::Recon),
             should_quit: false,
             mode: InputMode::Normal,
-            tab_scroll_offset: 0,
+            session_manager,
+            last_auto_save: std::time::Instant::now(),
+            theme_manager: ThemeManager::new(),
             recon: tabs::ReconTab::new(),
             load: tabs::LoadTab::new(),
             scan_ports: tabs::ScanPortsTab::new(),
@@ -197,6 +215,7 @@ impl App {
             global_search: Some(crate::tui::search::GlobalSearch::new()),
             search_backup: None,
             pending_key: None,
+            tab_scroll_offset: 0,
             export_format: OutputFormat::Json,
             task_handle: None,
             progress_rx: None,
@@ -207,9 +226,11 @@ impl App {
             help_context: HelpContext::Normal,
             pending_action: None,
             needs_redraw: true,
-            bookmarks: std::collections::HashSet::new(),
+            bookmarks: restored_bookmarks,
             paused: false,
-        }
+        };
+        
+        app
     }
 
     pub fn cycle_export_format(&mut self) {
@@ -759,6 +780,21 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
 
     pub fn resume(&mut self) {
         self.paused = false;
+    }
+
+    pub fn auto_save_if_due(&mut self) {
+        let interval_secs = self.session_manager.auto_save_interval();
+        if self.last_auto_save.elapsed().as_secs() >= interval_secs {
+            if let Err(e) = self.session_manager.save_quick(self) {
+                tracing::warn!("Auto-save failed: {:?}", e);
+            } else {
+                self.last_auto_save = std::time::Instant::now();
+            }
+        }
+    }
+
+    pub fn toggle_theme(&mut self) {
+        self.theme_manager.toggle();
     }
 }
 

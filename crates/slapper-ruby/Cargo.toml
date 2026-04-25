@@ -17,7 +17,7 @@ serde_json.workspace = true
 tracing.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
-slapper-plugin = { path = "../slapper-plugin" }
+slapper-plugin = { path = "../slapper-plugin", features = ["ruby-plugins"] }
 regex = { workspace = true }
 
 [features]
