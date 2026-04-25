@@ -10,14 +10,14 @@
 
 This document consolidates all improvement plans into a single implementation roadmap. Items are organized into waves based on parallelization potential, with dependencies noted for items that require prior completion.
 
-**Current State**:
+**Current State** (verified 2026-04-25):
 - 1,107+ passing tests (base)
 - 1,345 passing tests (with full features, 9 pre-existing AI test failures)
 - ~19 clippy warnings (TUI-specific acceptable)
 - 470+ source files
-- 30 payload types in fuzzer
+- 30 payload types in fuzzer (not 22 as documented)
 - 29 TUI tabs
-- 29 recon modules
+- ~30 recon modules
 
 **Goal**: Zero failing tests, minimal warnings, production-ready codebase with enhanced capabilities.
 
@@ -38,7 +38,7 @@ Focus: Hot path optimizations, reduced allocations
 Focus: Critical usability fixes, hardcoded colors, broken components
 
 ### Wave E: Feature Completion (Sequential after A-D)
-Focus: gRPC implementation, plugin architecture, capability gaps
+Focus: gRPC implementation, auto-calibration, capability gaps
 
 ### Wave F: Documentation (Parallel - Can run alongside E)
 Focus: Discrepancy fixes, new guides, skills standardization
@@ -55,13 +55,13 @@ Focus: Discrepancy fixes, new guides, skills standardization
 
 **Issue**: The `regex` crate allows building regexes from untrusted input without size limits. 7 locations in slapper-nse bypass the safe `build_regex()` helper.
 
-**Locations requiring fix**:
+**Locations requiring fix** (verified 2026-04-25):
 | File | Line | Risk |
 |------|------|------|
-| `slapper-nse/src/libraries/match_lib.rs` | 87 | CRITICAL |
-| `slapper-nse/src/libraries/matchs.rs` | 47, 56 | CRITICAL |
-| `slapper-nse/src/libraries/lpeg.rs` | 155, 179, 202 | CRITICAL |
-| `slapper-nse/src/libraries/re.rs` | 221 | CRITICAL |
+| `slapper-nse/src/libraries/match_lib.rs` | ~87 | CRITICAL |
+| `slapper-nse/src/libraries/matchs.rs` | ~47, ~56 | CRITICAL |
+| `slapper-nse/src/libraries/lpeg.rs` | ~155, ~179, ~202 | CRITICAL |
+| `slapper-nse/src/libraries/re.rs` | ~221 | CRITICAL |
 
 **Fix Pattern**:
 ```rust
@@ -85,9 +85,13 @@ cargo test --lib -p slapper-nse
 
 **Issue**: Missing critical patterns in Python and Ruby plugin validation.
 
+**Current State** (verified 2026-04-25):
+- Python has 17 patterns including `getattr(` and `chr(` (DO NOT REMOVE - they have legitimate use cases)
+- Ruby has 18 patterns including `(?i)\beval\b` and `(?i)\bopen\b` (DO NOT REMOVE - they serve a purpose)
+
 **Python - Add these patterns** (`slapper-plugin/src/security.rs`):
 ```rust
-// CRITICAL - code execution
+// CRITICAL - code execution (MISSING - add these)
 Regex::new(r"(?i)\bexec\(").unwrap(),
 Regex::new(r"(?i)\bcompile\(").unwrap(),
 Regex::new(r"(?i)types\.FunctionType").unwrap(),
@@ -99,7 +103,7 @@ Regex::new(r"(?i)platform\.os").unwrap(),
 Regex::new(r"(?i)sys\.modules\[").unwrap(),
 ```
 
-**Ruby - Add these patterns**:
+**Ruby - Add these patterns** (all 7 are MISSING):
 ```rust
 Regex::new(r"(?i)(instance_eval|class_eval|module_eval)\(").unwrap(),
 Regex::new(r"(?i)%x\{").unwrap(),
@@ -110,14 +114,9 @@ Regex::new(r"(?i)\bload\b").unwrap(),
 Regex::new(r"(?i)\bsend\(").unwrap(),
 ```
 
-**Python - Remove high false positives** (causes noise without security benefit):
-- `r"(?i)getattr\("` - too common
-- `r"(?i)chr\("` - trivially bypassed
-
-**Ruby - Remove high false positives**:
-- `r"(?i)\bopen\b"` - too generic
-- `r"(?i)\beval\b"` - redundant with `eval(`
-- `r"(?i)Shellwords\.escape"` - no direct execution risk
+**DO NOT REMOVE** (plan was wrong):
+- Python: `getattr(`, `chr(` - these exist and have legitimate security uses
+- Ruby: `(?i)\bopen\b`, `(?i)\beval\b` - `eval` is different from `eval(`, `open` catches `IO.open`
 
 **Verification**:
 ```bash
@@ -128,14 +127,14 @@ cargo test -p slapper-plugin --features python-plugins,ruby-plugins
 
 ### A.3: Config File Permissions
 
-**Issue**: `check_config_file_permissions()` in `types.rs:250-303` is never called.
+**Issue**: `check_config_file_permissions()` in `types.rs:269-303` is never called.
 
 **Fix**: Call after config loads in `config/loader.rs`:
 ```rust
-// After config.validate() at line 51:
+// After config.validate() at line ~51:
 check_config_file_permissions(&canonical_path);
 
-// After loading scope file at line 82:
+// After loading scope file at line ~82:
 check_config_file_permissions(&canonical_path);
 ```
 
@@ -149,7 +148,7 @@ check_config_file_permissions(&canonical_path);
 
 **Recommended Solution**: Process-based plugin runner
 
-**New module**: `slapper-plugin/src/process_runner.rs`
+**New module**: `slapper-plugin/src/process_runner.rs` (does not exist - needs to be created)
 
 ```rust
 pub struct ProcessPluginRunner {
@@ -204,9 +203,26 @@ pub struct PluginConfig {
 **Team**: B (can work in parallel with A, C, D)
 **Target**: Zero failing tests, minimal warnings
 
-### B.1: Fix Failing AI-integration Tests (9 tests)
+### B.1: Fix AI-integration Compilation Error (PREREQUISITE)
 
-**Test 1-2: Skills Trigger Extraction** (`agent/skills.rs:103-126`)
+**CRITICAL**: The `ai-integration` feature does not compile. Before any test fixes can be verified, this must be resolved.
+
+**Issue**: `cargo check --lib -p slapper --features ai-integration` fails with:
+```
+error[E0432]: unresolved import `crate::tool::ToolResult`
+```
+
+Multiple files in `tool/implementations/` import `ToolResult` from `crate::tool` but it only exists in `crate::tool::traits`.
+
+**Fix**: Add `pub use crate::tool::traits::ToolResult;` to `tool/mod.rs` (gated on `tool-api` feature).
+
+---
+
+### B.2: Fix Failing AI-integration Tests (9 tests) - AFTER B.1
+
+Once compilation is fixed, these tests need attention:
+
+**Test 1-2: Skills Trigger Extraction** (`agent/skills.rs:98-129`)
 
 **Issue**: Token extraction doesn't capture keywords correctly.
 - `skip_while(!is_alphanumeric())` skips the `#` but consumes line start
@@ -263,7 +279,7 @@ cache.entry(key).or_insert_with(|| CachedPlanData {
 
 ---
 
-**Test 8: Content Extraction** (`ai/client.rs:463`)
+**Test 8: Content Extraction** (`ai/client.rs:462-467`)
 
 **Issue**: Test expects 3 lines but 4 are returned.
 
@@ -279,20 +295,20 @@ cache.entry(key).or_insert_with(|| CachedPlanData {
 
 ---
 
-### B.2: Add Missing Default Implementations (8 types)
+### B.3: Add Missing Default Implementations (8 types)
 
-All are SAFE - zero-sized structs with all fields having Default:
+All are SAFE - zero-sized structs with all fields having Default. Line numbers verified 2026-04-25:
 
-| Type | File |
-|------|------|
-| CargoScanner | `recon/dependency_scan/cargo/mod.rs:10` |
-| NpmScanner | `recon/dependency_scan/npm/mod.rs:10` |
-| GoScanner | `recon/dependency_scan/go/mod.rs:10` |
-| StressTab | `tui/tabs/stress.rs:63` |
-| ReportTab | `tui/tabs/report.rs:78` |
-| OAuthTab | `tui/tabs/oauth.rs:58` |
-| GraphQlTab | `tui/tabs/graphql.rs:55` |
-| ClusterTab | `tui/tabs/cluster.rs:64` |
+| Type | File | `new()` line |
+|------|------|-------------|
+| CargoScanner | `recon/dependency_scan/cargo/mod.rs` | ~8 |
+| NpmScanner | `recon/dependency_scan/npm/mod.rs` | ~8 |
+| GoScanner | `recon/dependency_scan/go/mod.rs` | ~8 |
+| StressTab | `tui/tabs/stress.rs` | ~39 |
+| ReportTab | `tui/tabs/report.rs` | ~38 |
+| OAuthTab | `tui/tabs/oauth.rs` | ~32 |
+| GraphQlTab | `tui/tabs/graphql.rs` | ~32 |
+| ClusterTab | `tui/tabs/cluster.rs` | ~37 |
 
 **Implementation Pattern**:
 ```rust
@@ -305,7 +321,7 @@ impl Default for TypeName {
 
 ---
 
-### B.3: Remove Dead Code (2 items)
+### B.4: Remove Dead Code (2 items)
 
 **Item 1: `ParsedDependency` struct**
 - Location: `recon/dependency_scan/mod.rs:61`
@@ -319,14 +335,18 @@ impl Default for TypeName {
 
 ---
 
-### B.4: Address Remaining Clippy Warnings
+### B.5: Address Remaining Clippy Warnings
+
+Current: 19 warnings total
 
 | Warning Type | Count | Action |
 |------------|------- |--------|
-| map_or simplification | 2 | Apply suggestion |
-| casting unnecessary | 2 | Apply suggestion |
-| unused import | 1 | Remove |
-| variable mutable | 1 | Review |
+| Missing Default impl | 8 | Apply Default to 8 structs (B.3) |
+| Dead code | 2 | Remove (B.4) |
+| Unused imports | ~5 | Remove |
+| Unused mutability | ~2 | Review |
+| Unnecessary cast | ~1 | Apply suggestion |
+| Comparison to empty | ~1 | Replace `key == ""` with `key.is_empty()` |
 
 **Note**: TUI-specific warnings are acceptable per AGENTS.md guidelines.
 
@@ -343,9 +363,9 @@ impl Default for TypeName {
 **Priority**: CRITICAL
 **Location**: `fuzzer/engine/execution.rs:101-140`
 
-**Issue**: Per-payload worker loop clones 13+ values per iteration.
+**Issue**: Per-payload worker loop clones 13+ values per iteration. Some Arc optimization exists but still clones `client`, `url`, `method`, `param`, `payload_clone`, `user_agent` as full values.
 
-**Current Pattern** (lines 102-113):
+**Current Pattern** (lines ~102-113):
 ```rust
 let semaphore = semaphore.clone();
 let client = self.client.clone();        // HIGH COST - reqwest Client
@@ -368,7 +388,7 @@ let counter = counter.clone();
 struct FuzzArgs {
     url: Arc<Url>,           // Changed from String
     payload: Arc<String>,    // Changed from String
-    client: Arc<Client>,    // Changed from Client
+    client: Arc<Client>,      // Changed from Client
     // ...
 }
 ```
@@ -397,13 +417,13 @@ tokio::spawn(async move {
 **Priority**: HIGH
 **Target**: Replace `std::collections::HashMap` with `rustc_hash::FxHashMap` in hot paths
 
-**Locations** (all SAFE - no untrusted input):
+**Locations** (verified NOT migrated as of 2026-04-25 - all SAFE - no untrusted input):
 | File | Module | Usage |
 |------|--------|-------|
-| `fuzzer/api_schema/mod.rs:5` | 5 | `generate_auth_bypass_payloads()` |
-| `fuzzer/targets/api.rs:3` | 3 | OpenAPI spec parsing |
-| `fuzzer/redos_detect.rs:4` | 4 | Cache compiled patterns |
-| `scanner/cms/mod.rs:14` | 14 | CMS fingerprinting |
+| `fuzzer/api_schema/mod.rs` | ~5 | `generate_auth_bypass_payloads()` |
+| `fuzzer/targets/api.rs` | ~3 | OpenAPI spec parsing |
+| `fuzzer/redos_detect.rs` | ~4 | Cache compiled patterns |
+| `scanner/cms/mod.rs` | ~14 | CMS fingerprinting |
 
 **Migration Pattern**:
 ```rust
@@ -423,11 +443,13 @@ use rustc_hash::FxHashMap;
 **Priority**: HIGH
 **Target**: Simple counter increments use lock-free atomics
 
-**Locations**:
+**Locations** (verified 2026-04-25):
 | File | Line | Current | Change |
 |------|------|---------|--------|
-| `scanner/fingerprint.rs` | 234 | `tokio::sync::Mutex<u64>` | `AtomicU64` |
-| `scanner/ports/spoofed.rs` | 138 | `tokio::sync::Mutex<u64>` | `AtomicU64` |
+| `scanner/fingerprint.rs` | ~234 | `tokio::sync::Mutex<u64>` for `scanned_count` | `AtomicU64` |
+| `scanner/ports/spoofed.rs` | ~138 | `tokio::sync::Mutex<u64>` for `scanned_count` | `AtomicU64` |
+
+Note: `results_count` in these files already uses `AtomicU64`. Only `scanned_count` needs migration.
 
 **Note**: `scanner/endpoints.rs:699` is more complex (used for progress channel) - defer.
 
@@ -466,24 +488,27 @@ fn replace_vars(input: &str, replacements: &FxHashMap<&str, &str>) -> Cow<str> {
 
 **Item 2: URL Format in Loop** (`scanner/endpoints.rs:727`)
 
+Current `format!("{}{}", base, endpoint)` creates new allocation each iteration.
+
 Consider preallocation or `Url::join()`.
 
 ---
 
-### C.5: Hot Path Arc<Mutex<Vec>> → DashMap (4 locations)
+### C.5: DashMap Migration
 
-**Priority**: MEDIUM
-**Target**: Lock contention on concurrent appends
+**Status**: PLAN CORRECTION - The files listed do NOT currently use DashMap. They use `RwLock<Vec>` patterns.
 
-**Locations**:
-| File | Type | Hot Path? | Recommendation |
-|------|------|-----------|----------------|
-| `tool/history.rs:26` | `Arc<RwLock<Vec<ExecutionEntry>>>` | Yes | DashMap keyed by ID |
-| `distributed/queue.rs:26` | `Arc<RwLock<VecDeque<Task>>>` | Yes | Channel-based queue |
-| `tool/agents/communication.rs:150` | `Arc<RwLock<Vec<AgentMessage>>>` | Yes | DashMap keyed by message ID |
-| `tool/implementations/oast.rs:29` | `Arc<RwLock<Vec<Interaction>>>` | Yes | DashMap keyed by interaction ID |
+**Candidate Locations** (if lock contention becomes an issue):
+| File | Current Pattern | Notes |
+|------|----------------|-------|
+| `tool/history.rs:26` | `Arc<RwLock<Vec<ExecutionEntry>>>` | Consider if profiling shows contention |
+| `distributed/queue.rs:26` | `Arc<RwLock<VecDeque<Task>>>` | Channel-based may be better |
+| `tool/agents/communication.rs:150` | `Arc<RwLock<Vec<AgentMessage>>>` | Consider if profiling shows contention |
+| `tool/implementations/oast.rs:29` | `Arc<RwLock<Vec<Interaction>>>` | Consider if profiling shows contention |
 
-**Migration Pattern**:
+**Note**: Do NOT migrate unless profiling shows lock contention is a problem. The current `RwLock<Vec>` patterns are not necessarily inefficient.
+
+**If profiling shows contention**, migration pattern:
 ```rust
 // BEFORE:
 struct HistoryManager {
@@ -506,16 +531,16 @@ struct HistoryManager {
 
 ### D.1: UTF-8 Cursor Position Bug (CRITICAL)
 
-**Location**: `tui/components/input.rs:39, 76, 132`
+**Location**: `tui/components/input.rs`
 
 **The Bug**: `cursor_pos` field is used as both byte offset AND character position inconsistently.
 
-**Root Cause**: Struct designed for byte offsets (line 81's `insert()` takes byte index), but `with_value()`, `apply_autocomplete()`, and `move_end()` treat it as character count.
+**Root Cause**: Struct designed for byte offsets (line ~82's `insert()` takes byte index), but `with_value()`, `apply_autocomplete()`, and `move_end()` treat it as character count.
 
 **Solution**: Standardize on byte offsets throughout:
 
 ```rust
-// FIX at line 37-43 (with_value method):
+// FIX at line ~39 (with_value method):
 pub fn with_value(mut self, value: impl Into<String>) -> Self {
     let v = value.into();
     self.cursor_pos = v.len();  // Use byte length, not char count
@@ -523,13 +548,13 @@ pub fn with_value(mut self, value: impl Into<String>) -> Self {
     self
 }
 
-// FIX at line 74-77 (apply_autocomplete method):
+// FIX at line ~76 (apply_autocomplete method):
 pub fn apply_autocomplete(&mut self, suggestion: &str) {
     self.value = suggestion.to_string();
     self.cursor_pos = self.value.len();  // Use byte length
 }
 
-// FIX at line 131-133 (move_end method):
+// FIX at line ~132 (move_end method):
 pub fn move_end(&mut self) {
     self.cursor_pos = self.value.len();  // Use byte length, not char count
 }
@@ -541,15 +566,15 @@ pub fn move_end(&mut self) {
 
 **Issue**: Tabs use `Color::Green`, `Color::Red`, `Color::Yellow` directly instead of `tc!()` theme macro.
 
-**Affected Files** (39 instances across 5 files):
+**Affected Files** (verified 2026-04-25 - approximate line numbers):
 
-| File | Lines | Should Be |
-|------|-------|-----------|
-| `tabs/recon.rs` | 136, 153, 179, 199, 211, 226, 381, 385, 399 | `tc!(success/warning/error/text_dim)` |
-| `tabs/waf.rs` | 124, 128, 131, 138, 142, 150, 162, 174, 196, 203, 205, 212, 224, 374, 387 | `tc!(warning/error/success/info/text_dim)` |
-| `tabs/scan_ports.rs` | 115, 120, 123, 129, 132, 138, 288, 294 | `tc!(warning/info/success/text_dim)` |
-| `components/selector.rs` | 245, 247, 303, 305, 355, 357 | `tc!(selected/border)` |
-| `components/scrollable.rs` | 104 | `tc!(border)` |
+| File | Should Be |
+|------|-----------|
+| `tabs/recon.rs` | `tc!(success/warning/error/text_dim)` |
+| `tabs/waf.rs` | `tc!(warning/error/success/info/text_dim)` |
+| `tabs/scan_ports.rs` | `tc!(warning/info/success/text_dim)` |
+| `components/selector.rs` | `tc!(selected/border)` |
+| `components/scrollable.rs` | `tc!(border)` |
 
 **Fix Pattern**:
 ```rust
@@ -566,13 +591,14 @@ pub fn move_end(&mut self) {
 
 ### D.3: AuthTab Non-Functional (CRITICAL)
 
-**Location**: `tui/tabs/auth.rs` (entire file - 116 lines)
+**Location**: `tui/tabs/auth.rs` (entire file - ~116 lines)
 
-**Problems**:
+**Problems** (more severe than originally described):
 1. No InputGroup - uses raw `String` fields instead of component
 2. No Focus Tracking - all handlers empty or return false
-3. Missing Required Methods - `progress()` not implemented
-4. No Input Rendering - only shows static text
+3. Missing Required Methods - `progress()` exists but returns hardcoded `0.0`
+4. No Input Validation - appends characters blindly without validation
+5. No actual auth functionality implemented
 
 **Solution**: Complete rewrite following `tabs/oauth.rs` pattern. Key changes:
 
@@ -627,7 +653,7 @@ impl AuthTab {
 
 ### D.4: Help Overlay Incorrect Information (CRITICAL)
 
-**Location**: `tui/ui.rs:710, 716, 721`
+**Location**: `tui/ui.rs:~709-724`
 
 **Current (WRONG)**:
 ```
@@ -658,20 +684,22 @@ Line 710: "[h/l] Tab | [j/k] Nav | [w/b] Word | [gg/Top] [G/Bot] | [n/p] Tab | [
 
 **Location**: `tui/help.rs:511-557`
 
-**Issue**: 10+ shortcuts exist but aren't documented.
+**Issue**: Some shortcuts exist but aren't documented or may not be wired up.
 
-| Shortcut | Action | Missing From |
-|----------|--------|---------------|
-| `Ctrl+Z` | Pause/Resume | Help + CommandPalette |
-| `Ctrl+T` | Theme toggle | Help + CommandPalette |
-| `Ctrl+V` | Paste | Help + CommandPalette |
-| `Ctrl+Y` | Resume when paused | Help + CommandPalette |
-| `Ctrl+B` | Bookmark | Help + CommandPalette |
-| `Space` | Toggle help | Help only |
-| `w` / `b` | Word forward/backward | Help only |
-| `H` / `L` | Home/End | Help only |
+**Verify and add** if missing:
+| Shortcut | Action |
+|----------|--------|
+| `gg` / `G` | Go to first/last tab (verify two-key combo is wired) |
+| `Ctrl+Z` | Pause/Resume |
+| `Ctrl+T` | Theme toggle |
+| `Ctrl+V` | Paste |
+| `Ctrl+Y` | Resume when paused |
+| `Ctrl+B` | Bookmark |
+| `Space` | Toggle help |
+| `w` / `b` | Word forward/backward |
+| `H` / `L` | Home/End |
 
-**Fix**: Add to `global_commands` vector in help.rs
+**Fix**: Add to `global_commands` vector in help.rs after verifying shortcuts are wired in input handler.
 
 ---
 
@@ -680,9 +708,9 @@ Line 710: "[h/l] Tab | [j/k] Nav | [w/b] Word | [gg/Top] [G/Bot] | [n/p] Tab | [
 **Location**: Multiple tabs
 
 **Pattern Quality**:
-- ✓ Good: ReconTab - dedicated error block with `tc!(error)`
-- ⚠ Mediocre: FuzzTab - in status bar, can truncate
-- ✗ Bug: SettingsTab - always green even for errors
+- Good: ReconTab - dedicated error block with `tc!(error)`
+- Mediocre: FuzzTab - in status bar, can truncate
+- Bug: SettingsTab - always green even for errors
 
 **Solution**: Adopt ReconTab pattern across all tabs:
 1. Use dedicated error block (not status bar)
@@ -691,54 +719,53 @@ Line 710: "[h/l] Tab | [j/k] Nav | [w/b] Word | [gg/Top] [G/Bot] | [n/p] Tab | [
 
 ---
 
-### D.7: HistoryTab Search Unavailable (MEDIUM)
+### D.7: HistoryTab Search - VERIFY BEFORE WORK
 
-**Location**: `tabs/history.rs:170-186`
+**Location**: `tui/tabs/history.rs:170-186`
 
-**Issue**: Search method EXISTS but NO UI to access it.
-
-**Solution**: Add search input field:
+**CORRECTION**: The plan claimed search was unavailable, but `search()` method **DOES EXIST** and is functional:
 ```rust
-// Add to HistoryTab render:
-// - Add search InputField to struct
-// - Render in top area when focused
-// - Bind '/' key to activate search
-// - Call search() method on input
+pub fn search(&self, query: &str) -> Vec<&HistoryEntry> {
+    if query.is_empty() {
+        return self.entries.iter().collect();
+    }
+    // ... filtering logic
+}
 ```
+
+**Action**: Verify if there's actually a UI issue or if the plan was simply wrong.
 
 ---
 
-### D.8: SettingsTab Missing Progress Indicator (MEDIUM)
+### D.8: SettingsTab Progress - VERIFY BEFORE WORK
 
-**Location**: `tabs/settings/main.rs`
+**Location**: `tui/tabs/settings/main.rs:~414-416`
 
-**Current**: Hardcoded returns `AppState::Idle` and `0.0` progress.
+**CORRECTION**: The plan claimed progress indicator was missing, but `SettingsTab` has no async operations. Returning `0.0` is **correct behavior** - Settings is not a scanning operation.
 
-**Blocking Operations** (no progress shown):
-- `save_config()` - blocking file write
-- `add_schedule()` - blocking file operation
-- `convert_report()` - blocking I/O
-
-**Solution**: Add progress tracking:
-```rust
-pub progress: ProgressGauge,
-pub state: AppState,
-pub pending_operation: Option<PendingOp>,
-
-// Update TabState:
-fn state(&self) -> AppState { self.state.clone() }
-fn progress(&self) -> f64 { self.progress.percent() as f64 }
-```
+**Action**: Verify if there's actually a missing feature or if the plan was wrong.
 
 ---
 
 ### D.9: Validation Feedback Missing (MEDIUM)
 
-**Location**: `tui/components/input.rs`
+**Location**: `tui/components/input.rs:~140-292`
 
-**Issue**: Validation methods exist, message NOT displayed.
+**Issue**: Validation methods exist (`validate_url()`, `validate_ip()`, etc.) but NOT automatically triggered on input.
 
-**Solution**: Display validation message in `InputField::render()`:
+**Current**: InputField has `validation: Option<ValidationResult>` field but no automatic validation on `insert()` or `backspace()`.
+
+**Solution**: Trigger validation on input changes:
+```rust
+// In insert() method, after inserting character:
+if let Some(ref validation) = self.validation {
+    if !validation.valid {
+        // Update validation state
+    }
+}
+```
+
+Display validation message in `InputField::render()`:
 ```rust
 if let Some(ref validation) = self.validation {
     if !validation.valid && !validation.message.is_empty() {
@@ -790,7 +817,7 @@ fn handle_focus_next(&mut self) {
 
 ### E.1: Fix gRPC Implementation (HIGH)
 
-**Issue**: gRPC implementation uses manual Rust structs instead of protobuf-generated code.
+**Issue**: gRPC implementation uses manual Rust structs instead of protobuf-generated code. `proto/tool.proto` does not exist.
 
 **Required Steps**:
 
@@ -839,33 +866,25 @@ prost = "0.14"
 
 ---
 
-### E.2: Fix Feature Flag Inconsistencies (MEDIUM)
+### E.2: Feature Flag Inconsistencies (MEDIUM)
 
 **Issue 1**: `full` feature references wrong name (`websocket` instead of `ws-api`)
 
-**Location**: `Cargo.toml:237`
+**Location**: `Cargo.toml:~237`
 
 **Fix**: Change `full = [..., "websocket", ...]` to `full = [..., "ws-api", ...]`
 
-**Issue 2**: Missing `#[cfg(not(...))]` arms for TUI tabs
+**Issue 2**: TUI tab feature-gated dispatch
 
-**Location**: `tui/tabs/mod.rs`
+**CORRECTION**: `tui/tabs/mod.rs` already has proper `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]` dual-arm pattern for all feature-gated tabs. This issue may have been fixed or was never present.
 
-**Fix**: Add dual-arm pattern for feature-gated tab variants:
-```rust
-#[cfg(feature = "nse")]
-Tab::Nse => handler.handle_nse(),
-#[cfg(not(feature = "nse"))]
-Tab::Nse => {
-    Err("NSE support not compiled".into())
-},
-```
+**Action**: Verify with `cargo check --lib -p slapper --features nse` (should compile without tab dispatch errors).
 
 ---
 
 ### E.3: Consolidate Empty Feature Flags (LOW)
 
-**Issue**: 12 features have no Cargo dependencies but enable code.
+**Issue**: Some features have no Cargo dependencies but enable code.
 
 **Recommendation**: Document groupings in `ARCHITECTURE.md`:
 ```toml
@@ -884,33 +903,17 @@ devsecops = ["external-integrations", "database", "sbom", "vuln-management"]
 
 **Current**: No synchronization on `Vec<Arc<dyn Plugin>>`
 
-**Fix**:
-```rust
-use std::sync::RwLock;
-
-pub struct PluginRegistry {
-    plugins: RwLock<Vec<Arc<dyn Plugin>>>,
-}
-
-impl PluginRegistry {
-    pub fn register(&self, plugin: Arc<dyn Plugin>) {
-        self.plugins.write().unwrap().push(plugin);
-    }
-
-    pub async fn run_check(&self, check_name: &str, target: &str) -> Result<Vec<PluginResult>> {
-        let plugins = self.plugins.read().unwrap();
-        // ... iterate safely
-    }
-}
-```
+**CORRECTION**: `slapper-plugin/src/lib.rs` already uses `Arc<RwLock<Vec<Arc<dyn Plugin>>>` - thread safety is already implemented.
 
 **E.4.2: AST-Based Security Analysis (MEDIUM)**
 
+**CORRECTION**: Current implementation uses REGEX-BASED pattern detection, not AST analysis. The plan incorrectly described existing code.
+
 **Reference**: [PyAegis](https://github.com/mnbplus/PyAegis) - AST taint analysis
 
-**New module**: `slapper-plugin/src/ast_scanner.rs`
+**New module** (if desired): `slapper-plugin/src/ast_scanner.rs`
 
-**Config option**:
+**Config option** (for future):
 ```rust
 pub enum DetectionMode {
     Regex,    // Current, fast
@@ -935,12 +938,13 @@ pub enum DetectionMode {
 
 ---
 
-### E.6: Auto-Calibration System (Capability Gap)
+### E.6: Auto-Calibration System (HIGH)
 
-**Priority**: HIGH
 **Reference**: plan7.md Phase 3
 
 **Goal**: Implement ffuf-style smart calibration
+
+**Current State**: `calibration.rs` and `filters.rs` do NOT exist in fuzzer/ - this is a real capability gap.
 
 **Components**:
 1. `fuzzer/calibration.rs` - Sample-based calibration
@@ -951,12 +955,12 @@ pub enum DetectionMode {
 
 ---
 
-### E.7: Subdomain Enumeration Enhancement (Capability Gap)
+### E.7: Subdomain Enumeration Enhancement (HIGH)
 
-**Priority**: HIGH
 **Reference**: plan7.md Phase 2
 
-**Current**: 2 sources (crt.sh, ThreatMiner)
+**Current State** (CORRECTION): Code has 3 sources (crt.sh, alexa, threatminer), NOT 2 as plan stated. Threatminer is correctly present.
+
 **Target**: Match Amass with 40+ OSINT sources
 
 **Phases**:
@@ -969,20 +973,20 @@ pub enum DetectionMode {
 
 ---
 
-### E.8: Community Template Ecosystem (Capability Gap)
+### E.8: Community Template Ecosystem
 
-**Priority**: HIGH
-**Reference**: plan7.md Phase 1
+**CORRECTION**: `scanner/templates/` ALREADY EXISTS with:
+- `marketplace.rs`
+- `verify.rs`
+- `models.rs`
+- `executor.rs`
+- `matcher.rs`
+- `mod.rs`
+- `loader.rs`
 
-**Goal**: Add Nuclei-compatible template support
+The plan incorrectly treated this as a "capability gap" when templates are already implemented.
 
-**Components**:
-1. `scanner/templates/schema.rs` - Template format definition
-2. `scanner/templates/loader.rs` - YAML parser, variable substitution
-3. `scanner/templates/registry.rs` - Index by tags, severity, CVE
-4. CLI: `slapper template run -t cve -s high`
-
-**Effort**: 600 lines
+**Action**: Verify existing implementation is complete and working. If gaps exist, document them specifically.
 
 ---
 
@@ -994,7 +998,7 @@ pub enum DetectionMode {
 
 ### F.1: Fix Documentation Discrepancies
 
-**F.1.1: Payload Types (6 missing)**
+**F.1.1: Payload Types (verified - 30 exist, docs say 22)**
 
 Add to documentation:
 - `nosql` - NoSQL Injection
@@ -1007,14 +1011,16 @@ Add to documentation:
 **Files requiring updates**:
 - `docs/CAPABILITIES.md` - Add 6 missing payload types
 - `README.md` - Update "20+ payload types" → "30 payload types"
-- `lib.rs` - Update comment on line 16 from "22" to "30"
-- `fuzzer/mod.rs` - Update "22 payload types" to "30"
+- `lib.rs:16` - Update comment from "22" to "30"
+- `fuzzer/mod.rs:1` - Update "22+ payload types" to "30"
 
 ---
 
-**F.1.2: Recon Modules (11 missing)**
+**F.1.2: Recon Modules**
 
-Add to documentation:
+**CORRECTION**: Plan expected ~18 modules but ~30 exist. Verify actual module list before documenting.
+
+Add to documentation (after verification):
 - `secrets` - Secret Detection
 - `git_secrets` - Git Repository Secrets (feature: `git-secrets`)
 - `api_schema` - API Schema Discovery (feature: `api-schema`)
@@ -1029,7 +1035,7 @@ Add to documentation:
 
 ---
 
-**F.1.3: Feature Flags (17 missing)**
+**F.1.3: Feature Flags (~15 undocumented, not 17)**
 
 Add to documentation:
 - `ai-integration` - AI analysis, payload generation
@@ -1075,7 +1081,7 @@ Decision guide for choosing scan profiles and understanding tradeoffs.
 
 Detailed documentation for undocumented feature flags.
 
-**Sections**: All 17 undocumented features with descriptions, configuration, and security warnings
+**Sections**: All ~15 undocumented features with descriptions, configuration, and security warnings
 
 ---
 
@@ -1099,7 +1105,7 @@ Detailed documentation for undocumented feature flags.
 
 ### F.4: Skills Standardization
 
-**Structure Requirements** for all 52 skills:
+**Structure Requirements** for all skills in `slapper_skills/`:
 1. YAML frontmatter (name, description, triggers, metadata)
 2. Overview section
 3. Capabilities section
@@ -1121,38 +1127,40 @@ Detailed documentation for undocumented feature flags.
 
 **Team A - Security**:
 - A.1: Regex ReDoS Prevention (2-4h)
-- A.2: Plugin Security Patterns (2-3h)
+- A.2: Plugin Security Patterns (2-3h) - ADD missing patterns, don't remove existing
 - A.3: Config File Permissions (1-2h)
 - A.4: Plugin Timeout Enforcement (High effort - start early)
 
 **Team B - Code Quality**:
-- B.1: Fix 9 Failing Tests (Medium effort - high priority)
-- B.2: Add Default Implementations (Low effort)
-- B.3: Remove Dead Code (Low effort)
-- B.4: Clippy Warnings (Low effort)
+- B.1: Fix AI-integration compilation error (HIGH priority - unblocks B.2)
+- B.2: Fix 9 Failing Tests (Medium effort - after B.1)
+- B.3: Add Default Implementations (Low effort)
+- B.4: Remove Dead Code (Low effort)
+- B.5: Clippy Warnings (Low effort)
 
 **Team C - Performance**:
 - C.1: Clone Storm Fix (4-6h - highest impact)
 - C.2: FxHashMap Migration (1-2h)
 - C.3: AtomicU64 Counters (1-2h)
 - C.4: String Allocations (2-3h)
-- C.5: DashMap Migration (3-4h)
+- C.5: DashMap (Only if profiling shows contention)
 
 **Team D - TUI**:
 - D.1: UTF-8 Cursor Fix (Low effort - CRITICAL)
-- D.2: Hardcoded Colors (Medium effort - 39 instances)
+- D.2: Hardcoded Colors (Medium effort)
 - D.3: AuthTab Rewrite (High effort - 250 lines)
 - D.4: Help Overlay Fix (Low effort)
-- D.5-D.10: Medium/Low priority items
+- D.5-D.10: Verify before working (some items may be incorrect)
 
 ### Phase 2: Feature Completion (Weeks 5-8)
 
 - E.1: gRPC Implementation (1-2 weeks)
-- E.2: Feature Flag Fixes (1 day)
+- E.2: Feature Flag Fixes (1 day) - fix `full` feature reference
 - E.3: Empty Feature Consolidation (2 days)
-- E.4: Plugin Architecture (ongoing)
+- E.4: Plugin Architecture (if desired - current implementation is regex-based)
 - E.5: PDF Pagination (2 days)
-- E.6-E.8: Capability Gaps (ongoing)
+- E.6-E.7: Capability Gaps (ongoing)
+- E.8: Verify templates already exist
 
 ### Phase 3: Documentation (Weeks 6-10)
 
@@ -1170,7 +1178,7 @@ Detailed documentation for undocumented feature flags.
 cargo check --lib -p slapper
 cargo test --lib -p slapper
 
-# Full features
+# Full features (may fail due to B.1 issue)
 cargo test --lib -p slapper --features rest-api,ai-integration
 cargo clippy --lib -p slapper
 cargo clippy --lib -p slapper --features rest-api,ai-integration
@@ -1192,10 +1200,11 @@ cargo build --release -p slapper --features full
 
 | Metric | Target | Current | Notes |
 |--------|--------|---------|-------|
-| Test failures | 0 | 9 | AI-integration tests (Wave B) |
+| AI-integration compiles | Yes | No | B.1 fix required |
+| Test failures | 0 | 9+ | Wave B |
 | Clippy warnings | <10 | ~19 | Accept TUI-specific |
 | ReDoS protected | 100% | No | Wave A |
-| Plugin patterns | 30+ | 17 Python, 18 Ruby | Wave A |
+| Plugin patterns | 30+ Python, 25+ Ruby | 17 Python, 18 Ruby | Wave A - add missing |
 | Fuzzer clones | <5/iter | 13+ | Wave C |
 | Hot path HashMap | FxHashMap | HashMap | Wave C |
 | TUI theme-aware | 100% | No | Wave D |
@@ -1210,10 +1219,16 @@ cargo build --release -p slapper --features full
 **Sequential Dependencies**:
 - Wave E requires A, B, C, D to be largely complete
 - Wave F can run alongside Wave E
+- B.2 (test fixes) depends on B.1 (compilation fix)
 
 **Cross-Wave Dependencies**:
 - E.1 (gRPC) is independent - can start in Phase 1
-- D.3 (AuthTab) depends on B.2 (Default implementations) for InputGroup
+- D.3 (AuthTab) depends on B.3 (Default implementations) for InputGroup
+
+**Verification Required** (before work):
+- D.7 (HistoryTab search) - method already exists
+- D.8 (SettingsTab progress) - 0.0 is correct behavior
+- E.8 (Templates) - already implemented
 
 ---
 
@@ -1224,8 +1239,10 @@ cargo build --release -p slapper --features full
 - Plugin pattern detection must balance security vs false positives
 - Config permission enforcement should warn, not block (for usability)
 - Benchmark before/after for each performance optimization
+- Always verify plan claims against actual codebase before implementing
 
 ---
 
 *Last updated: 2026-04-25*
 *Status: ACTIVE DEVELOPMENT*
+*Verified by: subagent exploration of codebase*

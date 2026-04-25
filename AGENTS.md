@@ -207,26 +207,24 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ## Planning
 
 - `plans/plan.md` — Consolidated improvement plan (active development)
-  - Wave A: Security Hardening (Regex ReDoS, Plugin patterns, Config permissions)
-  - Wave B: Code Quality (Test fixes, Default impls, Dead code removal)
-  - Wave C: Performance (Clone storm, FxHashMap, AtomicU64, DashMap)
-  - Wave D: TUI Improvements (UTF-8 cursor, Hardcoded colors, AuthTab rewrite)
-  - Wave E: Feature Completion (gRPC, Auto-calibration, Subdomain enum, Templates)
-  - Wave F: Documentation (Discrepancy fixes, New guides, Skills standardization)
+  - Contains all improvement items organized by wave
+  - See plan.md for implementation details, dependencies, and verification commands
 
-**Parallelization**: Waves A, B, C, D can run in parallel with 4 teams. Wave E is sequential after A-D. Wave F can run alongside Wave E.
+**On Using This Guide**: When working on items from plan.md, always verify claims against the actual codebase. Line numbers and file paths in plans may become outdated as code evolves. Use `rg` to confirm before implementing.
 
 ## Lessons Learned
 
 ### Codebase Verification Required
 
 When implementing plan items, verify actual state rather than assuming plan accuracy:
-- Payload type count: 30 (confirmed via `fuzzer/payloads/mod.rs:39-70`)
-- Recon module count: 29 (confirmed via `recon/` directory listing)
-- Test count: 1107 passing (confirmed via `cargo test --lib`)
+- Payload type count: 30 (verified 2026-04-25 via `fuzzer/payloads/mod.rs`)
+- Recon module count: ~30 (verified - more than the 18 expected in old plans)
+- Test count: 1107 passing base, 1345 with full features
 - Use `rg` to confirm file paths and line numbers exist
 - Run `cargo test --lib -p slapper` after each change
 - Check test counts: `cargo test --lib -p slapper -- --list 2>/dev/null | grep -c "test$"`
+
+**Critical: Always verify AI-integration compiles before working on AI test fixes.** The `ai-integration` feature has a compilation error (`unresolved import ToolResult`) that must be fixed first.
 
 ### Configuration
 
@@ -914,6 +912,23 @@ The following items have been implemented and verified:
 16. **Clipboard paste**: Ctrl+V integration with `arboard`
 17. **Alert CLI flags**: `--alert-webhook`, `--alert-slack`, `--alert-email`
 18. **Dedup key includes finding_ids**: `make_dedup_key()` in AlertRouter
+19. **TUI tabs/mod.rs dual arms**: Feature-gated tabs already have proper `#[cfg(feature)]` and `#[cfg(not(feature))]` arms
+20. **HistoryTab search**: `search()` method already exists and is functional
+21. **PluginRegistry thread safety**: Already uses `Arc<RwLock<Vec<Arc<dyn Plugin>>>>`
+22. **Community templates**: `scanner/templates/` already exists with full implementation
+23. **Subdomain sources**: Has 3 sources (crt.sh, alexa, threatminer) - not 2 as previously thought
+
+### Verified Incorrect Plan Items
+
+The following items in plan.md were found to be incorrect during verification (2026-04-25):
+
+- **D.7 (HistoryTab search)**: Plan claimed search was unavailable, but `search()` method EXISTS
+- **D.8 (SettingsTab progress)**: Plan claimed missing, but 0.0 is correct - SettingsTab has no async work
+- **E.2 Issue 2 (tab dual arms)**: Plan claimed tabs/mod.rs was missing dual arms, but they exist
+- **E.4 (AST-based security)**: Plan described AST-based but code is regex-based (regex is current implementation)
+- **E.8 (Templates)**: Plan treated as capability gap, but `scanner/templates/` already exists
+- **C.5 (DashMap migration)**: Plan listed candidates but none use DashMap - all use `RwLock<Vec>`
+- **A.2 (Pattern removal)**: Plan said remove `getattr(`, `chr(` and `open`, `eval` but these exist and have legitimate uses
 
 ---
 
