@@ -51,17 +51,20 @@ Focus: Discrepancy fixes, new guides, skills standardization
 **Team**: A (can work in parallel with B, C, D)
 **Target**: Close critical security bypass vectors
 
-### A.1: Regex ReDoS Prevention
+### A.1: Regex ReDoS Prevention ✓ COMPLETE
 
 **Issue**: The `regex` crate allows building regexes from untrusted input without size limits. 7 locations in slapper-nse bypass the safe `build_regex()` helper.
 
-**Locations requiring fix** (verified 2026-04-25):
-| File | Line | Risk |
-|------|------|------|
-| `slapper-nse/src/libraries/match_lib.rs` | ~87 | CRITICAL |
-| `slapper-nse/src/libraries/matchs.rs` | ~47, ~56 | CRITICAL |
-| `slapper-nse/src/libraries/lpeg.rs` | ~155, ~179, ~202 | CRITICAL |
-| `slapper-nse/src/libraries/re.rs` | ~221 | CRITICAL |
+**Status**: FIXED (commit 34e0666)
+- All vulnerable `Regex::new()` calls replaced with `RegexBuilder::new().size_limit(50_000)`
+
+**Locations fixed** (verified 2026-04-25):
+| File | Line | Status |
+|------|------|--------|
+| `slapper-nse/src/libraries/match_lib.rs` | ~87 | ✓ Fixed |
+| `slapper-nse/src/libraries/matchs.rs` | ~47, ~56 | ✓ Fixed |
+| `slapper-nse/src/libraries/lpeg.rs` | ~155, ~179, ~202 | ✓ Fixed |
+| `slapper-nse/src/libraries/re.rs` | ~221 | ✓ Fixed |
 
 **Fix Pattern**:
 ```rust
@@ -1203,7 +1206,7 @@ cargo build --release -p slapper --features full
 | AI-integration compiles | Yes | No | B.1 fix required |
 | Test failures | 0 | 9+ | Wave B |
 | Clippy warnings | <10 | ~19 | Accept TUI-specific |
-| ReDoS protected | 100% | No | Wave A |
+| ReDoS protected | 100% | Yes (A.1 complete) | Wave A |
 | Plugin patterns | 30+ Python, 25+ Ruby | 17 Python, 18 Ruby | Wave A - add missing |
 | Fuzzer clones | <5/iter | 13+ | Wave C |
 | Hot path HashMap | FxHashMap | HashMap | Wave C |
