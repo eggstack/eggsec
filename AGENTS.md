@@ -206,9 +206,27 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan (All waves complete)
+- `plans/plan.md` — Consolidated improvement plan (active development)
+  - Wave A: Security Hardening (Regex ReDoS, Plugin patterns, Config permissions)
+  - Wave B: Code Quality (Test fixes, Default impls, Dead code removal)
+  - Wave C: Performance (Clone storm, FxHashMap, AtomicU64, DashMap)
+  - Wave D: TUI Improvements (UTF-8 cursor, Hardcoded colors, AuthTab rewrite)
+  - Wave E: Feature Completion (gRPC, Auto-calibration, Subdomain enum, Templates)
+  - Wave F: Documentation (Discrepancy fixes, New guides, Skills standardization)
+
+**Parallelization**: Waves A, B, C, D can run in parallel with 4 teams. Wave E is sequential after A-D. Wave F can run alongside Wave E.
 
 ## Lessons Learned
+
+### Codebase Verification Required
+
+When implementing plan items, verify actual state rather than assuming plan accuracy:
+- Payload type count: 30 (confirmed via `fuzzer/payloads/mod.rs:39-70`)
+- Recon module count: 29 (confirmed via `recon/` directory listing)
+- Test count: 1107 passing (confirmed via `cargo test --lib`)
+- Use `rg` to confirm file paths and line numbers exist
+- Run `cargo test --lib -p slapper` after each change
+- Check test counts: `cargo test --lib -p slapper -- --list 2>/dev/null | grep -c "test$"`
 
 ### Configuration
 
@@ -855,6 +873,14 @@ When fixing failing tests in integration scenarios:
 - **Circuit breaker tests**: The breaker requires BOTH failure_threshold (5) AND success_threshold (3) transitions to close. After 5 failures, one success only moves to HalfOpen, not Closed. Tests should reflect actual state machine behavior.
 - **WAF bypass knowledge_base**: Pre-populated from `~/.config/slapper/waf_bypasses.json` - tests may have non-empty state. Use unique identifiers for test payloads to avoid collisions.
 - **Skills extract_triggers**: Pattern matching is case-insensitive. Line must contain "trigger", "keyword", or "example" AND ":" for YAML frontmatter format, or start with these words for other formats.
+
+### UTF-8 Byte Slicing
+
+`InputField` stores cursor as character count (not byte offset). **This is being fixed in Wave D** - the current implementation treats cursor_pos as both byte offset AND character count inconsistently:
+- `with_value()`, `apply_autocomplete()`, `move_end()` use `chars().count()` (character position)
+- `insert()` uses byte index with `cursor_pos += c.len_utf8()`
+
+**Fix**: Standardize on byte offsets throughout using `value.len()` instead of `value.chars().count()`.
 
 ### Large File Reference
 
