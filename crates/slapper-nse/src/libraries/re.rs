@@ -218,7 +218,10 @@ pub fn register_re_library(lua: &Lua) -> LuaResult<()> {
 
     // re.find_newlines(str, pattern) -> table
     let find_newlines_fn = lua.create_function(|lua, (s, pattern): (String, String)| {
-        let regex = match Regex::new(&pattern) {
+        let regex = match RegexBuilder::new(&pattern)
+            .size_limit(50_000)
+            .build()
+        {
             Ok(r) => r,
             Err(_) => return Ok(lua.create_table()?),
         };
