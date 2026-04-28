@@ -929,15 +929,42 @@ pub enum DetectionMode {
 
 ### E.5: PDF Pagination Fix (LOW)
 
-**Location**: `output/pdf.rs:80`
+### E.26: Skill System Improvements (IN PROGRESS)
 
-**Issue**: Only renders first 30 findings, rest silently dropped.
+**Issue**: Skill structs lack version field for compatibility.
 
-**Fix Options**:
-- Option A (recommended): Add pagination
-- Option B (quick fix): Increase limit to 100
+**Status**: IN PROGRESS (commit agent-wave-e-fixes)
+- Added `version: Option<String>` to `Skill` struct
+- Added `version: Option<String>` to `SkillMetadata`
 
-**Effort**: 2 days
+### E.24: LongitudinalMemory Unbounded Growth ✓ COMPLETE
+
+**Status**: FIXED
+- Added `max_scans_per_target: Option<usize>` config
+- FIFO eviction when limit reached
+
+### E.25: Agent handle_status_impl ✓ COMPLETE
+
+**Status**: FIXED
+- Shows AI enabled status
+- Shows memory directory and stored target count
+- Shows monitored/enabled target counts
+
+### E-20: TUI Spinner Animation ✓ COMPLETE
+
+**Status**: FIXED
+- Added `spinner_tick: u64` to `App` struct
+
+### E-17: TUI Confirmation Dialogs ✓ COMPLETE
+
+**Status**: FIXED
+- Added `PopupKind::Destructive` variant
+- Added `destructive_popup()` helper
+
+### E-28: No Update Command for Targets ✓ COMPLETE
+
+**Status**: FIXED
+- Added `TargetsCommand::Update` variant
 
 ---
 
