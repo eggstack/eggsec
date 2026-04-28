@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
+use crate::error::SlapperError;
 use crate::output::AgentSeverity;
 use crate::tool::traits::{
     SecurityTool, ToolCapability, ToolCategory, ToolResult,
@@ -57,7 +58,7 @@ impl SearchTool {
         }
     }
 
-    async fn search_searxng(&self, query: &str, categories: Option<&str>) -> Result<Vec<SearchResult>, String> {
+    async fn search_searxng(&self, query: &str, categories: Option<&str>) -> Result<Vec<SearchResult>, crate::error::SlapperError> {
         let mut url = format!("{}/search?q={}", self.searxng_url, urlencoding::encode(query));
         
         if let Some(cats) = categories {
@@ -73,7 +74,7 @@ impl SearchTool {
             .map_err(|e| format!("SearXNG request failed: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(format!("SearXNG returned status: {}", response.status()));
+            return Err(SlapperError::Network(format!("SearXNG returned status: {}", response.status())));
         }
 
         let results: serde_json::Value = response
@@ -97,7 +98,7 @@ impl SearchTool {
         Ok(search_results)
     }
 
-    async fn search_osv(&self, query: &str) -> Result<Vec<CveSearchResult>, String> {
+    async fn search_osv(&self, query: &str) -> Result<Vec<CveSearchResult>, crate::error::SlapperError> {
         let client = crate::utils::get_shared_http_client();
         
         let response = client
@@ -111,10 +112,10 @@ impl SearchTool {
             .timeout(std::time::Duration::from_secs(10))
             .send()
             .await
-            .map_err(|e| format!("OSV request failed: {}", e))?;
+            .map_err(|e| SlapperError::Network(format!("OSV request failed: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(format!("OSV returned status: {}", response.status()));
+            return Err(SlapperError::Network(format!("OSV returned status: {}", response.status())));
         }
 
         let results: serde_json::Value = response
@@ -150,7 +151,7 @@ impl SearchTool {
         Ok(cve_results)
     }
 
-    async fn search_nvd(&self, query: &str) -> Result<Vec<CveSearchResult>, String> {
+    async fn search_nvd(&self, query: &str) -> Result<Vec<CveSearchResult>, crate::error::SlapperError> {
         let client = crate::utils::get_shared_http_client();
         
         let url = format!(
@@ -164,10 +165,10 @@ impl SearchTool {
             .timeout(std::time::Duration::from_secs(15))
             .send()
             .await
-            .map_err(|e| format!("NVD request failed: {}", e))?;
+            .map_err(|e| SlapperError::Network(format!("NVD request failed: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(format!("NVD returned status: {}", response.status()));
+            return Err(SlapperError::Network(format!("NVD returned status: {}", response.status())));
         }
 
         let results: serde_json::Value = response
