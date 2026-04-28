@@ -25,7 +25,7 @@ slapper/                         # Workspace root
 | `config/` | TOML/YAML config loading, scope enforcement (`SlapperConfig`, `Scope`) |
 | `constants/` | Centralized magic numbers and default values |
 | `scanner/` | TCP port scanning, endpoint discovery, service fingerprinting, UDP fingerprinting |
-| `fuzzer/` | Fuzz engine with 22 payload types, mutation, grammar, diffing, session handling |
+| `fuzzer/` | Fuzz engine with 30 payload types, mutation, grammar, diffing, session handling |
 | `waf/` | WAF detection (30+ products), bypass techniques (headers, smuggling, evasion) |
 | `recon/` | Passive recon: DNS, WHOIS, SSL, subdomain enum, tech detection, CVE mapping, CORS, cloud |
 | `loadtest/` | HTTP load testing with HDR histogram metrics |
@@ -54,6 +54,55 @@ slapper/                         # Workspace root
 | `grpc-api` | gRPC server | tonic, prost |
 | `nse` | Nmap NSE script support | mlua |
 | `full` | All features | all of the above |
+
+## Feature Flag Groupings
+
+Features are organized into logical groupings for easier reference and composite feature configuration:
+
+```
+# Plugin System
+all-plugins = ["python-plugins", "ruby-plugins"]
+
+# API & Protocol Integration
+api-integration = ["rest-api", "grpc-api", "ws-api", "tool-api"]
+
+# AI & Agent Capabilities
+ai-capabilities = ["ai-integration", "advanced-hunting"]
+
+# DevSecOps & Compliance
+devsecops = ["external-integrations", "database", "sbom", "vuln-management", "compliance", "finding-workflow"]
+
+# Network & Packet Analysis
+network-analysis = ["stress-testing", "packet-inspection", "wireless"]
+
+# Browser & Application Testing
+app-testing = ["headless-browser", "websocket", "api-schema"]
+
+# Cloud & Container Security
+cloud-security = ["cloud", "container"]
+
+# NSE Scripting
+nse-scripting = ["nse", "nse-sandbox"]
+
+# Security Research
+security-research = ["git-secrets", "pdf"]
+```
+
+### Composite Feature Sets
+
+| Group | Features Included |
+|-------|-------------------|
+| `all-plugins` | `python-plugins`, `ruby-plugins` |
+| `api-integration` | `rest-api`, `grpc-api`, `ws-api`, `tool-api` |
+| `ai-capabilities` | `ai-integration`, `advanced-hunting` |
+| `devsecops` | `external-integrations`, `database`, `sbom`, `vuln-management`, `compliance`, `finding-workflow` |
+| `network-analysis` | `stress-testing`, `packet-inspection`, `wireless` |
+| `app-testing` | `headless-browser`, `websocket`, `api-schema` |
+| `cloud-security` | `cloud`, `container` |
+| `nse-scripting` | `nse`, `nse-sandbox` |
+| `security-research` | `git-secrets`, `pdf` |
+
+Note: The `full` feature enables all features except `insecure-tls` (which is intentionally excluded due to security risks).
 
 ## Command Flow
 
