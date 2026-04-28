@@ -53,59 +53,28 @@ pub async fn enumerate_extensions(url: &str) -> Option<Vec<String>> {
 }
 
 pub async fn scan_joomla(target: &CmsTarget, client: &Client) -> Result<CmsScanResult, crate::error::SlapperError> {
-    let mut vulnerabilities = Vec::new();
-    let mut misconfigurations = Vec::new();
-
+    let scanner = CmsScanner::new()?;
+    let mut vulnerabilities = scanner.build_vulnerabilities(&target.version, &JOOMLA_VULNERABILITIES);
+    
     let version = target.version.clone().or_else(|| detect_joomla_version(target, client).await);
-
-    if let Some(ref ver) = version {
-        for (cve, title, severity, desc, fixed) in JOOMLA_VULNERABILITIES {
-            if let Some(fix_version) = fixed {
-                if ver.lt(fix_version) {
-                    vulnerabilities.push(CmsVulnerability {
-                        id: (*cve).to_string(),
-                        title: (*title).to_string(),
-                        severity: *severity,
-                        description: (*desc).to_string(),
-                        cve_ids: vec![(*cve).to_string()],
-                        fixed_in_version: Some(fix_version.to_string()),
-                    });
-                }
-            }
-        }
-    }
-
+    
+    let mut misconfigurations = Vec::new();
+    
     let admin_url = format!("{}/administrator", target.url.trim_end_matches('/'));
     match client.get(&admin_url).send().await {
         Ok(resp) => {
             if resp.status().as_u16() == 200 {
-                misconfigurations.push(CmsMisconfiguration {
-                    id: "JM001".to_string(),
-                    title: "Joomla Administrator Accessible".to_string(),
-                    severity: Severity::Low,
-                    description: "The Joomla admin panel is accessible".to_string(),
-                    recommendation: "Consider restricting access to administrator area by IP".to_string(),
-                });
+                misconfigurations.push(scanner.make_misconfig(
+                    "JM001", "Joomla Administrator Accessible", Severity::Low,
+                    "The Joomla admin panel is accessible",
+                    "Consider restricting access to administrator area by IP"
+                ));
             }
         }
         Err(_) => {}
     }
-
-    let overall_severity = vulnerabilities
-        .iter()
-        .map(|v| v.severity)
-        .max()
-        .unwrap_or(Severity::Info);
-
-    Ok(CmsScanResult {
-        target: target.url.clone(),
-        cms_type: CmsType::Joomla,
-        version,
-        vulnerabilities,
-        misconfigurations,
-        security_headers: std::collections::HashMap::new(),
-        overall_severity,
-    })
+    
+    Ok(scanner.build_scan_result(target, CmsType::Joomla, vulnerabilities, misconfigurations))
 }
 
 async fn detect_joomla_version(target: &CmsTarget, client: &Client) -> Option<String> {

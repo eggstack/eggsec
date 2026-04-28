@@ -75,8 +75,6 @@ pub struct CmsScanner {
     http_client: reqwest::Client,
 }
 
-use crate::utils::create_insecure_http_client;
-
 impl CmsScanner {
     pub fn new() -> Result<Self> {
         let client = create_insecure_http_client(30)?;
@@ -84,6 +82,76 @@ impl CmsScanner {
         Ok(Self {
             http_client: client,
         })
+    }
+
+    /// Build vulnerabilities from a list of (cve, title, severity, description, fixed_version)
+    pub fn build_vulnerabilities<'a>(
+        &self,
+        version: &Option<String>,
+        vuln_list: &'a [(&'a str, &'a str, Severity, &'a str, Option<&'a str>)],
+    ) -> Vec<CmsVulnerability> {
+        let mut vulnerabilities = Vec::new();
+        
+        if let Some(ref ver) = version {
+            for (cve, title, severity, desc, fixed) in vuln_list {
+                if let Some(fix_version) = fixed {
+                    if ver.lt(fix_version) {
+                        vulnerabilities.push(CmsVulnerability {
+                            id: (*cve).to_string(),
+                            title: (*title).to_string(),
+                            severity: *severity,
+                            description: (*desc).to_string(),
+                            cve_ids: vec![(*cve).to_string()],
+                            fixed_in_version: Some(fix_version.to_string()),
+                        });
+                    }
+                }
+            }
+        }
+        
+        vulnerabilities
+    }
+
+    /// Helper to create a CmsMisconfiguration
+    pub fn make_misconfig(
+        id: &str,
+        title: &str,
+        severity: Severity,
+        description: &str,
+        recommendation: &str,
+    ) -> CmsMisconfiguration {
+        CmsMisconfiguration {
+            id: id.to_string(),
+            title: title.to_string(),
+            severity,
+            description: description.to_string(),
+            recommendation: recommendation.to_string(),
+        }
+    }
+
+    /// Build a CmsScanResult with the given parameters
+    pub fn build_scan_result(
+        &self,
+        target: &CmsTarget,
+        cms_type: CmsType,
+        vulnerabilities: Vec<CmsVulnerability>,
+        misconfigurations: Vec<CmsMisconfiguration>,
+    ) -> CmsScanResult {
+        let overall_severity = vulnerabilities
+            .iter()
+            .map(|v| v.severity)
+            .max()
+            .unwrap_or(Severity::Info);
+
+        CmsScanResult {
+            target: target.url.clone(),
+            cms_type,
+            version: target.version.clone(),
+            vulnerabilities,
+            misconfigurations,
+            security_headers: std::collections::HashMap::new(),
+            overall_severity,
+        }
     }
 
     pub async fn detect_cms(&self, url: &str) -> Result<CmsTarget> {

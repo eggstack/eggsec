@@ -82,81 +82,44 @@ pub async fn enumerate_themes(url: &str) -> Option<Vec<String>> {
 }
 
 pub async fn scan_wordpress(target: &CmsTarget, client: &Client) -> Result<CmsScanResult, crate::error::SlapperError> {
-    let mut vulnerabilities = Vec::new();
-    let mut misconfigurations = Vec::new();
-
-    if let Some(ref version) = target.version {
-        for (cve, title, severity, desc, fixed) in WORDPRESS_VULNERABILITIES {
-            if let Some(fix_version) = fixed {
-                if version.lt(fix_version) {
-                    vulnerabilities.push(CmsVulnerability {
-                        id: (*cve).to_string(),
-                        title: (*title).to_string(),
-                        severity: *severity,
-                        description: (*desc).to_string(),
-                        cve_ids: vec![(*cve).to_string()],
-                        fixed_in_version: Some(fix_version.to_string()),
-                    });
-                }
-            }
-        }
-    }
-
+    let scanner = CmsScanner::new()?;
+    let mut vulnerabilities = scanner.build_vulnerabilities(&target.version, &WORDPRESS_VULNERABILITIES);
+    
     for plugin in &target.plugins {
         let plugin_vulns = check_plugin_vulnerabilities(plugin).await;
         vulnerabilities.extend(plugin_vulns);
     }
-
+    
+    let mut misconfigurations = Vec::new();
+    
     let xml_rpc_enabled = check_xml_rpc(target, client).await;
     if xml_rpc_enabled {
-        misconfigurations.push(CmsMisconfiguration {
-            id: "WP001".to_string(),
-            title: "XML-RPC Enabled".to_string(),
-            severity: Severity::Medium,
-            description: "XML-RPC interface is enabled, allowing pingbacks and brute force attacks"
-                .to_string(),
-            recommendation: "Disable XML-RPC if not needed".to_string(),
-        });
+        misconfigurations.push(scanner.make_misconfig(
+            "WP001", "XML-RPC Enabled", Severity::Medium,
+            "XML-RPC interface is enabled, allowing pingbacks and brute force attacks",
+            "Disable XML-RPC if not needed"
+        ));
     }
-
+    
     let debug_mode = check_wp_debug(target, client).await;
     if debug_mode {
-        misconfigurations.push(CmsMisconfiguration {
-            id: "WP002".to_string(),
-            title: "Debug Mode Enabled".to_string(),
-            severity: Severity::High,
-            description: "WordPress debug mode is enabled, exposing sensitive information"
-                .to_string(),
-            recommendation: "Disable WP_DEBUG in wp-config.php".to_string(),
-        });
+        misconfigurations.push(scanner.make_misconfig(
+            "WP002", "Debug Mode Enabled", Severity::High,
+            "WordPress debug mode is enabled, exposing sensitive information",
+            "Disable WP_DEBUG in wp-config.php"
+        ));
     }
-
+    
     let user_enum = check_user_enumeration(target, client).await;
     if user_enum {
-        misconfigurations.push(CmsMisconfiguration {
-            id: "WP003".to_string(),
-            title: "User Enumeration Enabled".to_string(),
-            severity: Severity::Low,
-            description: "User IDs can be enumerated via author archive pages".to_string(),
-            recommendation: "Restrict author archives or implement rate limiting".to_string(),
-        });
+        misconfigurations.push(scanner.make_misconfig(
+            "WP003", "User Enumeration Enabled", Severity::Low,
+            "User IDs can be enumerated via author archive pages",
+            "Restrict author archives or implement rate limiting"
+        ));
     }
-
-    let overall_severity = vulnerabilities
-        .iter()
-        .map(|v| v.severity)
-        .max()
-        .unwrap_or(Severity::Info);
-
-    Ok(CmsScanResult {
-        target: target.url.clone(),
-        cms_type: CmsType::WordPress,
-        version: target.version.clone(),
-        vulnerabilities,
-        misconfigurations,
-        security_headers: std::collections::HashMap::new(),
-        overall_severity,
-    })
+    
+    Ok(scanner.build_scan_result(target, CmsType::WordPress, vulnerabilities, misconfigurations))
 }
 
 async fn check_xml_rpc(target: &CmsTarget, client: &Client) -> bool {
