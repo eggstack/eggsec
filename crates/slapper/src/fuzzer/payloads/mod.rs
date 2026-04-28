@@ -1,5 +1,4 @@
 pub mod cache;
-pub mod cmd;
 pub mod compression;
 pub mod csv;
 pub mod deser;
@@ -13,6 +12,7 @@ pub mod jwt;
 pub mod ldap;
 #[macro_use]
 pub mod macros;
+pub mod cmd;
 pub mod mass_assign;
 pub mod nosql;
 pub mod oauth;
