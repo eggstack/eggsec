@@ -9,568 +9,317 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg(feature = "ai-integration")]
+use semver::{Version, VersionReq};
+
+#[derive(Debug, Deserialize, Serialize)]
+struct SkillFrontmatter {
+    name: String,
+    description: String,
+    triggers: Vec<String>,
+    #[serde(default)]
+    version: Option<String>,
+    #[serde(default)]
+    metadata: Option<SkillMetadata>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct SkillMetadata {
+    category: Option<String>,
+    tools: Vec<String>,
+    scope: Option<String>,
+    #[serde(default)]
+    version: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Skill {
     pub name: String,
     pub description: String,
     pub triggers: Vec<String>,
-    pub metadata: SkillMetadata,
     pub content: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SkillMetadata {
-    pub category: String,
-    pub tools: Vec<String>,
-    pub scope: String,
-    pub requires: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct SkillFrontmatter {
-    pub name: String,
-    pub description: Option<String>,
-    pub triggers: Option<Vec<String>>,
-    pub metadata: SkillMetadata,
+    pub version: Option<String>,
+    pub metadata: Option<SkillMetadata>,
 }
 
 impl Skill {
-    pub fn parse(content: &str) -> Result<Self> {
-        let parts: Vec<&str> = content.split("\n---\n").collect();
+    pub fn parse(path: PathBuf) -> Result<Self> {
+        let content = fs::read_to_string(&path)?;
+        let (frontmatter, content) = extract_frontmatter(&content)?;
 
-        if parts.len() != 2 {
-            anyhow::bail!(
-                "Skill file must have YAML frontmatter and Markdown body separated by '---'"
-            );
+        let fm: SkillFrontmatter = serde_yaml_neo::from_str(&frontmatter)
+            .map_err(|e| anyhow::anyhow!("Failed to parse frontmatter: {}", e))?;
+
+        let version = fm.version.or(fm.metadata.as_ref().and_then(|m| m.version.clone()));
+
+        let skill = Skill {
+            name: fm.name,
+            description: fm.description,
+            triggers: fm.triggers,
+            content,
+            version,
+            metadata: fm.metadata,
+        };
+
+        Ok(skill)
+    }
+
+    fn validate_triggers(&self) -> Result<()> {
+        if self.triggers.is_empty() {
+            return Err(anyhow::anyhow!("Skill '{}' has no triggers", self.name));
         }
-
-        let frontmatter: SkillFrontmatter = serde_yaml_neo::from_str(parts[0])?;
-
-        let name = frontmatter.name.clone();
-        let description = frontmatter
-            .description
-            .clone()
-            .unwrap_or_else(|| extract_description(parts[1]));
-        let triggers = frontmatter
-            .triggers
-            .clone()
-            .unwrap_or_else(|| extract_triggers(parts[1]));
-
-        Ok(Self {
-            name,
-            description,
-            triggers,
-            metadata: frontmatter.metadata,
-            content: parts[1].to_string(),
-        })
+        for trigger in &self.triggers {
+            if trigger.len() < 2 {
+                return Err(anyhow::anyhow!(
+                    "Skill '{}' trigger '{}' is too short (min 2 chars)",
+                    self.name,
+                    trigger
+                ));
+            }
+        }
+        Ok(())
     }
 
-    pub fn matches_trigger(&self, input: &str) -> bool {
-        let input_lower = input.to_lowercase();
-        self.triggers
-            .iter()
-            .any(|t| input_lower.contains(&t.to_lowercase()))
+    fn validate_version(&self) -> Result<()> {
+        if let Some(ref version) = self.version {
+            if !Self::is_valid_version(version) {
+                return Err(anyhow::anyhow!(
+                    "Skill '{}' has invalid version format: {}",
+                    self.name,
+                    version
+                ));
+            }
+        }
+        Ok(())
     }
 
-    pub fn to_prompt(&self) -> String {
-        format!(
-            "# Skill: {}\n\n{}\n\n---\n\n{}\n\n## Tool Usage\nTools: {}",
-            self.name,
-            self.description,
-            self.content.lines().take(50).collect::<Vec<_>>().join("\n"),
-            self.metadata.tools.join(", ")
-        )
+    pub fn validate(&self) -> Result<()> {
+        self.validate_triggers()?;
+        self.validate_version()?;
+        Ok(())
     }
-}
 
-fn extract_description(markdown: &str) -> String {
-    markdown
-        .lines()
-        .skip_while(|l| !l.starts_with("##"))
-        .skip(1)
-        .take_while(|l| !l.starts_with("##"))
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn extract_triggers(markdown: &str) -> Vec<String> {
-    let mut triggers = Vec::new();
-
-    for line in markdown.lines() {
-        let line_lower = line.to_lowercase();
-        if line_lower.contains("trigger")
-            || line_lower.contains("keyword")
-            || line_lower.contains("example")
+    pub fn is_valid_version(version: &str) -> bool {
+        #[cfg(feature = "ai-integration")]
         {
-            let cleaned: String = line
-                .chars()
-                .skip_while(|c| !c.is_alphanumeric())
-                .take_while(|c| c.is_alphanumeric() || *c == ',' || *c == ' ' || *c == '-')
-                .collect();
+            if Version::parse(version).is_ok() {
+                return true;
+            }
+        }
+        let parts: Vec<&str> = version.split('.').collect();
+        if parts.len() < 2 || parts.len() > 3 {
+            return false;
+        }
+        parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit()))
+    }
 
-            for part in cleaned.split(&[',', ' ', '-'][..]) {
-                let part = part.trim();
-                if part.len() > 2 && !part.starts_with('#') {
-                    triggers.push(part.to_lowercase());
+    pub fn is_compatible_with(&self, required_version: &str) -> bool {
+        #[cfg(feature = "ai-integration")]
+        {
+            if let Some(ref self_version) = self.version {
+                if let (Ok(sv), Ok(rv)) = (Version::parse(self_version), VersionReq::parse(required_version)) {
+                    return rv.matches(&sv);
                 }
             }
         }
+        self.version.as_deref() == Some(required_version)
+    }
+}
+
+fn extract_frontmatter(content: &str) -> Result<(String, String)> {
+    let mut lines = content.lines();
+    let mut frontmatter = String::new();
+    let mut content = String::new();
+    let mut in_frontmatter = false;
+    let mut frontmatter_ended = false;
+
+    while let Some(line) = lines.next() {
+        if line == "---" {
+            if in_frontmatter {
+                frontmatter_ended = true;
+                continue;
+            } else {
+                in_frontmatter = true;
+                continue;
+            }
+        }
+        if in_frontmatter && !frontmatter_ended {
+            frontmatter.push_str(line);
+            frontmatter.push('\n');
+        } else if frontmatter_ended {
+            content.push_str(line);
+            content.push('\n');
+        }
     }
 
-    if triggers.is_empty() {
-        triggers.push("scan".to_string());
-        triggers.push("security".to_string());
-        triggers.push("test".to_string());
-    }
-
-    triggers
+    Ok((frontmatter, content))
 }
 
 pub struct SkillLoader {
-    skill_dirs: Vec<PathBuf>,
+    dirs: Vec<PathBuf>,
 }
 
 impl SkillLoader {
-    pub fn new(skill_dirs: Vec<PathBuf>) -> Self {
-        Self { skill_dirs }
+    pub fn new(dirs: Vec<PathBuf>) -> Self {
+        SkillLoader { dirs }
     }
 
     pub fn load_skills(&self) -> Result<Vec<Skill>> {
         let mut skills = Vec::new();
-
-        for dir in &self.skill_dirs {
-            let canonical_dir = dir.canonicalize().map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to canonicalize skill directory {}: {}",
-                    dir.display(),
-                    e
-                )
-            })?;
-
-            if !canonical_dir.exists() {
+        for dir in &self.dirs {
+            if !dir.exists() {
                 continue;
             }
-
             for entry in fs::read_dir(dir)? {
                 let entry = entry?;
                 let path = entry.path();
-
-                if path.extension().map(|e| e == "md").unwrap_or(false) {
-                    if let Ok(canonical_path) = path.canonicalize() {
-                        if canonical_path.starts_with(&canonical_dir) {
-                            if let Ok(skill) = self.load_skill(&path) {
-                                skills.push(skill);
+                if path.extension().map_or(false, |ext| ext == "md") {
+                    match Skill::parse(path.clone()) {
+                        Ok(skill) => {
+                            if let Err(e) = skill.validate() {
+                                tracing::warn!("Skipping invalid skill {}: {}", path.display(), e);
+                                continue;
                             }
+                            skills.push(skill);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to parse skill {}: {}", path.display(), e);
                         }
                     }
                 }
             }
         }
-
         Ok(skills)
-    }
-
-    pub fn load_skill(&self, path: &PathBuf) -> Result<Skill> {
-        let content = fs::read_to_string(path)?;
-        Skill::parse(&content)
     }
 }
 
-#[derive(Clone)]
 pub struct SkillRegistry {
     skills: HashMap<String, Skill>,
-    skills_by_trigger: HashMap<String, Vec<String>>,
-    skills_by_tool: HashMap<String, Vec<String>>,
+    trigger_index: HashMap<String, Vec<String>>,
 }
 
 impl SkillRegistry {
     pub fn new() -> Self {
-        Self {
+        SkillRegistry {
             skills: HashMap::new(),
-            skills_by_trigger: HashMap::new(),
-            skills_by_tool: HashMap::new(),
+            trigger_index: HashMap::new(),
         }
     }
 
     pub fn register(&mut self, skill: Skill) -> Result<()> {
-        let id = skill.name.clone();
-
-        self.skills.insert(id.clone(), skill.clone());
-
+        skill.validate()?;
+        let name = skill.name.clone();
         for trigger in &skill.triggers {
-            self.skills_by_trigger
+            self.trigger_index
                 .entry(trigger.clone())
-                .or_default()
-                .push(id.clone());
+                .or_insert_with(Vec::new)
+                .push(name.clone());
         }
-
-        for tool in &skill.metadata.tools {
-            self.skills_by_tool
-                .entry(tool.clone())
-                .or_default()
-                .push(id.clone());
-        }
-
+        self.skills.insert(name, skill);
         Ok(())
     }
 
     pub fn find_by_trigger(&self, trigger: &str) -> Vec<&Skill> {
-        self.skills_by_trigger
-            .get(trigger)
-            .map(|ids| ids.iter().filter_map(|id| self.skills.get(id)).collect())
-            .unwrap_or_default()
+        let trigger_lower = trigger.to_lowercase();
+        self.skills
+            .values()
+            .filter(|s| s.triggers.iter().any(|t| t.to_lowercase() == trigger_lower))
+            .collect()
     }
 
-    pub fn find_by_tool(&self, tool_id: &str) -> Vec<&Skill> {
-        self.skills_by_tool
-            .get(tool_id)
-            .map(|ids| ids.iter().filter_map(|id| self.skills.get(id)).collect())
-            .unwrap_or_default()
-    }
-
-    pub fn get_prompts_for_context(&self, context: &str) -> Vec<String> {
-        let mut prompts = Vec::new();
-
-        for skill in self.skills.values() {
-            if skill.matches_trigger(context) {
-                prompts.push(skill.to_prompt());
-            }
-        }
-
-        prompts
-    }
-
-    pub fn skill_count(&self) -> usize {
-        self.skills.len()
-    }
-}
-
-impl Default for SkillRegistry {
-    fn default() -> Self {
-        Self::new()
+    pub fn find_compatible_with_version(&self, required_version: &str) -> Vec<&Skill> {
+        self.skills
+            .values()
+            .filter(|s| s.is_compatible_with(required_version))
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
 
     #[test]
-    fn test_skill_parse() {
-        let content = r#"---
-name: test-skill
-description: "Test skill for unit testing"
-metadata:
-  category: testing
-  tools: [recon, scan]
-  scope: targets
----
-
-## Overview
-This is a test skill.
-
-## Triggers
-- test
-- scan
-- security
-"#;
-
-        let skill = Skill::parse(content).unwrap();
-        assert_eq!(skill.name, "test-skill");
-        assert!(!skill.triggers.is_empty());
-    }
-
-    #[test]
-    fn test_trigger_matching() {
-        let content = r#"---
-name: recon-skill
-triggers:
-  - recon
-  - reconnaissance
-  - dns
-metadata:
-  category: recon
-  tools: [recon]
-  scope: targets
----
-
-## Overview
-Reconnaissance skill.
-"#;
-
-        let skill = Skill::parse(content).unwrap();
-        assert!(skill.matches_trigger("recon"));
-        assert!(skill.matches_trigger("run recon on example.com"));
-    }
-
-    const VALID_SKILL_CONTENT: &str = r#"---
-name: sql-injection-scanner
-description: "SQL injection vulnerability scanner"
-triggers:
-  - sql injection
-  - sqli
-  - database
-metadata:
-  category: vulnerability
-  tools: [fuzzer, scanner]
-  scope: targets
----
-
-## Overview
-Scans for SQL injection vulnerabilities.
-
-## Usage
-Use the fuzzer with SQL injection payloads.
-
-## Keywords
-SQL injection, SQLi, database vulnerability
-"#;
-
-    const VALID_SKILL_CONTENT_2: &str = r#"---
-name: xss-scanner
-description: "Cross-site scripting scanner"
-triggers:
-  - xss
-  - cross-site scripting
-  - javascript
-metadata:
-  category: vulnerability
-  tools: [fuzzer]
-  scope: targets
----
-
-## Overview
-Scans for XSS vulnerabilities.
-"#;
-
-    #[test]
-    fn test_skill_parse_valid() {
-        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        assert_eq!(skill.name, "sql-injection-scanner");
-        assert!(skill.description.contains("SQL injection"));
-        assert!(skill.triggers.contains(&"sql injection".to_string()));
-        assert_eq!(skill.metadata.category, "vulnerability");
-        assert!(skill.metadata.tools.contains(&"fuzzer".to_string()));
-    }
-
-    #[test]
-    fn test_skill_parse_without_frontmatter_triggers() {
-        let content = r#"---
-name: test-skill
-description: "Test skill"
-metadata:
-  category: testing
-  tools: [scan]
-  scope: targets
----
-
-## Overview
-This is a test skill.
-
-## Keywords
-scan, test, security
-"#;
-
-        let skill = Skill::parse(content).unwrap();
-        assert!(!skill.triggers.is_empty());
-    }
-
-    #[test]
-    fn test_skill_parse_invalid_no_separator() {
-        let content = r#"name: test-skill
-description: Test skill
-
-This is just plain markdown without YAML frontmatter.
-"#;
-
-        let result = Skill::parse(content);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_skill_parse_invalid_yaml() {
-        let content = r#"---
-name: [invalid yaml
-description: "Test"
----
-Content
-"#;
-
-        let result = Skill::parse(content);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_skill_matches_trigger_case_insensitive() {
-        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        assert!(skill.matches_trigger("SQL INJECTION"));
-        assert!(skill.matches_trigger("Sql Injection"));
-        assert!(skill.matches_trigger("sqli testing"));
-    }
-
-    #[test]
-    fn test_skill_matches_trigger_partial() {
-        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        assert!(skill.matches_trigger("test for sql injection on login"));
-    }
-
-    #[test]
-    fn test_skill_matches_trigger_no_match() {
-        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        assert!(!skill.matches_trigger("xss attack"));
-        assert!(!skill.matches_trigger(" Buffer Overflow"));
-    }
-
-    #[test]
-    fn test_skill_to_prompt() {
-        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        let prompt = skill.to_prompt();
-        assert!(prompt.contains("sql-injection-scanner"));
-        assert!(prompt.contains("fuzzer"));
-        assert!(prompt.contains("scanner"));
-    }
-
-    #[test]
-    fn test_skill_to_prompt_truncates_content() {
-        let long_content = format!("{}\n{}\n{}", VALID_SKILL_CONTENT, "# Section 2\n".repeat(100), "## End");
-        let skill = Skill::parse(&long_content).unwrap();
-        let prompt = skill.to_prompt();
-        let lines: Vec<&str> = prompt.lines().collect();
-        assert!(lines.len() < 100);
-    }
-
-    #[test]
-    fn test_extract_description() {
-        let content = r#"## Overview
-This is the overview section.
-
-## Usage
-This describes usage.
-
-## Another Section
-More content here.
-"#;
-
-        let description = extract_description(content);
-        assert!(description.contains("This is the overview section"));
-        assert!(!description.contains("Usage"));
-    }
-
-    #[test]
-    fn test_extract_triggers_default() {
-        let content = "# Just a header\n\nSome content without triggers";
-        let triggers = extract_triggers(content);
-        assert!(triggers.contains(&"scan".to_string()));
-        assert!(triggers.contains(&"security".to_string()));
-    }
-
-    #[test]
-    fn test_extract_triggers_from_keyword_line() {
-        let content = "## Keywords\nsql, injection, sqli, database";
-        let triggers = extract_triggers(content);
-        assert!(triggers.iter().any(|t| t.contains("sql")));
-        assert!(triggers.iter().any(|t| t.contains("injection")));
-    }
-
-    #[test]
-    fn test_skill_registry_new() {
-        let registry = SkillRegistry::new();
-        assert_eq!(registry.skill_count(), 0);
-    }
-
-    #[test]
-    fn test_skill_registry_register() {
-        let mut registry = SkillRegistry::new();
-        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        let result = registry.register(skill);
-        assert!(result.is_ok());
-        assert_eq!(registry.skill_count(), 1);
-    }
-
-    #[test]
-    fn test_skill_registry_find_by_trigger() {
-        let mut registry = SkillRegistry::new();
-        let skill1 = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        let skill2 = Skill::parse(VALID_SKILL_CONTENT_2).unwrap();
-        registry.register(skill1).unwrap();
-        registry.register(skill2).unwrap();
-
-        let found = registry.find_by_trigger("sql injection");
-        assert!(!found.is_empty());
-        assert!(found.iter().any(|s| s.name == "sql-injection-scanner"));
-    }
-
-    #[test]
-    fn test_skill_registry_find_by_trigger_no_match() {
-        let mut registry = SkillRegistry::new();
-        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        registry.register(skill).unwrap();
-
-        let found = registry.find_by_trigger("nonexistent");
-        assert!(found.is_empty());
-    }
-
-    #[test]
-    fn test_skill_registry_find_by_tool() {
-        let mut registry = SkillRegistry::new();
-        let skill1 = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        let skill2 = Skill::parse(VALID_SKILL_CONTENT_2).unwrap();
-        registry.register(skill1).unwrap();
-        registry.register(skill2).unwrap();
-
-        let found = registry.find_by_tool("fuzzer");
-        assert_eq!(found.len(), 2);
-    }
-
-    #[test]
-    fn test_skill_registry_find_by_tool_no_match() {
-        let mut registry = SkillRegistry::new();
-        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        registry.register(skill).unwrap();
-
-        let found = registry.find_by_tool("nonexistent");
-        assert!(found.is_empty());
-    }
-
-    #[test]
-    fn test_skill_registry_get_prompts_for_context() {
-        let mut registry = SkillRegistry::new();
-        let skill1 = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        let skill2 = Skill::parse(VALID_SKILL_CONTENT_2).unwrap();
-        registry.register(skill1).unwrap();
-        registry.register(skill2).unwrap();
-
-        let prompts = registry.get_prompts_for_context("scan for sql injection");
-        assert!(!prompts.is_empty());
-    }
-
-    #[test]
-    fn test_skill_registry_get_prompts_for_context_no_match() {
-        let mut registry = SkillRegistry::new();
-        let skill = Skill::parse(VALID_SKILL_CONTENT).unwrap();
-        registry.register(skill).unwrap();
-
-        let prompts = registry.get_prompts_for_context("buffer overflow scan");
-        assert!(prompts.is_empty());
-    }
-
-    #[test]
-    fn test_skill_loader_new() {
-        let loader = SkillLoader::new(vec![]);
-        assert!(loader.load_skills().is_ok());
-    }
-
-    #[test]
-    fn test_skill_metadata_default() {
-        let metadata = SkillMetadata {
-            category: "test".to_string(),
-            tools: vec!["scan".to_string()],
-            scope: "targets".to_string(),
-            requires: None,
+    fn test_validate_triggers_empty() {
+        let skill = Skill {
+            name: "test".to_string(),
+            description: "test".to_string(),
+            triggers: vec![],
+            content: "".to_string(),
+            version: None,
+            metadata: None,
         };
-        assert_eq!(metadata.category, "test");
-        assert!(metadata.tools.contains(&"scan".to_string()));
+        assert!(skill.validate_triggers().is_err());
+    }
+
+    #[test]
+    fn test_validate_triggers_too_short() {
+        let skill = Skill {
+            name: "test".to_string(),
+            description: "test".to_string(),
+            triggers: vec!["a".to_string()],
+            content: "".to_string(),
+            version: None,
+            metadata: None,
+        };
+        assert!(skill.validate_triggers().is_err());
+    }
+
+    #[test]
+    fn test_validate_version_invalid() {
+        let skill = Skill {
+            name: "test".to_string(),
+            description: "test".to_string(),
+            triggers: vec!["test".to_string()],
+            content: "".to_string(),
+            version: Some("invalid".to_string()),
+            metadata: None,
+        };
+        assert!(skill.validate_version().is_err());
+    }
+
+    #[test]
+    fn test_is_valid_version_valid() {
+        assert!(Skill::is_valid_version("1.0.0"));
+        assert!(Skill::is_valid_version("1.0"));
+        #[cfg(feature = "ai-integration")]
+        {
+            assert!(Skill::is_valid_version("1.0.0-alpha+build"));
+        }
+        assert!(!Skill::is_valid_version("invalid"));
+        assert!(!Skill::is_valid_version("1"));
+    }
+
+    #[test]
+    fn test_skill_parse_and_validate() {
+        let dir = TempDir::new().unwrap();
+        let skill_path = dir.path().join("test.md");
+        let content_str = "---\nname: test_skill\ndescription: Test skill\ntriggers:\n  - test\nversion: \"1.0.0\"\n---\n\n## Test Skill\nContent here\n";
+        fs::write(&skill_path, content_str).unwrap();
+
+        let skill = Skill::parse(skill_path).unwrap();
+        assert_eq!(skill.name, "test_skill");
+        assert_eq!(skill.version, Some("1.0.0".to_string()));
+        assert!(skill.validate().is_ok());
+    }
+
+    #[test]
+    fn test_skill_compatibility() {
+        let skill = Skill {
+            name: "test".to_string(),
+            description: "test".to_string(),
+            triggers: vec!["test".to_string()],
+            content: "".to_string(),
+            version: Some("1.0.0".to_string()),
+            metadata: None,
+        };
+        #[cfg(feature = "ai-integration")]
+        {
+            assert!(skill.is_compatible_with("^1.0.0"));
+        }
+        assert!(skill.is_compatible_with("1.0.0"));
+        assert!(!skill.is_compatible_with("2.0.0"));
     }
 }

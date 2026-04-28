@@ -390,6 +390,13 @@ impl Pipeline {
             schema: None,
             discover_only: false,
             auto_discover_schema: false,
+            calibrate: false,
+            fc: None,
+            fs: None,
+            fw: None,
+            fl: None,
+            ft: None,
+            fr: None,
             common: crate::cli::CommonHttpArgs {
                 stealth,
                 ..self.common.clone()

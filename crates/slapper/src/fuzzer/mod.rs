@@ -86,10 +86,12 @@
 
 pub mod advanced;
 pub mod api_schema;
+pub mod calibration;
 pub mod chain;
 pub mod detection;
 pub mod diff;
 pub mod engine;
+pub mod filters;
 pub mod grammar;
 pub mod mutator;
 pub mod payloads;
@@ -110,11 +112,13 @@ use crate::tool::response::Finding;
 
 use crate::cli::FuzzArgs;
 
+pub use calibration::{BaselineStats, CalibrationResult, Calibrator};
 pub use chain::{
     AutoExploiter, ChainAction, ChainExecutionResult, ChainExecutor, ChainedFuzzResult,
 };
 pub use diff::{DiffResult, ResponseDiff, ResponseDiffer};
 pub use engine::{FuzzEngine, FuzzResult, FuzzSession, OwaspSummary};
+pub use filters::{FilterChain, PayloadFilter};
 pub use grammar::{Grammar, GrammarFuzzer};
 pub use mutator::generate_mutations;
 pub use payloads::{get_all_payloads_cached, get_payloads, get_payloads_cached, Payload, PayloadType, Severity};
