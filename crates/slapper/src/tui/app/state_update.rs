@@ -64,7 +64,8 @@ impl super::App {
     pub(super) fn handle_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::LoadTest(r) => {
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.add_load_test_result(
                         &r.target_url,
                         r.total_requests,
@@ -83,7 +84,8 @@ impl super::App {
                 } else {
                     0
                 };
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.add_load_test_result(
                         "stress-test",
                         stats.packets_sent,
@@ -96,7 +98,8 @@ impl super::App {
                 self.load.set_stress_results(target.clone(), stats);
             }
             TaskResult::PortScan(r) => {
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.add_port_scan_result(
                         &r.host,
                         r.ports_scanned as usize,
@@ -106,7 +109,8 @@ impl super::App {
                 self.scan_ports.set_results(r);
             }
             TaskResult::EndpointScan(r) => {
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.add_endpoint_scan_result(
                         &r.base_url,
                         r.endpoints_found,
@@ -116,7 +120,8 @@ impl super::App {
                 self.scan_endpoints.set_results(r);
             }
             TaskResult::Fingerprint(r) => {
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.add_fingerprint_result(
                         &r.host,
                         r.services_identified,
@@ -130,7 +135,8 @@ impl super::App {
             }
             TaskResult::WafDetection(r) => {
                 let waf_name = r.waf_name.clone().unwrap_or_default();
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.add_waf_result("<target>", r.waf_name.is_some(), &waf_name, 0);
                 }
                 self.waf.set_detection_result(r);
@@ -141,7 +147,8 @@ impl super::App {
             } => {
                 let success_count = bypasses.iter().filter(|b| b.success).count();
                 let waf_name = detection.waf_name.clone().unwrap_or_default();
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.add_waf_result(
                         "<target>",
                         detection.waf_name.is_some(),
@@ -154,7 +161,8 @@ impl super::App {
             }
             TaskResult::Pipeline(r) => {
                 let completed = r.stage_results.iter().filter(|s| s.success).count();
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.add_pipeline_result(
                         &r.target,
                         completed,
@@ -168,7 +176,8 @@ impl super::App {
                 self.fuzz.set_results(session);
             }
             TaskResult::Recon(r) => {
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.add_recon_result(
                         &r.target,
                         r.domain.clone().unwrap_or_default(),

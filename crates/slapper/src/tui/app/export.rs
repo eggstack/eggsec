@@ -182,7 +182,8 @@ impl super::App {
                 tracing::warn!("Settings tab: no exportable data available");
             }
             super::tabs::Tab::History => {
-                if let Ok(h) = self.history.lock() {
+                let h = self.history.lock(); {
+
                     let history_data = h.export();
                     self.save_export("history.json", history_data);
                 }

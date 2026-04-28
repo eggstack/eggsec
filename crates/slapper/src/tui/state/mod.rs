@@ -1,7 +1,8 @@
 mod history;
 
 use crate::tui::tabs::HistoryTab;
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 pub type SharedHistory = Arc<Mutex<HistoryTab>>;
 

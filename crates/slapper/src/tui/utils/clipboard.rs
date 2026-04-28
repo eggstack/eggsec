@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 static CLIPBOARD: std::sync::LazyLock<Mutex<Option<arboard::Clipboard>>> =
     std::sync::LazyLock::new(|| Mutex::new(arboard::Clipboard::new().ok()));
@@ -7,10 +7,7 @@ pub struct Clipboard;
 
 impl Clipboard {
     pub fn get() -> Option<String> {
-        let mut guard = match CLIPBOARD.lock() {
-            Ok(g) => g,
-            Err(_) => return None,
-        };
+        let mut guard = CLIPBOARD.lock();
         match guard.as_mut() {
             Some(cb) => cb.get_text().ok(),
             None => None,
@@ -18,10 +15,7 @@ impl Clipboard {
     }
 
     pub fn set(text: &str) -> bool {
-        let mut guard = match CLIPBOARD.lock() {
-            Ok(g) => g,
-            Err(_) => return false,
-        };
+        let mut guard = CLIPBOARD.lock();
         match guard.as_mut() {
             Some(cb) => cb.set_text(text).is_ok(),
             None => false,
@@ -33,10 +27,7 @@ impl Clipboard {
     }
 
     pub fn is_available() -> bool {
-        match CLIPBOARD.lock() {
-            Ok(guard) => guard.is_some(),
-            Err(_) => false,
-        }
+        CLIPBOARD.lock().is_some()
     }
 }
 

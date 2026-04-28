@@ -68,7 +68,8 @@ impl super::App {
 
         if self.current_tab == super::tabs::Tab::History {
             let query = self.search_query.clone();
-            if let Ok(mut h) = self.history.lock() {
+            let mut h = self.history.lock(); {
+
                 self.search_backup = Some(h.entries.clone());
 
                 let results: Vec<_> = h.search(&query).into_iter().cloned().collect();
@@ -89,7 +90,8 @@ impl super::App {
     pub(super) fn restore_search(&mut self) {
         if self.current_tab == super::tabs::Tab::History {
             if let Some(backup) = self.search_backup.take() {
-                if let Ok(mut h) = self.history.lock() {
+                let mut h = self.history.lock(); {
+
                     h.entries = backup;
                     h.selected = Some(0);
                     h.update_details_view();

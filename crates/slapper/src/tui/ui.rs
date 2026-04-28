@@ -560,10 +560,9 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
             app.settings.render_overlays(f, area);
         }
         crate::tui::tabs::Tab::History => {
-            if let Ok(h) = app.history.lock() {
-                h.render(f, area, insert_mode);
-                h.render_overlays(f, area);
-            }
+            let h = app.history.lock();
+            h.render(f, area, insert_mode);
+            h.render_overlays(f, area);
         }
         crate::tui::tabs::Tab::Dashboard => {
             app.dashboard.render(f, area, insert_mode);

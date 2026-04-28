@@ -8,7 +8,7 @@ use rcgen::{
     KeyPair, SanType,
 };
 use rustc_hash::FxHashMap;
-use std::sync::RwLock;
+use parking_lot::RwLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct CertGenerator {
@@ -84,7 +84,7 @@ impl CertGenerator {
     }
 
     fn get_cached(&self, host: &str) -> Option<Certificate> {
-        let cache = self.cache.read().ok()?;
+        let cache = self.cache.read();
 
         cache.get(host).and_then(|cached| {
             let now = SystemTime::now()
@@ -101,7 +101,7 @@ impl CertGenerator {
     }
 
     fn cache_cert(&self, host: &str, cert: &Certificate) {
-        if let Ok(mut cache) = self.cache.write() {
+        if let mut cache = self.cache.write() {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -118,7 +118,7 @@ impl CertGenerator {
     }
 
     pub fn clear_cache(&self) {
-        if let Ok(mut cache) = self.cache.write() {
+        if let mut cache = self.cache.write() {
             cache.clear();
         }
     }
