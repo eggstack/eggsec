@@ -97,6 +97,7 @@ pub struct FuzzEngine {
     pub(crate) http_session: Option<HttpSession>,
     pub(crate) differ: Option<ResponseDiffer>,
     pub(crate) baseline_captured: bool,
+    pub(crate) filter_chain: crate::fuzzer::FilterChain,
     #[cfg(feature = "ai-integration")]
     pub(crate) ai_generator: Option<crate::ai::AiPayloadGenerator>,
 }
@@ -154,6 +155,8 @@ impl FuzzEngine {
             None
         };
 
+        let filter_chain = crate::fuzzer::FilterChain::new();
+
         Ok(Self {
             args,
             client,
@@ -165,6 +168,7 @@ impl FuzzEngine {
             http_session,
             differ,
             baseline_captured: false,
+            filter_chain,
             #[cfg(feature = "ai-integration")]
             ai_generator: None,
         })
@@ -358,6 +362,16 @@ impl FuzzEngine {
             }
         }
 
+        // Apply filter chain to remove baseline/filtered responses
+        if !self.filter_chain.is_empty() {
+            let before = all_results.len();
+            all_results.retain(|r| !self.filter_chain.should_filter(r));
+            let after = all_results.len();
+            if !self.tui_mode && before != after {
+                eprintln!("Filtered out {} responses matching filter criteria", before - after);
+            }
+        }
+
         Ok(self.build_session(all_results, start.elapsed(), None))
     }
 
@@ -447,6 +461,13 @@ mod tests {
             schema: None,
             discover_only: false,
             auto_discover_schema: false,
+            calibrate: false,
+            fc: None,
+            fs: None,
+            fw: None,
+            fl: None,
+            ft: None,
+            fr: None,
         }
     }
 

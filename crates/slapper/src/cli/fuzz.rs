@@ -195,6 +195,20 @@ pub struct FuzzArgs {
     pub discover_only: bool,
     #[arg(long, help = "Auto-discover API schema from common paths")]
     pub auto_discover_schema: bool,
+    #[arg(long, help = "Enable auto-calibration before fuzzing (samples baseline responses)")]
+    pub calibrate: bool,
+    #[arg(short = 'C', long, value_name = "CODES", help = "Filter out responses by status code (comma-separated, e.g., 404,500)")]
+    pub fc: Option<String>,
+    #[arg(short = 'S', long, value_name = "SIZES", help = "Filter out responses by size (comma-separated, e.g., 123,456)")]
+    pub fs: Option<String>,
+    #[arg(short = 'W', long, value_name = "WORDS", help = "Filter out responses by word count (comma-separated)")]
+    pub fw: Option<String>,
+    #[arg(short = 'L', long, value_name = "LINES", help = "Filter out responses by line count (comma-separated)")]
+    pub fl: Option<String>,
+    #[arg(short = 'T', long, value_name = "MS", help = "Filter out responses by time in ms (e.g., 5000 for >5s)")]
+    pub ft: Option<u64>,
+    #[arg(short = 'R', long, value_name = "REGEX", help = "Filter out responses matching regex pattern")]
+    pub fr: Option<String>,
     #[command(flatten)]
     pub common: CommonHttpArgs,
 }
@@ -264,6 +278,13 @@ impl From<WafStressArgs> for FuzzArgs {
             schema: None,
             discover_only: false,
             auto_discover_schema: false,
+            calibrate: false,
+            fc: None,
+            fs: None,
+            fw: None,
+            fl: None,
+            ft: None,
+            fr: None,
             common: args.common,
         }
     }
