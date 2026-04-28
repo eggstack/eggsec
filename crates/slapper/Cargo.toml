@@ -72,6 +72,7 @@ lettre = { version = "0.11", default-features = false, features = ["tokio1-rustl
 crossbeam = "0.8"
 dashmap.workspace = true
 scraper.workspace = true
+semver = { version = "1", optional = true }
 rustls-pki-types = "1"
 maxminddb = "0.27"
 shellexpand = "3"
@@ -254,7 +255,7 @@ vuln-management = []
 full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
-ai-integration = ["tool-api", "eventsource-stream"]
+ai-integration = ["tool-api", "eventsource-stream", "semver"]
 
 # WebSocket security testing with real connections
 websocket = ["tokio-tungstenite"]
