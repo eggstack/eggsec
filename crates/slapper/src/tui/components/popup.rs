@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
+use crate::tc;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
@@ -14,18 +15,10 @@ pub enum PopupKind {
     Error,
     Confirm,
     Help,
+    Destructive,
 }
 
 impl PopupKind {
-    pub fn default_color(&self) -> Color {
-        match self {
-            PopupKind::Info => Color::Cyan,
-            PopupKind::Warning => Color::Yellow,
-            PopupKind::Error => Color::Red,
-            PopupKind::Confirm => Color::Magenta,
-            PopupKind::Help => Color::Green,
-        }
-    }
 }
 
 pub struct Popup {
@@ -73,6 +66,12 @@ impl Popup {
         self
     }
 
+    pub fn destructive(title: impl Into<String>, content: Vec<String>) -> Self {
+        Self::new(title, PopupKind::Destructive)
+            .content(content)
+            .buttons(vec!["Cancel", "Confirm"])
+    }
+
     pub fn next_button(&mut self) {
         if !self.buttons.is_empty() {
             self.active_button = (self.active_button + 1) % self.buttons.len();
@@ -98,7 +97,14 @@ impl Popup {
 
         f.render_widget(Clear, popup_area);
 
-        let color = self.kind.default_color();
+        let color = match self.kind {
+            PopupKind::Info => tc!(info),
+            PopupKind::Warning => tc!(warning),
+            PopupKind::Error => tc!(error),
+            PopupKind::Confirm => tc!(highlight),
+            PopupKind::Help => tc!(success),
+            PopupKind::Destructive => tc!(error),
+        };
 
         let block = Block::default()
             .title(self.title.as_str())

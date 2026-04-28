@@ -127,6 +127,11 @@ optional = true
 version = "0.4"
 optional = true
 
+[dependencies.tower-http]
+version = "0.6"
+optional = true
+features = ["cors", "trace", "compression-br"]
+
 [dependencies.tokio-tungstenite]
 version = "0.26"
 features = ["rustls-tls-webpki-roots"]
@@ -189,7 +194,7 @@ tool-api = []
 insecure-tls = []
 
 # REST API server with MCP (Model Context Protocol) for AI agent integration
-rest-api = ["tool-api", "axum", "tower", "async-stream"]
+rest-api = ["tool-api", "axum", "tower", "tower-http", "async-stream"]
 
 # WebSocket API server support
 ws-api = ["axum/ws"]

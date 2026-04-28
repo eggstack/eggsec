@@ -83,10 +83,15 @@ impl Default for TargetMemory {
 
 pub struct LongitudinalMemory {
     storage_dir: PathBuf,
+    max_scans_per_target: Option<usize>,
 }
 
 impl LongitudinalMemory {
     pub fn new(storage_dir: PathBuf) -> Result<Self> {
+        Self::with_max_scans(storage_dir, None)
+    }
+
+    pub fn with_max_scans(storage_dir: PathBuf, max_scans: Option<usize>) -> Result<Self> {
         if !storage_dir.exists() {
             fs::create_dir_all(&storage_dir)?;
         }
@@ -101,7 +106,10 @@ impl LongitudinalMemory {
             fs::create_dir_all(&patterns_dir)?;
         }
 
-        Ok(Self { storage_dir })
+        Ok(Self {
+            storage_dir,
+            max_scans_per_target: max_scans,
+        })
     }
 
     fn get_target_path(&self, target: &str) -> PathBuf {
@@ -146,6 +154,12 @@ impl LongitudinalMemory {
         };
 
         memory.scans.push(scan_memory);
+
+        if let Some(max) = self.max_scans_per_target {
+            while memory.scans.len() > max {
+                memory.scans.remove(0);
+            }
+        }
 
         let content = serde_json::to_string(&memory)?;
         fs::write(&target_path, content)?;
@@ -478,6 +492,7 @@ impl Default for LongitudinalMemory {
     fn default() -> Self {
         Self {
             storage_dir: PathBuf::from("~/.config/slapper/memory"),
+            max_scans_per_target: None,
         }
     }
 }

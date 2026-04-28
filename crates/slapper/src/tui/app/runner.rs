@@ -138,6 +138,8 @@ where
     B::Error: Send + Sync + 'static,
 {
     loop {
+        app.spinner_tick = app.spinner_tick.wrapping_add(1);
+
         if app.needs_redraw {
             terminal.draw(|f| ui::draw(f, app))?;
             app.needs_redraw = false;

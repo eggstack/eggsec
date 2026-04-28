@@ -202,7 +202,7 @@ impl Agent {
                     );
 
                     let result = self
-                        .execute_scan_with_depth(&config.target, "pipeline", config.scan_depth)
+                        .execute_scan_with_depth(&config.target, "pipeline", config.scan_depth, None)
                         .await;
 
                     if let Ok(ref response) = result {
@@ -227,7 +227,7 @@ impl Agent {
         target: &str,
         scan_type: &str,
     ) -> Result<ToolResponse> {
-        self.execute_scan_with_depth(target, scan_type, crate::agent::portfolio::ScanDepth::Shallow)
+        self.execute_scan_with_depth(target, scan_type, crate::agent::portfolio::ScanDepth::Shallow, None)
             .await
     }
 
@@ -236,6 +236,7 @@ impl Agent {
         target: &str,
         scan_type: &str,
         depth: crate::agent::portfolio::ScanDepth,
+        cancellation_token: Option<CancellationToken>,
     ) -> Result<ToolResponse> {
         let params = match depth {
             crate::agent::portfolio::ScanDepth::Shallow => {
@@ -256,6 +257,10 @@ impl Agent {
             }
         };
 
+        let token_handle = cancellation_token.map(|_| {
+            let ct = crate::tool::request::CancellationToken::new();
+            ct.wrap()
+        });
         let request = ToolRequest {
             id: uuid::Uuid::new_v4().to_string(),
             tool: scan_type.to_string(),
@@ -266,7 +271,7 @@ impl Agent {
             },
             params,
             options: Default::default(),
-            cancellation_token: None,
+            cancellation_token: token_handle,
         };
 
         self.dispatcher

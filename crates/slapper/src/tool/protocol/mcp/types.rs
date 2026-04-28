@@ -135,3 +135,42 @@ pub struct CapabilitySummary {
     pub attack_surface: Vec<String>,
     pub severity_potential: Vec<String>,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct McpRoot {
+    pub uri: String,
+    pub name: String,
+    pub description: String,
+    #[serde(rename = "mimeType")]
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct McpNotification {
+    pub method: String,
+    pub params: Option<serde_json::Value>,
+}
+
+impl McpNotification {
+    pub fn shutdown() -> Self {
+        Self {
+            method: "shutdown".to_string(),
+            params: None,
+        }
+    }
+
+    pub fn roots_changed() -> Self {
+        Self {
+            method: "roots/list_changed".to_string(),
+            params: None,
+        }
+    }
+
+    pub fn to_jsonrpc_notification(&self) -> serde_json::Value {
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": self.method,
+            "params": self.params
+        })
+    }
+}

@@ -1,5 +1,6 @@
 use crate::cli::ScanProfile;
 use crate::pipeline::{PipelineReport, Stage};
+use crate::tui::app::error::make_friendly_error;
 use crate::tui::components::{
     InputField, InputGroup, ProgressGauge, ScrollableText, Selector, SelectorItem,
 };
@@ -319,7 +320,7 @@ impl TabRender for ScanTab {
                 StageStatus::Pending => "pending".to_string(),
                 StageStatus::Running => "running".to_string(),
                 StageStatus::Completed => format!("{}s", stage_info.duration_ms / 1000),
-                StageStatus::Failed(e) => e.chars().take(10).collect(),
+                StageStatus::Failed(e) => make_friendly_error(&anyhow::anyhow!("{}", e)),
             };
 
             stage_lines.push(Line::from(vec![

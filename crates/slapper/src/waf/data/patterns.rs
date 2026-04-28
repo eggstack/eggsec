@@ -491,6 +491,179 @@ static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new
     );
 
     signatures.insert(
+        "f5_bigip_asm".to_string(),
+        WafSignature {
+            name: "F5 BIG-IP Advanced WAF".to_string(),
+            headers: vec![
+                "x-cnection".to_string(),
+                "x-info".to_string(),
+                "x-iinfo".to_string(),
+                "bigip".to_string(),
+                "ts".to_string(),
+            ],
+            cookies: vec![],
+            body_patterns: vec![
+                "the requested url was rejected".to_string(),
+                "please contact the web site administrator".to_string(),
+                "support id".to_string(),
+                "big-ip".to_string(),
+                "f5 networks".to_string(),
+            ],
+            ip_ranges: vec![
+                "205.210.0.0/15".to_string(),
+                "207.210.0.0/15".to_string(),
+                "63.92.0.0/15".to_string(),
+                "67.20.0.0/15".to_string(),
+            ],
+        },
+    );
+
+    signatures.insert(
+        "palo_alto".to_string(),
+        WafSignature {
+            name: "Palo Alto".to_string(),
+            headers: vec![
+                "x-pan-a".to_string(),
+                "x-paloalto".to_string(),
+                "x-fireeye".to_string(),
+                "infoblox".to_string(),
+            ],
+            cookies: vec![],
+            body_patterns: vec![
+                "palo alto networks".to_string(),
+                "threat signature".to_string(),
+                "malware".to_string(),
+                "blocked by palo alto".to_string(),
+            ],
+            ip_ranges: vec![
+                "198.92.0.0/15".to_string(),
+                "199.92.0.0/15".to_string(),
+            ],
+        },
+    );
+
+    signatures.insert(
+        "qrator".to_string(),
+        WafSignature {
+            name: "Qrator".to_string(),
+            headers: vec![
+                "x-qrator".to_string(),
+                "qrator".to_string(),
+            ],
+            cookies: vec!["qr".to_string()],
+            body_patterns: vec![
+                "qrator".to_string(),
+                "blocked by qrator".to_string(),
+            ],
+            ip_ranges: vec![
+                "185.71.64.0/22".to_string(),
+                "185.71.68.0/22".to_string(),
+                "188.42.128.0/17".to_string(),
+            ],
+        },
+    );
+
+    signatures.insert(
+        "imunify360".to_string(),
+        WafSignature {
+            name: "Imunify360".to_string(),
+            headers: vec![
+                "imunify".to_string(),
+                "x-imunify".to_string(),
+            ],
+            cookies: vec![],
+            body_patterns: vec![
+                "imunify".to_string(),
+                "captcha".to_string(),
+                "human verification".to_string(),
+                "attacked".to_string(),
+                "shield".to_string(),
+            ],
+            ip_ranges: vec![],
+        },
+    );
+
+    signatures.insert(
+        "siteguard".to_string(),
+        WafSignature {
+            name: "SiteGuard".to_string(),
+            headers: vec![
+                "siteguard".to_string(),
+                "x-siteguard".to_string(),
+            ],
+            cookies: vec![],
+            body_patterns: vec![
+                "siteguard".to_string(),
+                "powered by".to_string(),
+            ],
+            ip_ranges: vec![],
+        },
+    );
+
+    signatures.insert(
+        "stackpath_waf".to_string(),
+        WafSignature {
+            name: "StackPath WAF".to_string(),
+            headers: vec![
+                "x-edge".to_string(),
+                "x-cache".to_string(),
+                "x-srv".to_string(),
+                "x-sh".to_string(),
+            ],
+            cookies: vec![],
+            body_patterns: vec![
+                "stackpath".to_string(),
+                "edge".to_string(),
+            ],
+            ip_ranges: vec![
+                "151.236.0.0/18".to_string(),
+                "178.255.0.0/18".to_string(),
+                "185.94.0.0/18".to_string(),
+            ],
+        },
+    );
+
+    signatures.insert(
+        "humanity".to_string(),
+        WafSignature {
+            name: "Humanity".to_string(),
+            headers: vec![
+                "x-hpx".to_string(),
+                "x-hx".to_string(),
+            ],
+            cookies: vec!["px".to_string(), "_px".to_string()],
+            body_patterns: vec![
+                "humanity".to_string(),
+                "blocked by security".to_string(),
+                "human verification".to_string(),
+            ],
+            ip_ranges: vec![
+                "23.14.0.0/15".to_string(),
+                "34.100.0.0/15".to_string(),
+            ],
+        },
+    );
+
+    signatures.insert(
+        "datadog".to_string(),
+        WafSignature {
+            name: "Datadog".to_string(),
+            headers: vec![
+                "x-datadog".to_string(),
+                "datadog".to_string(),
+            ],
+            cookies: vec![],
+            body_patterns: vec![
+                "datadog".to_string(),
+                "security policy".to_string(),
+            ],
+            ip_ranges: vec![
+                "3.0.0.0/8".to_string(),
+            ],
+        },
+    );
+
+    signatures.insert(
         "denied_by_waf".to_string(),
         WafSignature {
             name: "Generic WAF Block".to_string(),

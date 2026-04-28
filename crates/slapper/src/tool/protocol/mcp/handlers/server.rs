@@ -17,7 +17,7 @@ use crate::ai::AiClient;
 
 use crate::tool::protocol::mcp::auth::{validate_auth, validate_auth_params};
 use crate::tool::protocol::mcp::prompts::get_builtin_prompts;
-use crate::tool::protocol::mcp::types::{CapabilitySummary, McpError, McpRequest, McpResource, McpResponse, McpTool};
+use crate::tool::protocol::mcp::types::{CapabilitySummary, McpError, McpNotification, McpRequest, McpResource, McpResponse, McpRoot, McpTool};
 use crate::tool::protocol::mcp::streaming::StreamEvent;
 use crate::tool::protocol::mcp::handlers::helpers::{build_capabilities_summary, build_input_schema};
 
@@ -35,6 +35,7 @@ pub struct McpServer {
     ai_client: Option<AiClient>,
     #[cfg(feature = "rest-api")]
     scope: Option<Scope>,
+    shutdown_requested: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl McpServer {
@@ -45,10 +46,10 @@ impl McpServer {
     pub fn with_scope(registry: ToolRegistry, api_key: Option<String>, scope: Option<Scope>) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
         let (stream_events, _) = tokio::sync::broadcast::channel(1000);
-        
+
         let pending_cancellations = Arc::new(RwLock::new(HashMap::new()));
         let completed_results = Arc::new(RwLock::new(HashMap::new()));
-        
+
         let server = Self {
             registry,
             dispatcher,
@@ -62,11 +63,20 @@ impl McpServer {
             ai_client: None,
             #[cfg(feature = "rest-api")]
             scope,
+            shutdown_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
-        
+
         server.start_hashmap_reaper(60);
-        
+
         server
+    }
+
+    pub fn request_shutdown(&self) {
+        self.shutdown_requested.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn is_shutdown_requested(&self) -> bool {
+        self.shutdown_requested.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     pub fn with_session_manager(mut self, session_manager: SessionManager) -> Self {
@@ -94,6 +104,7 @@ impl McpServer {
             ai_client: self.ai_client,
             #[cfg(feature = "rest-api")]
             scope: self.scope,
+            shutdown_requested: self.shutdown_requested,
         }
     }
 
@@ -179,11 +190,54 @@ impl McpServer {
             "rate-limit/status" => self.handle_rate_limit_status(req).await,
             "resources/list" => self.handle_resources_list(req).await,
             "resources/read" => self.handle_resources_read(req).await,
+            "roots/list" => self.handle_roots_list(req).await,
             "prompts/list" => self.handle_prompts_list(req).await,
             "prompts/read" => self.handle_prompts_read(req).await,
             "ping" => self.handle_ping(req).await,
+            "shutdown" => self.handle_shutdown(req).await,
             _ => req.not_found_method(),
         }
+    }
+
+    async fn handle_roots_list(&self, req: McpRequest) -> McpResponse {
+        let roots = vec![
+            McpRoot {
+                uri: "slapper://config".to_string(),
+                name: "Configuration".to_string(),
+                description: "Slapper configuration directory".to_string(),
+                mime_type: Some("application/json".to_string()),
+            },
+            McpRoot {
+                uri: "slapper://payloads".to_string(),
+                name: "Payloads".to_string(),
+                description: "Security testing payloads directory".to_string(),
+                mime_type: Some("application/json".to_string()),
+            },
+            McpRoot {
+                uri: "slapper://templates".to_string(),
+                name: "Templates".to_string(),
+                description: "Security testing templates".to_string(),
+                mime_type: Some("application/yaml".to_string()),
+            },
+        ];
+
+        let result = serde_json::json!({
+            "roots": roots,
+            "count": roots.len()
+        });
+
+        req.success_response(result)
+    }
+
+    async fn handle_shutdown(&self, req: McpRequest) -> McpResponse {
+        self.request_shutdown();
+
+        let result = serde_json::json!({
+            "success": true,
+            "message": "Server shutdown requested"
+        });
+
+        req.success_response(result)
     }
 
     async fn handle_initialize(&self, req: McpRequest) -> McpResponse {
@@ -194,7 +248,10 @@ impl McpServer {
                     "listChanged": true
                 },
                 "streaming": true,
-                "sessions": true
+                "sessions": true,
+                "roots": {
+                    "listChanged": true
+                }
             },
             "serverInfo": {
                 "name": "slapper-tool-api",

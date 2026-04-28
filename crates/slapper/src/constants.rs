@@ -21,7 +21,7 @@ pub const DEFAULT_ICMP_PAYLOAD_SIZE: usize = 56;
 pub const DEFAULT_CONFIG_FILE: &str = "slapper.toml";
 pub const DEFAULT_WORDLIST: &str = "wordlists/directories.txt";
 
-pub const SUPPORTED_WAF_COUNT: usize = 26;
+pub const SUPPORTED_WAF_COUNT: usize = 34;
 
 #[cfg(test)]
 mod tests {

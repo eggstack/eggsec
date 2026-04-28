@@ -17,6 +17,7 @@ pub mod validation;
 pub use python::PythonPluginManager;
 
 use futures::future::join_all;
+use crate::security::validate_python_plugin;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
@@ -282,6 +283,7 @@ pub struct PluginManager {
     plugin_dirs: Vec<PathBuf>,
     plugins: HashMap<String, PluginInfo>,
     configs: HashMap<String, PluginConfig>,
+    block_suspicious_plugins: bool,
 }
 
 impl Default for PluginManager {
@@ -300,7 +302,12 @@ impl PluginManager {
             plugin_dirs: Self::default_plugin_dirs(config_dir),
             plugins: HashMap::new(),
             configs: HashMap::new(),
+            block_suspicious_plugins: true,
         }
+    }
+
+    pub fn set_block_suspicious_plugins(&mut self, block: bool) {
+        self.block_suspicious_plugins = block;
     }
 
     pub fn plugin_dirs(&self) -> &[PathBuf] {
@@ -434,7 +441,19 @@ impl PluginManager {
                         if path.extension().map(|e| e == "py").unwrap_or(false) {
                             if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                                 if stem == name {
+                                    use crate::validation::validate_plugin_path;
+                                    if let Err(e) = validate_plugin_path(dir, &path) {
+                                        tracing::warn!(path = %path.display(), error = %e, "Path validation failed");
+                                        continue;
+                                    }
                                     if let Some(info) = self.load_python_plugin(&path) {
+                                        if let Err(e) = validate_python_plugin(
+                                            &std::fs::read_to_string(&path).unwrap_or_default(),
+                                            self.block_suspicious_plugins,
+                                        ) {
+                                            tracing::warn!(path = %path.display(), error = %e, "Plugin security validation failed");
+                                            continue;
+                                        }
                                         self.plugins.insert(name.to_string(), info.clone());
                                         return Ok(Some(info));
                                     }

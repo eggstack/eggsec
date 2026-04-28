@@ -57,6 +57,8 @@ pub enum TargetsCommand {
     List,
     /// Add a new target
     Add(AddTargetArgs),
+    /// Update a target
+    Update(UpdateTargetArgs),
     /// Remove a target
     Remove { id: String },
     /// Enable a target
@@ -80,6 +82,24 @@ pub struct AddTargetArgs {
     /// Priority
     #[arg(long, default_value = "normal")]
     pub priority: String,
+}
+
+#[derive(Debug, Clone, Parser)]
+pub struct UpdateTargetArgs {
+    /// Target ID to update
+    pub id: String,
+    /// New target URL
+    #[arg(long)]
+    pub target: Option<String>,
+    /// New schedule (cron expression)
+    #[arg(long)]
+    pub schedule: Option<String>,
+    /// New priority
+    #[arg(long)]
+    pub priority: Option<String>,
+    /// Scan depth (quick, normal, deep)
+    #[arg(long)]
+    pub scan_depth: Option<String>,
 }
 
 #[derive(Debug, Clone, Parser)]

@@ -50,18 +50,67 @@ pub enum WebSocketOpcode {
 
 pub struct WebSocketFuzzer {
     subprotocols: Vec<String>,
+    url: String,
 }
 
 impl WebSocketFuzzer {
-    pub fn new(_url: String) -> Self {
+    pub fn new(url: String) -> Self {
         Self {
             subprotocols: vec![],
+            url,
         }
     }
 
     pub fn with_subprotocols(mut self, protocols: Vec<String>) -> Self {
         self.subprotocols = protocols;
         self
+    }
+
+    pub fn generate_subprotocol_tests(&self) -> Vec<WebSocketTestResult> {
+        let mut results = Vec::new();
+
+        if self.subprotocols.is_empty() {
+            return results;
+        }
+
+        let common_subprotocols = vec![
+            ("graphql-ws", "GraphQL WebSocket protocol"),
+            ("soap", "SOAP over WebSocket"),
+            ("mqtt", "MQTT over WebSocket"),
+            ("wamp", "WAMP protocol"),
+        ];
+
+        for (proto, desc) in common_subprotocols {
+            let is_configured = self.subprotocols.iter().any(|s| {
+                s.eq_ignore_ascii_case(proto) || s.contains(proto)
+            });
+
+            results.push(WebSocketTestResult {
+                vulnerability: WebSocketVulnerability::AuthBypass,
+                success: is_configured,
+                message: format!("Protocol: {}", proto),
+                response_snippet: if is_configured {
+                    "Subprotocol accepted - verify auth handling".to_string()
+                } else {
+                    String::new()
+                },
+                severity: Severity::Medium,
+                description: format!("Subprotocol test: {} - {}", proto, desc),
+            });
+        }
+
+        for subprotocol in &self.subprotocols {
+            results.push(WebSocketTestResult {
+                vulnerability: WebSocketVulnerability::AuthBypass,
+                success: true,
+                message: format!("Configured subprotocol: {}", subprotocol),
+                response_snippet: format!("Testing {} subprotocol", subprotocol),
+                severity: Severity::Info,
+                description: format!("Configured subprotocol validation: {}", subprotocol),
+            });
+        }
+
+        results
     }
 
     pub async fn fuzz(
@@ -103,6 +152,8 @@ impl WebSocketFuzzer {
         results.extend(self.generate_dos_tests());
         results.extend(self.generate_cswsb_tests());
         results.extend(self.generate_message_fuzz_tests());
+        results.extend(self.generate_frame_fuzz_tests());
+        results.extend(self.generate_subprotocol_tests());
         results
     }
 
@@ -324,5 +375,32 @@ mod tests {
         assert!(has_sqli, "Missing SQL injection payload");
         assert!(has_xss, "Missing XSS payload");
         assert!(has_template, "Missing template injection payload");
+    }
+
+    #[test]
+    fn test_subprotocol_tests_generation() {
+        let fuzzer = WebSocketFuzzer::new("wss://example.com/ws".to_string())
+            .with_subprotocols(vec!["graphql-ws".to_string(), "soap".to_string()]);
+
+        let tests = fuzzer.generate_subprotocol_tests();
+        assert!(!tests.is_empty());
+        assert!(tests.iter().any(|t| t.message.contains("graphql-ws")));
+        assert!(tests.iter().any(|t| t.message.contains("soap")));
+    }
+
+    #[test]
+    fn test_subprotocol_tests_empty_when_no_protocols() {
+        let fuzzer = WebSocketFuzzer::new("wss://example.com/ws".to_string());
+        let tests = fuzzer.generate_subprotocol_tests();
+        assert!(tests.is_empty());
+    }
+
+    #[test]
+    fn test_all_tests_includes_subprotocol() {
+        let fuzzer = WebSocketFuzzer::new("wss://example.com/ws".to_string())
+            .with_subprotocols(vec!["graphql-ws".to_string()]);
+
+        let tests = fuzzer.generate_all_tests();
+        assert!(tests.iter().any(|t| t.vulnerability == WebSocketVulnerability::AuthBypass));
     }
 }

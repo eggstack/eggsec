@@ -98,12 +98,54 @@ async fn handle_agent_run_impl(
 
 async fn handle_status_impl(_use_ai: bool, _ai_config_path: Option<String>, portfolio_path: Option<String>) -> Result<()> {
     println!("Agent Status");
+    println!("{}", "=".repeat(50));
 
     if let Some(ref path) = portfolio_path {
-        println!("  Portfolio: {}", path);
+        println!("Portfolio: {}", path);
     } else {
-        println!("  Portfolio: not configured");
+        println!("Portfolio: not configured");
     }
+
+    let portfolio = if let Some(ref path_str) = portfolio_path {
+        let path = PathBuf::from(path_str);
+        TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new())
+    } else {
+        TargetPortfolio::new()
+    };
+
+    let targets = portfolio.get_all_targets();
+    println!("\nTargets: {} total", targets.len());
+
+    let enabled_targets: Vec<_> = targets.iter().filter(|(_, cfg)| cfg.enabled).collect();
+    let disabled_targets: Vec<_> = targets.iter().filter(|(_, cfg)| !cfg.enabled).collect();
+
+    println!("  Enabled: {}", enabled_targets.len());
+    println!("  Disabled: {}", disabled_targets.len());
+
+    if !targets.is_empty() {
+        println!("\nTarget Details:");
+        println!("{}", "-".repeat(50));
+        for (id, config) in &targets {
+            let status = if config.enabled { "enabled" } else { "disabled" };
+            let schedule = config.schedule.as_deref().unwrap_or("none");
+            let last_scan = config.last_scan.map(|t| t.to_rfc3339()).unwrap_or_else(|| "never".to_string());
+            let scan_count = config.scan_history.len();
+
+            println!("  {} [{}]", id, status);
+            println!("    Target: {}", config.target);
+            println!("    Schedule: {}", schedule);
+            println!("    Last scan: {}", last_scan);
+            println!("    Scan history: {} scans", scan_count);
+            println!("    Priority: {:?}", config.priority);
+            println!("    Scan depth: {:?}", config.scan_depth);
+            if !config.alert_channels.is_empty() {
+                println!("    Alerts: {} channels", config.alert_channels.len());
+            }
+            println!();
+        }
+    }
+
+    println!("{}", "=".repeat(50));
     Ok(())
 }
 
@@ -155,6 +197,37 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs) -> Result<()> {
             portfolio.save()?;
 
             println!("Target added successfully");
+            Ok(())
+        }
+        crate::cli::agent::TargetsCommand::Update(update_args) => {
+            let mut portfolio = load_portfolio(portfolio_path.as_ref());
+            if let Some(mut target) = portfolio.get_mut_target(&update_args.id) {
+                if let Some(new_target) = update_args.target {
+                    target.target = new_target;
+                }
+                if let Some(schedule) = update_args.schedule {
+                    target.schedule = Some(schedule);
+                }
+                if let Some(priority) = update_args.priority {
+                    target.priority = match priority.to_lowercase().as_str() {
+                        "low" => Priority::Low,
+                        "high" => Priority::High,
+                        "critical" => Priority::Critical,
+                        _ => Priority::Normal,
+                    };
+                }
+                if let Some(depth) = update_args.scan_depth {
+                    target.scan_depth = match depth.to_lowercase().as_str() {
+                        "shallow" => crate::agent::portfolio::ScanDepth::Shallow,
+                        "deep" => crate::agent::portfolio::ScanDepth::Deep,
+                        _ => target.scan_depth,
+                    };
+                }
+                portfolio.save()?;
+                println!("Target {} updated successfully", update_args.id);
+            } else {
+                println!("Target {} not found", update_args.id);
+            }
             Ok(())
         }
         crate::cli::agent::TargetsCommand::Remove { id } => {

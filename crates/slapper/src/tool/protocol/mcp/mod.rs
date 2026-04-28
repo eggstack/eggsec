@@ -12,7 +12,7 @@ pub use constraints::McpConstraintContext;
 pub use handlers::McpServer;
 pub use routes::{create_mcp_router, run_stdio};
 pub use streaming::StreamEvent;
-pub use types::{CapabilitySummary, McpError, McpRequest, McpResource, McpResponse, McpTool};
+pub use types::{CapabilitySummary, McpError, McpNotification, McpRequest, McpResource, McpResponse, McpRoot, McpTool};
 
 #[cfg(test)]
 mod tests {
@@ -200,19 +200,64 @@ mod tests {
     #[tokio::test]
     async fn test_unknown_method() {
         let server = create_test_server();
-        
+
         let request = McpRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(serde_json::json!(1)),
             method: "unknown/method".to_string(),
             params: None,
         };
-        
+
         let response = server.handle_request(request).await;
-        
+
         assert!(response.error.is_some());
         let error = response.error.unwrap();
         assert_eq!(error.code, -32601);
+    }
+
+    #[tokio::test]
+    async fn test_roots_list() {
+        let server = create_test_server();
+
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "roots/list".to_string(),
+            params: None,
+        };
+
+        let response = server.handle_request(request).await;
+
+        assert!(response.error.is_none());
+        assert!(response.result.is_some());
+
+        let result = response.result.unwrap();
+        assert!(result.get("roots").is_some());
+        assert!(result.get("count").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_shutdown() {
+        let server = create_test_server();
+
+        assert!(!server.is_shutdown_requested());
+
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "shutdown".to_string(),
+            params: None,
+        };
+
+        let response = server.handle_request(request).await;
+
+        assert!(response.error.is_none());
+        assert!(response.result.is_some());
+
+        let result = response.result.unwrap();
+        assert_eq!(result.get("success").unwrap(), &serde_json::json!(true));
+
+        assert!(server.is_shutdown_requested());
     }
 
     #[tokio::test]
