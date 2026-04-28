@@ -706,7 +706,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let help_text = if app.is_help_visible() {
-        " [Esc] Close | [Space] Help | [Enter] Confirm | [h/l] Tab | [j/k] Nav | [w/b] Word | [gg/Top] [G/Bot] | [n/p] Tab | [q] Quit ".to_string()
+        " [Esc] Close | [Space] Help | [Enter] Confirm | [h/l] Tab | [j/k] Nav | [w/b] Word | [gg/G] Top/Bot | [n/p] Tab | [q] Quit ".to_string()
     } else {
         match app.mode {
             super::InputMode::Normal => {
@@ -717,7 +717,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
                     )
                 } else {
                     format!(
-                        " [h/l] Tab | [j/k] Nav | [/] Search | [Ctrl+F] Global | [Ctrl+Z]{} | [1-9] Jump | [Space] Help | [i] Insert | [q] Quit | [b] Bookmark",
+                        " [h/l] Tab | [j/k] Nav | [/] Search | [Ctrl+F] Global | [Ctrl+Z]{} | [1-9] Jump | [Space] Help | [i] Insert | [q] Quit | [b] Bookmark | [Ctrl+T] Theme",
                         if app.is_paused() { " Resume" } else { " Pause" }
                     )
                 };
@@ -735,9 +735,9 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
             }
             super::InputMode::Insert => {
                 if area.width < 60 {
-                    " [Esc] Normal | Type | [Ctrl+C] Cancel ".to_string()
+                    " [Esc] Normal | Type | [Ctrl+C] Cancel | [Ctrl+V] Paste".to_string()
                 } else {
-                    " [Esc] Normal | Type to input | [Ctrl+C] Cancel ".to_string()
+                    " [Esc] Normal | Type to input | [Ctrl+C] Cancel | [Ctrl+V] Paste".to_string()
                 }
             }
         }

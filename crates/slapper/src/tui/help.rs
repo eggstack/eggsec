@@ -554,6 +554,21 @@ impl Default for HelpContent {
                     description: "Go to top/bottom".to_string(),
                     category: "Navigation".to_string(),
                 },
+                HelpCommand {
+                    key: "Ctrl+Z".to_string(),
+                    description: "Pause/Resume".to_string(),
+                    category: "Control".to_string(),
+                },
+                HelpCommand {
+                    key: "Ctrl+T".to_string(),
+                    description: "Toggle theme".to_string(),
+                    category: "Settings".to_string(),
+                },
+                HelpCommand {
+                    key: "Ctrl+V".to_string(),
+                    description: "Paste from clipboard".to_string(),
+                    category: "Edit".to_string(),
+                },
             ],
             command_palette_entries: Arc::new(vec![
                 CommandPaletteResult {
