@@ -159,6 +159,8 @@ where
                     }
                 }
 
+                app.needs_redraw = true;
+
                 match (key.modifiers, key.code) {
                     (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
                         if app.is_running() {
@@ -464,15 +466,14 @@ where
                     (KeyModifiers::NONE, KeyCode::Char(c)) if app.mode == InputMode::Insert => {
                         app.handle_char(c);
                     }
-                    _ => {}
+                    _ => {
+                        app.needs_redraw = false;
+                    }
                 }
-
-                app.needs_redraw = true;
             }
 
             if let Event::Mouse(mouse_event) = event {
                 handle_mouse_event(mouse_event, app);
-                app.needs_redraw = true;
             }
         }
 
