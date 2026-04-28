@@ -454,9 +454,8 @@ impl App {
             return;
         }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_escape();
-            }
+            let mut h = self.history.lock();
+        h.handle_escape();
             return;
         }
         self.dispatcher_mut().handle_escape();
@@ -467,9 +466,8 @@ impl App {
             return;
         }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_char(c);
-            }
+            let mut h = self.history.lock();
+        h.handle_char(c);
             return;
         }
         self.dispatcher_mut().handle_char(c);
@@ -480,9 +478,8 @@ impl App {
             return;
         }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_backspace();
-            }
+            let mut h = self.history.lock();
+        h.handle_backspace();
             return;
         }
         self.dispatcher_mut().handle_backspace();
@@ -505,9 +502,8 @@ impl App {
             return;
         }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_up();
-            }
+            let mut h = self.history.lock();
+        h.handle_up();
             return;
         }
         self.dispatcher_mut().handle_up();
@@ -518,9 +514,8 @@ impl App {
             return;
         }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_down();
-            }
+            let mut h = self.history.lock();
+        h.handle_down();
             return;
         }
         self.dispatcher_mut().handle_down();
@@ -531,9 +526,8 @@ impl App {
             return;
         }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_left();
-            }
+            let mut h = self.history.lock();
+        h.handle_left();
             return;
         }
         let moved = self.dispatcher_mut().handle_left();
@@ -547,9 +541,8 @@ impl App {
             return;
         }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_right();
-            }
+            let mut h = self.history.lock();
+        h.handle_right();
             return;
         }
         let moved = self.dispatcher_mut().handle_right();
@@ -563,9 +556,8 @@ impl App {
             return;
         }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_focus_next();
-            }
+            let mut h = self.history.lock();
+        h.handle_focus_next();
             return;
         }
         self.dispatcher_mut().handle_focus_next();
@@ -576,9 +568,8 @@ impl App {
             return;
         }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_focus_prev();
-            }
+            let mut h = self.history.lock();
+        h.handle_focus_prev();
             return;
         }
         self.dispatcher_mut().handle_focus_prev();
@@ -620,9 +611,8 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
 
     pub fn reset_current_tab(&mut self) {
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.clear_all();
-            }
+            let mut h = self.history.lock();
+        h.clear_all();
             return;
         }
         self.dispatcher_mut().reset();
@@ -635,15 +625,13 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     }
 
     pub fn delete_history_entry(&mut self) {
-        if let Ok(mut h) = self.history.lock() {
-            h.delete_selected();
-        }
+        let mut h = self.history.lock();
+        h.delete_selected();
     }
 
     pub fn clear_all_history(&mut self) {
-        if let Ok(mut h) = self.history.lock() {
-            h.clear_all();
-        }
+        let mut h = self.history.lock();
+        h.clear_all();
     }
 
     pub fn request_confirmation(&mut self, action: PendingAction) {
@@ -667,9 +655,8 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn page_up(&mut self) {
         const PAGE_SIZE: usize = 10;
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.page_up(PAGE_SIZE);
-            }
+            let mut h = self.history.lock();
+        h.page_up(PAGE_SIZE);
             return;
         }
         self.dispatcher_mut().page_up(PAGE_SIZE);
@@ -678,9 +665,8 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn page_down(&mut self) {
         const PAGE_SIZE: usize = 10;
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.page_down(PAGE_SIZE);
-            }
+            let mut h = self.history.lock();
+        h.page_down(PAGE_SIZE);
             return;
         }
         self.dispatcher_mut().page_down(PAGE_SIZE);
@@ -689,9 +675,8 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn handle_word_forward(&mut self) {
         if self.show_help { return; }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_word_forward();
-            }
+            let mut h = self.history.lock();
+        h.handle_word_forward();
             return;
         }
         self.dispatcher_mut().handle_word_forward();
@@ -700,9 +685,8 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn handle_word_backward(&mut self) {
         if self.show_help { return; }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_word_backward();
-            }
+            let mut h = self.history.lock();
+        h.handle_word_backward();
             return;
         }
         self.dispatcher_mut().handle_word_backward();
@@ -711,9 +695,8 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn handle_home(&mut self) {
         if self.show_help { return; }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_home();
-            }
+            let mut h = self.history.lock();
+        h.handle_home();
             return;
         }
         self.dispatcher_mut().handle_home();
@@ -722,9 +705,8 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn handle_end(&mut self) {
         if self.show_help { return; }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_end();
-            }
+            let mut h = self.history.lock();
+        h.handle_end();
             return;
         }
         self.dispatcher_mut().handle_end();
@@ -733,9 +715,8 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn handle_top(&mut self) {
         if self.show_help { return; }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_top();
-            }
+            let mut h = self.history.lock();
+        h.handle_top();
             return;
         }
         self.dispatcher_mut().handle_top();
@@ -744,9 +725,8 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn handle_bottom(&mut self) {
         if self.show_help { return; }
         if self.current_tab == Tab::History {
-            if let Ok(mut h) = self.history.lock() {
-                h.handle_bottom();
-            }
+            let mut h = self.history.lock();
+        h.handle_bottom();
             return;
         }
         self.dispatcher_mut().handle_bottom();
