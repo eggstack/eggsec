@@ -1,256 +1,18 @@
+// This file provides the gRPC service implementation
+// The proto-generated code is in slapper.tool.v1 module
+
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
+use tonic::{Request, Response, Status};
 
 use crate::tool::{
-    RequestOptions, Target, ToolDispatcher, ToolRegistry, ToolRequest,
+    ToolDispatcher, ToolRegistry, ToolRequest,
 };
 
-#[derive(Clone)]
-pub struct GrpcService {
-    registry: ToolRegistry,
-    dispatcher: ToolDispatcher,
-    api_key: Option<String>,
-}
+// Include the proto-generated code
+tonic::include_proto!("slapper.tool.v1");
 
-impl GrpcService {
-    pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
-        let dispatcher = ToolDispatcher::new(registry.clone());
-        Self {
-            registry,
-            dispatcher,
-            api_key,
-        }
-    }
-
-    pub fn validate_api_key(&self, key: &str) -> Result<(), String> {
-        if let Some(ref expected) = self.api_key {
-            if !bool::from(expected.as_bytes().ct_eq(key.as_bytes())) {
-                return Err("Invalid or missing API key".to_string());
-            }
-        }
-        Ok(())
-    }
-
-    pub fn get_registry(&self) -> &ToolRegistry {
-        &self.registry
-    }
-
-    pub fn get_dispatcher(&self) -> &ToolDispatcher {
-        &self.dispatcher
-    }
-
-    pub async fn list_tools(&self, category: Option<String>) -> Result<ListToolsResponse, String> {
-        let tools = if let Some(cat) = category {
-            let cat_lower = cat.to_lowercase();
-            let tool_cat = match cat_lower.as_str() {
-                "recon" => crate::tool::ToolCategory::Recon,
-                "scanning" => crate::tool::ToolCategory::Scanning,
-                "fuzzing" => crate::tool::ToolCategory::Fuzzing,
-                "waf" => crate::tool::ToolCategory::Waf,
-                "loadtest" | "load_test" => crate::tool::ToolCategory::LoadTest,
-                "stress" => crate::tool::ToolCategory::Stress,
-                "pipeline" => crate::tool::ToolCategory::Pipeline,
-                _ => crate::tool::ToolCategory::Recon,
-            };
-            self.registry.list_by_category(tool_cat)
-        } else {
-            self.registry.list()
-        };
-
-        let tool_infos: Vec<GrpcToolInfo> = tools
-            .into_iter()
-            .map(|t| GrpcToolInfo {
-                id: t.id,
-                name: t.name,
-                category: t.category.to_string(),
-                description: t.description,
-                protocols: t.protocols,
-                capabilities: t
-                    .capabilities
-                    .into_iter()
-                    .map(|c| GrpcToolCapability {
-                        name: c.name,
-                        description: c.description,
-                        parameters: c
-                            .parameters
-                            .into_iter()
-                            .map(|p| GrpcParameterDef {
-                                name: p.name,
-                                param_type: p.param_type.to_string(),
-                                required: p.required,
-                                default: p.default,
-                                description: p.description,
-                            })
-                            .collect(),
-                    })
-                    .collect(),
-            })
-            .collect();
-
-        let categories: Vec<String> = self
-            .registry
-            .categories()
-            .iter()
-            .map(|c| c.to_string())
-            .collect();
-
-        Ok(ListToolsResponse {
-            tools: tool_infos,
-            categories,
-        })
-    }
-
-    pub async fn get_tool(&self, tool_id: &str) -> Result<GrpcToolInfo, String> {
-        let tools = self.registry.list();
-        tools
-            .into_iter()
-            .find(|t| t.id == tool_id)
-            .map(|t| GrpcToolInfo {
-                id: t.id,
-                name: t.name,
-                category: t.category.to_string(),
-                description: t.description,
-                protocols: t.protocols,
-                capabilities: t
-                    .capabilities
-                    .into_iter()
-                    .map(|c| GrpcToolCapability {
-                        name: c.name,
-                        description: c.description,
-                        parameters: c
-                            .parameters
-                            .into_iter()
-                            .map(|p| GrpcParameterDef {
-                                name: p.name,
-                                param_type: p.param_type.to_string(),
-                                required: p.required,
-                                default: p.default,
-                                description: p.description,
-                            })
-                            .collect(),
-                    })
-                    .collect(),
-            })
-            .ok_or_else(|| format!("Tool '{}' not found", tool_id))
-    }
-
-    pub async fn execute_tool(
-        &self,
-        req: ExecuteToolRequest,
-    ) -> Result<ExecuteToolResponse, String> {
-        let tool_id = req.tool_id.clone();
-
-        let target = req.target.ok_or_else(|| "Target is required".to_string())?;
-        let target = match target.target_type.as_str() {
-            "url" | "1" => Target::url(target.value),
-            "domain" | "2" => Target::domain(target.value),
-            "ip" | "3" => Target::ip(target.value),
-            "cidr" | "4" => Target::cidr(target.value),
-            _ => Target::url(target.value),
-        };
-
-        let options = req
-            .options
-            .map(|o| RequestOptions {
-                timeout_ms: o.timeout_ms,
-                concurrency: o.concurrency.map(|c| c as usize),
-                rate_limit: o.rate_limit,
-                proxy: o.proxy,
-                headers: o.headers,
-                auth: None,
-                stealth: o.stealth.unwrap_or(false),
-                follow_redirects: o.follow_redirects.unwrap_or(true),
-                verify_ssl: o.verify_ssl.unwrap_or(true),
-            })
-            .unwrap_or_default();
-
-        let request = ToolRequest::new(tool_id.clone(), target)
-            .with_params(req.params.unwrap_or_default())
-            .with_options(options);
-
-        let response = self
-            .dispatcher
-            .dispatch(request)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        Ok(ExecuteToolResponse {
-            request_id: response.request_id,
-            tool_id: response.tool_id,
-            status: response.status.to_string(),
-            results: Some(response.results),
-            metadata: GrpcResponseMetadata {
-                started_at: response.metadata.started_at.to_rfc3339(),
-                completed_at: response.metadata.completed_at.to_rfc3339(),
-                duration_ms: response.metadata.duration_ms,
-                targets_scanned: response.metadata.targets_scanned as u32,
-                findings_count: response.metadata.findings_count as u32,
-            },
-            errors: response
-                .errors
-                .into_iter()
-                .map(|e| GrpcToolError {
-                    code: e.code,
-                    message: e.message,
-                    details: e.details,
-                    target: e.target,
-                })
-                .collect(),
-            findings: response
-                .findings
-                .into_iter()
-                .map(|f| GrpcFinding {
-                    id: f.id,
-                    finding_type: f.finding_type.to_string(),
-                    severity: f.severity.to_string(),
-                    title: f.title,
-                    description: f.description,
-                    location: f.location,
-                    evidence: f.evidence,
-                    cve_ids: f.cve_ids,
-                    remediation: f.remediation,
-                    references: f.references,
-                })
-                .collect(),
-        })
-    }
-
-    pub async fn get_capabilities(
-        &self,
-        tool_id: Option<String>,
-    ) -> Result<CapabilitiesResponse, String> {
-        if let Some(id) = tool_id {
-            let tool = self.get_tool(&id).await?;
-            Ok(CapabilitiesResponse {
-                capabilities: tool.capabilities,
-            })
-        } else {
-            let tools = self.registry.list();
-            let caps: Vec<GrpcToolCapability> = tools
-                .into_iter()
-                .flat_map(|t| {
-                    t.capabilities.into_iter().map(|c| GrpcToolCapability {
-                        name: c.name,
-                        description: c.description,
-                        parameters: c
-                            .parameters
-                            .into_iter()
-                            .map(|p| GrpcParameterDef {
-                                name: p.name,
-                                param_type: p.param_type.to_string(),
-                                required: p.required,
-                                default: p.default,
-                                description: p.description,
-                            })
-                            .collect(),
-                    })
-                })
-                .collect();
-            Ok(CapabilitiesResponse { capabilities: caps })
-        }
-    }
-}
-
+// Helper structs for internal use (not generated by proto)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GrpcToolInfo {
     pub id: String,
@@ -308,79 +70,137 @@ pub struct GrpcFinding {
     pub references: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ListToolsRequest {
-    pub category: Option<String>,
+// Service implementation
+pub struct GrpcService {
+    registry: ToolRegistry,
+    dispatcher: ToolDispatcher,
+    api_key: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ListToolsResponse {
-    pub tools: Vec<GrpcToolInfo>,
-    pub categories: Vec<String>,
+impl GrpcService {
+    pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
+        let dispatcher = ToolDispatcher::new(registry.clone());
+        Self {
+            registry,
+            dispatcher,
+            api_key,
+        }
+    }
+
+    pub fn validate_api_key(&self, key: &str) -> Result<(), String> {
+        if let Some(ref expected) = self.api_key {
+            if !bool::from(expected.as_bytes().ct_eq(key.as_bytes())) {
+                return Err("Invalid or missing API key".to_string());
+            }
+        }
+        Ok(())
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetToolRequest {
-    pub tool_id: String,
+// Conversion functions
+fn convert_tool_info_to_proto(info: GrpcToolInfo) -> ToolInfo {
+    ToolInfo {
+        id: info.id,
+        name: info.name,
+        category: info.category,
+        description: info.description,
+        protocols: info.protocols,
+        capabilities: info.capabilities.into_iter().map(convert_capability_to_proto).collect(),
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetToolResponse {
-    pub tool: Option<GrpcToolInfo>,
+fn convert_capability_to_proto(cap: GrpcToolCapability) -> ToolCapability {
+    ToolCapability {
+        name: cap.name,
+        description: cap.description,
+        parameters: cap.parameters.into_iter().map(convert_param_to_proto).collect(),
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ExecuteToolRequest {
-    pub tool_id: String,
-    pub target: Option<GrpcTarget>,
-    pub params: Option<serde_json::Value>,
-    pub options: Option<GrpcRequestOptions>,
+fn convert_param_to_proto(param: GrpcParameterDef) -> ParameterDef {
+    ParameterDef {
+        name: param.name,
+        param_type: param.param_type,
+        required: param.required,
+        default: param.default,
+        description: param.description,
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ExecuteToolResponse {
-    pub request_id: String,
-    pub tool_id: String,
-    pub status: String,
-    pub results: Option<serde_json::Value>,
-    pub metadata: GrpcResponseMetadata,
-    pub errors: Vec<GrpcToolError>,
-    pub findings: Vec<GrpcFinding>,
+// Server implementation
+pub async fn start_grpc_server(
+    host: &str,
+    port: u16,
+    service: GrpcService,
+) -> Result<(), String> {
+    use tonic::{transport::Server, Request, Response, Status};
+
+    let addr = format!("{}:{}", host, port).parse().map_err(|e| e.to_string())?;
+
+    // Register the file descriptor set for reflection
+    let reflection_service = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(include_bytes!(concat!(env!("OUT_DIR"), "/tool_descriptor.bin")))
+        .build_v1()
+        .map_err(|e| e.to_string())?;
+
+    let tool_service = ToolServiceImpl { service };
+
+    tracing::info!("Starting gRPC server on {}", addr);
+
+    Server::builder()
+        .add_service(reflection_service)
+        .add_service(
+            tool_service_server::ToolServiceServer::new(tool_service),
+        )
+        .serve(addr)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GrpcTarget {
-    pub target_type: String,
-    pub value: String,
+pub struct ToolServiceImpl {
+    service: GrpcService,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GrpcRequestOptions {
-    pub timeout_ms: Option<u64>,
-    pub concurrency: Option<u32>,
-    pub rate_limit: Option<f64>,
-    pub proxy: Option<String>,
-    pub headers: Option<std::collections::HashMap<String, String>>,
-    pub stealth: Option<bool>,
-    pub follow_redirects: Option<bool>,
-    pub verify_ssl: Option<bool>,
-    pub auth: Option<GrpcAuth>,
-}
+#[tonic::async_trait]
+impl tool_service_server::ToolService for ToolServiceImpl {
+    type StreamExecuteToolStream = tonic::Streaming<ToolStreamEvent>;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GrpcAuth {
-    pub auth_type: String,
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub token: Option<String>,
-}
+    async fn list_tools(
+        &self,
+        request: Request<ListToolsRequest>,
+    ) -> Result<Response<ListToolsResponse>, Status> {
+        let req = request.into_inner();
+        // Implementation here
+        Err(Status::unimplemented("Not yet implemented"))
+    }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CapabilitiesRequest {
-    pub tool_id: Option<String>,
-}
+    async fn get_tool(
+        &self,
+        request: Request<GetToolRequest>,
+    ) -> Result<Response<GetToolResponse>, Status> {
+        Err(Status::unimplemented("Not yet implemented"))
+    }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CapabilitiesResponse {
-    pub capabilities: Vec<GrpcToolCapability>,
+    async fn execute_tool(
+        &self,
+        request: Request<ExecuteToolRequest>,
+    ) -> Result<Response<ExecuteToolResponse>, Status> {
+        Err(Status::unimplemented("Not yet implemented"))
+    }
+
+    async fn stream_execute_tool(
+        &self,
+        request: Request<ExecuteToolRequest>,
+    ) -> Result<Response<Self::StreamExecuteToolStream>, Status> {
+        Err(Status::unimplemented("Not yet implemented"))
+    }
+
+    async fn get_capabilities(
+        &self,
+        request: Request<CapabilitiesRequest>,
+    ) -> Result<Response<CapabilitiesResponse>, Status> {
+        Err(Status::unimplemented("Not yet implemented"))
+    }
 }

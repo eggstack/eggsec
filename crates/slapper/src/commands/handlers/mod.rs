@@ -19,6 +19,8 @@ pub use config::*;
 pub mod sbom;
 #[cfg(feature = "rest-api")]
 pub mod agent;
+#[cfg(feature = "grpc-api")]
+pub mod grpc;
 
 pub use ci::*;
 pub use scan::*;
@@ -42,6 +44,9 @@ pub use vuln::*;
 pub use storage::*;
 #[cfg(feature = "rest-api")]
 pub use agent::*;
+
+#[cfg(feature = "grpc-api")]
+pub use grpc::*;
 
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
@@ -141,6 +146,8 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Agent(args)) => handle_agent(ctx, args).await,
         #[cfg(feature = "ai-integration")]
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(args).await,
+        #[cfg(feature = "grpc-api")]
+        Some(Commands::Grpc(args)) => handle_grpc_server(args).await,
         Some(Commands::Vuln(args)) => handle_vuln(ctx, args).await,
         Some(Commands::Storage(args)) => handle_storage(ctx, args).await,
     }

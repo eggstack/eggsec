@@ -176,6 +176,11 @@ pub enum Commands {
     #[cfg(feature = "ai-integration")]
     #[command(about = "Post-scan AI analysis of findings")]
     AiAnalyze(AiAnalyzeArgs),
+
+    // --- gRPC server ---
+    #[cfg(feature = "grpc-api")]
+    #[command(about = "Start gRPC server for external tool integration")]
+    Grpc(GrpcServerArgs),
 }
 
 #[derive(clap::Args, Clone)]
@@ -261,3 +266,14 @@ impl std::fmt::Display for ScanProfile {
 }
 
 pub use crate::types::OutputFormat;
+
+#[cfg(feature = "grpc-api")]
+#[derive(clap::Args, Clone)]
+pub struct GrpcServerArgs {
+    #[arg(long, default_value = "127.0.0.1")]
+    pub host: String,
+    #[arg(long, default_value = "50051")]
+    pub port: u16,
+    #[arg(long, help = "API key for authentication")]
+    pub api_key: Option<String>,
+}

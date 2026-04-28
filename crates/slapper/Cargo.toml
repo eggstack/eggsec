@@ -145,6 +145,18 @@ optional = true
 version = "0.14"
 optional = true
 
+[dependencies.prost-types]
+version = "0.14"
+optional = true
+
+[dependencies.tonic-prost]
+version = "0.14"
+optional = true
+
+[dependencies.tonic-reflection]
+version = "0.14"
+optional = true
+
 [dependencies.headless_chrome]
 version = "1"
 optional = true
@@ -200,7 +212,7 @@ rest-api = ["tool-api", "axum", "tower", "tower-http", "async-stream"]
 ws-api = ["axum/ws"]
 
 # gRPC API server for external tool integration
-grpc-api = ["tool-api", "tonic", "prost", "prost-build"]
+grpc-api = ["tool-api", "tonic", "prost", "prost-types", "tonic-prost", "tonic-reflection", "prost-build", "dep:tonic-prost-build"]
 
 # Python plugin support
 python-plugins = ["dep:slapper-plugin", "slapper-plugin/python-plugins"]
@@ -283,3 +295,7 @@ wiremock = "0.6"
 tempfile = "3"
 criterion = "0.5"
 proptest = "1"
+
+[build-dependencies.tonic-prost-build]
+version = "0.14"
+optional = true
