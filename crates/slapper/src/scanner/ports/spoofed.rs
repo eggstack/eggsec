@@ -383,15 +383,20 @@ pub(crate) async fn scan_ports_spoofed(
                 let wait_start = std::time::Instant::now();
                 let timeout_ms = timeout_duration.as_millis() as u64;
                 let mut status = "filtered".to_string();
+                let mut backoff_ms = 1u64;
+                let max_backoff_ms = 50u64;
                 
                 while (wait_start.elapsed().as_millis() as u64) < timeout_ms {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-                    
+                    tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
+                     
                     let responses_guard = responses.lock();
                     if let Some(resp) = responses_guard.get(&port) {
                         status = resp.clone();
                         break;
                     }
+                    
+                    // Exponential backoff: double the delay each time
+                    backoff_ms = std::cmp::min(backoff_ms * 2, max_backoff_ms);
                 }
                 
                 status
