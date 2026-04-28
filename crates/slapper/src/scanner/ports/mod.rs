@@ -15,6 +15,7 @@ use crate::error::Result;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as FmtWrite;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -271,14 +272,14 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
     } else if args.grepable {
         let mut s = String::new();
         s.push_str("# Nmap grepable output\n");
-        s.push_str(&format!("Host: {}\n", results.host));
+        write!(s, "Host: {}\n", results.host).unwrap();
         s.push_str("Status: up\n");
         s.push_str("Ports: ");
         for (i, port) in results.open_ports.iter().enumerate() {
             if i > 0 {
                 s.push_str(", ");
             }
-            s.push_str(&format!("{}/open/{}", port.port, port.service));
+            write!(s, "{}/open/{}", port.port, port.service).unwrap();
         }
         s.push('\n');
         s
@@ -286,13 +287,15 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
         let mut s = String::new();
         s.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         s.push_str("<nmaprun>\n");
-        s.push_str(&format!("  <host>{}</host>\n", escape_xml(&results.host)));
+        write!(s, "  <host>{}</host>\n", escape_xml(&results.host)).unwrap();
         s.push_str("  <ports>\n");
         for port in &results.open_ports {
-            s.push_str(&format!(
+            write!(
+                s,
                 r#"    <port protocol="tcp" portid="{}"><state state="open"/><service name="{}"/></port>"#,
                 port.port, port.service
-            ));
+            )
+            .unwrap();
             s.push('\n');
         }
         s.push_str("  </ports>\n");
@@ -441,14 +444,14 @@ where
     } else if args.grepable {
         let mut s = String::new();
         s.push_str("# Nmap grepable output\n");
-        s.push_str(&format!("Host: {}\n", results.host));
+        write!(s, "Host: {}\n", results.host).unwrap();
         s.push_str("Status: up\n");
         s.push_str("Ports: ");
         for (i, port) in results.open_ports.iter().enumerate() {
             if i > 0 {
                 s.push_str(", ");
             }
-            s.push_str(&format!("{}/open/{}", port.port, port.service));
+            write!(s, "{}/open/{}", port.port, port.service).unwrap();
         }
         s.push('\n');
         s
@@ -456,13 +459,15 @@ where
         let mut s = String::new();
         s.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         s.push_str("<nmaprun>\n");
-        s.push_str(&format!("  <host>{}</host>\n", escape_xml(&results.host)));
+        write!(s, "  <host>{}</host>\n", escape_xml(&results.host)).unwrap();
         s.push_str("  <ports>\n");
         for port in &results.open_ports {
-            s.push_str(&format!(
+            write!(
+                s,
                 r#"    <port protocol="tcp" portid="{}"><state state="open"/><service name="{}"/></port>"#,
                 port.port, port.service
-            ));
+            )
+            .unwrap();
             s.push('\n');
         }
         s.push_str("  </ports>\n");
