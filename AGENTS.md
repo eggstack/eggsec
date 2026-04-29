@@ -1224,4 +1224,37 @@ The following items were found to be incorrect during verification (note: the co
 
 ---
 
+### Session Learnings (2026-04-29)
+
+**Compilation Fixes Completed:**
+- AlertRouter: Added `default()` for Default impl (new() returns Result, cannot be used in Default)
+- agent/mod.rs: `LongitudinalMemory::new()` now properly awaited (was missing `.await`)
+- commands/handlers/agent.rs: Fixed portfolio_path scope (handle_targets now receives portfolio_path)
+- agent/skills.rs: Made `SkillMetadata` fields public (tools, category, scope, version)
+- tool/mod.rs: Re-exported `AttackSurface` for MCP protocol tests
+
+**Deferred Items Addressed:**
+- D.4: Fixed help overlay `[h/l] Tab` → `[n/p] Tab` in ui.rs (h/l is input movement, n/p is tab nav)
+- D.6/D.10: Rewrote AuthTab with proper InputGroup, AuthFocusArea enum, and error handling
+- E.7: Removed stub `query_alexa()` from subdomain enumeration (alexa top sites API unavailable)
+
+**Verified as Already Implemented (from sub-agent exploration):**
+- C.1: Clone storm is normal async pattern (12 clones needed for concurrent fuzzing)
+- C.2: FxHashMap already migrated in critical paths, 5 modules remain with std HashMap (lower priority)
+- C.3: AtomicU64 already used in all 3 scanner locations
+- C.4: String allocations not a specific issue (vague plan item)
+- C.5: DashMap already used where appropriate per plan's own guidance
+- E.6: Auto-Calibration System already implemented in fuzzer/calibration.rs
+
+**Test Results:**
+- 1115 passing (base library)
+- 1364 passing (with rest-api,ai-integration)
+- 7 pre-existing AI test failures remain
+
+**New Skills Added:**
+- `slapper_skills/tui_improvements.md` - Documents AuthTab rewrite, FocusArea pattern, keyboard shortcuts
+- `slapper_skills/grpc_implementation.md` - Documents gRPC status (infrastructure complete, RPCs are stubs)
+
+---
+
 *End of AGENTS.md*
