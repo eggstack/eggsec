@@ -117,7 +117,7 @@ pub use chain::{
     AutoExploiter, ChainAction, ChainExecutionResult, ChainExecutor, ChainedFuzzResult,
 };
 pub use diff::{DiffResult, ResponseDiff, ResponseDiffer};
-pub use engine::{FuzzEngine, FuzzResult, FuzzSession, OwaspSummary};
+pub use engine::{ChainedFuzzInput, ChainedFuzzOutput, FuzzChainStep, FuzzEngine, FuzzResult, FuzzSession, OwaspSummary, StatefulFuzzer, StepResults};
 pub use filters::{FilterChain, PayloadFilter};
 pub use grammar::{Grammar, GrammarFuzzer};
 pub use mutator::generate_mutations;

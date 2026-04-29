@@ -12,6 +12,8 @@ pub mod memory;
 pub mod alerts;
 pub mod channels;
 pub mod events;
+pub mod logging;
+pub mod config_watcher;
 
 #[cfg(feature = "ai-integration")]
 pub mod skills;

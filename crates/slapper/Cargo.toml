@@ -57,6 +57,9 @@ uuid = { version = "1", features = ["v4", "serde"] }
 base64.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+notify = { version = "7", features = ["serde"] }
+notify-debouncer-mini = "0.5"
 directories = "5"
 quick-xml = { version = "0.31", features = ["serialize"] }
 ipnetwork = "0.20"
