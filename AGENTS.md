@@ -114,10 +114,10 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1115 passing | Base library tests |
-| Tests | 1238 passing | With rest-api,ai-integration (7 pre-existing AI test failures) |
-| Clippy | ~21 warnings | TUI-specific acceptable, some dead code warnings remain |
-| Source files | 503 |
+| Tests | 1120 passing | Base library tests |
+| Tests | 1371 passing | With rest-api,ai-integration |
+| Clippy | ~4 warnings | TUI-specific acceptable |
+| Source files | 506 |
 | Payload types | 30 |
 | Tabs | 29 |
 
@@ -250,14 +250,23 @@ The master plan in `plan.md` is structured for parallel implementation by domain
 | Intercept proxy TLS | No TLS validation | NOT A BUG - by design (intercepting proxy) |
 | HistoryTab Search | missing | Feature EXISTS in `tui/tabs/history.rs` |
 
-**Pre-existing AI Test Failures (7)** - These are known and should be addressed separately:
-1. `ai::client::tests::test_extract_content_valid_response` - expects 3 lines, gets 4
-2. `ai::planner::tests::test_parse_modifications_from_text_add_stage`
-3. `ai::planner::tests::test_parse_modifications_from_text_reduce_duration`
-4. `ai::planner::tests::test_parse_modifications_multiple_types`
-5. `ai::planner::tests::test_planner_cache_clear`
-6. `ai::planner::tests::test_record_outcome_updates_success_rate`
-7. `ai::waf_bypass::tests::test_record_success_adds_to_knowledge_base`
+**Completed Wave 0 (2026-04-29):**
+- Fixed all 7 pre-existing AI test failures (ai::planner, ai::waf_bypass, ai::client)
+- Tests now pass: 1371 passing with rest-api,ai-integration
+
+**Completed Wave 1 (2026-04-29):**
+- Fixed grpc-api + stress-testing + packet-inspection compilation errors
+- Export CaptureError from packet module, add get_service_name import, fix serde_json/prost_types conversion
+- Add PacketBatch::new constructor
+
+**Completed Wave 2 (2026-04-29):**
+- Fixed SettingsTab::reset() infinite recursion bug
+- Verified orphaned tabs already removed, mouse redraw bug already fixed
+
+**Completed Wave 5 (2026-04-29):**
+- Added tracing-appender for file-based agent observability
+- Added notify-based config hot-reloading
+- Created StatefulFuzzer for chained fuzzing
 
 ---
 
