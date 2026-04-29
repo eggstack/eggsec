@@ -206,17 +206,17 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Consolidated improvement plan (sole plan file, all others removed)
-  - 121 verified items across original 7 waves (A through G) - all complete
-  - Additional waves 1.1-3.2 implemented in 2026-04-29 session
-  - Wave 1.1: Security hardening (path traversal, CORS, plaintext passwords, privilege checks) ✓
-  - Wave 1.2: Compilation fixes (DashMap deadlocks, stress-testing) ✓
-  - Wave 2.1: TUI bug fixes (mouse redraw, settings reset, WafStress) ✓
-  - Wave 2.2: Orphaned tab removal ✓
-  - Wave 3.1: Network performance (TCP_NODELAY, HTTP pooling) ✓
-  - Wave 3.2: Async memory (tokio::fs conversion) ✓
-  - Waves 4.1-8: Deferred (complex, already complete, or false positives)
-  - **Test count: 1115 passing (base), 1345 with full features**
+- `plans/plan.md` — Consolidated improvement plan (sole plan file, all others removed in 2026-04-29)
+  - Contains all pending items organized into 7 Waves
+  - **Wave 1**: Critical Fixes (compilation, security vulnerabilities)
+  - **Wave 2**: Code Quality (dead code, error handling, refactoring)
+  - **Wave 3**: Performance (FxHashMap, TUI renders, ReDoS)
+  - **Wave 4**: TUI Improvements (LoadTest, AuthTab, CSRF, Formula injection)
+  - **Wave 5**: Feature Enhancements (Agent, Plugin, Fuzzer, WAF, CLI, Config)
+  - **Wave 6**: New Capabilities (Exploitation, Cloud, Mobile - long term)
+  - **Wave 7**: Documentation (README, CAPABILITIES, ARCHITECTURE updates)
+  - **Test count: 1115 passing (base), 1364 with full features**
+  - **Pre-existing: 7 AI test failures (ai::planner, ai::waf_bypass, ai::client)**
 
 **On Using This Guide**: When working on items from plan.md, always verify claims against the actual codebase. Line numbers and file paths in plans may become outdated as code evolves. Use `rg` to confirm before implementing.
 
@@ -227,7 +227,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 When implementing plan items, verify actual state rather than assuming plan accuracy:
 - Payload type count: 30 (verified via `fuzzer/payloads/mod.rs`)
 - Recon module count: ~30 (more than previously documented)
-- Test count: 1107 passing base, 1345 with full features
+- Test count: 1115 passing base, 1364 with full features
 - Use `rg` to confirm file paths and line numbers exist
 - Run `cargo test --lib -p slapper` after each change
 - Check test counts: `cargo test --lib -p slapper -- --list 2>/dev/null | grep -c "test$"`
@@ -236,74 +236,34 @@ When implementing plan items, verify actual state rather than assuming plan accu
 
 The consolidated plan.md is structured for parallel implementation by wave. See plan.md's "Parallelization Strategy" section for the full agent assignment tables. Key principle: items in different files can always be parallelized; items touching the same file need sequential execution within a sub-agent.
 
-### Configuration
+### Session Learnings (2026-04-29)
 
-- `PathsConfig` fields are flattened via `#[serde(flatten)]` for backward compatibility
-- Existing config files with top-level `custom_payloads_dir` etc. still work
+**Consolidation Results:**
+- Merged 9 plan files into single consolidated plan.md
+- Verified 20+ plan items against actual codebase
+- Identified 4 false positives (items claimed as bugs were not bugs)
+- Marked 1 item as already fixed (k8s-openapi version 0.22)
+- Corrected 1 count (12 clones, not 13)
 
-### Testing
+**Newly Verified False Positives:**
+| Item | Claim | Actual State |
+|------|-------|--------------|
+| k8s-openapi | full feature doesn't compile | Already fixed - version is 0.22 |
+| SSRF/Private IP blocking | No blocking in executor | Partially protected via template loader |
+| Intercept proxy TLS | No TLS validation | NOT A BUG - by design (intercepting proxy) |
+| Clone count | 13 clones | Actually **12 clones** |
 
-- Negative tests should use specific assertions, not `assert!(result.is_err() || result.is_ok())`
-- Check actual error messages: `err.to_string().contains("expected substring")`
-- Use `SpoofConfig::from_args()` with `Option<usize>` for decoy_count
+**Pre-existing AI Test Failures (7)** - will be addressed separately:
+1. `ai::client::tests::test_extract_content_valid_response` - expects 3 lines, gets 4
+2. `ai::planner::tests::test_parse_modifications_from_text_add_stage` - keyword extraction
+3. `ai::planner::tests::test_parse_modifications_from_text_reduce_duration` - keyword matching
+4. `ai::planner::tests::test_parse_modifications_multiple_types` - keyword matching
+5. `ai::planner::tests::test_planner_cache_clear` - cache behavior
+6. `ai::planner::tests::test_record_outcome_updates_success_rate` - cache entry creation
+7. `ai::waf_bypass::tests::test_record_success_adds_to_knowledge_base` - knowledge base state
 
-### Common Pitfalls
-
-1. **ScopeRule CIDR handling**: `ScopeRule::new()` creates rule with `pattern` but NOT `cidr`. CIDR matching only works via `ScopeRule::with_cidr()`. Using `ScopeRule::new("10.0.0.0/8")` will NOT match IPs correctly — use `with_cidr()` instead.
-2. **Type mismatches**: `ScopeRule::new()` takes `String`, not `&str`
-3. **Option types**: `decoy_count` is `Option<usize>`, not `usize`
-4. **Unused imports**: Move feature-gated imports inside `#[cfg(...)]` blocks
-5. **Feature-gated dead code**: Functions used only under `#[cfg(feature = "...")]` appear as dead code to the compiler. Gate the module declaration itself, not just callers.
-6. **Clippy redundant closures**: `.map(|arr| func(arr))` should be `.map(func)` when the argument is passed directly
-7. **Clippy needless borrows**: `.post(&format!(...))` should be `.post(format!(...))` when the format result implements the required traits
-8. **`default_value = "None"` on Options**: Never use `#[arg(default_value = "None")]` on `Option<T>` fields — clap assigns the string `"None"` instead of `None`. Omit `default_value` entirely; `Option` defaults to `None` automatically.
-9. **`fingerprint_services` signature**: Takes 5 args: `host`, `ports`, `timeout`, `tui_mode`, `concurrency` — don't forget `concurrency`
-10. **Test assertion logic**: Always verify tests actually exercise the expected code path. Use specific assertions and test documentation to verify behavior.
-11. **UTF-8 byte slicing**: `InputField` stores cursor as character count (not byte offset). Always use character-based indexing for UTF-8 strings to avoid panics.
-12. **File path verification**: Always verify file paths with `rg` or `ls` before referencing. Several plan items referenced non-existent files (e.g., `slapper-plugin/src/ruby.rs` doesn't exist — Ruby is in `slapper-ruby/src/loader.rs`).
-13. **parking_lot lock scoping**: When checking if operations are inside a lock, note that `parking_lot::MutexGuard` lives until end of scope (function return), unlike `std::sync::MutexGuard` which can be dropped early. Always trace the actual scope.
-14. **Feature-gated compilation**: Always verify build errors with the actual feature flag enabled. Some modules (e.g., `packet/`, `stress/`) only fail to compile when their respective features are active.
-
-### Severity Enum
-
-- `Severity` has custom `Ord`/`PartialOrd` implementations using `as_int()` for correct semantic ordering (Critical > High > Medium > Low > Info)
-- Use `as_int()` for numeric severity comparisons
-- `Display` outputs UPPERCASE ("CRITICAL"), `as_str()` outputs lowercase ("critical")
-- `serde` serialization uses lowercase (due to `#[serde(rename_all = "lowercase")]`)
-- `Severity` implements `FromStr` trait; inherent method renamed to `parse_or_default`
-- Use `eq_ignore_ascii_case()` instead of `to_lowercase().as_str()` for comparisons
-
-### SensitiveString
-
-- Field is private; use `expose_secret()` (borrow) or `into_secret()` (consume)
-- `into_secret()` uses `std::mem::take` internally to work with `ZeroizeOnDrop`
-- `PartialEq` uses constant-time comparison; safe for credential checking
-- Config deserialization works transparently — existing TOML files with plain strings still load
-- Use `to_log_key()` for logging/display, NOT `to_url()` which exposes credentials
-
-### TUI-Specific Patterns
-
-- `tui/app/runner.rs` contains the main event loop (`run_app`)
-- `tui/app/mod.rs` contains the `App` struct; split into submodules: `dispatch.rs`, `navigation.rs`, `command.rs`, `export.rs`, `state_update.rs`, `task_management.rs`
-- `tui/workers/` directory contains 8 files: `runner.rs`, `scanner.rs`, `fuzzer.rs`, `network.rs`, `api.rs`, `recon.rs`, `security.rs`, `pipeline.rs`
-- Tab dispatch uses match statements across ~18+ methods (29-arm matches)
-- TUI uses ratatui 0.30 + crossterm 0.29 with immediate-mode rendering
-- 29 tab variants exist (Recon=0 through Vuln=28); all 29 are fully functional
-- `tui/app/dispatch.rs` has `TabDispatcher` wrapper with 27 methods for input delegation
-- `tui/app/task_management.rs` contains `TaskBuilder` trait for task building logic
-- Tab cfg attributes: `Nse` and `Plugin` variants are always present in the Tab enum; use both `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]` arms for feature-gated dispatch
-
-### Output Module
-
-- `output/convert.rs` converts findings to HTML, JUnit, SARIF, JSON
-- `output/junit.rs` generates JUnit XML reports
-
-### Scope Module
-
-- `config/scope.rs` handles target scope validation
-- `ScopeRule` supports wildcard patterns (`*.example.com`)
-- Wildcard matching **includes** apex domain (`*.example.com` matches `example.com`)
-- `TargetScope` has `host` and `ip` fields (no `pinned_ip` — that field does not exist)
+**Note on reqwest 0.13:**
+The `cookies()` method is not available in reqwest 0.13 by default. Use manual Set-Cookie header parsing instead.
 
 ## Style Guidelines
 
@@ -905,182 +865,12 @@ When fixing failing tests in integration scenarios:
 
 ### Completed Implementation Items
 
-The following items have been implemented and verified:
+All completed implementation items from historical work sessions are consolidated in `plans/plan.md`. The plan contains:
+- 69 completed items across Waves A-G (2026-04-28 session)
+- Additional items from 2026-04-29 consolidation
+- Full verification details and file references
 
-**Core Security:**
-1. **Plugin timeout enforcement**: Python uses `tokio::time::timeout`, Ruby uses `rx.recv_timeout()`
-2. **Path traversal prevention**: `validate_plugin_path()` in `slapper-plugin/src/validation.rs`
-3. **Constant-time comparison**: All auth uses `bool::from(ct_eq())` instead of `unwrap_u8()`
-4. **IMAP injection prevention**: `escape_imap_quoted()` in slapper-nse
-5. **Private IP blocking**: `resolve_host()` blocks loopback and private IPs
-6. **Ruby sandbox**: Only safe reporting methods exposed, `RubySandboxConfig` with `allowed_dir/networks`
-7. **Shared security patterns**: `slapper-plugin/src/security.rs` consolidates pattern detection
-8. **HMAC webhook signing**: `X-Signature-256` header with HMAC-SHA256
-9. **Error sanitization**: Rust panics, Python tracebacks, Go panics, Windows paths caught
-10. **PSK output to eprintln**: PSK now sent to stderr to avoid shell history capture
-11. **Python chr() pattern removed**: Was causing false positives in plugin validation
-
-**TUI Enhancements:**
-12. **Theme system**: `ThemeManager` integrated with `tc!()` macro (~300 hardcoded `Color::*` replaced)
-13. **UTF-8 handling**: Character-based indexing in InputField (cursor as byte offset)
-14. **TUI Plugin Tab**: `TaskResult::PluginsLoaded` variant and proper integration
-15. **Clipboard paste**: Ctrl+V integration with `arboard`
-16. **TUI spinner animation**: Added `spinner_tick` to App struct (E-20)
-17. **TUI error handling**: Improved - no more 10-char truncation (E-16)
-18. **TUI confirmation dialogs**: Added `PopupKind::Destructive` variant (E-17)
-19. **TUI unused import fixed**: `Modifier` now used in `tabs/scan_endpoints.rs`
-
-**Plugin System:**
-20. **PluginRegistry thread safety**: Uses `parking_lot::RwLock<Vec<Arc<dyn Plugin>>>` for thread-safe concurrent access
-21. **Plugin reload validation**: With security checks (E-5)
-22. **Community templates**: `scanner/templates/` with full implementation (marketplace, verify, executor, matcher)
-
-**Agent & AI:**
-23. **AI client integration**: `analyze_findings_typed()` used in Agent
-24. **Session persistence**: `SessionManager` integrated with `auto_save_if_due()`
-25. **Agent status shows actual data**: AI enabled status, memory dir, target counts (E-25)
-26. **LongitudinalMemory**: `max_scans_per_target` config for unbounded growth prevention (E-24)
-27. **Cancellation token**: For scan execution (E-27)
-28. **TargetsCommand Update variant**: For updating target configurations (E-28)
-29. **Skill system versioning**: `version: Option<String>` added to `Skill` and `SkillMetadata` structs (E-26)
-
-**Alerts & Communication:**
-30. **Alert CLI flags**: `--alert-webhook`, `--alert-slack`, `--alert-email`
-31. **AlertRouter routing_rules**: Integrates `AlertRoutingRules` with `set_routing_rules()` method
-32. **InterAgentChannel subscriber notification**: Notifies via webhook callbacks
-33. **Dedup key includes finding_ids**: `make_dedup_key()` in AlertRouter
-34. **AlertRouter dedup_window_secs**: Now configurable via `with_dedup_window()` (B-14)
-
-**Network & API:**
-35. **WebSocket support**: `ws-api` feature with `/ws` endpoint, authentication enforced
-36. **gRPC server**: Proto file, `GrpcServerArgs` CLI, `grpc_server.rs` handler, proper feature gating
-37. **REST API enhancements**: CORS, validation, pagination, metrics (F-6)
-38. **MCP improvements**: `roots/list`, shutdown notifications (F-7)
-39. **WebSocket subprotocol testing**: (F-8)
-
-**Fuzzer & Scanner:**
-40. **Pipeline depth params**: Now reads `concurrency`, `timeout_ms`, `max_rate`, `payload_types` from request
-41. **WAF fingerprinting active**: 34 products (up from 26), integrated in production (E-13)
-42. **WAF request_error field added**: For better error tracking (B-5)
-43. **JWT brute_force_weak_key**: Now performs actual HMAC-SHA256 verification (E-8)
-44. **Cron expression matching**: `output/schedule.rs:field_matches()` correctly handles wildcards
-
-**Performance:**
-45. **LazyLock<Regex>**: In `tool/session.rs` (D-1)
-46. **HTTP connection pooling**: Added with `pool_max_idle_per_host(20)` (D-3)
-47. **FxHashMap migration**: In `ai/cache`, `ai/planner`, `utils/cache`, `tool/state`, `distributed/remote` (D-4)
-48. **contains_ignore_case optimization**: Single `to_lowercase()` allocation (D-5)
-49. **TUI Selector render_with_focus**: Eliminates clones (D-6)
-50. **AtomicU64 replacements**: In scanner modules (D-10)
-51. **O(n²) dedup replaced**: With HashSet (A-13)
-
-**Code Quality & Configuration:**
-52. **TUI tabs/mod.rs dual arms**: Feature-gated tabs have proper `#[cfg(feature)]` and `#[cfg(not(feature))]` arms
-53. **TUI color theme system**: Documented at `tabs/settings.rs` split into `settings/` subdirectory
-54. **TimeRange unified**: With `OffPeakWindow` (midnight wrap-around support) (B-15)
-55. **MCP health endpoint**: Auth check added (B-7)
-56. **TimingAnalyzer Clone semantics**: Documented (B-8)
-57. **TaskScheduler**: Respects `scheduled_for` timestamp (B-10)
-58. **list_tasks()**: Returns actual tasks (B-11)
-59. **Agent CLI fields**: For target configuration added (B-13)
-60. **CI/CD module**: `cli/ci.rs` with `--fail-on`, `--baseline`, `--quiet` flags
-61. **Plan command**: `cli/plan.rs` for previewing execution plans
-62. **Deduplication Engine**: `output/dedup.rs` with `Strict`, `Fuzzy`, `Disabled` strategies
-63. **OAST Integration**: `tool/implementations/oast.rs` for Out-of-Band testing
-64. **Runtime Scripting Engine**: `tool/scripting.rs` with sandbox restrictions
-65. **Template Signing**: `scanner/templates/verify.rs` with Ed25519 verification
-66. **Report Templating**: `output/template.rs` using `handlebars` crate
-67. **Multi-Agent Communication**: `tool/agents/communication.rs` with `InterAgentChannel`
-68. **Network Utilities**: `utils/network.rs` with `TCP_NODELAY` helpers
-
-**Subdomain Enumeration:**
-69. **Subdomain sources**: 4 sources (crt.sh, alexa stub, threatminer, dns-bruteforce)
-
-### Wave A/B/C/D/E/F/G Implementation Items (2026-04-28 - ALL WAVES COMPLETE)
-
-**Wave A - Critical Bugs (15/15 complete):**
-- A-1: gRPC API key timing attack fixed with constant-time comparison
-- A-2: WebSocket authentication enforced (was missing auth check)
-- A-3: Private IP blocking in stress modules (udp, icmp, syn)
-- A-4: packet/parse.rs module added (was missing)
-- A-5: container feature k8s-openapi version fix
-- A-6: stress module ProxyCommand import fix
-- A-7: Portfolio persistence - TargetPortfolio::load_from_file used
-- A-8: Pipeline tool reads depth params from request
-- A-9: Event system wired into agent scan completion
-- A-10: InterAgentChannel notifies subscribers
-- A-11: AlertRoutingRules integrated into AlertRouter  
-- A-12: cleanup_stale_entries async/sync fix
-- A-13: O(n^2) dedup replaced with HashSet
-- A-14: Mutex guard scope fixed (not held across await)
-- A-15: Unused SHA256 body hashing removed
-
-**Wave B - Code Quality (13/13 complete):**
-- B-1: TUI unused imports removed (5 files)
-- B-2: full feature includes grpc-api
-- B-3: Agent routes feature gate fixed (ai-integration → rest-api)
-- B-5: WAF request_error field added
-- B-6: ChainExecutor error_kind field added
-- B-7: MCP health endpoint auth check added
-- B-8: TimingAnalyzer Clone semantics documented
-- B-10: TaskScheduler respects scheduled_for timestamp
-- B-11: list_tasks() returns actual tasks
-- B-13: Agent CLI fields for target configuration added
-- B-14: AlertRouter dedup_window_secs now configurable via with_dedup_window()
-- B-15: TimeRange unified with OffPeakWindow (midnight wrap-around support)
-
-**Wave C - Security (10/10 complete):**
-- C-1/C-4: Startup warning when API key not configured
-- C-2: RubySandboxConfig with allowed_dir/networks
-- C-3: Proxy to_dedup_key() method added
-- C-5: TUI notify secret → SensitiveString
-- C-6: PSK output to eprintln! (was println!)
-- C-7: Python chr() pattern removed (caused false positives)
-- C-8: cleanup_expired_messages synchronous
-- C-10: AI cache serialization fixed (was losing entries)
-- C-11: Skills feature gate → rest-api
-
-**Wave D - Performance (6/6 complete):**
-- D-1: LazyLock<Regex> in tool/session.rs
-- D-3: HTTP connection pooling added
-- D-4: HashMap → FxHashMap in ai/cache, ai/planner, utils/cache, tool/state, distributed/remote
-- D-5: contains_ignore_case optimization (single to_lowercase allocation)
-- D-6: TUI Selector render_with_focus method (eliminates clones)
-- D-10: AtomicU64 replacements in scanner modules
-
-**Wave E - Features (11/11 complete):**
-- E-5: Plugin reload validation with security checks
-- E-8: JWT brute_force_weak_key now performs actual HMAC-SHA256 verification
-- E-13: WAF detection enhanced (34 products, up from 26)
-- E-15: TUI spinner animation added
-- E-16: TUI error handling improved (no more 10-char truncation)
-- E-17: TUI confirmation dialogs with Destructive variant
-- E-20: TUI spinner tick in event loop
-- E-24: LongitudinalMemory max_scans_per_target config
-- E-25: Agent status shows actual data
-- E-27: Cancellation token for scan execution
-- E-28: TargetsCommand Update variant
-
-**Wave F - New Capabilities (3/3 complete):**
-- F-6: REST API CORS, validation, pagination, metrics
-- F-7: MCP roots/list, shutdown notifications
-- F-8: WebSocket subprotocol testing
-
-**Wave G - Documentation (3/3 complete + additional):**
-- G-1: mcp-server → rest-api in docs
-- G-2: Payload count 22→30 in docs
-- G-3: Recon modules 18→30+ in docs
-- G-4: API.md deprecation notice added (points to `cargo doc`)
-- G-5: `docs/VULNERABILITY_GUIDE.md` created (SQLi, XSS, SSRF/JWT, WebSocket, gRPC)
-- G-6: `docs/SCAN_STRATEGY.md` created (profiles, scenarios, tradeoffs, CI/CD)
-- G-7 through G-17: README.md, CAPABILITIES.md, USAGE.md expanded with "When to Use" columns, attack variants, scenario-based testing
-
-**gRPC Compilation Fixes:**
-- prost_types::Value to serde_json::Value conversion added
-- ResponseStatus struct usage fixed
-- Option<String> fields properly unwrapped
-
-### Session Learnings (2026-04-29)
+See `plans/plan.md` for the complete list of all verified completed items.
 
 **Additional Waves Completed** (2026-04-29):
 - **Wave 1.1**: Security hardening - path traversal validation, restrictive CORS config, plaintext password redaction with SensitiveString, privilege checks in stress modules
@@ -1164,7 +954,7 @@ The `cookies()` method is not available in reqwest 0.13 by default. Use manual S
 ### Session Learnings (2026-04-28)
 
 **All Waves Complete**: Waves A through G are now fully implemented (121 items total).
-- Test count updated: 1115 passing (base), 1345 with full features
+- Test count updated: 1115 passing (base), 1364 with full features
 - Source files: 503 (updated from 470+)
 - Clippy warnings: ~19 (reduced from ~28)
 - See plan.md for verification commands
@@ -1221,39 +1011,6 @@ The following items were found to be incorrect during verification (note: the co
   - A-9: `trigger_event()` IS called in process_scheduled_scans() at line 220
   - A-12: cleanup_stale_entries() is synchronous, no async issue
   - A-14: MutexGuard drops immediately after recording (scope block)
-
----
-
-### Session Learnings (2026-04-29)
-
-**Compilation Fixes Completed:**
-- AlertRouter: Added `default()` for Default impl (new() returns Result, cannot be used in Default)
-- agent/mod.rs: `LongitudinalMemory::new()` now properly awaited (was missing `.await`)
-- commands/handlers/agent.rs: Fixed portfolio_path scope (handle_targets now receives portfolio_path)
-- agent/skills.rs: Made `SkillMetadata` fields public (tools, category, scope, version)
-- tool/mod.rs: Re-exported `AttackSurface` for MCP protocol tests
-
-**Deferred Items Addressed:**
-- D.4: Fixed help overlay `[h/l] Tab` → `[n/p] Tab` in ui.rs (h/l is input movement, n/p is tab nav)
-- D.6/D.10: Rewrote AuthTab with proper InputGroup, AuthFocusArea enum, and error handling
-- E.7: Removed stub `query_alexa()` from subdomain enumeration (alexa top sites API unavailable)
-
-**Verified as Already Implemented (from sub-agent exploration):**
-- C.1: Clone storm is normal async pattern (12 clones needed for concurrent fuzzing)
-- C.2: FxHashMap already migrated in critical paths, 5 modules remain with std HashMap (lower priority)
-- C.3: AtomicU64 already used in all 3 scanner locations
-- C.4: String allocations not a specific issue (vague plan item)
-- C.5: DashMap already used where appropriate per plan's own guidance
-- E.6: Auto-Calibration System already implemented in fuzzer/calibration.rs
-
-**Test Results:**
-- 1115 passing (base library)
-- 1364 passing (with rest-api,ai-integration)
-- 7 pre-existing AI test failures remain
-
-**New Skills Added:**
-- `slapper_skills/tui_improvements.md` - Documents AuthTab rewrite, FocusArea pattern, keyboard shortcuts
-- `slapper_skills/grpc_implementation.md` - Documents gRPC status (infrastructure complete, RPCs are stubs)
 
 ---
 
