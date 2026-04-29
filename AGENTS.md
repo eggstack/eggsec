@@ -114,9 +114,9 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1110 passing | Library tests |
-| Tests | 1345 passing | With rest-api,ai-integration (pre-existing AI test failures fixed) |
-| Clippy | ~19 warnings | TUI-specific acceptable, some dead code warnings remain |
+| Tests | 1115 passing | Base library tests |
+| Tests | 1238 passing | With rest-api,ai-integration (7 pre-existing AI test failures) |
+| Clippy | ~21 warnings | TUI-specific acceptable, some dead code warnings remain |
 | Source files | 503 |
 | Payload types | 30 |
 | Tabs | 29 |
@@ -1096,6 +1096,70 @@ The following items have been implemented and verified:
 - **Wave 4.1 (Tab Integration)**: Requires adding 6 new tabs (Auth, Plan, Ci, Serve, Sbom, Notify) to the 29-tab Tab enum - complex architectural change deferred
 - **Wave 4.2 (TUI Refactoring)**: History wrapper and animation fix - verified as false positives (features already exist)
 - **Waves 5-8**: Many items already complete, false positives, or require large new features (Auto-Calibration, Subdomain Enumeration)
+
+### Session Learnings (2026-04-29)
+
+**AI-integration Compilation Fixes:**
+- `tool/implementations/search.rs`: Error conversion to `SlapperError::Network`/`Parse` instead of `String`
+- `tool/session.rs`: Manual Set-Cookie header parsing instead of `response.cookies()` (reqwest 0.13 lacks cookies feature)
+- `tool/session.rs`: Fixed `TargetType` import and csrf token lookup using `request.target.value`
+- `tool/session.rs`: Fixed `StatusCode` parse type annotation with explicit `u16`
+- `tool/session.rs`: Fixed `form_re` duplicate `ok()?` bug
+- `tool/session.rs`: Fixed `has_field_named` to use `find_field_name` (regex-based string matching was broken)
+- `tool/session.rs`: Fixed `NotFound` error - used `Runtime(format!(...))` instead
+- `tool/implementations/fuzzer.rs`: Added missing `FuzzArgs` fields (calibrate, fc, fs, fw, fl, ft, fr)
+
+**Test Results:**
+- 1115 base tests pass
+- 1238 ai-integration tests pass (7 pre-existing AI test failures remain)
+
+**Pre-existing AI Test Failures (7)** - will be addressed separately:
+1. `ai::client::tests::test_extract_content_valid_response` - expects 3 lines, gets 4
+2. `ai::planner::tests::test_parse_modifications_from_text_add_stage` - keyword extraction
+3. `ai::planner::tests::test_parse_modifications_from_text_reduce_duration` - keyword matching
+4. `ai::planner::tests::test_parse_modifications_multiple_types` - keyword matching
+5. `ai::planner::tests::test_planner_cache_clear` - cache behavior
+6. `ai::planner::tests::test_record_outcome_updates_success_rate` - cache entry creation
+7. `ai::waf_bypass::tests::test_record_success_adds_to_knowledge_base` - knowledge base state
+
+**Clippy Auto-fix Applied:**
+- Added `Default` impl for 8 types: CargoScanner, NpmScanner, GoScanner, ClusterTab, GraphQlTab, OAuthTab, ReportTab, StressTab
+
+**Note on reqwest 0.13:**
+The `cookies()` method is not available in reqwest 0.13 by default. Use manual Set-Cookie header parsing instead.
+
+### Session Learnings (2026-04-29)
+
+**AI-integration Compilation Fixes:**
+- `tool/implementations/search.rs`: Error conversion to `SlapperError::Network`/`Parse` instead of `String`
+- `tool/session.rs`: Manual Set-Cookie header parsing instead of `response.cookies()` (reqwest 0.13 lacks cookies feature)
+- `tool/session.rs`: Fixed `TargetType` import and csrf token lookup using `request.target.value`
+- `tool/session.rs`: Fixed `StatusCode` parse type annotation with explicit `u16`
+- `tool/session.rs`: Fixed `form_re` duplicate `ok()?` bug
+- `tool/session.rs`: Fixed `has_field_named` to use `find_field_name` (regex-based was broken)
+- `tool/session.rs`: Fixed `NotFound` error - used `Runtime(format!(...))` instead
+- `tool/implementations/fuzzer.rs`: Added missing `FuzzArgs` fields (calibrate, fc, fs, fw, fl, ft, fr)
+
+**Test Results:**
+- 1115 base tests pass
+- 1238 ai-integration tests pass (7 pre-existing AI test failures remain)
+
+**Pre-existing AI Test Failures (7)** - will be addressed separately:
+1. `ai::client::tests::test_extract_content_valid_response` - expects 3 lines, gets 4
+2. `ai::planner::tests::test_parse_modifications_from_text_add_stage` - keyword extraction
+3. `ai::planner::tests::test_parse_modifications_from_text_reduce_duration` - keyword matching
+4. `ai::planner::tests::test_parse_modifications_multiple_types` - keyword matching
+5. `ai::planner::tests::test_planner_cache_clear` - cache behavior
+6. `ai::planner::tests::test_record_outcome_updates_success_rate` - cache entry creation
+7. `ai::waf_bypass::tests::test_record_success_adds_to_knowledge_base` - knowledge base state
+
+**Clippy Auto-fix Applied:**
+- Added `Default` impl for 8 types: CargoScanner, NpmScanner, GoScanner, ClusterTab, GraphQlTab, OAuthTab, ReportTab, StressTab
+
+**Note on reqwest 0.13:**
+The `cookies()` method is not available in reqwest 0.13 by default. Use manual Set-Cookie header parsing instead.
+
+---
 
 ### Session Learnings (2026-04-28)
 
