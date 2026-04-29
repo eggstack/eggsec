@@ -376,9 +376,9 @@ async fn fingerprint_port(
     };
 
     for (probe_name, probe_data, match_pattern) in probes_to_try {
-        let stream = match timeout(timeout_duration, TcpStream::connect(&addr)).await {
-            Ok(Ok(s)) => s,
-            _ => continue,
+        let stream = match crate::utils::network::connect_with_nodelay_timeout(&addr, timeout_duration).await {
+            Ok(s) => s,
+            Err(_) => continue,
         };
 
         let mut stream = stream;

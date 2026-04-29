@@ -18,6 +18,7 @@ pub struct AlertRouter {
     channels: Arc<Mutex<Vec<AlertChannel>>>,
     recent_alerts: Arc<Mutex<std::collections::HashMap<String, Instant>>>,
     dedup_window_secs: u64,
+    client: reqwest::Client,
 }
 
 impl AlertRouter {
@@ -30,12 +31,13 @@ impl AlertRouter {
             .context("Failed to create HTTP client")
     }
 
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
             channels: Arc::new(Mutex::new(Vec::new())),
             recent_alerts: Arc::new(Mutex::new(std::collections::HashMap::new())),
             dedup_window_secs: 300,
-        }
+            client: Self::create_pooled_client()?,
+        })
     }
 
     pub fn add_channel(&self, channel: AlertChannel) {
@@ -161,8 +163,7 @@ impl AlertRouter {
             }
         });
 
-        let client = Self::create_pooled_client()?;
-        let mut request = client.post(&config.url).json(&payload);
+        let mut request = self.client.post(&config.url).json(&payload);
 
         if let Some(ref secret) = config.secret {
             let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes())
@@ -219,8 +220,7 @@ impl AlertRouter {
             }
         });
 
-        let client = Self::create_pooled_client()?;
-        let response = client
+        let response = self.client
             .post("https://events.pagerduty.com/v2/enqueue")
             .header("Content-Type", "application/json")
             .json(&payload)

@@ -70,6 +70,7 @@ pub struct LifecycleManager {
     agent_registry: AgentRegistry,
     health_status: Arc<RwLock<HashMap<Uuid, AgentHealth>>>,
     event_tx: mpsc::Sender<LifecycleEvent>,
+    client: Client,
 }
 
 impl LifecycleManager {
@@ -78,12 +79,20 @@ impl LifecycleManager {
         config: LifecycleConfig,
     ) -> (Self, mpsc::Receiver<LifecycleEvent>) {
         let (event_tx, event_rx) = mpsc::channel(100);
+        let client = Client::builder()
+            .timeout(Duration::from_secs(5))
+            .pool_max_idle_per_host(20)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_nodelay(true)
+            .build()
+            .unwrap_or_else(|_| Client::new());
         (
             Self {
                 config,
                 agent_registry,
                 health_status: Arc::new(RwLock::new(HashMap::new())),
                 event_tx,
+                client,
             },
             event_rx,
         )
@@ -94,6 +103,7 @@ impl LifecycleManager {
         let agent_registry = self.agent_registry.clone();
         let config = self.config.clone();
         let event_tx = self.event_tx.clone();
+        let client = self.client.clone();
 
         tokio::spawn(async move {
             let mut ticker = interval(Duration::from_secs(config.health_check_interval_secs));
@@ -105,16 +115,17 @@ impl LifecycleManager {
                     &agent_registry,
                     &config,
                     &event_tx,
+                    &client,
                 ).await;
             }
         });
     }
 
-    async fn check_agent_callback_health(callback_url: &str) -> bool {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(5))
-            .build()
-            .unwrap_or_else(|_| Client::new());
+    async fn check_agent_callback_health(&self, callback_url: &str) -> bool {
+        self.client.get(callback_url).send().await.map(|resp| resp.status().is_success()).unwrap_or(false)
+    }
+
+    async fn check_agent_callback_health_static(client: &Client, callback_url: &str) -> bool {
         client.get(callback_url).send().await.map(|resp| resp.status().is_success()).unwrap_or(false)
     }
 
@@ -123,6 +134,7 @@ impl LifecycleManager {
         agent_registry: &AgentRegistry,
         config: &LifecycleConfig,
         event_tx: &mpsc::Sender<LifecycleEvent>,
+        client: &Client,
     ) {
         let agents = agent_registry.list().await;
         let now = std::time::SystemTime::now()
@@ -145,7 +157,7 @@ impl LifecycleManager {
             agent_health.last_health_check = now;
 
             let callback_unhealthy = if let Some(ref callback_url) = agent.callback_url {
-                !Self::check_agent_callback_health(callback_url).await
+                !Self::check_agent_callback_health_static(client, callback_url).await
             } else {
                 false
             };
