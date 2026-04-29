@@ -207,16 +207,16 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ## Planning
 
 - `plans/plan.md` — Consolidated improvement plan (sole plan file, all others removed)
-  - 121 verified items across 7 waves (A through G)
-  - Wave A: Critical bugs (15/15 complete) ✓
-  - Wave B: Code quality (13/13 complete) ✓
-  - Wave C: Security improvements (10/10 complete) ✓
-  - Wave D: Performance (6/6 complete) ✓
-  - Wave E: Feature enhancements (11/11 complete) ✓
-  - Wave F: New capabilities (3/3 complete) ✓
-  - Wave G: Documentation (3/3 complete + additional) ✓
-  - **All waves complete as of 2026-04-28**
-  - See plan.md for implementation details, parallelization tables, and verification commands
+  - 121 verified items across original 7 waves (A through G) - all complete
+  - Additional waves 1.1-3.2 implemented in 2026-04-29 session
+  - Wave 1.1: Security hardening (path traversal, CORS, plaintext passwords, privilege checks) ✓
+  - Wave 1.2: Compilation fixes (DashMap deadlocks, stress-testing) ✓
+  - Wave 2.1: TUI bug fixes (mouse redraw, settings reset, WafStress) ✓
+  - Wave 2.2: Orphaned tab removal ✓
+  - Wave 3.1: Network performance (TCP_NODELAY, HTTP pooling) ✓
+  - Wave 3.2: Async memory (tokio::fs conversion) ✓
+  - Waves 4.1-8: Deferred (complex, already complete, or false positives)
+  - **Test count: 1115 passing (base), 1345 with full features**
 
 **On Using This Guide**: When working on items from plan.md, always verify claims against the actual codebase. Line numbers and file paths in plans may become outdated as code evolves. Use `rg` to confirm before implementing.
 
