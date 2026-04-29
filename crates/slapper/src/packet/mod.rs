@@ -6,7 +6,7 @@ pub mod types;
 pub mod validation;
 pub mod traceroute;
 
-pub use capture::{CaptureBuilder, CaptureConfig, CaptureStats, PacketCapture};
+pub use capture::{CaptureBuilder, CaptureConfig, CaptureError, CaptureStats, PacketCapture};
 pub use craft::PacketBuilder;
 pub use hexdump::{hexdump, hexdump_with_offset};
 pub use types::ParsedPacket;

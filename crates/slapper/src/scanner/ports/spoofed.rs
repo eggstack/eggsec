@@ -7,7 +7,7 @@ use crate::error::{Result, SlapperError};
 use std::time::Duration;
 
 use crate::scanner::spoof::SpoofConfig;
-use super::PortScanResults;
+use super::{get_service_name, PortScanResults};
 
 #[cfg(all(feature = "stress-testing", unix))]
 fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {

@@ -122,8 +122,46 @@ fn convert_param_to_proto(param: GrpcParameterDef) -> ParameterDef {
         name: param.name,
         param_type: param.param_type,
         required: param.required,
-        default: param.default,
+        default: Some(serde_json_value_to_proto(param.default)),
         description: param.description,
+    }
+}
+
+fn serde_json_value_to_proto(value: Option<serde_json::Value>) -> prost_types::Value {
+    match value {
+        Some(serde_json::Value::Null) => prost_types::Value {
+            kind: Some(prost_types::value::Kind::NullValue(0)),
+        },
+        Some(serde_json::Value::Bool(b)) => prost_types::Value {
+            kind: Some(prost_types::value::Kind::BoolValue(b)),
+        },
+        Some(serde_json::Value::Number(n)) => {
+            prost_types::Value {
+                kind: Some(prost_types::value::Kind::NumberValue(n.as_f64().unwrap_or(0.0))),
+            }
+        }
+        Some(serde_json::Value::String(s)) => prost_types::Value {
+            kind: Some(prost_types::value::Kind::StringValue(s)),
+        },
+        Some(serde_json::Value::Array(arr)) => prost_types::Value {
+            kind: Some(prost_types::value::Kind::ListValue(prost_types::ListValue {
+                values: arr.into_iter().map(|v| {
+                    let opt: Option<serde_json::Value> = Some(v);
+                    serde_json_value_to_proto(opt)
+                }).collect(),
+            })),
+        },
+        Some(serde_json::Value::Object(obj)) => prost_types::Value {
+            kind: Some(prost_types::value::Kind::StructValue(prost_types::Struct {
+                fields: obj
+                    .into_iter()
+                    .map(|(k, v)| (k, serde_json_value_to_proto(Some(v))))
+                    .collect(),
+            })),
+        },
+        None => prost_types::Value {
+            kind: Some(prost_types::value::Kind::NullValue(0)),
+        },
     }
 }
 
@@ -135,7 +173,11 @@ pub async fn start_grpc_server(
 ) -> Result<(), String> {
     use tonic::{transport::Server, Request, Response, Status};
 
-    let addr = format!("{}:{}", host, port).parse().map_err(|e| e.to_string())?;
+    let addr_str = format!("{}:{}", host, port);
+    let addr: std::net::SocketAddr = match addr_str.parse() {
+        Ok(a) => a,
+        Err(e) => return Err(e.to_string()),
+    };
 
     // Register the file descriptor set for reflection
     let reflection_service = tonic_reflection::server::Builder::configure()

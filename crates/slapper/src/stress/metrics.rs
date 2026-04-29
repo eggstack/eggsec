@@ -319,6 +319,13 @@ mod tests {
 }
 
 impl PacketBatch {
+    pub fn new(_capacity: usize) -> Self {
+        Self {
+            packets: Vec::new(),
+            total_size: 0,
+        }
+    }
+
     pub fn add(&mut self, packet: Vec<u8>) {
         self.total_size += packet.len() as u64;
         self.packets.push(packet);
