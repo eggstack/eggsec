@@ -314,25 +314,30 @@ impl AiPlanner {
         let mut modifications = Vec::new();
         let lower = content.to_lowercase();
 
-        let mod_types = [
-            ("add stage", ModificationType::AddStage),
-            ("remove stage", ModificationType::RemoveStage),
-            ("reorder", ModificationType::ReorderStages),
-            ("modify stage", ModificationType::ModifyStage),
-            ("add tool", ModificationType::AddTool),
-            ("remove tool", ModificationType::RemoveTool),
-            ("increase coverage", ModificationType::IncreaseCoverage),
-            ("reduce duration", ModificationType::ReduceDuration),
+        let action_keywords = [
+            ("add", "adding", ModificationType::AddStage, vec!["stage", "tool", "phase"]),
+            ("remove", "removing", ModificationType::RemoveStage, vec!["stage", "tool"]),
+            ("reorder", "reordering", ModificationType::ReorderStages, vec!["stage", "phase", "step"]),
+            ("modify", "modifying", ModificationType::ModifyStage, vec!["stage", "phase"]),
+            ("increase", "increasing", ModificationType::IncreaseCoverage, vec!["coverage"]),
+            ("reduce", "reducing", ModificationType::ReduceDuration, vec!["duration"]),
         ];
 
-        for (keyword, mod_type) in &mod_types {
-            if lower.contains(keyword) {
-                modifications.push(PlanModification {
-                    modification_type: mod_type.clone(),
-                    target_stage: self.extract_stage_reference(content),
-                    description: format!("AI suggested: {}", self.extract_sentence_containing(content, keyword)),
-                    rationale: "Extracted from AI response".to_string(),
-                });
+        for (action_base, action_ing, mod_type, targets) in &action_keywords {
+            if let Some(action_pos) = lower.find(action_base).or_else(|| lower.find(action_ing)) {
+                for target in targets {
+                    if let Some(target_pos) = lower.find(target) {
+                        if (action_pos as i64 - target_pos as i64).abs() < 20 {
+                            modifications.push(PlanModification {
+                                modification_type: mod_type.clone(),
+                                target_stage: self.extract_stage_reference(content),
+                                description: format!("AI suggested: {}", self.extract_sentence_containing(content, action_base)),
+                                rationale: "Extracted from AI response".to_string(),
+                            });
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -398,6 +403,16 @@ impl AiPlanner {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
+        } else {
+            cache.insert(key, CachedPlan {
+                plan: plan.clone(),
+                success_rate: if outcome.success { 1.0 } else { 0.0 },
+                use_count: 1,
+                last_used: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            });
         }
     }
 

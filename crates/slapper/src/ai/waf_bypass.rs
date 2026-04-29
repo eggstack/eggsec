@@ -54,6 +54,16 @@ impl SmartWafBypass {
         }
     }
 
+    fn with_knowledge_base(client: AiClient, knowledge_base: Vec<WafBypassEntry>) -> Self {
+        Self {
+            client,
+            cache: Arc::new(AiCache::new(50, Duration::from_secs(1800))),
+            knowledge_base,
+            persist_path: PathBuf::from("waf_bypasses.json"),
+            max_bypasses: 10,
+        }
+    }
+
     pub async fn find_bypass(
         &mut self,
         waf: &str,
@@ -218,11 +228,10 @@ mod tests {
 
     #[test]
     fn test_record_success_adds_to_knowledge_base() {
-        let mut bypass = create_test_bypass();
-        let initial_len = bypass.knowledge_base.len();
+        let mut bypass = SmartWafBypass::with_knowledge_base(create_mock_client(), Vec::new());
         bypass.record_success("cloudflare", "payload1", "bypassed1", "technique1");
-        assert_eq!(bypass.knowledge_base.len(), initial_len + 1);
-        let entry = &bypass.knowledge_base[initial_len];
+        assert_eq!(bypass.knowledge_base.len(), 1);
+        let entry = &bypass.knowledge_base[0];
         assert_eq!(entry.waf_name, "cloudflare");
         assert_eq!(entry.original_payload, "payload1");
         assert_eq!(entry.bypass_payload, "bypassed1");

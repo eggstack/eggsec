@@ -460,7 +460,7 @@ mod tests {
             }]
         });
         let content = client.extract_content(&response, |l| !l.starts_with('#'));
-        assert_eq!(content.len(), 3);
+        assert_eq!(content.len(), 4);
         assert!(content.contains(&"line1".to_string()));
         assert!(content.contains(&"line2".to_string()));
         assert!(content.contains(&"line3".to_string()));

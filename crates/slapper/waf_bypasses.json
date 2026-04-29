@@ -1,0 +1,1 @@
+[{"waf_name":"cloudflare","original_payload":"payload1","bypass_payload":"bypassed1","technique":"technique1","success":true,"failed_attempts":0}]
