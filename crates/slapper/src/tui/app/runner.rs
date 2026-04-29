@@ -88,6 +88,7 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
                     return;
                 }
                 app.page_up();
+                app.needs_redraw = true;
             }
             return;
         }
@@ -102,6 +103,7 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
                     return;
                 }
                 app.page_down();
+                app.needs_redraw = true;
             }
             return;
         }
@@ -128,6 +130,7 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
             let tab_index = (mouse_event.column.saturating_sub(1) / tab_width) as usize;
             if tab_index < tab_count {
                 app.select_tab(tab_index);
+                app.needs_redraw = true;
             }
         }
     }

@@ -415,5 +415,7 @@ impl TabState for SettingsTab {
         0.0
     }
 
-    fn reset(&mut self) {}
+    fn reset(&mut self) {
+        self.reset();
+    }
 }

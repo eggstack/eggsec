@@ -159,6 +159,19 @@ impl super::App {
                 self.waf.set_detection_result(detection);
                 self.waf.set_bypass_results(bypasses);
             }
+            TaskResult::WafStress(bypasses) => {
+                let success_count = bypasses.iter().filter(|b| b.success).count();
+                let mut h = self.history.lock(); {
+
+                    h.add_waf_result(
+                        "<target>",
+                        true,
+                        "WAF Stress",
+                        success_count,
+                    );
+                }
+                self.waf.set_bypass_results(bypasses);
+            }
             TaskResult::Pipeline(r) => {
                 let completed = r.stage_results.iter().filter(|s| s.success).count();
                 let mut h = self.history.lock(); {

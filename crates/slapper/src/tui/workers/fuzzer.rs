@@ -152,3 +152,30 @@ pub async fn run_waf(
     let _ = progress_tx.send((1, 1)).await;
     Ok(())
 }
+
+pub async fn run_waf_stress(
+    target: String,
+    concurrency: usize,
+    timeout: u64,
+    progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
+    result_tx: tokio::sync::mpsc::Sender<TaskResult>,
+) -> anyhow::Result<()> {
+    use crate::cli::WafStressArgs;
+    use crate::fuzzer::run_waf_stress as fuzzer_run_waf_stress;
+
+    let args = WafStressArgs {
+        url: target,
+        concurrency,
+        timeout,
+        json: false,
+        verbose: false,
+        quiet: false,
+        output: None,
+        common: Default::default(),
+    };
+
+    fuzzer_run_waf_stress(args).await?;
+    let _ = progress_tx.send((1, 1)).await;
+    let _ = result_tx.send(TaskResult::WafStress(vec![])).await;
+    Ok(())
+}

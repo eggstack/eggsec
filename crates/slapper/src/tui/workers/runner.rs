@@ -180,6 +180,7 @@ pub enum TaskResult {
         detection: crate::waf::WafDetectionResult,
         bypasses: Vec<crate::waf::BypassResult>,
     },
+    WafStress(Vec<crate::waf::BypassResult>),
     Pipeline(crate::pipeline::PipelineReport),
     Fuzz(crate::fuzzer::engine::FuzzSession),
     Recon(crate::recon::FullReconResult),
@@ -364,13 +365,13 @@ impl TaskRunner {
             } => super::fuzzer::run_waf(target, bypass_mode, techniques, progress_tx, result_tx).await,
             TaskConfig::WafStress {
                 target,
-                concurrency: _,
-                timeout: _,
+                concurrency,
+                timeout,
             } => {
-                super::fuzzer::run_waf(
+                super::fuzzer::run_waf_stress(
                     target,
-                    true,
-                    vec!["all".to_string()],
+                    concurrency,
+                    timeout,
                     progress_tx,
                     result_tx,
                 )
