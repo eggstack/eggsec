@@ -206,7 +206,9 @@ impl Agent {
                         .await;
 
                     if let Ok(ref response) = result {
-                        self.memory.store_scan_results(&config.target, response)?;
+                        if let Err(e) = self.memory.store_scan_results(&config.target, response).await {
+                            tracing::warn!("Failed to store scan results: {}", e);
+                        }
 
                         let findings = self.process_findings(response);
                         if !findings.is_empty() {
@@ -401,7 +403,7 @@ impl Agent {
 
         let result = self.execute_scan(target, scan_type).await?;
 
-        if let Err(e) = self.memory.store_scan_results(target, &result) {
+        if let Err(e) = self.memory.store_scan_results(target, &result).await {
             tracing::warn!("Failed to store scan results: {}", e);
         }
 
