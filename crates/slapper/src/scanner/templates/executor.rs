@@ -7,7 +7,9 @@ use super::loader::TemplateLoader;
 use super::matcher::{DnsResponse, MatchResult, TemplateMatcher};
 use super::models::{TemplateRequest, VulnerabilityTemplate};
 use crate::error::{Result, SlapperError};
+use crate::utils::validation::validate_path;
 use reqwest::Client;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -264,8 +266,9 @@ mod tests {
     fn create_test_template() -> TempDir {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("test.yaml");
+        let validated = validate_path(dir.path(), &path).unwrap();
         std::fs::write(
-            &path,
+            &validated,
             r#"
 id: test-template
 info:

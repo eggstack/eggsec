@@ -12,16 +12,20 @@ pub mod models;
 pub mod postgres;
 pub mod queries;
 
-use crate::error::Result;
+use crate::{
+    error::Result,
+    types::SensitiveString,
+};
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
     pub host: String,
     pub port: u16,
     pub database: String,
     pub username: String,
-    pub password: String,
+    pub password: SensitiveString,
     pub max_connections: u32,
 }
 
@@ -32,9 +36,22 @@ impl Default for StorageConfig {
             port: 5432,
             database: "slapper".to_string(),
             username: "postgres".to_string(),
-            password: "".to_string(),
+            password: SensitiveString::new(String::new()),
             max_connections: 10,
         }
+    }
+}
+
+impl Debug for StorageConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("database", &self.database)
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .field("max_connections", &self.max_connections)
+            .finish()
     }
 }
 

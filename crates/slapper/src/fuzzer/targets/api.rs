@@ -1,6 +1,8 @@
 use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
+use crate::utils::validation::validate_path;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAPISpec {
@@ -163,7 +165,9 @@ impl OpenAPIFuzzer {
     }
 
     pub fn parse_from_file(path: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let content = std::fs::read_to_string(path)?;
+        let base = PathBuf::from(".");
+        let validated = validate_path(&base, &PathBuf::from(path))?;
+        let content = std::fs::read_to_string(&validated)?;
         let spec: OpenAPISpec = serde_json::from_str(&content)?;
         Ok(Self::new(spec))
     }

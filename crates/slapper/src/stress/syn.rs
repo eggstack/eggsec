@@ -196,6 +196,7 @@ fn create_channel(
     Box<dyn datalink::DataLinkSender>,
     Box<dyn datalink::DataLinkReceiver>,
 )> {
+    crate::utils::privilege::check_privileged("SYN scan")?;
     let config = Config::default();
 
     match datalink::channel(interface, config) {

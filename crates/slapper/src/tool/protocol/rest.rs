@@ -8,7 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use subtle::ConstantTimeEq;
-use tower_http::cors::{CorsLayer, Any};
+use tower_http::cors::{CorsLayer, AllowMethods, AllowHeaders};
 use std::time::{Instant, Duration};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -185,11 +185,25 @@ impl<T> PaginatedResponse<T> {
 pub fn create_router(registry: ToolRegistry, api_key: Option<String>, scope: Option<Scope>, tls_config: Option<TlsConfig>) -> Router {
     let state = Arc::new(RestState::new(registry, api_key.clone(), scope, tls_config.clone()));
 
+    let methods = AllowMethods::list([
+        axum::http::Method::GET,
+        axum::http::Method::POST,
+        axum::http::Method::PUT,
+        axum::http::Method::DELETE,
+        axum::http::Method::OPTIONS,
+    ]);
+
+    let headers = AllowHeaders::list([
+        axum::http::header::CONTENT_TYPE,
+        axum::http::header::AUTHORIZATION,
+        "X-API-Key".parse::<axum::http::HeaderName>().unwrap(),
+    ]);
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any)
-        .max_age(Duration::from_secs(3600));
+        .allow_methods(methods)
+        .allow_headers(headers)
+        .max_age(Duration::from_secs(3600))
+        .allow_credentials(false);
 
     let mut router = Router::new()
         .route("/health", get(health_check))

@@ -5,6 +5,7 @@
 
 use super::models::{TemplateInfo, VulnerabilityTemplate};
 use crate::error::{Result, SlapperError};
+use crate::utils::validation::validate_path;
 use std::path::{Path, PathBuf};
 
 pub struct TemplateLoader {
@@ -21,7 +22,11 @@ impl TemplateLoader {
     }
 
     pub fn load_template(&self, path: &Path) -> Result<VulnerabilityTemplate> {
-        let content = std::fs::read_to_string(path)
+        let base = self.template_dirs.first()
+            .map(|d| d.as_path())
+            .unwrap_or(path.parent().unwrap_or(path));
+        let validated = validate_path(base, path)?;
+        let content = std::fs::read_to_string(&validated)
             .map_err(|e| SlapperError::Config(format!("Failed to read template: {}", e)))?;
 
         self.parse_template(&content)
@@ -102,6 +107,23 @@ impl TemplateLoader {
                 "Template directory does not exist: {}",
                 dir.display()
             )));
+        }
+
+        let canonical_dir = dir.canonicalize()
+            .map_err(|e| SlapperError::Config(format!("Failed to canonicalize directory: {}", e)))?;
+
+        let valid_dir = self.template_dirs.first()
+            .map(|d| d.canonicalize())
+            .transpose()
+            .map_err(|e| SlapperError::Config(format!("Failed to canonicalize base directory: {}", e)))?;
+
+        if let Some(ref valid) = valid_dir {
+            if !canonical_dir.starts_with(valid) {
+                return Err(SlapperError::Config(format!(
+                    "Directory {} is not within allowed template directories",
+                    dir.display()
+                )));
+            }
         }
 
         let mut templates = Vec::new();

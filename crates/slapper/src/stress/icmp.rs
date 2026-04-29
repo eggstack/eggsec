@@ -202,6 +202,7 @@ fn create_channel(
     Box<dyn datalink::DataLinkSender>,
     Box<dyn datalink::DataLinkReceiver>,
 )> {
+    crate::utils::privilege::check_privileged("ICMP probe")?;
     let config = Config::default();
 
     match datalink::channel(interface, config) {

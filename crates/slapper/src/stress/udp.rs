@@ -172,6 +172,8 @@ async fn run_udp_flood_spoofed(
     let start_time = Instant::now();
     let interval = Duration::from_micros(1_000_000 / config.rate_pps.max(1));
 
+    crate::utils::privilege::check_privileged("UDP flood")?;
+
     let socket = unsafe {
         let sock = libc::socket(libc::PF_INET, libc::SOCK_RAW, libc::IPPROTO_RAW);
         if sock < 0 {

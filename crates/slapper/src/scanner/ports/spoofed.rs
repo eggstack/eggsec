@@ -122,6 +122,8 @@ pub(crate) async fn scan_ports_spoofed(
     let interface = get_network_interface()?;
     let local_ip = get_local_ip(&interface)?;
 
+    crate::utils::privilege::check_privileged("IP spoof")?;
+
     let (tx, rx) = match pnet::datalink::channel(&interface, Config::default()) {
         Ok(pnet::datalink::Channel::Ethernet(tx, rx)) => (tx, rx),
         Ok(_) => return Err(SlapperError::Runtime("Unsupported channel type".to_string())),
