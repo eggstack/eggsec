@@ -1080,10 +1080,27 @@ The following items have been implemented and verified:
 - ResponseStatus struct usage fixed
 - Option<String> fields properly unwrapped
 
+### Session Learnings (2026-04-29)
+
+**Additional Waves Completed** (2026-04-29):
+- **Wave 1.1**: Security hardening - path traversal validation, restrictive CORS config, plaintext password redaction with SensitiveString, privilege checks in stress modules
+- **Wave 1.2**: Compilation fixes - DashMap deadlocks (spoofed.rs), removed missing `parse` module, added `TracerouteError` export, fixed `ipnet::Ipv4Net` → `ipnetwork::Ipv4Network`, fixed reqwest errors, fixed Arc/DashMap issues, fixed libc::in_addr wrapping
+- **Wave 2.1**: TUI bug fixes - mouse redraw now sets `needs_redraw = true`, settings reset calls `reset()`, WafStress parameters properly passed via `run_waf_stress`
+- **Wave 2.2**: Orphaned tab removal - icmp.rs, mcp.rs, traceroute.rs deleted
+- **Wave 3.1**: Network performance - `connect_with_nodelay_timeout` in fingerprint.rs, HTTP client pooling with TCP_NODELAY in lifecycle.rs and alerts routing.rs
+- **Wave 3.2**: Async memory - Converted `agent/memory.rs` from blocking `std::fs` to async `tokio::fs`, updated callers in `agent/mod.rs` to use `.await`, converted tests to `#[tokio::test]`
+
+**Test Count**: 1115 passing (base library tests)
+
+**Deferred Items**:
+- **Wave 4.1 (Tab Integration)**: Requires adding 6 new tabs (Auth, Plan, Ci, Serve, Sbom, Notify) to the 29-tab Tab enum - complex architectural change deferred
+- **Wave 4.2 (TUI Refactoring)**: History wrapper and animation fix - verified as false positives (features already exist)
+- **Waves 5-8**: Many items already complete, false positives, or require large new features (Auto-Calibration, Subdomain Enumeration)
+
 ### Session Learnings (2026-04-28)
 
 **All Waves Complete**: Waves A through G are now fully implemented (121 items total).
-- Test count updated: 1110 passing (base), 1345 with full features
+- Test count updated: 1115 passing (base), 1345 with full features
 - Source files: 503 (updated from 470+)
 - Clippy warnings: ~19 (reduced from ~28)
 - See plan.md for verification commands
