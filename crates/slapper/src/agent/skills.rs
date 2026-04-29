@@ -23,13 +23,13 @@ struct SkillFrontmatter {
     metadata: Option<SkillMetadata>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct SkillMetadata {
-    category: Option<String>,
-    tools: Vec<String>,
-    scope: Option<String>,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SkillMetadata {
+    pub category: Option<String>,
+    pub tools: Vec<String>,
+    pub scope: Option<String>,
     #[serde(default)]
-    version: Option<String>,
+    pub version: Option<String>,
 }
 
 #[derive(Debug, Clone)]

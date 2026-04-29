@@ -26,7 +26,7 @@ pub async fn handle_agent(_ctx: &CommandContext, args: AgentArgs) -> Result<()> 
         Some(AgentCommand::Run(run_args)) => {
             handle_agent_run_impl(use_ai, ai_config_path, portfolio_path, memory_dir, poll_interval, run_args).await
         }
-        Some(AgentCommand::Targets(targets_args)) => handle_targets(targets_args).await,
+        Some(AgentCommand::Targets(targets_args)) => handle_targets(targets_args, portfolio_path).await,
         Some(AgentCommand::Skills(skills_args)) => handle_skills(skills_args).await,
         Some(AgentCommand::Status) => handle_status_impl(use_ai, ai_config_path, portfolio_path).await,
     }
@@ -160,7 +160,7 @@ fn expand_path(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
-async fn handle_targets(args: crate::cli::agent::TargetsArgs) -> Result<()> {
+async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Option<String>) -> Result<()> {
     match args.command {
         crate::cli::agent::TargetsCommand::List => {
             let portfolio = TargetPortfolio::new();
@@ -200,7 +200,12 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs) -> Result<()> {
             Ok(())
         }
         crate::cli::agent::TargetsCommand::Update(update_args) => {
-            let mut portfolio = load_portfolio(portfolio_path.as_ref());
+            let path = portfolio_path.as_ref().map(PathBuf::from).unwrap_or_else(|| {
+                std::env::var("HOME")
+                    .map(|h| PathBuf::from(h).join(".config").join("slapper").join("portfolio.json"))
+                    .unwrap_or_else(|_| PathBuf::from("portfolio.json"))
+            });
+            let mut portfolio = TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new());
             if let Some(mut target) = portfolio.get_mut_target(&update_args.id) {
                 if let Some(new_target) = update_args.target {
                     target.target = new_target;
@@ -295,10 +300,10 @@ async fn handle_skills(args: crate::cli::agent::SkillsArgs) -> Result<()> {
                 let loader = SkillLoader::new(default_dirs);
                 let skills = loader.load_skills()?;
                 if let Some(skill) = skills.iter().find(|s| s.name == name) {
-                    println!("# {}\n\n{}\n\nTools: {}",
-                        skill.name,
-                        skill.description,
-                        skill.metadata.tools.join(", "));
+                    let tools = skill.metadata.as_ref()
+                        .map(|m| m.tools.join(", "))
+                        .unwrap_or_default();
+                    println!("# {}\n\n{}\n\nTools: {}", skill.name, skill.description, tools);
                 } else {
                     println!("Skill '{}' not found", name);
                 }

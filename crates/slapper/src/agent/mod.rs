@@ -97,7 +97,7 @@ impl Agent {
         };
 
         let memory_dir = config.memory_dir.join("memory");
-        let memory = LongitudinalMemory::new(memory_dir)?;
+        let memory = LongitudinalMemory::new(memory_dir).await?;
 
         let alert_router = AlertRouter::new()?;
 

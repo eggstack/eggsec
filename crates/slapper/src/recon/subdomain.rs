@@ -65,13 +65,6 @@ impl SubdomainEnumerator {
             sources.push("crt.sh".to_string());
         }
 
-        if let Ok(alexa_subdomains) = self.query_alexa(domain).await {
-            for sub in alexa_subdomains {
-                subdomains.insert(sub);
-            }
-            sources.push("alexa".to_string());
-        }
-
         if let Ok(threatminer_subdomains) = self.query_threatminer(domain).await {
             for sub in threatminer_subdomains {
                 subdomains.insert(sub);

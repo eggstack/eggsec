@@ -82,7 +82,7 @@ pub use session::{
     ResponseField, SessionState, SessionStatus, SessionVerification, SessionVerifier,
 };
 pub use state::{AgentSession, ScanContext, SessionManager, SessionStatus as ToolSessionStatus};
-pub use traits::ToolResult;
+pub use traits::{ToolResult, AttackSurface};
 
 pub fn create_default_registry() -> ToolRegistry {
     let registry = ToolRegistry::new();

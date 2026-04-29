@@ -36,8 +36,22 @@ impl AlertRouter {
             channels: Arc::new(Mutex::new(Vec::new())),
             recent_alerts: Arc::new(Mutex::new(std::collections::HashMap::new())),
             dedup_window_secs: 300,
-            client: Self::create_pooled_client()?,
+            client: Self::create_pooled_client().unwrap_or_else(|_| {
+                reqwest::Client::builder()
+                    .pool_max_idle_per_host(5)
+                    .build()
+                    .expect("Failed to create fallback HTTP client")
+            }),
         })
+    }
+
+    fn default() -> Self {
+        Self {
+            channels: Arc::new(Mutex::new(Vec::new())),
+            recent_alerts: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            dedup_window_secs: 300,
+            client: reqwest::Client::new(),
+        }
     }
 
     pub fn add_channel(&self, channel: AlertChannel) {
@@ -376,6 +390,6 @@ impl AlertRouter {
 
 impl Default for AlertRouter {
     fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }

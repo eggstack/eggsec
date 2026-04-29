@@ -706,18 +706,18 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let help_text = if app.is_help_visible() {
-        " [Esc] Close | [Space] Help | [Enter] Confirm | [h/l] Tab | [j/k] Nav | [w/b] Word | [gg/G] Top/Bot | [n/p] Tab | [q] Quit ".to_string()
+        " [Esc] Close | [Space] Help | [Enter] Confirm | [j/k] Nav | [w/b] Word | [gg/G] Top/Bot | [n/p] Tab | [h/l] Input | [q] Quit ".to_string()
     } else {
         match app.mode {
             super::InputMode::Normal => {
                 let mut help = if area.width < 80 {
                     format!(
-                        " [h/l]Tab [j/k]Nav [Ctrl+F]Search [Ctrl+Z]{} [i]Insert [q]Quit",
+                        " [n/p]Tab [j/k]Nav [Ctrl+F]Search [Ctrl+Z]{} [i]Insert [q]Quit",
                         if app.is_paused() { "[Paused]" } else { "" }
                     )
                 } else {
                     format!(
-                        " [h/l] Tab | [j/k] Nav | [/] Search | [Ctrl+F] Global | [Ctrl+Z]{} | [1-9] Jump | [Space] Help | [i] Insert | [q] Quit | [b] Bookmark | [Ctrl+T] Theme",
+                        " [n/p] Tab | [j/k] Nav | [/] Search | [Ctrl+F] Global | [Ctrl+Z]{} | [1-9] Jump | [Space] Help | [i] Insert | [q] Quit | [b] Bookmark | [Ctrl+T] Theme",
                         if app.is_paused() { " Resume" } else { " Pause" }
                     )
                 };
