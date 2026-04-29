@@ -117,7 +117,7 @@ mod raw_udp {
 }
 
 #[cfg(feature = "stress-testing")]
-pub async fn run_udp_flood(config: &StressConfig, metrics: &StressMetrics) -> Result<StressStats> {
+pub async fn run_udp_flood(config: &StressConfig, metrics: Arc<StressMetrics>) -> Result<StressStats> {
     let target_ip = resolve_target(&config.target).await?;
     let target_addr = SocketAddr::new(target_ip, config.port);
 
@@ -140,7 +140,7 @@ pub async fn run_udp_flood(config: &StressConfig, metrics: &StressMetrics) -> Re
         }
     }
 
-    run_udp_flood_standard(config, target_addr, payload, metrics).await
+    run_udp_flood_standard(config, target_addr, payload, (&*metrics).clone()).await
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
@@ -231,7 +231,7 @@ async fn run_udp_flood_spoofed(
             let dst = libc::sockaddr_in {
                 sin_family: libc::AF_INET as u16,
                 sin_port: target_addr.port().to_be(),
-                sin_addr: u32::from_be_bytes(target_ip_v4.octets()),
+                sin_addr: libc::in_addr { s_addr: u32::from_be_bytes(target_ip_v4.octets()) },
                 sin_zero: [0; 8],
             };
 
@@ -286,7 +286,7 @@ fn parse_spoof_range(range: &str) -> Result<Vec<Ipv4Addr>> {
             ips.push(Ipv4Addr::from(ip));
         }
     } else if parts.len() == 1 {
-        let cidr: ipnet::Ipv4Net = range
+        let cidr: ipnetwork::Ipv4Network = range
             .parse()
             .map_err(|_| SlapperError::Runtime("Invalid CIDR".to_string()))?;
 

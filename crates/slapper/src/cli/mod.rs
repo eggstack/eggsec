@@ -25,6 +25,9 @@ pub use scan::*;
 pub use vuln::*;
 pub use storage::*;
 
+#[cfg(feature = "stress-testing")]
+pub use stress::*;
+
 #[cfg(feature = "ai-integration")]
 pub mod ai_analyze;
 #[cfg(feature = "ai-integration")]

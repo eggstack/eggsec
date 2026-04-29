@@ -54,7 +54,7 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
 
     metrics.start();
 
-    let mut handles = Vec::with_capacity(total_requests);
+    let mut handles = Vec::with_capacity(total_requests as usize);
     let _requests_per_second = config.rate_pps;
 
     for _ in 0..total_requests {
@@ -74,7 +74,7 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
         let handle = tokio::spawn(async move {
             let _request_start = Instant::now();
 
-            let result: Result<reqwest::Response, reqwest::Error> = if let Some(client) = client {
+            let result: std::result::Result<reqwest::Response, Box<dyn std::error::Error + Send + Sync>> = if let Some(client) = client {
                 client
                     .get(&url)
                     .header("User-Agent", random_user_agent())
@@ -86,11 +86,9 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
                     .header("X-Real-IP", random_ip())
                     .send()
                     .await
+                    .map_err(|e| e.into())
             } else {
-                Err(reqwest::Error::new(
-                    reqwest::error::Kind::Request,
-                    Some(std::io::Error::new(std::io::ErrorKind::Other, "no proxy available").into()),
-                ))
+                Err("no proxy available".into())
             };
 
             match result {

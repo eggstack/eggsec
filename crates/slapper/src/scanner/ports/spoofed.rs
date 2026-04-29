@@ -4,6 +4,7 @@
 //! and packet fragmentation capabilities.
 
 use crate::error::{Result, SlapperError};
+use crate::utils::service_detection::get_service_name;
 use std::time::Duration;
 
 use crate::scanner::spoof::SpoofConfig;
@@ -281,7 +282,7 @@ pub(crate) async fn scan_ports_spoofed(
                             Some(Ok(_)) => {
                                 packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 let src_ip_u32: u32 = u32::from(src_ip);
-                                sent_packets.lock().insert(port, src_ip_u32);
+                                sent_packets.insert(port, src_ip_u32);
                             }
                             _ => {}
                         }
@@ -390,9 +391,8 @@ pub(crate) async fn scan_ports_spoofed(
                 
                 while (wait_start.elapsed().as_millis() as u64) < timeout_ms {
                     tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
-                     
-                    let responses_guard = responses.lock();
-                    if let Some(resp) = responses_guard.get(&port) {
+
+                    if let Some(resp) = responses.get(&port) {
                         status = resp.clone();
                         break;
                     }
@@ -451,7 +451,11 @@ pub(crate) async fn scan_ports_spoofed(
         pb.finish_and_clear();
     }
 
-    let mut results: Vec<PortResult> = results.into_iter().map(|(_, v)| v).collect();
+    let mut results: Vec<PortResult> = Arc::try_unwrap(results)
+        .expect("All task clones should have been dropped after join_all")
+        .into_iter()
+        .map(|(_, v)| v)
+        .collect();
     results.sort_by_key(|p| p.port);
 
     let spoof_stats = Some(crate::scanner::spoof::SpoofStats {

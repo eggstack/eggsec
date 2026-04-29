@@ -258,7 +258,7 @@ impl PacketCapture {
     }
 
     fn parse_packet_internal(data: &[u8]) -> PacketInfo {
-        use crate::packet::parse::ParsedPacket;
+        use crate::packet::types::ParsedPacket;
 
         let timestamp = chrono::Utc::now();
         let hex = hexdump(data);

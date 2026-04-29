@@ -517,7 +517,7 @@ fn print_packet(info: &PacketInfo) {
 }
 
 fn parse_and_print_packet(data: &[u8]) -> Option<String> {
-    use crate::packet::parse::ParsedPacket;
+    use crate::packet::types::ParsedPacket;
 
     let parsed = ParsedPacket::parse(data)?;
     let mut output = String::new();
