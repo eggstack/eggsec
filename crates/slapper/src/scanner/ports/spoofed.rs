@@ -4,7 +4,6 @@
 //! and packet fragmentation capabilities.
 
 use crate::error::{Result, SlapperError};
-use crate::utils::service_detection::get_service_name;
 use std::time::Duration;
 
 use crate::scanner::spoof::SpoofConfig;

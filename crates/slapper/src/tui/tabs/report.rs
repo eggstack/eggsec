@@ -34,6 +34,12 @@ pub enum ReportFocusArea {
     Results,
 }
 
+impl Default for ReportTab {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReportTab {
     pub fn new() -> Self {
         let view_selector =

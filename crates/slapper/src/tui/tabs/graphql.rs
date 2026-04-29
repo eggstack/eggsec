@@ -28,6 +28,12 @@ pub enum GraphQlFocusArea {
     Results,
 }
 
+impl Default for GraphQlTab {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GraphQlTab {
     pub fn new() -> Self {
         let inputs = InputGroup::new()

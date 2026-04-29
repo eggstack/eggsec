@@ -33,6 +33,12 @@ pub enum ClusterFocusArea {
     Results,
 }
 
+impl Default for ClusterTab {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClusterTab {
     pub fn new() -> Self {
         let view_selector =

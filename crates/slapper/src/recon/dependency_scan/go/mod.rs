@@ -4,6 +4,12 @@ use std::path::Path;
 
 pub struct GoScanner;
 
+impl Default for GoScanner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GoScanner {
     pub fn new() -> Self {
         Self

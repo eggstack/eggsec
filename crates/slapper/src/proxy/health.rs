@@ -93,7 +93,7 @@ impl HealthChecker {
             reqwest::Proxy::all(&proxy_url)?
         };
 
-        let timeout_secs = (self.config.timeout_ms as u64) / 1000;
+        let timeout_secs = self.config.timeout_ms / 1000;
         let client = create_insecure_client_with_options(timeout_secs, |builder| {
             builder.proxy(reqwest_proxy)
         })?;

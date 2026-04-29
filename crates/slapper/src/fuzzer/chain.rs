@@ -1,6 +1,5 @@
 
 use regex::{Regex, RegexBuilder};
-use regex::Captures;
 use reqwest::{Client, Method};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};

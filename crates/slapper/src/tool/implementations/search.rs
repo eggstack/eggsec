@@ -71,7 +71,7 @@ impl SearchTool {
             .timeout(std::time::Duration::from_secs(10))
             .send()
             .await
-            .map_err(|e| format!("SearXNG request failed: {}", e))?;
+            .map_err(|e| SlapperError::Network(format!("SearXNG request failed: {}", e)))?;
 
         if !response.status().is_success() {
             return Err(SlapperError::Network(format!("SearXNG returned status: {}", response.status())));
@@ -80,7 +80,7 @@ impl SearchTool {
         let results: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| format!("Failed to parse SearXNG response: {}", e))?;
+            .map_err(|e| SlapperError::Parse(format!("Failed to parse SearXNG response: {}", e)))?;
 
         let mut search_results = Vec::new();
         if let Some(results_array) = results["results"].as_array() {
@@ -121,7 +121,7 @@ impl SearchTool {
         let results: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| format!("Failed to parse OSV response: {}", e))?;
+            .map_err(|e| SlapperError::Parse(format!("Failed to parse OSV response: {}", e)))?;
 
         let mut cve_results = Vec::new();
         if let Some(vulns) = results["vulns"].as_array() {
@@ -174,7 +174,7 @@ impl SearchTool {
         let results: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| format!("Failed to parse NVD response: {}", e))?;
+            .map_err(|e| SlapperError::Parse(format!("Failed to parse NVD response: {}", e)))?;
 
         let mut cve_results = Vec::new();
         if let Some(vulnerabilities) = results["vulnerabilities"].as_array() {
@@ -268,7 +268,7 @@ impl SecurityTool for SearchTool {
                             "count": cves.len()
                         })
                     }
-                    Err(e) => serde_json::json!({ "error": e }),
+                    Err(e) => serde_json::json!({ "error": e.to_string() }),
                 }
             }
             "nvd" => {
@@ -290,7 +290,7 @@ impl SecurityTool for SearchTool {
                             "count": cves.len()
                         })
                     }
-                    Err(e) => serde_json::json!({ "error": e }),
+                    Err(e) => serde_json::json!({ "error": e.to_string() }),
                 }
             }
             _ => {
@@ -303,7 +303,7 @@ impl SecurityTool for SearchTool {
                             "count": results.len()
                         })
                     }
-                    Err(e) => serde_json::json!({ "error": e }),
+                    Err(e) => serde_json::json!({ "error": e.to_string() }),
                 }
             }
         };

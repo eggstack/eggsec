@@ -272,7 +272,7 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
     } else if args.grepable {
         let mut s = String::new();
         s.push_str("# Nmap grepable output\n");
-        write!(s, "Host: {}\n", results.host).unwrap();
+        writeln!(s, "Host: {}", results.host).unwrap();
         s.push_str("Status: up\n");
         s.push_str("Ports: ");
         for (i, port) in results.open_ports.iter().enumerate() {
@@ -287,7 +287,7 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
         let mut s = String::new();
         s.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         s.push_str("<nmaprun>\n");
-        write!(s, "  <host>{}</host>\n", escape_xml(&results.host)).unwrap();
+        writeln!(s, "  <host>{}</host>", escape_xml(&results.host)).unwrap();
         s.push_str("  <ports>\n");
         for port in &results.open_ports {
             write!(

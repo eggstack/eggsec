@@ -86,7 +86,7 @@ impl SessionManager {
         let entries = fs::read_dir(&self.config.session_dir)?;
         let mut sessions: Vec<_> = entries
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
             .collect();
 
         sessions.sort_by_key(|e| e.path());
@@ -124,7 +124,7 @@ pub fn restore_session(&self, app: &mut App, state: &SessionState) {
         let entries = fs::read_dir(&self.config.session_dir)?;
         let mut sessions: Vec<_> = entries
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
             .collect();
 
         sessions.sort_by_key(|e| e.path());

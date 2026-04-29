@@ -4,6 +4,12 @@ use std::path::Path;
 
 pub struct CargoScanner;
 
+impl Default for CargoScanner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CargoScanner {
     pub fn new() -> Self {
         Self

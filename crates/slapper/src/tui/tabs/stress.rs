@@ -35,6 +35,12 @@ pub enum StressFocusArea {
     Results,
 }
 
+impl Default for StressTab {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StressTab {
     pub fn new() -> Self {
         let inputs = InputGroup::new()

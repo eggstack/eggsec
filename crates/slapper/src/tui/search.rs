@@ -120,7 +120,7 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
     let width = 80u16;
     let height = 20u16;
 
-    let search_area = centered_rect(width as u16, height, area);
+    let search_area = centered_rect(width, height, area);
 
     f.render_widget(
         Block::default()

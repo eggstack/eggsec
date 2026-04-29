@@ -10,8 +10,36 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::sync::RwLock;
+
+static CSRF_INPUT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"<input[^>]*name="([^"]+)"[^>]*value="([^"]+)"[^>]*>"#).unwrap()
+});
+
+static CSRF_META_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"<meta[^>]*name="csrf-token"[^>]*content="([^"]+)""#).unwrap()
+});
+
+static FORM_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"<form[^>]*>"#).unwrap());
+
+static INPUT_TAG_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"<input[^>]*>"#).unwrap());
+
+static LOGGED_IN_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"(?i)logout|sign.?out|sign.?off").unwrap(),
+        Regex::new(r"(?i)dashboard|profile|settings").unwrap(),
+        Regex::new(r"(?i)welcome,?\s+\w+").unwrap(),
+    ]
+});
+
+static LOGGED_OUT_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"(?i)sign.?in|log.?in|login").unwrap(),
+        Regex::new(r"(?i)please.?login|session.?expired").unwrap(),
+    ]
+});
 
 /// Authentication method types supported by Slapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -386,14 +414,12 @@ impl SessionState {
         }
 
         // Add CSRF token if available for this URL
-        if let Some(target) = request.target.url.as_ref() {
-            if let Some(csrf) = self.get_csrf_token(target) {
-                if let Some(param_name) = &csrf.param_name {
-                    request.params["csrf_param"] = serde_json::json!(param_name);
-                    request.params["csrf_value"] = serde_json::json!(&csrf.token);
-                }
-                request.params["csrf_header"] = serde_json::json!(&csrf.header_name);
+        if let Some(csrf) = self.get_csrf_token(&request.target.value) {
+            if let Some(param_name) = &csrf.param_name {
+                request.params["csrf_param"] = serde_json::json!(param_name);
+                request.params["csrf_value"] = serde_json::json!(&csrf.token);
             }
+            request.params["csrf_header"] = serde_json::json!(&csrf.header_name);
         }
 
         Ok(())
@@ -480,21 +506,26 @@ impl LoginExecutor {
                     })?;
 
                     response_code = Some(response.status().as_u16());
-                    final_url = Some(response.url().to_string());
+                    let final_url = response.url().to_string();
 
-                    // Extract cookies from response
-                    if let Ok(cookies) = response.cookies() {
-                        for cookie in cookies {
-                            session_cookies.insert(cookie.name().to_string(), cookie.value().to_string());
+                    if let Some(cookies) = response.headers().get("set-cookie") {
+                        for cookie_str in cookies.to_str().unwrap_or("").split(',') {
+                            if let Some((name, value)) = cookie_str.split_once('=') {
+                                session_cookies.insert(
+                                    name.trim().to_string(),
+                                    value.split(';').next().unwrap_or("").trim().to_string(),
+                                );
+                            }
                         }
                     }
 
                     // Store response for extraction steps
-                    let body = response.text().await.unwrap_or_default();
-                    response_headers = response.headers()
+                    let headers_map: std::collections::HashMap<String, String> = response.headers()
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                         .collect();
+                    response_headers = headers_map.clone();
+                    let body = response.text().await.unwrap_or_default();
 
                     // Store response body for extraction
                     variables.insert("_response_body".to_string(), body.clone());
@@ -615,12 +646,11 @@ impl LoginExecutor {
                 variables.get("_response_body").map(|b| b.contains(text)).unwrap_or(false)
             }
             Condition::StatusCode(code) => {
-                variables.get("_response_status").and_then(|s| s.parse().ok()).map(|c| c == *code).unwrap_or(false)
+                variables.get("_response_status").and_then(|s| s.parse::<u16>().ok()).map(|c| c == *code).unwrap_or(false)
             }
             Condition::Redirects => {
-                // Check if response indicates redirect
-                variables.get("_response_status").and_then(|s| s.parse().ok())
-                    .map(|c| c >= 300 && c < 400).unwrap_or(false)
+                variables.get("_response_status").and_then(|s| s.parse::<i32>().ok())
+                    .map(|c: i32| c >= 300 && c < 400).unwrap_or(false)
             }
         }
     }
@@ -668,41 +698,35 @@ impl CsrfExtractor {
         let mut tokens = Vec::new();
 
         // Extract from hidden input fields
-        let input_re = Regex::new(r#"<input[^>]*name="([^"]+)"[^>]*value="([^"]+)"[^>]*>"#).ok();
-        if let Some(re) = input_re {
-            for cap in re.captures_iter(html) {
-                let name = cap.get(1).map(|m| m.as_str()).unwrap_or("");
-                let value = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+        for cap in CSRF_INPUT_PATTERN.captures_iter(html) {
+            let name = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+            let value = cap.get(2).map(|m| m.as_str()).unwrap_or("");
 
-                if self.is_csrf_token_name(name) && !value.is_empty() {
-                    tokens.push(CsrfToken {
-                        token: value.to_string(),
-                        url: url.to_string(),
-                        header_name: "X-CSRF-Token".to_string(),
-                        param_name: Some(name.to_string()),
-                        acquired_at: chrono::Utc::now(),
-                        expires_at: None,
-                        token_location: CsrfTokenLocation::FormParam,
-                    });
-                }
+            if self.is_csrf_token_name(name) && !value.is_empty() {
+                tokens.push(CsrfToken {
+                    token: value.to_string(),
+                    url: url.to_string(),
+                    header_name: "X-CSRF-Token".to_string(),
+                    param_name: Some(name.to_string()),
+                    acquired_at: chrono::Utc::now(),
+                    expires_at: None,
+                    token_location: CsrfTokenLocation::FormParam,
+                });
             }
         }
 
         // Also check meta tags
-        let meta_re = Regex::new(r#"<meta[^>]*name="csrf-token"[^>]*content="([^"]+)""#).ok();
-        if let Some(re) = meta_re {
-            for cap in re.captures_iter(html) {
-                if let Some(value) = cap.get(1) {
-                    tokens.push(CsrfToken {
-                        token: value.as_str().to_string(),
-                        url: url.to_string(),
-                        header_name: "X-CSRF-Token".to_string(),
-                        param_name: None,
-                        acquired_at: chrono::Utc::now(),
-                        expires_at: None,
-                        token_location: CsrfTokenLocation::Header,
-                    });
-                }
+        for cap in CSRF_META_PATTERN.captures_iter(html) {
+            if let Some(value) = cap.get(1) {
+                tokens.push(CsrfToken {
+                    token: value.as_str().to_string(),
+                    url: url.to_string(),
+                    header_name: "X-CSRF-Token".to_string(),
+                    param_name: None,
+                    acquired_at: chrono::Utc::now(),
+                    expires_at: None,
+                    token_location: CsrfTokenLocation::Header,
+                });
             }
         }
 
@@ -783,12 +807,7 @@ impl FormDetector {
 
     /// Detect login forms in HTML and return form details
     pub fn detect_login_form(&self, html: &str, base_url: &str) -> Option<LoginForm> {
-        // Find all forms
-        let form_re = Regex::new(r#"<form[^>]*>"#).ok()?;
-        let form_re = form_re?;
-
-        // Find form with username and password fields
-        let forms: Vec<_> = form_re.find_iter(html).collect();
+        let forms: Vec<_> = FORM_PATTERN.find_iter(html).collect();
 
         for form_match in forms {
             let form_start = form_match.start();
@@ -842,13 +861,7 @@ impl FormDetector {
     }
 
     fn has_field_named(&self, html: &str, names: &[String]) -> bool {
-        for name in names {
-            let pattern = format!(r#"name=["']{}["']"#, name);
-            if html.contains(&pattern) {
-                return true;
-            }
-        }
-        false
+        self.find_field_name(html, names).is_some()
     }
 
     fn find_field_name(&self, html: &str, names: &[String]) -> Option<String> {
@@ -872,22 +885,18 @@ impl FormDetector {
 
     fn extract_other_fields(&self, html: &str) -> Vec<FormField> {
         let mut fields = Vec::new();
-        let input_re = Regex::new(r#"<input[^>]*>"#).ok()?;
-
-        if let Some(re) = input_re {
-            for cap in re.find_iter(html) {
-                let input = cap.as_str();
-                if let (Some(name), Some(type_)) = (
-                    self.extract_attribute(input, "name"),
-                    self.extract_attribute(input, "type"),
-                ) {
-                    if name != "username" && name != "password" {
-                        fields.push(FormField {
-                            name,
-                            field_type: type_,
-                            value: self.extract_attribute(input, "value"),
-                        });
-                    }
+        for cap in INPUT_TAG_PATTERN.find_iter(html) {
+            let input = cap.as_str();
+            if let (Some(name), Some(type_)) = (
+                self.extract_attribute(input, "name"),
+                self.extract_attribute(input, "type"),
+            ) {
+                if name != "username" && name != "password" {
+                    fields.push(FormField {
+                        name,
+                        field_type: type_,
+                        value: self.extract_attribute(input, "value"),
+                    });
                 }
             }
         }
@@ -930,22 +939,10 @@ impl SessionVerifier {
     pub fn new(timeout_secs: u64) -> crate::error::Result<Self> {
         let client = create_insecure_http_client(timeout_secs)?;
         
-        // Default patterns (similar to ZAP's logged in/out indicators)
-        let logged_in_patterns = vec![
-            Regex::new(r"(?i)logout|sign.?out|sign.?off").ok(),
-            Regex::new(r"(?i)dashboard|profile|settings").ok(),
-            Regex::new(r"(?i)welcome,?\s+\w+").ok(),
-        ].into_iter().flatten().collect();
-
-        let logged_out_patterns = vec![
-            Regex::new(r"(?i)sign.?in|log.?in|login").ok(),
-            Regex::new(r"(?i)please.?login|session.?expired").ok(),
-        ].into_iter().flatten().collect();
-
         Ok(Self {
             client,
-            logged_in_patterns,
-            logged_out_patterns,
+            logged_in_patterns: LOGGED_IN_PATTERNS.clone(),
+            logged_out_patterns: LOGGED_OUT_PATTERNS.clone(),
         })
     }
 
@@ -969,8 +966,8 @@ impl SessionVerifier {
             .await
             .map_err(|e| crate::error::SlapperError::Network(format!("Verification request failed: {}", e)))?;
 
-        let body = response.text().await.unwrap_or_default();
         let status = response.status();
+        let body = response.text().await.unwrap_or_default();
 
         // Check for logged in indicators
         let logged_in = self.logged_in_patterns.iter().any(|p| p.is_match(&body));
@@ -1117,7 +1114,7 @@ impl AuthenticatedSessionManager {
     /// Verify session is still valid and attempt re-authentication if expired
     pub async fn verify_and_refresh(&self, session_id: &str) -> crate::error::Result<SessionVerification> {
         let session = self.sessions.read().await.get(session_id).cloned()
-            .ok_or_else(|| crate::error::SlapperError::NotFound("Session not found".to_string()))?;
+            .ok_or_else(|| crate::error::SlapperError::Config("Session not found".to_string()))?;
 
         // If no verification URL set, assume session is valid
         let verification_url = match &self.verification_url {

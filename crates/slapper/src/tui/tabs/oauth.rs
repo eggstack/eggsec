@@ -28,6 +28,12 @@ pub enum OAuthFocusArea {
     Results,
 }
 
+impl Default for OAuthTab {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OAuthTab {
     pub fn new() -> Self {
         let inputs = InputGroup::new()

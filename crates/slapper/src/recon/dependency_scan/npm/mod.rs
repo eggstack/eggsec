@@ -4,6 +4,12 @@ use std::path::Path;
 
 pub struct NpmScanner;
 
+impl Default for NpmScanner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NpmScanner {
     pub fn new() -> Self {
         Self
@@ -63,7 +69,7 @@ impl NpmScanner {
 
         if let Some(packages) = json.get("packages").and_then(|v| v.as_object()) {
             for (key, value) in packages {
-                if key.is_empty() || key == "" {
+                if key.is_empty() || key.is_empty() {
                     continue;
                 }
                 let version = value.get("version").and_then(|v| v.as_str()).unwrap_or("*");
