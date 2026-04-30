@@ -1,7 +1,7 @@
 # Slapper Improvement Plan - Master Consolidated
 
 **Date**: 2026-04-30
-**Status**: COMPLETED ✓
+**Status**: IN PROGRESS
 **Priority**: High
 
 ---
@@ -17,6 +17,33 @@ This document is the single source of truth for all planned improvements to Slap
 - **506** source files, **30** payload types, **29** TUI tabs.
 
 **All waves verified complete as of 2026-04-30.**
+
+---
+
+## Phase 8: Pre-Open Source Polish (Planned)
+
+**Status**: PLANNED
+**Priority**: High
+**Objective**: Resolve "rough edges" identified in the general code review to ensure high quality for open-source release.
+
+### **8.1: Agent Alert Fatigue & Memory Efficiency**
+- [ ] **8.1.1: Baseline-Aware Alerting**: Modify `Agent::process_scheduled_scans` to use `LongitudinalMemory::compare_with_baseline`. Only trigger alerts for *new* findings that aren't in the baseline.
+- [ ] **8.1.2: Finding Deduplication**: Implement cross-scan deduplication in `handle_findings` to ensure persistent vulnerabilities don't trigger repeat alerts on every scan.
+- [ ] **8.1.3: Handler Registry Fix**: Refactor `Agent::trigger_event` to prevent handler loss when `std::mem::take` is used during event processing.
+
+### **8.2: TUI Performance & Responsiveness**
+- [ ] **8.2.1: Event Loop Optimization**: Reorder the main loop in `runner.rs` (`update() -> draw() -> poll()`) to reduce perceived latency between background task completion and UI refresh.
+- [ ] **8.2.2: Async Channel Draining**: Update `App::update` to use `while let Ok(...)` for `progress_rx` and `result_rx` to prevent UI lag when high-volume scan data arrives.
+- [ ] **8.2.3: Dynamic Constraints**: Replace hardcoded `visible_rows` (e.g., in `HistoryTab`) with dynamic calculations based on the active `Rect` height.
+
+### **8.3: Architectural Cleanup**
+- [ ] **8.3.1: Standardize History Tab**: Refactor `HistoryTab` to fit the `TabInput` trait more cleanly, removing the need for `Arc<Mutex>`-specific special cases in `App` and `ui.rs`.
+- [ ] **8.3.2: Breadcrumb Consolidation**: Implement a shared `Breadcrumb` trait or helper to centralize breadcrumb logic and reduce the massive `match` block in `ui.rs`.
+- [ ] **8.3.3: Theme Consistency**: Audit all TUI components to ensure 100% compliance with the `tc!` macro for color selection.
+
+### **8.4: Dashboard & Reporting Enhancements**
+- [ ] **8.4.1: Trend Visualization**: Add sparklines or mini-charts to the Dashboard using `LongitudinalMemory::analyze_temporal_patterns`.
+- [ ] **8.4.2: Asset Status Overview**: Implement a high-level "Asset Health" summary in the Dashboard for a quick view of the security state across the entire portfolio.
 
 ---
 
@@ -68,5 +95,3 @@ All waves completed and verified:
 - **5.2.1**: StatefulFuzzer implemented - multi-step chain execution with variable extraction
 
 ---
-
-*End of file - plan items pruned 2026-04-30 after verification*

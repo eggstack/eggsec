@@ -232,7 +232,33 @@ impl Agent {
 
                         let findings = self.process_findings(response);
                         if !findings.is_empty() {
-                            self.handle_findings(&config.target, findings).await?;
+                            let baseline_comparison = self.memory.compare_with_baseline(&config.target, &findings).await?;
+                            let new_findings = baseline_comparison.new_findings;
+
+                            if !new_findings.is_empty() {
+                                let (to_alert, deduplicated) = self.memory.deduplicate_findings(new_findings).await?;
+                                if !to_alert.is_empty() {
+                                    tracing::debug!(
+                                        "Alerting on {} new findings ({} deduplicated from previous scans)",
+                                        to_alert.len(),
+                                        deduplicated.len()
+                                    );
+                                    self.handle_findings(&config.target, to_alert).await?;
+                                } else {
+                                    tracing::debug!(
+                                        "Skipped alerting on {} findings - already alerted in previous scans",
+                                        deduplicated.len()
+                                    );
+                                }
+                            }
+
+                            if !baseline_comparison.resolved_findings.is_empty() {
+                                tracing::info!(
+                                    "{} previously known findings resolved on {}",
+                                    baseline_comparison.resolved_findings.len(),
+                                    config.target
+                                );
+                            }
                         }
                     }
 
@@ -433,17 +459,21 @@ impl Agent {
     pub async fn trigger_event(&mut self, event: SecurityEvent) -> Result<()> {
         tracing::debug!("Event triggered: {:?}", event.event_type());
 
-        let handlers: Vec<Box<dyn EventHandler>> = std::mem::take(&mut self.event_handlers);
-
-        for handler in &handlers {
-            if handler.handles(&event) {
-                handler.handle(&event, self).await?;
+        let handlers = std::mem::take(&mut self.event_handlers);
+        let result: Result<()> = (|| async {
+            for handler in handlers.iter() {
+                if handler.handles(&event) {
+                    handler.handle(&event, self).await?;
+                }
             }
+            Ok(())
+        })().await;
+
+        if self.event_handlers.is_empty() {
+            self.event_handlers = handlers;
         }
 
-        self.event_handlers = handlers;
-
-        Ok(())
+        result
     }
 }
 

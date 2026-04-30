@@ -14,6 +14,8 @@ use tokio::io::AsyncWriteExt;
 
 use crate::tool::response::Finding;
 
+const ALERTED_FINDINGS_FILE: &str = "alerted_findings.json";
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScanMemory {
     pub scan_id: String,
@@ -126,6 +128,54 @@ impl LongitudinalMemory {
 
     fn get_patterns_path(&self) -> PathBuf {
         self.storage_dir.join("patterns").join("detected.json")
+    }
+
+    fn get_alerted_findings_path(&self) -> PathBuf {
+        self.storage_dir.join(ALERTED_FINDINGS_FILE)
+    }
+
+    async fn load_alerted_findings(&self) -> Result<HashSet<String>> {
+        let path = self.get_alerted_findings_path();
+        if !path.exists() {
+            return Ok(HashSet::new());
+        }
+        let content = fs::read_to_string(&path).await?;
+        let findings: HashSet<String> = serde_json::from_str(&content)?;
+        Ok(findings)
+    }
+
+    async fn save_alerted_findings(&self, findings: &HashSet<String>) -> Result<()> {
+        let path = self.get_alerted_findings_path();
+        let content = serde_json::to_string_pretty(findings)?;
+        let mut file = fs::File::create(&path).await?;
+        file.write_all(content.as_bytes()).await?;
+        Ok(())
+    }
+
+    pub async fn deduplicate_findings(
+        &self,
+        findings: Vec<Finding>,
+    ) -> Result<(Vec<Finding>, Vec<Finding>)> {
+        let alerted = self.load_alerted_findings().await?;
+        let mut new_alerted = alerted.clone();
+
+        let mut deduplicated = Vec::new();
+        let mut filtered = Vec::new();
+
+        for finding in findings {
+            if alerted.contains(&finding.id) {
+                filtered.push(finding);
+            } else {
+                new_alerted.insert(finding.id.clone());
+                deduplicated.push(finding);
+            }
+        }
+
+        if new_alerted != alerted {
+            self.save_alerted_findings(&new_alerted).await?;
+        }
+
+        Ok((deduplicated, filtered))
     }
 
     pub async fn store_scan_results(
