@@ -15,7 +15,9 @@ use crate::tui::components::{centered_rect, confirm_popup, help_popup_for_tab};
 const LAYOUT_MARGIN: u16 = 1;
 const TAB_BAR_HEIGHT: u16 = 3;
 
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
+    let area = f.area();
+    app.last_tab_area_width = area.width.saturating_sub(LAYOUT_MARGIN * 2);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(LAYOUT_MARGIN)
@@ -153,10 +155,8 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
         return;
     };
     let area = f.area();
-    let popup_width = 60;
-    let popup_height = 20;
 
-    let popup_area = centered_rect(popup_width, popup_height, area);
+    let popup_area = centered_rect(palette.popup_width, palette.popup_height, area);
 
     f.render_widget(Clear, popup_area);
 
@@ -184,7 +184,7 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
     f.render_widget(query_paragraph, chunks[0]);
 
     // Pagination
-    let visible_height = (popup_area.height as usize).saturating_sub(5).max(5);
+    let visible_height = palette.visible_results_height();
     let total = palette.results.len();
     let start = palette.scroll_offset;
     let end = (start + visible_height).min(total);
@@ -588,8 +588,8 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
                         help.push_str(" [Ctrl+P] Palette");
                     }
                 }
-                if !app.get_bookmarked_tabs().is_empty() {
-                    help.push_str(&format!(" [{}]", app.get_bookmarked_tabs().len()));
+                if !app.get_bookmarked_tab_ids().is_empty() {
+                    help.push_str(&format!(" [{}]", app.get_bookmarked_tab_ids().len()));
                 }
                 help
             }

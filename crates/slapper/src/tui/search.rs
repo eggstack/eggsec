@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Rect},
     style::{Color, Modifier, Style},
     text::Span,
     widgets::{Block, Borders, Paragraph, Row, Table},
@@ -7,6 +7,8 @@ use ratatui::{
 };
 
 use crate::tui::App;
+use crate::tui::components::centered_rect;
+use crate::utils::preserve_all;
 
 #[derive(Debug, Clone)]
 pub struct SearchResult {
@@ -122,6 +124,10 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
 
     let search_area = centered_rect(width, height, area);
 
+    if search_area.width < 4 || search_area.height < 4 {
+        return;
+    }
+
     f.render_widget(
         Block::default()
             .title("Search Results")
@@ -133,8 +139,8 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
     let inner = Rect {
         x: search_area.x + 1,
         y: search_area.y + 1,
-        width: search_area.width - 2,
-        height: search_area.height - 2,
+        width: search_area.width.saturating_sub(2).max(1),
+        height: search_area.height.saturating_sub(2).max(1),
     };
 
     if search.is_empty() {
@@ -155,6 +161,8 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
     let start = start.min(search.len().saturating_sub(visible_rows));
     let end = (start + visible_rows).min(search.len());
 
+    let content_max_chars = (inner.width.saturating_sub(30) as usize).max(10);
+
     let rows: Vec<Row> = search.results[start..end]
         .iter()
         .enumerate()
@@ -167,34 +175,20 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
             Row::new(vec![
                 Span::raw(&r.tab),
                 Span::raw(&r.title),
-                Span::raw(if r.content.len() > 40 {
-                    format!("{}...", &r.content[..40])
-                } else {
-                    r.content.clone()
-                }),
+                Span::raw(preserve_all(&r.content, content_max_chars)),
             ])
             .style(style)
         })
         .collect();
 
+    let third_col_min = inner.width.saturating_sub(20).max(10);
     let widths = [
-        ratatui::layout::Constraint::Length(15),
-        ratatui::layout::Constraint::Length(15),
-        ratatui::layout::Constraint::Min(30),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Min(third_col_min),
     ];
     let table = Table::new(rows, widths)
         .block(Block::default().borders(Borders::NONE));
 
     f.render_widget(table, inner);
-}
-
-fn centered_rect(w: u16, h: u16, r: Rect) -> Rect {
-    let clamped_width = w.min(r.width.saturating_sub(2));
-    let clamped_height = h.min(r.height.saturating_sub(2));
-    Rect {
-        x: r.x.saturating_add(r.width.saturating_sub(clamped_width) / 2),
-        y: r.y.saturating_add(r.height.saturating_sub(clamped_height) / 2),
-        width: clamped_width,
-        height: clamped_height,
-    }
 }

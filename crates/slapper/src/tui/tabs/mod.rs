@@ -348,38 +348,39 @@ impl Tab {
     }
 
     pub fn from_stable_id(id: &str) -> Option<Tab> {
-        match id {
-            "recon" => Some(Tab::Recon),
-            "load" => Some(Tab::Load),
-            "scan_ports" => Some(Tab::ScanPorts),
-            "scan_endpoints" => Some(Tab::ScanEndpoints),
-            "fingerprint" => Some(Tab::Fingerprint),
-            "fuzz" => Some(Tab::Fuzz),
-            "waf" => Some(Tab::Waf),
-            "waf_stress" => Some(Tab::WafStress),
-            "scan" => Some(Tab::Scan),
-            "resume" => Some(Tab::Resume),
-            "proxy" => Some(Tab::Proxy),
-            "packet" => Some(Tab::Packet),
-            "graphql" => Some(Tab::GraphQl),
-            "oauth" => Some(Tab::OAuth),
-            "cluster" => Some(Tab::Cluster),
-            "stress" => Some(Tab::Stress),
-            "report" => Some(Tab::Report),
-            "nse" => Some(Tab::Nse),
-            "plugin" => Some(Tab::Plugin),
-            "settings" => Some(Tab::Settings),
-            "history" => Some(Tab::History),
-            "dashboard" => Some(Tab::Dashboard),
-            "hunt" => Some(Tab::Hunt),
-            "browser" => Some(Tab::Browser),
-            "compliance" => Some(Tab::Compliance),
-            "storage" => Some(Tab::Storage),
-            "integrations" => Some(Tab::Integrations),
-            "workflow" => Some(Tab::Workflow),
-            "vuln" => Some(Tab::Vuln),
-            _ => None,
-        }
+        let tab = match id {
+            "recon" => Tab::Recon,
+            "load" => Tab::Load,
+            "scan_ports" => Tab::ScanPorts,
+            "scan_endpoints" => Tab::ScanEndpoints,
+            "fingerprint" => Tab::Fingerprint,
+            "fuzz" => Tab::Fuzz,
+            "waf" => Tab::Waf,
+            "waf_stress" => Tab::WafStress,
+            "scan" => Tab::Scan,
+            "resume" => Tab::Resume,
+            "proxy" => Tab::Proxy,
+            "packet" => Tab::Packet,
+            "graphql" => Tab::GraphQl,
+            "oauth" => Tab::OAuth,
+            "cluster" => Tab::Cluster,
+            "stress" => Tab::Stress,
+            "report" => Tab::Report,
+            "nse" => Tab::Nse,
+            "plugin" => Tab::Plugin,
+            "settings" => Tab::Settings,
+            "history" => Tab::History,
+            "dashboard" => Tab::Dashboard,
+            "hunt" => Tab::Hunt,
+            "browser" => Tab::Browser,
+            "compliance" => Tab::Compliance,
+            "storage" => Tab::Storage,
+            "integrations" => Tab::Integrations,
+            "workflow" => Tab::Workflow,
+            "vuln" => Tab::Vuln,
+            _ => return None,
+        };
+        tab.visible_index().and(Some(tab))
     }
 
     pub fn next(&self) -> Tab {
@@ -422,17 +423,22 @@ impl TabWindow {
         let min_tab_width = 8_usize;
         let max_visible = (visible_width / min_tab_width).max(1).min(total_tabs);
 
-        let current_idx = current_tab.visible_index().unwrap_or(0);
+        let current_idx = current_tab.visible_index().unwrap_or(0).min(total_tabs.saturating_sub(1));
         let previous_offset = previous_offset as usize;
 
-        let start = previous_offset.min(total_tabs.saturating_sub(max_visible));
-        let end = (start + max_visible).min(total_tabs);
+        let clamped_offset = previous_offset.min(total_tabs.saturating_sub(max_visible));
 
-        let selected_visible = if current_idx >= start && current_idx < end {
-            current_idx - start
+        let start = if current_idx < clamped_offset {
+            current_idx
+        } else if current_idx >= clamped_offset + max_visible {
+            current_idx + 1 - max_visible
         } else {
-            start.min(max_visible.saturating_sub(1))
+            clamped_offset
         };
+
+        let start = start.min(total_tabs.saturating_sub(max_visible));
+        let end = (start + max_visible).min(total_tabs);
+        let selected_visible = current_idx.saturating_sub(start);
 
         let has_prev = start > 0;
         let has_next = end < total_tabs;

@@ -206,16 +206,16 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Master Consolidated Improvement Plan (COMPLETED)
-  - Plan is COMPLETED as of 2026-04-30
-  - All phases (0-12) verified complete
+- `plans/plan.md` — Master Consolidated Improvement Plan
+  - Phase 12R (TUI Tab Model Correction) COMPLETED as of 2026-04-30
+  - All Phase 12R items verified: stable IDs, TabWindow clamping, width tracking, bookmarks, session restore, mouse hit-testing, popup hardening
   - Contains architecture patterns useful for future work:
-    - TabIndexing Model (Phase 12)
+    - TabIndexing Model (Phase 12, corrected in Phase 12R)
     - Event Loop Order (Phase 8)
     - Handler Registry Pattern (Phase 8)
     - Snapshot File Pattern (Phase 10)
-    - Session Persistence with Stable IDs (Phase 12)
-    - Popup Clamping (Phase 12)
+    - Session Persistence with Stable IDs (Phase 12R)
+    - Popup Clamping (Phase 12R)
 
 ## Important Guidelines
 
@@ -224,7 +224,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 When implementing changes or reviewing plan items, verify actual state rather than assuming plan accuracy:
 - Payload type count: 30 (verified via `fuzzer/payloads/mod.rs`)
 - Recon module count: 31 (verified)
-- Test count: 1130 base, 1388 with full features (verified 2026-04-30)
+- Test count: 1134 base, 1388 with full features (verified 2026-04-30)
 - Use `rg` to confirm file paths and line numbers exist
 - Run `cargo test --lib -p slapper` after each change
 
@@ -408,6 +408,10 @@ impl TabWindow {
 - Navigation: Uses `TabWindow` instead of hardcoded `visible_count = 10`
 - Mouse hit-testing: Uses `TabWindow` to map click position to correct tab
 - Session persistence: Uses `stable_id` for forward compatibility
+
+- `App::new(history: SharedHistory)` - Runtime constructor; restores session state
+- `App::new_for_testing(history: SharedHistory)` - Test constructor; does NOT restore session
+- Use `App::new_for_testing()` in all unit tests to avoid ambient session file dependencies
 
 **Anti-patterns to avoid**:
 - Don't use `tab as usize` for tab indexing (enum discriminants != visible indexes)

@@ -41,6 +41,47 @@ pub struct CommandPalette {
     pub results: Arc<Vec<CommandPaletteResult>>,
     pub selected_index: usize,
     pub scroll_offset: usize,
+    pub popup_width: u16,
+    pub popup_height: u16,
+}
+
+impl CommandPalette {
+    pub fn new(results: Arc<Vec<CommandPaletteResult>>) -> Self {
+        Self {
+            visible: false,
+            query: String::new(),
+            results,
+            selected_index: 0,
+            scroll_offset: 0,
+            popup_width: 60,
+            popup_height: 20,
+        }
+    }
+
+    pub fn with_popup_size(mut self, width: u16, height: u16) -> Self {
+        self.popup_width = width;
+        self.popup_height = height;
+        self
+    }
+
+    pub fn visible_results_height(&self) -> usize {
+        (self.popup_height as usize).saturating_sub(5).max(5)
+    }
+
+    pub fn max_scroll_offset(&self) -> usize {
+        self.results.len().saturating_sub(self.visible_results_height())
+    }
+
+    pub fn adjust_scroll_for_selection(&mut self) {
+        let vis = self.visible_results_height();
+        let max_scroll = self.max_scroll_offset();
+        if self.selected_index >= self.scroll_offset + vis {
+            self.scroll_offset = self.selected_index.saturating_sub(vis).min(max_scroll).max(0);
+        }
+        if self.selected_index < self.scroll_offset {
+            self.scroll_offset = self.selected_index.min(max_scroll);
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

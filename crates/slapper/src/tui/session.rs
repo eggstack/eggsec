@@ -4,6 +4,22 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+/// Session state persistence.
+///
+/// # Stability Guarantees
+///
+/// - `current_tab_id` (stable ID string) is the **authoritative** tab identity for new sessions.
+/// - `legacy_current_tab` stores the **visible index** for backward compatibility. When restoring
+///   from legacy data, `Tab::from_index()` interprets the value as a visible index into `Tab::all()`.
+/// - `bookmarks` stores stable IDs and is the **authoritative** bookmark identity for new sessions.
+/// - `legacy_bookmarks` stores visible indexes for backward compatibility.
+///
+/// # Migration Path
+///
+/// Old numeric session files may contain enum discriminants written as `tab as usize`.
+/// When restoring, we interpret `legacy_current_tab` as a visible index (not discriminant)
+/// because `Tab::from_index()` maps directly to `Tab::all()[index]`. If tabs are reordered in
+/// future versions, the stable ID (`current_tab_id`) remains correct regardless of tab ordering.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
     pub current_tab_id: Option<String>,
@@ -116,30 +132,29 @@ impl SessionManager {
 
         for bookmark_id in &state.bookmarks {
             if let Some(tab) = Tab::from_stable_id(bookmark_id) {
-                if let Some(idx) = tab.visible_index() {
-                    app.bookmarks.insert(idx);
-                }
+                app.bookmarks.insert(tab.stable_id().to_string());
             }
         }
 
         for &idx in &state.legacy_bookmarks {
             if let Some(tab) = Tab::from_index(idx) {
-                if let Some(visible_idx) = tab.visible_index() {
-                    app.bookmarks.insert(visible_idx);
+                if tab.visible_index().is_some() {
+                    app.bookmarks.insert(tab.stable_id().to_string());
                 }
             }
         }
     }
 
     fn capture_state(&self, app: &App) -> SessionState {
+        let current_tab_visible = app.current_tab.visible_index();
         SessionState {
             current_tab_id: Some(app.current_tab.stable_id().to_string()),
-            bookmarks: app.get_bookmarked_tabs().iter().filter_map(|&idx| {
-                Tab::from_index(idx).map(|t| t.stable_id().to_string())
-            }).collect(),
+            bookmarks: app.get_bookmarked_tab_ids(),
             theme_name: "dark".to_string(),
-            legacy_current_tab: Some(app.current_tab as usize),
-            legacy_bookmarks: app.get_bookmarked_tabs(),
+            legacy_current_tab: current_tab_visible,
+            legacy_bookmarks: app.get_bookmarked_tab_ids().iter().filter_map(|id| {
+                Tab::from_stable_id(id).and_then(|t| t.visible_index())
+            }).collect(),
         }
     }
 

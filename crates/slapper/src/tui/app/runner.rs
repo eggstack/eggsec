@@ -125,16 +125,18 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
         }
 
         if tab_area.contains((mouse_event.column, mouse_event.row).into()) {
-            let window = TabWindow::for_width(term_width, app.current_tab, app.tab_scroll_offset);
+            let window = TabWindow::for_width(tab_area.width, app.current_tab, app.tab_scroll_offset);
             if window.max_visible > 0 {
                 let tab_width = tab_area.width / window.max_visible as u16;
-                let local_index = (mouse_event.column.saturating_sub(1) / tab_width) as usize;
-                let clicked_global_index = window.start + local_index;
-                if clicked_global_index < window.total_tabs {
-                    if let Some(tab) = Tab::from_visible_index(clicked_global_index) {
-                        app.current_tab = tab;
-                        app.adjust_tab_scroll();
-                        app.needs_redraw = true;
+                if tab_width > 0 {
+                    let local_index = ((mouse_event.column.saturating_sub(tab_area.x)) / tab_width) as usize;
+                    let clicked_global_index = window.start + local_index;
+                    if clicked_global_index < window.total_tabs {
+                        if let Some(tab) = Tab::from_visible_index(clicked_global_index) {
+                            app.current_tab = tab;
+                            app.adjust_tab_scroll();
+                            app.needs_redraw = true;
+                        }
                     }
                 }
             }
@@ -257,7 +259,7 @@ where
                         }
                     }
                     (KeyModifiers::CONTROL, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
-                        app.toggle_bookmark(app.current_tab as usize);
+                        app.toggle_bookmark(app.current_tab);
                     }
                     _ if app
                         .get_command_palette()
@@ -292,15 +294,7 @@ where
                                     if palette.selected_index < max_idx {
                                         palette.selected_index += 1;
                                     }
-                                    let visible_height = 14usize;
-                                    let max_scroll =
-                                        palette.results.len().saturating_sub(visible_height);
-                                    if palette.selected_index
-                                        >= palette.scroll_offset + visible_height
-                                    {
-                                        palette.scroll_offset =
-                                            palette.scroll_offset.min(max_scroll) + 1;
-                                    }
+                                    palette.adjust_scroll_for_selection();
                                 }
                             }
                             (KeyModifiers::NONE, KeyCode::Backspace) => {
@@ -330,15 +324,7 @@ where
                                     if palette.selected_index < max_idx {
                                         palette.selected_index += 1;
                                     }
-                                    let visible_height = 14usize;
-                                    let max_scroll =
-                                        palette.results.len().saturating_sub(visible_height);
-                                    if palette.selected_index
-                                        >= palette.scroll_offset + visible_height
-                                    {
-                                        palette.scroll_offset =
-                                            palette.scroll_offset.min(max_scroll) + 1;
-                                    }
+                                    palette.adjust_scroll_for_selection();
                                 }
                             }
                             (KeyModifiers::SHIFT, KeyCode::BackTab) => {

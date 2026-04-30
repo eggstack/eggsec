@@ -13,13 +13,8 @@ impl super::App {
                 palette.scroll_offset = 0;
             }
         } else {
-            let palette = CommandPalette {
-                visible: true,
-                query: String::new(),
-                results: self.help_manager.get_command_palette_entries().clone(),
-                selected_index: 0,
-                scroll_offset: 0,
-            };
+            let mut palette = CommandPalette::new(self.help_manager.get_command_palette_entries().clone());
+            palette.visible = true;
             self.command_palette = Some(palette);
         }
     }
@@ -145,7 +140,7 @@ mod tests {
     use crate::tui::tabs::Tab;
 
     fn create_test_app() -> App {
-        App::new(create_shared_history())
+        App::new_for_testing(create_shared_history())
     }
 
     #[test]
