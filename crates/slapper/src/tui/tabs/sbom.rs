@@ -1,4 +1,6 @@
 #[cfg(feature = "sbom")]
+use crate::tc;
+#[cfg(feature = "sbom")]
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 
 #[cfg(feature = "sbom")]
@@ -61,12 +63,12 @@ impl TabRender for SbomTab {
 
         let title = Paragraph::new("SBOM Generation")
             .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::Cyan));
+            .style(Style::default().fg(tc!(info)));
         f.render_widget(title, layout[0]);
 
         let output = Paragraph::new(&self.output)
             .block(Block::default().borders(Borders::ALL).title("SBOM"))
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(tc!(text)));
         f.render_widget(output, layout[1]);
     }
 }

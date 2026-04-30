@@ -1,8 +1,8 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     text::Line,
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -100,7 +100,7 @@ impl TabState for ResumeTab {
         self.state = AppState::Error(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -125,7 +125,7 @@ impl TabRender for ResumeTab {
         }
 
         if !self.results_view.is_empty() {
-            self.results_view.render(f, results_area, Some(Color::Cyan));
+            self.results_view.render(f, results_area, Some(tc!(info)));
         } else {
             let placeholder = Paragraph::new(
                 "Enter session file path and press Enter to resume a previous scan.\n\n\
@@ -134,7 +134,7 @@ impl TabRender for ResumeTab {
                    slapper resume /path/to/session.json",
             )
             .block(Block::default().borders(Borders::ALL).title("Session Info"))
-            .style(Color::DarkGray);
+            .style(tc!(text_dim));
             f.render_widget(placeholder, results_area);
         }
     }

@@ -1,7 +1,7 @@
+use crate::tc;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
@@ -61,12 +61,12 @@ impl TabRender for AgentTab {
 
         let title = Paragraph::new("Agent Configuration")
             .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::Cyan));
+            .style(Style::default().fg(tc!(info)));
         f.render_widget(title, layout[0]);
 
         let status = Paragraph::new(format!("Status: {}", self.status))
             .block(Block::default().borders(Borders::ALL).title("Status"))
-            .style(Style::default().fg(Color::Green));
+            .style(Style::default().fg(tc!(success)));
         f.render_widget(status, layout[1]);
     }
 }

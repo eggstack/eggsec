@@ -1,7 +1,7 @@
+use crate::tc;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
@@ -59,12 +59,12 @@ impl TabRender for CiTab {
 
         let title = Paragraph::new("CI/CD Integration")
             .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::Cyan));
+            .style(Style::default().fg(tc!(info)));
         f.render_widget(title, layout[0]);
 
         let output = Paragraph::new(&self.output)
             .block(Block::default().borders(Borders::ALL).title("Output"))
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(tc!(text)));
         f.render_widget(output, layout[1]);
     }
 }

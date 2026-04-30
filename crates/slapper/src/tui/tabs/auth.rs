@@ -1,8 +1,8 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
@@ -96,7 +96,7 @@ impl TabRender for AuthTab {
 
         let title = Paragraph::new("Authentication Testing")
             .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::Cyan));
+            .style(Style::default().fg(tc!(info)));
         f.render_widget(title, layout[0]);
 
         let mut input_text = String::new();
@@ -116,12 +116,12 @@ impl TabRender for AuthTab {
 
         let input_display = Paragraph::new(input_text)
             .block(Block::default().borders(Borders::ALL).title("Inputs"))
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(tc!(text)));
         f.render_widget(input_display, layout[1]);
 
         let results = Paragraph::new(&self.results)
             .block(Block::default().borders(Borders::ALL).title("Results"))
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(tc!(text)));
         f.render_widget(results, layout[3]);
     }
 }

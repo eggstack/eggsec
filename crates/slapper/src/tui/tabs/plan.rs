@@ -1,7 +1,7 @@
+use crate::tc;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
@@ -57,12 +57,12 @@ impl TabRender for PlanTab {
 
         let title = Paragraph::new("Scan Plan Preview")
             .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::Cyan));
+            .style(Style::default().fg(tc!(info)));
         f.render_widget(title, layout[0]);
 
         let preview = Paragraph::new(&self.preview)
             .block(Block::default().borders(Borders::ALL).title("Plan Stages"))
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(tc!(text)));
         f.render_widget(preview, layout[1]);
     }
 }
