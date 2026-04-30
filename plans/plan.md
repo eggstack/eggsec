@@ -16,7 +16,7 @@ This document is the single source of truth for all planned improvements to Slap
 - **~5** clippy warnings (TUI-specific acceptable)
 - **506** source files, **30** payload types, **29** TUI tabs.
 
-**All waves verified complete as of 2026-04-30. Phase 8 also complete. Phase 9 planned.**
+**All waves verified complete as of 2026-04-30. Phase 8 also complete. Phase 9 complete. Phase 10 planned.**
 
 ---
 
@@ -100,6 +100,7 @@ All waves completed and verified:
 | 7: Documentation | ✓ COMPLETE | CI/CD templates already implemented |
 | 8: Pre-Open Source Polish | ✓ COMPLETE | Alert fatigue fix, TUI perf, architectural cleanup, Dashboard enhancements |
 | 9: Dashboard & Alert Polish | ✓ COMPLETE | Sparkline data from history, session asset health, warm_cache, drop guard handlers |
+| 10: Portfolio Memory Integration | PLANNED | Snapshot file pattern: Agent writes, TUI reads for real portfolio health |
 
 ---
 
@@ -138,5 +139,131 @@ All waves completed and verified:
 - **9.2.2**: Health indicator (Healthy/Needs Attention) based on critical findings count
 - **9.3.1**: `warm_cache()` added to LongitudinalMemory, called in Agent::new() to pre-load alerted_findings.json
 - **9.4.2**: Handler registry uses `std::mem::replace` with `RestoreHandlers` drop guard for guaranteed restoration
+
+---
+
+## Phase 10: Portfolio Memory Integration (PLANNED)
+
+**Status**: PLANNED
+**Priority**: Medium
+**Objective**: Connect Agent's LongitudinalMemory to Dashboard via snapshot file for real portfolio-level asset health.
+
+### Architecture: Snapshot File Pattern
+
+```
+Agent scan complete → LongitudinalMemory → write portfolio_snapshot.json
+                                                      ↓
+                              TUI Dashboard ← read on demand
+```
+
+**Why this approach:**
+- Decoupled: Agent and TUI evolve independently
+- Simple: Reuses existing file I/O infrastructure
+- Resilient: TUI gracefully handles missing/malformed snapshots
+
+### Implementation Steps
+
+#### 10.1: Define PortfolioSnapshot Struct
+
+**File**: `crates/slapper/src/agent/memory.rs`
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PortfolioSnapshot {
+    pub unique_targets: usize,
+    pub total_scans: usize,
+    pub scans_today: usize,
+    pub findings_by_severity: HashMap<String, usize>,  // "critical" -> 2, "high" -> 5, etc.
+    pub findings_trend: Vec<(String, usize)>,           // [("2024-01", 3), ("2024-02", 7), ...]
+    pub critical_findings: usize,
+    pub health_score: f64,  // 0.0-1.0, computed from severity ratios
+    pub last_updated: DateTime<Utc>,
+}
+```
+
+**Task**: Add `PortfolioSnapshot` struct and `DEFAULT_SNAPSHOT_FILE: &str = "portfolio_snapshot.json"`
+
+#### 10.2: Add Snapshot Write Method
+
+**File**: `crates/slapper/src/agent/memory.rs`
+
+**Method**: `pub async fn write_portfolio_snapshot(&self) -> Result<()>`
+
+**Logic**:
+1. Iterate all target memory files in `targets/` directory
+2. Aggregate `findings_by_severity` across all targets
+3. Compute `findings_trend` from historical scan timestamps (last 6 months)
+4. Calculate `health_score` = 1.0 - (critical * 0.4 + high * 0.25 + medium * 0.15 + low * 0.1) / max(1, total)
+5. Write JSON to `storage_dir / DEFAULT_SNAPSHOT_FILE`
+
+**Task**: Implement `write_portfolio_snapshot()` and call it from:
+- `store_scan_results()` after storing new scan results
+- `Agent::process_scheduled_scans()` after successful scan
+
+#### 10.3: Add Snapshot Read Method (Sync)
+
+**File**: `crates/slapper/src/agent/memory.rs`
+
+**Method**: `pub fn read_portfolio_snapshot() -> Option<PortfolioSnapshot>`
+
+**Logic**:
+1. Read `storage_dir / DEFAULT_SNAPSHOT_FILE` synchronously
+2. Parse JSON and return `PortfolioSnapshot`
+3. Return `None` if file doesn't exist or parse fails
+
+**Task**: Implement synchronous read for TUI consumption
+
+#### 10.4: Add TUI Loading Method
+
+**File**: `crates/slapper/src/tui/tabs/dashboard.rs`
+
+**Method**: `fn load_portfolio_snapshot() -> Option<PortfolioSnapshot>`
+
+**Logic**:
+1. Construct path: `~/.config/slapper/memory/portfolio_snapshot.json`
+2. Read and parse synchronously
+3. Return `None` on failure (graceful degradation)
+
+**Task**: Add `load_portfolio_snapshot()` that calls `memory.rs` (need to expose read method)
+
+#### 10.5: Update Dashboard to Use Snapshot
+
+**File**: `crates/slapper/src/tui/tabs/dashboard.rs`
+
+**Changes**:
+1. Add `portfolio_snapshot: Option<PortfolioSnapshot>` field to `DashboardTab`
+2. In `update_from_history()` or new `update_from_snapshot()`:
+   - If snapshot available, use its `unique_targets`, `scans_today`, `critical_findings`
+   - Compute health status from `health_score` instead of heuristic
+3. Update `render_stats()` to display:
+   - "Portfolio Health: X%" (from `health_score * 100`)
+   - "Total Findings: X" (from `findings_by_severity` sum)
+   - "Trend: ↑N / ↓M" (from `findings_trend` comparison)
+
+#### 10.6: Expose Snapshot Path via Agent
+
+**File**: `crates/slapper/src/agent/mod.rs`
+
+**Changes**:
+1. Add `pub fn get_snapshot_path(&self) -> PathBuf` method to `Agent`
+2. Return `self.memory.storage_dir() / DEFAULT_SNAPSHOT_FILE`
+
+**Note**: May need to make `storage_dir` field public or add accessor.
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `agent/memory.rs` | +PortfolioSnapshot struct, +write_portfolio_snapshot(), +read_portfolio_snapshot() |
+| `agent/mod.rs` | +get_snapshot_path(), call write_snapshot after scans |
+| `tui/tabs/dashboard.rs` | +load_portfolio_snapshot(), +portfolio_snapshot field, use snapshot data in render |
+
+### Success Criteria
+
+- [ ] Agent writes snapshot after each scan
+- [ ] Dashboard reads and displays portfolio-level stats
+- [ ] TUI gracefully degrades when snapshot unavailable
+- [ ] Health score reflects actual finding severity from LongitudinalMemory
+- [ ] Trend data shows month-over-month comparison
 
 ---
