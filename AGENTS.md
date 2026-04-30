@@ -426,6 +426,36 @@ impl TabWindow {
 - Don't use `Tab::all().len()` as visible count (not all tabs may be available)
 - Don't divide tab area by total tab count for mouse hit-testing
 
+**Phase 13 Updates (2026-04-30):**
+
+`TabWindow::for_width` now uses actual tab label widths (greedy algorithm) instead of fixed `min_tab_width = 8`:
+```rust
+pub fn for_width(term_width: u16, current_tab: Tab, previous_offset: u16) -> Self;
+// Uses actual tab title widths to compute max_visible
+```
+
+Added `visible_tab_spans()` for render-aware mouse hit-testing:
+```rust
+pub struct TabSpan {
+    pub tab: Tab,
+    pub global_index: usize,
+    pub x_start: u16,
+    pub x_end: u16,
+}
+
+pub fn visible_tab_spans(&self, term_width: u16) -> Vec<TabSpan>;
+```
+
+Keyboard navigation uses edge detection:
+- `handle_left()` and `handle_right()` check `is_at_left_edge()` / `is_at_right_edge()` before attempting movement
+- No longer fall back to tab switching when `handle_left/right` returns `false`
+- Use `n/p` or `Shift+H/L` for explicit tab navigation
+
+Tab labels now show shortcuts only for tabs 1-10:
+- `[1] Recon` through `[9] Scan` have keyboard shortcuts
+- `[0] Resume` - keyboard shortcut is '0' for tab 10
+- `Proxy`, `Packet`, etc. (tabs 11+) have no numeric shortcut labels
+
 ---
 
 ### Auto-Insert Mode

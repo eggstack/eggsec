@@ -82,6 +82,74 @@ impl TabWindow {
 - `1-9`, `0` - direct tab selection (limited to single digit)
 - Mouse click on tab - selects that tab if visible
 
+## Phase 13 Updates (2026-04-30)
+
+### Completed Items
+
+- **13.1**: Render-aware capacity - `TabWindow::for_width` uses actual label widths, not fixed minimum
+- **13.2**: TabSpan helper - `visible_tab_spans()` provides accurate mouse hit-testing
+- **13.3**: Fixed tab labels - tabs 11+ no longer show implied keyboard shortcuts
+- **13.4**: Edge-based navigation - `handle_left/handle_right` use `is_at_edge()` checks
+- **13.5**: Render tests - 9 tests covering various terminal sizes (30, 40, 60, 80, 120)
+- **13.6**: Overlay hardening - `visible_results_height()` bounds by actual result count
+- **13.7**: Status bar audit - already uses Paragraph widgets with proper overflow handling
+
+### Render-Aware Tab Capacity
+
+```rust
+// TabWindow now uses greedy algorithm with actual tab label widths
+let tab_widths: Vec<usize> = all_tabs.iter().map(|t| t.title().len()).collect();
+let mut max_visible = 0;
+let mut cum_width = 0;
+for (i, &w) in tab_widths.iter().enumerate() {
+    cum_width += w;
+    if cum_width > available_width && i > 0 {
+        break;
+    }
+    max_visible = i + 1;
+}
+```
+
+### TabSpan for Mouse Hit-Testing
+
+```rust
+pub struct TabSpan {
+    pub tab: Tab,
+    pub global_index: usize,
+    pub x_start: u16,
+    pub x_end: u16,
+}
+
+// Mouse click handling
+for span in spans {
+    if click_x >= span.x_start && click_x < span.x_end {
+        app.current_tab = span.tab;
+        break;
+    }
+}
+```
+
+### Tab Label Shortcuts
+
+Only tabs 1-10 show numeric shortcuts:
+```rust
+"[1] Recon", "[2] Load", ..., "[9] Scan", "[0] Resume",  // 10 tabs with shortcuts
+"Proxy", "Packet", "GraphQL", ...                           // No shortcuts for tabs 11+
+```
+
+### Navigation Changes
+
+`handle_left()` and `handle_right()` now stop at edge instead of switching tabs:
+```rust
+pub fn handle_left(&mut self) {
+    // ...
+    if self.dispatcher_mut().is_at_left_edge() {
+        return;  // Don't fall back to prev_tab
+    }
+    let _ = self.dispatcher_mut().handle_left();
+}
+```
+
 ### Session Persistence
 
 Session state now uses stable string IDs instead of numeric indexes:
