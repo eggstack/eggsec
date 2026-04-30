@@ -47,6 +47,9 @@ tab.stable_id() -> &'static str  // e.g., "dashboard", "settings"
 
 // Restore tab from stable ID (checks availability!)
 Tab::from_stable_id("dashboard") -> Option<Tab>
+
+// Restore tab from enum discriminant (legacy migration only!)
+Tab::from_discriminant(0) -> Option<Tab>  // Legacy migration path only!
 ```
 
 ## TabWindow Helper
@@ -203,6 +206,20 @@ fn test_tab_navigation() {
     let app = App::new_for_testing(create_shared_history());
     assert_eq!(app.current_tab, Tab::Recon);  // Always starts on Recon in tests
 }
+```
+
+## Legacy Migration Helper
+
+`Tab::from_discriminant(discriminant: usize) -> Option<Tab>` maps enum discriminant values directly to Tab variants:
+
+```rust
+// Maps discriminant values (0-28) to Tab variants
+Tab::from_discriminant(0)  // Some(Tab::Recon)
+Tab::from_discriminant(17)  // Some(Tab::Nse)
+Tab::from_discriminant(999) // None
+
+// Use only for explicit legacy numeric session migration
+// Normal code should use Tab::from_stable_id() or Tab::from_index()
 ```
 
 ## Implementation Files

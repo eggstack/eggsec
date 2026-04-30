@@ -90,6 +90,8 @@ let bookmarks = app.get_bookmarked_tab_ids();
 
 **Migration note:** Old numeric session files may have enum discriminants written as `tab as usize`. When restoring, we interpret `legacy_current_tab` as a visible index. If an old session saved visible indexes correctly, restoration works correctly. Stable IDs remain correct regardless of tab ordering.
 
+**Legacy discriminant helper:** `Tab::from_discriminant(discriminant: usize)` maps enum discriminant values directly to Tab variants. This is used only for explicit legacy migration paths and is NOT used in normal session restore. Normal restore uses `Tab::from_stable_id()` and `Tab::from_index()` (visible-index based)."
+
 ## Quick Save Feature
 
 The quick-save slot (`save_quick`/`load_quick`) automatically persists state periodically and on exit. Use this for crash recovery.
@@ -100,4 +102,31 @@ The quick-save slot (`save_quick`/`load_quick`) automatically persists state per
 cargo test --lib -p slapper -- session
 # or
 cargo test --lib -p slapper -- test_bookmark_api_uses_stable_ids
+```
+
+## Testing
+
+Dedicated session restoration tests verify the following scenarios:
+
+```rust
+// Test cases in crates/slapper/src/tui/session.rs
+#[test]
+fn test_restore_session_with_valid_stable_id() { ... }
+#[test]
+fn test_restore_session_with_unavailable_stable_id_falls_back_to_recon() { ... }
+#[test]
+fn test_restore_session_with_legacy_visible_index() { ... }
+#[test]
+fn test_restore_session_bookmarks_with_available_tabs() { ... }
+#[test]
+fn test_restore_session_unavailable_bookmark_ids_are_dropped() { ... }
+#[test]
+fn test_restore_session_prefers_stable_id_over_legacy() { ... }
+#[test]
+fn test_restore_session_empty_state_falls_back_to_recon() { ... }
+```
+
+Run the session restoration tests:
+```bash
+cargo test --lib -p slapper -- test_restore_session
 ```
