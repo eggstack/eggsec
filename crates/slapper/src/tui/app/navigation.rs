@@ -385,6 +385,23 @@ mod tests {
     }
 
     #[test]
+    fn test_tab_from_discriminant() {
+        use crate::tui::tabs::Tab;
+        for (i, tab) in Tab::all().iter().enumerate() {
+            assert_eq!(
+                Tab::from_discriminant(*tab as usize),
+                Some(*tab),
+                "from_discriminant({}) should return {:?}",
+                *tab as usize,
+                tab
+            );
+        }
+        assert_eq!(Tab::from_discriminant(999), None);
+        assert_eq!(Tab::from_discriminant(0), Some(Tab::Recon));
+        assert_eq!(Tab::from_discriminant(28), Some(Tab::Vuln));
+    }
+
+    #[test]
     fn test_tab_window_calculation_80_cols() {
         use crate::tui::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(80, Tab::Recon, 0);

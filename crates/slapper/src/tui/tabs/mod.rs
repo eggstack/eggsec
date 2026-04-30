@@ -313,6 +313,41 @@ impl Tab {
         Self::from_index(index)
     }
 
+    pub fn from_discriminant(discriminant: usize) -> Option<Tab> {
+        match discriminant {
+            0 => Some(Tab::Recon),
+            1 => Some(Tab::Load),
+            2 => Some(Tab::ScanPorts),
+            3 => Some(Tab::ScanEndpoints),
+            4 => Some(Tab::Fingerprint),
+            5 => Some(Tab::Fuzz),
+            6 => Some(Tab::Waf),
+            7 => Some(Tab::WafStress),
+            8 => Some(Tab::Scan),
+            9 => Some(Tab::Resume),
+            10 => Some(Tab::Proxy),
+            11 => Some(Tab::Packet),
+            12 => Some(Tab::GraphQl),
+            13 => Some(Tab::OAuth),
+            14 => Some(Tab::Cluster),
+            15 => Some(Tab::Stress),
+            16 => Some(Tab::Report),
+            17 => Some(Tab::Nse),
+            18 => Some(Tab::Plugin),
+            19 => Some(Tab::Settings),
+            20 => Some(Tab::History),
+            21 => Some(Tab::Dashboard),
+            22 => Some(Tab::Hunt),
+            23 => Some(Tab::Browser),
+            24 => Some(Tab::Compliance),
+            25 => Some(Tab::Storage),
+            26 => Some(Tab::Integrations),
+            27 => Some(Tab::Workflow),
+            28 => Some(Tab::Vuln),
+            _ => None,
+        }
+    }
+
     pub fn stable_id(&self) -> &'static str {
         match self {
             Tab::Recon => "recon",
