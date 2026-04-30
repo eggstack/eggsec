@@ -382,6 +382,42 @@ impl Tab {
         }
     }
 
+    const TAB_BREADCRUMBS: &'static [&'static str] = &[
+        "Recon",
+        "Load",
+        "Scan Ports",
+        "Scan Endpoints",
+        "Fingerprint",
+        "Fuzz",
+        "WAF",
+        "WAF Stress",
+        "Scan",
+        "Resume",
+        "Proxy",
+        "Packet",
+        "GraphQL Security",
+        "OAuth/OIDC Security",
+        "Cluster Management",
+        "Stress Testing",
+        "Report",
+        "NSE Scripts",
+        "Plugins",
+        "Settings",
+        "History",
+        "Dashboard",
+        "Hunt",
+        "Browser",
+        "Compliance",
+        "Storage",
+        "Integrations",
+        "Workflow",
+        "Vuln",
+    ];
+
+    pub fn default_breadcrumb(&self) -> Vec<&'static str> {
+        vec![Self::TAB_BREADCRUMBS[*self as usize]]
+    }
+
     pub fn as_tab_state_mut<'a>(&mut self, app: &'a mut super::App) -> &'a mut dyn TabState {
         match self {
             Tab::Recon => &mut app.recon,
