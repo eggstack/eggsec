@@ -123,26 +123,26 @@ impl Tab {
         "[7] WAF",
         "[8] WAF Stress",
         "[9] Scan",
-        "[10] Resume",
-        "[11] Proxy",
-        "[12] Packet",
-        "[13] GraphQL",
-        "[14] OAuth",
-        "[15] Cluster",
-        "[16] Stress",
-        "[17] Report",
-        "[18] NSE",
-        "[19] Plugins",
-        "[20] Settings",
-        "[21] History",
-        "[22] Dashboard",
-        "[23] Hunt",
-        "[24] Browser",
-        "[25] Compliance",
-        "[26] Storage",
-        "[27] Integrations",
-        "[28] Workflow",
-        "[29] Vuln",
+        "[0] Resume",
+        "Proxy",
+        "Packet",
+        "GraphQL",
+        "OAuth",
+        "Cluster",
+        "Stress",
+        "Report",
+        "NSE",
+        "Plugins",
+        "Settings",
+        "History",
+        "Dashboard",
+        "Hunt",
+        "Browser",
+        "Compliance",
+        "Storage",
+        "Integrations",
+        "Workflow",
+        "Vuln",
     ];
 
     pub fn title(&self) -> &'static str {
@@ -446,17 +446,35 @@ pub struct TabWindow {
     pub has_next: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct TabSpan {
+    pub tab: Tab,
+    pub global_index: usize,
+    pub x_start: u16,
+    pub x_end: u16,
+}
+
 impl TabWindow {
     pub fn for_width(term_width: u16, current_tab: Tab, previous_offset: u16) -> Self {
-        use std::sync::LazyLock;
-        static TAB_TITLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
-            Tab::all().iter().map(|t| t.title()).collect()
-        });
+        let all_tabs = Tab::all();
+        let total_tabs = all_tabs.len();
 
-        let total_tabs = TAB_TITLES.len();
-        let visible_width = (term_width as usize).saturating_sub(2);
-        let min_tab_width = 8_usize;
-        let max_visible = (visible_width / min_tab_width).max(1).min(total_tabs);
+        let inner_width = (term_width as usize).saturating_sub(2);
+        let range_text_len = Self::range_text_len(total_tabs, 0, total_tabs);
+        let available_width = inner_width.saturating_sub(range_text_len + 2);
+
+        let tab_widths: Vec<usize> = all_tabs.iter().map(|t| t.title().len()).collect();
+
+        let mut max_visible = 0;
+        let mut cum_width = 0;
+        for (i, &w) in tab_widths.iter().enumerate() {
+            cum_width += w;
+            if cum_width > available_width && i > 0 {
+                break;
+            }
+            max_visible = i + 1;
+        }
+        max_visible = max_visible.max(1).min(total_tabs);
 
         let current_idx = current_tab.visible_index().unwrap_or(0).min(total_tabs.saturating_sub(1));
         let previous_offset = previous_offset as usize;
@@ -489,12 +507,48 @@ impl TabWindow {
         }
     }
 
+    fn range_text_len(total_tabs: usize, start: usize, end: usize) -> usize {
+        let range_text = if start > 0 || end < total_tabs {
+            format!("[{}-{}/{}]", start + 1, end, total_tabs)
+        } else {
+            String::new()
+        };
+        range_text.len()
+    }
+
     pub fn range_text(&self) -> String {
         if self.has_prev || self.has_next {
             format!("[{}-{}/{}]", self.start + 1, self.end, self.total_tabs)
         } else {
             String::new()
         }
+    }
+
+    pub fn visible_tab_spans(&self, term_width: u16) -> Vec<TabSpan> {
+        let all_tabs = Tab::all();
+        let inner_width = (term_width as usize).saturating_sub(2);
+
+        if self.max_visible == 0 || self.end <= self.start {
+            return Vec::new();
+        }
+
+        let tab_width = inner_width / self.max_visible;
+
+        all_tabs[self.start..self.end]
+            .iter()
+            .enumerate()
+            .map(|(i, tab)| {
+                let global_index = self.start + i;
+                let x_start = (i * tab_width) as u16;
+                let x_end = ((i + 1) * tab_width) as u16;
+                TabSpan {
+                    tab: *tab,
+                    global_index,
+                    x_start,
+                    x_end,
+                }
+            })
+            .collect()
     }
 }
 

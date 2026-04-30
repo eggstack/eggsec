@@ -67,11 +67,13 @@ impl CommandPalette {
     }
 
     pub fn visible_results_height(&self) -> usize {
-        (self.last_content_height as usize).saturating_sub(3).max(5)
+        let computed = (self.last_content_height as usize).saturating_sub(3);
+        computed.min(self.results.len()).max(1)
     }
 
     pub fn visible_results_height_for_area(&self, popup_content_height: u16) -> usize {
-        (popup_content_height as usize).saturating_sub(3).max(5)
+        let computed = (popup_content_height as usize).saturating_sub(3);
+        computed.min(self.results.len()).max(1)
     }
 
     pub fn update_content_height(&mut self, content_height: u16) {
@@ -122,10 +124,10 @@ mod tests {
         assert_eq!(palette.visible_results_height(), 7);
 
         palette.last_content_height = 5;
-        assert_eq!(palette.visible_results_height(), 5);
+        assert_eq!(palette.visible_results_height(), 2);
 
         palette.last_content_height = 0;
-        assert_eq!(palette.visible_results_height(), 5);
+        assert_eq!(palette.visible_results_height(), 1);
     }
 
     #[test]

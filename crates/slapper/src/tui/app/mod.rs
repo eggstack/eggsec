@@ -559,13 +559,13 @@ impl App {
         }
         if self.current_tab == Tab::History {
             let mut h = self.history.lock();
-        h.handle_left();
+            h.handle_left();
             return;
         }
-        let moved = self.dispatcher_mut().handle_left();
-        if !moved {
-            self.prev_tab();
+        if self.dispatcher_mut().is_at_left_edge() {
+            return;
         }
+        let _ = self.dispatcher_mut().handle_left();
     }
 
     pub fn handle_right(&mut self) {
@@ -574,13 +574,13 @@ impl App {
         }
         if self.current_tab == Tab::History {
             let mut h = self.history.lock();
-        h.handle_right();
+            h.handle_right();
             return;
         }
-        let moved = self.dispatcher_mut().handle_right();
-        if !moved {
-            self.next_tab();
+        if self.dispatcher_mut().is_at_right_edge() {
+            return;
         }
+        let _ = self.dispatcher_mut().handle_right();
     }
 
     pub fn handle_focus_next(&mut self) {

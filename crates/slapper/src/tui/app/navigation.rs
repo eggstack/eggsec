@@ -405,7 +405,7 @@ mod tests {
     fn test_tab_window_calculation_80_cols() {
         use crate::tui::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(80, Tab::Recon, 0);
-        assert_eq!(window.max_visible, 9);
+        assert_eq!(window.max_visible, 6);
         assert_eq!(window.start, 0);
         assert!(window.end <= window.total_tabs);
         assert!(window.selected_visible < window.max_visible);
@@ -415,7 +415,7 @@ mod tests {
     fn test_tab_window_calculation_40_cols() {
         use crate::tui::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(40, Tab::Recon, 0);
-        assert_eq!(window.max_visible, 4);
+        assert_eq!(window.max_visible, 3);
         assert!(window.start <= window.total_tabs);
     }
 
@@ -423,7 +423,7 @@ mod tests {
     fn test_tab_window_calculation_120_cols() {
         use crate::tui::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(120, Tab::Recon, 0);
-        assert_eq!(window.max_visible, 14);
+        assert_eq!(window.max_visible, 11);
     }
 
     #[test]
@@ -536,5 +536,104 @@ mod tests {
             window.start <= tab_idx && tab_idx < window.end,
             "Current tab should be visible after adjust_tab_scroll with stored width"
         );
+    }
+}
+
+#[cfg(test)]
+mod render_tests {
+    use ratatui::{backend::TestBackend, Terminal};
+
+    use crate::tui::tabs::Tab;
+    use crate::tui::ui;
+    use crate::tui::state::create_shared_history;
+    use crate::tui::app::App;
+
+    fn create_test_app() -> App {
+        App::new_for_testing(create_shared_history())
+    }
+
+    #[test]
+    fn test_render_at_80x24_no_panic() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Fuzz;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+    }
+
+    #[test]
+    fn test_render_at_40x20_no_panic() {
+        let mut app = create_test_app();
+        let backend = TestBackend::new(40, 20);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+    }
+
+    #[test]
+    fn test_render_at_60x20_no_panic() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Dashboard;
+        let backend = TestBackend::new(60, 20);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+    }
+
+    #[test]
+    fn test_render_at_120x24_no_panic() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        let backend = TestBackend::new(120, 24);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+    }
+
+    #[test]
+    fn test_render_stale_offset_at_80x24() {
+        let mut app = create_test_app();
+        app.tab_scroll_offset = 100;
+        app.current_tab = Tab::Scan;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+    }
+
+    #[test]
+    fn test_render_narrow_30_width() {
+        let mut app = create_test_app();
+        let backend = TestBackend::new(30, 20);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+    }
+
+    #[test]
+    fn test_render_height_12_minimal() {
+        let mut app = create_test_app();
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+    }
+
+    #[test]
+    fn test_render_tab_bar_at_various_widths() {
+        let widths = [30u16, 40, 60, 80, 120];
+        for width in widths {
+            let mut app = create_test_app();
+            app.current_tab = Tab::Recon;
+            let backend = TestBackend::new(width, 24);
+            let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+            terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_render_late_tab_near_end_of_tabs() {
+        let mut app = create_test_app();
+        let all_tabs = Tab::all();
+        if let Some(last_tab) = all_tabs.last() {
+            app.current_tab = *last_tab;
+            let backend = TestBackend::new(80, 24);
+            let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+            terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        }
     }
 }
