@@ -177,12 +177,11 @@ impl App {
         };
 
         let restored_current_tab = restored_state.as_ref()
-            .and_then(|s| s.current_tab_id.as_ref())
-            .and_then(|id| Tab::from_stable_id(id))
+            .and_then(|s| s.current_tab_id.as_ref().and_then(|id| Tab::from_stable_id(id)))
             .or_else(|| {
                 restored_state.as_ref()
                     .and_then(|s| s.legacy_current_tab)
-                    .and_then(|idx| Tab::from_index(idx))
+                    .and_then(Tab::from_index)
             });
 
         Self {

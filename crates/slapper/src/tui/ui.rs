@@ -273,10 +273,7 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
         Tab::all().iter().map(|t| Line::from(t.title())).collect()
     });
 
-    let visible_titles: Vec<Line> = TAB_TITLES[window.start..window.end]
-        .iter()
-        .cloned()
-        .collect();
+    let visible_titles: Vec<Line> = TAB_TITLES[window.start..window.end].to_vec();
 
     let tabs = Tabs::new(visible_titles)
         .block(Block::default().borders(Borders::ALL).title(format!("Slapper{}", window.range_text())))
