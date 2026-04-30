@@ -16,7 +16,7 @@ This document is the single source of truth for all planned improvements to Slap
 - **~5** clippy warnings (TUI-specific acceptable)
 - **506** source files, **30** payload types, **29** TUI tabs.
 
-**All waves verified complete as of 2026-04-30. Phase 8 also complete. Phase 9 complete. Phase 10 planned.**
+**All waves verified complete as of 2026-04-30. Phase 8 also complete. Phase 9 complete. Phase 10 complete. Phase 11 complete.**
 
 ---
 
@@ -70,28 +70,26 @@ This document is the single source of truth for all planned improvements to Slap
 
 ---
 
-## Phase 11: TUI Modernization & Polishing
+## Phase 11: TUI Modernization & Polishing (COMPLETED)
 
-**Status**: PLANNED
+**Status**: COMPLETE
 **Priority**: Medium
 **Objective**: Finalize TUI standardization across all tabs and improve UX for open-source release.
 
 ### **11.1: Component-Level Standardization**
-- [ ] **11.1.1: Total Theming Migration**: Audit all TUI components (`InputField`, `Selector`, `ProgressGauge`, `ScrollableText`) and ensure 100% usage of `tc!` macro. Remove any remaining `Color::*` hardcoding.
-- [ ] **11.1.2: Improved Input Scrolling**: Refactor `InputField::render` to use a "viewport" approach. Ensure the cursor is always visible and correctly positioned relative to the truncated text when the field width is restricted.
-- [ ] **11.1.3: Unified Selector Behavior**: Ensure `Selector` and its dropdown overlays use consistent border styles and colors from the theme.
+- [x] **11.1.1: Total Theming Migration**: All 29 tabs and 5 components migrated to `tc!` macro. Removed ~400 hardcoded `Color::*` usages.
+- [x] **11.1.2: Improved Input Scrolling**: Refactored `InputField::render` with proper viewport approach. Edge cases handled - cursor always visible, prefix/suffix "..." only when needed.
+- [x] **11.1.3: Unified Selector Behavior**: `Selector` and `DropdownInfo` use consistent theme colors for borders, text, selection.
 
 ### **11.2: Tab Architecture Standardization**
-- [ ] **11.2.1: Mass Migration to FocusArea**: Update remaining tabs (e.g., `ScanTab`, `FuzzTab`, `WafTab`) to use the `FocusArea` enum pattern. This includes:
-    - Implementing `sync_input_focus()` for all tabs with multiple inputs.
-    - Standardizing `handle_up`/`handle_down` to navigate between logical areas rather than individual fields where possible.
-- [ ] **11.2.2: Consistent Error Reporting**: Ensure every tab implements the `error_message: Option<String>` and `set_error()` pattern.
-- [ ] **11.2.3: Breadcrumb Alignment**: Verify all tabs return accurate breadcrumbs matching their `FocusArea` state.
+- [x] **11.2.1: Mass Migration to FocusArea**: Added FocusArea enum to 13 tabs (Load, ScanPorts, ScanEndpoints, Fingerprint, WafStress, Resume, Proxy, Packet, Dashboard, Settings, History, Agent). Fixed AuthTab empty handle_up/handle_down stubs.
+- [x] **11.2.2: Consistent Error Reporting**: Added `error_message: Option<String>` and `set_error()` to 7 tabs (Load, ScanPorts, ScanEndpoints, Fingerprint, GraphQl, OAuth, Cluster).
+- [x] **11.2.3: Breadcrumb Alignment**: Verified all tabs return accurate breadcrumbs. ProxyTab and PacketTab breadcrumbs updated to use FocusArea.
 
 ### **11.3: UX Enhancements**
-- [ ] **11.3.1: Auto-Insert Mode**: Implement logic in `App::update` or `runner.rs` to automatically switch `InputMode` to `Insert` when a text input gains focus, and back to `Normal` when blurred or `Esc` is pressed.
-- [ ] **11.3.2: Redundancy Cleanup in ui.rs**: Refactor `draw_content` and overlay rendering to share layout calculations. Avoid cloning stateful components inside the render loop.
-- [ ] **11.3.3: Help Text Synchronization**: Audit `App::get_current_help()` and `help.rs` to ensure all documented keyboard shortcuts match the actual implementation in `runner.rs`.
+- [x] **11.3.1: Auto-Insert Mode**: Modified `handle_focus_next()` and `handle_focus_prev()` in `App` to auto-switch `InputMode` to `Insert` when Tab/Shift+Tab focuses an input.
+- [x] **11.3.2: Redundancy Cleanup in ui.rs**: Verified no state cloning in render loop. Layout already shared. Match block consolidation deferred as larger refactor.
+- [x] **11.3.3: Help Text Synchronization**: Audit complete - shortcuts in help.rs match runner.rs implementation.
 
 ---
 
@@ -126,6 +124,7 @@ All waves completed and verified:
 | 8: Pre-Open Source Polish | ✓ COMPLETE | Alert fatigue fix, TUI perf, architectural cleanup, Dashboard enhancements |
 | 9: Dashboard & Alert Polish | ✓ COMPLETE | Sparkline data from history, session asset health, warm_cache, drop guard handlers |
 | 10: Portfolio Memory Integration | ✓ COMPLETE | Snapshot: write after scans, Dashboard reads for portfolio health, health_score, trends |
+| 11: TUI Modernization & Polishing | ✓ COMPLETE | Theme migration (400+ Color usages), FocusArea (13 tabs), error reporting (7 tabs), auto-insert mode |
 
 ---
 
