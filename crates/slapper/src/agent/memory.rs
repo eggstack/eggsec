@@ -152,6 +152,11 @@ impl LongitudinalMemory {
         Ok(())
     }
 
+    pub async fn warm_cache(&self) -> Result<()> {
+        self.load_alerted_findings().await?;
+        Ok(())
+    }
+
     pub async fn deduplicate_findings(
         &self,
         findings: Vec<Finding>,

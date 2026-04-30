@@ -104,6 +104,7 @@ impl Agent {
 
         let memory_dir = config.memory_dir.join("memory");
         let memory = LongitudinalMemory::new(memory_dir).await?;
+        memory.warm_cache().await.ok();
 
         let alert_router = AlertRouter::new()?;
 
@@ -459,21 +460,33 @@ impl Agent {
     pub async fn trigger_event(&mut self, event: SecurityEvent) -> Result<()> {
         tracing::debug!("Event triggered: {:?}", event.event_type());
 
-        let handlers = std::mem::take(&mut self.event_handlers);
-        let result: Result<()> = (|| async {
-            for handler in handlers.iter() {
-                if handler.handles(&event) {
-                    handler.handle(&event, self).await?;
-                }
-            }
-            Ok(())
-        })().await;
+        let handlers = std::mem::replace(&mut self.event_handlers, Vec::new());
 
-        if self.event_handlers.is_empty() {
-            self.event_handlers = handlers;
+        struct RestoreHandlers<'a> {
+            handlers: Vec<Box<dyn EventHandler>>,
+            target: &'a mut Vec<Box<dyn EventHandler>>,
         }
 
-        result
+        impl Drop for RestoreHandlers<'_> {
+            fn drop(&mut self) {
+                if self.target.is_empty() {
+                    *self.target = std::mem::take(&mut self.handlers);
+                }
+            }
+        }
+
+        let _guard = RestoreHandlers {
+            handlers,
+            target: &mut self.event_handlers,
+        };
+
+        for handler in _guard.handlers.iter() {
+            if handler.handles(&event) {
+                handler.handle(&event, self).await?;
+            }
+        }
+
+        Ok(())
     }
 }
 

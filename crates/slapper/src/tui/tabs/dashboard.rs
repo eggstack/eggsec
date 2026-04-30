@@ -13,6 +13,9 @@ pub struct DashboardTab {
     pub last_scan_type: String,
     pub last_target: String,
     pub sparkline_data: Vec<usize>,
+    pub unique_targets: usize,
+    pub critical_findings: usize,
+    pub today_scans: usize,
 }
 
 impl DashboardTab {
@@ -26,6 +29,9 @@ impl DashboardTab {
             last_scan_type: String::new(),
             last_target: String::new(),
             sparkline_data: Vec::new(),
+            unique_targets: 0,
+            critical_findings: 0,
+            today_scans: 0,
         };
         tab.render_welcome();
         tab
@@ -140,6 +146,8 @@ impl DashboardTab {
     }
 
     pub fn update_from_history(&mut self, history: &[crate::tui::tabs::history::HistoryEntry]) {
+        use std::collections::HashSet;
+
         self.total_scans = history.len();
         self.successful_scans = history
             .iter()
@@ -162,9 +170,55 @@ impl DashboardTab {
         }
 
         let last_n = 7.min(history.len());
-        self.sparkline_data = vec![1usize; last_n];
+        self.sparkline_data = history
+            .iter()
+            .take(last_n)
+            .map(|e| Self::extract_activity_score(&e.summary))
+            .collect();
+
+        let mut targets: HashSet<String> = HashSet::new();
+        let mut critical_count = 0;
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+
+        for entry in history.iter() {
+            targets.insert(entry.target.clone());
+
+            if entry.timestamp.starts_with(&today) {
+                self.today_scans += 1;
+            }
+
+            let summary_lower = entry.summary.to_lowercase();
+            if summary_lower.contains("critical")
+                || summary_lower.contains("critical")
+                || summary_lower.contains("critical findings")
+            {
+                critical_count += 1;
+            }
+        }
+
+        self.unique_targets = targets.len();
+        self.critical_findings = critical_count;
 
         self.render_stats();
+    }
+
+    fn extract_activity_score(summary: &str) -> usize {
+        let numbers: Vec<usize> = summary
+            .split(|c: char| !c.is_ascii_digit())
+            .filter(|s| !s.is_empty())
+            .filter_map(|s| s.parse().ok())
+            .collect();
+
+        if numbers.is_empty() {
+            return 1;
+        }
+
+        let sum: usize = numbers.iter().sum();
+        let count = numbers.len();
+
+        let base_score = if count > 0 { sum / count } else { 1 };
+
+        base_score.max(1).min(100)
     }
 
     fn render_stats(&mut self) {
@@ -215,6 +269,39 @@ impl DashboardTab {
             self.view.add_line(Line::from(sparkline));
             self.view.add_line(Line::from(""));
         }
+
+        self.view.add_line(Line::from(Span::styled(
+            "Asset Health Summary",
+            ratatui::style::Style::default()
+                .fg(Color::Green)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        )));
+        self.view.add_line(Line::from(""));
+        self.view.add_line(Line::from(format!(
+            "  Unique Targets:  {}",
+            self.unique_targets
+        )));
+        self.view.add_line(Line::from(format!(
+            "  Scans Today:     {}",
+            self.today_scans
+        )));
+        self.view.add_line(Line::from(format!(
+            "  Critical Issues: {}",
+            self.critical_findings
+        )));
+
+        let health_status = if self.critical_findings == 0 && self.unique_targets > 0 {
+            "Healthy"
+        } else if self.critical_findings > 0 {
+            "Needs Attention"
+        } else {
+            "No data"
+        };
+        self.view.add_line(Line::from(format!(
+            "  Status:          {}",
+            health_status
+        )));
+        self.view.add_line(Line::from(""));
 
         if !self.last_scan_type.is_empty() {
             self.view.add_line(Line::from(Span::styled(
