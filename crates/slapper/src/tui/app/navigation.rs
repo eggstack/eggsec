@@ -447,4 +447,77 @@ mod tests {
             "Current tab should be visible after adjust_tab_scroll"
         );
     }
+
+    #[test]
+    fn test_tab_window_always_contains_current_tab() {
+        use crate::tui::tabs::{Tab, TabWindow};
+        let tabs = Tab::all();
+        for tab in tabs {
+            for width in [40, 60, 80, 100, 120] {
+                let window = TabWindow::for_width(width, *tab, 0);
+                let tab_idx = tab.visible_index().unwrap_or(0);
+                assert!(
+                    window.start <= tab_idx && tab_idx < window.end,
+                    "Tab {:?} at index {} should be visible in window [{}, {}) for width {}",
+                    tab, tab_idx, window.start, window.end, width
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_tab_window_handles_stale_offset() {
+        use crate::tui::tabs::{Tab, TabWindow};
+        let tabs = Tab::all();
+        let stale_offset = 1000u16;
+        for tab in tabs {
+            let window = TabWindow::for_width(80, *tab, stale_offset);
+            let tab_idx = tab.visible_index().unwrap_or(0);
+            assert!(
+                window.start <= tab_idx && tab_idx < window.end,
+                "Tab {:?} should be visible even with stale offset",
+                tab
+            );
+        }
+    }
+
+    #[test]
+    fn test_bookmark_api_uses_stable_ids() {
+        use crate::tui::tabs::Tab;
+        let mut app = create_test_app();
+
+        app.toggle_bookmark(Tab::Dashboard);
+        assert!(app.is_bookmarked(Tab::Dashboard));
+        assert!(!app.is_bookmarked(Tab::Recon));
+
+        let bookmark_ids = app.get_bookmarked_tab_ids();
+        assert_eq!(bookmark_ids.len(), 1);
+        assert_eq!(bookmark_ids[0], "dashboard");
+
+        app.toggle_bookmark(Tab::Settings);
+        assert!(app.is_bookmarked(Tab::Settings));
+
+        let bookmark_ids = app.get_bookmarked_tab_ids();
+        assert_eq!(bookmark_ids.len(), 2);
+        assert!(bookmark_ids.contains(&"dashboard".to_string()));
+        assert!(bookmark_ids.contains(&"settings".to_string()));
+    }
+
+    #[test]
+    fn test_adjust_tab_scroll_with_stored_width() {
+        use crate::tui::tabs::{Tab, TabWindow};
+        let mut app = create_test_app();
+
+        app.last_terminal_width = 60;
+        app.current_tab = Tab::Dashboard;
+        app.tab_scroll_offset = 0;
+        app.adjust_tab_scroll();
+
+        let window = TabWindow::for_width(app.last_terminal_width, app.current_tab, app.tab_scroll_offset);
+        let tab_idx = app.current_tab.visible_index().unwrap_or(0);
+        assert!(
+            window.start <= tab_idx && tab_idx < window.end,
+            "Current tab should be visible after adjust_tab_scroll with stored width"
+        );
+    }
 }
