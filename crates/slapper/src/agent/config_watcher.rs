@@ -1,6 +1,6 @@
 use anyhow::Result;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
-use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,7 +11,7 @@ pub trait ConfigReloader: Send + Sync {
 }
 
 pub struct ConfigWatcher {
-    watcher: RecommendedWatcher,
+    watcher: Debouncer<RecommendedWatcher>,
 }
 
 impl ConfigWatcher {
@@ -19,28 +19,31 @@ impl ConfigWatcher {
         config_paths: Vec<P>,
         reloader: Arc<dyn ConfigReloader>,
     ) -> Result<Self> {
-        let (tx, rx) = mpsc::channel(100);
+        let (tx, mut rx) = mpsc::channel(100);
 
-        let watcher = new_debouncer(Duration::from_secs(1), tx)?;
+        let watcher = new_debouncer(Duration::from_secs(1), move |res: DebounceEventResult| {
+            if let Err(e) = tx.blocking_send(res) {
+                tracing::error!("Failed to send debounced event: {}", e);
+            }
+        })?;
 
-        let mut watcher = watcher.into_watcher();
+        let mut watcher = watcher;
 
         for path in &config_paths {
             let path = path.as_ref();
             if path.exists() {
-                watcher.watch(path, RecursiveMode::NonRecursive)?;
+                watcher.watcher().watch(path, RecursiveMode::NonRecursive)?;
                 tracing::debug!("Watching config file: {:?}", path);
             }
         }
 
         let reloader_clone = reloader;
         tokio::spawn(async move {
-            let mut rx = rx;
             while let Some(result) = rx.recv().await {
                 match result {
                     Ok(events) => {
                         for event in events {
-                            if matches!(event.kind, DebouncedEventKind::Any) {
+                            if matches!(event.kind, notify_debouncer_mini::DebouncedEventKind::Any) {
                                 tracing::info!("Config file changed: {:?}", event.path);
                                 if let Err(e) = reloader_clone.reload(&event.path) {
                                     tracing::error!("Failed to reload config: {}", e);
@@ -60,6 +63,7 @@ impl ConfigWatcher {
 
     pub fn watch<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         self.watcher
+            .watcher()
             .watch(path.as_ref(), RecursiveMode::NonRecursive)?;
         tracing::debug!("Now watching: {:?}", path.as_ref());
         Ok(())

@@ -74,6 +74,7 @@ pub fn create_insecure_http_client(timeout_secs: u64) -> Result<Client> {
          This is insecure and should only be used in isolated testing environments."
     );
     Client::builder()
+        .cookie_store(true)
         .timeout(Duration::from_secs(timeout_secs))
         .pool_max_idle_per_host(20)
         .pool_idle_timeout(Duration::from_secs(30))

@@ -1,9 +1,13 @@
 
+use lru::LruCache;
+use std::num::NonZeroUsize;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
+
+const REGEX_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(100).unwrap();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChainAction {
@@ -78,7 +82,7 @@ pub struct ChainExecutor {
     client: Client,
     variables: FxHashMap<String, String>,
     results: Vec<ChainResult>,
-    regex_cache: FxHashMap<String, regex::Regex>,
+    regex_cache: LruCache<String, regex::Regex>,
 }
 
 impl ChainExecutor {
@@ -87,7 +91,7 @@ impl ChainExecutor {
             client,
             variables: FxHashMap::default(),
             results: Vec::new(),
-            regex_cache: FxHashMap::default(),
+            regex_cache: LruCache::new(REGEX_CACHE_SIZE),
         }
     }
 
@@ -99,7 +103,7 @@ impl ChainExecutor {
             .size_limit(100_000)
             .build()
             .ok()?;
-        self.regex_cache.insert(pattern.to_string(), re.clone());
+        self.regex_cache.put(pattern.to_string(), re.clone());
         Some(re)
     }
 

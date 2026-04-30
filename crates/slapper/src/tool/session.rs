@@ -484,16 +484,6 @@ impl LoginExecutor {
                         request = request.header(&key, &value);
                     }
 
-                    // Add cookies
-                    let cookie_str: String = session_cookies
-                        .iter()
-                        .map(|(k, v)| format!("{}={}", k, v))
-                        .collect::<Vec<_>>()
-                        .join("; ");
-                    if !cookie_str.is_empty() {
-                        request = request.header(reqwest::header::COOKIE, &cookie_str);
-                    }
-
                     // Add body if present
                     if let Some(body) = body {
                         request = request
@@ -507,17 +497,6 @@ impl LoginExecutor {
 
                     response_code = Some(response.status().as_u16());
                     let final_url = response.url().to_string();
-
-                    if let Some(cookies) = response.headers().get("set-cookie") {
-                        for cookie_str in cookies.to_str().unwrap_or("").split(',') {
-                            if let Some((name, value)) = cookie_str.split_once('=') {
-                                session_cookies.insert(
-                                    name.trim().to_string(),
-                                    value.split(';').next().unwrap_or("").trim().to_string(),
-                                );
-                            }
-                        }
-                    }
 
                     // Store response for extraction steps
                     let headers_map: std::collections::HashMap<String, String> = response.headers()

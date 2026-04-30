@@ -28,11 +28,14 @@ use tokio::sync::RwLock;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
+use crate::config::SlapperConfig;
 use crate::output::schedule::CronScheduler;
 use crate::tool::{
     create_default_registry, ToolDispatcher, ToolRegistry, ToolRequest,
     ToolResponse,
 };
+
+pub use config_watcher::{ConfigReloader, ConfigWatcher, SlapperConfigReloader};
 
 #[cfg(feature = "ai-integration")]
 use crate::ai::AiClient;
@@ -85,6 +88,7 @@ pub struct Agent {
     alert_router: AlertRouter,
     event_handlers: Vec<Box<dyn EventHandler>>,
     running: Arc<RwLock<bool>>,
+    config_watcher: Option<ConfigWatcher>,
 }
 
 impl Agent {
@@ -103,6 +107,16 @@ impl Agent {
 
         let alert_router = AlertRouter::new()?;
 
+        let config_paths = std::iter::once(config.portfolio_path.clone())
+            .flatten()
+            .chain(SlapperConfig::default_path())
+            .collect::<Vec<_>>();
+        let reloader = Arc::new(SlapperConfigReloader::new(
+            config.portfolio_path.clone(),
+            SlapperConfig::default_path(),
+        ));
+        let config_watcher = ConfigWatcher::new(config_paths, reloader).ok();
+
         Ok(Self {
             config,
             registry,
@@ -115,6 +129,7 @@ impl Agent {
             alert_router,
             event_handlers: Vec::new(),
             running: Arc::new(RwLock::new(false)),
+            config_watcher,
         })
     }
 
@@ -137,6 +152,9 @@ impl Agent {
             }
             *running = true;
         }
+
+        let log_dir = self.config.memory_dir.join("logs");
+        let _logger = logging::AgentLogger::init(log_dir)?;
 
         tracing::info!("Starting autonomous security agent");
 
