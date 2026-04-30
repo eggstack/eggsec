@@ -12,7 +12,7 @@ These skills cover the agent observability system and configuration hot-reloadin
 
 **Key Features**:
 - Uses `tracing-appender` for non-blocking writes
-- Daily rotating logs at `~/.config/slapper/logs/agent.log`
+- Daily rotating logs at `memory_dir/logs/agent.log`
 - Thread-safe with worker guard pattern
 - Rich formatting with target, thread IDs, file/line numbers
 
@@ -20,8 +20,8 @@ These skills cover the agent observability system and configuration hot-reloadin
 ```rust
 use crate::agent::logging::AgentLogger;
 
-let logger = AgentLogger::new();
-logger.init("target.com");
+let log_dir = agent_config.memory_dir.join("logs");
+let _logger = AgentLogger::init(log_dir)?;
 tracing::info!("Agent started scanning");
 ```
 
@@ -36,16 +36,24 @@ tracing::info!("Agent started scanning");
 
 **Key Features**:
 - Uses `notify` crate with debounced events (1 second debounce)
+- Uses `notify-debouncer-mini` v0.5+ callback-based API (NOT channel-based)
 - `ConfigReloader` trait for custom reload callbacks
 - `SlapperConfigReloader` for watching config files
+- Gracefully handles missing files
 
-**Usage**:
+**Important API Note**:
+`notify-debouncer-mini` 0.5+ uses callback-based API:
 ```rust
-use crate::agent::config_watcher::{ConfigWatcher, SlapperConfigReloader};
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 
-let watcher = ConfigWatcher::new();
-watcher.watch_config("slapper.toml", Box::new(SlapperConfigReloader::new()));
-watcher.start().await;
+let watcher = new_debouncer(Duration::from_secs(1), move |res: DebounceEventResult| {
+    if let Err(e) = tx.blocking_send(res) {
+        tracing::error!("Failed to send debounced event: {}", e);
+    }
+})?;
+let mut watcher = watcher;
+// Access underlying watcher via:
+watcher.watcher().watch(path, RecursiveMode::NonRecursive)?;
 ```
 
 **When to use**:
@@ -95,7 +103,7 @@ let results = fuzzer.run_chain(chain).await?;
 
 - `tracing-appender` - non-blocking file logging
 - `notify` - file system watching
-- `notify-debouncer-mini` - debounced file events
+- `notify-debouncer-mini` - debounced file events (v0.5+)
 
 ## Related Files
 
@@ -107,11 +115,11 @@ let results = fuzzer.run_chain(chain).await?;
 ## Verification
 
 ```bash
-cargo check --lib -p slapper
-cargo test --lib -p slapper -- agent
+cargo test --lib -p slapper --features rest-api,ai-integration
+# Should show 1378 passing tests
 ```
 
 ---
 
 *Created: 2026-04-29*
-*Wave: 5 - Feature Enhancements*
+*Updated: 2026-04-30*

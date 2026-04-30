@@ -18,50 +18,43 @@ This skill guides AI agents through complex multi-wave improvement plans with pa
 
 ## Current Status
 
-Most waves are complete. Only **Wave 7 (Dependency Updates)** remains deferred:
-- **Wave 1-6, 8-9**: ✅ COMPLETE
-- **Wave 7 (Axum 0.7→0.8, Tonic 0.12→0.14)**: ⏸ DEFERRED (highest risk - must run LAST)
+**Plan is COMPLETED and pruned as of 2026-04-30.**
+All waves verified complete. The `plans/plan.md` file now contains only verification notes.
 
-## Usage
+## Verification Process
 
-When the user asks to work through a plan file:
-1. Read the plan.md file to understand wave structure
-2. Run verification commands to establish baseline
-3. Verify each item status as complete or needs work
-4. Execute fixes in order (Waves 1-2 first as foundational)
-5. Commit after each wave for traceability
-
-## Wave Execution Order (Historical)
-
-```
-Wave 1-2 (Security) ──► Foundation (start first)
-      │
-      ├── Wave 5, 6, 8 (Independent - can parallelize)
-      │
-      ├── Wave 3-4 (Refactoring, Performance)
-      │
-      └── Wave 7 (Dependency Updates - highest risk, LAST)
-```
+When reviewing plan items or implementing changes:
+1. Read `plans/plan.md` for current status
+2. Run verification commands to establish baseline: `cargo test --lib -p slapper`
+3. Use subagents to verify items in parallel (explore type for research)
+4. Always verify claims against actual code, not assuming plan accuracy
+5. Commit after each fix for traceability
+6. Update plan.md with verification status
 
 ## Key Patterns
 
 - Use subagents for parallel work (explore, general types)
 - Always verify before claiming DONE
-- Commit after each wave
+- Commit after each fix
 - Update plan.md with completion status
+- Test count: 1120 base, 1378 with full features
 
-## Wave 7 Dependency Updates (When Ready)
+## Common Issues Found During Verification
 
-When executing Wave 7:
-- Test thoroughly after each dependency update
-- Coordinate Axum and Tonic updates (shared transitive dependencies)
-- Breaking changes: Path syntax, Option<T> extractor changes, async_trait removal
+During the 2026-04-30 review, these items were found incomplete despite plan claims:
+
+| Item | Issue | Fix |
+|------|-------|-----|
+| CookieStore (3.3.1) | Manual parsing still in session.rs | Enable reqwest cookies feature |
+| Regex LRU Cache (4.2) | Unbounded FxHashMap | Use lru crate with 100 entry limit |
+| AgentLogger (5.1.1) | Code exists but never called | Wire up in agent run() |
+| ConfigWatcher (5.1.2) | Code exists but never called | Wire up in agent new() |
 
 ## Triggers
 
 Keywords that activate this skill:
-- "work through all remaining waves"
+- "work through plan"
+- "verify plan items"
 - "wave-based parallelization"
 - "plan execution"
 - "subagent assignment"
-- "execute Wave 7"
