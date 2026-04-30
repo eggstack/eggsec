@@ -114,7 +114,7 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1146 passing | Base library tests |
+| Tests | 1155 passing | Base library tests |
 | Tests | 1388 passing | With rest-api,ai-integration (note: feature check has pre-existing agent/mod.rs closure issue) |
 | Clippy | ~5 warnings | TUI-specific acceptable |
 | Source files | 506 |
@@ -206,18 +206,22 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Master Consolidated Improvement Plan
-  - Phase 12 ALL COMPLETED (2026-04-30): All remaining checkbox items finished (session restoration tests, CommandPalette scroll tests, Tab::from_discriminant helper)
+- `plans/plan.md` — Contains historical record of completed phases (Phase 12 and Phase 13 as of 2026-04-30)
+  - Phase 13 ALL COMPLETED: Render-accurate TUI hardening
+    - TabWindow uses actual label widths (greedy algorithm)
+    - Mouse hit-testing uses `visible_tab_spans()`
+    - Tab labels show shortcuts only for tabs 1-10
+    - Left/right uses edge detection without fallback tab switching
+    - 9 render tests pass for narrow screens
+    - Overlay layouts properly bound
+    - Status bar and breadcrumb use proper overflow handling
   - Contains architecture patterns useful for future work:
-    - TabIndexing Model (Phase 12, corrected in Phase 12R)
-    - Event Loop Order (Phase 8)
-    - Handler Registry Pattern (Phase 8)
-    - Snapshot File Pattern (Phase 10)
-    - Session Persistence with Stable IDs (Phase 12R)
-    - Popup Clamping (Phase 12R)
-    - Tab-Area Width Consistency (Phase 12T.1)
-    - Command Palette Dynamic Height (Phase 12T.2)
-    - Tab::from_discriminant for Legacy Migration (Phase 12S.4 remaining)
+    - TabIndexing Model
+    - Event Loop Order
+    - Handler Registry Pattern
+    - Snapshot File Pattern
+    - Session Persistence with Stable IDs
+    - Popup Clamping
 
 ## Important Guidelines
 
@@ -226,7 +230,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 When implementing changes or reviewing plan items, verify actual state rather than assuming plan accuracy:
 - Payload type count: 30 (verified via `fuzzer/payloads/mod.rs`)
 - Recon module count: 31 (verified)
-- Test count: 1146 base, 1388 with full features (verified 2026-04-30)
+- Test count: 1155 base, 1388 with full features (verified 2026-04-30)
 - Use `rg` to confirm file paths and line numbers exist
 - Run `cargo test --lib -p slapper` after each change
 
