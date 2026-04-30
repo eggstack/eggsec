@@ -26,7 +26,7 @@ This skill documents TUI patterns and recent improvements in Slapper's terminal 
 - **11.1.1**: Total theming migration - 400+ hardcoded `Color::*` usages replaced with `tc!()` macro
 - **11.1.2**: Improved InputField scrolling - viewport approach with proper edge handling
 - **11.1.3**: Unified Selector behavior - consistent theme styling
-- **11.2.1**: FocusArea standardization - 13 tabs migrated to FocusArea enum pattern
+- **11.2.1**: FocusArea standardization - 29 tabs migrated to FocusArea enum pattern
 - **11.2.2**: Consistent error reporting - 7 tabs now have `error_message` field
 - **11.3.1**: Auto-insert mode - Tab/Shift+Tab auto-switches to Insert mode when focusing inputs
 

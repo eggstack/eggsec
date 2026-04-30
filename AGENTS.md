@@ -114,8 +114,8 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1120 passing | Base library tests |
-| Tests | 1378 passing | With rest-api,ai-integration |
+| Tests | 1130 passing | Base library tests |
+| Tests | 1388 passing | With rest-api,ai-integration |
 | Clippy | ~5 warnings | TUI-specific acceptable |
 | Source files | 506 |
 | Payload types | 30 |
@@ -206,12 +206,16 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 ## Planning
 
-- `plans/plan.md` — Master Consolidated Improvement Plan (sole plan file, all others removed in 2026-04-29)
+- `plans/plan.md` — Master Consolidated Improvement Plan (COMPLETED)
   - Plan is COMPLETED as of 2026-04-30
-  - All 8 Waves verified complete (including Phase 8)
-  - Phase 8 items: baseline-aware alerting, channel draining, dynamic visible_rows, HistoryTab standardization, breadcrumb consolidation, theme consistency, sparkline visualization, asset health overview
-  - Phase 11 (TUI Modernization & Polishing) COMPLETED: Theme migration, FocusArea standardization, error reporting, auto-insert mode
-  - Phase 12 (TUI Navigation & Layout Hardening) COMPLETED: TabWindow helper, stable tab IDs, fixed mouse hit-testing, popup clamping, 10 new tests
+  - All phases (0-12) verified complete
+  - Contains architecture patterns useful for future work:
+    - TabIndexing Model (Phase 12)
+    - Event Loop Order (Phase 8)
+    - Handler Registry Pattern (Phase 8)
+    - Snapshot File Pattern (Phase 10)
+    - Session Persistence with Stable IDs (Phase 12)
+    - Popup Clamping (Phase 12)
 
 ## Important Guidelines
 
@@ -220,7 +224,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 When implementing changes or reviewing plan items, verify actual state rather than assuming plan accuracy:
 - Payload type count: 30 (verified via `fuzzer/payloads/mod.rs`)
 - Recon module count: 31 (verified)
-- Test count: 1130 base, 1388 with full features
+- Test count: 1130 base, 1388 with full features (verified 2026-04-30)
 - Use `rg` to confirm file paths and line numbers exist
 - Run `cargo test --lib -p slapper` after each change
 
@@ -275,8 +279,9 @@ The agent has built-in mechanisms to prevent alert fatigue:
 - Uses `load_alerted_findings()` and `save_alerted_findings()` for persistence
 
 **Handler Registry Safety:**
-- `Agent::trigger_event` uses closure-based execution to handle partial async handler failures
-- Event handlers are restored even if a handler fails mid-processing
+- `Agent::trigger_event` uses deferred restoration pattern for handler safety
+- Handlers are taken, processed, then ALWAYS restored regardless of panic/error
+- This prevents handler loss during event processing failures
 
 ### TUI Event Loop Order
 
