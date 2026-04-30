@@ -423,7 +423,7 @@ impl TabWindow {
         let min_tab_width = 8_usize;
         let max_visible = (visible_width / min_tab_width).max(1).min(total_tabs);
 
-        let current_idx = current_tab.visible_index().unwrap_or(0);
+        let current_idx = current_tab.visible_index().unwrap_or(0).min(total_tabs.saturating_sub(1));
         let previous_offset = previous_offset as usize;
 
         let clamped_offset = previous_offset.min(total_tabs.saturating_sub(max_visible));
@@ -436,8 +436,9 @@ impl TabWindow {
             clamped_offset
         };
 
+        let start = start.min(total_tabs.saturating_sub(max_visible));
         let end = (start + max_visible).min(total_tabs);
-        let selected_visible = current_idx - start;
+        let selected_visible = current_idx.saturating_sub(start);
 
         let has_prev = start > 0;
         let has_next = end < total_tabs;
