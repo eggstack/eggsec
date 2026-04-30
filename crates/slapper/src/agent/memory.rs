@@ -15,6 +15,7 @@ use tokio::io::AsyncWriteExt;
 use crate::tool::response::Finding;
 
 const ALERTED_FINDINGS_FILE: &str = "alerted_findings.json";
+const SNAPSHOT_FILE: &str = "portfolio_snapshot.json";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScanMemory {
@@ -115,6 +116,10 @@ impl LongitudinalMemory {
         })
     }
 
+    pub fn storage_dir(&self) -> &PathBuf {
+        &self.storage_dir
+    }
+
     fn get_target_path(&self, target: &str) -> PathBuf {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -132,6 +137,10 @@ impl LongitudinalMemory {
 
     fn get_alerted_findings_path(&self) -> PathBuf {
         self.storage_dir.join(ALERTED_FINDINGS_FILE)
+    }
+
+    fn get_snapshot_path(&self) -> PathBuf {
+        self.storage_dir.join(SNAPSHOT_FILE)
     }
 
     async fn load_alerted_findings(&self) -> Result<HashSet<String>> {
@@ -183,6 +192,117 @@ impl LongitudinalMemory {
         Ok((deduplicated, filtered))
     }
 
+    pub async fn write_portfolio_snapshot(&self) -> Result<()> {
+        let targets_dir = self.storage_dir.join("targets");
+
+        let mut unique_targets: HashSet<String> = HashSet::new();
+        let mut total_scans = 0;
+        let mut findings_by_severity: HashMap<String, usize> = HashMap::new();
+        let mut today_scans = 0;
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        if targets_dir.exists() {
+            let mut entries = fs::read_dir(&targets_dir).await?;
+            while let Some(entry) = entries.next_entry().await? {
+                let path = entry.path();
+                if path.extension().is_some_and(|ext| ext == "json") {
+                    if let Ok(content) = fs::read_to_string(&path).await {
+                        if let Ok(memory) = serde_json::from_str::<TargetMemory>(&content) {
+                            unique_targets.insert(memory.target.clone());
+
+                            for scan in &memory.scans {
+                                total_scans += 1;
+
+                                let scan_day = scan.timestamp.format("%Y-%m-%d").to_string();
+                                if scan_day == today {
+                                    today_scans += 1;
+                                }
+
+                                for finding in &scan.findings {
+                                    *findings_by_severity
+                                        .entry(finding.severity.as_str().to_lowercase())
+                                        .or_insert(0) += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let critical_findings = *findings_by_severity.get("critical").unwrap_or(&0);
+        let high_findings = *findings_by_severity.get("high").unwrap_or(&0);
+        let medium_findings = *findings_by_severity.get("medium").unwrap_or(&0);
+        let low_findings = *findings_by_severity.get("low").unwrap_or(&0);
+        let total_findings: usize = findings_by_severity.values().sum();
+
+        let health_score = if total_findings > 0 {
+            let penalty = (critical_findings as f64 * 0.4)
+                + (high_findings as f64 * 0.25)
+                + (medium_findings as f64 * 0.15)
+                + (low_findings as f64 * 0.1);
+            (1.0 - (penalty / total_findings as f64)).max(0.0).min(1.0)
+        } else {
+            1.0
+        };
+
+        let mut findings_trend: Vec<(String, usize)> = Vec::new();
+        let mut monthly_counts: HashMap<String, usize> = HashMap::new();
+
+        if targets_dir.exists() {
+            let mut entries = fs::read_dir(&targets_dir).await?;
+            while let Some(entry) = entries.next_entry().await? {
+                let path = entry.path();
+                if path.extension().is_some_and(|ext| ext == "json") {
+                    if let Ok(content) = fs::read_to_string(&path).await {
+                        if let Ok(memory) = serde_json::from_str::<TargetMemory>(&content) {
+                            for scan in &memory.scans {
+                                let month = scan.timestamp.format("%Y-%m").to_string();
+                                *monthly_counts.entry(month).or_insert(0) += scan.findings.len();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut sorted_months: Vec<String> = monthly_counts.keys().cloned().collect();
+        sorted_months.sort();
+        for month in sorted_months.into_iter().rev().take(6) {
+            if let Some(&count) = monthly_counts.get(&month) {
+                findings_trend.push((month, count));
+            }
+        }
+        findings_trend.reverse();
+
+        let snapshot = PortfolioSnapshot {
+            unique_targets: unique_targets.len(),
+            total_scans,
+            scans_today: today_scans,
+            findings_by_severity,
+            findings_trend,
+            critical_findings,
+            health_score,
+            last_updated: chrono::Utc::now(),
+        };
+
+        let path = self.get_snapshot_path();
+        let content = serde_json::to_string_pretty(&snapshot)?;
+        let mut file = fs::File::create(&path).await?;
+        file.write_all(content.as_bytes()).await?;
+
+        Ok(())
+    }
+
+    pub fn read_portfolio_snapshot(&self) -> Option<PortfolioSnapshot> {
+        let path = self.get_snapshot_path();
+        if !path.exists() {
+            return None;
+        }
+        let content = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str::<PortfolioSnapshot>(&content).ok()
+    }
+
     pub async fn store_scan_results(
         &self,
         target: &str,
@@ -221,6 +341,10 @@ impl LongitudinalMemory {
         fs::write(&target_path, content).await?;
 
         self.detect_and_record_patterns(target, &memory).await?;
+
+        if let Err(e) = self.write_portfolio_snapshot().await {
+            tracing::warn!("Failed to write portfolio snapshot: {}", e);
+        }
 
         Ok(())
     }
@@ -542,6 +666,18 @@ pub struct BaselineComparison {
     pub new_findings: Vec<Finding>,
     pub resolved_findings: Vec<Finding>,
     pub unchanged_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PortfolioSnapshot {
+    pub unique_targets: usize,
+    pub total_scans: usize,
+    pub scans_today: usize,
+    pub findings_by_severity: HashMap<String, usize>,
+    pub findings_trend: Vec<(String, usize)>,
+    pub critical_findings: usize,
+    pub health_score: f64,
+    pub last_updated: DateTime<Utc>,
 }
 
 impl Default for LongitudinalMemory {

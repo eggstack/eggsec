@@ -3,6 +3,21 @@ use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::style::Color;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
+use std::collections::HashMap;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Deserialize)]
+struct PortfolioSnapshot {
+    unique_targets: usize,
+    total_scans: usize,
+    scans_today: usize,
+    findings_by_severity: HashMap<String, usize>,
+    findings_trend: Vec<(String, usize)>,
+    critical_findings: usize,
+    health_score: f64,
+    last_updated: DateTime<Utc>,
+}
 
 pub struct DashboardTab {
     pub view: ScrollableText,
@@ -59,6 +74,14 @@ impl DashboardTab {
             .collect();
 
         format!(" {}", sparkline)
+    }
+
+    fn load_portfolio_snapshot(path: &std::path::Path) -> Option<PortfolioSnapshot> {
+        if !path.exists() {
+            return None;
+        }
+        let content = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str(&content).ok()
     }
 
     fn render_welcome(&mut self) {
@@ -274,30 +297,94 @@ impl DashboardTab {
                 .add_modifier(ratatui::style::Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
-        self.view.add_line(Line::from(format!(
-            "  Unique Targets:  {}",
-            self.unique_targets
-        )));
-        self.view.add_line(Line::from(format!(
-            "  Scans Today:     {}",
-            self.today_scans
-        )));
-        self.view.add_line(Line::from(format!(
-            "  Critical Issues: {}",
-            self.critical_findings
-        )));
 
-        let health_status = if self.critical_findings == 0 && self.unique_targets > 0 {
-            "Healthy"
-        } else if self.critical_findings > 0 {
-            "Needs Attention"
+        let snapshot = Self::load_portfolio_snapshot(
+            &directories::ProjectDirs::from("com", "slapper", "slapper")
+                .map(|d| d.config_dir().to_path_buf())
+                .unwrap_or_default()
+                .join("memory")
+                .join("portfolio_snapshot.json")
+        );
+
+        if let Some(snap) = snapshot {
+            let health_pct = (snap.health_score * 100.0) as usize;
+            self.view.add_line(Line::from(format!(
+                "  Portfolio Health: {}%",
+                health_pct
+            )));
+            self.view.add_line(Line::from(format!(
+                "  Total Scans:      {}",
+                snap.total_scans
+            )));
+            self.view.add_line(Line::from(format!(
+                "  Unique Targets:   {}",
+                snap.unique_targets
+            )));
+            self.view.add_line(Line::from(format!(
+                "  Critical Issues:  {}",
+                snap.critical_findings
+            )));
+
+            let total_findings: usize = snap.findings_by_severity.values().sum();
+            self.view.add_line(Line::from(format!(
+                "  Total Findings:   {}",
+                total_findings
+            )));
+
+            let health_status = if snap.critical_findings > 0 {
+                "Needs Attention"
+            } else if snap.unique_targets > 0 {
+                "Healthy"
+            } else {
+                "No data"
+            };
+            self.view.add_line(Line::from(format!(
+                "  Status:           {}",
+                health_status
+            )));
+
+            if !snap.findings_trend.is_empty() {
+                self.view.add_line(Line::from(""));
+                if let Some((_, last_count)) = snap.findings_trend.last() {
+                    if let Some((_, prev_count)) = snap.findings_trend.get(snap.findings_trend.len().saturating_sub(2)) {
+                        let diff = *last_count as i64 - *prev_count as i64;
+                        let trend_icon = if diff > 0 { "↑" } else if diff < 0 { "↓" } else { "→" };
+                        self.view.add_line(Line::from(format!(
+                            "  Monthly Trend:    {} ({}{})",
+                            trend_icon,
+                            if diff > 0 { "+" } else { "" },
+                            diff
+                        )));
+                    }
+                }
+            }
         } else {
-            "No data"
-        };
-        self.view.add_line(Line::from(format!(
-            "  Status:          {}",
-            health_status
-        )));
+            self.view.add_line(Line::from(format!(
+                "  Unique Targets:  {}",
+                self.unique_targets
+            )));
+            self.view.add_line(Line::from(format!(
+                "  Scans Today:     {}",
+                self.today_scans
+            )));
+            self.view.add_line(Line::from(format!(
+                "  Critical Issues: {}",
+                self.critical_findings
+            )));
+
+            let health_status = if self.critical_findings == 0 && self.unique_targets > 0 {
+                "Healthy"
+            } else if self.critical_findings > 0 {
+                "Needs Attention"
+            } else {
+                "No data"
+            };
+            self.view.add_line(Line::from(format!(
+                "  Status:          {}",
+                health_status
+            )));
+            self.view.add_line(Line::from("  (Session-only data - Agent not running)"));
+        }
         self.view.add_line(Line::from(""));
 
         if !self.last_scan_type.is_empty() {

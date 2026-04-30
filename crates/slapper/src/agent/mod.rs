@@ -145,6 +145,10 @@ impl Agent {
         self.event_handlers.push(handler);
     }
 
+    pub fn get_snapshot_path(&self) -> std::path::PathBuf {
+        self.memory.storage_dir().join("portfolio_snapshot.json")
+    }
+
     pub async fn run(&mut self) -> Result<()> {
         {
             let mut running = self.running.write().await;
