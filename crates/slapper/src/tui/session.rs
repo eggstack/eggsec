@@ -189,3 +189,159 @@ impl SessionManager {
         &self.config
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::state::create_shared_history;
+
+    fn make_test_app() -> App {
+        App::new_for_testing(create_shared_history())
+    }
+
+    fn make_manager() -> SessionManager {
+        SessionManager::new(SessionConfig::default())
+    }
+
+    #[test]
+    fn test_restore_session_with_valid_stable_id() {
+        let mut app = make_test_app();
+        let manager = make_manager();
+
+        let state = SessionState {
+            current_tab_id: Some("dashboard".to_string()),
+            bookmarks: vec!["recon".to_string(), "fuzz".to_string()],
+            theme_name: "dark".to_string(),
+            legacy_current_tab: None,
+            legacy_bookmarks: vec![],
+        };
+
+        manager.restore_session(&mut app, &state);
+
+        assert_eq!(app.current_tab, Tab::Dashboard);
+        assert!(app.bookmarks.contains("recon"));
+        assert!(app.bookmarks.contains("fuzz"));
+    }
+
+    #[test]
+    fn test_restore_session_with_unavailable_stable_id_falls_back_to_recon() {
+        let mut app = make_test_app();
+        let manager = make_manager();
+
+        let state = SessionState {
+            current_tab_id: Some("nse".to_string()),
+            bookmarks: vec![],
+            theme_name: "dark".to_string(),
+            legacy_current_tab: None,
+            legacy_bookmarks: vec![],
+        };
+
+        manager.restore_session(&mut app, &state);
+
+        assert_eq!(app.current_tab, Tab::Recon);
+    }
+
+    #[test]
+    fn test_restore_session_with_legacy_visible_index() {
+        let mut app = make_test_app();
+        let manager = make_manager();
+
+        let state = SessionState {
+            current_tab_id: None,
+            bookmarks: vec![],
+            theme_name: "dark".to_string(),
+            legacy_current_tab: Some(0),
+            legacy_bookmarks: vec![],
+        };
+
+        manager.restore_session(&mut app, &state);
+
+        assert_eq!(app.current_tab, Tab::Recon);
+    }
+
+    #[test]
+    fn test_restore_session_bookmarks_with_available_tabs() {
+        let mut app = make_test_app();
+        let manager = make_manager();
+
+        let state = SessionState {
+            current_tab_id: Some("dashboard".to_string()),
+            bookmarks: vec![
+                "recon".to_string(),
+                "fuzz".to_string(),
+                "waf".to_string(),
+            ],
+            theme_name: "dark".to_string(),
+            legacy_current_tab: None,
+            legacy_bookmarks: vec![],
+        };
+
+        manager.restore_session(&mut app, &state);
+
+        assert!(app.bookmarks.contains("recon"));
+        assert!(app.bookmarks.contains("fuzz"));
+        assert!(app.bookmarks.contains("waf"));
+    }
+
+    #[test]
+    fn test_restore_session_unavailable_bookmark_ids_are_dropped() {
+        let mut app = make_test_app();
+        let manager = make_manager();
+
+        let state = SessionState {
+            current_tab_id: Some("recon".to_string()),
+            bookmarks: vec![
+                "recon".to_string(),
+                "nse".to_string(),
+                "plugin".to_string(),
+                "fuzz".to_string(),
+            ],
+            theme_name: "dark".to_string(),
+            legacy_current_tab: None,
+            legacy_bookmarks: vec![],
+        };
+
+        manager.restore_session(&mut app, &state);
+
+        assert!(app.bookmarks.contains("recon"));
+        assert!(app.bookmarks.contains("fuzz"));
+        assert!(!app.bookmarks.contains("nse"), "nse should be dropped when feature is off");
+        assert!(!app.bookmarks.contains("plugin"), "plugin should be dropped when feature is off");
+    }
+
+    #[test]
+    fn test_restore_session_prefers_stable_id_over_legacy() {
+        let mut app = make_test_app();
+        let manager = make_manager();
+
+        let state = SessionState {
+            current_tab_id: Some("settings".to_string()),
+            bookmarks: vec![],
+            theme_name: "dark".to_string(),
+            legacy_current_tab: Some(999),
+            legacy_bookmarks: vec![],
+        };
+
+        manager.restore_session(&mut app, &state);
+
+        assert_eq!(app.current_tab, Tab::Settings);
+    }
+
+    #[test]
+    fn test_restore_session_empty_state_falls_back_to_recon() {
+        let mut app = make_test_app();
+        let manager = make_manager();
+
+        let state = SessionState {
+            current_tab_id: None,
+            bookmarks: vec![],
+            theme_name: "dark".to_string(),
+            legacy_current_tab: None,
+            legacy_bookmarks: vec![],
+        };
+
+        manager.restore_session(&mut app, &state);
+
+        assert_eq!(app.current_tab, Tab::Recon);
+    }
+}
