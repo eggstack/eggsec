@@ -36,13 +36,6 @@ pub enum ModificationType {
 }
 
 #[derive(Debug, Clone)]
-pub struct PlanHistoryEntry {
-    pub plan: ExecutionPlan,
-    pub outcome: PlanOutcome,
-    pub timestamp: u64,
-}
-
-#[derive(Debug, Clone)]
 pub struct PlanOutcome {
     pub success: bool,
     pub findings_count: usize,

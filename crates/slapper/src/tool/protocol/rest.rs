@@ -270,13 +270,6 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>, scope: Opt
     router
 }
 
-fn check_rate_limit(state: &Arc<RestState>, client_id: &str) -> Result<(), SlapperError> {
-    if state.rate_limiter.check_rate_limit(client_id).is_err() {
-        return Err(SlapperError::Config("Rate limit exceeded".to_string()));
-    }
-    Ok(())
-}
-
 fn require_auth(state: &Arc<RestState>, headers: &HeaderMap) -> Result<(), SlapperError> {
     if let Some(ref key) = state.api_key {
         let auth = headers

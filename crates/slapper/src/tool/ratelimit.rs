@@ -223,13 +223,6 @@ impl RateLimiter {
         self
     }
 
-    fn get_or_create_bucket(&self, key: &str) -> TokenBucket {
-        self.tokens
-            .get(key)
-            .map(|r| r.value().clone())
-            .unwrap_or_else(|| TokenBucket::new(&self.config))
-    }
-
     pub fn check_rate_limit(&self, key: &str) -> Result<(), SlapperError> {
         let mut bucket = self.tokens.entry(key.to_string()).or_insert_with(|| TokenBucket::new(&self.config));
 

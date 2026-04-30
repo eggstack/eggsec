@@ -121,10 +121,6 @@ impl LifecycleManager {
         });
     }
 
-    async fn check_agent_callback_health(&self, callback_url: &str) -> bool {
-        self.client.get(callback_url).send().await.map(|resp| resp.status().is_success()).unwrap_or(false)
-    }
-
     async fn check_agent_callback_health_static(client: &Client, callback_url: &str) -> bool {
         client.get(callback_url).send().await.map(|resp| resp.status().is_success()).unwrap_or(false)
     }

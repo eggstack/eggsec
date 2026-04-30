@@ -429,16 +429,12 @@ impl SessionState {
 /// Login sequence executor - executes recorded login steps
 pub struct LoginExecutor {
     client: reqwest::Client,
-    timeout_secs: u64,
 }
 
 impl LoginExecutor {
     pub fn new(timeout_secs: u64) -> crate::error::Result<Self> {
         let client = create_insecure_http_client(timeout_secs)?;
-        Ok(Self {
-            client,
-            timeout_secs,
-        })
+        Ok(Self { client })
     }
 
     /// Execute a login sequence and return the result
