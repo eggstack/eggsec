@@ -467,16 +467,13 @@ impl Agent {
         tracing::debug!("Event triggered: {:?}", event.event_type());
 
         let handlers = std::mem::take(&mut self.event_handlers);
-        let result = (|| async {
-            for handler in handlers.iter() {
-                if handler.handles(&event) {
-                    handler.handle(&event, self).await?;
-                }
+        for handler in handlers.iter() {
+            if handler.handles(&event) {
+                handler.handle(&event, self).await?;
             }
-            Ok(())
-        })().await;
+        }
         self.event_handlers = handlers;
-        result
+        Ok(())
     }
 }
 
@@ -558,8 +555,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_agent_register_event_handler() {
+    async fn test_trigger_event_restores_handlers_on_success() {
         let mut agent = Agent::new(AgentConfig::default()).await.unwrap();
+
         struct TestHandler;
         impl EventHandler for TestHandler {
             fn handles(&self, _event: &SecurityEvent) -> bool {
@@ -574,7 +572,53 @@ mod tests {
             }
         }
         agent.register_handler(Box::new(TestHandler));
-        assert_eq!(agent.event_handlers.len(), 1);
+        let initial_count = agent.event_handlers.len();
+
+        let event = SecurityEvent::ScanComplete(ScanCompleteEvent {
+            scan_id: "test-1".to_string(),
+            target: "https://example.com".to_string(),
+            scan_type: "recon".to_string(),
+            timestamp: Utc::now(),
+            findings_count: 0,
+            severity_counts: std::collections::HashMap::new(),
+        });
+        agent.trigger_event(event).await.unwrap();
+
+        assert_eq!(agent.event_handlers.len(), initial_count, "Handlers should be restored after successful event");
+    }
+
+    #[tokio::test]
+    async fn test_trigger_event_restores_handlers_on_error() {
+        let mut agent = Agent::new(AgentConfig::default()).await.unwrap();
+
+        struct FailingHandler;
+        impl EventHandler for FailingHandler {
+            fn handles(&self, _event: &SecurityEvent) -> bool {
+                true
+            }
+            fn handle<'a>(
+                &'a self,
+                _event: &'a SecurityEvent,
+                _agent: &'a mut Agent,
+            ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+                Box::pin(async { Err(anyhow::anyhow!("handler failed")) })
+            }
+        }
+        agent.register_handler(Box::new(FailingHandler));
+        let initial_count = agent.event_handlers.len();
+
+        let event = SecurityEvent::ScanComplete(ScanCompleteEvent {
+            scan_id: "test-2".to_string(),
+            target: "https://example.com".to_string(),
+            scan_type: "recon".to_string(),
+            timestamp: Utc::now(),
+            findings_count: 0,
+            severity_counts: std::collections::HashMap::new(),
+        });
+        let result = agent.trigger_event(event).await;
+
+        assert!(result.is_err(), "Handler error should propagate");
+        assert_eq!(agent.event_handlers.len(), initial_count, "Handlers should be restored even after handler error");
     }
 
     #[test]
