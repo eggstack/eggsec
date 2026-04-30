@@ -170,11 +170,14 @@ impl Popup {
 }
 
 pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
+    let clamped_width = width.min(r.width.saturating_sub(2));
+    let clamped_height = height.min(r.height.saturating_sub(2));
+
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(r.height.saturating_sub(height) / 2),
-            Constraint::Length(height),
+            Constraint::Length(r.height.saturating_sub(clamped_height) / 2),
+            Constraint::Length(clamped_height),
             Constraint::Min(0),
         ])
         .split(r);
@@ -182,8 +185,8 @@ pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
     Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(r.width.saturating_sub(width) / 2),
-            Constraint::Length(width),
+            Constraint::Length(r.width.saturating_sub(clamped_width) / 2),
+            Constraint::Length(clamped_width),
             Constraint::Min(0),
         ])
         .split(popup_layout[1])[1]

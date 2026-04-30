@@ -347,4 +347,104 @@ mod tests {
         assert!(!app.show_search);
         assert!(app.search_query.is_empty());
     }
+
+    #[test]
+    fn test_tab_visible_index() {
+        use crate::tui::tabs::Tab;
+        let all_tabs = Tab::all();
+        for (i, tab) in all_tabs.iter().enumerate() {
+            assert_eq!(tab.visible_index(), Some(i), "Tab {:?} should have visible_index {}", tab, i);
+        }
+    }
+
+    #[test]
+    fn test_tab_from_visible_index() {
+        use crate::tui::tabs::Tab;
+        let all_tabs = Tab::all();
+        for (i, tab) in all_tabs.iter().enumerate() {
+            assert_eq!(Tab::from_visible_index(i), Some(*tab), "from_visible_index({}) should return {:?}", i, tab);
+        }
+        assert_eq!(Tab::from_visible_index(999), None);
+    }
+
+#[test]
+    fn test_tab_stable_id_roundtrip() {
+        use crate::tui::tabs::Tab;
+        let all_tabs = Tab::all();
+        for tab in all_tabs {
+            let id = tab.stable_id();
+            assert_eq!(Tab::from_stable_id(id), Some(*tab), "stable_id {:?} should roundtrip", id);
+        }
+    }
+
+    #[test]
+    fn test_tab_from_stable_id_invalid() {
+        use crate::tui::tabs::Tab;
+        assert_eq!(Tab::from_stable_id("nonexistent"), None);
+        assert_eq!(Tab::from_stable_id(""), None);
+    }
+
+    #[test]
+    fn test_tab_window_calculation_80_cols() {
+        use crate::tui::tabs::{Tab, TabWindow};
+        let window = TabWindow::for_width(80, Tab::Recon, 0);
+        assert_eq!(window.max_visible, 9);
+        assert_eq!(window.start, 0);
+        assert!(window.end <= window.total_tabs);
+        assert!(window.selected_visible < window.max_visible);
+    }
+
+    #[test]
+    fn test_tab_window_calculation_40_cols() {
+        use crate::tui::tabs::{Tab, TabWindow};
+        let window = TabWindow::for_width(40, Tab::Recon, 0);
+        assert_eq!(window.max_visible, 4);
+        assert!(window.start <= window.total_tabs);
+    }
+
+    #[test]
+    fn test_tab_window_calculation_120_cols() {
+        use crate::tui::tabs::{Tab, TabWindow};
+        let window = TabWindow::for_width(120, Tab::Recon, 0);
+        assert_eq!(window.max_visible, 14);
+    }
+
+    #[test]
+    fn test_tab_window_has_correct_flags() {
+        use crate::tui::tabs::{Tab, TabWindow};
+        let first_window = TabWindow::for_width(80, Tab::Recon, 0);
+        assert!(!first_window.has_prev, "First tab should not have prev");
+        assert!(first_window.has_next || first_window.end < first_window.total_tabs, "Should have next or be at end");
+
+        let last_tab = Tab::all().last().copied().unwrap_or(Tab::Recon);
+        let last_window = TabWindow::for_width(80, last_tab, 0);
+        assert!(last_window.has_next == (last_window.end < last_window.total_tabs));
+    }
+
+    #[test]
+    fn test_tab_window_scroll_stays_in_bounds() {
+        use crate::tui::tabs::{Tab, TabWindow};
+        let tabs = Tab::all();
+        for tab in tabs {
+            let window = TabWindow::for_width(80, *tab, 0);
+            assert!(window.start <= window.end);
+            assert!(window.end <= window.total_tabs);
+            assert!(window.selected_visible < window.max_visible || window.max_visible == 0);
+        }
+    }
+
+    #[test]
+    fn test_adjust_tab_scroll_keeps_tab_visible() {
+        use crate::tui::tabs::{Tab, TabWindow};
+        let mut app = create_test_app();
+
+        app.current_tab = Tab::Dashboard;
+        app.adjust_tab_scroll();
+        let window = TabWindow::for_width(80, app.current_tab, app.tab_scroll_offset);
+        let tab_idx = app.current_tab.visible_index().unwrap_or(0);
+        assert!(
+            tab_idx >= window.start && tab_idx < window.end,
+            "Current tab should be visible after adjust_tab_scroll"
+        );
+    }
 }

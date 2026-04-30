@@ -189,10 +189,12 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
 }
 
 fn centered_rect(w: u16, h: u16, r: Rect) -> Rect {
+    let clamped_width = w.min(r.width.saturating_sub(2));
+    let clamped_height = h.min(r.height.saturating_sub(2));
     Rect {
-        x: r.x.saturating_sub(r.width / 2).saturating_add(w / 2),
-        y: r.y.saturating_sub(r.height / 2).saturating_add(h / 2),
-        width: w.min(r.width),
-        height: h.min(r.height),
+        x: r.x.saturating_add(r.width.saturating_sub(clamped_width) / 2),
+        y: r.y.saturating_add(r.height.saturating_sub(clamped_height) / 2),
+        width: clamped_width,
+        height: clamped_height,
     }
 }

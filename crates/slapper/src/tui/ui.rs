@@ -184,7 +184,7 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
     f.render_widget(query_paragraph, chunks[0]);
 
     // Pagination
-    let visible_height = 14usize;
+    let visible_height = (popup_area.height as usize).saturating_sub(5).max(5);
     let total = palette.results.len();
     let start = palette.scroll_offset;
     let end = (start + visible_height).min(total);
