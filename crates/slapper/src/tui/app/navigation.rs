@@ -181,7 +181,7 @@ mod tests {
     use crate::tui::tabs::Tab;
 
     fn create_test_app() -> App {
-        App::new(create_shared_history())
+        App::new_for_testing(create_shared_history())
     }
 
     #[test]

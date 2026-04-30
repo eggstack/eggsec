@@ -152,9 +152,21 @@ pub struct App {
 
 impl App {
     pub fn new(history: SharedHistory) -> Self {
+        Self::new_inner(history, true)
+    }
+
+    pub fn new_for_testing(history: SharedHistory) -> Self {
+        Self::new_inner(history, false)
+    }
+
+    fn new_inner(history: SharedHistory, restore_session: bool) -> Self {
         let session_manager = SessionManager::new(SessionConfig::default());
 
-        let restored_state = session_manager.load_latest_session().ok().flatten();
+        let restored_state = if restore_session {
+            session_manager.load_latest_session().ok().flatten()
+        } else {
+            None
+        };
 
         let restored_bookmarks: std::collections::HashSet<String> = if let Some(ref state) = restored_state {
             let mut bookmarks = std::collections::HashSet::new();
@@ -828,7 +840,7 @@ mod tests {
     use crossterm::event::KeyCode;
 
     fn create_test_app() -> App {
-        App::new(create_shared_history())
+        App::new_for_testing(create_shared_history())
     }
 
     #[test]

@@ -84,18 +84,11 @@ let bookmarks = app.get_bookmarked_tab_ids();
 // Returns: ["dashboard", "settings"]
 ```
 
-## Backward Compatibility
+## Legacy Session Semantics
 
-Legacy numeric fields are maintained for reading old session files:
-- `legacy_current_tab: Option<usize>` - Previous enum discriminant
-- `legacy_bookmarks: Vec<usize>` - Previous numeric bookmarks
+`legacy_current_tab` now stores the **visible index** (position in `Tab::all()`), not the enum discriminant. This ensures backward compatibility with sessions that correctly saved visible indexes. The stable ID (`current_tab_id`) remains authoritative for all new writes.
 
-On restore, both stable ID and legacy fields are checked, with stable IDs preferred.
-
-## File Location
-
-Session state is stored in the user's data directory:
-- Linux: `~/.local/share/slapper/sessions/`
+**Migration note:** Old numeric session files may have enum discriminants written as `tab as usize`. When restoring, we interpret `legacy_current_tab` as a visible index. If an old session saved visible indexes correctly, restoration works correctly. Stable IDs remain correct regardless of tab ordering.
 
 ## Quick Save Feature
 

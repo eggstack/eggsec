@@ -188,6 +188,18 @@ let tab = Tab::from_stable_id("nse");  // None if no nse feature
 let tab = Tab::from_stable_id(id).unwrap_or(Tab::Recon);
 ```
 
+## Testing with TUI
+
+Use `App::new_for_testing()` in unit tests to avoid ambient session file dependencies:
+
+```rust
+#[test]
+fn test_tab_navigation() {
+    let app = App::new_for_testing(create_shared_history());
+    assert_eq!(app.current_tab, Tab::Recon);  // Always starts on Recon in tests
+}
+```
+
 ## Implementation Files
 
 - `crates/slapper/src/tui/tabs/mod.rs` - Tab enum, TabWindow, stable IDs

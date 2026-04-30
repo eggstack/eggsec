@@ -409,6 +409,10 @@ impl TabWindow {
 - Mouse hit-testing: Uses `TabWindow` to map click position to correct tab
 - Session persistence: Uses `stable_id` for forward compatibility
 
+- `App::new(history: SharedHistory)` - Runtime constructor; restores session state
+- `App::new_for_testing(history: SharedHistory)` - Test constructor; does NOT restore session
+- Use `App::new_for_testing()` in all unit tests to avoid ambient session file dependencies
+
 **Anti-patterns to avoid**:
 - Don't use `tab as usize` for tab indexing (enum discriminants != visible indexes)
 - Don't use `Tab::all().len()` as visible count (not all tabs may be available)

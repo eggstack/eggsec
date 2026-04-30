@@ -403,7 +403,7 @@ mod tests {
     use super::super::{create_shared_history, App};
 
     fn create_test_app() -> App {
-        App::new(create_shared_history())
+        App::new_for_testing(create_shared_history())
     }
 
     #[test]

@@ -294,15 +294,7 @@ where
                                     if palette.selected_index < max_idx {
                                         palette.selected_index += 1;
                                     }
-                                    let visible_height = 14usize;
-                                    let max_scroll =
-                                        palette.results.len().saturating_sub(visible_height);
-                                    if palette.selected_index
-                                        >= palette.scroll_offset + visible_height
-                                    {
-                                        palette.scroll_offset =
-                                            palette.scroll_offset.min(max_scroll) + 1;
-                                    }
+                                    palette.adjust_scroll_for_selection();
                                 }
                             }
                             (KeyModifiers::NONE, KeyCode::Backspace) => {
@@ -332,15 +324,7 @@ where
                                     if palette.selected_index < max_idx {
                                         palette.selected_index += 1;
                                     }
-                                    let visible_height = 14usize;
-                                    let max_scroll =
-                                        palette.results.len().saturating_sub(visible_height);
-                                    if palette.selected_index
-                                        >= palette.scroll_offset + visible_height
-                                    {
-                                        palette.scroll_offset =
-                                            palette.scroll_offset.min(max_scroll) + 1;
-                                    }
+                                    palette.adjust_scroll_for_selection();
                                 }
                             }
                             (KeyModifiers::SHIFT, KeyCode::BackTab) => {

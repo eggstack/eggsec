@@ -361,7 +361,7 @@ mod tests {
     use crate::types::OutputFormat;
 
     fn create_test_app() -> App {
-        App::new(create_shared_history())
+        App::new_for_testing(create_shared_history())
     }
 
     #[test]

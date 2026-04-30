@@ -154,10 +154,8 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
         return;
     };
     let area = f.area();
-    let popup_width = 60;
-    let popup_height = 20;
 
-    let popup_area = centered_rect(popup_width, popup_height, area);
+    let popup_area = centered_rect(palette.popup_width, palette.popup_height, area);
 
     f.render_widget(Clear, popup_area);
 
@@ -185,7 +183,7 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
     f.render_widget(query_paragraph, chunks[0]);
 
     // Pagination
-    let visible_height = (popup_area.height as usize).saturating_sub(5).max(5);
+    let visible_height = palette.visible_results_height();
     let total = palette.results.len();
     let start = palette.scroll_offset;
     let end = (start + visible_height).min(total);
