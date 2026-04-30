@@ -1,14 +1,14 @@
 # Slapper Improvement Plan - Active TUI Stabilization
 
 **Date**: 2026-04-30
-**Status**: Phase 12S COMPLETED as of 2026-04-30
+**Status**: Phase 12S mostly complete; Phase 12T follow-up active
 **Priority**: High
 
 ---
 
 ## Executive Summary
 
-Phase 12R moved the TUI tab model substantially closer to the intended design, but it is not complete. The latest review found that `cargo check --lib -p slapper` passes, while `cargo test --lib -p slapper` fails two TUI tests because `App::new()` restores an existing saved session and no longer reliably starts on `Recon` in tests.
+Phase 12R and 12S moved the TUI tab model substantially closer to the intended design. The latest verification found that `cargo test --lib -p slapper` now passes with **1134 tests passing**, but a few narrow follow-up concerns remain before calling the TUI stabilization fully complete.
 
 The current implementation has correctly addressed several previous blockers:
 
@@ -23,7 +23,89 @@ Remaining work should be narrow and corrective. Do not restart the TUI refactor 
 
 ---
 
-## Phase 12S: Final TUI Stabilization (ACTIVE)
+## Phase 12T: Remaining TUI Follow-Ups (ACTIVE)
+
+**Objective**: Close the remaining small mismatches found after the latest Phase 12S implementation attempt.
+
+### 12T.1: Use Tab-Area Width Consistently
+
+**Problem**: The implementation still appears to use more than one width source for `TabWindow`.
+
+**Current Evidence**:
+
+- `crates/slapper/src/tui/ui.rs:268` renders tabs with `TabWindow::for_width(area.width, ...)`.
+- `crates/slapper/src/tui/ui.rs:19` still stores `app.last_terminal_width = f.area().width`.
+- `crates/slapper/src/tui/app/navigation.rs:25` uses `self.last_terminal_width`.
+- `crates/slapper/src/tui/app/runner.rs:128` uses full `term_width` for mouse hit-testing.
+
+**Tasks**:
+
+- [ ] Replace `last_terminal_width` with `last_tab_area_width`, or add a separate field and stop using terminal width for tab-window math.
+- [ ] Set `last_tab_area_width` from the actual tab bar `Rect` width produced by the layout.
+- [ ] Make `adjust_tab_scroll()` use `last_tab_area_width`.
+- [ ] Make mouse hit-testing call `TabWindow::for_width(tab_area.width, ...)`, not full terminal width.
+- [ ] Add or update tests around widths near tab-count thresholds.
+
+**Acceptance Criteria**:
+
+- [ ] Rendering, keyboard scroll adjustment, and mouse hit-testing pass the same tab-area width to `TabWindow`.
+- [ ] At threshold widths, the highlighted tab, active tab, and clicked tab agree.
+
+### 12T.2: Tie Command Palette Scroll Height to Clamped Render Height
+
+**Problem**: Command palette key handling now uses a helper, but the helper appears based on `palette.popup_height`. Render uses `centered_rect(...)`, which can clamp the actual popup height on small terminals. Input scroll math can still disagree with the actual visible rows.
+
+**Current Evidence**:
+
+- `crates/slapper/src/tui/ui.rs:158` renders using `centered_rect(palette.popup_width, palette.popup_height, area)`.
+- `crates/slapper/src/tui/ui.rs:186` uses `palette.visible_results_height()`.
+- `crates/slapper/src/tui/help.rs:67` derives visible height from `popup_height`, not the clamped `popup_area.height`.
+
+**Tasks**:
+
+- [ ] Make visible result height calculation accept the actual clamped popup/content height.
+- [ ] Use the same derived value in rendering and input scroll adjustment.
+- [ ] If input handling cannot know terminal height directly, store the last computed command palette visible row count on `App` or `CommandPalette`.
+- [ ] Add a small test for reduced visible row count scroll behavior.
+
+**Acceptance Criteria**:
+
+- [ ] Selection remains visible when command palette is clamped on small terminals.
+- [ ] No input path assumes the unclamped requested popup height.
+
+### 12T.3: Document Non-TUI Feature Check Failure Separately
+
+**Problem**: `cargo check --lib -p slapper --features rest-api,ai-integration` still fails, but the failure is outside the TUI work.
+
+**Observed Error**:
+
+```text
+error: captured variable cannot escape `FnMut` closure body
+   --> crates/slapper/src/agent/mod.rs:470:26
+```
+
+**Tasks**:
+
+- [ ] Keep this documented as non-TUI unless the next work item explicitly targets `agent/mod.rs`.
+- [ ] Do not mark full feature verification as passing until this is fixed or formally scoped out.
+
+**Acceptance Criteria**:
+
+- [ ] TUI stabilization status is not conflated with the `agent/mod.rs` async closure compile failure.
+
+### Latest Verification
+
+```bash
+cargo test --lib -p slapper
+# result: 1134 passed, 0 failed
+
+cargo check --lib -p slapper --features rest-api,ai-integration
+# result: fails in crates/slapper/src/agent/mod.rs:470 with async closure capture error
+```
+
+---
+
+## Phase 12S: Final TUI Stabilization (MOSTLY COMPLETE)
 
 **Objective**: Make the second Phase 12 iteration test-stable and remove the last tab-width, session-legacy, and command-palette mismatches.
 
@@ -70,16 +152,16 @@ Remaining work should be narrow and corrective. Do not restart the TUI refactor 
 
 **Tasks**:
 
-- [x] Rename `last_terminal_width` to `last_tab_area_width`, or add a separate `last_tab_area_width`.
-- [x] Set it from the actual tab area width used by `draw_tabs`.
-- [x] Make `adjust_tab_scroll()` use `last_tab_area_width`.
-- [x] Make mouse hit-testing call `TabWindow::for_width(tab_area.width, ...)`.
-- [x] Ensure tests use `last_tab_area_width` when exercising narrow-width behavior.
+- [ ] Rename `last_terminal_width` to `last_tab_area_width`, or add a separate `last_tab_area_width`.
+- [ ] Set it from the actual tab area width used by `draw_tabs`.
+- [ ] Make `adjust_tab_scroll()` use `last_tab_area_width`.
+- [ ] Make mouse hit-testing call `TabWindow::for_width(tab_area.width, ...)`.
+- [ ] Ensure tests use `last_tab_area_width` when exercising narrow-width behavior.
 
 **Acceptance Criteria**:
 
-- [x] Rendering, keyboard scroll adjustment, and mouse hit-testing all pass the same width value to `TabWindow`.
-- [x] At widths near threshold boundaries, the highlighted tab, active tab, and mouse-selected tab agree.
+- [ ] Rendering, keyboard scroll adjustment, and mouse hit-testing all pass the same width value to `TabWindow`.
+- [ ] At widths near threshold boundaries, the highlighted tab, active tab, and mouse-selected tab agree.
 
 ### 12S.3: Finish Command Palette Dynamic Height
 
@@ -95,13 +177,13 @@ Remaining work should be narrow and corrective. Do not restart the TUI refactor 
 
 - [x] Extract one helper for command palette visible rows.
 - [x] Use the helper in render and input handling.
-- [x] Avoid deriving scroll behavior from the fixed popup height when the popup has been clamped.
+- [ ] Avoid deriving scroll behavior from the fixed popup height when the popup has been clamped.
 - [ ] Add a small unit test for scroll offset behavior with a reduced visible row count, if practical.
 
 **Acceptance Criteria**:
 
 - [x] No remaining `visible_height = 14usize` in command palette input handling.
-- [x] Selection remains visible when the popup is clamped on small terminals.
+- [ ] Selection remains visible when the popup is clamped on small terminals.
 
 ### 12S.4: Clarify Legacy Session Semantics
 

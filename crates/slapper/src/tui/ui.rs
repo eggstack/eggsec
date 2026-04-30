@@ -16,7 +16,8 @@ const LAYOUT_MARGIN: u16 = 1;
 const TAB_BAR_HEIGHT: u16 = 3;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
-    app.last_terminal_width = f.area().width;
+    let area = f.area();
+    app.last_tab_area_width = area.width.saturating_sub(LAYOUT_MARGIN * 2);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(LAYOUT_MARGIN)

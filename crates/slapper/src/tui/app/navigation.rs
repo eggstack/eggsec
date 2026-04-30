@@ -22,7 +22,7 @@ impl super::App {
     pub(super) fn adjust_tab_scroll(&mut self) {
         use super::tabs::TabWindow;
         let tab_index = self.current_tab.visible_index().unwrap_or(0);
-        let window = TabWindow::for_width(self.last_terminal_width, self.current_tab, self.tab_scroll_offset);
+        let window = TabWindow::for_width(self.last_tab_area_width, self.current_tab, self.tab_scroll_offset);
         if tab_index < window.start {
             self.tab_scroll_offset = tab_index as u16;
         } else if tab_index >= window.end {
@@ -508,12 +508,12 @@ mod tests {
         use crate::tui::tabs::{Tab, TabWindow};
         let mut app = create_test_app();
 
-        app.last_terminal_width = 60;
+        app.last_tab_area_width = 60;
         app.current_tab = Tab::Dashboard;
         app.tab_scroll_offset = 0;
         app.adjust_tab_scroll();
 
-        let window = TabWindow::for_width(app.last_terminal_width, app.current_tab, app.tab_scroll_offset);
+        let window = TabWindow::for_width(app.last_tab_area_width, app.current_tab, app.tab_scroll_offset);
         let tab_idx = app.current_tab.visible_index().unwrap_or(0);
         assert!(
             window.start <= tab_idx && tab_idx < window.end,

@@ -125,7 +125,7 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
         }
 
         if tab_area.contains((mouse_event.column, mouse_event.row).into()) {
-            let window = TabWindow::for_width(term_width, app.current_tab, app.tab_scroll_offset);
+            let window = TabWindow::for_width(tab_area.width, app.current_tab, app.tab_scroll_offset);
             if window.max_visible > 0 {
                 let tab_width = tab_area.width / window.max_visible as u16;
                 if tab_width > 0 {
