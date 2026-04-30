@@ -7,7 +7,8 @@ triggers:
   - ratatui
   - input field
   - focus area
-  - auth tab
+  - auto-insert mode
+  - input scrolling
 metadata:
   category: code_quality
   tools: [tui]
@@ -16,13 +17,18 @@ metadata:
 
 ## Overview
 
-This skill documents TUI patterns and recent improvements in Slapper's terminal UI implementation.
+This skill documents TUI patterns and recent improvements in Slapper's terminal UI implementation, updated for Phase 11 completion.
 
-## Recent Updates (2026-04-29)
+## Phase 11 Updates (2026-04-30)
 
-- AuthTab rewrite with InputGroup and FocusArea enum
-- Help overlay keyboard shortcut fix ([h/l] → [n/p] for tab navigation)
-- Error handling pattern added to AuthTab
+### Completed Items
+
+- **11.1.1**: Total theming migration - 400+ hardcoded `Color::*` usages replaced with `tc!()` macro
+- **11.1.2**: Improved InputField scrolling - viewport approach with proper edge handling
+- **11.1.3**: Unified Selector behavior - consistent theme styling
+- **11.2.1**: FocusArea standardization - 13 tabs migrated to FocusArea enum pattern
+- **11.2.2**: Consistent error reporting - 7 tabs now have `error_message` field
+- **11.3.1**: Auto-insert mode - Tab/Shift+Tab auto-switches to Insert mode when focusing inputs
 
 ## TUI Architecture
 
@@ -33,49 +39,69 @@ App
 ├── TabDispatcher (handles focus and input routing)
 │   └── Tab implementations (ReconTab, AuthTab, etc.)
 ├── Components
-│   ├── InputField - single input with validation
+│   ├── InputField - single input with validation and viewport scrolling
 │   ├── InputGroup - collection of InputField with focus management
 │   ├── ScrollableText - scrollable text display
-│   ├── ProgressGauge - progress indicator
+│   ├── ProgressGauge - progress indicator with theme colors
+│   ├── Selector - dropdown selector with theme-consistent styling
 │   └── Checkbox - toggle option
 └── Theme system (tc!() macro)
 ```
 
 ### FocusArea Pattern
 
-All major tabs should implement an enum-based focus area system:
+All tabs should implement an enum-based focus area system:
 
-**Example** (from `tabs/recon.rs`):
+**Standard Pattern** (from `tabs/auth.rs`):
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ReconFocusArea {
-    Inputs,
-    Options,
+pub enum AuthFocusArea {
+    Target,
+    Username,
+    Password,
     Results,
 }
 
-pub struct ReconTab {
-    pub focus_area: ReconFocusArea,
+pub struct AuthTab {
+    pub inputs: InputGroup,
+    pub state: AppState,
+    pub focus_area: AuthFocusArea,
     pub error_message: Option<String>,
-    // ...
 }
-```
 
-**Key methods**:
-```rust
-fn breadcrumb(&self) -> Option<Vec<&'static str>> {
-    let focus = match self.focus_area {
-        ReconFocusArea::Inputs => "Inputs",
-        ReconFocusArea::Options => "Options",
-        ReconFocusArea::Results => "Results",
-    };
-    Some(vec!["Recon", focus])
+impl TabInput for AuthTab {
+    fn handle_up(&mut self) {
+        self.focus_area = match self.focus_area {
+            AuthFocusArea::Results => AuthFocusArea::Password,
+            AuthFocusArea::Password => AuthFocusArea::Username,
+            AuthFocusArea::Username => AuthFocusArea::Target,
+            AuthFocusArea::Target => {
+                self.inputs.focus_prev();
+                if !self.inputs.is_focused() {
+                    self.inputs.focus(self.inputs.fields.len() - 1);
+                }
+                AuthFocusArea::Target
+            }
+        };
+    }
+
+    fn handle_down(&mut self) {
+        self.focus_area = match self.focus_area {
+            AuthFocusArea::Target => AuthFocusArea::Username,
+            AuthFocusArea::Username => AuthFocusArea::Password,
+            AuthFocusArea::Password => AuthFocusArea::Results,
+            AuthFocusArea::Results => AuthFocusArea::Results,
+        };
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+    }
 }
 ```
 
 ### Error Handling Pattern
-
-Tabs should implement error handling following ReconTab's pattern:
 
 ```rust
 pub struct SomeTab {
@@ -96,83 +122,81 @@ impl SomeTab {
 }
 ```
 
-### InputGroup Usage
+### InputField Viewport Scrolling
 
-For tabs with multiple input fields, use InputGroup:
+The InputField component now properly handles scrolling when the text exceeds the visible width:
 
 ```rust
-pub struct AuthTab {
-    pub inputs: InputGroup,
-    pub focus_area: AuthFocusArea,
-}
-
-impl AuthTab {
-    fn current_input_index(&self) -> Option<usize> {
-        match self.focus_area {
-            AuthFocusArea::Target => Some(0),
-            AuthFocusArea::Username => Some(1),
-            AuthFocusArea::Password => Some(2),
-            AuthFocusArea::Results => None,
-        }
-    }
-
-    fn sync_input_focus(&mut self) {
-        for (i, field) in self.inputs.fields.iter_mut().enumerate() {
-            field.focused = Some(i) == self.current_input_index();
-        }
+// Viewport calculation in InputField::render
+let display_value = if let Some(w) = self.width {
+    let available = (w as usize).saturating_sub(2);
+    let char_count = self.value.chars().count();
+    if char_count > available {
+        // Center viewport on cursor with edge clamping
+        let start = if cursor_char_pos <= available / 2 {
+            0
+        } else if cursor_char_pos >= char_count - available / 2 {
+            (char_count.saturating_sub(available)).max(0)
+        } else {
+            cursor_char_pos.saturating_sub(available / 2)
+        };
+        // Show "..." prefix only if scrolled past start
+        // Show "..." suffix only if more content after visible
     }
 }
 ```
 
+### Auto-Insert Mode
+
+As of Phase 11, the TUI automatically switches to Insert mode when an input is focused:
+
+```rust
+// In app/mod.rs - handle_focus_next
+pub fn handle_focus_next(&mut self) {
+    // ... existing logic ...
+    self.dispatcher_mut().handle_focus_next();
+    if self.dispatcher_mut().is_input_focused() {
+        self.mode = InputMode::Insert;
+    } else {
+        self.mode = InputMode::Normal;
+    }
+}
+```
+
+Users can still manually toggle with `i` in Normal mode.
+
 ### Keyboard Navigation
 
-**Current key bindings** (verified 2026-04-29):
-- `h` / `l` - move cursor left/right within input
-- `n` / `p` - next/prev tab
-- `j` / `k` - navigate up/down
+**Key bindings** (verified 2026-04-30):
+- `h` / `l` or `←` / `→` - move cursor left/right within input
+- `j` / `k` or `↓` / `↑` - navigate up/down lists
+- `n` / `p` or Tab/Shift-Tab - next/prev tab
 - `gg` / `G` - go to top/bottom
 - `Ctrl+T` - toggle theme
 - `Ctrl+P` - command palette
 - `Space` - help overlay
-
-**Help text in ui.rs** should match actual behavior.
+- `i` - enter Insert mode (from Normal mode)
+- `Esc` - return to Normal mode
 
 ### Theme System
 
-Use the `tc!()` macro for all colors:
-
-```rust
-use crate::tui::theme::tc;
-
-// Instead of:
-widget.style(Style::default().fg(Color::Cyan))
-
-// Use:
-widget.style(tc!(primary))
-```
-
-## AuthTab Implementation
-
-**Before** (basic, no proper input handling):
-- Stored raw strings (target_url, username, password_list)
-- handle_char() only appended to target_url
-- No focus management
-- No InputGroup
-
-**After** (proper TUI pattern):
-- Uses InputGroup with 3 fields (Target, Username, Password)
-- AuthFocusArea enum for navigation
-- Proper focus sync between focus_area and input fields
-- Error handling with set_error() method
+Use the `tc!()` macro for all colors - see `tui_theme_system.md` skill for details.
 
 ## Verification Commands
 
 ```bash
-cargo test --lib -p slapper
-cargo clippy --lib -p slapper
+# Verify theme migration (should find 0 Color::* usages in TUI)
+grep -r "Color::" crates/slapper/src/tui/tabs/*.rs crates/slapper/src/tui/components/*.rs | wc -l
+
+# Run TUI tests
+cargo test --lib -p slapper -- tui
+
+# Run clippy on TUI
+cargo clippy --lib -p slapper -- -A clippy::all -W clippy::pedantic
 ```
 
 ## Related Skills
 
+- `tui_theme_system` - Theme system and color mapping
 - `performance_patterns` - Performance optimization patterns
 - `security_fix_patterns` - Security vulnerability patterns

@@ -210,6 +210,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
   - Plan is COMPLETED as of 2026-04-30
   - All 8 Waves verified complete (including Phase 8)
   - Phase 8 items: baseline-aware alerting, channel draining, dynamic visible_rows, HistoryTab standardization, breadcrumb consolidation, theme consistency, sparkline visualization, asset health overview
+  - Phase 11 (TUI Modernization & Polishing) COMPLETED: Theme migration, FocusArea standardization, error reporting, auto-insert mode
 
 ## Important Guidelines
 
@@ -303,6 +304,76 @@ Breadcrumb display is centralized via `TAB_BREADCRUMBS` constant in `tui/tabs/mo
 Dashboard includes trend visualization and asset health overview:
 - `render_sparkline()` - ASCII sparkline renderer using Unicode block characters (▁▂▃▄▅▆▇█)
 - Asset Health Summary shows: unique targets, today's scans, critical findings count, health indicator
+
+### TUI Theming
+
+The TUI uses a theme system via the `tc!` macro (defined in `tui/theme.rs`):
+- Add `use crate::tc;` to imports
+- Usage: `tc!(field_name)` where field_name is one of: primary, secondary, accent, background, foreground, surface, border, border_focused, text, text_dim, text_bright, success, warning, error, info, selected, selected_text, highlight, mode_normal, mode_insert, tab_active, tab_inactive, status_running, status_idle, status_error
+
+**Semantic mapping for Color replacements:**
+- Text: `Color::White` → `tc!(text)`, `Color::Gray/DarkGray` → `tc!(text_dim)`
+- Borders: `Color::Yellow` focused → `tc!(border_focused)`, `Color::Gray/DarkGray` → `tc!(border)`
+- Status: `Color::Green` → `tc!(success)`, `Color::Red` → `tc!(error)`, `Color::Yellow` → `tc!(warning)` or `tc!(accent)`, `Color::Cyan` → `tc!(info)`
+- HTTP status: 200-299 → `tc!(success)`, 300-399 → `tc!(info)`, 400-499 → `tc!(warning)`, 500-599 → `tc!(error)`
+
+### FocusArea Enum Pattern
+
+Tabs should use a `FocusArea` enum for navigation between logical areas:
+```rust
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TabFocusArea {
+    Inputs,
+    Options,
+    Results,
+}
+
+pub struct Tab {
+    pub focus_area: TabFocusArea,
+    pub error_message: Option<String>,
+    // ... other fields
+}
+
+impl Tab {
+    pub fn new() -> Self {
+        Self {
+            focus_area: TabFocusArea::Inputs,
+            error_message: None,
+            // ...
+        }
+    }
+}
+
+impl TabInput for Tab {
+    fn handle_up(&mut self) {
+        self.focus_area = match self.focus_area {
+            TabFocusArea::Options => TabFocusArea::Inputs,
+            TabFocusArea::Results => TabFocusArea::Options,
+            TabFocusArea::Inputs => TabFocusArea::Results,
+        };
+    }
+
+    fn handle_down(&mut self) {
+        self.focus_area = match self.focus_area {
+            TabFocusArea::Inputs => TabFocusArea::Options,
+            TabFocusArea::Options => TabFocusArea::Results,
+            TabFocusArea::Results => TabFocusArea::Inputs,
+        };
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+    }
+}
+```
+
+### Auto-Insert Mode
+
+The TUI automatically switches to Insert mode when Tab/Shift+Tab focuses an input:
+- `handle_focus_next()` and `handle_focus_prev()` in `App` check `is_input_focused()` after navigation
+- If input is focused, mode is set to `InputMode::Insert`; otherwise `InputMode::Normal`
+- Users can still manually toggle with `i` key in Normal mode
 
 ---
 

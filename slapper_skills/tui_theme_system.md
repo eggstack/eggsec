@@ -1,12 +1,13 @@
 ---
 name: tui_theme_system
-description: "TUI theme system with dark/light presets using ratatui"
+description: "TUI theme system with dark/light presets using ratatui - updated for Phase 11"
 triggers:
   - theme
   - dark mode
   - light mode
   - colors
-  - ui colors
+  - tc! macro
+  - tc!()
 metadata:
   category: TUI
   tools: [tui]
@@ -15,76 +16,97 @@ metadata:
 
 ## Overview
 
-Slapper's TUI includes a theme system that provides consistent color definitions across all UI components. Themes support both dark and light presets with full customization capability.
+Slapper's TUI includes a theme system that provides consistent color definitions across all UI components. **As of Phase 11**, all hardcoded `Color::*` usages have been migrated to the `tc!()` macro, ensuring theme-consistent UI throughout all 29 tabs and 5 components.
 
 ## Usage
 
 ### Available Theme Colors
 
-The `ThemeColors` struct provides colors for all UI elements:
-- `black`, `white`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`
-- `bg_primary`, `bg_secondary`, `bg_tertiary` - background colors
-- `fg_primary`, `fg_secondary`, `fg_tertiary` - foreground colors
-- `border`, `highlight`, `selection` - UI element colors
-- `severity_critical`, `severity_high`, `severity_medium`, `severity_low` - severity colors
+The `ThemeColors` struct (in `tui/theme.rs`) provides these theme fields:
+- **Core**: `primary`, `secondary`, `accent`, `background`, `foreground`
+- **Surface**: `surface`, `border`, `border_focused`
+- **Text**: `text`, `text_dim`, `text_bright`
+- **Status**: `success`, `warning`, `error`, `info`
+- **Selection**: `selected`, `selected_text`, `highlight`
+- **Mode**: `mode_normal`, `mode_insert`, `tab_active`, `tab_inactive`
+- **Status Bar**: `status_running`, `status_idle`, `status_error`
+
+### Using the tc! Macro
+
+**Important**: All TUI code should use the `tc!` macro instead of hardcoded `Color::*`.
+
+```rust
+use crate::tc;
+
+// Get a theme color
+let border_color = tc!(border);
+let focused_border = tc!(border_focused);
+let error_color = tc!(error);
+let success_text = tc!(success);
+```
+
+### Semantic Color Mapping
+
+When migrating from hardcoded `Color::*`, use this mapping:
+
+| Hardcoded | Theme Field | Usage |
+|-----------|-------------|-------|
+| `Color::Yellow` (focused) | `tc!(border_focused)` | Focused element borders |
+| `Color::Gray/DarkGray` | `tc!(border)` or `tc!(text_dim)` | Unfocused borders, placeholder text |
+| `Color::Green` | `tc!(success)` | Success states, 2xx HTTP |
+| `Color::Red` | `tc!(error)` | Error states, 5xx HTTP |
+| `Color::Yellow` (warning) | `tc!(warning)` or `tc!(accent)` | Warning states, 4xx HTTP |
+| `Color::Cyan` | `tc!(info)` | Info states, 3xx HTTP |
+| `Color::Blue` | `tc!(secondary)` | Secondary actions |
+| `Color::White` | `tc!(text)` | Primary text |
+| `Color::Black` (on selected) | `tc!(selected_text)` | Text on selected bg |
 
 ### Using Themes in TUI Code
 
 ```rust
-use slapper::tui::theme::{Theme, ThemeManager, ThemeColors, dark_theme, light_theme};
+use ratatui::style::{Style, Modifier};
+use crate::tc;
 
-// Get current theme
-let theme = Theme::current();
-
-// Use preset themes
-let dark = dark_theme();
-let light = light_theme();
-
-// ThemeManager for managing active theme
-let mut manager = ThemeManager::new(dark_theme());
-manager.set_theme(light_theme());
-manager.toggle_theme();
-```
-
-### Macros for Easy Access
-
-```rust
-use slapper::tui::theme::{theme, tc};
-
-// Get current theme
-let current = theme!();
-
-// Get specific color
-let primary = tc!(fg_primary);
-let critical = tc!(severity_critical);
-```
-
-### Implementing Custom Themes
-
-```rust
-let custom = Theme {
-    name: "custom".to_string(),
-    colors: ThemeColors {
-        bg_primary: Color::Rgb(30, 30, 30),
-        fg_primary: Color::Rgb(220, 220, 220),
-        // ... other colors
-    },
+// Create a styled element
+let border_style = if focused {
+    Style::default().fg(tc!(border_focused))
+} else {
+    Style::default().fg(tc!(border))
 };
+
+// Combine with other style properties
+let text_style = Style::default()
+    .fg(tc!(text))
+    .add_modifier(Modifier::BOLD);
 ```
+
+## FocusArea Pattern
+
+Tabs should use a `FocusArea` enum for navigation between logical areas. See `tui_improvements.md` skill for details.
+
+## Auto-Insert Mode
+
+As of Phase 11, the TUI automatically switches to Insert mode when Tab/Shift+Tab focuses an input field. See `tui_improvements.md` skill for details.
 
 ## Implementation
 
-- `crates/slapper/src/tui/theme.rs` - Theme, ThemeColors, ThemeManager
-- Uses `std::sync::LazyLock` for thread-safe global theme access
+- `crates/slapper/src/tui/theme.rs` - Theme, ThemeColors, ThemeManager, `tc!` macro
+- Uses `std::cell::RefCell` with `thread_local!` for thread-safe theme access
+- `#[macro_export]` makes `tc!` available crate-wide
 
 ## Key Types
 
 - `Theme` - Contains name and ThemeColors
 - `ThemeColors` - All color definitions for UI
 - `ThemeManager` - Manages active theme and switching
+- `ThemeMode` - Enum: Dark, Light
 
 ## Verification
 
 ```bash
-cargo test --lib -p slapper -- tui::theme
+# Verify theme migration (should find 0 Color::* usages)
+grep -r "Color::" crates/slapper/src/tui/tabs/*.rs crates/slapper/src/tui/components/*.rs
+
+# Run TUI tests
+cargo test --lib -p slapper -- tui
 ```
