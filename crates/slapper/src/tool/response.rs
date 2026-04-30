@@ -279,6 +279,7 @@ impl std::fmt::Display for StreamEventType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fuzzer::engine::FuzzResult;
     use crate::fuzzer::payloads::{Payload, PayloadType};
     use crate::types::Severity;
 
