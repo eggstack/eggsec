@@ -78,6 +78,7 @@ impl Default for AgentConfig {
 
 pub struct Agent {
     config: AgentConfig,
+    #[allow(dead_code)]
     registry: ToolRegistry,
     dispatcher: ToolDispatcher,
     #[cfg(feature = "ai-integration")]
@@ -88,6 +89,7 @@ pub struct Agent {
     alert_router: AlertRouter,
     event_handlers: Vec<Box<dyn EventHandler>>,
     running: Arc<RwLock<bool>>,
+    #[allow(dead_code)]
     config_watcher: Option<ConfigWatcher>,
 }
 

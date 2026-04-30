@@ -69,11 +69,6 @@ impl AiPlanner {
         }
     }
 
-    pub fn with_learning_cache(mut self, cache: Arc<RwLock<HashMap<String, CachedPlan>>>) -> Self {
-        self.learning_cache = cache;
-        self
-    }
-
     pub async fn create_plan(&self, request: &PlanRequest) -> ExecutionPlan {
         if let Some(ref client) = self.client {
             match self.query_ai_for_plan(client, request).await {

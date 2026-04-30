@@ -152,8 +152,11 @@ pub struct InterAgentChannel {
 }
 
 struct MessageSubscription {
+    #[allow(dead_code)]
     subscriber_id: Uuid,
+    #[allow(dead_code)]
     message_types: Vec<String>,
+    #[allow(dead_code)]
     callback_url: Option<String>,
 }
 

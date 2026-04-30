@@ -54,7 +54,9 @@ pub struct ResultAggregator {
 }
 
 struct InProgressExecution {
+    #[allow(dead_code)]
     execution_id: Uuid,
+    #[allow(dead_code)]
     started_at: DateTime<Utc>,
     stage_results: HashMap<String, StageResultAccumulator>,
     tool_results: HashMap<String, ToolResultAccumulator>,

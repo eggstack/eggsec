@@ -18,6 +18,7 @@ use crate::tool::{ToolRequest, ToolResponse};
 #[derive(Clone)]
 pub struct SearchTool {
     searxng_url: String,
+    #[allow(dead_code)]
     cache: Arc<tokio::sync::RwLock<std::collections::HashMap<String, SearchResult>>>,
     client: reqwest::Client,
 }

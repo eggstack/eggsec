@@ -54,6 +54,7 @@ impl SmartWafBypass {
         }
     }
 
+    #[allow(dead_code)]
     fn with_knowledge_base(client: AiClient, knowledge_base: Vec<WafBypassEntry>) -> Self {
         Self {
             client,
