@@ -22,7 +22,7 @@ impl super::App {
     pub(super) fn adjust_tab_scroll(&mut self) {
         use super::tabs::TabWindow;
         let tab_index = self.current_tab.visible_index().unwrap_or(0);
-        let window = TabWindow::for_width(80, self.current_tab, self.tab_scroll_offset);
+        let window = TabWindow::for_width(self.last_terminal_width, self.current_tab, self.tab_scroll_offset);
         if tab_index < window.start {
             self.tab_scroll_offset = tab_index as u16;
         } else if tab_index >= window.end {
