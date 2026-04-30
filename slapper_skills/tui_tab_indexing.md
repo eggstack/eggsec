@@ -124,24 +124,29 @@ let id = app.current_tab.stable_id();  // "dashboard"
 
 ## Terminal Width Tracking
 
-`App` tracks terminal width to ensure keyboard navigation uses the same width as rendering:
+`App` tracks the tab-area width to ensure keyboard navigation uses the same width as rendering:
 
 ```rust
 pub struct App {
-    pub last_terminal_width: u16,  // Updated in ui::draw()
+    pub last_tab_area_width: u16,  // Tab bar width = area.width - (LAYOUT_MARGIN * 2)
     pub tab_scroll_offset: u16,
     // ...
 }
 
+// Updated in ui::draw() - tracks actual tab bar width
+app.last_tab_area_width = area.width.saturating_sub(LAYOUT_MARGIN * 2);
+
 // Navigation uses stored width
 fn adjust_tab_scroll(&mut self) {
     let window = TabWindow::for_width(
-        self.last_terminal_width,
+        self.last_tab_area_width,
         self.current_tab,
         self.tab_scroll_offset
     );
 }
 ```
+
+**Important:** Rendering, keyboard scroll adjustment, and mouse hit-testing all use the same `last_tab_area_width` to ensure consistent tab window calculation.
 
 ## Bookmarks with Stable IDs
 
