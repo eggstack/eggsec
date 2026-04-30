@@ -44,7 +44,7 @@ crates/slapper/
 │   ├── constants.rs   # Centralized constants (WAF, HTTP, scan, etc.)
 │   ├── types.rs       # Shared types (Severity, SensitiveString)
 │   ├── fuzzer/        # Fuzzing engine (30 payload types)
-│   │   ├── chain.rs   # ChainExecutor (with regex caching)
+│   │   ├── chain.rs   # ChainExecutor (with LRU regex cache)
 │   │   ├── detection/ # TimingAnalyzer (lock-free with atomics)
 │   │   └── payloads/
 │   │       └── macros.rs  # payload_vec! macro
@@ -115,8 +115,8 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 | Metric | Value | Note |
 |--------|-------|------|
 | Tests | 1120 passing | Base library tests |
-| Tests | 1371 passing | With rest-api,ai-integration |
-| Clippy | ~4 warnings | TUI-specific acceptable |
+| Tests | 1378 passing | With rest-api,ai-integration |
+| Clippy | ~5 warnings | TUI-specific acceptable |
 | Source files | 506 |
 | Payload types | 30 |
 | Tabs | 29 |
@@ -207,66 +207,56 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ## Planning
 
 - `plans/plan.md` — Master Consolidated Improvement Plan (sole plan file, all others removed in 2026-04-29)
-  - Organized into 7 Waves for parallel execution.
-  - **Wave 1**: Critical & Security (vulnerabilities, blockers)
-  - **Wave 2**: TUI UX & Features (Search, Clipboard, Pause/Resume)
-  - **Wave 3**: Core Quality & Refactor (splitting large files, error handling)
-  - **Wave 4**: Performance & Hardening (FxHashMap, Regex LruCache)
-  - **Wave 5**: Feature Enhancements (Agent, Plugin, WAF/Fuzzer gaps)
-  - **Wave 6**: Long-term Capabilities (Exploitation, Cloud, Mobile)
-  - **Wave 7**: Documentation (Full updates)
+  - Plan is COMPLETED and pruned as of 2026-04-30
+  - All 7 Waves verified complete
+  - Only verification notes and completion summary remain
 
-**On Using This Guide**: When working on items from `plan.md`, always verify claims against the actual codebase. Line numbers and file paths in plans may become outdated as code evolves. Use `rg` to confirm before implementing.
-
-## Lessons Learned
+## Important Guidelines
 
 ### Codebase Verification Required
 
-When implementing plan items, verify actual state rather than assuming plan accuracy:
+When implementing changes or reviewing plan items, verify actual state rather than assuming plan accuracy:
 - Payload type count: 30 (verified via `fuzzer/payloads/mod.rs`)
 - Recon module count: 31 (verified)
-- Test count: 1115 passing base, 1364 with full features
+- Test count: 1120 base, 1378 with full features
 - Use `rg` to confirm file paths and line numbers exist
 - Run `cargo test --lib -p slapper` after each change
 
-### Wave-Based Parallelization
+### notify-debouncer-mini API
 
-The master plan in `plan.md` is structured for parallel implementation by domain. Independent waves can be assigned to separate agents.
+When using `notify-debouncer-mini` in config watching code:
+- Version 0.5+ uses callback-based API, NOT channel-based
+- Use `new_debouncer(duration, |res: DebounceEventResult| { ... })` with callback
+- Access watcher via `debouncer.watcher()` method
+- Debouncer struct stores the RecommendedWatcher internally
 
-### Session Learnings (2026-04-29)
+### Agent Observability
 
-**Consolidation Results:**
-- Merged all source plans (`code_quality_review.md`, `tui_improvements.md`, etc.) into a single `plans/plan.md`.
-- Reorganized plan into 7 waves supporting parallel execution by domain.
-- Verified critical items like `unwrap_u8` auth pattern and `TOCTOU` config fixes are already implemented.
-- Identified and documented 4 false positives in original plan claims.
-- Verified that `Global Search`, `Clipboard`, and `Pause/Resume` are currently stubs/missing and added them to Wave 2.
+The `agent/logging.rs` module provides `AgentLogger` for file-based logging:
+- Call `AgentLogger::init(log_dir)` early in agent startup
+- Logs written to `log_dir/agent.log` with daily rotation
+- JSON format with thread IDs, file/line info
 
-**Verified False Positives:**
-| Item | Claim | Actual State |
-|------|-------|--------------|
-| k8s-openapi | full feature doesn't compile | Already fixed - version is 0.22 |
-| SSRF/Private IP blocking | No blocking in executor | Partially protected via template loader |
-| Intercept proxy TLS | No TLS validation | NOT A BUG - by design (intercepting proxy) |
-| HistoryTab Search | missing | Feature EXISTS in `tui/tabs/history.rs` |
+### Agent Config Hot-Reloading
 
-**Completed Wave 0 (2026-04-29):**
-- Fixed all 7 pre-existing AI test failures (ai::planner, ai::waf_bypass, ai::client)
-- Tests now pass: 1371 passing with rest-api,ai-integration
+The `agent/config_watcher.rs` module provides `ConfigWatcher`:
+- Use `SlapperConfigReloader` for portfolio + main config paths
+- Watcher gracefully handles missing files via `.ok()`
+- Requires `ConfigReloader` trait implementation for custom reload logic
 
-**Completed Wave 1 (2026-04-29):**
-- Fixed grpc-api + stress-testing + packet-inspection compilation errors
-- Export CaptureError from packet module, add get_service_name import, fix serde_json/prost_types conversion
-- Add PacketBatch::new constructor
+### Cookie Management
 
-**Completed Wave 2 (2026-04-29):**
-- Fixed SettingsTab::reset() infinite recursion bug
-- Verified orphaned tabs already removed, mouse redraw bug already fixed
+Reqwest handles cookies automatically when `cookies` feature is enabled:
+- Enable via `features = [..., "cookies"]` in Cargo.toml
+- Client's internal cookie jar manages Set-Cookie automatically
+- Manual cookie header construction is NOT needed when using reqwest Client
 
-**Completed Wave 5 (2026-04-29):**
-- Added tracing-appender for file-based agent observability
-- Added notify-based config hot-reloading
-- Created StatefulFuzzer for chained fuzzing
+### Regex Caching
+
+Use LRU cache for regex patterns to prevent unbounded memory growth:
+- `lru = "0.18"` crate available for use
+- Recommended cache size: 100 entries (use `NonZeroUsize`)
+- Access via `cache.put(key, value)` and `cache.get(&key)`
 
 ---
 
