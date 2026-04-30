@@ -12,6 +12,7 @@ pub struct DashboardTab {
     pub failed_scans: usize,
     pub last_scan_type: String,
     pub last_target: String,
+    pub sparkline_data: Vec<usize>,
 }
 
 impl DashboardTab {
@@ -24,9 +25,34 @@ impl DashboardTab {
             failed_scans: 0,
             last_scan_type: String::new(),
             last_target: String::new(),
+            sparkline_data: Vec::new(),
         };
         tab.render_welcome();
         tab
+    }
+
+    fn render_sparkline(data: &[usize]) -> String {
+        if data.is_empty() {
+            return String::from("[no data]");
+        }
+
+        let min_val = *data.iter().min().unwrap_or(&0);
+        let max_val = *data.iter().max().unwrap_or(&0);
+        let range = if max_val > min_val { max_val - min_val } else { 1 };
+
+        let blocks = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+        let bucket_count = blocks.len() - 1;
+
+        let sparkline: String = data
+            .iter()
+            .map(|&v| {
+                let normalized = ((v - min_val) * bucket_count as usize) / range;
+                let idx = normalized.min(bucket_count);
+                blocks[idx]
+            })
+            .collect();
+
+        format!(" {}", sparkline)
     }
 
     fn render_welcome(&mut self) {
@@ -135,6 +161,9 @@ impl DashboardTab {
             self.last_target = last.target.clone();
         }
 
+        let last_n = 7.min(history.len());
+        self.sparkline_data = vec![1usize; last_n];
+
         self.render_stats();
     }
 
@@ -173,6 +202,19 @@ impl DashboardTab {
         }
 
         self.view.add_line(Line::from(""));
+
+        if !self.sparkline_data.is_empty() {
+            self.view.add_line(Line::from(Span::styled(
+                "Activity Trend (last 7 scans)",
+                ratatui::style::Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            )));
+            self.view.add_line(Line::from(""));
+            let sparkline = Self::render_sparkline(&self.sparkline_data);
+            self.view.add_line(Line::from(sparkline));
+            self.view.add_line(Line::from(""));
+        }
 
         if !self.last_scan_type.is_empty() {
             self.view.add_line(Line::from(Span::styled(
