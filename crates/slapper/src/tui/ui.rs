@@ -589,8 +589,8 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
                         help.push_str(" [Ctrl+P] Palette");
                     }
                 }
-                if !app.get_bookmarked_tabs().is_empty() {
-                    help.push_str(&format!(" [{}]", app.get_bookmarked_tabs().len()));
+                if !app.get_bookmarked_tab_ids().is_empty() {
+                    help.push_str(&format!(" [{}]", app.get_bookmarked_tab_ids().len()));
                 }
                 help
             }

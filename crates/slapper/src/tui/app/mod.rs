@@ -145,7 +145,7 @@ pub struct App {
     pub needs_redraw: bool,
     pub tab_scroll_offset: u16,
     pub last_terminal_width: u16,
-    pub bookmarks: std::collections::HashSet<usize>,
+    pub bookmarks: std::collections::HashSet<String>,
     pub paused: bool,
     pub spinner_tick: u64,
 }
@@ -156,19 +156,17 @@ impl App {
 
         let restored_state = session_manager.load_latest_session().ok().flatten();
 
-        let restored_bookmarks: std::collections::HashSet<usize> = if let Some(ref state) = restored_state {
+        let restored_bookmarks: std::collections::HashSet<String> = if let Some(ref state) = restored_state {
             let mut bookmarks = std::collections::HashSet::new();
             for bookmark_id in &state.bookmarks {
                 if let Some(tab) = Tab::from_stable_id(bookmark_id) {
-                    if let Some(idx) = tab.visible_index() {
-                        bookmarks.insert(idx);
-                    }
+                    bookmarks.insert(tab.stable_id().to_string());
                 }
             }
             for &idx in &state.legacy_bookmarks {
                 if let Some(tab) = Tab::from_index(idx) {
-                    if let Some(visible_idx) = tab.visible_index() {
-                        bookmarks.insert(visible_idx);
+                    if tab.visible_index().is_some() {
+                        bookmarks.insert(tab.stable_id().to_string());
                     }
                 }
             }
@@ -774,19 +772,20 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
         self.dispatcher_mut().handle_bottom();
     }
 
-    pub fn toggle_bookmark(&mut self, tab_index: usize) {
-        if self.bookmarks.contains(&tab_index) {
-            self.bookmarks.remove(&tab_index);
+    pub fn toggle_bookmark(&mut self, tab: Tab) {
+        let id = tab.stable_id().to_string();
+        if self.bookmarks.contains(&id) {
+            self.bookmarks.remove(&id);
         } else {
-            self.bookmarks.insert(tab_index);
+            self.bookmarks.insert(id);
         }
     }
 
-    pub fn is_bookmarked(&self, tab_index: usize) -> bool {
-        self.bookmarks.contains(&tab_index)
+    pub fn is_bookmarked(&self, tab: Tab) -> bool {
+        self.bookmarks.contains(tab.stable_id())
     }
 
-    pub fn get_bookmarked_tabs(&self) -> Vec<usize> {
+    pub fn get_bookmarked_tab_ids(&self) -> Vec<String> {
         self.bookmarks.iter().cloned().collect()
     }
 
