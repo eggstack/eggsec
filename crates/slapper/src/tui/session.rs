@@ -105,7 +105,7 @@ impl SessionManager {
         }
     }
 
-pub fn restore_session(&self, app: &mut App, state: &SessionState) {
+    pub fn restore_session(&self, app: &mut App, state: &SessionState) {
         let tab_to_restore = state.current_tab_id.as_ref()
             .and_then(|id| Tab::from_stable_id(id))
             .or_else(|| {

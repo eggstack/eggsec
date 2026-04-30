@@ -263,38 +263,24 @@ fn draw_search_popup(f: &mut Frame, app: &App) {
 }
 
 fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
-    use crate::tui::tabs::Tab;
+    use crate::tui::tabs::{Tab, TabWindow};
     use ratatui::text::Line;
+
+    let window = TabWindow::for_width(area.width, app.current_tab, app.tab_scroll_offset);
 
     use std::sync::LazyLock;
     static TAB_TITLES: LazyLock<Vec<Line>> = LazyLock::new(|| {
         Tab::all().iter().map(|t| Line::from(t.title())).collect()
     });
 
-    let visible_width = (area.width as usize).saturating_sub(2);
-    let min_tab_width = 8_usize;
-    let max_visible = (visible_width / min_tab_width).max(1).min(TAB_TITLES.len());
-
-    let start_idx = (app.tab_scroll_offset as usize).min(TAB_TITLES.len().saturating_sub(max_visible));
-    let visible_titles: Vec<Line> = TAB_TITLES[start_idx..]
+    let visible_titles: Vec<Line> = TAB_TITLES[window.start..window.end]
         .iter()
-        .take(max_visible)
         .cloned()
         .collect();
 
-    let adjusted_select = (app.current_tab as usize).saturating_sub(start_idx).min(max_visible.saturating_sub(1));
-
-    let has_prev = start_idx > 0;
-    let has_next = start_idx + max_visible < TAB_TITLES.len();
-    let title_suffix = if has_prev || has_next {
-        format!(" [{}/{}]", start_idx + 1, TAB_TITLES.len())
-    } else {
-        String::new()
-    };
-
     let tabs = Tabs::new(visible_titles)
-        .block(Block::default().borders(Borders::ALL).title(format!("Slapper{}", title_suffix)))
-        .select(adjusted_select)
+        .block(Block::default().borders(Borders::ALL).title(format!("Slapper{}", window.range_text())))
+        .select(window.selected_visible)
         .style(Style::default().fg(tc!(tab_active)))
         .highlight_style(
             Style::default()

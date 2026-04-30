@@ -20,17 +20,13 @@ impl super::App {
     }
 
     fn adjust_tab_scroll(&mut self) {
-        use super::tabs::Tab;
-        let titles: Vec<&str> = Tab::all().iter().map(|t| t.title()).collect();
-        let tab_index = titles.iter().position(|t| *t == self.current_tab.title());
-        if let Some(idx) = tab_index {
-            let visible_count = 10usize;
-            let current_start = self.tab_scroll_offset as usize;
-            if idx < current_start {
-                self.tab_scroll_offset = idx as u16;
-            } else if idx >= current_start + visible_count {
-                self.tab_scroll_offset = (idx.saturating_sub(visible_count) + 1) as u16;
-            }
+        use super::tabs::TabWindow;
+        let tab_index = self.current_tab.visible_index().unwrap_or(0);
+        let window = TabWindow::for_width(80, self.current_tab, self.tab_scroll_offset);
+        if tab_index < window.start {
+            self.tab_scroll_offset = tab_index as u16;
+        } else if tab_index >= window.end {
+            self.tab_scroll_offset = (tab_index.saturating_sub(window.max_visible) + 1).max(0) as u16;
         }
     }
 

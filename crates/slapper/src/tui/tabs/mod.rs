@@ -397,7 +397,67 @@ impl Tab {
             all[idx - 1]
         }
     }
+}
 
+#[derive(Debug, Clone, Copy)]
+pub struct TabWindow {
+    pub start: usize,
+    pub end: usize,
+    pub selected_visible: usize,
+    pub max_visible: usize,
+    pub total_tabs: usize,
+    pub has_prev: bool,
+    pub has_next: bool,
+}
+
+impl TabWindow {
+    pub fn for_width(term_width: u16, current_tab: Tab, previous_offset: u16) -> Self {
+        use std::sync::LazyLock;
+        static TAB_TITLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+            Tab::all().iter().map(|t| t.title()).collect()
+        });
+
+        let total_tabs = TAB_TITLES.len();
+        let visible_width = (term_width as usize).saturating_sub(2);
+        let min_tab_width = 8_usize;
+        let max_visible = (visible_width / min_tab_width).max(1).min(total_tabs);
+
+        let current_idx = current_tab.visible_index().unwrap_or(0);
+        let previous_offset = previous_offset as usize;
+
+        let start = previous_offset.min(total_tabs.saturating_sub(max_visible));
+        let end = (start + max_visible).min(total_tabs);
+
+        let selected_visible = if current_idx >= start && current_idx < end {
+            current_idx - start
+        } else {
+            start.min(max_visible.saturating_sub(1))
+        };
+
+        let has_prev = start > 0;
+        let has_next = end < total_tabs;
+
+        Self {
+            start,
+            end,
+            selected_visible,
+            max_visible,
+            total_tabs,
+            has_prev,
+            has_next,
+        }
+    }
+
+    pub fn range_text(&self) -> String {
+        if self.has_prev || self.has_next {
+            format!("[{}-{}/{}]", self.start + 1, self.end, self.total_tabs)
+        } else {
+            String::new()
+        }
+    }
+}
+
+impl Tab {
     pub fn as_tab_state<'a>(&self, app: &'a super::App) -> &'a dyn TabState {
         match self {
             Tab::Recon => &app.recon,
