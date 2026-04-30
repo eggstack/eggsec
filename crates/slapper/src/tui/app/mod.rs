@@ -557,10 +557,20 @@ impl App {
         }
         if self.current_tab == Tab::History {
             let mut h = self.history.lock();
-        h.handle_focus_next();
+            h.handle_focus_next();
+            if h.is_input_focused() {
+                self.mode = InputMode::Insert;
+            } else {
+                self.mode = InputMode::Normal;
+            }
             return;
         }
         self.dispatcher_mut().handle_focus_next();
+        if self.dispatcher_mut().is_input_focused() {
+            self.mode = InputMode::Insert;
+        } else {
+            self.mode = InputMode::Normal;
+        }
     }
 
     pub fn handle_focus_prev(&mut self) {
@@ -569,10 +579,20 @@ impl App {
         }
         if self.current_tab == Tab::History {
             let mut h = self.history.lock();
-        h.handle_focus_prev();
+            h.handle_focus_prev();
+            if h.is_input_focused() {
+                self.mode = InputMode::Insert;
+            } else {
+                self.mode = InputMode::Normal;
+            }
             return;
         }
         self.dispatcher_mut().handle_focus_prev();
+        if self.dispatcher_mut().is_input_focused() {
+            self.mode = InputMode::Insert;
+        } else {
+            self.mode = InputMode::Normal;
+        }
     }
 
     pub fn handle_left_or_prev_tab(&mut self) -> bool {
