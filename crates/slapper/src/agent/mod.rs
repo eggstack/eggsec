@@ -467,18 +467,16 @@ impl Agent {
         tracing::debug!("Event triggered: {:?}", event.event_type());
 
         let handlers = std::mem::take(&mut self.event_handlers);
-
-        for handler in handlers.iter() {
-            if handler.handles(&event) {
-                handler.handle(&event, self).await?;
+        let result = (|| async {
+            for handler in handlers.iter() {
+                if handler.handles(&event) {
+                    handler.handle(&event, self).await?;
+                }
             }
-        }
-
-        if self.event_handlers.is_empty() {
-            self.event_handlers = handlers;
-        }
-
-        Ok(())
+            Ok(())
+        })().await;
+        self.event_handlers = handlers;
+        result
     }
 }
 
