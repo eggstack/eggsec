@@ -43,6 +43,7 @@ pub struct CommandPalette {
     pub scroll_offset: usize,
     pub popup_width: u16,
     pub popup_height: u16,
+    pub last_content_height: u16,
 }
 
 impl CommandPalette {
@@ -55,6 +56,7 @@ impl CommandPalette {
             scroll_offset: 0,
             popup_width: 60,
             popup_height: 20,
+            last_content_height: 15,
         }
     }
 
@@ -65,11 +67,24 @@ impl CommandPalette {
     }
 
     pub fn visible_results_height(&self) -> usize {
-        (self.popup_height as usize).saturating_sub(5).max(5)
+        (self.last_content_height as usize).saturating_sub(3).max(5)
+    }
+
+    pub fn visible_results_height_for_area(&self, popup_content_height: u16) -> usize {
+        (popup_content_height as usize).saturating_sub(3).max(5)
+    }
+
+    pub fn update_content_height(&mut self, content_height: u16) {
+        self.last_content_height = content_height;
     }
 
     pub fn max_scroll_offset(&self) -> usize {
         self.results.len().saturating_sub(self.visible_results_height())
+    }
+
+    pub fn max_scroll_offset_for_height(&self, content_height: u16) -> usize {
+        let vis = self.visible_results_height_for_area(content_height);
+        self.results.len().saturating_sub(vis)
     }
 
     pub fn adjust_scroll_for_selection(&mut self) {
