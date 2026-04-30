@@ -114,7 +114,7 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1134 passing | Base library tests |
+| Tests | 1146 passing | Base library tests |
 | Tests | 1388 passing | With rest-api,ai-integration (note: feature check has pre-existing agent/mod.rs closure issue) |
 | Clippy | ~5 warnings | TUI-specific acceptable |
 | Source files | 506 |
@@ -207,10 +207,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ## Planning
 
 - `plans/plan.md` — Master Consolidated Improvement Plan
-  - Phase 12T COMPLETED (2026-04-30): TUI stabilization - all Phase 12 (12R, 12S, 12T) work finished
-    - Phase 12T.1: Tab-area width consistency across rendering, keyboard scroll, mouse hit-testing
-    - Phase 12T.2: Command palette scroll height tied to clamped render height
-    - Phase 12T.3: Non-TUI feature check failure documented separately
+  - Phase 12 ALL COMPLETED (2026-04-30): All remaining checkbox items finished (session restoration tests, CommandPalette scroll tests, Tab::from_discriminant helper)
   - Contains architecture patterns useful for future work:
     - TabIndexing Model (Phase 12, corrected in Phase 12R)
     - Event Loop Order (Phase 8)
@@ -220,6 +217,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
     - Popup Clamping (Phase 12R)
     - Tab-Area Width Consistency (Phase 12T.1)
     - Command Palette Dynamic Height (Phase 12T.2)
+    - Tab::from_discriminant for Legacy Migration (Phase 12S.4 remaining)
 
 ## Important Guidelines
 
@@ -228,7 +226,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 When implementing changes or reviewing plan items, verify actual state rather than assuming plan accuracy:
 - Payload type count: 30 (verified via `fuzzer/payloads/mod.rs`)
 - Recon module count: 31 (verified)
-- Test count: 1134 base, 1388 with full features (verified 2026-04-30)
+- Test count: 1146 base, 1388 with full features (verified 2026-04-30)
 - Use `rg` to confirm file paths and line numbers exist
 - Run `cargo test --lib -p slapper` after each change
 
@@ -388,6 +386,7 @@ The TUI uses a unified tab indexing system to handle feature-gated tabs correctl
 - `Tab::from_visible_index(index: usize) -> Option<Tab>` - Returns tab by position
 - `Tab::stable_id(&self) -> &'static str` - Returns string ID for persistence (`"recon"`, `"dashboard"`, etc.)
 - `Tab::from_stable_id(id: &str) -> Option<Tab>` - Returns tab from string ID (None if tab unavailable in feature set)
+- `Tab::from_discriminant(discriminant: usize) -> Option<Tab>` - Maps enum discriminant directly; use only for explicit legacy migration path
 
 **TabWindow Helper** (in `tui/tabs/mod.rs`):
 ```rust
