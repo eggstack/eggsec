@@ -1,9 +1,10 @@
 use crate::scanner::fingerprint::FingerprintResults;
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -102,35 +103,35 @@ impl FingerprintTab {
             .collect();
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Host: ", Style::default().fg(Color::Yellow)),
+            Span::styled("Host: ", Style::default().fg(tc!(warning))),
             Span::raw(host),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Services identified: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Services identified: ", Style::default().fg(tc!(info))),
             Span::raw(services_identified.to_string()),
         ]));
 
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(vec![
-            Span::styled(format!("{:<8}", "PORT"), Style::default().fg(Color::Yellow)),
+            Span::styled(format!("{:<8}", "PORT"), Style::default().fg(tc!(warning))),
             Span::styled(
                 format!("{:<15}", "SERVICE"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(warning)),
             ),
             Span::styled(
                 format!("{:<12}", "VERSION"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(warning)),
             ),
-            Span::styled("BANNER", Style::default().fg(Color::Yellow)),
+            Span::styled("BANNER", Style::default().fg(tc!(warning))),
         ]));
 
         for (port, service, version, banner_display) in fp_data {
             self.results_view.add_line(Line::from(vec![
-                Span::styled(format!("{:<8}", port), Style::default().fg(Color::Green)),
+                Span::styled(format!("{:<8}", port), Style::default().fg(tc!(success))),
                 Span::raw(format!("{:<15}", service)),
                 Span::raw(format!("{:<12}", version.as_deref().unwrap_or("-"))),
-                Span::styled(banner_display, Style::default().fg(Color::Gray)),
+                Span::styled(banner_display, Style::default().fg(tc!(text_dim))),
             ]));
         }
     }
@@ -227,11 +228,11 @@ impl TabRender for FingerprintTab {
             self.progress.render(f, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder = Paragraph::new("Results will appear here after running")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

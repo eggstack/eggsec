@@ -1,5 +1,6 @@
 use crate::cli::ScanProfile;
 use crate::pipeline::{PipelineReport, Stage};
+use crate::tc;
 use crate::tui::app::error::make_friendly_error;
 use crate::tui::components::{
     InputField, InputGroup, ProgressGauge, ScrollableText, Selector, SelectorItem,
@@ -7,7 +8,7 @@ use crate::tui::components::{
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -309,10 +310,10 @@ impl TabRender for ScanTab {
 
         for stage_info in &self.stages {
             let (icon, status_color) = match &stage_info.status {
-                StageStatus::Pending => ("○", Color::DarkGray),
-                StageStatus::Running => ("▶", Color::Yellow),
-                StageStatus::Completed => ("✓", Color::Green),
-                StageStatus::Failed(_) => ("✗", Color::Red),
+                StageStatus::Pending => ("○", tc!(text_dim)),
+                StageStatus::Running => ("▶", tc!(warning)),
+                StageStatus::Completed => ("✓", tc!(success)),
+                StageStatus::Failed(_) => ("✗", tc!(error)),
             };
 
             let stage_name = format!("{:?}", stage_info.stage);
@@ -355,7 +356,7 @@ impl TabRender for ScanTab {
                         .borders(Borders::ALL)
                         .title("Current Stage Output"),
                 )
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, output_area);
         }
     }

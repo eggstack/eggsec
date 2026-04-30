@@ -1,8 +1,9 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders},
     Frame,
@@ -122,7 +123,7 @@ impl ClusterTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             "Cluster Status",
-            Style::default().fg(Color::Green),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(format!(
@@ -148,13 +149,13 @@ impl ClusterTab {
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             "Workers:",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(warning)),
         )));
         for worker in &results.workers {
             let status_color = if worker.is_active {
-                Color::Green
+                tc!(success)
             } else {
-                Color::Red
+                tc!(error)
             };
             let status_text = if worker.is_active {
                 "Active"
@@ -207,7 +208,7 @@ impl TabState for ClusterTab {
         self.state = AppState::Error(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -238,9 +239,9 @@ impl TabRender for ClusterTab {
             .borders(Borders::ALL)
             .border_style(
                 Style::default().fg(if self.focus_area == ClusterFocusArea::Inputs {
-                    Color::Yellow
+                    tc!(border_focused)
                 } else {
-                    Color::Gray
+                    tc!(border)
                 }),
             );
 

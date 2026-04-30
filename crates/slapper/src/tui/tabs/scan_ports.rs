@@ -1,10 +1,10 @@
 use crate::scanner::ports::PortScanResults;
+use crate::tc;
 use crate::tui::components::ValidationResult;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     Frame,
 };
 
@@ -112,30 +112,30 @@ impl ScanPortsTab {
             .collect();
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Host: ", Style::default().fg(Color::Yellow)),
+            Span::styled("Host: ", Style::default().fg(tc!(warning))),
             Span::raw(host),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Ports scanned: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Ports scanned: ", Style::default().fg(tc!(info))),
             Span::raw(ports_scanned.to_string()),
             Span::raw(" | "),
-            Span::styled("Open: ", Style::default().fg(Color::Green)),
+            Span::styled("Open: ", Style::default().fg(tc!(success))),
             Span::raw(open_ports.len().to_string()),
         ]));
 
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(vec![
-            Span::styled(format!("{:<8}", "PORT"), Style::default().fg(Color::Yellow)),
+            Span::styled(format!("{:<8}", "PORT"), Style::default().fg(tc!(warning))),
             Span::styled(
                 format!("{:<15}", "SERVICE"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(warning)),
             ),
         ]));
 
         for (port, service) in open_ports {
             self.results_view.add_line(Line::from(vec![
-                Span::styled(format!("{:<8}", port), Style::default().fg(Color::Green)),
+                Span::styled(format!("{:<8}", port), Style::default().fg(tc!(success))),
                 Span::raw(format!("{:<15}", service)),
             ]));
         }
@@ -285,13 +285,13 @@ impl TabRender for ScanPortsTab {
             self.progress.render(f, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let placeholder = Paragraph::new("Results will appear here after running")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }
