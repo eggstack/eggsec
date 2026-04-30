@@ -188,10 +188,7 @@ impl DashboardTab {
             }
 
             let summary_lower = entry.summary.to_lowercase();
-            if summary_lower.contains("critical")
-                || summary_lower.contains("critical")
-                || summary_lower.contains("critical findings")
-            {
+            if summary_lower.contains("critical") || summary_lower.contains("critical findings") {
                 critical_count += 1;
             }
         }
