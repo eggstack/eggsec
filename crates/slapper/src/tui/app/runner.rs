@@ -15,7 +15,7 @@ use super::App;
 use super::PendingAction;
 use crate::tui::help::CommandPalette;
 use crate::tui::state;
-use crate::tui::tabs::Tab;
+use crate::tui::tabs::{Tab, TabWindow};
 use crate::tui::ui;
 use crate::tui::utils::Clipboard;
 
@@ -125,12 +125,18 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
         }
 
         if tab_area.contains((mouse_event.column, mouse_event.row).into()) {
-            let tab_count = Tab::all().len();
-            let tab_width = tab_area.width / tab_count as u16;
-            let tab_index = (mouse_event.column.saturating_sub(1) / tab_width) as usize;
-            if tab_index < tab_count {
-                app.select_tab(tab_index);
-                app.needs_redraw = true;
+            let window = TabWindow::for_width(term_width, app.current_tab, app.tab_scroll_offset);
+            if window.max_visible > 0 {
+                let tab_width = tab_area.width / window.max_visible as u16;
+                let local_index = (mouse_event.column.saturating_sub(1) / tab_width) as usize;
+                let clicked_global_index = window.start + local_index;
+                if clicked_global_index < window.total_tabs {
+                    if let Some(tab) = Tab::from_visible_index(clicked_global_index) {
+                        app.current_tab = tab;
+                        app.adjust_tab_scroll();
+                        app.needs_redraw = true;
+                    }
+                }
             }
         }
     }
