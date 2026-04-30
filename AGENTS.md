@@ -114,8 +114,8 @@ Note: `mcp-server` feature has been removed. Use `rest-api` instead.
 
 | Metric | Value | Note |
 |--------|-------|------|
-| Tests | 1130 passing | Base library tests |
-| Tests | 1388 passing | With rest-api,ai-integration |
+| Tests | 1134 passing | Base library tests |
+| Tests | 1388 passing | With rest-api,ai-integration (note: feature check has pre-existing agent/mod.rs closure issue) |
 | Clippy | ~5 warnings | TUI-specific acceptable |
 | Source files | 506 |
 | Payload types | 30 |
@@ -207,8 +207,10 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ## Planning
 
 - `plans/plan.md` — Master Consolidated Improvement Plan
-  - Phase 12R (TUI Tab Model Correction) COMPLETED as of 2026-04-30
-  - All Phase 12R items verified: stable IDs, TabWindow clamping, width tracking, bookmarks, session restore, mouse hit-testing, popup hardening
+  - Phase 12T COMPLETED (2026-04-30): TUI stabilization - all Phase 12 (12R, 12S, 12T) work finished
+    - Phase 12T.1: Tab-area width consistency across rendering, keyboard scroll, mouse hit-testing
+    - Phase 12T.2: Command palette scroll height tied to clamped render height
+    - Phase 12T.3: Non-TUI feature check failure documented separately
   - Contains architecture patterns useful for future work:
     - TabIndexing Model (Phase 12, corrected in Phase 12R)
     - Event Loop Order (Phase 8)
@@ -216,6 +218,8 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
     - Snapshot File Pattern (Phase 10)
     - Session Persistence with Stable IDs (Phase 12R)
     - Popup Clamping (Phase 12R)
+    - Tab-Area Width Consistency (Phase 12T.1)
+    - Command Palette Dynamic Height (Phase 12T.2)
 
 ## Important Guidelines
 
@@ -412,6 +416,11 @@ impl TabWindow {
 - `App::new(history: SharedHistory)` - Runtime constructor; restores session state
 - `App::new_for_testing(history: SharedHistory)` - Test constructor; does NOT restore session
 - Use `App::new_for_testing()` in all unit tests to avoid ambient session file dependencies
+
+**Width tracking:**
+- `App::last_tab_area_width` tracks the actual tab bar width (`area.width - LAYOUT_MARGIN * 2`)
+- Updated during draw, used by `adjust_tab_scroll()` and mouse hit-testing
+- Ensures consistent TabWindow calculations across all code paths
 
 **Anti-patterns to avoid**:
 - Don't use `tab as usize` for tab indexing (enum discriminants != visible indexes)
