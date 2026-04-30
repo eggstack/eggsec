@@ -7,6 +7,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
+use crate::tc;
 
 #[derive(Clone)]
 pub struct ScrollableText {
@@ -101,7 +102,7 @@ impl ScrollableText {
             return;
         }
 
-        let border_color = border_color.unwrap_or(Color::Gray);
+        let border_color = border_color.unwrap_or(tc!(border));
 
         let block = Block::default()
             .title(self.title.as_str())

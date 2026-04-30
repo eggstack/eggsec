@@ -1,9 +1,10 @@
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
+use crate::tc;
 
 #[derive(Clone, Debug)]
 pub struct ValidationResult {
@@ -293,15 +294,15 @@ impl InputField {
 
     pub fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let border_style = if self.focused {
-            Style::default().fg(Color::Yellow)
+            Style::default().fg(tc!(border_focused))
         } else if let Some(ref validation) = self.validation {
             if validation.valid {
-                Style::default().fg(Color::Green)
+                Style::default().fg(tc!(success))
             } else {
-                Style::default().fg(Color::Red)
+                Style::default().fg(tc!(error))
             }
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(tc!(border))
         };
 
         let block = Block::default()

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -118,7 +119,7 @@ impl PacketTab {
 
             self.results_view.add_line(Line::from(vec![Span::styled(
                 "Available Network Interfaces",
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             )]));
             self.results_view.add_line(Line::from(""));
 
@@ -126,7 +127,7 @@ impl PacketTab {
                 let ips: Vec<String> = iface.ips.iter().map(|ip| format!("{}", ip)).collect();
                 let name = iface.name.clone();
                 self.results_view.add_line(Line::from(vec![
-                    Span::styled(name, Style::default().fg(Color::Cyan)),
+                    Span::styled(name, Style::default().fg(tc!(info))),
                     Span::raw(format!(" - {}", ips.join(", "))),
                 ]));
             }
@@ -135,7 +136,7 @@ impl PacketTab {
         #[cfg(not(all(feature = "packet-inspection", unix)))]
         {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red)),
+                Span::styled("Error: ", Style::default().fg(tc!(error))),
                 Span::raw("Packet inspection not available on this platform."),
             ]));
         }
@@ -144,23 +145,23 @@ impl PacketTab {
     }
 
     pub fn set_send_results(&mut self, packets_sent: u32, bytes_sent: u64) {
-        use ratatui::style::{Color, Style};
+        use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
         self.results_view.clear();
 
         self.results_view.add_line(Line::from(vec![Span::styled(
             "Packet Send Complete",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )]));
         self.results_view.add_line(Line::from(""));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Packets sent: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Packets sent: ", Style::default().fg(tc!(info))),
             Span::raw(packets_sent.to_string()),
         ]));
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Bytes sent: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Bytes sent: ", Style::default().fg(tc!(info))),
             Span::raw(bytes_sent.to_string()),
         ]));
 
@@ -168,25 +169,25 @@ impl PacketTab {
     }
 
     pub fn set_capture_results(&mut self, packets_captured: usize, output_file: Option<String>) {
-        use ratatui::style::{Color, Style};
+        use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
         self.results_view.clear();
 
         self.results_view.add_line(Line::from(vec![Span::styled(
             "Packet Capture Complete",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )]));
         self.results_view.add_line(Line::from(""));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Packets captured: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Packets captured: ", Style::default().fg(tc!(info))),
             Span::raw(packets_captured.to_string()),
         ]));
 
         if let Some(file) = output_file {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Output file: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Output file: ", Style::default().fg(tc!(info))),
                 Span::raw(file),
             ]));
         }
@@ -198,14 +199,14 @@ impl PacketTab {
         &mut self,
         hops: Vec<super::super::workers::TracerouteHopResult>,
     ) {
-        use ratatui::style::{Color, Style};
+        use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
         self.results_view.clear();
 
         self.results_view.add_line(Line::from(vec![Span::styled(
             "Traceroute Results",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )]));
         self.results_view.add_line(Line::from(""));
 
@@ -228,7 +229,7 @@ impl PacketTab {
         let target = self.target().to_string();
         if target.is_empty() {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red)),
+                Span::styled("Error: ", Style::default().fg(tc!(error))),
                 Span::raw("Target is required"),
             ]));
             self.state = AppState::Idle;
@@ -236,7 +237,7 @@ impl PacketTab {
         }
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Traceroute to ", Style::default().fg(Color::Yellow)),
+            Span::styled("Traceroute to ", Style::default().fg(tc!(accent))),
             Span::raw(target.clone()),
         ]));
         self.results_view.add_line(Line::from(
@@ -257,7 +258,7 @@ impl PacketTab {
         let target = self.target().to_string();
         if target.is_empty() {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red)),
+                Span::styled("Error: ", Style::default().fg(tc!(error))),
                 Span::raw("Target host is required"),
             ]));
             self.state = AppState::Idle;
@@ -265,7 +266,7 @@ impl PacketTab {
         }
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("ICMP Echo (Ping) to ", Style::default().fg(Color::Yellow)),
+            Span::styled("ICMP Echo (Ping) to ", Style::default().fg(tc!(accent))),
             Span::raw(target.clone()),
         ]));
         self.results_view
@@ -287,7 +288,7 @@ impl PacketTab {
             let target = self.target();
             if target.is_empty() {
                 self.results_view.add_line(Line::from(vec![
-                    Span::styled("Error: ", Style::default().fg(Color::Red)),
+                    Span::styled("Error: ", Style::default().fg(tc!(error))),
                     Span::raw("Interface name is required"),
                 ]));
                 self.state = AppState::Idle;
@@ -308,7 +309,7 @@ impl PacketTab {
         #[cfg(not(all(feature = "packet-inspection", unix)))]
         {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red)),
+                Span::styled("Error: ", Style::default().fg(tc!(error))),
                 Span::raw("Packet inspection not available on this platform."),
             ]));
         }
@@ -322,7 +323,7 @@ impl PacketTab {
         let target = self.target().to_string();
         if target.is_empty() {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red)),
+                Span::styled("Error: ", Style::default().fg(tc!(error))),
                 Span::raw("Target is required"),
             ]));
             self.state = AppState::Idle;
@@ -330,7 +331,7 @@ impl PacketTab {
         }
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Send packets to ", Style::default().fg(Color::Yellow)),
+            Span::styled("Send packets to ", Style::default().fg(tc!(accent))),
             Span::raw(target.clone()),
         ]));
         self.results_view.add_line(Line::from(
@@ -352,7 +353,7 @@ impl PacketTab {
         let target = self.target().to_string();
         if target.is_empty() {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red)),
+                Span::styled("Error: ", Style::default().fg(tc!(error))),
                 Span::raw("Input file is required"),
             ]));
             self.state = AppState::Idle;
@@ -371,7 +372,7 @@ impl PacketTab {
                     if file.read_to_end(&mut buffer).is_ok() {
                         let dump = hexdump(&buffer);
                         self.results_view.add_line(Line::from(vec![
-                            Span::styled("Hexdump: ", Style::default().fg(Color::Yellow)),
+                            Span::styled("Hexdump: ", Style::default().fg(tc!(accent))),
                             Span::raw(target),
                         ]));
                         self.results_view.add_line(Line::from(""));
@@ -380,14 +381,14 @@ impl PacketTab {
                         }
                     } else {
                         self.results_view.add_line(Line::from(vec![
-                            Span::styled("Error: ", Style::default().fg(Color::Red)),
+                            Span::styled("Error: ", Style::default().fg(tc!(error))),
                             Span::raw("Failed to read file"),
                         ]));
                     }
                 }
                 Err(e) => {
                     self.results_view.add_line(Line::from(vec![
-                        Span::styled("Error: ", Style::default().fg(Color::Red)),
+                        Span::styled("Error: ", Style::default().fg(tc!(error))),
                         Span::raw(format!("Failed to open file: {}", e)),
                     ]));
                 }
@@ -397,7 +398,7 @@ impl PacketTab {
         #[cfg(not(feature = "packet-inspection"))]
         {
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red)),
+                Span::styled("Error: ", Style::default().fg(tc!(error))),
                 Span::raw("Packet inspection not available on this platform."),
             ]));
         }
@@ -489,7 +490,7 @@ impl PacketTab {
         if self.privileges_required && !self.is_root {
             self.results_view.clear();
             self.results_view.add_line(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red)),
+                Span::styled("Error: ", Style::default().fg(tc!(error))),
                 Span::raw("Root privileges required for packet operations."),
             ]));
             self.results_view.add_line(Line::from(""));
@@ -579,7 +580,7 @@ impl TabRender for PacketTab {
 
         if !self.is_root {
             let warning = Paragraph::new("Warning: Root privileges required for packet operations")
-                .style(Style::default().fg(Color::Yellow));
+                .style(Style::default().fg(tc!(warning)));
             f.render_widget(
                 warning,
                 Rect {
@@ -593,12 +594,12 @@ impl TabRender for PacketTab {
 
         if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder =
                 Paragraph::new("Select a tool, enter parameters, and press Enter to run")
                     .block(Block::default().borders(Borders::ALL).title("Results"))
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

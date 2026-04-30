@@ -145,7 +145,7 @@ impl Popup {
                 let is_active = i == self.active_button;
                 let style = if is_active {
                     Style::default()
-                        .fg(Color::Black)
+                        .fg(tc!(selected_text))
                         .bg(color)
                         .add_modifier(Modifier::BOLD)
                 } else {

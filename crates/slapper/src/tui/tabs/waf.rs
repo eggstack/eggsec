@@ -1,3 +1,4 @@
+use crate::tc;
 use crate::tui::components::{
     Checkbox, InputField, InputGroup, ProgressGauge, RadioGroup, ScrollableText,
 };
@@ -5,7 +6,7 @@ use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::waf::{BypassResult, WafDetectionResult};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -121,25 +122,25 @@ impl WafTab {
         let matched_patterns = result.matched_patterns.clone();
 
         self.detection_view.add_line(Line::from(vec![
-            Span::styled("WAF Status: ", Style::default().fg(Color::Yellow)),
+            Span::styled("WAF Status: ", Style::default().fg(tc!(accent))),
             if has_waf {
                 Span::styled(
                     "WAF Detected!",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    Style::default().fg(tc!(error)).add_modifier(Modifier::BOLD),
                 )
             } else {
-                Span::styled("No WAF Detected", Style::default().fg(Color::Green))
+                Span::styled("No WAF Detected", Style::default().fg(tc!(success)))
             },
         ]));
 
         if has_waf {
             self.detection_view.add_line(Line::from(""));
             self.detection_view.add_line(Line::from(vec![
-                Span::styled("WAF Name: ", Style::default().fg(Color::Cyan)),
+                Span::styled("WAF Name: ", Style::default().fg(tc!(info))),
                 Span::raw(waf_name),
             ]));
             self.detection_view.add_line(Line::from(vec![
-                Span::styled("Confidence: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Confidence: ", Style::default().fg(tc!(info))),
                 Span::raw(format!("{}%", confidence)),
             ]));
 
@@ -147,7 +148,7 @@ impl WafTab {
                 self.detection_view.add_line(Line::from(""));
                 self.detection_view.add_line(Line::from(Span::styled(
                     "Matched Headers:",
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(tc!(accent)),
                 )));
                 for header in &matched_headers {
                     self.detection_view
@@ -159,7 +160,7 @@ impl WafTab {
                 self.detection_view.add_line(Line::from(""));
                 self.detection_view.add_line(Line::from(Span::styled(
                     "Matched Cookies:",
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(tc!(accent)),
                 )));
                 for cookie in &matched_cookies {
                     self.detection_view
@@ -171,7 +172,7 @@ impl WafTab {
                 self.detection_view.add_line(Line::from(""));
                 self.detection_view.add_line(Line::from(Span::styled(
                     "Matched Patterns:",
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(tc!(accent)),
                 )));
                 for pattern in &matched_patterns {
                     self.detection_view
@@ -193,23 +194,23 @@ impl WafTab {
             .collect();
 
         self.bypass_view.add_line(Line::from(vec![
-            Span::styled("Successful Bypasses: ", Style::default().fg(Color::Green)),
+            Span::styled("Successful Bypasses: ", Style::default().fg(tc!(success))),
             Span::raw(format!("{}/{}", success_count, total)),
         ]));
         self.bypass_view.add_line(Line::from(""));
 
         for (success, technique, description, status_code) in bypass_data {
             let (icon, color) = if success {
-                ("✓", Color::Green)
+                ("✓", tc!(success))
             } else {
-                ("✗", Color::Red)
+                ("✗", tc!(error))
             };
 
             self.bypass_view.add_line(Line::from(vec![
                 Span::styled(format!("[{}] ", icon), Style::default().fg(color)),
                 Span::styled(
                     format!("{:?}", technique),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(tc!(accent)),
                 ),
             ]));
 
@@ -221,7 +222,7 @@ impl WafTab {
             if success {
                 self.bypass_view.add_line(Line::from(vec![
                     Span::raw("    Status: "),
-                    Span::styled(status_code.to_string(), Style::default().fg(Color::Green)),
+                    Span::styled(status_code.to_string(), Style::default().fg(tc!(success))),
                 ]));
             }
             self.bypass_view.add_line(Line::from(""));
@@ -371,7 +372,7 @@ impl TabRender for WafTab {
                             .borders(Borders::ALL)
                             .title("Detection Result"),
                     )
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(Style::default().fg(tc!(text_dim)));
                 f.render_widget(placeholder, results_chunks[0]);
             }
 
@@ -384,7 +385,7 @@ impl TabRender for WafTab {
                             .borders(Borders::ALL)
                             .title("Bypass Results"),
                     )
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(Style::default().fg(tc!(text_dim)));
                 f.render_widget(placeholder, results_chunks[1]);
             }
         }

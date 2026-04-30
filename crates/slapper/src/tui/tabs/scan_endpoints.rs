@@ -1,4 +1,5 @@
 use crate::scanner::endpoints::EndpointScanResults;
+use crate::tc;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -127,15 +128,15 @@ impl ScanEndpointsTab {
             .collect();
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("URL: ", Style::default().fg(Color::Yellow)),
+            Span::styled("URL: ", Style::default().fg(tc!(accent))),
             Span::raw(base_url),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Found: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Found: ", Style::default().fg(tc!(info))),
             Span::raw(endpoints_found.to_string()),
             Span::raw(" | "),
-            Span::styled("Interesting: ", Style::default().fg(Color::Red)),
+            Span::styled("Interesting: ", Style::default().fg(tc!(error))),
             Span::raw(interesting_findings.to_string()),
         ]));
 
@@ -143,30 +144,30 @@ impl ScanEndpointsTab {
         self.results_view.add_line(Line::from(vec![
             Span::styled(
                 format!("{:<40}", "PATH"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             ),
             Span::styled(
                 format!("{:<8}", "STATUS"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             ),
             Span::styled(
                 format!("{:<10}", "SIZE"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             ),
         ]));
 
         for (path, status_code, content_length, interesting) in endpoint_data {
             let style = if interesting {
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                Style::default().fg(tc!(error)).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
 
             let status_color = match status_code {
-                200..=299 => Color::Green,
-                300..=399 => Color::Blue,
-                400..=499 => Color::Yellow,
-                _ => Color::Red,
+                200..=299 => tc!(success),
+                300..=399 => tc!(secondary),
+                400..=499 => tc!(warning),
+                _ => tc!(error),
             };
 
             let path_display = if path.len() > 38 {
@@ -283,11 +284,11 @@ impl TabRender for ScanEndpointsTab {
             self.progress.render(f, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder = Paragraph::new("Results will appear here after running")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

@@ -1,4 +1,5 @@
 use crate::loadtest::metrics::LoadTestResults;
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText, Selector};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -149,19 +150,19 @@ impl LoadTab {
 
     #[cfg(feature = "stress-testing")]
     pub fn set_stress_results(&mut self, target: String, stats: crate::stress::StressStats) {
-        use ratatui::style::{Color, Style};
+        use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
         self.results_view.clear();
 
         self.results_view.add_line(Line::from(vec![Span::styled(
             "Stress Test Results",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )]));
         self.results_view.add_line(Line::from(""));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Target: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Target: ", Style::default().fg(tc!(info))),
             Span::raw(target),
         ]));
 
@@ -172,7 +173,7 @@ impl LoadTab {
         };
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Packets: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Packets: ", Style::default().fg(tc!(info))),
             Span::raw(format!(
                 "{} sent, {} errors",
                 stats.packets_sent, stats.errors
@@ -180,17 +181,17 @@ impl LoadTab {
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Rate: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Rate: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} pps", pps)),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Duration: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Duration: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} ms", stats.duration_ms)),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Data Sent: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Data Sent: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} bytes", stats.bytes_sent)),
         ]));
 
@@ -198,7 +199,7 @@ impl LoadTab {
     }
 
     fn update_results_view(&mut self, results: &LoadTestResults) {
-        use ratatui::style::{Color, Style};
+        use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
         self.results_view.clear();
@@ -217,13 +218,13 @@ impl LoadTab {
         let p99 = results.latency_p99_ms;
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Target: ", Style::default().fg(Color::Yellow)),
+            Span::styled("Target: ", Style::default().fg(tc!(accent))),
             Span::raw(target_url),
         ]));
         self.results_view.add_line(Line::from(""));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Requests: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Requests: ", Style::default().fg(tc!(info))),
             Span::raw(format!(
                 "{} total, {} success, {} failed",
                 total_requests, successful_requests, failed_requests
@@ -231,14 +232,14 @@ impl LoadTab {
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("RPS: ", Style::default().fg(Color::Cyan)),
+            Span::styled("RPS: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{:.2} req/s", rps)),
         ]));
 
         self.results_view.add_line(Line::from(""));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Latency: ", Style::default().fg(Color::Green)),
+            Span::styled("Latency: ", Style::default().fg(tc!(success))),
             Span::raw(format!(
                 "min={:.2}ms, max={:.2}ms, mean={:.2}ms",
                 min_ms, max_ms, mean_ms
@@ -258,16 +259,16 @@ impl LoadTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Status Codes:",
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             )));
             let mut codes: Vec<_> = status_codes.iter().collect();
             codes.sort_by_key(|(k, _)| *k);
             for (code, count) in codes {
                 let color = match *code {
-                    200..=299 => Color::Green,
-                    300..=399 => Color::Blue,
-                    400..=499 => Color::Yellow,
-                    _ => Color::Red,
+                    200..=299 => tc!(success),
+                    300..=399 => tc!(secondary),
+                    400..=499 => tc!(warning),
+                    _ => tc!(error),
                 };
                 self.results_view.add_line(Line::from(vec![
                     Span::styled(format!("  {}:", code), Style::default().fg(color)),
@@ -281,7 +282,7 @@ impl LoadTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Errors:",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
             for error in &errors {
                 self.results_view
@@ -401,13 +402,13 @@ impl TabRender for LoadTab {
             self.progress.render(f, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let placeholder = Paragraph::new("Results will appear here after running")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

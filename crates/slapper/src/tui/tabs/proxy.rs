@@ -1,5 +1,6 @@
 use crate::config::ProxyConfigEntry;
 use crate::proxy::{HealthCheckConfig, HealthChecker, ProxyEntry, ProxyType};
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::types::SensitiveString;
@@ -83,7 +84,7 @@ impl ProxyTab {
         self.results_view.clear();
         self.results_view.add_line(Line::from(vec![Span::styled(
             "Proxy Health Check Results",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )]));
         self.results_view.add_line(Line::from(""));
 
@@ -109,9 +110,9 @@ impl ProxyTab {
                 Span::styled(
                     format!("[{}] ", status),
                     if result.is_healthy {
-                        Style::default().fg(Color::Green)
+                        Style::default().fg(tc!(success))
                     } else {
-                        Style::default().fg(Color::Red)
+                        Style::default().fg(tc!(error))
                     },
                 ),
                 Span::raw(format!("{} - {} ({})", result.url, latency, error)),
@@ -124,7 +125,7 @@ impl ProxyTab {
         if let Some(ref result) = self.test_result {
             self.results_view.add_line(Line::from(vec![Span::styled(
                 "Proxy Test Result",
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             )]));
             self.results_view.add_line(Line::from(""));
 
@@ -145,9 +146,9 @@ impl ProxyTab {
                 Span::styled(
                     status,
                     if result.is_healthy {
-                        Style::default().fg(Color::Green)
+                        Style::default().fg(tc!(success))
                     } else {
-                        Style::default().fg(Color::Red)
+                        Style::default().fg(tc!(error))
                     },
                 ),
                 Span::raw(format!(" (latency: {})", latency)),
@@ -155,7 +156,7 @@ impl ProxyTab {
             if !result.is_healthy {
                 let error_msg = error.to_string();
                 self.results_view.add_line(Line::from(vec![
-                    Span::styled("Error: ", Style::default().fg(Color::Red)),
+                    Span::styled("Error: ", Style::default().fg(tc!(error))),
                     Span::raw(error_msg),
                 ]));
             }
@@ -172,14 +173,14 @@ impl ProxyTab {
         } else {
             self.results_view.add_line(Line::from(vec![Span::styled(
                 format!("Proxy Pool ({} proxies)", self.proxies.len()),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             )]));
             self.results_view.add_line(Line::from(""));
 
             for (i, proxy) in self.proxies.iter().enumerate() {
                 let status = if proxy.enabled { "enabled" } else { "disabled" };
                 self.results_view.add_line(Line::from(vec![
-                    Span::styled(format!("[{}] ", i + 1), Style::default().fg(Color::Cyan)),
+                    Span::styled(format!("[{}] ", i + 1), Style::default().fg(tc!(info))),
                     Span::raw(format!(
                         "{}://{}:{} - {}",
                         proxy.proxy_type, proxy.address, proxy.port, status
@@ -283,7 +284,7 @@ impl ProxyTab {
             }
             Err(e) => {
                 self.results_view.add_line(Line::from(vec![
-                    Span::styled("Error: ", Style::default().fg(Color::Red)),
+                    Span::styled("Error: ", Style::default().fg(tc!(error))),
                     Span::raw(e.to_string()),
                 ]));
             }
@@ -302,7 +303,7 @@ impl ProxyTab {
             Ok((a, p, u, pw)) => (a, p, u, pw),
             Err(e) => {
                 self.results_view.add_line(Line::from(vec![
-                    Span::styled("Error: ", Style::default().fg(Color::Red)),
+                    Span::styled("Error: ", Style::default().fg(tc!(error))),
                     Span::raw(e.to_string()),
                 ]));
                 self.state = AppState::Error(e.to_string());
@@ -393,7 +394,7 @@ impl TabState for ProxyTab {
         self.state = AppState::Error(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -439,11 +440,11 @@ impl TabRender for ProxyTab {
 
         if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder = Paragraph::new("Results will appear here")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

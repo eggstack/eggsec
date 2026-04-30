@@ -1,8 +1,9 @@
+use crate::tc;
 use crate::tui::components::ScrollableText;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -214,19 +215,19 @@ impl HistoryTab {
 
         if let Some((scan_type, timestamp, target, summary, details)) = entry_data {
             self.details_view.add_line(Line::from(vec![
-                Span::styled("Type: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Type: ", Style::default().fg(tc!(accent))),
                 Span::raw(scan_type),
             ]));
             self.details_view.add_line(Line::from(vec![
-                Span::styled("Time: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Time: ", Style::default().fg(tc!(accent))),
                 Span::raw(timestamp),
             ]));
             self.details_view.add_line(Line::from(vec![
-                Span::styled("Target: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Target: ", Style::default().fg(tc!(accent))),
                 Span::raw(target),
             ]));
             self.details_view.add_line(Line::from(vec![
-                Span::styled("Summary: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Summary: ", Style::default().fg(tc!(accent))),
                 Span::raw(summary),
             ]));
             self.details_view.add_line(Line::from(""));
@@ -234,7 +235,7 @@ impl HistoryTab {
             if !details.is_empty() {
                 self.details_view.add_line(Line::from(Span::styled(
                     "Details:",
-                    Style::default().fg(Color::Cyan),
+                    Style::default().fg(tc!(info)),
                 )));
                 for detail in &details {
                     self.details_view.add_text(detail, None);
@@ -294,12 +295,12 @@ impl TabRender for HistoryTab {
             let empty =
                 Paragraph::new("No history entries yet.\n\nRun a scan to see results here.")
                     .block(Block::default().borders(Borders::ALL).title("History"))
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(empty, list_area);
 
             let placeholder = Paragraph::new("Select an entry to view details")
                 .block(Block::default().borders(Borders::ALL).title("Details"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, details_area);
             return;
         }
@@ -308,17 +309,17 @@ impl TabRender for HistoryTab {
             Line::from(vec![
                 Span::styled(
                     format!("{:<20}", "TIME"),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(tc!(accent)),
                 ),
                 Span::styled(
                     format!("{:<10}", "TYPE"),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(tc!(accent)),
                 ),
-                Span::styled("TARGET", Style::default().fg(Color::Yellow)),
+                Span::styled("TARGET", Style::default().fg(tc!(accent))),
             ]),
             Line::from(Span::styled(
                 "─".repeat(60),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(tc!(text_dim)),
             )),
         ];
 
@@ -329,8 +330,8 @@ impl TabRender for HistoryTab {
             let is_selected = Some(real_idx) == self.selected;
             let style = if is_selected {
                 Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Yellow)
+                    .fg(tc!(selected_text))
+                    .bg(tc!(selected))
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -375,7 +376,7 @@ impl TabRender for HistoryTab {
         } else {
             let placeholder = Paragraph::new("Select an entry to view details")
                 .block(Block::default().borders(Borders::ALL).title("Details"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, details_area);
         }
     }
