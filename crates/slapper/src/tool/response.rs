@@ -1,9 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
-use crate::fuzzer::{FuzzResult, Payload};
-use crate::types::Severity;
 
 pub use crate::tool::finding::{Finding, FindingType, ResponseSeverity};
 pub use crate::tool::tool_error::{ToolError, ToolErrorType};
@@ -284,6 +280,7 @@ impl std::fmt::Display for StreamEventType {
 mod tests {
     use super::*;
     use crate::fuzzer::payloads::{Payload, PayloadType};
+    use crate::types::Severity;
 
     fn make_fuzz_result(
         leaks: Vec<String>,

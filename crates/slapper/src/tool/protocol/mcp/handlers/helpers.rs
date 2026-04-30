@@ -1,4 +1,4 @@
-use crate::tool::protocol::mcp::types::{CapabilitySummary, McpTool};
+use crate::tool::protocol::mcp::types::CapabilitySummary;
 use crate::tool::registry::ToolInfo;
 
 pub fn build_capabilities_summary(info: &ToolInfo) -> Vec<CapabilitySummary> {

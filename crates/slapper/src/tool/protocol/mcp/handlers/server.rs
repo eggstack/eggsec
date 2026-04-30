@@ -17,7 +17,7 @@ use crate::ai::AiClient;
 
 use crate::tool::protocol::mcp::auth::{validate_auth, validate_auth_params};
 use crate::tool::protocol::mcp::prompts::get_builtin_prompts;
-use crate::tool::protocol::mcp::types::{CapabilitySummary, McpError, McpNotification, McpRequest, McpResource, McpResponse, McpRoot, McpTool};
+use crate::tool::protocol::mcp::types::{McpError, McpRequest, McpResource, McpResponse, McpRoot, McpTool};
 use crate::tool::protocol::mcp::streaming::StreamEvent;
 use crate::tool::protocol::mcp::handlers::helpers::{build_capabilities_summary, build_input_schema};
 

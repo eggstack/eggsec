@@ -1,5 +1,6 @@
 use anyhow::Result;
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::RecommendedWatcher;
+use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

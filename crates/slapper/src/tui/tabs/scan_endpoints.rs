@@ -4,7 +4,7 @@ use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, Sc
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,

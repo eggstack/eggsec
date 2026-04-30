@@ -4,7 +4,7 @@ use std::sync::Arc;
 use subtle::ConstantTimeEq;
 
 #[cfg(feature = "ai-integration")]
-use crate::ai::{AiClient, Provider};
+use crate::ai::AiClient;
 
 #[derive(Clone)]
 pub struct AiState {

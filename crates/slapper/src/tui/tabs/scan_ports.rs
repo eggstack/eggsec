@@ -109,7 +109,7 @@ impl ScanPortsTab {
     }
 
     fn update_results_view(&mut self, results: &PortScanResults) {
-        use ratatui::style::{Color, Style};
+        use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
         self.results_view.clear();

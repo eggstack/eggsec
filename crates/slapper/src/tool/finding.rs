@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::fuzzer::{FuzzResult, Payload};
+use crate::fuzzer::FuzzResult;
 use crate::types::Severity;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -464,30 +464,16 @@ impl Agent {
     pub async fn trigger_event(&mut self, event: SecurityEvent) -> Result<()> {
         tracing::debug!("Event triggered: {:?}", event.event_type());
 
-        let handlers = std::mem::replace(&mut self.event_handlers, Vec::new());
+        let mut handlers = std::mem::take(&mut self.event_handlers);
 
-        struct RestoreHandlers<'a> {
-            handlers: Vec<Box<dyn EventHandler>>,
-            target: &'a mut Vec<Box<dyn EventHandler>>,
-        }
-
-        impl Drop for RestoreHandlers<'_> {
-            fn drop(&mut self) {
-                if self.target.is_empty() {
-                    *self.target = std::mem::take(&mut self.handlers);
-                }
-            }
-        }
-
-        let _guard = RestoreHandlers {
-            handlers,
-            target: &mut self.event_handlers,
-        };
-
-        for handler in _guard.handlers.iter() {
+        for handler in handlers.iter() {
             if handler.handles(&event) {
                 handler.handle(&event, self).await?;
             }
+        }
+
+        if self.event_handlers.is_empty() {
+            self.event_handlers = handlers;
         }
 
         Ok(())

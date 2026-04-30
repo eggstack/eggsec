@@ -6,7 +6,7 @@ use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::types::SensitiveString;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,

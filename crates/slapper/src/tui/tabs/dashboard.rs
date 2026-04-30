@@ -5,7 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::Frame;
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
 struct PortfolioSnapshot {

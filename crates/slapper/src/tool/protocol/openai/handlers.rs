@@ -381,7 +381,6 @@ fn extract_tool_arguments(
     tool: &crate::tool::registry::ToolInfo,
     query: &str,
 ) -> serde_json::Value {
-    use crate::tool::request::TargetType;
 
     let mut args = serde_json::Map::new();
     let target = extract_target_from_query(query);

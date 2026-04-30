@@ -4,7 +4,6 @@ use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableTe
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     Frame,
 };
 

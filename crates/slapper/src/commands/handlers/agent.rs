@@ -66,7 +66,6 @@ async fn handle_agent_run_impl(
 
     #[cfg(feature = "ai-integration")]
     {
-        use crate::agent::Agent as AgentTrait;
         if use_ai_final {
             let mut agent_with_ai = agent.with_ai_client(ai_config.unwrap()).await;
             if run_once {

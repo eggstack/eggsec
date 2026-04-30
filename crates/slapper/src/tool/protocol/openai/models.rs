@@ -1,4 +1,3 @@
-use axum::{routing::get, Router};
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::Arc;
