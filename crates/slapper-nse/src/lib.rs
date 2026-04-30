@@ -166,15 +166,19 @@ impl SandboxConfig {
 
 #[cfg(feature = "nse")]
 pub mod async_executor;
+#[cfg(feature = "nse")]
 pub mod context;
 #[cfg(feature = "nse")]
 pub mod executor;
 #[cfg(feature = "nse")]
 pub mod executor_core;
 pub mod output;
+#[cfg(feature = "nse")]
 pub mod public_api;
+#[cfg(feature = "nse")]
 pub mod cve;
 
+#[cfg(feature = "nse")]
 pub mod libraries;
 
 #[cfg(feature = "nse")]

@@ -1,7 +1,7 @@
 # Slapper Improvement Plan - Master Consolidated
 
 **Date**: 2026-04-30
-**Status**: COMPLETE
+**Status**: COMPLETE through Phase 11; Phase 12 PLANNED
 **Priority**: High
 
 ---
@@ -16,7 +16,238 @@ This document is the single source of truth for all planned improvements to Slap
 - **~5** clippy warnings (TUI-specific acceptable)
 - **506** source files, **30** payload types, **29** TUI tabs.
 
-**All waves verified complete as of 2026-04-30. Phase 8 also complete. Phase 9 complete. Phase 10 complete. Phase 11 complete.**
+**All waves verified complete as of 2026-04-30. Phase 8 also complete. Phase 9 complete. Phase 10 complete. Phase 11 complete. Phase 12 is newly planned for TUI navigation and layout hardening.**
+
+---
+
+## Phase 12: TUI Core Navigation & Layout Hardening (PLANNED)
+
+**Status**: PLANNED
+**Priority**: High
+**Objective**: Fix the TUI tab system and related layout behavior so navigation, rendering, mouse selection, session restore, and bookmarks all agree across terminal sizes and feature-gated builds.
+
+### Problem Statement
+
+The current TUI has a visible-window tab renderer, but several related systems still assume either:
+
+1. A fixed number of visible tabs.
+2. Enum discriminants are equivalent to visible tab indexes.
+3. The full tab list is rendered in one continuous bar.
+
+Those assumptions are no longer reliable because `Tab::all()` is feature-gated and compact, while the tab enum retains stable discriminants for disabled features. This causes late tabs to be highlighted incorrectly, mouse clicks to select the wrong tab, session/bookmark state to drift, and narrow terminals to hide the active tab.
+
+### Confirmed Risk Areas
+
+| Area | Current Risk |
+|------|--------------|
+| Tab rendering | `ui.rs::draw_tabs` derives visible count from terminal width, then uses `current_tab as usize` for selection |
+| Tab scrolling | `App::adjust_tab_scroll` hardcodes `visible_count = 10` instead of sharing renderer logic |
+| Mouse hit-testing | `runner.rs::handle_mouse_event` divides tab area by total tab count and ignores `tab_scroll_offset` |
+| Direct shortcuts | Labels advertise `[11]`, `[12]`, etc. but only `1..9` and `0` are implemented |
+| Session restore | Session capture stores enum discriminants, restore reads compact `Tab::all()` indexes |
+| Bookmarks | Bookmark state stores `current_tab as usize`, not stable tab identity |
+| Popups | Several overlays use fixed dimensions and incomplete clamping on small terminals |
+
+### Design Principles
+
+- Use a single tab indexing model everywhere.
+- Treat `Tab::all()` position as the runtime visible index.
+- Treat enum discriminants as implementation details, not user-facing or persistence indexes.
+- Keep stable persisted identities separate from runtime ordering.
+- Keep tab-window calculation deterministic and testable without a terminal.
+- Make small-screen behavior degraded but coherent: active tab must remain visible, popups must clamp, and controls must not select hidden items.
+
+### 12.1: Centralize Tab Indexing
+
+**Files**:
+- `crates/slapper/src/tui/tabs/mod.rs`
+- `crates/slapper/src/tui/app/navigation.rs`
+- `crates/slapper/src/tui/ui.rs`
+- `crates/slapper/src/tui/app/runner.rs`
+
+**Tasks**:
+- [ ] Add `Tab::visible_index(self) -> Option<usize>` that returns the position in `Tab::all()`.
+- [ ] Add `Tab::from_visible_index(index: usize) -> Option<Tab>` and migrate callers away from ambiguous `from_index`.
+- [ ] Rename or deprecate `from_index` if keeping it would preserve ambiguity.
+- [ ] Add `Tab::stable_id(self) -> &'static str` for persistence (`"recon"`, `"scan_ports"`, `"dashboard"`, etc.).
+- [ ] Add `Tab::from_stable_id(id: &str) -> Option<Tab>` that returns `None` when the tab is not available in the current feature set.
+
+**Acceptance Criteria**:
+- [ ] No UI navigation path uses `app.current_tab as usize` for runtime selection.
+- [ ] Runtime tab selection is always based on `Tab::all()` position.
+- [ ] Disabled feature tabs cannot be selected through stale indexes.
+
+### 12.2: Extract Testable Tab Window Calculation
+
+**Files**:
+- `crates/slapper/src/tui/ui.rs`
+- New helper location if useful: `crates/slapper/src/tui/tabs/mod.rs` or `crates/slapper/src/tui/app/navigation.rs`
+
+**Tasks**:
+- [ ] Introduce a small pure helper, for example `TabWindow::for_width(width, current_index, previous_offset, tab_count)`.
+- [ ] Move `visible_width`, `min_tab_width`, `max_visible`, `start_idx`, and selected-index calculation into that helper.
+- [ ] Ensure the helper clamps `start_idx` so the active tab is always inside `[start_idx, start_idx + max_visible)`.
+- [ ] Decide whether `min_tab_width = 8` is acceptable or whether the helper should estimate actual title widths.
+- [ ] Return enough metadata for rendering and mouse hit-testing: `start`, `end`, `selected_visible`, `max_visible`.
+
+**Acceptance Criteria**:
+- [ ] Renderer and navigation use the same window calculation.
+- [ ] On `40`, `60`, `80`, `100`, and `120` column widths, selecting each tab keeps it visible.
+- [ ] The last tab is reachable and highlighted correctly.
+
+### 12.3: Fix Keyboard Tab Navigation
+
+**Files**:
+- `crates/slapper/src/tui/app/navigation.rs`
+- `crates/slapper/src/tui/app/runner.rs`
+
+**Tasks**:
+- [ ] Change `adjust_tab_scroll` to use the shared `TabWindow` helper or accept computed visible capacity.
+- [ ] Update `next_tab`, `prev_tab`, and `select_tab` to use visible indexes.
+- [ ] Ensure `n`, `N`, `p`, `Shift+H`, and `Shift+L` preserve current behavior while updating scroll correctly.
+- [ ] Revisit direct numeric shortcuts. Choose one:
+  - Keep only `1..9` and `0`, but update labels to avoid advertising unsupported `[11+]` shortcuts.
+  - Add multi-digit tab selection through command palette or a `go to tab` prompt.
+  - Replace numeric title prefixes with compact ordinal/status indicators.
+
+**Acceptance Criteria**:
+- [ ] Repeated `n` from the first tab cycles through every available tab exactly once.
+- [ ] Repeated `N` from the first tab cycles backward through every available tab exactly once.
+- [ ] Current tab, highlighted tab, breadcrumb, status line, and rendered content always agree.
+- [ ] Direct shortcuts do not imply unsupported behavior.
+
+### 12.4: Fix Mouse Tab Selection
+
+**Files**:
+- `crates/slapper/src/tui/app/runner.rs`
+- Shared tab window helper from 12.2
+
+**Tasks**:
+- [ ] Compute the rendered tab window during mouse hit-testing using the same width and offset model as rendering.
+- [ ] Map click position to visible tab index, then to global visible index using `window.start + clicked_visible_index`.
+- [ ] Handle narrow terminals where only one tab fits.
+- [ ] Guard against zero-width divisions and clicks on borders/title text.
+- [ ] Consider whether clicking left/right edge markers should scroll without changing tabs if markers are introduced.
+
+**Acceptance Criteria**:
+- [ ] Clicking each visible tab selects that exact tab.
+- [ ] Clicking inside the tab bar after scrolling does not select hidden first-window tabs.
+- [ ] Mouse behavior is ignored cleanly while modal overlays are visible.
+
+### 12.5: Repair Session and Bookmark Persistence
+
+**Files**:
+- `crates/slapper/src/tui/session.rs`
+- `crates/slapper/src/tui/app/mod.rs`
+- `crates/slapper/src/tui/app/runner.rs`
+
+**Tasks**:
+- [ ] Update `SessionState` to store `current_tab_id: String` instead of, or in addition to, `current_tab: usize`.
+- [ ] Update bookmarks to store stable tab IDs instead of numeric indexes.
+- [ ] Add backward-compatible migration for old sessions that only contain numeric values.
+- [ ] When restoring an unavailable feature-gated tab, fall back to `Tab::Recon` or the first available tab.
+- [ ] Ensure restored tab calls tab-scroll adjustment so it is visible on first draw.
+
+**Acceptance Criteria**:
+- [ ] A session saved on `Settings`, `History`, or `Dashboard` restores the same tab in a base build.
+- [ ] Bookmarks survive restart and still point to the intended tabs.
+- [ ] Old numeric session files continue to load without panic.
+- [ ] Sessions saved under one feature set degrade safely under another feature set.
+
+### 12.6: Improve Tab Bar Visual Model
+
+**Files**:
+- `crates/slapper/src/tui/ui.rs`
+- `crates/slapper/src/tui/tabs/mod.rs`
+
+**Tasks**:
+- [ ] Replace the current title suffix `[{start}/total]` with clearer range text, for example `[1-7/20]`.
+- [ ] Add visible previous/next affordances when there are hidden tabs (`<` / `>` or similar ASCII-safe markers).
+- [ ] Consider shortening tab titles for constrained widths:
+  - `Scan Ports` -> `Ports`
+  - `Scan Endpoints` -> `Endpoints`
+  - `Fingerprint` -> `Finger`
+  - `WAF Stress` -> `WAF+`
+- [ ] Separate display labels from shortcut labels so the UI can change without changing tab identity.
+- [ ] Ensure title text does not overflow the tab border at `40x20`.
+
+**Acceptance Criteria**:
+- [ ] Users can tell when tabs exist before or after the current visible window.
+- [ ] The active tab is visually unambiguous at narrow widths.
+- [ ] No label advertises a keyboard shortcut that is not implemented.
+
+### 12.7: Harden Popup and Overlay Layouts
+
+**Files**:
+- `crates/slapper/src/tui/components/popup.rs`
+- `crates/slapper/src/tui/ui.rs`
+- `crates/slapper/src/tui/search.rs`
+
+**Tasks**:
+- [ ] Clamp shared `centered_rect` width and height to the available terminal area.
+- [ ] Replace duplicated `centered_rect` in `search.rs` with the shared helper after fixing clamping.
+- [ ] Make command palette visible row count derive from actual popup content height instead of hardcoded `14`.
+- [ ] Clamp HTTP options, search popup, command palette, and confirmation popups on small screens.
+- [ ] Use safe character truncation for result snippets instead of byte slicing where user-controlled text is displayed.
+
+**Acceptance Criteria**:
+- [ ] Popups render coherently at `60x20` and do not request impossible areas.
+- [ ] Search results with non-ASCII content do not panic from byte slicing.
+- [ ] Command palette selection remains visible as popup height changes.
+
+### 12.8: Add Focused Tests
+
+**Files**:
+- Existing TUI unit test modules where appropriate.
+- Add a small helper test module if needed.
+
+**Tasks**:
+- [ ] Unit test `Tab::visible_index` and `Tab::from_visible_index`.
+- [ ] Unit test stable ID round trips for all available tabs.
+- [ ] Unit test tab-window calculation across small and normal widths.
+- [ ] Unit test next/previous navigation keeps active tab within window.
+- [ ] Unit test session migration from old numeric state to stable IDs.
+- [ ] Add render smoke tests with `ratatui::backend::TestBackend` if feasible.
+
+**Acceptance Criteria**:
+- [ ] Tests fail against the current flawed index model.
+- [ ] Tests cover base feature build and at least one feature-rich build path where practical.
+- [ ] `cargo test --lib -p slapper` passes after implementation.
+
+### 12.9: Manual Verification Matrix
+
+Run these after implementation:
+
+| Scenario | Expected Result |
+|----------|-----------------|
+| Base build, `80x24`, repeated `n` | Every available tab becomes active and visible |
+| Base build, `60x20`, repeated `n` | Active tab remains visible despite reduced capacity |
+| Full feature build, late tabs | `Storage`, `Integrations`, `Workflow`, `Vuln`, `NSE`, `Plugin`, `Browser` highlight correctly when enabled |
+| Mouse clicks after scrolling | Clicked visible tab is selected exactly |
+| Session saved on Dashboard | Restart restores Dashboard |
+| Session saved with unavailable feature tab | Restart falls back cleanly without panic |
+| Bookmarks on late tabs | Restart preserves intended bookmark targets |
+| Command palette at `60x20` | Overlay is clamped and selection remains visible |
+| Search with Unicode result content | No panic; content truncates safely |
+
+### Recommended Implementation Order
+
+1. Implement tab identity/index helper methods.
+2. Implement pure tab-window helper and tests.
+3. Migrate renderer and keyboard navigation to the helper.
+4. Fix mouse hit-testing using the same helper.
+5. Migrate session/bookmark persistence to stable IDs with backward compatibility.
+6. Clean up visual labels and shortcut affordances.
+7. Harden popup sizing and search truncation.
+8. Run unit tests and manual TUI matrix.
+
+### Success Criteria
+
+- [ ] Runtime tab indexes, rendering, mouse clicks, session state, and bookmarks use one consistent model.
+- [ ] Feature-gated builds do not mis-highlight or restore the wrong tab.
+- [ ] Small terminals degrade predictably without hiding the active tab.
+- [ ] The tab bar communicates hidden tabs and supported navigation honestly.
+- [ ] No implementation changes expand scope into unrelated TUI tab internals unless required for verification.
 
 ---
 

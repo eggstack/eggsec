@@ -305,6 +305,83 @@ impl Tab {
         Self::all().get(index).copied()
     }
 
+    pub fn visible_index(&self) -> Option<usize> {
+        Self::all().iter().position(|t| t == self)
+    }
+
+    pub fn from_visible_index(index: usize) -> Option<Tab> {
+        Self::from_index(index)
+    }
+
+    pub fn stable_id(&self) -> &'static str {
+        match self {
+            Tab::Recon => "recon",
+            Tab::Load => "load",
+            Tab::ScanPorts => "scan_ports",
+            Tab::ScanEndpoints => "scan_endpoints",
+            Tab::Fingerprint => "fingerprint",
+            Tab::Fuzz => "fuzz",
+            Tab::Waf => "waf",
+            Tab::WafStress => "waf_stress",
+            Tab::Scan => "scan",
+            Tab::Resume => "resume",
+            Tab::Proxy => "proxy",
+            Tab::Packet => "packet",
+            Tab::GraphQl => "graphql",
+            Tab::OAuth => "oauth",
+            Tab::Cluster => "cluster",
+            Tab::Stress => "stress",
+            Tab::Report => "report",
+            Tab::Nse => "nse",
+            Tab::Plugin => "plugin",
+            Tab::Settings => "settings",
+            Tab::History => "history",
+            Tab::Dashboard => "dashboard",
+            Tab::Hunt => "hunt",
+            Tab::Browser => "browser",
+            Tab::Compliance => "compliance",
+            Tab::Storage => "storage",
+            Tab::Integrations => "integrations",
+            Tab::Workflow => "workflow",
+            Tab::Vuln => "vuln",
+        }
+    }
+
+    pub fn from_stable_id(id: &str) -> Option<Tab> {
+        match id {
+            "recon" => Some(Tab::Recon),
+            "load" => Some(Tab::Load),
+            "scan_ports" => Some(Tab::ScanPorts),
+            "scan_endpoints" => Some(Tab::ScanEndpoints),
+            "fingerprint" => Some(Tab::Fingerprint),
+            "fuzz" => Some(Tab::Fuzz),
+            "waf" => Some(Tab::Waf),
+            "waf_stress" => Some(Tab::WafStress),
+            "scan" => Some(Tab::Scan),
+            "resume" => Some(Tab::Resume),
+            "proxy" => Some(Tab::Proxy),
+            "packet" => Some(Tab::Packet),
+            "graphql" => Some(Tab::GraphQl),
+            "oauth" => Some(Tab::OAuth),
+            "cluster" => Some(Tab::Cluster),
+            "stress" => Some(Tab::Stress),
+            "report" => Some(Tab::Report),
+            "nse" => Some(Tab::Nse),
+            "plugin" => Some(Tab::Plugin),
+            "settings" => Some(Tab::Settings),
+            "history" => Some(Tab::History),
+            "dashboard" => Some(Tab::Dashboard),
+            "hunt" => Some(Tab::Hunt),
+            "browser" => Some(Tab::Browser),
+            "compliance" => Some(Tab::Compliance),
+            "storage" => Some(Tab::Storage),
+            "integrations" => Some(Tab::Integrations),
+            "workflow" => Some(Tab::Workflow),
+            "vuln" => Some(Tab::Vuln),
+            _ => None,
+        }
+    }
+
     pub fn next(&self) -> Tab {
         let all = Self::all();
         let idx = all.iter().position(|t| t == self).unwrap_or(0);

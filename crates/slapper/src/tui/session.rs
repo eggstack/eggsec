@@ -6,9 +6,14 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
-    pub current_tab: usize,
-    pub bookmarks: Vec<usize>,
+    pub current_tab_id: Option<String>,
+    #[serde(default)]
+    pub bookmarks: Vec<String>,
     pub theme_name: String,
+    #[serde(default)]
+    pub legacy_current_tab: Option<usize>,
+    #[serde(default)]
+    pub legacy_bookmarks: Vec<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,22 +106,40 @@ impl SessionManager {
     }
 
 pub fn restore_session(&self, app: &mut App, state: &SessionState) {
-        if let Some(tab) = Tab::from_index(state.current_tab) {
-            app.current_tab = tab;
+        let tab_to_restore = state.current_tab_id.as_ref()
+            .and_then(|id| Tab::from_stable_id(id))
+            .or_else(|| {
+                state.legacy_current_tab.and_then(|idx| Tab::from_index(idx))
+            })
+            .unwrap_or(Tab::Recon);
+        app.current_tab = tab_to_restore;
+
+        for bookmark_id in &state.bookmarks {
+            if let Some(tab) = Tab::from_stable_id(bookmark_id) {
+                if let Some(idx) = tab.visible_index() {
+                    app.bookmarks.insert(idx);
+                }
+            }
         }
 
-        for &idx in &state.bookmarks {
-            if Tab::from_index(idx).is_some() {
-                app.bookmarks.insert(idx);
+        for &idx in &state.legacy_bookmarks {
+            if let Some(tab) = Tab::from_index(idx) {
+                if let Some(visible_idx) = tab.visible_index() {
+                    app.bookmarks.insert(visible_idx);
+                }
             }
         }
     }
 
     fn capture_state(&self, app: &App) -> SessionState {
         SessionState {
-            current_tab: app.current_tab as usize,
-            bookmarks: app.get_bookmarked_tabs(),
+            current_tab_id: Some(app.current_tab.stable_id().to_string()),
+            bookmarks: app.get_bookmarked_tabs().iter().filter_map(|&idx| {
+                Tab::from_index(idx).map(|t| t.stable_id().to_string())
+            }).collect(),
             theme_name: "dark".to_string(),
+            legacy_current_tab: Some(app.current_tab as usize),
+            legacy_bookmarks: app.get_bookmarked_tabs(),
         }
     }
 

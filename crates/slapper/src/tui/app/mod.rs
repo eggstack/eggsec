@@ -152,20 +152,41 @@ pub struct App {
 impl App {
     pub fn new(history: SharedHistory) -> Self {
         let session_manager = SessionManager::new(SessionConfig::default());
-        
+
         let restored_state = session_manager.load_latest_session().ok().flatten();
-        let restored_bookmarks: std::collections::HashSet<usize> = restored_state
-            .as_ref()
-            .map(|s| s.bookmarks.iter().cloned().collect())
-            .unwrap_or_default();
-        let restored_current_tab = restored_state.as_ref().map(|s| s.current_tab);
-        
-        
-        
+
+        let restored_bookmarks: std::collections::HashSet<usize> = if let Some(ref state) = restored_state {
+            let mut bookmarks = std::collections::HashSet::new();
+            for bookmark_id in &state.bookmarks {
+                if let Some(tab) = Tab::from_stable_id(bookmark_id) {
+                    if let Some(idx) = tab.visible_index() {
+                        bookmarks.insert(idx);
+                    }
+                }
+            }
+            for &idx in &state.legacy_bookmarks {
+                if let Some(tab) = Tab::from_index(idx) {
+                    if let Some(visible_idx) = tab.visible_index() {
+                        bookmarks.insert(visible_idx);
+                    }
+                }
+            }
+            bookmarks
+        } else {
+            std::collections::HashSet::new()
+        };
+
+        let restored_current_tab = restored_state.as_ref()
+            .and_then(|s| s.current_tab_id.as_ref())
+            .and_then(|id| Tab::from_stable_id(id))
+            .or_else(|| {
+                restored_state.as_ref()
+                    .and_then(|s| s.legacy_current_tab)
+                    .and_then(|idx| Tab::from_index(idx))
+            });
+
         Self {
-            current_tab: restored_current_tab
-                .and_then(Tab::from_index)
-                .unwrap_or(Tab::Recon),
+            current_tab: restored_current_tab.unwrap_or(Tab::Recon),
             should_quit: false,
             mode: InputMode::Normal,
             session_manager,
