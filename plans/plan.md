@@ -1,7 +1,7 @@
 # Slapper Improvement Plan - Master Consolidated
 
 **Date**: 2026-04-30
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 **Priority**: High
 
 ---
@@ -16,34 +16,34 @@ This document is the single source of truth for all planned improvements to Slap
 - **~5** clippy warnings (TUI-specific acceptable)
 - **506** source files, **30** payload types, **29** TUI tabs.
 
-**All waves verified complete as of 2026-04-30.**
+**All waves verified complete as of 2026-04-30. Phase 8 also complete.**
 
 ---
 
-## Phase 8: Pre-Open Source Polish (Planned)
+## Phase 8: Pre-Open Source Polish (COMPLETED)
 
-**Status**: PLANNED
+**Status**: COMPLETE
 **Priority**: High
 **Objective**: Resolve "rough edges" identified in the general code review to ensure high quality for open-source release.
 
 ### **8.1: Agent Alert Fatigue & Memory Efficiency**
-- [ ] **8.1.1: Baseline-Aware Alerting**: Modify `Agent::process_scheduled_scans` to use `LongitudinalMemory::compare_with_baseline`. Only trigger alerts for *new* findings that aren't in the baseline.
-- [ ] **8.1.2: Finding Deduplication**: Implement cross-scan deduplication in `handle_findings` to ensure persistent vulnerabilities don't trigger repeat alerts on every scan.
-- [ ] **8.1.3: Handler Registry Fix**: Refactor `Agent::trigger_event` to prevent handler loss when `std::mem::take` is used during event processing.
+- [x] **8.1.1: Baseline-Aware Alerting**: Modified `Agent::process_scheduled_scans` to use `LongitudinalMemory::compare_with_baseline`. Only triggers alerts for *new* findings that aren't in the baseline.
+- [x] **8.1.2: Finding Deduplication**: Implemented cross-scan deduplication via `deduplicate_findings` in `LongitudinalMemory` to track alerted finding IDs and prevent repeat alerts.
+- [x] **8.1.3: Handler Registry Fix**: Refactored `Agent::trigger_event` to prevent handler loss when `std::mem::take` is used during event processing.
 
 ### **8.2: TUI Performance & Responsiveness**
-- [ ] **8.2.1: Event Loop Optimization**: Reorder the main loop in `runner.rs` (`update() -> draw() -> poll()`) to reduce perceived latency between background task completion and UI refresh.
-- [ ] **8.2.2: Async Channel Draining**: Update `App::update` to use `while let Ok(...)` for `progress_rx` and `result_rx` to prevent UI lag when high-volume scan data arrives.
-- [ ] **8.2.3: Dynamic Constraints**: Replace hardcoded `visible_rows` (e.g., in `HistoryTab`) with dynamic calculations based on the active `Rect` height.
+- [x] **8.2.1: Event Loop Optimization**: Reordered the main loop in `runner.rs` (`update() -> draw() -> poll()`) to reduce perceived latency between background task completion and UI refresh.
+- [x] **8.2.2: Async Channel Draining**: Updated `App::update` to drain ALL pending messages from `progress_rx` and `result_rx` using while let loops with collected pending updates.
+- [x] **8.2.3: Dynamic Constraints**: Replaced hardcoded `visible_rows` in `HistoryTab` with dynamic calculations via `calc_visible_rows()` based on the active `Rect` height.
 
 ### **8.3: Architectural Cleanup**
-- [ ] **8.3.1: Standardize History Tab**: Refactor `HistoryTab` to fit the `TabInput` trait more cleanly, removing the need for `Arc<Mutex>`-specific special cases in `App` and `ui.rs`.
-- [ ] **8.3.2: Breadcrumb Consolidation**: Implement a shared `Breadcrumb` trait or helper to centralize breadcrumb logic and reduce the massive `match` block in `ui.rs`.
-- [ ] **8.3.3: Theme Consistency**: Audit all TUI components to ensure 100% compliance with the `tc!` macro for color selection.
+- [x] **8.3.1: Standardize History Tab**: Refactored `HistoryTab` from `Arc<Mutex<HistoryTab>>` to direct field in `App`, using the dispatcher system like other tabs.
+- [x] **8.3.2: Breadcrumb Consolidation**: Implemented `TAB_BREADCRUMBS` constant and `default_breadcrumb()` method, reducing the 127-line match block in `ui.rs` to 4 lines.
+- [x] **8.3.3: Theme Consistency**: Replaced 307 hardcoded `Color::*` usages with `tc!` macro across all tab files (auth, cluster, stress, oauth, report, graphql, waf, scan_ports, recon, scan_endpoints, fingerprint, fuzz, waf_stress).
 
 ### **8.4: Dashboard & Reporting Enhancements**
-- [ ] **8.4.1: Trend Visualization**: Add sparklines or mini-charts to the Dashboard using `LongitudinalMemory::analyze_temporal_patterns`.
-- [ ] **8.4.2: Asset Status Overview**: Implement a high-level "Asset Health" summary in the Dashboard for a quick view of the security state across the entire portfolio.
+- [x] **8.4.1: Trend Visualization**: Added ASCII sparkline renderer using Unicode block characters, displayed in Dashboard under Activity Trend section.
+- [x] **8.4.2: Asset Status Overview**: Added Asset Health Summary to Dashboard showing unique targets, scans today, critical findings count, and health indicator.
 
 ---
 
@@ -75,6 +75,7 @@ All waves completed and verified:
 | 5: Feature Enhancements | ✓ COMPLETE | Observability (AgentLogger), hot-reload (ConfigWatcher), chained fuzzing (StatefulFuzzer) |
 | 6: Long-term Capabilities | ✓ COMPLETE | Exploit framework, cloud scanning exist |
 | 7: Documentation | ✓ COMPLETE | CI/CD templates already implemented |
+| 8: Pre-Open Source Polish | ✓ COMPLETE | Alert fatigue fix, TUI perf, architectural cleanup, Dashboard enhancements |
 
 ---
 
@@ -89,9 +90,22 @@ All waves completed and verified:
 - **4.2**: Regex LRU cache implemented - 100 entry LruCache in `fuzzer/chain.rs` replacing unbounded FxHashMap
 - **4.3**: Fuzzer clone reduction - ChainExecutor and StatefulFuzzer handle clones appropriately
 
-### Wave 5: Feature Enhancements  
+### Wave 5: Feature Enhancements
 - **5.1.1**: AgentLogger initialized in agent run() - rotating JSON logs at `memory_dir/logs/agent.log`
 - **5.1.2**: ConfigWatcher initialized in agent new() - watches portfolio.json and slapper.toml via notify
 - **5.2.1**: StatefulFuzzer implemented - multi-step chain execution with variable extraction
+
+### Wave 8: Pre-Open Source Polish
+- **8.1.1**: Baseline-aware alerting - `process_scheduled_scans` now uses `compare_with_baseline` to filter new findings
+- **8.1.2**: Cross-scan deduplication - `deduplicate_findings` tracks alerted finding IDs in `alerted_findings.json`
+- **8.1.3**: Handler registry fix - `trigger_event` restores handlers even on partial async handler failure
+- **8.2.1**: Event loop reordered to `update()->draw()->poll()` reducing UI latency
+- **8.2.2**: Channel draining with `while let` loops + collected pending updates
+- **8.2.3**: Dynamic `visible_rows` via `calc_visible_rows()` in HistoryTab
+- **8.3.1**: HistoryTab now direct field in App, uses dispatcher like other tabs
+- **8.3.2**: Breadcrumbs via `TAB_BREADCRUMBS` constant + `default_breadcrumb()`, 4-line fallback in ui.rs
+- **8.3.3**: 307 hardcoded colors replaced with `tc!` macro across 13 tab files
+- **8.4.1**: ASCII sparkline renderer with Unicode block characters in Dashboard
+- **8.4.2**: Asset Health Summary showing unique targets, today's scans, critical findings
 
 ---

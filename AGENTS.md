@@ -207,9 +207,9 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 ## Planning
 
 - `plans/plan.md` — Master Consolidated Improvement Plan (sole plan file, all others removed in 2026-04-29)
-  - Plan is COMPLETED and pruned as of 2026-04-30
-  - All 7 Waves verified complete
-  - Only verification notes and completion summary remain
+  - Plan is COMPLETED as of 2026-04-30
+  - All 8 Waves verified complete (including Phase 8)
+  - Phase 8 items: baseline-aware alerting, channel draining, dynamic visible_rows, HistoryTab standardization, breadcrumb consolidation, theme consistency, sparkline visualization, asset health overview
 
 ## Important Guidelines
 
@@ -255,8 +255,54 @@ Reqwest handles cookies automatically when `cookies` feature is enabled:
 
 Use LRU cache for regex patterns to prevent unbounded memory growth:
 - `lru = "0.18"` crate available for use
-- Recommended cache size: 100 entries (use `NonZeroUsize`)
+- Recommended cache size: 100 entries (use `NonZeroUsizer`)
 - Access via `cache.put(key, value)` and `cache.get(&key)`
+
+### Agent Alert Fatigue Prevention
+
+The agent has built-in mechanisms to prevent alert fatigue:
+
+**Baseline-Aware Alerting:**
+- `Agent::process_scheduled_scans` uses `LongitudinalMemory::compare_with_baseline` to filter findings
+- Only NEW findings (not in baseline) trigger alerts
+- Resolved findings are tracked separately
+
+**Cross-Scan Deduplication:**
+- `LongitudinalMemory::deduplicate_findings` prevents repeat alerts for same finding IDs
+- Alerted finding IDs stored in `alerted_findings.json` in memory directory
+- Uses `load_alerted_findings()` and `save_alerted_findings()` for persistence
+
+**Handler Registry Safety:**
+- `Agent::trigger_event` uses closure-based execution to handle partial async handler failures
+- Event handlers are restored even if a handler fails mid-processing
+
+### TUI Event Loop Order
+
+The main TUI event loop in `runner.rs` follows `update() -> draw() -> poll()` order:
+- `update()` is called first to process background task results
+- `draw()` renders the UI only if `needs_redraw` is set
+- `poll()` waits for user input with 100ms timeout
+
+**Channel Draining:**
+- `App::update` drains ALL pending messages from `progress_rx` and `result_rx` using while-let loops
+- Uses collected `pending_updates` / `pending_results` vectors to avoid borrow checker issues
+
+**Dynamic visible_rows:**
+- `HistoryTab::calc_visible_rows(area: Rect)` calculates visible rows based on actual Rect height
+- Called during render to provide dynamic sizing based on terminal size
+
+### Breadcrumb System
+
+Breadcrumb display is centralized via `TAB_BREADCRUMBS` constant in `tui/tabs/mod.rs`:
+- `Tab::default_breadcrumb()` returns static labels for most tabs
+- Custom breadcrumb implementations exist for: Recon, Fuzz, WAF, Proxy, Packet, Hunt, Browser, Compliance, Storage, Integrations, Workflow, Vuln
+- `ui.rs::draw_breadcrumb` uses `unwrap_or_else` to fall back to default
+
+### Dashboard Enhancements
+
+Dashboard includes trend visualization and asset health overview:
+- `render_sparkline()` - ASCII sparkline renderer using Unicode block characters (▁▂▃▄▅▆▇█)
+- Asset Health Summary shows: unique targets, today's scans, critical findings count, health indicator
 
 ---
 
