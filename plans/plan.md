@@ -16,7 +16,7 @@ This document is the single source of truth for all planned improvements to Slap
 - **~5** clippy warnings (TUI-specific acceptable)
 - **506** source files, **30** payload types, **29** TUI tabs.
 
-**All waves verified complete as of 2026-04-30. Phase 8 also complete.**
+**All waves verified complete as of 2026-04-30. Phase 8 also complete. Phase 9 planned.**
 
 ---
 
@@ -44,6 +44,33 @@ This document is the single source of truth for all planned improvements to Slap
 ### **8.4: Dashboard & Reporting Enhancements**
 - [x] **8.4.1: Trend Visualization**: Added ASCII sparkline renderer using Unicode block characters, displayed in Dashboard under Activity Trend section.
 - [x] **8.4.2: Asset Status Overview**: Added Asset Health Summary to Dashboard showing unique targets, scans today, critical findings count, and health indicator.
+
+---
+
+## Phase 9: Dashboard & Alert Polish (PLANNED)
+
+**Status**: PLANNED
+**Priority**: Medium
+**Objective**: Connect existing infrastructure to Dashboard and improve alert edge cases.
+
+### **9.1: Sparkline Data Integration**
+- [ ] **9.1.1: Connect LongitudinalMemory to Dashboard**: The `analyze_temporal_patterns()` method exists in `agent/memory.rs` but Dashboard doesn't use it. Wire up the Dashboard to receive temporal analysis data.
+- [ ] **9.1.2: Populate actual finding counts**: Currently sparklines show placeholder data. Extract finding counts per day from `LongitudinalMemory` for the last 7-14 days.
+
+### **9.2: Asset Health from Portfolio Memory**
+- [ ] **9.2.1: Aggregate portfolio-level stats**: Instead of session-level stats, use `TargetPortfolio` + `LongitudinalMemory` to show portfolio-wide health.
+- [ ] **9.2.2: Cross-target trend summary**: Show aggregate findings across all targets (e.g., "5 targets, 12 total findings this week, 2 critical").
+
+### **9.3: Alert Restart Edge Case**
+- [ ] **9.3.1: Warm baseline on startup**: When the agent restarts, `alerted_findings.json` is fresh. The first scheduled scan after restart could re-alert on findings that were already alerted before restart.
+- [ ] **9.3.2: Solution options**:
+  - Option A: Load `alerted_findings.json` into a "warm" state on startup before first scan
+  - Option B: On first scan, mark all current baseline findings as "already alerted" to prevent re-alert
+  - Option C: Add a startup baseline snapshot to track what was already alerted in previous sessions
+
+### **9.4: Handler Registry Error Recovery**
+- [ ] **9.4.1: Current state**: `trigger_event` restores handlers on success but not on error
+- [ ] **9.4.2: Improvement**: Always restore handlers regardless of outcome using `std::mem::replace` or `std::mem::take` with explicit restoration in a `drop` guard or `finally` pattern
 
 ---
 
@@ -76,6 +103,7 @@ All waves completed and verified:
 | 6: Long-term Capabilities | ✓ COMPLETE | Exploit framework, cloud scanning exist |
 | 7: Documentation | ✓ COMPLETE | CI/CD templates already implemented |
 | 8: Pre-Open Source Polish | ✓ COMPLETE | Alert fatigue fix, TUI perf, architectural cleanup, Dashboard enhancements |
+| 9: Dashboard & Alert Polish | PLANNED | Sparkline data, portfolio health, alert restart edge case, handler error recovery |
 
 ---
 
