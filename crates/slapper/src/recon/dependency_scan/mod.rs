@@ -58,11 +58,6 @@ pub struct DependencyVulnerability {
     pub references: Vec<String>,
 }
 
-struct ParsedDependency {
-    name: String,
-    version: String,
-}
-
 pub struct DependencyScanner {
     #[allow(dead_code)]
     client: reqwest::Client,

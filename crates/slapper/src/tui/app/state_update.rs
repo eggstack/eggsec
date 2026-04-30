@@ -6,7 +6,6 @@ impl super::App {
         let mut dirty = false;
 
         if let Some(ref mut rx) = self.progress_rx {
-            use tokio::sync::mpsc;
             let mut pending_updates = Vec::new();
             while let Ok((completed, total)) = rx.try_recv() {
                 pending_updates.push((completed, total));
@@ -21,7 +20,6 @@ impl super::App {
         }
 
         if let Some(ref mut rx) = self.result_rx {
-            use tokio::sync::mpsc;
             let mut pending_results = Vec::new();
             while let Ok(result) = rx.try_recv() {
                 pending_results.push(result);

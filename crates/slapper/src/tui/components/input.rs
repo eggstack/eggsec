@@ -311,7 +311,7 @@ impl InputField {
             .border_style(border_style);
 
         let display_value = if let Some(w) = self.width {
-            let available = (w as usize).saturating_sub(2);
+            let available = w.saturating_sub(2);
             let char_count = self.value.chars().count();
             if char_count > available {
                 let cursor_char_pos = self.cursor_pos.min(char_count);
@@ -339,7 +339,7 @@ impl InputField {
 
         if self.focused && insert_mode {
             let display_cursor = if let Some(w) = self.width {
-                let available = (w as usize).saturating_sub(2);
+                let available = w.saturating_sub(2);
                 let char_count = self.value.chars().count();
                 if char_count > available {
                     let cursor_char_pos = self.cursor_pos.min(char_count);

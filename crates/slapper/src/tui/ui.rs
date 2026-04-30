@@ -306,7 +306,6 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
-    use crate::tui::tabs::TabRender;
     use ratatui::text::Line;
 
     let breadcrumb_parts: Vec<Line> = app

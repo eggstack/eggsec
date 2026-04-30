@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
-const REGEX_CACHE_SIZE: NonZeroUsize = NonZeroUsize::new(100).unwrap();
+const REGEX_CACHE_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(100) };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChainAction {

@@ -11,11 +11,13 @@ use serde::Deserialize;
 struct PortfolioSnapshot {
     unique_targets: usize,
     total_scans: usize,
+    #[allow(dead_code)]
     scans_today: usize,
     findings_by_severity: HashMap<String, usize>,
     findings_trend: Vec<(String, usize)>,
     critical_findings: usize,
     health_score: f64,
+    #[allow(dead_code)]
     last_updated: DateTime<Utc>,
 }
 
@@ -74,7 +76,7 @@ impl DashboardTab {
         let sparkline: String = data
             .iter()
             .map(|&v| {
-                let normalized = ((v - min_val) * bucket_count as usize) / range;
+                let normalized = ((v - min_val) * bucket_count) / range;
                 let idx = normalized.min(bucket_count);
                 blocks[idx]
             })
@@ -245,7 +247,7 @@ impl DashboardTab {
 
         let base_score = if count > 0 { sum / count } else { 1 };
 
-        base_score.max(1).min(100)
+        base_score.clamp(1, 100)
     }
 
     fn render_stats(&mut self) {

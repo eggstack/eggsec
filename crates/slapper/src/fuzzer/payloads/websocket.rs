@@ -50,14 +50,12 @@ pub enum WebSocketOpcode {
 
 pub struct WebSocketFuzzer {
     subprotocols: Vec<String>,
-    url: String,
 }
 
 impl WebSocketFuzzer {
-    pub fn new(url: String) -> Self {
+    pub fn new(_url: String) -> Self {
         Self {
             subprotocols: vec![],
-            url,
         }
     }
 
