@@ -445,11 +445,11 @@ impl LoginExecutor {
     pub async fn execute_sequence(
         &self,
         sequence: &LoginSequence,
-        auth_method: &AuthMethod,
+        _auth_method: &AuthMethod,
     ) -> crate::error::Result<LoginResult> {
         let mut variables: HashMap<String, String> = HashMap::new();
-        let mut session_cookies: HashMap<String, String> = HashMap::new();
-        let mut final_url: Option<String> = None;
+        let session_cookies: HashMap<String, String> = HashMap::new();
+        let final_url: Option<String> = None;
         let mut response_code: Option<u16> = None;
         let mut response_headers: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
@@ -496,7 +496,7 @@ impl LoginExecutor {
                     })?;
 
                     response_code = Some(response.status().as_u16());
-                    let final_url = response.url().to_string();
+                    let _final_url = response.url().to_string();
 
                     // Store response for extraction steps
                     let headers_map: std::collections::HashMap<String, String> = response.headers()

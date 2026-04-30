@@ -74,7 +74,7 @@ pub use stage::{parse_stages, Stage};
 /// - Any stage fails to execute
 /// - Output file cannot be written
 #[cfg(feature = "tool-api")]
-pub async fn run_cli_with_callback<F>(args: ScanArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+pub async fn run_cli_with_callback<F>(args: ScanArgs, config: &SlapperConfig, _callback: F) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {

@@ -101,7 +101,7 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
                     if loader.list_plugins().iter().any(|p| p.name == run_args.name) {
                         println!("Running Ruby plugin '{}' against target '{}'", run_args.name, run_args.target);
 
-                        let result = loader.run_plugin(&run_args.name, &run_args.target)?;
+                        let result = loader.run_plugin(&run_args.name, &run_args.target, 300)?;
 
                         println!("\nPlugin Results:");
                         println!("  Success: {}", result.success);
@@ -154,7 +154,7 @@ pub fn discover_all_plugins() -> Vec<crate::tui::tabs::plugin::PluginInfo> {
 
     #[cfg(feature = "ruby-plugins")]
     {
-        if let Ok(loader) = crate::ruby::PluginLoader::new(plugin_dirs) {
+        if let Ok(mut loader) = crate::ruby::PluginLoader::new(plugin_dirs) {
             if let Ok(discovered) = loader.discover_plugins() {
                 for plugin in discovered {
                     all_plugins.push(PluginInfo {

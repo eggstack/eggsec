@@ -304,7 +304,7 @@ impl MsfClient {
     }
 
     pub async fn kill_session(&mut self, session_id: &str) -> Result<()> {
-        self.request(
+        self.request::<()>(
             "session.stop",
             serde_json::json!({ "session_id": session_id }),
         )

@@ -4,6 +4,11 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+#[cfg(feature = "ruby-plugins")]
+use magnus::prelude::*;
+#[cfg(feature = "ruby-plugins")]
+use magnus::Ruby;
+
 use super::{RubyPlugin, RubyPluginResult};
 use slapper_plugin::security::validate_ruby_plugin;
 

@@ -47,11 +47,11 @@ fn py_value_to_json(_py: Python<'_>, val: &pyo3::Bound<'_, pyo3::PyAny>) -> serd
         serde_json::Number::from_f64(f)
             .map(serde_json::Value::Number)
             .unwrap_or(serde_json::Value::Null)
-    } else if let Ok(list) = val.downcast::<PyList>() {
+    } else if let Ok(list) = val.cast::<PyList>() {
         let items: Vec<serde_json::Value> =
             list.iter().map(|item| py_value_to_json(_py, &item)).collect();
         serde_json::Value::Array(items)
-    } else if let Ok(dict) = val.downcast::<PyDict>() {
+    } else if let Ok(dict) = val.cast::<PyDict>() {
         let mut map = serde_json::Map::new();
         for (k, v) in dict.iter() {
             if let Ok(key) = k.extract::<String>() {
@@ -201,7 +201,7 @@ impl PythonPluginManager {
         let mut class_plugins = Vec::new();
 
         if let Ok(plugins_attr) = module.getattr("PLUGINS") {
-            if let Ok(list) = plugins_attr.downcast::<PyList>() {
+            if let Ok(list) = plugins_attr.cast::<PyList>() {
                 for item in list.iter() {
                     if let Ok(inst) = item.call0() {
                         let name = inst
@@ -252,11 +252,11 @@ impl PythonPluginManager {
         let mut json_results = Vec::new();
 
         // Try to extract as a dict with "findings" key
-        if let Ok(dict) = result.downcast_bound::<PyDict>(py) {
+        if let Ok(dict) = result.bind(py).cast::<PyDict>() {
             if let Some(findings) = dict.get_item("findings").ok().flatten() {
-                if let Ok(list) = findings.downcast::<PyList>() {
+                if let Ok(list) = findings.cast::<PyList>() {
                     for item in list.iter() {
-                        if let Ok(finding_dict) = item.downcast::<PyDict>() {
+                        if let Ok(finding_dict) = item.cast::<PyDict>() {
                             let mut finding = serde_json::Map::new();
                             for (key, val) in finding_dict.iter() {
                                 if let Ok(k) = key.extract::<String>() {
@@ -283,12 +283,12 @@ impl PythonPluginManager {
                     let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner());
                     for plugin in plugins.iter() {
                         // Collect checks from function-based plugins
-                        if let Ok(module) = plugin.module.bind(py).downcast::<PyModule>() {
+                        if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
                             if let Ok(register_func) = module.getattr("register_checks") {
                                 if let Ok(result) = register_func.call0() {
-                                    if let Ok(list) = result.downcast::<PyList>() {
+                                    if let Ok(list) = result.cast::<PyList>() {
                                         for item in list.iter() {
-                                            if let Ok(dict) = item.downcast::<PyDict>() {
+                                            if let Ok(dict) = item.cast::<PyDict>() {
                                                 let name = dict
                                                     .get_item("name")
                                                     .ok()
@@ -352,11 +352,11 @@ impl PythonPluginManager {
             let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner());
             for plugin in plugins.iter() {
                 // Try function-based plugins
-                if let Ok(module) = plugin.module.bind(py).downcast::<PyModule>() {
+                if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
                     if let Ok(run_func) = module.getattr("run_check") {
                         let args = (check_name, target);
                         if let Ok(result) = run_func.call1(args) {
-                            if let Ok(list) = result.downcast::<PyList>() {
+                            if let Ok(list) = result.cast::<PyList>() {
                                 for item in list.iter() {
                                         if let Ok(json_str) = item.extract::<String>() {
                                             if json_str.len() > MAX_JSON_SIZE_BYTES {

@@ -223,7 +223,7 @@ pub struct TaskWorker {
 
 impl TaskWorker {
     pub fn new(scheduler: Arc<TaskScheduler>, dispatcher: ToolDispatcher) -> Self {
-        let (shutdown_tx, shutdown_rx) = mpsc::channel::<()>(1);
+        let (_shutdown_tx, shutdown_rx) = mpsc::channel::<()>(1);
         Self {
             scheduler,
             dispatcher,
@@ -241,7 +241,7 @@ impl TaskWorker {
     {
         loop {
             let task = {
-                let mut rx_guard = self.shutdown_rx.write().await;
+                let rx_guard = self.shutdown_rx.write().await;
                 if rx_guard.is_none() {
                     break;
                 }

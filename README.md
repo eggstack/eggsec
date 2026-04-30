@@ -43,6 +43,48 @@ Slapper excels in areas that complement your existing toolkit:
 | **Notifications** | Slack, Discord, Teams, and custom webhook integrations |
 | **Automation** | 11 pipeline profiles, session resumption, multiple output formats |
 
+## System Dependencies
+
+Some features require system-level packages to be installed via your package manager:
+
+| Feature | Required Packages | Package Manager Commands |
+|---------|-------------------|--------------------------|
+| `ruby-plugins` | `ruby-dev`, `clang` | `sudo apt-get install ruby-dev clang` (Ubuntu/Debian) |
+| `packet-inspection` | `libpcap-dev` (optional, for full packet capture) | `sudo apt-get install libpcap-dev` (Ubuntu/Debian) |
+| `wireless` | `libusb-1.0-0-dev` (optional, for wireless testing) | `sudo apt-get install libusb-1.0-0-dev` (Ubuntu/Debian) |
+| `nse` | `libssl-dev` (for NSE script compatibility) | `sudo apt-get install libssl-dev` (Ubuntu/Debian) |
+
+**Ubuntu/Debian:**
+```bash
+# For Ruby plugin support
+sudo apt-get install ruby-dev clang
+
+# For packet inspection (optional)
+sudo apt-get install libpcap-dev
+
+# For wireless testing (optional)
+sudo apt-get install libusb-1.0-0-dev
+```
+
+**Fedora/RHEL:**
+```bash
+# For Ruby plugin support
+sudo dnf install ruby-devel clang
+
+# For packet inspection (optional)
+sudo dnf install libpcap-devel
+
+# For wireless testing (optional)
+sudo dnf install libusb1-devel
+```
+
+**macOS:**
+```bash
+# For Ruby plugin support
+xcode-select --install  # Installs clang
+brew install ruby       # Installs ruby with development headers
+```
+
 ## Build Features
 
 Slapper uses Cargo feature flags to enable optional capabilities. Some commands require specific build configurations:
@@ -77,6 +119,32 @@ cargo build --release --features all-plugins
 ```
 
 ## Quick Start
+
+### Prerequisites
+
+Before building, ensure you have Rust installed. For features that require system dependencies, install the necessary packages:
+
+**For Ruby plugin support (recommended):**
+```bash
+# Ubuntu/Debian
+sudo apt-get install ruby-dev clang
+
+# Fedora/RHEL
+sudo dnf install ruby-devel clang
+
+# macOS
+xcode-select --install
+brew install ruby
+```
+
+**For full build with all features:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install ruby-dev clang libpcap-dev libssl-dev libusb-1.0-0-dev
+
+# Fedora/RHEL
+sudo dnf install ruby-devel clang libpcap-devel openssl-devel libusb1-devel
+```
 
 ### Installation
 
@@ -853,6 +921,32 @@ slapper --scope /path/to/scope.toml       # Scope file
 - Use the scope file to restrict testing to authorized systems
 - Use rate limiting to avoid overwhelming targets: `--rate-limit 10`
 - Consider stealth mode for evasive testing: `--stealth`
+
+## Troubleshooting
+
+### Build Issues
+
+**Error: `ruby.h` file not found**
+- **Cause:** Ruby development headers not installed
+- **Fix:** Install `ruby-dev` (Ubuntu/Debian) or `ruby-devel` (Fedora/RHEL)
+
+**Error: `stdarg.h` file not found or clang not found**
+- **Cause:** `clang` compiler not installed (required for Ruby FFI bindings)
+- **Fix:** Install `clang` via package manager
+
+**Error: `regex` crate not found during build**
+- **Cause:** This should not happen with the current codebase
+- **Fix:** Ensure you're using the latest version from the repository
+
+### Runtime Issues
+
+**Panic: "command X alias X is duplicated"**
+- **Cause:** Duplicate command alias in CLI configuration (fixed in current version)
+- **Fix:** Update to the latest version from the repository
+
+**Permission denied when running packet capture**
+- **Cause:** Packet capture requires root/sudo privileges
+- **Fix:** Run with `sudo slapper packet capture -i eth0`
 
 ## License
 

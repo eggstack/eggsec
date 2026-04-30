@@ -25,4 +25,4 @@ futures = "0.3"
 [features]
 default = []
 python-plugins = ["dep:pyo3", "dep:dirs", "dep:regex"]
-ruby-plugins = ["dep:magnus"]
+ruby-plugins = ["dep:magnus", "dep:regex"]

@@ -191,7 +191,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
                 off_peak_window: None,
             };
 
-            let mut portfolio = TargetPortfolio::new();
+            let portfolio = TargetPortfolio::new();
             portfolio.add_target(add_args.id, config);
             portfolio.save()?;
 
@@ -204,7 +204,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
                     .map(|h| PathBuf::from(h).join(".config").join("slapper").join("portfolio.json"))
                     .unwrap_or_else(|_| PathBuf::from("portfolio.json"))
             });
-            let mut portfolio = TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new());
+            let portfolio = TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new());
             if let Some(mut target) = portfolio.get_mut_target(&update_args.id) {
                 if let Some(new_target) = update_args.target {
                     target.target = new_target;
@@ -235,7 +235,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
             Ok(())
         }
         crate::cli::agent::TargetsCommand::Remove { id } => {
-            let mut portfolio = TargetPortfolio::new();
+            let portfolio = TargetPortfolio::new();
             if portfolio.remove_target(&id) {
                 portfolio.save()?;
                 println!("Target {} removed", id);
@@ -245,7 +245,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
             Ok(())
         }
         crate::cli::agent::TargetsCommand::Enable { id } => {
-            let mut portfolio = TargetPortfolio::new();
+            let portfolio = TargetPortfolio::new();
             if let Some(mut target) = portfolio.get_mut_target(&id) {
                 target.enabled = true;
                 portfolio.save()?;
@@ -256,7 +256,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
             Ok(())
         }
         crate::cli::agent::TargetsCommand::Disable { id } => {
-            let mut portfolio = TargetPortfolio::new();
+            let portfolio = TargetPortfolio::new();
             if let Some(mut target) = portfolio.get_mut_target(&id) {
                 target.enabled = false;
                 portfolio.save()?;

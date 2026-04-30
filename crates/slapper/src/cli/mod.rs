@@ -79,9 +79,9 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     // --- Scan operations ---
-    #[command(about = "Scan ports on target host", long_about = SCAN_PORTS_ABOUT, alias = "scan-ports")]
+    #[command(about = "Scan ports on target host", long_about = SCAN_PORTS_ABOUT)]
     ScanPorts(PortScanArgs),
-    #[command(about = "Discover sensitive HTTP endpoints", long_about = SCAN_ENDPOINTS_ABOUT, alias = "scan-endpoints")]
+    #[command(about = "Discover sensitive HTTP endpoints", long_about = SCAN_ENDPOINTS_ABOUT)]
     ScanEndpoints(EndpointScanArgs),
     #[command(about = "Fingerprint services (AMAP-style)", long_about = FINGERPRINT_ABOUT)]
     Fingerprint(FingerprintArgs),
@@ -95,7 +95,7 @@ pub enum Commands {
     Fuzz(FuzzArgs),
     #[command(about = "Detect and bypass Web Application Firewalls", long_about = WAF_ABOUT)]
     Waf(WafArgs),
-    #[command(about = "Comprehensive WAF stress testing", long_about = WAF_STRESS_ABOUT, alias = "waf-stress")]
+    #[command(about = "Comprehensive WAF stress testing", long_about = WAF_STRESS_ABOUT)]
     WafStress(WafStressArgs),
     #[command(about = "Test GraphQL endpoints for security issues", long_about = GRAPHQL_ABOUT)]
     Graphql(GraphQlArgs),

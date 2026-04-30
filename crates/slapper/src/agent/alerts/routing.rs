@@ -8,8 +8,8 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
 use crate::agent::channels::{
-    Alert, AlertChannel, AggregatedAlert, EmailChannel, EmailFormattedAlert, EscalationLevel,
-    PagerDutyChannel, ReportSummary, ScanReport, SlackChannel, SlackFormattedAlert, WebhookConfig,
+    Alert, AlertChannel, AggregatedAlert, EmailChannel, EscalationLevel,
+    PagerDutyChannel, ReportSummary, ScanReport, WebhookConfig,
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -267,7 +267,7 @@ impl AlertRouter {
         )
     }
 
-    async fn cleanup_stale_entries(&self) {
+    fn cleanup_stale_entries(&self) {
         let cutoff = Duration::from_secs(self.dedup_window_secs * 2);
         let mut recent_alerts = self.recent_alerts.lock();
         recent_alerts.retain(|_, last_sent| last_sent.elapsed() < cutoff);

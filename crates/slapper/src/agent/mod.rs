@@ -464,7 +464,7 @@ impl Agent {
     pub async fn trigger_event(&mut self, event: SecurityEvent) -> Result<()> {
         tracing::debug!("Event triggered: {:?}", event.event_type());
 
-        let mut handlers = std::mem::take(&mut self.event_handlers);
+        let handlers = std::mem::take(&mut self.event_handlers);
 
         for handler in handlers.iter() {
             if handler.handles(&event) {

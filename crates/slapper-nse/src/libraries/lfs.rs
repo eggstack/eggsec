@@ -40,27 +40,31 @@ pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()>
     let sandbox_enabled = sandbox.enabled;
     let allowed_dir = sandbox.allowed_dir.clone();
 
-    // Helper function for path validation
-    let check_path = move |path: &str| -> bool {
-        if !sandbox_enabled {
-            return true;
-        }
-        if let Some(ref dir) = allowed_dir {
-            let path_buf = PathBuf::from(path);
-            let canonical = match path_buf.canonicalize() {
-                Ok(c) => c,
-                Err(_) => return false,
-            };
-            if !canonical.starts_with(dir) {
-                return false;
+    let check_path = {
+        let sandbox_enabled = sandbox_enabled;
+        let allowed_dir = allowed_dir.clone();
+        move |path: &str| -> bool {
+            if !sandbox_enabled {
+                return true;
             }
+            if let Some(ref dir) = allowed_dir {
+                let path_buf = PathBuf::from(path);
+                let canonical = match path_buf.canonicalize() {
+                    Ok(c) => c,
+                    Err(_) => return false,
+                };
+                if !canonical.starts_with(dir) {
+                    return false;
+                }
+            }
+            true
         }
-        true
     };
 
     // lfs.attributes(path) - Get file attributes
-    let attributes_fn = lua.create_function(|lua, path: String| {
-        if !check_path(&path) {
+    let check_path_for_closure = check_path.clone();
+    let attributes_fn = lua.create_function(move |lua, path: String| {
+        if !check_path_for_closure(&path) {
             LFS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
             return Err(mlua::Error::RuntimeError(format!(
                 "Path '{}' blocked by sandbox",

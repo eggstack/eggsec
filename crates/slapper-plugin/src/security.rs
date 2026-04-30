@@ -1,7 +1,7 @@
-#[cfg(feature = "python-plugins")]
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 use std::sync::LazyLock;
 
-#[cfg(feature = "python-plugins")]
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 use regex::Regex;
 
 const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
@@ -30,33 +30,33 @@ static SUSPICIOUS_PYTHON_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 });
 
 #[cfg(feature = "ruby-plugins")]
-static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+static SUSPICIOUS_RUBY_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
-        regex::Regex::new(r"(?i)\beval\(").unwrap(),
-        regex::Regex::new(r"(?i)\bexec\(").unwrap(),
-        regex::Regex::new(r"(?i)\bsystem\(").unwrap(),
-        regex::Regex::new(r"(?i)`").unwrap(),
-        regex::Regex::new(r"(?i)IO\.popen").unwrap(),
-        regex::Regex::new(r"(?i)Process\.spawn").unwrap(),
-        regex::Regex::new(r"(?i)File\.read\(").unwrap(),
-        regex::Regex::new(r"(?i)File\.write\(").unwrap(),
-        regex::Regex::new(r"(?i)File\.open\(").unwrap(),
-        regex::Regex::new(r"(?i)Net::HTTP").unwrap(),
-        regex::Regex::new(r"(?i)Socket\.open").unwrap(),
-        regex::Regex::new(r"(?i)TCPSocket").unwrap(),
-        regex::Regex::new(r"(?i)UDPSocket").unwrap(),
-        regex::Regex::new(r"(?i)Open3\.").unwrap(),
-        regex::Regex::new(r"(?i)Shellwords\.escape").unwrap(),
-        regex::Regex::new(r"(?i)Kernel\.exec").unwrap(),
-        regex::Regex::new(r"(?i)\bopen\b").unwrap(),
-        regex::Regex::new(r"(?i)\beval\b").unwrap(),
-        regex::Regex::new(r"(?i)(instance_eval|class_eval|module_eval)\(").unwrap(),
-        regex::Regex::new(r"(?i)%x\{").unwrap(),
-        regex::Regex::new(r"(?i)Marshal\.load").unwrap(),
-        regex::Regex::new(r"(?i)RubyVM::InstructionSequence").unwrap(),
-        regex::Regex::new(r"(?i)\brequire\b").unwrap(),
-        regex::Regex::new(r"(?i)\bload\b").unwrap(),
-        regex::Regex::new(r"(?i)\bsend\(").unwrap(),
+        Regex::new(r"(?i)\beval\(").unwrap(),
+        Regex::new(r"(?i)\bexec\(").unwrap(),
+        Regex::new(r"(?i)\bsystem\(").unwrap(),
+        Regex::new(r"(?i)`").unwrap(),
+        Regex::new(r"(?i)IO\.popen").unwrap(),
+        Regex::new(r"(?i)Process\.spawn").unwrap(),
+        Regex::new(r"(?i)File\.read\(").unwrap(),
+        Regex::new(r"(?i)File\.write\(").unwrap(),
+        Regex::new(r"(?i)File\.open\(").unwrap(),
+        Regex::new(r"(?i)Net::HTTP").unwrap(),
+        Regex::new(r"(?i)Socket\.open").unwrap(),
+        Regex::new(r"(?i)TCPSocket").unwrap(),
+        Regex::new(r"(?i)UDPSocket").unwrap(),
+        Regex::new(r"(?i)Open3\.").unwrap(),
+        Regex::new(r"(?i)Shellwords\.escape").unwrap(),
+        Regex::new(r"(?i)Kernel\.exec").unwrap(),
+        Regex::new(r"(?i)\bopen\b").unwrap(),
+        Regex::new(r"(?i)\beval\b").unwrap(),
+        Regex::new(r"(?i)(instance_eval|class_eval|module_eval)\(").unwrap(),
+        Regex::new(r"(?i)%x\{").unwrap(),
+        Regex::new(r"(?i)Marshal\.load").unwrap(),
+        Regex::new(r"(?i)RubyVM::InstructionSequence").unwrap(),
+        Regex::new(r"(?i)\brequire\b").unwrap(),
+        Regex::new(r"(?i)\bload\b").unwrap(),
+        Regex::new(r"(?i)\bsend\(").unwrap(),
     ]
 });
 
