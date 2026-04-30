@@ -15,7 +15,8 @@ use crate::tui::components::{centered_rect, confirm_popup, help_popup_for_tab};
 const LAYOUT_MARGIN: u16 = 1;
 const TAB_BAR_HEIGHT: u16 = 3;
 
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
+    app.last_terminal_width = f.area().width;
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(LAYOUT_MARGIN)
