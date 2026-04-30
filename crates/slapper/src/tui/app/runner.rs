@@ -257,7 +257,7 @@ where
                         }
                     }
                     (KeyModifiers::CONTROL, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
-                        app.toggle_bookmark(app.current_tab as usize);
+                        app.toggle_bookmark(app.current_tab);
                     }
                     _ if app
                         .get_command_palette()

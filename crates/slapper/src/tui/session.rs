@@ -116,16 +116,14 @@ impl SessionManager {
 
         for bookmark_id in &state.bookmarks {
             if let Some(tab) = Tab::from_stable_id(bookmark_id) {
-                if let Some(idx) = tab.visible_index() {
-                    app.bookmarks.insert(idx);
-                }
+                app.bookmarks.insert(tab.stable_id().to_string());
             }
         }
 
         for &idx in &state.legacy_bookmarks {
             if let Some(tab) = Tab::from_index(idx) {
-                if let Some(visible_idx) = tab.visible_index() {
-                    app.bookmarks.insert(visible_idx);
+                if tab.visible_index().is_some() {
+                    app.bookmarks.insert(tab.stable_id().to_string());
                 }
             }
         }
@@ -134,12 +132,12 @@ impl SessionManager {
     fn capture_state(&self, app: &App) -> SessionState {
         SessionState {
             current_tab_id: Some(app.current_tab.stable_id().to_string()),
-            bookmarks: app.get_bookmarked_tabs().iter().filter_map(|&idx| {
-                Tab::from_index(idx).map(|t| t.stable_id().to_string())
-            }).collect(),
+            bookmarks: app.get_bookmarked_tab_ids(),
             theme_name: "dark".to_string(),
             legacy_current_tab: Some(app.current_tab as usize),
-            legacy_bookmarks: app.get_bookmarked_tabs(),
+            legacy_bookmarks: app.get_bookmarked_tab_ids().iter().filter_map(|id| {
+                Tab::from_stable_id(id).and_then(|t| t.visible_index())
+            }).collect(),
         }
     }
 
