@@ -53,7 +53,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         f.render_widget(context_paragraph, context_chunks[1]);
     }
 
-    if let Some(palette) = app.get_command_palette() {
+    if let Some(ref mut palette) = app.command_palette {
         if palette.visible {
             draw_command_palette(f, app);
         }
@@ -147,12 +147,12 @@ fn draw_http_options_popup(f: &mut Frame, app: &App) {
     f.render_widget(paragraph, inner);
 }
 
-fn draw_command_palette(f: &mut Frame, app: &App) {
+fn draw_command_palette(f: &mut Frame, app: &mut App) {
     use ratatui::widgets::{Clear, List, ListItem, Paragraph};
 
-    let Some(palette) = app.get_command_palette() else {
-        tracing::error!("Command palette unavailable despite being checked in caller");
-        return;
+    let palette = match app.command_palette.as_mut() {
+        Some(pal) if pal.visible => pal,
+        _ => return,
     };
     let area = f.area();
 
@@ -177,6 +177,9 @@ fn draw_command_palette(f: &mut Frame, app: &App) {
             Constraint::Min(1),
         ])
         .split(inner);
+
+    let content_height = chunks[2].height;
+    palette.update_content_height(content_height);
 
     // Query input
     let query_paragraph = Paragraph::new(format!("Query: {}", palette.query))
