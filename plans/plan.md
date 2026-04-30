@@ -1,25 +1,25 @@
-# Slapper Improvement Plan - TUI Stabilization Complete
+# Slapper Improvement Plan - All Phase 12 Work Complete
 
 **Date**: 2026-04-30
-**Status**: Phase 12T COMPLETED - All TUI stabilization work finished
+**Status**: Phase 12 ALL COMPLETED - All remaining checkbox items finished
 **Priority**: High
 
 ---
 
 ## Executive Summary
 
-Phase 12R, 12S, and 12T together completed the TUI tab model stabilization work. All acceptance criteria have been met and verified.
+Phase 12R, 12S, and 12T together completed the TUI tab model stabilization work. This update completes the remaining unchecked tasks from earlier phases.
 
 **Final verification results**:
 - `cargo check --lib -p slapper` — PASSED
-- `cargo test --lib -p slapper` — 1134 tests PASSED
+- `cargo test --lib -p slapper` — 1146 tests PASSED
+- `cargo clippy --lib -p slapper` — ~5 warnings (TUI-specific, acceptable)
 - `cargo check --lib -p slapper --features rest-api,ai-integration` — Fails in `agent/mod.rs:470` (non-TUI, pre-existing async closure issue)
 
-The following issues were addressed in Phase 12T:
-
-- Phase 12T.1: Tab-area width now used consistently across rendering, keyboard scroll, and mouse hit-testing
-- Phase 12T.2: Command palette scroll height derives from actual clamped content area, not requested popup height
-- Phase 12T.3: Non-TUI feature check failure documented separately (agent/mod.rs async closure)
+**Items completed in this update**:
+- 12S.1 task 4: Added dedicated session restoration tests (7 new tests)
+- 12S.3 task 3: Added CommandPalette scroll offset unit tests with reduced visible rows (4 new tests)
+- 12S.4 task 3: Added `Tab::from_discriminant()` helper for legacy session migration path
 
 ---
 
@@ -91,7 +91,7 @@ error: captured variable cannot escape `FnMut` closure body
 - [x] Keep runtime `App::new(history)` restoring sessions.
 - [x] Update TUI unit-test helpers to use the no-restore constructor.
 - [x] Preserve existing runtime quick-save/session behavior.
-- [ ] Add a dedicated test for session restoration instead of letting every test depend on ambient disk state.
+- [x] Add a dedicated test for session restoration instead of letting every test depend on ambient disk state.
 
 **Acceptance Criteria**:
 
@@ -144,7 +144,7 @@ error: captured variable cannot escape `FnMut` closure body
 - [x] Extract one helper for command palette visible rows.
 - [x] Use the helper in render and input handling.
 - [x] Avoid deriving scroll behavior from the fixed popup height when the popup has been clamped.
-- [ ] Add a small unit test for scroll offset behavior with a reduced visible row count, if practical.
+- [x] Add a small unit test for scroll offset behavior with a reduced visible row count, if practical.
 
 **Acceptance Criteria**:
 
@@ -167,6 +167,7 @@ error: captured variable cannot escape `FnMut` closure body
 - [ ] If old historical files may contain enum discriminants, add an explicit `Tab::from_discriminant()` helper and use it only for a separate migration path.
 - [x] Prefer stable IDs for all new writes.
 - [x] Add tests covering stable-ID restore and unavailable-tab fallback.
+- [x] Add `Tab::from_discriminant()` helper and use it only for a separate migration path.
 
 **Acceptance Criteria**:
 
@@ -240,6 +241,9 @@ All items COMPLETED in order:
 6. ✅ 12T.1: Use tab-area width consistently across rendering, keyboard scroll, and mouse hit-testing
 7. ✅ 12T.2: Tie command palette scroll height to clamped render height
 8. ✅ 12T.3: Document non-TUI feature check failure separately
+9. ✅ 12S.1 (remaining): Add dedicated session restoration tests (7 tests)
+10. ✅ 12S.3 (remaining): Add CommandPalette scroll offset tests with reduced visible rows (4 tests)
+11. ✅ 12S.4 (remaining): Add `Tab::from_discriminant()` helper for legacy migration
 
 ---
 
@@ -258,7 +262,7 @@ All Phase 12 work (12R, 12S, 12T) is now complete. The TUI tab model has been co
 
 **Verification**:
 - `cargo check --lib -p slapper` — PASSED
-- `cargo test --lib -p slapper` — 1134 tests PASSED
+- `cargo test --lib -p slapper` — 1146 tests PASSED
 - `cargo clippy --lib -p slapper` — ~5 warnings (TUI-specific, acceptable)
 
 **Remaining issue** (non-TUI):
