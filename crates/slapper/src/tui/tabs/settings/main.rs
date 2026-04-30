@@ -4,6 +4,12 @@ use crate::config::{
 use crate::tui::components::{Checkbox, InputField, InputGroup, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabState};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsFocusArea {
+    SectionList,
+    SectionDetail,
+}
+
 pub struct SettingsTab {
     pub http_inputs: InputGroup,
     pub scan_inputs: InputGroup,
@@ -20,6 +26,7 @@ pub struct SettingsTab {
     pub proxy_rotation_selector: Selector,
     pub severity_selector: Selector,
     pub current_section: SettingsSection,
+    pub focus_area: SettingsFocusArea,
     pub config: Option<SlapperConfig>,
     pub config_path: Option<String>,
     pub status_message: String,
@@ -105,6 +112,7 @@ impl SettingsTab {
             proxy_rotation_selector,
             severity_selector,
             current_section: SettingsSection::Http,
+            focus_area: SettingsFocusArea::SectionList,
             config: None,
             config_path: Some("slapper.toml".to_string()),
             status_message: String::new(),

@@ -1,4 +1,6 @@
 #[cfg(feature = "rest-api")]
+use crate::tc;
+#[cfg(feature = "rest-api")]
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 
 #[cfg(feature = "rest-api")]
@@ -63,12 +65,12 @@ impl TabRender for ServeTab {
 
         let title = Paragraph::new("REST API Server")
             .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::Cyan));
+            .style(Style::default().fg(tc!(info)));
         f.render_widget(title, layout[0]);
 
         let logs = Paragraph::new(&self.logs)
             .block(Block::default().borders(Borders::ALL).title("Logs"))
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(tc!(text)));
         f.render_widget(logs, layout[1]);
     }
 }

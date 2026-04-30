@@ -1,8 +1,9 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders},
     Frame,
@@ -139,9 +140,9 @@ impl ReportTab {
         self.results_view.clear();
 
         let (title, color) = if success {
-            ("Conversion Complete", Color::Green)
+            ("Conversion Complete", tc!(success))
         } else {
-            ("Conversion Failed", Color::Red)
+            ("Conversion Failed", tc!(error))
         };
 
         self.results_view
@@ -156,7 +157,7 @@ impl ReportTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             "Trend Analysis Complete",
-            Style::default().fg(Color::Green),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view
@@ -166,7 +167,7 @@ impl ReportTab {
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             "Summary:",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(summary));
     }
@@ -177,7 +178,7 @@ impl ReportTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             "Schedule Added",
-            Style::default().fg(Color::Green),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view
@@ -192,7 +193,7 @@ impl ReportTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             "Scheduled Scans",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(""));
 
@@ -226,7 +227,7 @@ impl TabState for ReportTab {
         self.state = AppState::Error(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -257,9 +258,9 @@ impl TabRender for ReportTab {
             .borders(Borders::ALL)
             .border_style(
                 Style::default().fg(if self.focus_area == ReportFocusArea::Inputs {
-                    Color::Yellow
+                    tc!(border_focused)
                 } else {
-                    Color::Gray
+                    tc!(border)
                 }),
             );
 

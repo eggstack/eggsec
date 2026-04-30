@@ -1,3 +1,4 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::workflow::finding::Finding;
@@ -6,7 +7,7 @@ use crate::workflow::sla::calculate_sla;
 use crate::workflow::WorkflowReport;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders},
     Frame,
@@ -187,7 +188,7 @@ impl WorkflowTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             "Workflow Summary",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(format!(
             "Total: {} | Open: {} | In Progress: {} | Resolved: {} | SLA Violations: {}",
@@ -202,7 +203,7 @@ impl WorkflowTab {
         if !findings.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 "Findings:",
-                Style::default().fg(Color::Green),
+                Style::default().fg(tc!(success)),
             )));
             for f in &findings {
                 let sla = calculate_sla(&f.id, f.severity, f.created_at);
@@ -263,7 +264,7 @@ impl TabState for WorkflowTab {
         self.error_message = Some(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -341,12 +342,12 @@ impl TabRender for WorkflowTab {
                         .borders(Borders::ALL)
                         .title("Processing..."),
                 )
-                .gauge_style(Style::default().fg(Color::Yellow))
+                .gauge_style(Style::default().fg(tc!(warning)))
                 .ratio(0.5);
             f.render_widget(gauge, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder = ratatui::widgets::Paragraph::new("Select mode and press Enter")
                 .block(
@@ -354,7 +355,7 @@ impl TabRender for WorkflowTab {
                         .borders(Borders::ALL)
                         .title("Finding Management"),
                 )
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

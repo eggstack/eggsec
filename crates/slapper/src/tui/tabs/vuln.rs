@@ -1,3 +1,4 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::vuln::{
@@ -148,7 +149,7 @@ impl VulnTab {
             Ok(cvss) => {
                 self.results_view.add_line(Line::from(Span::styled(
                     "CVSS 3.1 Score",
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(tc!(accent)),
                 )));
                 self.results_view.add_line(Line::from(""));
                 self.results_view.add_line(Line::from(format!(
@@ -169,7 +170,7 @@ impl VulnTab {
             Err(e) => {
                 self.results_view.add_line(Line::from(Span::styled(
                     format!("Invalid CVSS vector: {}", e),
-                    Style::default().fg(Color::Red),
+                    Style::default().fg(tc!(error)),
                 )));
             }
         }
@@ -180,7 +181,7 @@ impl VulnTab {
         self.results_view.clear();
         self.results_view.add_line(Line::from(Span::styled(
             format!("Exploitability: {}", cve_id),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(format!(
@@ -218,7 +219,7 @@ impl VulnTab {
         self.results_view.clear();
         self.results_view.add_line(Line::from(Span::styled(
             format!("Asset Assessment: {}", asset.asset_id),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(format!(
@@ -248,7 +249,7 @@ impl VulnTab {
         self.results_view.clear();
         self.results_view.add_line(Line::from(Span::styled(
             format!("Prioritized Findings ({}):", findings.len()),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )));
         self.results_view.add_line(Line::from(""));
         for f in &findings {
@@ -268,7 +269,7 @@ impl VulnTab {
         self.results_view.clear();
         self.results_view.add_line(Line::from(Span::styled(
             format!("Triage: {}", result.finding_id),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(format!(
@@ -288,7 +289,7 @@ impl VulnTab {
         self.results_view.clear();
         self.results_view.add_line(Line::from(Span::styled(
             format!("Remediation: {}", remediation.title),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(format!(
@@ -302,7 +303,7 @@ impl VulnTab {
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             "Steps:",
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(tc!(info)),
         )));
         for (i, step) in remediation.steps.iter().enumerate() {
             self.results_view
@@ -312,7 +313,7 @@ impl VulnTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "References:",
-                Style::default().fg(Color::Cyan),
+                Style::default().fg(tc!(info)),
             )));
             for r in &remediation.references {
                 self.results_view.add_line(Line::from(format!("  - {}", r)));
@@ -358,7 +359,7 @@ impl TabState for VulnTab {
         self.error_message = Some(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -428,12 +429,12 @@ impl TabRender for VulnTab {
                         .borders(Borders::ALL)
                         .title("Processing..."),
                 )
-                .gauge_style(Style::default().fg(Color::Yellow))
+                .gauge_style(Style::default().fg(tc!(warning)))
                 .ratio(0.5);
             f.render_widget(gauge, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder = ratatui::widgets::Paragraph::new("Select mode and press Enter")
                 .block(
@@ -441,7 +442,7 @@ impl TabRender for VulnTab {
                         .borders(Borders::ALL)
                         .title("Vulnerability Prioritization"),
                 )
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

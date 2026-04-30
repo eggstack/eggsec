@@ -1,9 +1,10 @@
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
+use crate::tc;
 
 #[derive(Clone, Debug)]
 pub struct ValidationResult {
@@ -293,15 +294,15 @@ impl InputField {
 
     pub fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let border_style = if self.focused {
-            Style::default().fg(Color::Yellow)
+            Style::default().fg(tc!(border_focused))
         } else if let Some(ref validation) = self.validation {
             if validation.valid {
-                Style::default().fg(Color::Green)
+                Style::default().fg(tc!(success))
             } else {
-                Style::default().fg(Color::Red)
+                Style::default().fg(tc!(error))
             }
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(tc!(border))
         };
 
         let block = Block::default()
@@ -310,14 +311,22 @@ impl InputField {
             .border_style(border_style);
 
         let display_value = if let Some(w) = self.width {
-            let available = w.saturating_sub(2);
+            let available = (w as usize).saturating_sub(2);
             let char_count = self.value.chars().count();
             if char_count > available {
-                let cursor_char_pos = self.value.chars().count().min(self.cursor_pos);
-                let start = cursor_char_pos.saturating_sub(available / 2);
+                let cursor_char_pos = self.cursor_pos.min(char_count);
+                let start = if cursor_char_pos <= available / 2 {
+                    0
+                } else if cursor_char_pos >= char_count - available / 2 {
+                    (char_count.saturating_sub(available)).max(0)
+                } else {
+                    cursor_char_pos.saturating_sub(available / 2)
+                };
                 let end = (start + available).min(char_count);
-                let truncated: String = self.value.chars().skip(start).take(end - start).collect();
-                format!("{}...", truncated)
+                let visible: String = self.value.chars().skip(start).take(end - start).collect();
+                let prefix = if start > 0 { "..." } else { "" };
+                let suffix = if end < char_count { "..." } else { "" };
+                format!("{}{}{}", prefix, visible, suffix)
             } else {
                 self.value.clone()
             }
@@ -325,18 +334,25 @@ impl InputField {
             self.value.clone()
         };
 
-        let paragraph = Paragraph::new(display_value).block(block);
+        let paragraph = Paragraph::new(display_value.as_str()).block(block);
         f.render_widget(paragraph, area);
 
         if self.focused && insert_mode {
             let display_cursor = if let Some(w) = self.width {
-                let available = w.saturating_sub(2);
+                let available = (w as usize).saturating_sub(2);
                 let char_count = self.value.chars().count();
                 if char_count > available {
-                    let cursor_char_pos = self.value.chars().count().min(self.cursor_pos);
-                    let start = cursor_char_pos.saturating_sub(available / 2);
-                    if self.cursor_pos >= start && self.cursor_pos < start + available {
-                        (self.cursor_pos - start) as u16
+                    let cursor_char_pos = self.cursor_pos.min(char_count);
+                    let start = if cursor_char_pos <= available / 2 {
+                        0
+                    } else if cursor_char_pos >= char_count - available / 2 {
+                        (char_count.saturating_sub(available)).max(0)
+                    } else {
+                        cursor_char_pos.saturating_sub(available / 2)
+                    };
+                    let prefix_len = if start > 0 { 3 } else { 0 };
+                    if cursor_char_pos >= start && cursor_char_pos < start + available {
+                        (cursor_char_pos - start + prefix_len) as u16
                     } else {
                         available as u16
                     }

@@ -1,12 +1,13 @@
 use ratatui::prelude::Stylize;
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
 use std::cell::RefCell;
+use crate::tc;
 
 #[derive(Clone, Debug)]
 pub struct DropdownInfo {
@@ -23,7 +24,7 @@ impl DropdownInfo {
             .map(|_| Line::from(" ".repeat(self.area.width as usize)))
             .collect();
         let bg = Paragraph::new(fill)
-            .style(Style::default().bg(Color::DarkGray))
+            .style(Style::default().bg(tc!(surface)))
             .block(Block::default());
         f.render_widget(bg, self.area);
 
@@ -33,11 +34,11 @@ impl DropdownInfo {
             .map(|(_, label, is_selected)| {
                 let style = if *is_selected {
                     Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Yellow)
+                        .fg(tc!(selected_text))
+                        .bg(tc!(selected))
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White).bg(Color::DarkGray)
+                    Style::default().fg(tc!(text)).bg(tc!(surface))
                 };
                 ListItem::new(label.as_str()).style(style)
             })
@@ -46,8 +47,8 @@ impl DropdownInfo {
         let list = List::new(items).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Yellow))
-                .bg(Color::DarkGray)
+                .border_style(Style::default().fg(tc!(border_focused)))
+                .bg(tc!(surface))
                 .title(self.label.as_str()),
         );
 
@@ -242,9 +243,9 @@ impl Selector {
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
         let style = if self.focused {
-            Style::default().fg(Color::Yellow)
+            Style::default().fg(tc!(border_focused))
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(tc!(border))
         };
 
         let block = Block::default()
@@ -300,9 +301,9 @@ impl Checkbox {
 
     pub fn render_with_focus(&self, focused: bool, f: &mut Frame, area: Rect) {
         let style = if focused {
-            Style::default().fg(Color::Yellow)
+            Style::default().fg(tc!(border_focused))
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(tc!(border))
         };
 
         let check = if self.checked { "[✓]" } else { "[ ]" };
@@ -352,9 +353,9 @@ impl RadioGroup {
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
         let style = if self.focused {
-            Style::default().fg(Color::Yellow)
+            Style::default().fg(tc!(border_focused))
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(tc!(border))
         };
 
         let label_width = self.label.len() + 2;

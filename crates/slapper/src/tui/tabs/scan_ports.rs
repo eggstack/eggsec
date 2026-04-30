@@ -1,12 +1,19 @@
 use crate::scanner::ports::PortScanResults;
+use crate::tc;
 use crate::tui::components::ValidationResult;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     Frame,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ScanPortsFocusArea {
+    Inputs,
+    Options,
+    Results,
+}
 
 pub struct ScanPortsTab {
     pub inputs: InputGroup,
@@ -15,6 +22,8 @@ pub struct ScanPortsTab {
     pub state: AppState,
     pub results_view: ScrollableText,
     pub udp_checkbox: Checkbox,
+    pub focus_area: ScanPortsFocusArea,
+    pub error_message: Option<String>,
 }
 
 impl ScanPortsTab {
@@ -32,6 +41,8 @@ impl ScanPortsTab {
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
             udp_checkbox: Checkbox::new("Enable UDP (requires root/sudo)").checked(false),
+            focus_area: ScanPortsFocusArea::Inputs,
+            error_message: None,
         }
     }
 
@@ -112,30 +123,30 @@ impl ScanPortsTab {
             .collect();
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Host: ", Style::default().fg(Color::Yellow)),
+            Span::styled("Host: ", Style::default().fg(tc!(warning))),
             Span::raw(host),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Ports scanned: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Ports scanned: ", Style::default().fg(tc!(info))),
             Span::raw(ports_scanned.to_string()),
             Span::raw(" | "),
-            Span::styled("Open: ", Style::default().fg(Color::Green)),
+            Span::styled("Open: ", Style::default().fg(tc!(success))),
             Span::raw(open_ports.len().to_string()),
         ]));
 
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(vec![
-            Span::styled(format!("{:<8}", "PORT"), Style::default().fg(Color::Yellow)),
+            Span::styled(format!("{:<8}", "PORT"), Style::default().fg(tc!(warning))),
             Span::styled(
                 format!("{:<15}", "SERVICE"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(warning)),
             ),
         ]));
 
         for (port, service) in open_ports {
             self.results_view.add_line(Line::from(vec![
-                Span::styled(format!("{:<8}", port), Style::default().fg(Color::Green)),
+                Span::styled(format!("{:<8}", port), Style::default().fg(tc!(success))),
                 Span::raw(format!("{:<15}", service)),
             ]));
         }
@@ -145,6 +156,7 @@ impl ScanPortsTab {
         let target = self.target();
         if target.is_empty() {
             self.state = AppState::Error("Target cannot be empty".to_string());
+            self.error_message = Some("Target cannot be empty".to_string());
             return;
         }
 
@@ -157,6 +169,7 @@ impl ScanPortsTab {
             if !validation.valid && !t.contains('.') && !t.contains(':') {
                 self.state =
                     AppState::Error(format!("Invalid target: {} - {}", t, validation.message));
+                self.error_message = Some(format!("Invalid target: {} - {}", t, validation.message));
                 return;
             }
         }
@@ -165,6 +178,7 @@ impl ScanPortsTab {
         if !port_validation.valid {
             self.state =
                 AppState::Error(format!("Invalid port range: {}", port_validation.message));
+            self.error_message = Some(format!("Invalid port range: {}", port_validation.message));
             return;
         }
 
@@ -172,6 +186,7 @@ impl ScanPortsTab {
         self.progress.current = 0;
         self.results = None;
         self.results_view.clear();
+        self.error_message = None;
     }
 
     pub fn stop(&mut self) {
@@ -241,6 +256,7 @@ impl TabState for ScanPortsTab {
         self.results = None;
         self.progress.current = 0;
         self.results_view.clear();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -250,6 +266,13 @@ impl TabState for ScanPortsTab {
         self.inputs.fields[2].cursor_pos = 3;
         self.inputs.fields[3].value = "2".to_string();
         self.inputs.fields[3].cursor_pos = 1;
+        self.focus_area = ScanPortsFocusArea::Inputs;
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+        self.progress.current = 0;
     }
 }
 
@@ -283,15 +306,26 @@ impl TabRender for ScanPortsTab {
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
+        } else if let Some(ref err_msg) = self.error_message {
+            use ratatui::style::Style;
+            use ratatui::widgets::{Block, Borders, Paragraph};
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Port Scan - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let placeholder = Paragraph::new("Results will appear here after running")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }
@@ -307,17 +341,25 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_up();
-        } else {
+        if self.focus_area == ScanPortsFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_up();
+            } else {
+                self.inputs.focus_prev();
+            }
+        } else if self.focus_area == ScanPortsFocusArea::Options {
             self.inputs.focus_prev();
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_down();
-        } else {
+        if self.focus_area == ScanPortsFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_down();
+            } else {
+                self.inputs.focus_next();
+            }
+        } else if self.focus_area == ScanPortsFocusArea::Options {
             self.inputs.focus_next();
         }
     }

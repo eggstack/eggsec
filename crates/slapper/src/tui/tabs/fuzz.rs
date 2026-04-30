@@ -1,3 +1,4 @@
+use crate::tc;
 use crate::fuzzer::engine::FuzzSession;
 use crate::fuzzer::PayloadType;
 use crate::tui::components::{
@@ -6,7 +7,7 @@ use crate::tui::components::{
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -124,7 +125,7 @@ impl FuzzTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("Fuzzing Complete: {}", s.target_url),
-            Style::default().fg(Color::Green),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(format!(
@@ -134,7 +135,7 @@ impl FuzzTab {
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             "Findings Summary:",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )));
         self.results_view.add_line(Line::from(format!(
             "  Requests: {} success / {} failed",
@@ -148,14 +149,14 @@ impl FuzzTab {
         if s.redos_suspected > 0 {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("  ReDoS Suspected: {}", s.redos_suspected),
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
         }
 
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             "OWASP Summary:",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )));
         self.results_view.add_line(Line::from(format!(
             "  A03 Injection: {} | A10 SSRF: {}",
@@ -173,7 +174,7 @@ impl FuzzTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Critical Findings:",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
             for result in critical {
                 let severity = if result.is_redos_suspected {
@@ -344,7 +345,7 @@ impl FuzzTab {
             self.results_view.clear();
             self.results_view.add_line(Line::from(Span::styled(
                 "Starting fuzzer...",
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             )));
         }
     }
@@ -469,10 +470,10 @@ impl TabRender for FuzzTab {
         mutation_cb.render(f, config_chunks[6]);
 
         let (status_text, status_color) = match &self.state {
-            AppState::Idle => ("Ready - Enter target and press Enter to start", Color::Gray),
-            AppState::Running => ("Running...", Color::Yellow),
-            AppState::Completed => ("Completed - Press r to reset", Color::Green),
-            AppState::Error(e) => (e.as_str(), Color::Red),
+            AppState::Idle => ("Ready - Enter target and press Enter to start", tc!(text_dim)),
+            AppState::Running => ("Running...", tc!(status_running)),
+            AppState::Completed => ("Completed - Press r to reset", tc!(success)),
+            AppState::Error(e) => (e.as_str(), tc!(error)),
         };
         let status = Paragraph::new(status_text)
             .style(Style::default().fg(status_color))
@@ -482,7 +483,7 @@ impl TabRender for FuzzTab {
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
         } else if !self.results_view.is_empty() {
-            self.results_view.render(f, results_area, Some(Color::Cyan));
+            self.results_view.render(f, results_area, Some(tc!(info)));
         } else {
             let info_text = vec![
                 Line::from(""),
@@ -490,19 +491,19 @@ impl TabRender for FuzzTab {
                 Line::from(""),
                 Line::from(Span::styled(
                     "CLI alternative:",
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(tc!(text_dim)),
                 )),
                 Line::from(Span::styled(
                     "  slapper fuzz <url> -t sqli",
-                    Style::default().fg(Color::Cyan),
+                    Style::default().fg(tc!(info)),
                 )),
                 Line::from(Span::styled(
                     "  slapper fuzz <url> -t xss --mutate",
-                    Style::default().fg(Color::Cyan),
+                    Style::default().fg(tc!(info)),
                 )),
                 Line::from(Span::styled(
                     "  slapper fuzz <url> -t all -M burst",
-                    Style::default().fg(Color::Cyan),
+                    Style::default().fg(tc!(info)),
                 )),
             ];
 

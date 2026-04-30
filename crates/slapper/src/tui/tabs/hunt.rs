@@ -1,9 +1,9 @@
 use crate::hunt::{HuntConfig, HuntReport};
+use crate::tc;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     text::{Line, Span},
     Frame,
 };
@@ -98,19 +98,19 @@ impl HuntTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("Vulnerability Hunt Complete: {}", report.target),
-            ratatui::style::Style::default().fg(Color::Green),
+            ratatui::style::Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             format!("Total findings: {}", report.total_findings),
-            ratatui::style::Style::default().fg(Color::Yellow),
+            ratatui::style::Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(""));
 
         if !report.attack_chains.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("Attack Chains ({}):", report.attack_chains.len()),
-                ratatui::style::Style::default().fg(Color::Red),
+                ratatui::style::Style::default().fg(tc!(error)),
             )));
             for chain in &report.attack_chains {
                 self.results_view.add_line(Line::from(format!(
@@ -126,7 +126,7 @@ impl HuntTab {
         if !report.business_logic.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("Business Logic Flaws ({}):", report.business_logic.len()),
-                ratatui::style::Style::default().fg(Color::Red),
+                ratatui::style::Style::default().fg(tc!(error)),
             )));
             for flaw in &report.business_logic {
                 self.results_view.add_line(Line::from(format!(
@@ -140,7 +140,7 @@ impl HuntTab {
         if !report.race_conditions.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("Race Conditions ({}):", report.race_conditions.len()),
-                ratatui::style::Style::default().fg(Color::Red),
+                ratatui::style::Style::default().fg(tc!(error)),
             )));
             for race in &report.race_conditions {
                 self.results_view.add_line(Line::from(format!(
@@ -154,7 +154,7 @@ impl HuntTab {
         if !report.authz_bypasses.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("AuthZ Bypasses ({}):", report.authz_bypasses.len()),
-                ratatui::style::Style::default().fg(Color::Red),
+                ratatui::style::Style::default().fg(tc!(error)),
             )));
             for bypass in &report.authz_bypasses {
                 self.results_view.add_line(Line::from(format!(
@@ -168,7 +168,7 @@ impl HuntTab {
         if !report.session_issues.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("Session Issues ({}):", report.session_issues.len()),
-                ratatui::style::Style::default().fg(Color::Yellow),
+                ratatui::style::Style::default().fg(tc!(warning)),
             )));
             for issue in &report.session_issues {
                 self.results_view.add_line(Line::from(format!(
@@ -311,13 +311,12 @@ impl TabRender for HuntTab {
                         .borders(Borders::ALL)
                         .title("Vulnerability Hunt - Error"),
                 )
-                .style(Style::default().fg(Color::Red));
+                .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
-            use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let placeholder =
                 Paragraph::new("Enter target and press Enter to start vulnerability hunting")
@@ -326,7 +325,7 @@ impl TabRender for HuntTab {
                             .borders(Borders::ALL)
                             .title("Vulnerability Hunting"),
                     )
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

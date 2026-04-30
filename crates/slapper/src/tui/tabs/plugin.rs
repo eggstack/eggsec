@@ -1,3 +1,4 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -93,43 +94,43 @@ impl PluginTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("Plugin: {}", results.plugin_name),
-            Style::default().fg(Color::Green),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(Span::styled(
             format!("Target: {}", results.target),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )));
         self.results_view.add_line(Line::from(Span::styled(
             format!("Execution Time: {}ms", results.execution_time_ms),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(tc!(info)),
         )));
         self.results_view.add_line(Line::from(""));
 
         if results.success {
             self.results_view.add_line(Line::from(Span::styled(
                 "Status: Success",
-                Style::default().fg(Color::Green),
+                Style::default().fg(tc!(success)),
             )));
         } else {
             self.results_view.add_line(Line::from(Span::styled(
                 "Status: Failed",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
         }
 
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             format!("Findings ({}):", results.findings.len()),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )));
 
         for finding in &results.findings {
             let severity_color = match finding.severity.as_str() {
-                "critical" => Color::Red,
-                "high" => Color::LightRed,
-                "medium" => Color::Yellow,
-                "low" => Color::Blue,
-                _ => Color::Gray,
+                "critical" => tc!(error),
+                "high" => tc!(error),
+                "medium" => tc!(warning),
+                "low" => tc!(secondary),
+                _ => tc!(text_dim),
             };
             self.results_view.add_line(Line::from(vec![
                 Span::styled("  ", Style::default()),
@@ -152,7 +153,7 @@ impl PluginTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Errors:",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
             for err in &results.errors {
                 self.results_view
@@ -198,7 +199,7 @@ impl TabState for PluginTab {
         self.state = AppState::Error(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -220,9 +221,9 @@ impl TabRender for PluginTab {
             .borders(Borders::ALL)
             .border_style(
                 Style::default().fg(if self.focus_area == PluginFocusArea::Inputs {
-                    Color::Yellow
+                    tc!(border_focused)
                 } else {
-                    Color::Gray
+                    tc!(border)
                 }),
             );
 

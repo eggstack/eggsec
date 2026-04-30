@@ -1,9 +1,9 @@
+use crate::tc;
 use crate::recon::FullReconResult;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     text::{Line, Span},
     Frame,
 };
@@ -133,7 +133,7 @@ impl ReconTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("Reconnaissance Complete: {}", results.target),
-            ratatui::style::Style::default().fg(Color::Green),
+            ratatui::style::Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
 
@@ -150,7 +150,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Tech Stack:",
-                ratatui::style::Style::default().fg(Color::Yellow),
+                ratatui::style::Style::default().fg(tc!(accent)),
             )));
             if !tech.frameworks.is_empty() {
                 self.results_view.add_line(Line::from(format!(
@@ -176,7 +176,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Geolocation:",
-                ratatui::style::Style::default().fg(Color::Yellow),
+                ratatui::style::Style::default().fg(tc!(accent)),
             )));
             if let Some(ref country) = geo.country {
                 self.results_view
@@ -196,7 +196,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "GeoIP Error:",
-                ratatui::style::Style::default().fg(Color::Red),
+                ratatui::style::Style::default().fg(tc!(error)),
             )));
             for line in geo_err.lines().take(4) {
                 self.results_view
@@ -208,7 +208,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "SSL/TLS:",
-                ratatui::style::Style::default().fg(Color::Yellow),
+                ratatui::style::Style::default().fg(tc!(accent)),
             )));
             if let Some(ref cert) = ssl.certificate {
                 self.results_view
@@ -223,7 +223,7 @@ impl ReconTab {
                 self.results_view.add_line(Line::from(""));
                 self.results_view.add_line(Line::from(Span::styled(
                     format!("Subdomains ({}):", subdomains.subdomains.len()),
-                    ratatui::style::Style::default().fg(Color::Yellow),
+                    ratatui::style::Style::default().fg(tc!(accent)),
                 )));
                 for sub in subdomains.subdomains.iter().take(5) {
                     self.results_view.add_line(Line::from(format!(
@@ -378,11 +378,11 @@ impl TabRender for ReconTab {
                         .borders(Borders::ALL)
                         .title("Reconnaissance - Error"),
                 )
-                .style(Style::default().fg(Color::Red));
+                .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
@@ -396,7 +396,7 @@ impl TabRender for ReconTab {
                     .borders(Borders::ALL)
                     .title("Reconnaissance"),
             )
-            .style(Style::default().fg(Color::DarkGray));
+            .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

@@ -1,9 +1,10 @@
+use crate::tc;
 use crate::integrations::{IntegrationConfig, Issue};
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders},
     Frame,
@@ -205,7 +206,7 @@ impl IntegrationsTab {
             AppState::Error(message.to_string())
         };
         self.results_view.clear();
-        let color = if success { Color::Green } else { Color::Red };
+        let color = if success { tc!(success) } else { tc!(error) };
         self.results_view.add_line(Line::from(Span::styled(
             message.to_string(),
             Style::default().fg(color),
@@ -253,7 +254,7 @@ impl TabState for IntegrationsTab {
         self.error_message = Some(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -316,12 +317,12 @@ impl TabRender for IntegrationsTab {
                         .borders(Borders::ALL)
                         .title("Processing..."),
                 )
-                .gauge_style(Style::default().fg(Color::Yellow))
+                .gauge_style(Style::default().fg(tc!(warning)))
                 .ratio(0.5);
             f.render_widget(gauge, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder =
                 ratatui::widgets::Paragraph::new("Select tracker, configure, and press Enter")
@@ -330,7 +331,7 @@ impl TabRender for IntegrationsTab {
                             .borders(Borders::ALL)
                             .title("Issue Tracker Integration"),
                     )
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

@@ -1,9 +1,10 @@
 use crate::storage::{models::StoredFinding, models::StoredScan, StorageConfig};
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders},
     Frame,
@@ -170,12 +171,12 @@ impl StorageTab {
         if connected {
             self.results_view.add_line(Line::from(Span::styled(
                 "Connected to database",
-                Style::default().fg(Color::Green),
+                Style::default().fg(tc!(success)),
             )));
         } else {
             self.results_view.add_line(Line::from(Span::styled(
                 "Failed to connect to database",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
         }
     }
@@ -186,7 +187,7 @@ impl StorageTab {
         self.results_view.clear();
         self.results_view.add_line(Line::from(Span::styled(
             format!("Recent Scans ({}):", scans.len()),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(""));
         for scan in &scans {
@@ -203,7 +204,7 @@ impl StorageTab {
         self.results_view.clear();
         self.results_view.add_line(Line::from(Span::styled(
             format!("Findings ({}):", findings.len()),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(""));
         for finding in &findings {
@@ -252,7 +253,7 @@ impl TabState for StorageTab {
         self.error_message = Some(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -285,9 +286,9 @@ impl TabRender for StorageTab {
         let results_area = chunks[1];
 
         let status_color = if self.connected {
-            Color::Green
+            tc!(success)
         } else {
-            Color::Red
+            tc!(error)
         };
         let status_text = if self.connected {
             "Connected"
@@ -346,12 +347,12 @@ impl TabRender for StorageTab {
                         .borders(Borders::ALL)
                         .title("Processing..."),
                 )
-                .gauge_style(Style::default().fg(Color::Yellow))
+                .gauge_style(Style::default().fg(tc!(warning)))
                 .ratio(0.5);
             f.render_widget(gauge, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder =
                 ratatui::widgets::Paragraph::new("Configure database connection and press Enter")
@@ -360,7 +361,7 @@ impl TabRender for StorageTab {
                             .borders(Borders::ALL)
                             .title("Database Storage"),
                     )
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

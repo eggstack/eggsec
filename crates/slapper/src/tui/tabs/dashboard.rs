@@ -1,6 +1,6 @@
+use crate::tc;
 use crate::tui::components::ScrollableText;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
-use ratatui::style::Color;
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 use std::collections::HashMap;
@@ -19,9 +19,15 @@ struct PortfolioSnapshot {
     last_updated: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DashboardFocusArea {
+    Main,
+}
+
 pub struct DashboardTab {
     pub view: ScrollableText,
     pub state: AppState,
+    pub focus_area: DashboardFocusArea,
     pub total_scans: usize,
     pub successful_scans: usize,
     pub failed_scans: usize,
@@ -38,6 +44,7 @@ impl DashboardTab {
         let mut tab = Self {
             view: ScrollableText::new("Dashboard"),
             state: AppState::Idle,
+            focus_area: DashboardFocusArea::Main,
             total_scans: 0,
             successful_scans: 0,
             failed_scans: 0,
@@ -89,7 +96,7 @@ impl DashboardTab {
         self.view.add_line(Line::from(Span::styled(
             "Security Assessment Dashboard",
             ratatui::style::Style::default()
-                .fg(Color::Cyan)
+                .fg(tc!(info))
                 .add_modifier(ratatui::style::Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
@@ -119,7 +126,7 @@ impl DashboardTab {
         self.view.add_line(Line::styled(
             "Additional Tabs:",
             ratatui::style::Style::default()
-                .fg(Color::Yellow)
+                .fg(tc!(accent))
                 .add_modifier(ratatui::style::Modifier::BOLD),
         ));
         self.view
@@ -142,7 +149,7 @@ impl DashboardTab {
         self.view.add_line(Line::styled(
             "Available Services:",
             ratatui::style::Style::default()
-                .fg(Color::Yellow)
+                .fg(tc!(accent))
                 .add_modifier(ratatui::style::Modifier::BOLD),
         ));
         self.view.add_line(Line::from(
@@ -247,7 +254,7 @@ impl DashboardTab {
         self.view.add_line(Line::from(Span::styled(
             "Security Assessment Dashboard",
             ratatui::style::Style::default()
-                .fg(Color::Cyan)
+                .fg(tc!(info))
                 .add_modifier(ratatui::style::Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
@@ -255,7 +262,7 @@ impl DashboardTab {
         self.view.add_line(Line::from(Span::styled(
             "Session Statistics",
             ratatui::style::Style::default()
-                .fg(Color::Yellow)
+                .fg(tc!(accent))
                 .add_modifier(ratatui::style::Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
@@ -281,7 +288,7 @@ impl DashboardTab {
             self.view.add_line(Line::from(Span::styled(
                 "Activity Trend (last 7 scans)",
                 ratatui::style::Style::default()
-                    .fg(Color::Green)
+                    .fg(tc!(success))
                     .add_modifier(ratatui::style::Modifier::BOLD),
             )));
             self.view.add_line(Line::from(""));
@@ -293,7 +300,7 @@ impl DashboardTab {
         self.view.add_line(Line::from(Span::styled(
             "Asset Health Summary",
             ratatui::style::Style::default()
-                .fg(Color::Green)
+                .fg(tc!(success))
                 .add_modifier(ratatui::style::Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
@@ -391,7 +398,7 @@ impl DashboardTab {
             self.view.add_line(Line::from(Span::styled(
                 "Last Scan",
                 ratatui::style::Style::default()
-                    .fg(Color::Yellow)
+                    .fg(tc!(accent))
                     .add_modifier(ratatui::style::Modifier::BOLD),
             )));
             self.view.add_line(Line::from(""));
@@ -405,7 +412,7 @@ impl DashboardTab {
         self.view.add_line(Line::from(Span::styled(
             "Quick Actions",
             ratatui::style::Style::default()
-                .fg(Color::Yellow)
+                .fg(tc!(accent))
                 .add_modifier(ratatui::style::Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));

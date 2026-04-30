@@ -1,4 +1,5 @@
 use crate::loadtest::metrics::LoadTestResults;
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText, Selector};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -7,6 +8,13 @@ use ratatui::{
     Frame,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LoadFocusArea {
+    Selector,
+    Inputs,
+    Results,
+}
+
 pub struct LoadTab {
     pub inputs: InputGroup,
     pub test_type_selector: Selector,
@@ -14,6 +22,8 @@ pub struct LoadTab {
     pub progress: ProgressGauge,
     pub state: AppState,
     pub results_view: ScrollableText,
+    pub focus_area: LoadFocusArea,
+    pub error_message: Option<String>,
 }
 
 impl LoadTab {
@@ -46,6 +56,8 @@ impl LoadTab {
             progress: ProgressGauge::new("Load testing..."),
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
+            focus_area: LoadFocusArea::Selector,
+            error_message: None,
         }
     }
 
@@ -149,19 +161,19 @@ impl LoadTab {
 
     #[cfg(feature = "stress-testing")]
     pub fn set_stress_results(&mut self, target: String, stats: crate::stress::StressStats) {
-        use ratatui::style::{Color, Style};
+        use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
         self.results_view.clear();
 
         self.results_view.add_line(Line::from(vec![Span::styled(
             "Stress Test Results",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(accent)),
         )]));
         self.results_view.add_line(Line::from(""));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Target: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Target: ", Style::default().fg(tc!(info))),
             Span::raw(target),
         ]));
 
@@ -172,7 +184,7 @@ impl LoadTab {
         };
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Packets: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Packets: ", Style::default().fg(tc!(info))),
             Span::raw(format!(
                 "{} sent, {} errors",
                 stats.packets_sent, stats.errors
@@ -180,17 +192,17 @@ impl LoadTab {
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Rate: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Rate: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} pps", pps)),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Duration: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Duration: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} ms", stats.duration_ms)),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Data Sent: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Data Sent: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{} bytes", stats.bytes_sent)),
         ]));
 
@@ -198,7 +210,7 @@ impl LoadTab {
     }
 
     fn update_results_view(&mut self, results: &LoadTestResults) {
-        use ratatui::style::{Color, Style};
+        use ratatui::style::Style;
         use ratatui::text::{Line, Span};
 
         self.results_view.clear();
@@ -217,13 +229,13 @@ impl LoadTab {
         let p99 = results.latency_p99_ms;
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Target: ", Style::default().fg(Color::Yellow)),
+            Span::styled("Target: ", Style::default().fg(tc!(accent))),
             Span::raw(target_url),
         ]));
         self.results_view.add_line(Line::from(""));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Requests: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Requests: ", Style::default().fg(tc!(info))),
             Span::raw(format!(
                 "{} total, {} success, {} failed",
                 total_requests, successful_requests, failed_requests
@@ -231,14 +243,14 @@ impl LoadTab {
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("RPS: ", Style::default().fg(Color::Cyan)),
+            Span::styled("RPS: ", Style::default().fg(tc!(info))),
             Span::raw(format!("{:.2} req/s", rps)),
         ]));
 
         self.results_view.add_line(Line::from(""));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Latency: ", Style::default().fg(Color::Green)),
+            Span::styled("Latency: ", Style::default().fg(tc!(success))),
             Span::raw(format!(
                 "min={:.2}ms, max={:.2}ms, mean={:.2}ms",
                 min_ms, max_ms, mean_ms
@@ -258,16 +270,16 @@ impl LoadTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Status Codes:",
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             )));
             let mut codes: Vec<_> = status_codes.iter().collect();
             codes.sort_by_key(|(k, _)| *k);
             for (code, count) in codes {
                 let color = match *code {
-                    200..=299 => Color::Green,
-                    300..=399 => Color::Blue,
-                    400..=499 => Color::Yellow,
-                    _ => Color::Red,
+                    200..=299 => tc!(success),
+                    300..=399 => tc!(secondary),
+                    400..=499 => tc!(warning),
+                    _ => tc!(error),
                 };
                 self.results_view.add_line(Line::from(vec![
                     Span::styled(format!("  {}:", code), Style::default().fg(color)),
@@ -281,7 +293,7 @@ impl LoadTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Errors:",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
             for error in &errors {
                 self.results_view
@@ -296,6 +308,7 @@ impl LoadTab {
             self.progress.current = 0;
             self.results = None;
             self.results_view.clear();
+            self.error_message = None;
         }
     }
 
@@ -345,6 +358,7 @@ impl TabState for LoadTab {
         self.results = None;
         self.progress.current = 0;
         self.results_view.clear();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -356,6 +370,13 @@ impl TabState for LoadTab {
         self.inputs.fields[3].cursor_pos = 2;
         self.inputs.fields[4].value = "30".to_string();
         self.inputs.fields[4].cursor_pos = 2;
+        self.focus_area = LoadFocusArea::Selector;
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+        self.progress.current = 0;
     }
 }
 
@@ -399,15 +420,26 @@ impl TabRender for LoadTab {
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
+        } else if let Some(ref err_msg) = self.error_message {
+            use ratatui::style::Style;
+            use ratatui::widgets::{Block, Borders, Paragraph};
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Load Testing - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let placeholder = Paragraph::new("Results will appear here after running")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }
@@ -415,33 +447,38 @@ impl TabRender for LoadTab {
 
 impl TabInput for LoadTab {
     fn handle_focus_next(&mut self) {
-        if self.test_type_selector.is_focused() {
-            self.test_type_selector.blur();
-            self.inputs.focus_next();
-        } else if self.inputs.is_focused() {
-            self.inputs.focus_next();
-            if self.inputs.is_focused() {
-                self.inputs.blur();
-                self.test_type_selector.focus();
+        self.focus_area = match self.focus_area {
+            LoadFocusArea::Selector => {
+                self.test_type_selector.blur();
+                LoadFocusArea::Inputs
             }
-        } else {
-            self.test_type_selector.focus();
-        }
+            LoadFocusArea::Inputs => {
+                self.inputs.blur();
+                LoadFocusArea::Results
+            }
+            LoadFocusArea::Results => {
+                self.test_type_selector.focus();
+                LoadFocusArea::Selector
+            }
+        };
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.test_type_selector.is_focused() {
-            self.test_type_selector.blur();
-            self.inputs.focus_prev();
-        } else if self.inputs.is_focused() {
-            self.inputs.focus_prev();
-            if !self.inputs.is_focused() {
+        self.focus_area = match self.focus_area {
+            LoadFocusArea::Selector => {
+                self.inputs.blur();
+                LoadFocusArea::Results
+            }
+            LoadFocusArea::Inputs => {
                 self.inputs.blur();
                 self.test_type_selector.focus();
+                LoadFocusArea::Selector
             }
-        } else {
-            self.test_type_selector.focus();
-        }
+            LoadFocusArea::Results => {
+                self.inputs.focus(0);
+                LoadFocusArea::Inputs
+            }
+        };
     }
 
     fn handle_char(&mut self, c: char) {
@@ -486,22 +523,26 @@ impl TabInput for LoadTab {
     }
 
     fn handle_up(&mut self) {
-        if self.test_type_selector.is_focused() {
+        if self.focus_area == LoadFocusArea::Selector {
             self.test_type_selector.handle_up();
-        } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_up();
-        } else {
-            self.inputs.focus_prev();
+        } else if self.focus_area == LoadFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_up();
+            } else {
+                self.inputs.focus_prev();
+            }
         }
     }
 
     fn handle_down(&mut self) {
-        if self.test_type_selector.is_focused() {
+        if self.focus_area == LoadFocusArea::Selector {
             self.test_type_selector.handle_down();
-        } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_down();
-        } else {
-            self.inputs.focus_next();
+        } else if self.focus_area == LoadFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_down();
+            } else {
+                self.inputs.focus_next();
+            }
         }
     }
 

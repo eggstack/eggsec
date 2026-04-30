@@ -1,13 +1,20 @@
 use crate::scanner::fingerprint::FingerprintResults;
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FingerprintFocusArea {
+    Inputs,
+    Results,
+}
 
 pub struct FingerprintTab {
     pub inputs: InputGroup,
@@ -15,6 +22,8 @@ pub struct FingerprintTab {
     pub progress: ProgressGauge,
     pub state: AppState,
     pub results_view: ScrollableText,
+    pub focus_area: FingerprintFocusArea,
+    pub error_message: Option<String>,
 }
 
 impl FingerprintTab {
@@ -33,6 +42,8 @@ impl FingerprintTab {
             progress: ProgressGauge::new("Fingerprinting..."),
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
+            focus_area: FingerprintFocusArea::Inputs,
+            error_message: None,
         }
     }
 
@@ -102,35 +113,35 @@ impl FingerprintTab {
             .collect();
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Host: ", Style::default().fg(Color::Yellow)),
+            Span::styled("Host: ", Style::default().fg(tc!(warning))),
             Span::raw(host),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Services identified: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Services identified: ", Style::default().fg(tc!(info))),
             Span::raw(services_identified.to_string()),
         ]));
 
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(vec![
-            Span::styled(format!("{:<8}", "PORT"), Style::default().fg(Color::Yellow)),
+            Span::styled(format!("{:<8}", "PORT"), Style::default().fg(tc!(warning))),
             Span::styled(
                 format!("{:<15}", "SERVICE"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(warning)),
             ),
             Span::styled(
                 format!("{:<12}", "VERSION"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(warning)),
             ),
-            Span::styled("BANNER", Style::default().fg(Color::Yellow)),
+            Span::styled("BANNER", Style::default().fg(tc!(warning))),
         ]));
 
         for (port, service, version, banner_display) in fp_data {
             self.results_view.add_line(Line::from(vec![
-                Span::styled(format!("{:<8}", port), Style::default().fg(Color::Green)),
+                Span::styled(format!("{:<8}", port), Style::default().fg(tc!(success))),
                 Span::raw(format!("{:<15}", service)),
                 Span::raw(format!("{:<12}", version.as_deref().unwrap_or("-"))),
-                Span::styled(banner_display, Style::default().fg(Color::Gray)),
+                Span::styled(banner_display, Style::default().fg(tc!(text_dim))),
             ]));
         }
     }
@@ -141,6 +152,7 @@ impl FingerprintTab {
             self.progress.current = 0;
             self.results = None;
             self.results_view.clear();
+            self.error_message = None;
         }
     }
 
@@ -190,6 +202,7 @@ impl TabState for FingerprintTab {
         self.results = None;
         self.progress.current = 0;
         self.results_view.clear();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -197,6 +210,13 @@ impl TabState for FingerprintTab {
         self.inputs.fields[1].cursor_pos = 35;
         self.inputs.fields[2].value = "5".to_string();
         self.inputs.fields[2].cursor_pos = 1;
+        self.focus_area = FingerprintFocusArea::Inputs;
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+        self.progress.current = 0;
     }
 }
 
@@ -225,13 +245,19 @@ impl TabRender for FingerprintTab {
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
+        } else if let Some(ref err_msg) = self.error_message {
+            use ratatui::style::Style;
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(Block::default().borders(Borders::ALL).title("Fingerprint - Error"))
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder = Paragraph::new("Results will appear here after running")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }
@@ -273,18 +299,22 @@ impl TabInput for FingerprintTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_up();
-        } else {
-            self.inputs.focus_prev();
+        if self.focus_area == FingerprintFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_up();
+            } else {
+                self.inputs.focus_prev();
+            }
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_down();
-        } else {
-            self.inputs.focus_next();
+        if self.focus_area == FingerprintFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_down();
+            } else {
+                self.inputs.focus_next();
+            }
         }
     }
 

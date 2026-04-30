@@ -1,8 +1,9 @@
+use crate::tc;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders},
     Frame,
@@ -19,6 +20,7 @@ pub struct GraphQlTab {
     pub results_view: ScrollableText,
     pub focus_area: GraphQlFocusArea,
     pub checkbox_focus_index: usize,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,6 +59,7 @@ impl GraphQlTab {
             results_view: ScrollableText::new("Results"),
             focus_area: GraphQlFocusArea::Inputs,
             checkbox_focus_index: 0,
+            error_message: None,
         }
     }
 
@@ -90,18 +93,18 @@ impl GraphQlTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("GraphQL Security Test Complete: {}", results.target),
-            Style::default().fg(Color::Green),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             "Findings:",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(warning)),
         )));
 
         if results.introspection_enabled {
             self.results_view.add_line(Line::from(Span::styled(
                 "  [!] Introspection is ENABLED - Schema exposed",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
         } else {
             self.results_view
@@ -111,21 +114,21 @@ impl GraphQlTab {
         if results.depth_limit_bypassed {
             self.results_view.add_line(Line::from(Span::styled(
                 "  [!] Depth limit bypass detected",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
         }
 
         if results.alias_overload_vulnerable {
             self.results_view.add_line(Line::from(Span::styled(
                 "  [!] Alias overload vulnerability detected",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
         }
 
         if !results.injection_findings.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("  Injection Findings: {}", results.injection_findings.len()),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(warning)),
             )));
         }
 
@@ -162,13 +165,15 @@ impl TabState for GraphQlTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.progress.current = 0;
+        self.error_message = None;
     }
 
     fn set_error(&mut self, msg: String) {
         self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -252,9 +257,9 @@ impl TabRender for GraphQlTab {
             .borders(Borders::ALL)
             .border_style(
                 Style::default().fg(if self.focus_area == GraphQlFocusArea::Inputs {
-                    Color::Yellow
+                    tc!(border_focused)
                 } else {
-                    Color::Gray
+                    tc!(border)
                 }),
             );
         f.render_widget(input_block, chunks[0]);
@@ -271,9 +276,9 @@ impl TabRender for GraphQlTab {
             .borders(Borders::ALL)
             .border_style(
                 Style::default().fg(if self.focus_area == GraphQlFocusArea::Options {
-                    Color::Yellow
+                    tc!(border_focused)
                 } else {
-                    Color::Gray
+                    tc!(border)
                 }),
             );
 

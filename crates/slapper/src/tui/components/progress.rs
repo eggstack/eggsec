@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, Paragraph},
     Frame,
 };
+use crate::tc;
 
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -22,7 +23,7 @@ impl ProgressGauge {
             label: label.into(),
             current: 0,
             total: 100,
-            color: Color::Blue,
+            color: tc!(secondary),
             spinner_frame: 0,
         }
     }

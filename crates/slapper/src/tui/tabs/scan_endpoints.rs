@@ -1,4 +1,5 @@
 use crate::scanner::endpoints::EndpointScanResults;
+use crate::tc;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -9,6 +10,13 @@ use ratatui::{
     Frame,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ScanEndpointsFocusArea {
+    Inputs,
+    Options,
+    Results,
+}
+
 pub struct ScanEndpointsTab {
     pub inputs: InputGroup,
     pub results: Option<EndpointScanResults>,
@@ -16,6 +24,8 @@ pub struct ScanEndpointsTab {
     pub state: AppState,
     pub results_view: ScrollableText,
     pub include_404_checkbox: Checkbox,
+    pub focus_area: ScanEndpointsFocusArea,
+    pub error_message: Option<String>,
 }
 
 impl ScanEndpointsTab {
@@ -33,6 +43,8 @@ impl ScanEndpointsTab {
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
             include_404_checkbox: Checkbox::new("Check for 404s").checked(true),
+            focus_area: ScanEndpointsFocusArea::Inputs,
+            error_message: None,
         }
     }
 
@@ -127,15 +139,15 @@ impl ScanEndpointsTab {
             .collect();
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("URL: ", Style::default().fg(Color::Yellow)),
+            Span::styled("URL: ", Style::default().fg(tc!(accent))),
             Span::raw(base_url),
         ]));
 
         self.results_view.add_line(Line::from(vec![
-            Span::styled("Found: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Found: ", Style::default().fg(tc!(info))),
             Span::raw(endpoints_found.to_string()),
             Span::raw(" | "),
-            Span::styled("Interesting: ", Style::default().fg(Color::Red)),
+            Span::styled("Interesting: ", Style::default().fg(tc!(error))),
             Span::raw(interesting_findings.to_string()),
         ]));
 
@@ -143,30 +155,30 @@ impl ScanEndpointsTab {
         self.results_view.add_line(Line::from(vec![
             Span::styled(
                 format!("{:<40}", "PATH"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             ),
             Span::styled(
                 format!("{:<8}", "STATUS"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             ),
             Span::styled(
                 format!("{:<10}", "SIZE"),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(tc!(accent)),
             ),
         ]));
 
         for (path, status_code, content_length, interesting) in endpoint_data {
             let style = if interesting {
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                Style::default().fg(tc!(error)).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
 
             let status_color = match status_code {
-                200..=299 => Color::Green,
-                300..=399 => Color::Blue,
-                400..=499 => Color::Yellow,
-                _ => Color::Red,
+                200..=299 => tc!(success),
+                300..=399 => tc!(secondary),
+                400..=499 => tc!(warning),
+                _ => tc!(error),
             };
 
             let path_display = if path.len() > 38 {
@@ -192,6 +204,7 @@ impl ScanEndpointsTab {
             self.progress.current = 0;
             self.results = None;
             self.results_view.clear();
+            self.error_message = None;
         }
     }
 
@@ -241,6 +254,7 @@ impl TabState for ScanEndpointsTab {
         self.results = None;
         self.progress.current = 0;
         self.results_view.clear();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -248,6 +262,13 @@ impl TabState for ScanEndpointsTab {
         self.inputs.fields[1].cursor_pos = 2;
         self.inputs.fields[2].value = "10".to_string();
         self.inputs.fields[2].cursor_pos = 2;
+        self.focus_area = ScanEndpointsFocusArea::Inputs;
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+        self.progress.current = 0;
     }
 }
 
@@ -281,13 +302,19 @@ impl TabRender for ScanEndpointsTab {
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
+        } else if let Some(ref err_msg) = self.error_message {
+            use ratatui::style::Style;
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(Block::default().borders(Borders::ALL).title("Endpoint Scan - Error"))
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             let placeholder = Paragraph::new("Results will appear here after running")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }
@@ -329,17 +356,25 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_up();
-        } else {
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_up();
+            } else {
+                self.inputs.focus_prev();
+            }
+        } else if self.focus_area == ScanEndpointsFocusArea::Options {
             self.inputs.focus_prev();
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_down();
-        } else {
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_down();
+            } else {
+                self.inputs.focus_next();
+            }
+        } else if self.focus_area == ScanEndpointsFocusArea::Options {
             self.inputs.focus_next();
         }
     }

@@ -1,17 +1,25 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     text::Line,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ResumeFocusArea {
+    Inputs,
+    Results,
+}
+
 pub struct ResumeTab {
     pub inputs: InputGroup,
     pub state: AppState,
     pub results_view: ScrollableText,
+    pub focus_area: ResumeFocusArea,
+    pub error_message: Option<String>,
 }
 
 impl ResumeTab {
@@ -22,6 +30,8 @@ impl ResumeTab {
             inputs,
             state: AppState::Idle,
             results_view: ScrollableText::new("Session Info"),
+            focus_area: ResumeFocusArea::Inputs,
+            error_message: None,
         }
     }
 
@@ -89,18 +99,22 @@ impl TabState for ResumeTab {
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        self.focus_area = ResumeFocusArea::Inputs;
     }
 
     fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg.clone());
+        self.results_view.clear();
         use ratatui::style::Style;
         use ratatui::text::Span;
-        self.state = AppState::Error(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -125,7 +139,7 @@ impl TabRender for ResumeTab {
         }
 
         if !self.results_view.is_empty() {
-            self.results_view.render(f, results_area, Some(Color::Cyan));
+            self.results_view.render(f, results_area, Some(tc!(info)));
         } else {
             let placeholder = Paragraph::new(
                 "Enter session file path and press Enter to resume a previous scan.\n\n\
@@ -134,7 +148,7 @@ impl TabRender for ResumeTab {
                    slapper resume /path/to/session.json",
             )
             .block(Block::default().borders(Borders::ALL).title("Session Info"))
-            .style(Color::DarkGray);
+            .style(tc!(text_dim));
             f.render_widget(placeholder, results_area);
         }
     }
@@ -176,18 +190,22 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_up();
-        } else {
-            self.inputs.focus_prev();
+        if self.focus_area == ResumeFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_up();
+            } else {
+                self.inputs.focus_prev();
+            }
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_down();
-        } else {
-            self.inputs.focus_next();
+        if self.focus_area == ResumeFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_down();
+            } else {
+                self.inputs.focus_next();
+            }
         }
     }
 

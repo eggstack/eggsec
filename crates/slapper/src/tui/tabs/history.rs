@@ -1,8 +1,9 @@
+use crate::tc;
 use crate::tui::components::ScrollableText;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -22,13 +23,19 @@ pub struct HistoryEntry {
     pub details: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HistoryFocusArea {
+    List,
+    Details,
+}
+
 #[derive(Clone)]
 pub struct HistoryTab {
     pub entries: VecDeque<HistoryEntry>,
     pub selected: Option<usize>,
     pub details_view: ScrollableText,
     pub next_id: usize,
-    pub details_focused: bool,
+    pub focus_area: HistoryFocusArea,
     pub scroll_offset: usize,
     pub visible_rows: usize,
 }
@@ -54,7 +61,7 @@ impl HistoryTab {
             selected: None,
             details_view: ScrollableText::new("Details"),
             next_id: 1,
-            details_focused: false,
+            focus_area: HistoryFocusArea::List,
             scroll_offset: 0,
             visible_rows: 20,
         }
@@ -214,19 +221,19 @@ impl HistoryTab {
 
         if let Some((scan_type, timestamp, target, summary, details)) = entry_data {
             self.details_view.add_line(Line::from(vec![
-                Span::styled("Type: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Type: ", Style::default().fg(tc!(accent))),
                 Span::raw(scan_type),
             ]));
             self.details_view.add_line(Line::from(vec![
-                Span::styled("Time: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Time: ", Style::default().fg(tc!(accent))),
                 Span::raw(timestamp),
             ]));
             self.details_view.add_line(Line::from(vec![
-                Span::styled("Target: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Target: ", Style::default().fg(tc!(accent))),
                 Span::raw(target),
             ]));
             self.details_view.add_line(Line::from(vec![
-                Span::styled("Summary: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Summary: ", Style::default().fg(tc!(accent))),
                 Span::raw(summary),
             ]));
             self.details_view.add_line(Line::from(""));
@@ -234,7 +241,7 @@ impl HistoryTab {
             if !details.is_empty() {
                 self.details_view.add_line(Line::from(Span::styled(
                     "Details:",
-                    Style::default().fg(Color::Cyan),
+                    Style::default().fg(tc!(info)),
                 )));
                 for detail in &details {
                     self.details_view.add_text(detail, None);
@@ -294,12 +301,12 @@ impl TabRender for HistoryTab {
             let empty =
                 Paragraph::new("No history entries yet.\n\nRun a scan to see results here.")
                     .block(Block::default().borders(Borders::ALL).title("History"))
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(empty, list_area);
 
             let placeholder = Paragraph::new("Select an entry to view details")
                 .block(Block::default().borders(Borders::ALL).title("Details"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, details_area);
             return;
         }
@@ -308,17 +315,17 @@ impl TabRender for HistoryTab {
             Line::from(vec![
                 Span::styled(
                     format!("{:<20}", "TIME"),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(tc!(accent)),
                 ),
                 Span::styled(
                     format!("{:<10}", "TYPE"),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(tc!(accent)),
                 ),
-                Span::styled("TARGET", Style::default().fg(Color::Yellow)),
+                Span::styled("TARGET", Style::default().fg(tc!(accent))),
             ]),
             Line::from(Span::styled(
                 "─".repeat(60),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(tc!(text_dim)),
             )),
         ];
 
@@ -329,8 +336,8 @@ impl TabRender for HistoryTab {
             let is_selected = Some(real_idx) == self.selected;
             let style = if is_selected {
                 Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Yellow)
+                    .fg(tc!(selected_text))
+                    .bg(tc!(selected))
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -375,7 +382,7 @@ impl TabRender for HistoryTab {
         } else {
             let placeholder = Paragraph::new("Select an entry to view details")
                 .block(Block::default().borders(Borders::ALL).title("Details"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, details_area);
         }
     }
@@ -383,10 +390,16 @@ impl TabRender for HistoryTab {
 
 impl TabInput for HistoryTab {
     fn handle_focus_next(&mut self) {
-        self.details_focused = !self.details_focused;
+        self.focus_area = match self.focus_area {
+            HistoryFocusArea::List => HistoryFocusArea::Details,
+            HistoryFocusArea::Details => HistoryFocusArea::List,
+        };
     }
     fn handle_focus_prev(&mut self) {
-        self.details_focused = !self.details_focused;
+        self.focus_area = match self.focus_area {
+            HistoryFocusArea::List => HistoryFocusArea::Details,
+            HistoryFocusArea::Details => HistoryFocusArea::List,
+        };
     }
 
     fn handle_char(&mut self, _c: char) {}
@@ -395,19 +408,25 @@ impl TabInput for HistoryTab {
     fn handle_enter(&mut self) {}
 
     fn handle_escape(&mut self) {
-        self.details_focused = false;
+        self.focus_area = HistoryFocusArea::List;
     }
 
     fn handle_up(&mut self) {
-        self.select_prev();
+        match self.focus_area {
+            HistoryFocusArea::List => self.select_prev(),
+            HistoryFocusArea::Details => self.details_view.scroll_up(1),
+        }
     }
 
     fn handle_down(&mut self) {
-        self.select_next();
+        match self.focus_area {
+            HistoryFocusArea::List => self.select_next(),
+            HistoryFocusArea::Details => self.details_view.scroll_down(1),
+        }
     }
 
     fn handle_left(&mut self) -> bool {
-        if self.details_focused {
+        if self.focus_area == HistoryFocusArea::Details {
             self.details_view.scroll_left(5);
             true
         } else {
@@ -416,7 +435,7 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_right(&mut self) -> bool {
-        if self.details_focused {
+        if self.focus_area == HistoryFocusArea::Details {
             self.details_view.scroll_right(5);
             true
         } else {
@@ -425,7 +444,7 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_home(&mut self) {
-        if self.details_focused {
+        if self.focus_area == HistoryFocusArea::Details {
             self.details_view.scroll_to_top();
         } else {
             self.selected = Some(0);
@@ -433,7 +452,7 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_end(&mut self) {
-        if self.details_focused {
+        if self.focus_area == HistoryFocusArea::Details {
             self.details_view.scroll_to_bottom();
         } else {
             self.selected = Some(self.entries.len().saturating_sub(1));
@@ -449,6 +468,6 @@ impl TabInput for HistoryTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.details_focused
+        self.focus_area == HistoryFocusArea::Details
     }
 }

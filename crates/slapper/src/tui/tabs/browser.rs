@@ -1,9 +1,9 @@
 use crate::browser::{BrowserConfig, BrowserReport};
+use crate::tc;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     text::{Line, Span},
     Frame,
 };
@@ -94,19 +94,19 @@ impl BrowserTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("Browser Scan Complete: {}", report.target),
-            ratatui::style::Style::default().fg(Color::Green),
+            ratatui::style::Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             format!("Total findings: {}", report.total_findings),
-            ratatui::style::Style::default().fg(Color::Yellow),
+            ratatui::style::Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(""));
 
         if !report.dom_xss.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("DOM XSS Findings ({}):", report.dom_xss.len()),
-                ratatui::style::Style::default().fg(Color::Red),
+                ratatui::style::Style::default().fg(tc!(error)),
             )));
             for finding in &report.dom_xss {
                 self.results_view.add_line(Line::from(format!(
@@ -120,7 +120,7 @@ impl BrowserTab {
         if !report.spa_routes.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("SPA Routes Discovered ({}):", report.spa_routes.len()),
-                ratatui::style::Style::default().fg(Color::Cyan),
+                ratatui::style::Style::default().fg(tc!(info)),
             )));
             for route in &report.spa_routes {
                 self.results_view.add_line(Line::from(format!(
@@ -134,7 +134,7 @@ impl BrowserTab {
         if !report.client_issues.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("Client Issues ({}):", report.client_issues.len()),
-                ratatui::style::Style::default().fg(Color::Yellow),
+                ratatui::style::Style::default().fg(tc!(warning)),
             )));
             for issue in &report.client_issues {
                 self.results_view.add_line(Line::from(format!(
@@ -256,7 +256,6 @@ impl TabRender for BrowserTab {
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
         } else if let Some(ref err_msg) = self.error_message {
-            use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let error_text = Paragraph::new(format!("Error: {}", err_msg))
                 .block(
@@ -264,13 +263,12 @@ impl TabRender for BrowserTab {
                         .borders(Borders::ALL)
                         .title("Browser Scan - Error"),
                 )
-                .style(Style::default().fg(Color::Red));
+                .style(ratatui::style::Style::default().fg(tc!(error)));
             f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
-            use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let placeholder =
                 Paragraph::new("Enter target URL and press Enter to start browser scan")
@@ -279,7 +277,7 @@ impl TabRender for BrowserTab {
                             .borders(Borders::ALL)
                             .title("Headless Browser Testing"),
                     )
-                    .style(Style::default().fg(Color::DarkGray));
+                    .style(ratatui::style::Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }

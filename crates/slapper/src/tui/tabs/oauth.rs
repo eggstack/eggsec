@@ -1,8 +1,9 @@
+use crate::tc;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders},
     Frame,
@@ -19,6 +20,7 @@ pub struct OAuthTab {
     pub results_view: ScrollableText,
     pub focus_area: OAuthFocusArea,
     pub checkbox_focus_index: usize,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -59,6 +61,7 @@ impl OAuthTab {
             results_view: ScrollableText::new("Results"),
             focus_area: OAuthFocusArea::Inputs,
             checkbox_focus_index: 0,
+            error_message: None,
         }
     }
 
@@ -108,12 +111,12 @@ impl OAuthTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("OAuth/OIDC Security Test Complete: {}", results.target),
-            Style::default().fg(Color::Green),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             "Findings:",
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(warning)),
         )));
 
         if !results.redirect_vulnerabilities.is_empty() {
@@ -122,7 +125,7 @@ impl OAuthTab {
                     "  [!] Redirect URI Issues: {}",
                     results.redirect_vulnerabilities.len()
                 ),
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
             for vuln in &results.redirect_vulnerabilities {
                 self.results_view
@@ -140,7 +143,7 @@ impl OAuthTab {
                     "  [!] Scope Escalation Issues: {}",
                     results.scope_vulnerabilities.len()
                 ),
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
         }
 
@@ -150,7 +153,7 @@ impl OAuthTab {
                     "  [!] State Parameter Issues: {}",
                     results.state_vulnerabilities.len()
                 ),
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
         }
 
@@ -160,7 +163,7 @@ impl OAuthTab {
                     "  [!] Grant Type Issues: {}",
                     results.grant_vulnerabilities.len()
                 ),
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
         }
 
@@ -197,13 +200,15 @@ impl TabState for OAuthTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.progress.current = 0;
+        self.error_message = None;
     }
 
     fn set_error(&mut self, msg: String) {
         self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -289,9 +294,9 @@ impl TabRender for OAuthTab {
             .borders(Borders::ALL)
             .border_style(
                 Style::default().fg(if self.focus_area == OAuthFocusArea::Inputs {
-                    Color::Yellow
+                    tc!(border_focused)
                 } else {
-                    Color::Gray
+                    tc!(border)
                 }),
             );
         f.render_widget(input_block, chunks[0]);
@@ -308,9 +313,9 @@ impl TabRender for OAuthTab {
             .borders(Borders::ALL)
             .border_style(
                 Style::default().fg(if self.focus_area == OAuthFocusArea::Options {
-                    Color::Yellow
+                    tc!(border_focused)
                 } else {
-                    Color::Gray
+                    tc!(border)
                 }),
             );
 

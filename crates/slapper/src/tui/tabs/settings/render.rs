@@ -1,8 +1,9 @@
 use super::SettingsSection;
+use crate::tc;
 use crate::tui::tabs::TabRender;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -31,9 +32,9 @@ impl TabRender for super::SettingsTab {
         let mut nav_lines = Vec::new();
         for (label, section) in &nav_items {
             let style = if *section == self.current_section {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
+                Style::default().fg(tc!(selected_text)).bg(tc!(selected))
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(tc!(border))
             };
             nav_lines.push(Line::from(Span::styled(format!("  {}", label), style)));
         }
@@ -187,7 +188,7 @@ impl TabRender for super::SettingsTab {
 
         if !self.status_message.is_empty() {
             let status = Paragraph::new(self.status_message.as_str())
-                .style(Style::default().fg(Color::Green));
+                .style(Style::default().fg(tc!(success)));
             let status_area = Rect {
                 x: inner.x,
                 y: inner.y + inner.height.saturating_sub(2),

@@ -1,16 +1,24 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     Frame,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WafStressFocusArea {
+    Inputs,
+    Results,
+}
 
 pub struct WafStressTab {
     pub inputs: InputGroup,
     pub progress: ProgressGauge,
     pub state: AppState,
     pub results_view: ScrollableText,
+    pub focus_area: WafStressFocusArea,
+    pub error_message: Option<String>,
 }
 
 impl WafStressTab {
@@ -25,6 +33,8 @@ impl WafStressTab {
             progress: ProgressGauge::new("WAF Stress Testing..."),
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
+            focus_area: WafStressFocusArea::Inputs,
+            error_message: None,
         }
     }
 
@@ -128,6 +138,7 @@ impl TabState for WafStressTab {
         self.state = AppState::Idle;
         self.progress.current = 0;
         self.results_view.clear();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -135,10 +146,13 @@ impl TabState for WafStressTab {
         self.inputs.fields[1].cursor_pos = 2;
         self.inputs.fields[2].value = "10".to_string();
         self.inputs.fields[2].cursor_pos = 2;
+        self.focus_area = WafStressFocusArea::Inputs;
     }
 
     fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg);
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+        self.progress.current = 0;
     }
 }
 
@@ -168,15 +182,26 @@ impl TabRender for WafStressTab {
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
+        } else if let Some(ref err_msg) = self.error_message {
+            use ratatui::style::Style;
+            use ratatui::widgets::{Block, Borders, Paragraph};
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("WAF Stress - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(Color::Green));
+                .render(f, results_area, Some(tc!(success)));
         } else {
             use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let placeholder = Paragraph::new("Results will appear here after running")
                 .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, results_area);
         }
     }
@@ -218,18 +243,22 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_up();
-        } else {
-            self.inputs.focus_prev();
+        if self.focus_area == WafStressFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_up();
+            } else {
+                self.inputs.focus_prev();
+            }
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_down();
-        } else {
-            self.inputs.focus_next();
+        if self.focus_area == WafStressFocusArea::Inputs {
+            if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_down();
+            } else {
+                self.inputs.focus_next();
+            }
         }
     }
 

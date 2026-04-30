@@ -1,8 +1,9 @@
+use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -85,16 +86,16 @@ impl NseTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("NSE Script Results: {}", results.script),
-            Style::default().fg(Color::Green),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(Span::styled(
             format!("Target: {}", results.target),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             "Output:",
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(tc!(info)),
         )));
         self.results_view.add_line(Line::from(""));
 
@@ -106,7 +107,7 @@ impl NseTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Errors:",
-                Style::default().fg(Color::Red),
+                Style::default().fg(tc!(error)),
             )));
             for err in results.errors.lines() {
                 self.results_view.add_line(Line::from(err.to_string()));
@@ -143,7 +144,7 @@ impl TabState for NseTab {
         self.state = AppState::Error(msg.clone());
         self.results_view.add_line(Line::from(Span::styled(
             format!("Error: {}", msg),
-            Style::default().fg(Color::Red),
+            Style::default().fg(tc!(error)),
         )));
     }
 }
@@ -175,9 +176,9 @@ impl TabRender for NseTab {
             .borders(Borders::ALL)
             .border_style(
                 Style::default().fg(if self.focus_area == NseFocusArea::Inputs {
-                    Color::Yellow
+                    tc!(border_focused)
                 } else {
-                    Color::Gray
+                    tc!(border)
                 }),
             );
         f.render_widget(input_block, chunks[0]);
