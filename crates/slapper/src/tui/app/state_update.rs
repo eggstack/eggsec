@@ -7,29 +7,31 @@ impl super::App {
 
         if let Some(ref mut rx) = self.progress_rx {
             use tokio::sync::mpsc;
-            match rx.try_recv() {
-                Ok((completed, total)) => {
-                    self.update_progress(completed, total);
-                    dirty = true;
-                }
-                Err(mpsc::error::TryRecvError::Empty) => {}
-                Err(mpsc::error::TryRecvError::Disconnected) => {
-                    self.progress_rx = None;
-                }
+            let mut pending_updates = Vec::new();
+            while let Ok((completed, total)) = rx.try_recv() {
+                pending_updates.push((completed, total));
+            }
+            if rx.is_closed() {
+                self.progress_rx = None;
+            }
+            for (completed, total) in pending_updates {
+                self.update_progress(completed, total);
+                dirty = true;
             }
         }
 
         if let Some(ref mut rx) = self.result_rx {
             use tokio::sync::mpsc;
-            match rx.try_recv() {
-                Ok(result) => {
-                    self.handle_result(result);
-                    dirty = true;
-                }
-                Err(mpsc::error::TryRecvError::Empty) => {}
-                Err(mpsc::error::TryRecvError::Disconnected) => {
-                    self.result_rx = None;
-                }
+            let mut pending_results = Vec::new();
+            while let Ok(result) = rx.try_recv() {
+                pending_results.push(result);
+            }
+            if rx.is_closed() {
+                self.result_rx = None;
+            }
+            for result in pending_results {
+                self.handle_result(result);
+                dirty = true;
             }
         }
 

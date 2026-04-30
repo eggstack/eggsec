@@ -143,6 +143,9 @@ where
     loop {
         app.spinner_tick = app.spinner_tick.wrapping_add(1);
 
+        app.update();
+        app.auto_save_if_due();
+
         if app.needs_redraw {
             terminal.draw(|f| ui::draw(f, app))?;
             app.needs_redraw = false;
@@ -481,8 +484,5 @@ where
                 handle_mouse_event(mouse_event, app);
             }
         }
-
-        app.update();
-        app.auto_save_if_due();
     }
 }

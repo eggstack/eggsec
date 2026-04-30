@@ -60,6 +60,21 @@ impl HistoryTab {
         }
     }
 
+    fn calc_visible_rows(&self, area: Rect) -> usize {
+        let header_lines = 3;
+        area.height.saturating_sub(header_lines).into()
+    }
+
+    fn ensure_visible(&mut self) {
+        if let Some(idx) = self.selected {
+            if idx < self.scroll_offset {
+                self.scroll_offset = idx;
+            } else if idx >= self.scroll_offset + self.visible_rows {
+                self.scroll_offset = idx.saturating_sub(self.visible_rows - 1);
+            }
+        }
+    }
+
     pub fn add_entry(
         &mut self,
         scan_type: String,
@@ -105,16 +120,6 @@ impl HistoryTab {
                 self.selected = Some(idx - 1);
                 self.ensure_visible();
                 self.update_details_view();
-            }
-        }
-    }
-
-    fn ensure_visible(&mut self) {
-        if let Some(idx) = self.selected {
-            if idx < self.scroll_offset {
-                self.scroll_offset = idx;
-            } else if idx >= self.scroll_offset + self.visible_rows {
-                self.scroll_offset = idx.saturating_sub(self.visible_rows - 1);
             }
         }
     }
@@ -317,7 +322,9 @@ impl TabRender for HistoryTab {
             )),
         ];
 
-        for (display_idx, entry) in self.entries.iter().enumerate().skip(self.scroll_offset).take(self.visible_rows) {
+        let visible_rows = self.calc_visible_rows(list_area);
+
+        for (display_idx, entry) in self.entries.iter().enumerate().skip(self.scroll_offset).take(visible_rows) {
             let real_idx = self.scroll_offset + display_idx;
             let is_selected = Some(real_idx) == self.selected;
             let style = if is_selected {
