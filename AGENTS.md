@@ -211,6 +211,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
   - All 8 Waves verified complete (including Phase 8)
   - Phase 8 items: baseline-aware alerting, channel draining, dynamic visible_rows, HistoryTab standardization, breadcrumb consolidation, theme consistency, sparkline visualization, asset health overview
   - Phase 11 (TUI Modernization & Polishing) COMPLETED: Theme migration, FocusArea standardization, error reporting, auto-insert mode
+  - Phase 12 (TUI Navigation & Layout Hardening) COMPLETED: TabWindow helper, stable tab IDs, fixed mouse hit-testing, popup clamping, 10 new tests
 
 ## Important Guidelines
 
@@ -219,7 +220,7 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 When implementing changes or reviewing plan items, verify actual state rather than assuming plan accuracy:
 - Payload type count: 30 (verified via `fuzzer/payloads/mod.rs`)
 - Recon module count: 31 (verified)
-- Test count: 1120 base, 1378 with full features
+- Test count: 1130 base, 1388 with full features
 - Use `rg` to confirm file paths and line numbers exist
 - Run `cargo test --lib -p slapper` after each change
 
@@ -367,6 +368,48 @@ impl TabInput for Tab {
     }
 }
 ```
+
+### TabIndexing Model
+
+The TUI uses a unified tab indexing system to handle feature-gated tabs correctly:
+
+**Key Types** (in `tui/tabs/mod.rs`):
+- `Tab::all()` - Returns `&'static [Tab]` with only available tabs for current feature set
+- `Tab::visible_index(&self) -> Option<usize>` - Returns position in `Tab::all()`
+- `Tab::from_visible_index(index: usize) -> Option<Tab>` - Returns tab by position
+- `Tab::stable_id(&self) -> &'static str` - Returns string ID for persistence (`"recon"`, `"dashboard"`, etc.)
+- `Tab::from_stable_id(id: &str) -> Option<Tab>` - Returns tab from string ID (None if tab unavailable in feature set)
+
+**TabWindow Helper** (in `tui/tabs/mod.rs`):
+```rust
+pub struct TabWindow {
+    pub start: usize,           // Start index in Tab::all()
+    pub end: usize,             // End index in Tab::all()
+    pub selected_visible: usize, // Selected index within visible window
+    pub max_visible: usize,     // Max tabs that fit in current width
+    pub total_tabs: usize,      // Total tabs in Tab::all()
+    pub has_prev: bool,         // True if there are hidden tabs before
+    pub has_next: bool,         // True if there are hidden tabs after
+}
+
+impl TabWindow {
+    pub fn for_width(term_width: u16, current_tab: Tab, previous_offset: u16) -> Self;
+    pub fn range_text(&self) -> String;  // Returns "[1-7/20]" style text
+}
+```
+
+**Usage**:
+- UI rendering: `TabWindow::for_width(area.width, app.current_tab, app.tab_scroll_offset)`
+- Navigation: Uses `TabWindow` instead of hardcoded `visible_count = 10`
+- Mouse hit-testing: Uses `TabWindow` to map click position to correct tab
+- Session persistence: Uses `stable_id` for forward compatibility
+
+**Anti-patterns to avoid**:
+- Don't use `tab as usize` for tab indexing (enum discriminants != visible indexes)
+- Don't use `Tab::all().len()` as visible count (not all tabs may be available)
+- Don't divide tab area by total tab count for mouse hit-testing
+
+---
 
 ### Auto-Insert Mode
 
