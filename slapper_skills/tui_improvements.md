@@ -30,6 +30,71 @@ This skill documents TUI patterns and recent improvements in Slapper's terminal 
 - **11.2.2**: Consistent error reporting - 7 tabs now have `error_message` field
 - **11.3.1**: Auto-insert mode - Tab/Shift+Tab auto-switches to Insert mode when focusing inputs
 
+## Phase 12 Updates (2026-04-30)
+
+### Completed Items
+
+- **12.1**: Centralized Tab Indexing - `Tab::visible_index()`, `Tab::from_visible_index()`, `Tab::stable_id()`, `Tab::from_stable_id()`
+- **12.2**: TabWindow helper - `TabWindow::for_width()` pure function for deterministic window calculation
+- **12.3**: Fixed keyboard navigation - `adjust_tab_scroll()` now uses TabWindow instead of hardcoded `visible_count = 10`
+- **12.4**: Fixed mouse hit-testing - uses TabWindow for accurate click-to-tab mapping
+- **12.5**: Session persistence - stable IDs with backward compatibility for legacy numeric indexes
+- **12.7**: Popup layout hardening - `centered_rect()` now clamps to terminal area
+- **12.8**: Added 10 focused tests for tab indexing and window calculation
+
+### TabIndexing System
+
+The TUI now uses a unified tab indexing system:
+
+```rust
+// In tabs/mod.rs
+pub fn visible_index(&self) -> Option<usize>  // Position in Tab::all()
+pub fn stable_id(&self) -> &'static str        // "recon", "dashboard", etc.
+pub fn from_stable_id(id: &str) -> Option<Tab> // Feature-gated safe lookup
+
+// TabWindow helper for rendering and navigation
+pub struct TabWindow {
+    pub start: usize,           // Start index in Tab::all()
+    pub end: usize,             // End index in Tab::all()
+    pub selected_visible: usize, // Selected index within visible window
+    pub max_visible: usize,
+    pub total_tabs: usize,
+    pub has_prev: bool,
+    pub has_next: bool,
+}
+
+impl TabWindow {
+    pub fn for_width(term_width: u16, current_tab: Tab, previous_offset: u16) -> Self;
+    pub fn range_text(&self) -> String;  // "[1-7/20]" style
+}
+```
+
+**Anti-patterns to avoid**:
+- Don't use `tab as usize` for indexing (enum discriminants != visible indexes)
+- Don't use `Tab::all().len()` as visible count
+- Don't divide tab area by total tab count for mouse hit-testing
+
+### Keyboard Navigation
+
+**Key bindings** (verified 2026-04-30):
+- `n` / `N` or `p` - next/prev tab (cycles through all available tabs)
+- `Shift+H` / `Shift+L` - previous/next tab
+- `1-9`, `0` - direct tab selection (limited to single digit)
+- Mouse click on tab - selects that tab if visible
+
+### Session Persistence
+
+Session state now uses stable string IDs instead of numeric indexes:
+
+```rust
+pub struct SessionState {
+    pub current_tab_id: Option<String>,  // e.g., Some("dashboard")
+    pub bookmarks: Vec<String>,           // e.g., vec!["recon", "settings"]
+    pub legacy_current_tab: Option<usize>, // For backward compat
+    pub legacy_bookmarks: Vec<usize>,     // For backward compat
+}
+```
+
 ## TUI Architecture
 
 ### Component Hierarchy
