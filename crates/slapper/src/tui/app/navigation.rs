@@ -19,7 +19,7 @@ impl super::App {
         }
     }
 
-    fn adjust_tab_scroll(&mut self) {
+    pub(super) fn adjust_tab_scroll(&mut self) {
         use super::tabs::TabWindow;
         let tab_index = self.current_tab.visible_index().unwrap_or(0);
         let window = TabWindow::for_width(80, self.current_tab, self.tab_scroll_offset);
