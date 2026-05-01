@@ -2,8 +2,111 @@ use axum::{routing::get, routing::post, routing::delete, extract::{State, Path},
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use subtle::ConstantTimeEq;
+use std::net::{IpAddr, ToSocketAddrs};
 
 use crate::tool::agents::{AgentRegistry, AgentInfo, AgentStatus, TaskScheduler, ScheduledTask, TaskPriority};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CallbackUrlValidationError {
+    InvalidUrl(String),
+    UnsupportedScheme(String),
+    ContainsCredentials,
+    ResolvesToForbiddenIp(String),
+    MissingHost,
+}
+
+pub fn validate_callback_url(url_str: &str) -> Result<(), CallbackUrlValidationError> {
+    let parsed = url::Url::parse(url_str)
+        .map_err(|e| CallbackUrlValidationError::InvalidUrl(e.to_string()))?;
+
+    let scheme = parsed.scheme();
+    if scheme != "http" && scheme != "https" {
+        return Err(CallbackUrlValidationError::UnsupportedScheme(scheme.to_string()));
+    }
+
+    let has_cred = !parsed.username().is_empty() || parsed.password().is_some();
+    if has_cred {
+        return Err(CallbackUrlValidationError::ContainsCredentials);
+    }
+
+    let host = parsed.host_str()
+        .ok_or(CallbackUrlValidationError::MissingHost)?;
+
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if is_forbidden_ip(&ip) {
+            return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(host.to_string()));
+        }
+    } else {
+        let addrs: Vec<_> = (host, 0).to_socket_addrs()
+            .map_err(|e| CallbackUrlValidationError::ResolvesToForbiddenIp(format!("DNS failed: {}", e)))?
+            .collect();
+        
+        if let Some(first_ip) = addrs.first().map(|a| a.ip()) {
+            if is_forbidden_ip(&first_ip) {
+                return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(host.to_string()));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn is_forbidden_ip(ip: &IpAddr) -> bool {
+    is_loopback_ip(ip)
+        || is_private_ip(ip)
+        || ip.is_unspecified()
+        || ip.is_multicast()
+        || is_link_local_ip(ip)
+        || is_benchmark_ip(ip)
+        || is_documentation_ip(ip)
+}
+
+fn is_loopback_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => ipv4.octets()[0] == 127,
+        IpAddr::V6(ipv6) => ipv6.is_loopback(),
+    }
+}
+
+fn is_private_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            let octets = ipv4.octets();
+            octets[0] == 10
+                || (octets[0] == 172 && (15..=31).contains(&octets[1]))
+                || (octets[0] == 192 && octets[1] == 168)
+        }
+        IpAddr::V6(ipv6) => {
+            let segs = ipv6.segments();
+            segs[0] == 0xfc00 >> 8 || segs[0] == 0xfd00 >> 8
+        }
+    }
+}
+
+fn is_link_local_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254,
+        IpAddr::V6(ipv6) => ipv6.segments()[0] == 0xfe80 >> 8,
+    }
+}
+
+fn is_benchmark_ip(ip: &IpAddr) -> bool {
+    if let IpAddr::V4(ipv4) = ip {
+        ipv4.octets()[0] == 198 && ipv4.octets()[1] == 18
+    } else {
+        false
+    }
+}
+
+fn is_documentation_ip(ip: &IpAddr) -> bool {
+    if let IpAddr::V4(ipv4) = ip {
+        ipv4.octets() == [192, 0, 2, 0]
+            || ipv4.octets() == [198, 51, 100, 0]
+            || ipv4.octets() == [203, 0, 113, 0]
+    } else {
+        false
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterAgentRequest {
@@ -27,6 +130,11 @@ async fn register_agent(
 ) -> Result<Json<RegisterAgentResponse>, &'static str> {
     if let Err(e) = require_auth(&state.api_key, &headers) {
         return Err(e);
+    }
+    if let Some(ref callback_url) = req.callback_url {
+        if let Err(e) = validate_callback_url(callback_url) {
+            return Err("Invalid callback URL");
+        }
     }
     let id = Uuid::new_v4();
     let agent = AgentInfo {
@@ -382,5 +490,91 @@ mod tests {
         let registry = AgentRegistry::new();
         let scheduler = TaskScheduler::new();
         let _router = router(registry, scheduler, None);
+    }
+
+    #[test]
+    fn test_callback_url_rejects_localhost() {
+        assert!(validate_callback_url("http://127.0.0.1:8080").is_err());
+        assert!(validate_callback_url("http://localhost:8080").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_loopback() {
+        assert!(validate_callback_url("http://127.0.0.1").is_err());
+        assert!(validate_callback_url("http://127.255.255.255").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_private_ips() {
+        assert!(validate_callback_url("http://10.0.0.1").is_err());
+        assert!(validate_callback_url("http://172.16.0.1").is_err());
+        assert!(validate_callback_url("http://192.168.1.1").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_link_local() {
+        assert!(validate_callback_url("http://169.254.0.1").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_aws_metadata() {
+        assert!(validate_callback_url("http://169.254.169.254/latest/meta-data").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_file_scheme() {
+        assert!(validate_callback_url("file:///tmp/x").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_credentials() {
+        assert!(validate_callback_url("http://user:pass@example.com").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_unspecified() {
+        assert!(validate_callback_url("http://0.0.0.0").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_documentation_ips() {
+        assert!(validate_callback_url("http://192.0.2.0").is_err());
+        assert!(validate_callback_url("http://198.51.100.0").is_err());
+        assert!(validate_callback_url("http://203.0.113.0").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_benchmark() {
+        assert!(validate_callback_url("http://198.18.0.1").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_accepts_safe_https() {
+        assert!(validate_callback_url("https://example.com").is_ok());
+        assert!(validate_callback_url("https://example.com:8443/callback").is_ok());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_unsupported_scheme() {
+        assert!(validate_callback_url("ftp://example.com").is_err());
+        assert!(validate_callback_url("ws://example.com").is_err());
+    }
+
+    #[test]
+    fn test_is_forbidden_ip_direct() {
+        use std::net::IpAddr;
+        use std::str::FromStr;
+        
+        assert!(is_forbidden_ip(&IpAddr::from_str("127.0.0.1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("10.0.0.1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("172.16.0.1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("192.168.1.1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("0.0.0.0").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("169.254.0.1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("192.0.2.0").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("198.18.0.1").unwrap()));
+        
+        assert!(!is_forbidden_ip(&IpAddr::from_str("8.8.8.8").unwrap()));
+        assert!(!is_forbidden_ip(&IpAddr::from_str("1.1.1.1").unwrap()));
     }
 }
