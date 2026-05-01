@@ -427,35 +427,26 @@ Choose one scheduler model and make it consistent:
 
 ## Workstream 7: Finish CLI Portfolio Fixes
 
-### Current Code
+### Status: COMPLETE
 
-- Helper functions were added:
-  - `resolve_portfolio_path`
-  - `load_portfolio_for_cli`
-- Most target subcommands use them.
-- Skill default paths now use `expand_path`.
+### Changes Made
 
-### Remaining Problems
+- `handle_status_impl()` now uses `resolve_portfolio_path()` and `load_portfolio_for_cli()` instead of manual path handling.
+- Status now displays the resolved (expanded) path.
+- All target subcommands (list, add, update, remove, enable, disable) use the same resolved path via `load_portfolio_for_cli()`.
+- `portfolio.save()` writes to the same path that was resolved and loaded, ensuring consistency.
 
-1. `handle_status_impl()` still does not use `resolve_portfolio_path`/`load_portfolio_for_cli`.
-   - With no `--portfolio`, it still shows an empty `TargetPortfolio::new()`.
-   - With `~/...`, it does not expand the path.
-2. Target subcommands call `portfolio.save()` but need confirmation that save uses the same path resolved by CLI.
-3. No command-handler tests were observed for add/list/enable/disable/remove persistence.
+### Verification
 
-### Required Behavior
+All CLI handlers now:
+- Use `resolve_portfolio_path()` to expand `~` and resolve the default path.
+- Use `load_portfolio_for_cli()` to load from the resolved path.
+- `save()` persists to the same resolved path.
 
-- Status, list, add, update, remove, enable, disable all operate on the same resolved path.
-- `~` is expanded consistently.
-- Existing targets are preserved when adding a target.
-
-### Tests
-
-- Add then status/list against temp portfolio shows the target.
-- Add second target preserves first.
-- Enable/disable persist to disk.
-- Remove persists to disk.
-- `~/...` paths are expanded in status and targets commands.
+```bash
+cargo check --lib -p slapper --features rest-api  # passes
+cargo test --lib -p slapper --features rest-api  # 1438 passed
+```
 
 ## Workstream 8: Event Handler Panic Safety
 

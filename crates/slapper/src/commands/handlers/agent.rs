@@ -75,16 +75,22 @@ async fn handle_agent_run_impl(
     let use_ai_final = use_ai && config.ai_config.is_some();
     let run_once = run_args.once;
 
+    let ai_config = config.ai_config.clone();
+
     let mut agent = Agent::new(config).await?;
 
     #[cfg(feature = "ai-integration")]
     {
         if use_ai_final {
-            let mut agent_with_ai = agent.with_ai_client(ai_config.unwrap()).await;
-            if run_once {
-                agent_with_ai.run_once().await?;
+            if let Some(ai_conf) = ai_config {
+                let mut agent_with_ai = agent.with_ai_client(ai_conf).await;
+                if run_once {
+                    agent_with_ai.run_once().await?;
+                } else {
+                    agent_with_ai.run().await?;
+                }
             } else {
-                agent_with_ai.run().await?;
+                return Err(anyhow::anyhow!("AI requested but config not available"));
             }
         } else if run_once {
             agent.run_once().await?;
@@ -112,18 +118,11 @@ async fn handle_status_impl(_use_ai: bool, _ai_config_path: Option<String>, port
     println!("Agent Status");
     println!("{}", "=".repeat(50));
 
-    if let Some(ref path) = portfolio_path {
-        println!("Portfolio: {}", path);
-    } else {
-        println!("Portfolio: not configured");
-    }
+    let portfolio_path_str = portfolio_path.as_deref();
+    let resolved_path = resolve_portfolio_path(portfolio_path_str);
+    println!("Portfolio: {}", resolved_path.display());
 
-    let portfolio = if let Some(ref path_str) = portfolio_path {
-        let path = PathBuf::from(path_str);
-        TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new())
-    } else {
-        TargetPortfolio::new()
-    };
+    let portfolio = load_portfolio_for_cli(portfolio_path_str);
 
     let targets = portfolio.get_all_targets();
     println!("\nTargets: {} total", targets.len());
