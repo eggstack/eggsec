@@ -20,8 +20,18 @@ These skills cover the agent observability system and configuration hot-reloadin
 ```rust
 use crate::agent::logging::AgentLogger;
 
-let log_dir = agent_config.memory_dir.join("logs");
-let _logger = AgentLogger::init(log_dir)?;
+// AgentLogger is stored as Option<AgentLogger> field on the Agent struct
+// and initialized lazily in Agent::run(), not in the constructor:
+
+// In Agent struct (agent/mod.rs):
+// pub struct Agent {
+//     ...
+//     logger: Option<AgentLogger>,
+// }
+
+// In Agent::run() (agent/mod.rs:296):
+let log_dir = self.config.memory_dir.join("logs");
+self.logger = Some(AgentLogger::init(log_dir)?);
 tracing::info!("Agent started scanning");
 ```
 
@@ -116,7 +126,7 @@ let results = fuzzer.run_chain(chain).await?;
 
 ```bash
 cargo test --lib -p slapper --features rest-api,ai-integration
-# Should show 1378 passing tests
+# Should show 1472 passing tests
 ```
 
 ---

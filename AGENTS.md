@@ -236,13 +236,16 @@ When using `notify-debouncer-mini` in config watching code:
 ### Agent Observability
 
 The `agent/logging.rs` module provides `AgentLogger` for file-based logging:
-- Call `AgentLogger::init(log_dir)` early in agent startup
+- `AgentLogger` is stored as `Option<AgentLogger>` field on the `Agent` struct (agent/mod.rs:140)
+- Initialized lazily in `Agent::run()` via `self.logger = Some(AgentLogger::init(log_dir)?)` (agent/mod.rs:296)
 - Logs written to `log_dir/agent.log` with daily rotation
 - JSON format with thread IDs, file/line info
 
 ### Agent Config Hot-Reloading
 
 The `agent/config_watcher.rs` module provides `ConfigWatcher`:
+- `ConfigWatcher` stored as `Option<ConfigWatcher>` field in `Agent` struct (agent/mod.rs:139)
+- Wired in `Agent::new()` at line 207 - kept alive for agent's lifetime
 - Use `SlapperConfigReloader` for portfolio + main config paths
 - Watcher gracefully handles missing files via `.ok()`
 - Requires `ConfigReloader` trait implementation for custom reload logic

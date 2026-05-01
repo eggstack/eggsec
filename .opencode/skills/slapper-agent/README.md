@@ -30,7 +30,7 @@ These skills provide specialized workflows and domain knowledge for the Slapper 
 | `mass_assignment.md` | Mass assignment testing |
 | `nse_sandbox.md` | NSE sandbox usage |
 | `nosql_injection.md` | NoSQL injection testing |
-| `oauth_integration.md` | OAuth integration testing |
+| `oauth_oidc_testing.md` | OAuth/OIDC integration testing |
 | `path_traversal_testing.md` | Path traversal testing |
 | `performance_patterns.md` | Performance testing patterns |
 | `plan_improvement.md` | Plan improvement workflows |
