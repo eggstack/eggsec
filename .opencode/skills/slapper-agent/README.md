@@ -1,167 +1,71 @@
-# Slapper Skills
+# Slapper Agent Skills#
 
-This directory contains skill files for the Slapper autonomous security agent system.
+These skills provide specialized workflows and domain knowledge for the Slapper autonomous agent.
 
-**Note:** These skills are for **using** Slapper's agent system, not for working on the Slapper codebase itself. The `AGENTS.md` file in the project root contains guidelines for AI agents working on the Slapper codebase.
+## Available Skills#
 
-## Purpose
+| Skill File | Description |
+|-----------|-------------|
+| `agent_observality.md` | Agent logging, observability patterns |
+| `agent_thread_safety.md` | Thread safety patterns for agent components |
+| `alert_notification.md` | Alert routing, notification channels |
+| `authentication_security_testing.md` | Auth testing workflows |
+| `autonomous_security_agent.md` | Agent architecture, behavior |
+| `code_quality_patterns.md` | Code quality, linting patterns |
+| `command_injection_testing.md` | Command injection testing |
+| `config_management.md` | Config management, reloading |
+| `cors_security_testing.md` | CORS testing workflows |
+| `cross_site_scripting.md` | XSS testing patterns |
+| `dependency_scanning.md` | Dependency scanning by ecosystem |
+| `dns_reconnaissance.md` | DNS recon, subdomain enumeration |
+| `endpoint_discovery.md` | Endpoint discovery patterns |
+| `expression_injection.md` | Expression injection testing |
+| `formula_injection_testing.md` | Formula injection testing |
+| `graphql_security_testing.md` | GraphQL security testing |
+| `grpc_implementation.md` | gRPC service implementation |
+| `http_load_testing.md` | HTTP load testing |
+| `intercepting_proxy.md` | Intercepting proxy usage |
+| `ldap_injection_testing.md` | LDAP injection testing |
+| `log_injection_testing.md` | Log injection testing |
+| `mass_assignment.md` | Mass assignment testing |
+| `nse_sandbox.md` | NSE sandbox usage |
+| `nosql_injection.md` | NoSQL injection testing |
+| `oauth_integration.md` | OAuth integration testing |
+| `path_traversal_testing.md` | Path traversal testing |
+| `performance_patterns.md` | Performance testing patterns |
+| `plan_improvement.md` | Plan improvement workflows |
+| `plugin_security.md` | Plugin security testing |
+| `port_scanning.md` | Port scanning patterns |
+| `prototype_pollution.md` | Prototype pollution testing |
+| `race_condition.md` | Race condition testing |
+| `rust_dependency_migration.md` | Rust dependency migration |
+| `security_assessment_pipeline.md` | Security assessment pipeline |
+| `security_compliance_checks.md` | Compliance checking |
+| `security_fix_patterns.md` | Security fix patterns |
+| `slapper-agent.md` | Agent-specific workflows |
+| `sql_injection_fuzzing.md` | SQL injection fuzzing |
+| `ssl_tls_audit.md` | SSL/TLS audit patterns |
+| `ssrf_testing.md` | SSRF testing |
+| `subdomain_enumeration.md` | Subdomain enumeration |
+| `template_based_scanning.md` | Template-based scanning |
+| `tui_clipboard.md` | TUI clipboard operations |
+| `tui_improvements.md` | TUI improvement patterns |
+| `tui_session_persistence.md` | TUI session persistence |
+| `tui_tab_indexing.md` | TUI tab indexing |
+| `tui_theme_system.md` | TUI theme system |
+| `vulnerability_management.md` | Vulnerability management |
+| `waf_detection_bypass.md` | WAF detection and bypass |
+| `web_search_integration.md` | Web search integration |
+| `websocket_api.md` | WebSocket API usage |
+| `wireless_security_testing.md` | Wireless security testing |
+| `xpath_injection.md` | XPath injection testing |
 
-Skills define how the autonomous agent should approach security testing workflows. Each skill contains:
-- YAML frontmatter with metadata and trigger keywords
-- Markdown body with capabilities, usage examples, and best practices
+## Usage#
 
-## Quick Start
+Load relevant skills when working on tasks in their domain:
 
-```bash
-# Build with agent support
-cargo build --release --features "rest-api ai-integration"
-
-# List available skills
-./slapper agent skills list
-
-# Load skills
-./slapper agent skills load ./slapper_skills/
-
-# Show skill details
-./slapper agent skills show sql_injection_fuzzing
+```
+use skill tool with name: "slapper-agent"
 ```
 
-## Skills Index
-
-### Reconnaissance
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `dns_reconnaissance.md` | DNS lookup and enumeration | recon |
-| `ssl_tls_audit.md` | TestSSL-like TLS auditing with grading | recon, ssl_audit |
-| `subdomain_enumeration.md` | Subdomain discovery | recon |
-| `web_search_integration.md` | CVE and vulnerability research | search |
-| `wireless_security_testing.md` | WiFi reconnaissance and analysis | wireless |
-| `oauth_oidc_testing.md` | OAuth/OIDC security assessment | recon |
-| `security_compliance_checks.md` | Compliance verification (PCI-DSS, SOC2) | scanner |
-
-### Scanning
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `port_scanning.md` | Network port and service scanning | scanner |
-| `endpoint_discovery.md` | Web path and directory discovery | scanner |
-| `template_based_scanning.md` | Nuclei-style template scanning | scanner, templates |
-
-### Fuzzing
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `sql_injection_fuzzing.md` | SQL injection testing | fuzzer |
-| `cross_site_scripting.md` | XSS vulnerability testing | fuzzer |
-| `path_traversal_testing.md` | Path traversal and LFI/RFI | fuzzer |
-| `ssrf_testing.md` | Server-Side Request Forgery | fuzzer |
-| `command_injection_testing.md` | OS command injection | fuzzer |
-| `ldap_injection_testing.md` | LDAP injection testing | fuzzer |
-| `formula_injection_testing.md` | CSV/spreadsheet formula injection | fuzzer |
-| `log_injection_testing.md` | Log injection and falsification | fuzzer |
-| `nosql_injection.md` | NoSQL injection (MongoDB, Redis, etc.) | fuzzer |
-| `xpath_injection.md` | XPath injection for XML APIs | fuzzer |
-| `expression_injection.md` | Expression language injection (Spring EL, OGNL, etc.) | fuzzer |
-| `mass_assignment.md` | Mass assignment vulnerability testing | fuzzer |
-| `prototype_pollution.md` | JavaScript prototype pollution | fuzzer |
-| `race_condition.md` | Race condition / TOCTOU testing | fuzzer |
-| `graphql_security_testing.md` | GraphQL security testing | fuzzer |
-
-### API Testing
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `graphql_security_testing.md` | GraphQL API security | fuzzer |
-| `oauth_oidc_testing.md` | OAuth/OIDC security | fuzzer |
-| `cors_security_testing.md` | CORS misconfiguration | fuzzer |
-| `authentication_security_testing.md` | Auth mechanism testing | auth_test |
-
-### Proxy
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `intercepting_proxy.md` | HTTP/HTTPS MITM proxy | proxy, intercept |
-
-### Protection
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `waf_detection_bypass.md` | WAF detection and bypass | waf |
-
-### Load Testing
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `http_load_testing.md` | Performance and stress testing | loadtest |
-
-### Compliance
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `security_compliance_checks.md` | Security header verification | compliance |
-
-### Pipeline
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `security_assessment_pipeline.md` | Full security assessment | pipeline |
-
-### Agent
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `autonomous_security_agent.md` | Agent configuration and usage | agent |
-| `agent_thread_safety.md` | Thread safety patterns | agent |
-| `alert_notification.md` | Alert and webhook notifications | notify, alert |
-| `vulnerability_management.md` | CVSS scoring, triage, remediation | vuln |
-| `mcp_protocol.md` | MCP server for AI agent tool execution | rest-api |
-| `dependency_scanning.md` | Dependency vulnerability scanning | recon |
-
-### NSE (Nmap Scripting Engine)
-| Skill | Description | Tools |
-|-------|-------------|-------|
-| `nse_sandbox.md` | NSE sandbox configuration and limitations | nse |
-
-## Usage
-
-### Loading Skills
-
-```bash
-# List all available skills
-slapper agent skills list
-
-# Load skills from this directory
-slapper agent skills load /path/to/slapper_skills/
-
-# Show specific skill details
-slapper agent skills show sql_injection_fuzzing
-```
-
-### Agent Configuration
-
-Agents use these skills to guide their behavior when interacting with targets. The skill triggers are matched against user input to activate appropriate capabilities.
-
-## Format
-
-Each skill follows the YAML + Markdown format:
-
-```yaml
----
-name: skill_name
-description: "Brief description"
-triggers:
-  - trigger1
-  - trigger2
-metadata:
-  category: category
-  tools: [tool1, tool2]
-  scope: targets
----
-
-## Overview
-<detailed description>
-
-## Usage
-<code examples>
-
-## Triggers
-Keywords that activate this skill
-```
-
-## Integration
-
-Skills are loaded by the `SkillLoader` in `agent/skills.rs`. The `SkillRegistry` provides:
-- `find_by_trigger()` - Match triggers to skills
-- `find_by_tool()` - Find skills for specific tools
-- `get_prompts_for_context()` - Generate context-aware prompts
+This will inject the skill's instructions and resources into the conversation context.

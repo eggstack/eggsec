@@ -78,13 +78,12 @@ crates/slapper/
 └── Cargo.toml
 ```
 
-**Note:** The `slapper_skills/` directory in the project root contains skill files for use with the autonomous agent. This is distinct from the codebase itself which agents work on.
+**Note:** The `.opencode/skills/slapper-agent/` directory contains skill files for use with the autonomous agent. This is distinct from the codebase itself which agents work on.
 
 ### Key Types
 
 - `SlapperConfig` - Main configuration (use `config::load_config()`)
 - `PathsConfig` - Directory paths (flattened into SlapperConfig)
-- `SpoofConfig` - IP spoofing settings
 - `FuzzEngine` - Main fuzzing engine (returns `Result`)
 - `PayloadType` - Enum of 30 payload categories
 - `Severity` - Canonical severity rating (in `types.rs`, re-exported everywhere)
@@ -211,25 +210,6 @@ Both use `.chars().take()` for safe character-based truncation (no byte slicing 
 
 **Note:** The `raw_udp` module in `stress/udp.rs:20-117` is integrated — `run_udp_flood()` calls `run_udp_flood_spoofed()` which uses `raw_udp::build_udp_packet` when IP spoofing is enabled on Unix.
 
-## Planning
-
-- `plans/plan.md` — Contains historical record of completed phases (Phase 12 and Phase 13 as of 2026-04-30)
-  - Phase 13 ALL COMPLETED: Render-accurate TUI hardening
-    - TabWindow uses actual label widths (greedy algorithm)
-    - Mouse hit-testing uses `visible_tab_spans()`
-    - Tab labels show shortcuts only for tabs 1-10
-    - Left/right uses edge detection without fallback tab switching
-    - 9 render tests pass for narrow screens
-    - Overlay layouts properly bound
-    - Status bar and breadcrumb use proper overflow handling
-  - Contains architecture patterns useful for future work:
-    - TabIndexing Model
-    - Event Loop Order
-    - Handler Registry Pattern
-    - Snapshot File Pattern
-    - Session Persistence with Stable IDs
-    - Popup Clamping
-
 ## Important Guidelines
 
 ### Codebase Verification Required
@@ -353,16 +333,6 @@ pub struct Tab {
     // ... other fields
 }
 
-impl Tab {
-    pub fn new() -> Self {
-        Self {
-            focus_area: TabFocusArea::Inputs,
-            error_message: None,
-            // ...
-        }
-    }
-}
-
 impl TabInput for Tab {
     fn handle_up(&mut self) {
         self.focus_area = match self.focus_area {
@@ -423,10 +393,6 @@ impl TabWindow {
 - Mouse hit-testing: Uses `TabWindow` to map click position to correct tab
 - Session persistence: Uses `stable_id` for forward compatibility
 
-- `App::new(history: SharedHistory)` - Runtime constructor; restores session state
-- `App::new_for_testing(history: SharedHistory)` - Test constructor; does NOT restore session
-- Use `App::new_for_testing()` in all unit tests to avoid ambient session file dependencies
-
 **Width tracking:**
 - `App::last_tab_area_width` tracks the actual tab bar width (`area.width - LAYOUT_MARGIN * 2`)
 - Updated during draw, used by `adjust_tab_scroll()` and mouse hit-testing
@@ -437,45 +403,15 @@ impl TabWindow {
 - Don't use `Tab::all().len()` as visible count (not all tabs may be available)
 - Don't divide tab area by total tab count for mouse hit-testing
 
-**Phase 13 Updates (2026-04-30):**
-
-`TabWindow::for_width` now uses actual tab label widths (greedy algorithm) instead of fixed `min_tab_width = 8`:
-```rust
-pub fn for_width(term_width: u16, current_tab: Tab, previous_offset: u16) -> Self;
-// Uses actual tab title widths to compute max_visible
-```
-
-Added `visible_tab_spans()` for render-aware mouse hit-testing:
-```rust
-pub struct TabSpan {
-    pub tab: Tab,
-    pub global_index: usize,
-    pub x_start: u16,
-    pub x_end: u16,
-}
-
-pub fn visible_tab_spans(&self, term_width: u16) -> Vec<TabSpan>;
-```
-
-Keyboard navigation uses edge detection:
-- `handle_left()` and `handle_right()` check `is_at_left_edge()` / `is_at_right_edge()` before attempting movement
-- No longer fall back to tab switching when `handle_left/right` returns `false`
-- Use `n/p` or `Shift+H/L` for explicit tab navigation
-
-Tab labels now show shortcuts only for tabs 1-10:
-- `[1] Recon` through `[9] Scan` have keyboard shortcuts
-- `[0] Resume` - keyboard shortcut is '0' for tab 10
-- `Proxy`, `Packet`, etc. (tabs 11+) have no numeric shortcut labels
-
----
-
-### Auto-Insert Mode
+**Auto-Insert Mode**
 
 The TUI automatically switches to Insert mode when Tab/Shift+Tab focuses an input:
 - `handle_focus_next()` and `handle_focus_prev()` in `App` check `is_input_focused()` after navigation
 - If input is focused, mode is set to `InputMode::Insert`; otherwise `InputMode::Normal`
 - Users can still manually toggle with `i` key in Normal mode
 
----
+## Skills Directory
 
-*End of AGENTS.md*
+Skills are located in `.opencode/skills/slapper-agent/`. These provide specialized workflows and domain knowledge for working on specific areas of the codebase.
+
+Use the `skill` tool to load relevant skills when tackling tasks in their domain.
