@@ -2,7 +2,7 @@ use axum::{routing::get, routing::post, routing::delete, extract::{State, Path},
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use subtle::ConstantTimeEq;
-use std::net::{IpAddr, ToSocketAddrs};
+use std::net::IpAddr;
 
 use crate::tool::agents::{AgentRegistry, AgentInfo, AgentStatus, TaskScheduler, ScheduledTask, TaskPriority, TaskStatus};
 
@@ -16,6 +16,23 @@ pub enum CallbackUrlValidationError {
 }
 
 pub fn validate_callback_url(url_str: &str) -> Result<(), CallbackUrlValidationError> {
+    let resolver = |host: &str, port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
+        let addr_str = if port == 0 {
+            host.to_string()
+        } else {
+            format!("{}:{}", host, port)
+        };
+        std::net::ToSocketAddrs::to_socket_addrs(addr_str.as_str())
+            .map(|iter| iter.map(|a| a.ip()).collect())
+            .map_err(|e| CallbackUrlValidationError::ResolvesToForbiddenIp(format!("DNS failed: {}", e)))
+    };
+    validate_callback_url_with_resolver(url_str, resolver)
+}
+
+pub fn validate_callback_url_with_resolver<F>(url_str: &str, resolver: F) -> Result<(), CallbackUrlValidationError>
+where
+    F: Fn(&str, u16) -> Result<Vec<IpAddr>, CallbackUrlValidationError>,
+{
     let parsed = url::Url::parse(url_str)
         .map_err(|e| CallbackUrlValidationError::InvalidUrl(e.to_string()))?;
 
@@ -32,19 +49,26 @@ pub fn validate_callback_url(url_str: &str) -> Result<(), CallbackUrlValidationE
     let host = parsed.host_str()
         .ok_or(CallbackUrlValidationError::MissingHost)?;
 
+    let host_lower = host.to_lowercase();
+    if host_lower == "localhost" || host_lower == "localhost." {
+        return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(host.to_string()));
+    }
+
+    let port = parsed.port().unwrap_or_else(|| {
+        match scheme {
+            "https" => 443,
+            _ => 80,
+        }
+    });
+
     if let Ok(ip) = host.parse::<IpAddr>() {
         if is_forbidden_ip(&ip) {
             return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(host.to_string()));
         }
     } else {
-        let addrs: Vec<_> = (host, 0).to_socket_addrs()
-            .map_err(|e| CallbackUrlValidationError::ResolvesToForbiddenIp(format!("DNS failed: {}", e)))?
-            .collect();
-        
-        if let Some(first_ip) = addrs.first().map(|a| a.ip()) {
-            if is_forbidden_ip(&first_ip) {
-                return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(host.to_string()));
-            }
+        let addrs = resolver(host, port)?;
+        if addrs.iter().any(|ip| is_forbidden_ip(ip)) {
+            return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(host.to_string()));
         }
     }
 
@@ -78,7 +102,7 @@ fn is_private_ip(ip: &IpAddr) -> bool {
         }
         IpAddr::V6(ipv6) => {
             let segs = ipv6.segments();
-            segs[0] == 0xfc00 >> 8 || segs[0] == 0xfd00 >> 8
+            (segs[0] & 0xfe00) == 0xfc00
         }
     }
 }
@@ -86,13 +110,14 @@ fn is_private_ip(ip: &IpAddr) -> bool {
 fn is_link_local_ip(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(ipv4) => ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254,
-        IpAddr::V6(ipv6) => ipv6.segments()[0] == 0xfe80 >> 8,
+        IpAddr::V6(ipv6) => (ipv6.segments()[0] & 0xffc0) == 0xfe80,
     }
 }
 
 fn is_benchmark_ip(ip: &IpAddr) -> bool {
     if let IpAddr::V4(ipv4) = ip {
-        ipv4.octets()[0] == 198 && ipv4.octets()[1] == 18
+        let octets = ipv4.octets();
+        octets[0] == 198 && (octets[1] == 18 || octets[1] == 19)
     } else {
         false
     }
@@ -100,9 +125,10 @@ fn is_benchmark_ip(ip: &IpAddr) -> bool {
 
 fn is_documentation_ip(ip: &IpAddr) -> bool {
     if let IpAddr::V4(ipv4) = ip {
-        ipv4.octets() == [192, 0, 2, 0]
-            || ipv4.octets() == [198, 51, 100, 0]
-            || ipv4.octets() == [203, 0, 113, 0]
+        let octets = ipv4.octets();
+        (octets[0] == 192 && octets[1] == 0 && octets[2] == 2)
+            || (octets[0] == 198 && octets[1] == 51 && octets[2] == 100)
+            || (octets[0] == 203 && octets[1] == 0 && octets[2] == 113)
     } else {
         false
     }
@@ -127,13 +153,13 @@ async fn register_agent(
     State(state): State<AgentState>,
     headers: HeaderMap,
     Json(req): Json<RegisterAgentRequest>,
-) -> Result<Json<RegisterAgentResponse>, &'static str> {
+) -> Result<Json<RegisterAgentResponse>, (StatusCode, String)> {
     if let Err(e) = require_auth(&state.api_key, &headers) {
-        return Err(e);
+        return Err((StatusCode::UNAUTHORIZED, e.to_string()));
     }
     if let Some(ref callback_url) = req.callback_url {
         if let Err(e) = validate_callback_url(callback_url) {
-            return Err("Invalid callback URL");
+            return Err((StatusCode::BAD_REQUEST, format!("Invalid callback URL: {:?}", e)));
         }
     }
     let id = Uuid::new_v4();
@@ -265,32 +291,23 @@ async fn create_task(
         _ => TaskPriority::Normal,
     };
 
-    let task = ScheduledTask {
-        id: Uuid::new_v4(),
-        task_type: req.task_type.clone(),
-        payload: req.payload.clone(),
-        priority,
-        retry_count: 0,
-        max_retries: 3,
-        created_at: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64,
-        scheduled_for: None,
-        status: TaskStatus::Pending,
-        assigned_agent_id: None,
-        leased_until: None,
-    };
-
+    let scheduler = state.scheduler.clone();
+    let mut task = scheduler.create_task(
+        req.task_type.clone(),
+        req.payload.clone(),
+    );
+    task.priority = priority;
+    if let Some(agent_id) = req.agent_id {
+        task.assigned_agent_id = Some(agent_id);
+    }
     let task_id = task.id;
-    state.scheduler.schedule(task).await;
-
-    let priority_str = match priority {
+    let priority_str = match task.priority {
         TaskPriority::Critical => "critical",
         TaskPriority::High => "high",
         TaskPriority::Normal => "normal",
         TaskPriority::Low => "low",
     };
+    scheduler.schedule(task).await;
 
     Ok(Json(CreateTaskResponse {
         id: task_id,
@@ -593,15 +610,30 @@ mod tests {
         assert!(scheduler.pending_count().await > 0);
     }
 
-    #[tokio::test]
+#[tokio::test]
     async fn test_task_status_pending() {
         let scheduler = TaskScheduler::new();
         let task = scheduler.create_task("scan", serde_json::json!({}));
         assert_eq!(task.status, TaskStatus::Pending);
         scheduler.schedule(task).await;
-        let next = scheduler.next_task().await;
+        let agent_id = Uuid::new_v4();
+        let next = scheduler.lease_next_task(agent_id, 60000).await;
         assert!(next.is_some());
-        assert_eq!(next.unwrap().status, TaskStatus::Pending);
+        assert_eq!(next.unwrap().status, TaskStatus::Leased);
+    }
+
+    #[tokio::test]
+    async fn test_leased_task_cannot_be_leased_again() {
+        let scheduler = TaskScheduler::new();
+        let task = scheduler.create_task("scan", serde_json::json!({}));
+        let task_id = task.id;
+        scheduler.schedule(task).await;
+        let agent_id1 = Uuid::new_v4();
+        let agent_id2 = Uuid::new_v4();
+        let first_lease = scheduler.lease_task(task_id, agent_id1, 60000).await;
+        assert!(first_lease);
+        let second_lease = scheduler.lease_task(task_id, agent_id2, 60000).await;
+        assert!(!second_lease);
     }
 
     #[tokio::test]
@@ -633,7 +665,8 @@ mod tests {
         scheduler.schedule(task).await;
         let agent_id = Uuid::new_v4();
         scheduler.lease_task(task_id, agent_id, 60000).await;
-        let next = scheduler.next_task().await;
+        let agent_id2 = Uuid::new_v4();
+        let next = scheduler.lease_next_task(agent_id2, 60000).await;
         assert!(next.is_none());
     }
 
@@ -649,8 +682,8 @@ mod tests {
         assert!(!leased);
     }
 
-    #[tokio::test]
-    async fn test_failed_task_with_retry() {
+#[tokio::test]
+    async fn test_failed_task_with_retries_becomes_pending() {
         let scheduler = TaskScheduler::new();
         let task = scheduler.create_task("scan", serde_json::json!({}));
         let task_id = task.id;
@@ -659,8 +692,9 @@ mod tests {
         scheduler.lease_task(task_id, agent_id, 60000).await;
         scheduler.submit_result(task_id, false, None, Some("error".to_string())).await;
         let failed_task = scheduler.get_task(task_id).await.unwrap();
-        assert_eq!(failed_task.status, TaskStatus::Failed);
-        assert!(failed_task.retry_count < failed_task.max_retries);
+        assert_eq!(failed_task.status, TaskStatus::Pending);
+        assert_eq!(failed_task.retry_count, 1);
+        assert_eq!(failed_task.error, Some("error".to_string()));
     }
 
     #[test]
@@ -742,7 +776,7 @@ mod tests {
     fn test_is_forbidden_ip_direct() {
         use std::net::IpAddr;
         use std::str::FromStr;
-        
+
         assert!(is_forbidden_ip(&IpAddr::from_str("127.0.0.1").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("10.0.0.1").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("172.16.0.1").unwrap()));
@@ -751,8 +785,53 @@ mod tests {
         assert!(is_forbidden_ip(&IpAddr::from_str("169.254.0.1").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("192.0.2.0").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("198.18.0.1").unwrap()));
-        
+
         assert!(!is_forbidden_ip(&IpAddr::from_str("8.8.8.8").unwrap()));
         assert!(!is_forbidden_ip(&IpAddr::from_str("1.1.1.1").unwrap()));
+    }
+
+    #[test]
+    fn test_is_forbidden_ip_extended() {
+        use std::net::IpAddr;
+        use std::str::FromStr;
+
+        assert!(is_forbidden_ip(&IpAddr::from_str("127.255.255.255").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("172.31.255.255").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("224.0.0.1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("192.0.2.55").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("198.51.100.55").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("203.0.113.55").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("198.19.255.255").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("::1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("fc00::1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("fd00::1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("fe80::1").unwrap()));
+        assert!(is_forbidden_ip(&IpAddr::from_str("169.254.169.254").unwrap()));
+    }
+
+    #[test]
+    fn test_callback_url_rejects_non_first_private_ip() {
+        let resolver = |_host: &str, _port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
+            Ok(vec![
+                "8.8.8.8".parse().unwrap(),
+                "10.0.0.1".parse().unwrap(),
+            ])
+        };
+        assert!(validate_callback_url_with_resolver("http://example.com", resolver).is_err());
+    }
+
+    #[test]
+    fn test_callback_url_accepts_safe_with_fake_resolver() {
+        let resolver = |_host: &str, _port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
+            Ok(vec!["8.8.8.8".parse().unwrap()])
+        };
+        assert!(validate_callback_url_with_resolver("http://example.com", resolver).is_ok());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_localhost_case_insensitive() {
+        assert!(validate_callback_url("http://LOCALHOST:8080").is_err());
+        assert!(validate_callback_url("http://Localhost:8080").is_err());
+        assert!(validate_callback_url("http://localhost.:8080").is_err());
     }
 }
