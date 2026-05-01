@@ -433,9 +433,15 @@ impl Agent {
             }
         };
 
-        let token_handle = cancellation_token.map(|_| {
-            let ct = crate::tool::request::CancellationToken::new();
-            ct.wrap()
+        let token_handle = cancellation_token.map(|tokio_token| {
+            // Bridge Tokio cancellation token to tool cancellation token
+            let tool_token = crate::tool::request::CancellationToken::new();
+            let tool_token_clone = tool_token.clone();
+            tokio::spawn(async move {
+                tokio_token.cancelled().await;
+                tool_token_clone.cancel();
+            });
+            tool_token.wrap()
         });
         let request = ToolRequest {
             id: uuid::Uuid::new_v4().to_string(),
