@@ -125,6 +125,8 @@ pub struct TargetConfig {
     pub enabled: bool,
     pub scan_depth: ScanDepth,
     pub off_peak_window: Option<OffPeakWindow>,
+    #[serde(default)]
+    pub scope: Option<crate::config::Scope>,
 }
 
 impl TargetConfig {
@@ -141,6 +143,22 @@ impl TargetConfig {
             enabled: true,
             scan_depth: ScanDepth::Shallow,
             off_peak_window: None,
+            scope: None,
+        }
+    }
+
+    /// Convert target_type string to TargetType enum
+    pub fn get_target_type(&self) -> crate::tool::request::TargetType {
+        match self.target_type.to_lowercase().as_str() {
+            "url" => crate::tool::request::TargetType::Url,
+            "domain" => crate::tool::request::TargetType::Domain,
+            "ip" => crate::tool::request::TargetType::Ip,
+            "cidr" => crate::tool::request::TargetType::Cidr,
+            "file" => crate::tool::request::TargetType::File,
+            _ => {
+                tracing::warn!("Unknown target type: {}, defaulting to Url", self.target_type);
+                crate::tool::request::TargetType::Url
+            }
         }
     }
 }
@@ -159,6 +177,7 @@ impl Default for TargetConfig {
             enabled: true,
             scan_depth: ScanDepth::default(),
             off_peak_window: None,
+            scope: None,
         }
     }
 }
@@ -357,6 +376,7 @@ mod tests {
             enabled: true,
             scan_depth: ScanDepth::default(),
             off_peak_window: None,
+            scope: None,
         };
         assert_eq!(config.target, "https://example.com");
         assert_eq!(config.priority, Priority::High);

@@ -190,6 +190,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
                 enabled: true,
                 scan_depth: crate::agent::portfolio::ScanDepth::default(),
                 off_peak_window: None,
+                scope: None,
             };
 
             let portfolio = TargetPortfolio::new();

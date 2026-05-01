@@ -338,8 +338,16 @@ impl Agent {
                         continue;
                     }
 
+                    let scope = config.scope.as_ref().map(|s| convert_scope(s));
                     let result = self
-                        .execute_scan_with_depth(&config.target, "pipeline", config.scan_depth, None)
+                        .execute_scan_with_depth(
+                            &config.target,
+                            "pipeline",
+                            config.scan_depth,
+                            None,
+                            config.get_target_type(),
+                            scope,
+                        )
                         .await;
 
                     if let Ok(ref response) = result {
@@ -393,8 +401,23 @@ impl Agent {
         target: &str,
         scan_type: &str,
     ) -> Result<ToolResponse> {
-        self.execute_scan_with_depth(target, scan_type, crate::agent::portfolio::ScanDepth::Shallow, None)
-            .await
+        // Look up target in portfolio to get target_type and scope
+        let (target_type, scope) = if let Some(config) = self.portfolio.get_target(target) {
+            let scope = config.scope.as_ref().map(|s| convert_scope(s));
+            (config.get_target_type(), scope)
+        } else {
+            // Default to Url if target not in portfolio
+            (crate::tool::request::TargetType::Url, None)
+        };
+        self.execute_scan_with_depth(
+            target,
+            scan_type,
+            crate::agent::portfolio::ScanDepth::Shallow,
+            None,
+            target_type,
+            scope,
+        )
+        .await
     }
 
     pub async fn execute_scan_with_depth(
@@ -403,6 +426,8 @@ impl Agent {
         scan_type: &str,
         depth: crate::agent::portfolio::ScanDepth,
         cancellation_token: Option<CancellationToken>,
+        target_type: crate::tool::request::TargetType,
+        scope: Option<crate::tool::request::Scope>,
     ) -> Result<ToolResponse> {
         // Check operational constraints before dispatch
         self.constraint_checker.evaluate_action("scan", target)
@@ -448,8 +473,8 @@ impl Agent {
             tool: scan_type.to_string(),
             target: crate::tool::Target {
                 value: target.to_string(),
-                target_type: crate::tool::TargetType::Url,
-                scope: None,
+                target_type,
+                scope,
             },
             params,
             options: Default::default(),
@@ -608,6 +633,16 @@ impl Agent {
     }
 }
 
+/// Convert config::Scope to tool::request::Scope
+fn convert_scope(config_scope: &crate::config::Scope) -> crate::tool::request::Scope {
+    crate::tool::request::Scope {
+        allowed_patterns: config_scope.allowed_targets.iter().map(|rule| rule.pattern.clone()).collect(),
+        excluded_patterns: config_scope.excluded_targets.iter().map(|rule| rule.pattern.clone()).collect(),
+        allowed_ips: vec![], // config::Scope doesn't have allowed_ips directly
+        allow_subdomains: true, // default
+    }
+}
+
 impl CronScheduler {
     pub fn should_run_for(&self, schedule: &str, now: &DateTime<Utc>) -> bool {
         if let Ok(expr) = crate::output::schedule::CronExpression::parse(schedule) {
@@ -635,7 +670,7 @@ impl CronScheduler {
         };
 
         // If last scan is in the same minute as now, don't run again (cron triggers at minute granularity)
-        if last.minute() == now.minute() && last.hour() == now.hour() && last.date() == now.date() {
+        if last.minute() == now.minute() && last.hour() == now.hour() && last.date_naive() == now.date_naive() {
             return false;
         }
 
