@@ -14,6 +14,50 @@ use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+/// Alert channel configuration for SlapperConfig
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AlertChannelsConfig {
+    #[serde(default)]
+    pub channels: HashMap<String, AlertChannelConfigEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum AlertChannelConfigEntry {
+    Webhook(WebhookConfigEntry),
+    Email(EmailConfigEntry),
+    Slack(SlackConfigEntry),
+    PagerDuty(PagerDutyConfigEntry),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebhookConfigEntry {
+    pub url: String,
+    pub secret: Option<SensitiveString>,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailConfigEntry {
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub from: String,
+    pub to: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlackConfigEntry {
+    pub webhook_url: String,
+    pub channel: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PagerDutyConfigEntry {
+    pub routing_key: SensitiveString,
+    pub severity: String,
+}
+
 fn default_ttl() -> u64 {
     cache_constants::DEFAULT_TTL_SECS
 }
@@ -84,6 +128,9 @@ pub struct SlapperConfig {
 
     #[serde(default)]
     pub search: Option<SearchConfig>,
+
+    #[serde(default)]
+    pub alert_channels: AlertChannelsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

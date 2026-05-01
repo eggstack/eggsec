@@ -205,6 +205,7 @@ impl SettingsTab {
             proxies: Vec::new(),
             ai: None,
             search: None,
+            alert_channels: crate::config::AlertChannelsConfig::default(),
         }
     }
 
