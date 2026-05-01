@@ -152,6 +152,10 @@ where
         app.update();
         app.auto_save_if_due();
 
+        if app.should_quit {
+            return Ok(());
+        }
+
         if app.needs_redraw {
             terminal.draw(|f| ui::draw(f, app))?;
             app.needs_redraw = false;
@@ -471,6 +475,10 @@ where
                         if !app.is_running() && app.current_tab == Tab::History {
                             app.request_confirmation(PendingAction::DeleteHistoryEntry);
                         }
+                    }
+                    (KeyModifiers::NONE, KeyCode::Char('e')) if app.mode == InputMode::Normal => {
+                        // Export results for current tab
+                        app.export_results();
                     }
                     (KeyModifiers::NONE, KeyCode::Enter) => {
                         if app.show_search {

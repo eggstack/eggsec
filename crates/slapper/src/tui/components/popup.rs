@@ -215,7 +215,6 @@ pub fn help_popup_for_tab(tab: crate::tui::tabs::Tab) -> Popup {
         "".to_string(),
         "=== TAB NAVIGATION ===".to_string(),
         "  Tab/Shift+Tab    - Next/Previous focus".to_string(),
-        "  h/l              - Previous/Next tab".to_string(),
         "  n/N              - Next/Previous tab".to_string(),
         "  p                - Previous tab".to_string(),
         "  Shift+H          - Previous tab".to_string(),

@@ -166,11 +166,11 @@ impl DashboardTab {
         self.view.add_line(Line::from(""));
         self.view.add_line(Line::from("Keybindings:"));
         self.view
-            .add_line(Line::from("  h/l or n/p   - Previous/Next tab"));
+            .add_line(Line::from("  n/p or Shift+H/L - Previous/Next tab"));
         self.view
             .add_line(Line::from("  j/k          - Scroll up/down"));
         self.view
-            .add_line(Line::from("  Enter        - Start scan"));
+            .add_line(Line::from("  Enter        - Jump to scan tab"));
         self.view
             .add_line(Line::from("  e            - Export results"));
         self.view

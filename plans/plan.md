@@ -146,6 +146,17 @@ Relevant files:
 - `GlobalSearch::search_from_strings("foo", data)` clears old selection and results.
 - A runner-level helper, if extracted, distinguishes `/` and `Ctrl+F` scopes.
 
+### Status: COMPLETED (2026-05-01)
+
+- Added `search_is_global` field to App to track search scope
+- Updated `toggle_search()` to accept `is_global` parameter
+- Updated `perform_search()` to handle both global and current-tab search
+- `Ctrl+F` now opens search prompt without searching (search on Enter)
+- `/` key does current-tab search, `Ctrl+F` does global search
+- Replaced `Color::*` with `tc!` theme colors in `search.rs`
+- Updated all callers of `toggle_search()` to pass the parameter
+- All 124 TUI tests pass
+
 ## Workstream 3: Fix Modal And Overlay Input Precedence
 
 ### Problem

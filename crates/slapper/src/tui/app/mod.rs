@@ -79,6 +79,36 @@ impl PendingAction {
     }
 }
 
+pub struct Notification {
+    pub message: String,
+    pub severity: NotificationSeverity,
+    pub created_at: std::time::Instant,
+    pub timeout_secs: u64,
+}
+
+impl Notification {
+    pub fn new(message: String, severity: NotificationSeverity) -> Self {
+        Self {
+            message,
+            severity,
+            created_at: std::time::Instant::now(),
+            timeout_secs: 5, // Default 5 seconds
+        }
+    }
+
+    pub fn is_expired(&self) -> bool {
+        self.created_at.elapsed().as_secs() > self.timeout_secs
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationSeverity {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+
 pub struct App {
     pub current_tab: Tab,
     pub should_quit: bool,
@@ -149,6 +179,7 @@ pub struct App {
     pub bookmarks: std::collections::HashSet<String>,
     pub paused: bool,
     pub spinner_tick: u64,
+    pub notification: Option<Notification>,
 }
 
 impl App {
@@ -263,6 +294,7 @@ impl App {
             help_context: HelpContext::Normal,
             pending_action: None,
             needs_redraw: true,
+            notification: None,
             bookmarks: restored_bookmarks,
             paused: false,
             spinner_tick: 0,
@@ -426,6 +458,12 @@ impl App {
     pub fn handle_enter(&mut self) {
         if self.show_help {
             self.show_help = false;
+            return;
+        }
+
+        // Dashboard Enter jumps to Recon tab (first scan tab)
+        if self.current_tab == super::tabs::Tab::Dashboard {
+            self.current_tab = super::tabs::Tab::Recon;
             return;
         }
 
@@ -883,6 +921,34 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     /// Check if any overlay is active (blocks tab content interaction)
     pub fn is_any_overlay_active(&self) -> bool {
         self.topmost_overlay().is_some()
+    }
+
+    /// Set a notification message with the given severity
+    pub fn set_notification(&mut self, message: String, severity: NotificationSeverity) {
+        self.notification = Some(Notification::new(message, severity));
+        self.needs_redraw = true;
+    }
+
+    /// Clear any current notification (if expired or manually dismissed)
+    pub fn clear_notification(&mut self) {
+        if let Some(ref notification) = self.notification {
+            if notification.is_expired() {
+                self.notification = None;
+                self.needs_redraw = true;
+            }
+        }
+    }
+
+    /// Get the current notification if any (and clear if expired)
+    pub fn get_notification(&mut self) -> Option<&Notification> {
+        if let Some(ref notification) = self.notification {
+            if notification.is_expired() {
+                self.notification = None;
+                self.needs_redraw = true;
+                return None;
+            }
+        }
+        self.notification.as_ref()
     }
 }
 
