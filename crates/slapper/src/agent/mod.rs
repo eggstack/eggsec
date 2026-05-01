@@ -166,7 +166,7 @@ impl Agent {
             config.portfolio_path.clone(),
             SlapperConfig::default_path(),
         ));
-        let config_watcher = ConfigWatcher::new(config_paths, reloader).ok();
+        let config_watcher = Some(ConfigWatcher::new(config_paths, reloader)?);
 
         let constraint_checker = if let Some(constraints) = config.operational_constraints.clone() {
             ConstraintChecker::new(constraints)
