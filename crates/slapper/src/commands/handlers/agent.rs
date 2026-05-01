@@ -7,6 +7,19 @@ use crate::agent::SkillLoader;
 use crate::cli::agent::{AgentArgs, AgentCommand};
 use crate::commands::handlers::CommandContext;
 
+fn resolve_portfolio_path(portfolio_path: Option<&str>) -> PathBuf {
+    portfolio_path.map(|p| expand_path(p)).unwrap_or_else(|| {
+        std::env::var("HOME")
+            .map(|h| PathBuf::from(h).join(".config").join("slapper").join("portfolio.json"))
+            .unwrap_or_else(|_| PathBuf::from("portfolio.json"))
+    })
+}
+
+fn load_portfolio_for_cli(portfolio_path: Option<&str>) -> TargetPortfolio {
+    let path = resolve_portfolio_path(portfolio_path);
+    TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new())
+}
+
 pub async fn handle_agent(_ctx: &CommandContext, args: AgentArgs) -> Result<()> {
     let use_ai = args.with_ai;
     let ai_config_path = args.ai_config.clone();
@@ -61,7 +74,6 @@ async fn handle_agent_run_impl(
 
     let use_ai_final = use_ai && config.ai_config.is_some();
     let run_once = run_args.once;
-    let ai_config = config.ai_config.clone();
 
     let mut agent = Agent::new(config).await?;
 
@@ -70,12 +82,12 @@ async fn handle_agent_run_impl(
         if use_ai_final {
             let mut agent_with_ai = agent.with_ai_client(ai_config.unwrap()).await;
             if run_once {
-                agent_with_ai.execute_scan("dummy", "recon").await?;
+                agent_with_ai.run_once().await?;
             } else {
                 agent_with_ai.run().await?;
             }
         } else if run_once {
-            println!("Agent run completed (once mode)");
+            agent.run_once().await?;
         } else {
             agent.run().await?;
         }
@@ -87,7 +99,7 @@ async fn handle_agent_run_impl(
             eprintln!("Warning: AI features not enabled. Recompile with --features ai-integration");
         }
         if run_once {
-            println!("Agent run completed (once mode)");
+            agent.run_once().await?;
         } else {
             agent.run().await?;
         }
@@ -161,9 +173,10 @@ fn expand_path(path: &str) -> PathBuf {
 }
 
 async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Option<String>) -> Result<()> {
+    let portfolio_path_str = portfolio_path.as_deref();
     match args.command {
         crate::cli::agent::TargetsCommand::List => {
-            let portfolio = TargetPortfolio::new();
+            let portfolio = load_portfolio_for_cli(portfolio_path_str);
             println!("Targets:");
             for (id, config) in portfolio.get_all_targets() {
                 println!("  {} -> {} (enabled: {})", id, config.target, config.enabled);
@@ -193,7 +206,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
                 scope: None,
             };
 
-            let portfolio = TargetPortfolio::new();
+            let portfolio = load_portfolio_for_cli(portfolio_path_str);
             portfolio.add_target(add_args.id, config);
             portfolio.save()?;
 
@@ -201,11 +214,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
             Ok(())
         }
         crate::cli::agent::TargetsCommand::Update(update_args) => {
-            let path = portfolio_path.as_ref().map(PathBuf::from).unwrap_or_else(|| {
-                std::env::var("HOME")
-                    .map(|h| PathBuf::from(h).join(".config").join("slapper").join("portfolio.json"))
-                    .unwrap_or_else(|_| PathBuf::from("portfolio.json"))
-            });
+            let path = resolve_portfolio_path(portfolio_path_str);
             let portfolio = TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new());
             if portfolio.update_target(&update_args.id, |target| {
                 if let Some(new_target) = update_args.target {
@@ -238,7 +247,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
             Ok(())
         }
         crate::cli::agent::TargetsCommand::Remove { id } => {
-            let portfolio = TargetPortfolio::new();
+            let portfolio = load_portfolio_for_cli(portfolio_path_str);
             if portfolio.remove_target(&id) {
                 portfolio.save()?;
                 println!("Target {} removed", id);
@@ -248,7 +257,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
             Ok(())
         }
         crate::cli::agent::TargetsCommand::Enable { id } => {
-            let portfolio = TargetPortfolio::new();
+            let portfolio = load_portfolio_for_cli(portfolio_path_str);
             if portfolio.update_target(&id, |target| {
                 target.enabled = true;
             }) {
@@ -260,7 +269,7 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
             Ok(())
         }
         crate::cli::agent::TargetsCommand::Disable { id } => {
-            let portfolio = TargetPortfolio::new();
+            let portfolio = load_portfolio_for_cli(portfolio_path_str);
             if portfolio.update_target(&id, |target| {
                 target.enabled = false;
             }) {
@@ -280,7 +289,7 @@ async fn handle_skills(args: crate::cli::agent::SkillsArgs) -> Result<()> {
         match args.command {
             crate::cli::agent::SkillsCommand::List => {
                 let default_dirs = vec![
-                    PathBuf::from("~/.config/slapper/skills"),
+                    expand_path("~/.config/slapper/skills"),
                 ];
                 let loader = SkillLoader::new(default_dirs);
                 let skills = loader.load_skills()?;
@@ -299,7 +308,7 @@ async fn handle_skills(args: crate::cli::agent::SkillsArgs) -> Result<()> {
             }
             crate::cli::agent::SkillsCommand::Show { name } => {
                 let default_dirs = vec![
-                    PathBuf::from("~/.config/slapper/skills"),
+                    expand_path("~/.config/slapper/skills"),
                 ];
                 let loader = SkillLoader::new(default_dirs);
                 let skills = loader.load_skills()?;

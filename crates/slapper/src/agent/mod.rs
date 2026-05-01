@@ -24,9 +24,11 @@ use std::pin::Pin;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
+use std::panic::AssertUnwindSafe;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc, Timelike};
+use futures::FutureExt;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
@@ -332,6 +334,26 @@ impl Agent {
         Ok(())
     }
 
+    pub async fn run_once(&mut self) -> Result<()> {
+        {
+            let mut running = self.running.write().await;
+            if *running {
+                return Ok(());
+            }
+            *running = true;
+        }
+
+        let log_dir = self.config.memory_dir.join("logs");
+        self.logger = Some(logging::AgentLogger::init(log_dir)?);
+
+        tracing::info!("Running agent in single-pass mode");
+
+        self.process_scheduled_scans().await?;
+
+        tracing::info!("Single pass completed");
+        Ok(())
+    }
+
     pub async fn stop(&self) {
         let mut running = self.running.write().await;
         *running = false;
@@ -393,6 +415,11 @@ impl Agent {
                     if let Ok(ref response) = result {
                         // Only update last_scan after successful dispatch
                         self.portfolio.update_last_scan(&target_id, &now);
+
+                        if let Err(e) = self.portfolio.save() {
+                            tracing::error!(error = %e, "Failed to persist portfolio state after scheduled scan");
+                            return Err(anyhow::anyhow!("Portfolio persistence failed: {}", e));
+                        }
 
                         if let Err(e) = self.memory.store_scan_results(&config.target, response).await {
                             tracing::warn!("Failed to store scan results: {}", e);
@@ -667,17 +694,26 @@ impl Agent {
         tracing::debug!("Event triggered: {:?}", event.event_type());
 
         let handlers = std::mem::take(&mut self.event_handlers);
-        let result = async {
-            for handler in handlers.iter() {
-                if handler.handles(&event) {
-                    handler.handle(&event, self).await?;
+
+        for handler in handlers.iter() {
+            if handler.handles(&event) {
+                let future = std::panic::AssertUnwindSafe(handler.handle(&event, self));
+                match future.catch_unwind().await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => {
+                        self.event_handlers = handlers;
+                        return Err(e);
+                    }
+                    Err(_) => {
+                        self.event_handlers = handlers;
+                        return Err(anyhow::anyhow!("handler panicked"));
+                    }
                 }
             }
-            Ok(())
         }
-        .await;
+
         self.event_handlers = handlers;
-        result
+        Ok(())
     }
 }
 
