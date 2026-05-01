@@ -4,6 +4,16 @@ use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskStatus {
+    Pending,
+    Leased,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
 #[derive(Debug, Clone)]
 pub struct ScheduledTask {
     pub id: Uuid,
@@ -14,6 +24,9 @@ pub struct ScheduledTask {
     pub max_retries: usize,
     pub created_at: u64,
     pub scheduled_for: Option<u64>,
+    pub status: TaskStatus,
+    pub assigned_agent_id: Option<Uuid>,
+    pub leased_until: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,7 +105,44 @@ impl TaskScheduler {
 
     pub async fn next_task(&self) -> Option<ScheduledTask> {
         let mut queue = self.queue.write().await;
-        queue.pop_front()
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        if let Some(pos) = queue.iter().position(|t| {
+            t.status == TaskStatus::Pending
+            && t.scheduled_for.map(|s| s <= now).unwrap_or(true)
+        }) {
+            Some(queue.remove(pos).unwrap())
+        } else {
+            None
+        }
+    }
+
+    pub async fn lease_task(&self, task_id: Uuid, agent_id: Uuid, lease_duration_ms: u64) -> bool {
+        let mut queue = self.queue.write().await;
+        if let Some(task) = queue.iter_mut().find(|t| t.id == task_id && t.status == TaskStatus::Pending) {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            task.status = TaskStatus::Leased;
+            task.assigned_agent_id = Some(agent_id);
+            task.leased_until = Some(now + lease_duration_ms);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub async fn submit_result(&self, task_id: Uuid, success: bool, result: Option<serde_json::Value>, error: Option<String>) -> bool {
+        let mut queue = self.queue.write().await;
+        if let Some(task) = queue.iter_mut().find(|t| t.id == task_id && t.status == TaskStatus::Leased) {
+            task.status = if success { TaskStatus::Completed } else { TaskStatus::Failed };
+            true
+        } else {
+            false
+        }
     }
 
     pub async fn requeue(&self, task: ScheduledTask) -> bool {
@@ -126,14 +176,18 @@ impl TaskScheduler {
 
     pub async fn cancel(&self, task_id: Uuid) -> bool {
         let mut queue = self.queue.write().await;
-        let original_len = queue.len();
-        queue.retain(|t| t.id != task_id);
-        queue.len() != original_len
+        if let Some(task) = queue.iter_mut().find(|t| t.id == task_id) {
+            if task.status == TaskStatus::Pending {
+                task.status = TaskStatus::Cancelled;
+                return true;
+            }
+        }
+        false
     }
 
     pub async fn pending_count(&self) -> usize {
         let queue = self.queue.read().await;
-        queue.len()
+        queue.iter().filter(|t| t.status == TaskStatus::Pending).count()
     }
 
     pub async fn retry_count(&self) -> usize {
@@ -153,6 +207,21 @@ impl TaskScheduler {
         queue.front().cloned()
     }
 
+    pub async fn get_task(&self, task_id: Uuid) -> Option<ScheduledTask> {
+        let queue = self.queue.read().await;
+        queue.iter().find(|t| t.id == task_id).cloned()
+    }
+
+    pub async fn list_by_status(&self, status: TaskStatus) -> Vec<ScheduledTask> {
+        let queue = self.queue.read().await;
+        queue.iter().filter(|t| t.status == status).cloned().collect()
+    }
+
+    pub async fn list_all_tasks(&self) -> Vec<ScheduledTask> {
+        let queue = self.queue.read().await;
+        queue.iter().cloned().collect()
+    }
+
     pub fn create_task(
         &self,
         task_type: impl Into<String>,
@@ -170,6 +239,9 @@ impl TaskScheduler {
                 .unwrap()
                 .as_millis() as u64,
             scheduled_for: None,
+            status: TaskStatus::Pending,
+            assigned_agent_id: None,
+            leased_until: None,
         }
     }
 }

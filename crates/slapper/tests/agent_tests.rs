@@ -5,7 +5,7 @@
 #[cfg(test)]
 #[cfg(feature = "rest-api")]
 mod tests {
-    use slapper::agent::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
+    use slapper::agent::{Priority, TargetConfig, TargetPortfolio};
 
     #[test]
     fn test_portfolio_target_crud() {
@@ -21,6 +21,9 @@ mod tests {
             scan_history: vec![],
             baseline_findings: vec![],
             enabled: true,
+            scan_depth: Default::default(),
+            off_peak_window: None,
+            scope: None,
         };
 
         portfolio.add_target("example.com".to_string(), config.clone());
@@ -165,5 +168,200 @@ mod tests {
     fn test_priority_default() {
         let default = Priority::default();
         assert_eq!(default, Priority::Normal);
+    }
+
+    #[test]
+    fn test_add_target_preserves_existing_targets() {
+        use std::path::PathBuf;
+
+        let base_dir = directories::ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/home/sugarwookie/.config/slapper"));
+        let portfolio_path = base_dir.join("test_portfolios").join("add_preserve.json");
+        std::fs::create_dir_all(portfolio_path.parent().unwrap()).ok();
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            portfolio.add_target("first.com".to_string(), TargetConfig::new("https://first.com"));
+            portfolio.save().unwrap();
+        }
+
+        {
+            let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            assert!(portfolio.get_target("first.com").is_some());
+        }
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            portfolio.add_target("second.com".to_string(), TargetConfig::new("https://second.com"));
+            portfolio.save().unwrap();
+        }
+
+        let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+        assert!(portfolio.get_target("first.com").is_some());
+        assert!(portfolio.get_target("second.com").is_some());
+
+        std::fs::remove_file(&portfolio_path).ok();
+        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn test_enable_target_mutates_existing_on_disk() {
+        use std::path::PathBuf;
+
+        let base_dir = directories::ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/home/sugarwookie/.config/slapper"));
+        let portfolio_path = base_dir.join("test_portfolios").join("enable_test.json");
+        std::fs::create_dir_all(portfolio_path.parent().unwrap()).ok();
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            let mut config = TargetConfig::new("https://example.com");
+            config.enabled = false;
+            portfolio.add_target("example.com".to_string(), config);
+            portfolio.save().unwrap();
+        }
+
+        {
+            let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            assert!(!portfolio.get_target("example.com").unwrap().enabled);
+        }
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            assert!(portfolio.update_target("example.com", |t| t.enabled = true));
+            portfolio.save().unwrap();
+        }
+
+        let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+        assert!(portfolio.get_target("example.com").unwrap().enabled);
+
+        std::fs::remove_file(&portfolio_path).ok();
+        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn test_disable_target_mutates_existing_on_disk() {
+        use std::path::PathBuf;
+
+        let base_dir = directories::ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/home/sugarwookie/.config/slapper"));
+        let portfolio_path = base_dir.join("test_portfolios").join("disable_test.json");
+        std::fs::create_dir_all(portfolio_path.parent().unwrap()).ok();
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            portfolio.add_target("example.com".to_string(), TargetConfig::new("https://example.com"));
+            portfolio.save().unwrap();
+        }
+
+        {
+            let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            assert!(portfolio.get_target("example.com").unwrap().enabled);
+        }
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            assert!(portfolio.update_target("example.com", |t| t.enabled = false));
+            portfolio.save().unwrap();
+        }
+
+        let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+        assert!(!portfolio.get_target("example.com").unwrap().enabled);
+
+        std::fs::remove_file(&portfolio_path).ok();
+        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn test_remove_target_deletes_existing_on_disk() {
+        use std::path::PathBuf;
+
+        let base_dir = directories::ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/home/sugarwookie/.config/slapper"));
+        let portfolio_path = base_dir.join("test_portfolios").join("remove_test.json");
+        std::fs::create_dir_all(portfolio_path.parent().unwrap()).ok();
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            portfolio.add_target("example.com".to_string(), TargetConfig::new("https://example.com"));
+            portfolio.save().unwrap();
+        }
+
+        {
+            let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            assert!(portfolio.get_target("example.com").is_some());
+        }
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            portfolio.remove_target("example.com");
+            portfolio.save().unwrap();
+        }
+
+        let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+        assert!(portfolio.get_target("example.com").is_none());
+
+        std::fs::remove_file(&portfolio_path).ok();
+        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn test_update_target_modifies_existing_on_disk() {
+        use std::path::PathBuf;
+
+        let base_dir = directories::ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/home/sugarwookie/.config/slapper"));
+        let portfolio_path = base_dir.join("test_portfolios").join("update_test.json");
+        std::fs::create_dir_all(portfolio_path.parent().unwrap()).ok();
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            portfolio.add_target("example.com".to_string(), TargetConfig::new("https://example.com"));
+            portfolio.save().unwrap();
+        }
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            assert!(portfolio.update_target("example.com", |t| t.target = "https://updated.com".to_string()));
+            portfolio.save().unwrap();
+        }
+
+        let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+        assert_eq!(portfolio.get_target("example.com").unwrap().target, "https://updated.com");
+
+        std::fs::remove_file(&portfolio_path).ok();
+        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn test_list_shows_configured_portfolio() {
+        use std::path::PathBuf;
+
+        let base_dir = directories::ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/home/sugarwookie/.config/slapper"));
+        let portfolio_path = base_dir.join("test_portfolios").join("list_test.json");
+        std::fs::create_dir_all(portfolio_path.parent().unwrap()).ok();
+
+        {
+            let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+            portfolio.add_target("target1.com".to_string(), TargetConfig::new("https://target1.com"));
+            portfolio.add_target("target2.com".to_string(), TargetConfig::new("https://target2.com"));
+            portfolio.save().unwrap();
+        }
+
+        let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+        let targets = portfolio.get_all_targets();
+        assert_eq!(targets.len(), 2);
+        assert!(targets.iter().any(|(id, _)| id == "target1.com"));
+        assert!(targets.iter().any(|(id, _)| id == "target2.com"));
+
+        std::fs::remove_file(&portfolio_path).ok();
+        std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
     }
 }
