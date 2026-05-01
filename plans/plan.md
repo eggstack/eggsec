@@ -1,484 +1,574 @@
-# Slapper Agent Harness Improvement Plan
+# TUI Improvement Plan
 
 ## Status
 
-**ALL WORKSTREAMS COMPLETE** - Verified 2026-05-01.
+Open. This plan replaces the completed agent-harness plan that previously lived in this file.
 
-All 9 workstreams have been completed and verified. Both `rest-api` and `rest-api,ai-integration` feature combinations compile and pass tests.
+Scope is limited to the terminal UI under `crates/slapper/src/tui/`. The next agent should make code changes only after reading:
+
+- `AGENTS.md`
+- `crates/slapper/src/tui/AGENTS.override.md`
+
+## Goals
+
+- Make TUI behavior predictable across tabs, overlays, feature flags, and terminal sizes.
+- Fix concrete interaction bugs found in the current shell and shared components.
+- Improve visual consistency without large rewrites or unrelated feature work.
+- Add focused tests around interaction state, rendering helpers, and regression-prone navigation math.
 
 ## Relevant Files
 
-- `crates/slapper/src/agent/mod.rs`
-- `crates/slapper/src/agent/portfolio.rs`
-- `crates/slapper/src/agent/AGENTS.override.md`
-- `crates/slapper/src/tool/agents/scheduler.rs`
-- `crates/slapper/src/tool/agents/lifecycle.rs`
-- `crates/slapper/src/tool/agents/registry.rs`
-- `crates/slapper/src/tool/agents/communication.rs`
-- `crates/slapper/src/tool/protocol/agent_routes.rs`
-- `crates/slapper/src/commands/handlers/agent.rs`
-- `crates/slapper/src/cli/agent.rs`
+- `crates/slapper/src/tui/ui.rs`
+- `crates/slapper/src/tui/app/mod.rs`
+- `crates/slapper/src/tui/app/runner.rs`
+- `crates/slapper/src/tui/app/navigation.rs`
+- `crates/slapper/src/tui/app/command.rs`
+- `crates/slapper/src/tui/app/state_update.rs`
+- `crates/slapper/src/tui/app/export.rs`
+- `crates/slapper/src/tui/components/input.rs`
+- `crates/slapper/src/tui/components/selector.rs`
+- `crates/slapper/src/tui/components/scrollable.rs`
+- `crates/slapper/src/tui/components/popup.rs`
+- `crates/slapper/src/tui/search.rs`
+- `crates/slapper/src/tui/session.rs`
+- `crates/slapper/src/tui/tabs/mod.rs`
+- Representative tab files to normalize first:
+  - `crates/slapper/src/tui/tabs/recon.rs`
+  - `crates/slapper/src/tui/tabs/fuzz.rs`
+  - `crates/slapper/src/tui/tabs/dashboard.rs`
+  - `crates/slapper/src/tui/tabs/history.rs`
+  - `crates/slapper/src/tui/tabs/oauth.rs`
+  - `crates/slapper/src/tui/tabs/proxy.rs`
 
 ## Implementation Rules For The Next Agent
 
-- Read `AGENTS.md` and `crates/slapper/src/agent/AGENTS.override.md` before editing.
-- Keep changes scoped to this plan.
-- Use existing test seams in `agent/mod.rs`:
-  - `ScanDispatcherTrait`
-  - `AlertSenderTrait`
-  - `Agent::new_for_test(...)`
-- Do not make private fields public just to test them.
-- Prefer focused regression tests over broad refactors.
-- Use `tempfile::TempDir` for portfolio/memory tests.
-- After each workstream, run the smallest relevant check before moving on.
+- Keep changes scoped to the TUI.
+- Do not rewrite all tabs at once. Fix shared shell/components first, then normalize representative tabs, then apply repeated safe patterns across the rest.
+- Use `tc!` theme colors instead of direct `Color::*` in TUI rendering.
+- Preserve `Tab::all()`, `visible_index()`, and `stable_id()` semantics. Do not use enum discriminants for visible tab behavior.
+- Prefer small helper functions for repeated tab dispatch/status/export behavior, but avoid a broad architectural refactor unless tests are in place first.
+- Add or update tests near the changed module. Do not rely on manual terminal inspection alone.
+- After each workstream, run the smallest relevant check:
 
-## What Was Partially Implemented
+```bash
+cargo test --lib -p slapper tui::
+cargo check --lib -p slapper
+```
 
-These items exist in the current code, but some are incomplete or incorrect:
+If a feature-gated tab is touched, also run the relevant feature check.
 
-- Callback URL validation was added in `tool/protocol/agent_routes.rs`.
-- `TaskStatus`, `assigned_agent_id`, and `leased_until` were added to `ScheduledTask`.
-- Task list now returns actual queued task summaries.
-- Lease and result endpoints were added:
-  - `POST /api/v1/tasks/{id}/lease`
-  - `POST /api/v1/tasks/{id}/result`
-- `Agent::run_once()` was added.
-- CLI target commands now mostly load a portfolio instead of always using `TargetPortfolio::new()`.
-- `trigger_event(...)` now catches handler panics and restores handlers on the explicit error paths.
-- Scheduled scan path now attempts `portfolio.save()` after updating `last_scan`.
-
-Do not assume these are complete. The sections below list the remaining defects.
-
-## Workstream 0: Restore Build Health
+## Workstream 1: Fix Input Cursor And Unicode Safety
 
 ### Problem
 
-`rest-api,ai-integration` does not compile.
+`InputField` mixes byte offsets and character counts. This can corrupt cursor placement and editing around multibyte text.
 
-Current failure:
+Current examples:
 
-- `crates/slapper/src/commands/handlers/agent.rs:83`
-- `ai_config` is referenced but not defined.
+- `InputField::cursor_pos` is treated as a byte offset by `insert`, `backspace`, `delete`, `move_left`, and `move_right`.
+- `with_value` sets `cursor_pos = v.chars().count()`, which is not a byte index for non-ASCII input.
+- `move_end` also sets `cursor_pos = self.value.chars().count()`.
+- `render` compares `cursor_pos` to character counts and uses it to calculate cursor display position.
+
+Relevant file: `crates/slapper/src/tui/components/input.rs`.
 
 ### Required Fix
 
-- Preserve the loaded AI config before moving `config` into `Agent::new(config).await?`.
-- Avoid `unwrap()` unless the branch invariant is very obvious and tested.
-- Keep behavior:
-  - If `--with-ai` and valid AI config are provided, call `with_ai_client(...)`.
-  - If `--with-ai` is requested but AI config cannot be loaded, behavior should be explicit. Prefer a warning or error over silently running without AI.
+- Pick one invariant for `cursor_pos`; preferred: byte index at a valid UTF-8 boundary.
+- Update constructors and movement helpers to maintain that invariant.
+- Convert byte index to display character position only during rendering.
+- Ensure truncated display with `...` still places the cursor correctly when the value is wider than the field.
+- Consider `unicode-width` if the crate is already present or acceptable; otherwise document that visual width is char-based and keep byte safety correct.
 
 ### Acceptance Criteria
 
-```bash
-cargo check --lib -p slapper --features rest-api
-cargo check --lib -p slapper --features rest-api,ai-integration
-```
-
-Both pass.
-
-## Workstream 1: Correct Callback URL SSRF Validation
-
-### Status: COMPLETE
-
-### Current Code
-
-- Validator lives in `crates/slapper/src/tool/protocol/agent_routes.rs`.
-- It uses `url::Url`, `ToSocketAddrs`, and helper functions:
-  - `validate_callback_url`
-  - `is_forbidden_ip`
-  - `is_private_ip`
-  - `is_link_local_ip`
-  - `is_documentation_ip`
-
-### Remaining Problems
-
-1. DNS validation checks only the first resolved IP:
-   - Current code collects `addrs` and checks `addrs.first()`.
-   - If a hostname resolves to both public and private IPs, private IPs after the first can pass.
-2. IPv6 private detection is wrong:
-   - Current expression compares the first segment to `0xfc00 >> 8` and `0xfd00 >> 8`.
-   - Unique-local IPv6 is `fc00::/7`; check `(segments[0] & 0xfe00) == 0xfc00`.
-3. IPv6 link-local detection is wrong:
-   - Link-local is `fe80::/10`; check `(segments[0] & 0xffc0) == 0xfe80`.
-4. Documentation IPv4 detection checks only exact `.0` addresses:
-   - Must reject all of:
-     - `192.0.2.0/24`
-     - `198.51.100.0/24`
-     - `203.0.113.0/24`
-5. Benchmark IPv4 detection only checks `198.18.x.x`, but benchmark range is `198.18.0.0/15`, including `198.19.x.x`.
-6. Hostname resolution during validation may perform live DNS in unit tests.
-   - Avoid tests that depend on external DNS such as `example.com`, or inject a resolver.
-7. `localhost` is only rejected because it resolves locally. Make this explicit before DNS resolution.
-8. The route returns `&'static str` errors, so all invalid callback cases become a generic 500-ish style handler error depending on Axum conversion. Prefer explicit `400 Bad Request`.
-
-### Required Behavior
-
-- Reject unsafe callback URLs at registration time.
-- Only allow `http` and `https`.
-- Reject embedded credentials.
-- Reject missing host.
-- Reject explicit forbidden IP literals.
-- Reject hostnames that resolve to any forbidden IP.
-- Reject `localhost` and localhost-like case-insensitive spelling directly.
-- For testability, use an injectable or helper-based resolver. The registration route can use the system resolver, but unit tests should not need network.
-- Return a client error for invalid callback URLs.
-
-### Suggested Implementation Shape
-
-- Move callback validation helpers into a small internal struct or module inside `agent_routes.rs`, unless reuse is needed elsewhere.
-- Add:
-  - `fn is_forbidden_ip(ip: IpAddr) -> bool`
-  - `fn validate_callback_url_with_resolver<F>(url: &str, resolver: F) -> Result<(), CallbackUrlValidationError>`
-  - where `F: Fn(&str, u16) -> Result<Vec<IpAddr>, CallbackUrlValidationError>`
-- Use the actual URL port or scheme default, not `(host, 0)`.
-- Validate every resolved IP with `any(is_forbidden_ip)`.
-- Keep `validate_callback_url(url)` as the production wrapper.
-
-### Tests To Add Or Fix
-
-- Direct IP rejection:
-  - `127.0.0.1`
-  - `127.255.255.255`
-  - `10.0.0.1`
-  - `172.16.0.1`
-  - `172.31.255.255`
-  - `192.168.1.1`
-  - `169.254.169.254`
-  - `0.0.0.0`
-  - `224.0.0.1`
-  - `192.0.2.55`
-  - `198.51.100.55`
-  - `203.0.113.55`
-  - `198.18.0.1`
-  - `198.19.255.255`
-  - `::1`
-  - `fc00::1`
-  - `fd00::1`
-  - `fe80::1`
-- Hostname validation:
-  - `localhost` rejected without DNS.
-  - fake resolver returning `[8.8.8.8, 10.0.0.1]` is rejected.
-  - fake resolver returning `[8.8.8.8]` is accepted.
-- Route-level invalid callback returns `400 Bad Request`.
-
-## Workstream 2: Fix Scheduler Semantics
-
-### Status: COMPLETE
-
-### Current Code
-
-- `TaskStatus` was added.
-- `ScheduledTask` has:
-  - `status`
-  - `assigned_agent_id`
-  - `leased_until`
-- `next_task()` skips future scheduled tasks and leased tasks.
-- `lease_task()` marks a queued task as leased.
-- `submit_result()` marks leased tasks completed or failed.
-
-### Remaining Problems
-
-1. `requeue()` still writes to `retry_queue`, but `next_task()` never drains `retry_queue`.
-2. `retry_count()` reports stranded tasks in `retry_queue`.
-3. `cancel()` only cancels pending tasks in the main queue. It cannot cancel leased, delayed, failed, or retry-queue tasks.
-4. `submit_result()` discards the result and error arguments.
-5. Failed tasks are not automatically retried according to policy.
-6. Lease expiration is not enforced. `leased_until` is set but never used to make a task available again.
-7. `create_task` route accepts `agent_id` but sets `assigned_agent_id: None`.
-8. `next_task()` removes the task from the queue entirely, while `lease_task()` expects tasks to remain in the queue. These are competing models.
-
-### Required Decision
-
-Choose one scheduler model and make it consistent:
-
-#### Preferred Model: Queue With Leasing
-
-- Tasks stay in the scheduler until completed/cancelled/expired retention.
-- Agents lease tasks instead of callers removing them with `next_task()`.
-- `next_task()` should either:
-  - be removed/replaced by `lease_next_task(agent_id, capabilities, lease_duration_ms)`, or
-  - only be used by tests/internal code and should mark the task leased instead of removing it.
-
-### Required Behavior
-
-- One authoritative storage path for all tasks. Avoid a separate undrained `retry_queue`.
-- Pending due tasks can be leased.
-- Future scheduled tasks cannot be leased before `scheduled_for`.
-- Leased tasks cannot be leased by another agent before `leased_until`.
-- Expired leases become pending again.
-- Failed tasks retry if `retry_count < max_retries`.
-- Cancel works for pending, delayed, leased, and retryable failed tasks.
-- Submitted result/error is retained somewhere queryable.
-
-### Suggested Implementation Shape
-
-- Replace `retry_queue` with one `VecDeque<ScheduledTask>` or `Vec<ScheduledTask>`.
-- Extend `ScheduledTask`:
-  - `result: Option<serde_json::Value>`
-  - `error: Option<String>`
-  - `completed_at: Option<u64>`
-  - `updated_at: Option<u64>`
-- Add helper:
-  - `fn now_ms() -> u64`
-  - `fn is_due(task, now_ms) -> bool`
-  - `fn lease_expired(task, now_ms) -> bool`
-- Add scheduler methods:
-  - `lease_next_task(agent_id, lease_duration_ms) -> Option<ScheduledTask>`
-  - `lease_task(task_id, agent_id, lease_duration_ms) -> bool`
-  - `submit_result(task_id, success, result, error) -> bool`
-  - `cancel(task_id) -> bool`
-  - `get_task(task_id) -> Option<ScheduledTask>`
-  - `list_all_tasks() -> Vec<ScheduledTask>`
-- When submitting failure:
-  - If retries remain, increment `retry_count`, set `status = Pending`, set `scheduled_for` to a retry delay if policy exists, and preserve last error.
-  - If retries exhausted, set `status = Failed`.
+- Typing, left/right movement, backspace, delete, home, and end work for ASCII and multibyte input.
+- Cursor never lands past the visible field area.
+- No panics from slicing a string at a non-character boundary.
 
 ### Tests
 
-- `requeue()` no longer strands a task.
-- Delayed task is not leaseable before due time.
-- Delayed task is leaseable after due time.
-- Leased task is not returned to another agent before lease expiry.
-- Expired leased task becomes leaseable.
-- Failed task with retries returns to pending and increments `retry_count`.
-- Failed task without retries remains failed.
-- Cancel works on pending and leased tasks.
-- `result` and `error` are retained after completion/failure.
+- `InputField::with_value("éx")` sets cursor to `value.len()`, not `chars().count()`.
+- Insert in the middle of `éx` produces valid text.
+- Backspace deletes one character, not one byte.
+- `move_end` followed by `insert` appends correctly for multibyte strings.
+- Rendering a long multibyte value does not panic.
 
-## Workstream 3: Fix Task Routes
+### Status: COMPLETED (2026-05-01)
 
-### Status: COMPLETE
+- Fixed `with_value()` and `move_end()` to use byte offsets (`value.len()`) instead of character counts
+- Added `byte_to_char_pos()` helper for render function
+- Fixed `render()` to properly convert byte cursor position to character position for display
+- All 6 acceptance criteria tests pass
+- All 117 TUI tests pass
 
-### Current Code
+## Workstream 2: Make Search Actually Search The User's Query
 
-- `GET /api/v1/tasks` now returns actual summaries.
-- `POST /api/v1/tasks/{id}/lease` exists.
-- `POST /api/v1/tasks/{id}/result` exists.
+### Problem
 
-### Remaining Problems
+Global search is wired incorrectly.
 
-1. `GET /api/v1/tasks/{id}` still returns hardcoded `not_found`.
-2. `CreateTaskRequest.agent_id` is ignored.
-3. Lease endpoint does not verify that the agent exists or is active/idle.
-4. Lease endpoint requires a task ID; there is no route for "give this agent the next eligible task".
-5. Result submission does not verify that the submitting agent owns the lease.
-6. Route errors are still mostly `&'static str`, which makes proper status codes hard.
+In `crates/slapper/src/tui/app/runner.rs`, `Ctrl+F` calls `search.search_from_strings(&app.search_query, &data)` before the user has typed the query, then sets `app.show_search = true`. Later typing updates `app.search_query`, but the global result set is not recomputed before `draw_search_results` is shown.
 
-### Required Behavior
+History search is separate and only runs on Enter. The UI title says Search, while keybindings call it both Search and Global.
 
-- `GET /api/v1/tasks/{id}` returns real task details or `404`.
-- Task creation either preserves `agent_id` or rejects it as unsupported.
-- Lease operation verifies agent exists and is not offline.
-- Add a next-task lease route if real external agents are intended:
-  - `POST /api/v1/agents/{id}/tasks/lease`
-  - or `POST /api/v1/tasks/lease-next`
-- Result submission should require `agent_id` and verify it matches `assigned_agent_id`.
-- Invalid request data should return `400`, missing task/agent should return `404`, auth failure should return `401`.
+Relevant files:
 
-### Suggested Implementation Shape
+- `crates/slapper/src/tui/app/runner.rs`
+- `crates/slapper/src/tui/app/navigation.rs`
+- `crates/slapper/src/tui/search.rs`
+- `crates/slapper/src/tui/ui.rs`
 
-- Introduce small response DTO:
-  - `TaskDetail`
-  - Include id, task_type, payload, priority, status, retry_count, timestamps, assigned_agent_id, result, error.
-- Change handlers that need status codes to return `Result<impl IntoResponse, (StatusCode, String)>`.
-- Do not expose internal structs directly unless they already derive the right serialization traits.
+### Required Fix
 
-### Tests
+- Separate "open search prompt" from "execute search".
+- Recompute global search when Enter is pressed or as the query changes, but do it consistently.
+- Define expected behavior:
+  - `/` should search within the current tab only if current-tab search exists; otherwise use the same prompt with a clear scope label.
+  - `Ctrl+F` should open global search.
+  - `Esc` closes search and restores any History filtering.
+  - `Enter` executes search and keeps results visible long enough to navigate them.
+- Add keyboard handling for global search result navigation (`Up`, `Down`, `Enter` to jump to result tab) or remove selected-state UI if navigation is not implemented.
+- Replace direct `Color::*` usage in `search.rs` with `tc!`.
 
-- Create task then get by ID returns task details.
-- Get unknown task returns `404`.
-- Create with `agent_id` either stores assignment or returns `400`.
-- Lease unknown task returns `404` or `leased: false` with a clear status; prefer `404`.
-- Lease by unknown/offline agent fails.
-- Submit result by non-owner fails.
-- Submit result by owner succeeds and result is visible in `GET`.
+### Acceptance Criteria
 
-## Workstream 4: Fix Lifecycle Monitor
-
-### Status: COMPLETE
-
-### Current Code
-
-- `HealthIssue::CallbackUnhealthy(String)` was added.
-- `saturating_sub` is used for heartbeat age.
-- Callback issue dedupe was attempted.
-
-### Fixed Problems
-
-1. `perform_health_check()` now splits work into phases:
-   - Phase 1: Read agents and compute `is_stale` with read lock
-   - Phase 2: Await callback probes outside any lock
-   - Phase 3: Acquire write lock and update `AgentHealth`
-2. `start_health_monitor()` now returns `JoinHandle<()>` and uses `tokio::select!`.
-3. Added `start_health_monitor_with_token(token)` for testability.
-4. Recovery condition fixed: now checks `!was_healthy && !is_stale && !callback_unhealthy` with proper state change detection.
-5. Stale/unhealthy agents now set to `AgentStatus::Offline` instead of `Idle`.
-6. `LifecycleEventType` derives `PartialEq` for test comparisons.
-
-### Required Behavior
-
-- Do not hold the health write lock while awaiting HTTP. ✅
-- Monitor can be stopped. ✅
-- Recovery clears issues and emits `AgentRecovered` once when state changes from unhealthy to healthy. ✅
-- Stale/unhealthy status should not be `Idle`. ✅
-- Callback failure event should not spam each interval. ✅
-
-### Tests Added
-
-- Slow callback does not block `record_task_start`/`record_task_success`. ✅
-- Callback failure emits one stale event while issue remains. ✅
-- Healthy callback after failure emits one recovery event and clears issues. ✅
-- Future heartbeat timestamp does not panic. ✅
-- Health monitor can be stopped. ✅
-- Stale agent status is not `Idle`. ✅
-
-## Workstream 5: Fix Agent Runtime Shutdown And Run State
-
-### Status: COMPLETE
-
-### Current Code
-
-- `Agent::run()` uses `tokio::select!` with `shutdown_notify.notified()`, `tokio::signal::ctrl_c()`, and `poll_interval.tick()`.
-- `Agent::stop()` sets `running = false` and calls `shutdown_notify.notify_one()`.
-- `Agent::run_once()` properly resets `running = false` before return.
-
-### Fixed Problems
-
-1. `stop()` now wakes `run()` promptly via `shutdown_notify.notify_one()`. ✅
-2. `running` is reset when `run()` exits (via `shutdown_notify`, ctrl-c, or loop end). ✅
-3. `run_once()` resets `running = false` before return on all exit paths. ✅
-4. Second `run()` or `run_once()` works because `running` is properly reset. ✅
-5. No detached ctrl-c task - `tokio::signal::ctrl_c()` is awaited directly in `tokio::select!`. ✅
-
-### Tests Added
-
-- `test_run_once_can_be_called_twice` - Verifies repeated `run_once()` works. ✅
-- `test_run_once_resets_running_after_success` - Verifies `running` is reset after success. ✅
-- `test_run_once_resets_running_after_error` - Verifies `running` is reset even when `run_once()` completes. ✅
-
-Note: Tests for `stop()` waking `run()` and `run()` not leaving stale state require complex async task management. The core behavior is verified through the implementation changes.
-
-## Workstream 6: Fix Scheduled Scan Persistence
-
-### Status: COMPLETE
-
-### Changes Made
-
-1. **Scan record added**: After successful scheduled scan, a `ScanRecord` is now created and added to the portfolio with scan_id (from response.request_id), scan_type ("pipeline"), timestamp, findings count, and severity counts.
-
-2. **Save ordering fixed**: The `save()` call now happens AFTER `add_scan_record()` but BEFORE `update_last_scan()`. This ensures:
-   - If save fails, `last_scan` is NOT updated in memory (safe to retry)
-   - If save succeeds, the scan record is persisted
-   - Memory is updated with new `last_scan` after save completes
-
-3. **No portfolio path warning**: Added explicit warning at start of `process_scheduled_scans()` when `portfolio.file_path()` is `None`, documenting that scheduled scan results will not be persisted.
-
-4. **Failed dispatch handling**: Verified that when dispatch fails (returns `Err`), `last_scan` is not updated. The existing test `test_integration_scheduled_scan_failure` confirms this behavior.
-
-### Confirmed Behaviors
-
-1. `TargetPortfolio::save()` writes to the same path that was loaded from `AgentConfig.portfolio_path` - CONFIRMED.
-2. If `TargetPortfolio::new()` has no path, `save()` is a no-op (returns `Ok(())` without saving) - behavior is now explicitly warned.
-3. Save happens before `store_scan_results()` - ordering is correct: save first to persist, then update memory, then store results.
-4. Scan history record IS now added in the scheduled scan path.
+- Typing a query after `Ctrl+F` and pressing Enter searches current tab target strings.
+- Search results reflect the typed query, not the stale query from before the prompt opened.
+- Empty search shows a prompt, not stale previous results.
+- History search can be canceled and restores the original list.
 
 ### Tests
 
-The existing test `test_integration_scheduled_scan_failure` passes, confirming failed dispatch does not update `last_scan`.
+- `toggle_search` clears query and does not mutate history.
+- `perform_search` with History creates a backup once and restores it on cancel.
+- `GlobalSearch::search_from_strings("foo", data)` clears old selection and results.
+- A runner-level helper, if extracted, distinguishes `/` and `Ctrl+F` scopes.
 
-## Workstream 7: Finish CLI Portfolio Fixes
+## Workstream 3: Fix Modal And Overlay Input Precedence
 
-### Status: COMPLETE
+### Problem
 
-### Changes Made
+Overlay behavior is inconsistent. Some overlays are rendered after content, but input routing does not always give them first priority.
 
-- `handle_status_impl()` now uses `resolve_portfolio_path()` and `load_portfolio_for_cli()` instead of manual path handling.
-- Status now displays the resolved (expanded) path.
-- All target subcommands (list, add, update, remove, enable, disable) use the same resolved path via `load_portfolio_for_cli()`.
-- `portfolio.save()` writes to the same path that was resolved and loaded, ensuring consistency.
+Specific issues:
 
-### Verification
+- `show_http_options` popup title says "press h to close", but `runner.rs` has no direct `h` close path for that popup. While the popup is visible, `h` can still be processed as normal left navigation.
+- Confirm popups render Yes/No buttons, but there is no Tab/Left/Right selection state wired into `PendingAction`; Enter always confirms and Esc cancels.
+- Help popup renders a "Close" button but button state is not interactive.
+- Command palette input is handled before ordinary Tab focus, but `Esc` is handled earlier globally; verify it consistently closes the topmost overlay first.
+- Search, help, command palette, HTTP options, and confirm popup can potentially conflict because there is no single overlay stack or precedence helper.
 
-All CLI handlers now:
-- Use `resolve_portfolio_path()` to expand `~` and resolve the default path.
-- Use `load_portfolio_for_cli()` to load from the resolved path.
-- `save()` persists to the same resolved path.
+Relevant files:
 
-```bash
-cargo check --lib -p slapper --features rest-api  # passes
-cargo test --lib -p slapper --features rest-api  # 1438 passed
-```
+- `crates/slapper/src/tui/ui.rs`
+- `crates/slapper/src/tui/app/runner.rs`
+- `crates/slapper/src/tui/app/command.rs`
+- `crates/slapper/src/tui/components/popup.rs`
+- `crates/slapper/src/tui/app/mod.rs`
 
-## Workstream 8: Event Handler Panic Safety
+### Required Fix
 
-### Status: COMPLETE
+- Introduce a small central "active overlay" decision helper, or equivalent ordered checks, with this precedence:
+  1. Confirm popup
+  2. Command palette
+  3. Search
+  4. HTTP options
+  5. Help
+  6. Tab content
+- Ensure `Esc` closes only the topmost overlay.
+- Make popup button labels match behavior. If confirm remains Enter/Esc only, render "Enter: Confirm" and "Esc: Cancel" instead of fake selectable buttons.
+- Make HTTP options close on `h`, `Esc`, or the command palette command, matching visible copy.
+- Prevent tab content navigation and task starts while any overlay is active.
 
-### Current Code
+### Acceptance Criteria
 
-- `trigger_event(...)` catches unwind with `FutureExt::catch_unwind()`.
-- It restores handlers on the explicit `Ok(Err(...))` and panic branches.
+- With HTTP options visible, pressing `h` or `Esc` closes it and does not move focus or tabs.
+- With confirm visible, Enter confirms and Esc cancels; no other tab action runs.
+- Help, search, and command palette cannot all render over each other accidentally from normal key sequences.
 
-### Fixed Problems
+### Tests
 
-1. Removed unused import `std::panic::AssertUnwindSafe` (line 27).
-2. Added `test_trigger_event_restores_handlers_on_panic` test that:
-   - Registers a handler that panics with message "handler panicked during event processing"
-   - Asserts `trigger_event` returns an error containing "panicked"
-   - Asserts handlers are restored after panic
-   - Asserts subsequent event trigger works and preserves handlers
+- Unit tests around any extracted overlay-precedence helper.
+- App-level tests for `execute_command("http")` and direct close behavior.
+- Regression test that Enter with a confirm popup does not call `handle_enter` on the active tab.
 
-### Required Behavior
+## Workstream 4: Correct Tab Hit-Testing And Tab Window Layout
 
-- Handler list is restored after success, normal error, and panic. ✅
-- Panic behavior is documented by tests: converted to `Err`. ✅
+### Problem
 
-## Workstream 9: Verification And Cleanup
+Tab rendering uses Ratatui `Tabs`, but mouse hit-testing approximates each visible tab with equal widths in `TabWindow::visible_tab_spans`. This does not match the rendered title widths, so clicking long or short tabs can select the wrong tab.
 
-### Required Commands
+Relevant files:
 
-Run at minimum:
+- `crates/slapper/src/tui/tabs/mod.rs`
+- `crates/slapper/src/tui/ui.rs`
+- `crates/slapper/src/tui/app/runner.rs`
 
-```bash
-cargo check --lib -p slapper --features rest-api
-cargo check --lib -p slapper --features rest-api,ai-integration
-cargo test --lib -p slapper --features rest-api
-cargo test --test agent_tests -p slapper --features rest-api
-```
+### Required Fix
 
-If AI behavior is changed beyond the compile fix:
+- Make hit-testing use the same width model as rendering.
+- Include title widths and any spacing Ratatui applies between tab titles.
+- Account for border offset and range text in the title.
+- Preserve the existing `TabWindow` model and tests.
+- Consider showing previous/next markers in the tab bar content, not only `Slapper[1-8/20]`, so users understand that more tabs exist.
 
-```bash
-cargo test --lib -p slapper --features rest-api,ai-integration
-```
+### Acceptance Criteria
 
-### Warnings To Clean If Touching The Area
+- Clicking the visible text for every visible tab selects that tab.
+- Clicking between tabs does not select an adjacent tab unexpectedly.
+- Narrow terminal widths still keep current tab visible.
 
-- `crates/slapper/src/tool/agents/scheduler.rs`
-  - `submit_result` currently does not use `result` or `error`.
-- `crates/slapper/src/tool/protocol/agent_routes.rs`
-  - callback validation error variable is unused.
-- `crates/slapper/src/agent/mod.rs`
-  - unused import of `std::panic::AssertUnwindSafe`.
+### Tests
 
-Warnings outside this workstream can be left alone unless the touched code makes them worse.
+- Add `visible_tab_spans` tests with uneven title widths.
+- Add tests for narrow widths and scrolled windows.
+- Add a regression test for clicking a long title such as Scan Endpoints.
+
+## Workstream 5: Align Help, Status Bar, And Actual Keybindings
+
+### Problem
+
+Several visible instructions are stale or misleading.
+
+Examples:
+
+- Help says `e` exports JSON, but runner only implements `Shift+E` to cycle export format and command palette `export` to export. No plain `e` key export path exists in `runner.rs`.
+- Help says `h/l - Previous/Next tab`, but `h/l` are input/result navigation in Normal mode; tab navigation is `n/N`, `p`, `Shift+H`, and `Shift+L`.
+- Status bar says `Ctrl+Z Resume` when paused, but actual resume is `Ctrl+Y`; `Ctrl+Z` toggles pause.
+- Dashboard says Enter starts a scan, but `DashboardTab::handle_enter` is empty.
+- Search help says `Ctrl+F Global`, but search prompt behavior is currently not global-search-complete.
+
+Relevant files:
+
+- `crates/slapper/src/tui/components/popup.rs`
+- `crates/slapper/src/tui/ui.rs`
+- `crates/slapper/src/tui/tabs/dashboard.rs`
+- `crates/slapper/src/tui/app/runner.rs`
+
+### Required Fix
+
+- Audit all visible keybinding text against `runner.rs`.
+- Decide whether missing bindings should be implemented or documentation should be corrected. Prefer implementing only low-risk expected bindings:
+  - Plain `e` in Normal mode should call `export_results()` if help continues to advertise it.
+  - Dashboard Enter should either jump to a sensible first scan tab or the text should stop saying it starts a scan.
+- Status bar should prioritize task-relevant hints and avoid overflowing small terminals.
+- Use consistent labels: `Normal`, `Insert`, `Search`, `Palette`, `Paused`.
+
+### Acceptance Criteria
+
+- Every key shown in help/status/dashboard either works or is removed.
+- Paused status tells the user the correct resume key.
+- Compact status text remains readable at 80 columns.
+
+### Tests
+
+- Add tests for any extracted keybinding-description helper.
+- Add a runner/app command test for plain export if implemented outside the event loop.
+
+## Workstream 6: Add User-Visible Feedback For Export And Unavailable Actions
+
+### Problem
+
+Export and some unavailable actions only log with `tracing`, which is invisible to most TUI users.
+
+Examples:
+
+- `export_json` silently does nothing when no results exist.
+- Unsupported tab exports log warnings but do not update the UI.
+- `save_export` logs success or failure but status bar does not show the outcome.
+- Command palette `quit` sets `should_quit`, but `run_app` never checks `app.should_quit`, so palette quit likely does not quit.
+
+Relevant files:
+
+- `crates/slapper/src/tui/app/export.rs`
+- `crates/slapper/src/tui/app/command.rs`
+- `crates/slapper/src/tui/app/runner.rs`
+- `crates/slapper/src/tui/ui.rs`
+- `crates/slapper/src/tui/app/mod.rs`
+
+### Required Fix
+
+- Add a lightweight TUI notification/status message field to `App`, with optional severity and timeout.
+- Show export success, no data, invalid export directory, and write errors in the status bar or a small non-blocking message area.
+- Make `CommandPalette` quit/exit honored by the event loop by checking `app.should_quit`.
+- Avoid overwriting task error states with generic notifications.
+
+### Acceptance Criteria
+
+- Export with no data tells the user "No exportable data for this tab."
+- Successful export shows the file path or filename.
+- Palette command `quit` exits when idle.
+- Errors remain visible until the next user action or a short timeout.
+
+### Tests
+
+- `execute_command("quit")` sets `should_quit`, and any extracted loop helper honors it.
+- Export no-data path sets a notification.
+- Invalid export directory sets an error notification.
+
+## Workstream 7: Route Background Results To The Tab That Started The Task
+
+### Problem
+
+Progress and error updates are applied to `current_tab`, not necessarily the tab that started the task.
+
+Examples:
+
+- `update_progress` matches on `self.current_tab`.
+- `TaskResult::Error(msg)` calls `set_error_for_current_tab(msg)`.
+- If a user starts a scan and navigates away, progress or errors can update the wrong tab or disappear.
+- Successful `TaskResult` variants update specific tabs, but error/progress routing is not task-aware.
+
+Relevant file: `crates/slapper/src/tui/app/state_update.rs`.
+
+### Required Fix
+
+- Track the tab associated with the active task when spawning it.
+- Route progress and error updates to that tab.
+- Decide whether multiple concurrent tasks are supported. Current `task_handle: Option<JoinHandle<()>>` implies one active task; document and enforce that.
+- Status bar should show global running state if a task is running in another tab.
+
+### Acceptance Criteria
+
+- Start a task, switch tabs, then progress updates the original tab.
+- Errors from a task appear on the original tab.
+- Status bar indicates a background task is running even when viewing a different tab.
+
+### Tests
+
+- Unit test an extracted `set_error_for_tab(tab, msg)` helper.
+- Unit test progress routing with an active-task tab field.
+- Regression test that switching tabs before an error does not set error on the new tab.
+
+## Workstream 8: Normalize Focus Navigation Across Tabs
+
+### Problem
+
+Focus behavior differs between tabs and sometimes strands focus.
+
+Examples:
+
+- `ReconTab::handle_focus_next` moves from Options to Results without clearing checkbox focus.
+- `ReconTab::handle_focus_prev` from Inputs to Results does not blur the current input.
+- `FuzzTab::FuzzFocusArea::Results` exists but `handle_focus_next` never reaches Results from MutationCheckbox; results scrolling is mostly reached indirectly.
+- Many tabs use ad hoc `FocusArea` and input handling, leading to inconsistent Tab/Shift+Tab, Enter, Escape, and arrow behavior.
+
+Relevant files:
+
+- `crates/slapper/src/tui/tabs/recon.rs`
+- `crates/slapper/src/tui/tabs/fuzz.rs`
+- Other tab files with `FocusArea` enums.
+- `crates/slapper/src/tui/app/mod.rs`
+
+### Required Fix
+
+- Define a focus contract in comments or a small helper:
+  - `Tab` cycles focus regions.
+  - `Shift+Tab` cycles backward.
+  - `Enter` edits/toggles focused controls; starts task only when not editing a field/control.
+  - `Esc` closes dropdowns or blurs inputs; second Esc returns to Normal mode.
+  - Results focus enables scroll keys.
+- Normalize Recon and Fuzz first, then apply the same pattern to tabs with obvious drift.
+- Ensure auto-insert mode in `App::handle_focus_next/prev` still matches focused input state.
+
+### Acceptance Criteria
+
+- Focus indicators are visible and only one control group appears focused at a time.
+- Results panes can be focused and scrolled predictably.
+- Enter does not accidentally start a task while a selector or checkbox has focus.
+
+### Tests
+
+- Recon focus cycle forward/backward clears stale focused checkboxes and inputs.
+- Fuzz focus cycle includes Results or removes the unused Results variant.
+- Enter on selector/checkbox toggles only that control.
+
+## Workstream 9: Improve Small-Terminal And Layout Robustness
+
+### Problem
+
+Several layouts assume more height than the runner only warns about. At small sizes, fixed `Constraint::Length` blocks can leave no useful results area or cause overlays to dominate the screen.
+
+Examples:
+
+- Fuzz uses a fixed 27-line config area.
+- Recon uses a fixed 16-line config area.
+- OAuth uses fixed 16 + 6 + min 5 structure.
+- Help popup requests 70x35 even though the runner only recommends 80x24.
+- Status bar horizontally splits into fixed and percentage chunks that can truncate both status and help.
+
+Relevant files:
+
+- `crates/slapper/src/tui/ui.rs`
+- `crates/slapper/src/tui/components/popup.rs`
+- `crates/slapper/src/tui/tabs/fuzz.rs`
+- `crates/slapper/src/tui/tabs/recon.rs`
+- `crates/slapper/src/tui/tabs/oauth.rs`
+- Similar tab files with large fixed input sections.
+
+### Required Fix
+
+- Add small-area fallbacks for major tab layouts.
+- For input-heavy tabs, consider a two-column layout on wide terminals and a scrollable config/results split on short terminals.
+- Clamp popup height and content display; use scrollable help content if needed.
+- Ensure status bar text does not overlap or become nonsensical at 80 columns and below.
+
+### Acceptance Criteria
+
+- At 80x24, all core tabs show at least one usable input region and one meaningful results/status region.
+- At smaller sizes, the UI shows a clear "terminal too small" or compact fallback rather than broken layout.
+- Help popup fits within the screen and remains readable.
+
+### Tests
+
+- Snapshot-like rendering tests using `ratatui::backend::TestBackend` for 80x24 on Recon, Fuzz, Dashboard, and History.
+- Tests that popup `centered_rect` never creates zero-width/zero-height invalid areas for small screens.
+
+## Workstream 10: Theme And Visual Consistency Pass
+
+### Problem
+
+The TUI has partial theming but still uses direct colors and inconsistent emphasis.
+
+Examples:
+
+- `search.rs` uses `Color::Cyan`, `Color::Gray`, `Color::Yellow`, `Color::White`.
+- Some tab files import direct `Color` or use hard-coded Unicode status glyphs without fallback.
+- Checkboxes use `[✓]`, while the codebase otherwise tries to stay simple and terminal-compatible.
+- Empty states vary between CLI examples, instructions, and blank placeholder copy.
+
+Relevant files:
+
+- `crates/slapper/src/tui/search.rs`
+- `crates/slapper/src/tui/tabs/vuln.rs`
+- `crates/slapper/src/tui/tabs/dashboard.rs`
+- `crates/slapper/src/tui/components/selector.rs`
+- `crates/slapper/src/tui/components/popup.rs`
+
+### Required Fix
+
+- Replace direct `Color::*` with semantic `tc!` colors.
+- Standardize empty states:
+  - Title
+  - One concise instruction
+  - Optional CLI equivalent
+- Standardize success/warning/error color usage.
+- Decide whether Unicode glyphs are acceptable. If keeping them, verify common terminals; otherwise use ASCII-friendly symbols in shared controls.
+- Keep visual polish restrained and information-dense; this is a security toolkit, not a landing-page UI.
+
+### Acceptance Criteria
+
+- No direct `Color::White`, `Color::Gray`, `Color::Green`, or `Color::Red` in TUI rendering.
+- Search, popup, selector, checkbox, and status visuals follow theme semantics.
+- Empty states look consistent across representative tabs.
+
+### Tests
+
+- Add lightweight grep/check guidance in PR notes; do not add brittle tests for every color.
+- Existing TUI tests should still pass.
+
+## Workstream 11: Feature-Gated Tabs And Command Palette Consistency
+
+### Problem
+
+Some code paths still refer to feature-gated tabs even when unavailable. `Tab::all()` filters them, but command execution and fallback render/dispatch paths can still select unavailable tabs or route them to Dashboard internals.
+
+Examples:
+
+- `dispatcher_mut` maps unavailable feature tabs to `dashboard`.
+- `draw_content` has no-op branches for unavailable tabs.
+- Command palette can navigate to commands without verifying `Tab::all()` availability if entries include gated commands.
+- Session restore correctly drops unavailable stable IDs, but command execution should use the same availability discipline.
+
+Relevant files:
+
+- `crates/slapper/src/tui/tabs/mod.rs`
+- `crates/slapper/src/tui/app/mod.rs`
+- `crates/slapper/src/tui/app/command.rs`
+- `crates/slapper/src/tui/session.rs`
+- `crates/slapper/src/tui/help.rs`
+
+### Required Fix
+
+- Add a helper like `App::set_current_tab_if_available(tab) -> bool`.
+- Use it in command palette navigation, session restore if useful, mouse selection, and numeric tab jumps where appropriate.
+- Filter command palette entries for feature-gated tabs unless the command explains the missing feature and does not switch tabs.
+- Avoid dispatching unavailable tabs to Dashboard; unreachable unavailable tabs should be impossible through normal state transitions.
+
+### Acceptance Criteria
+
+- With default features, commands for unavailable tabs do not switch `current_tab` to an unavailable tab.
+- Session restore and bookmarks still drop unavailable tabs.
+- No-op unavailable tab render branches are either unreachable or documented.
+
+### Tests
+
+- `execute_command("nse")` or any added gated command does not select `Tab::Nse` when the feature is off.
+- `set_current_tab_if_available` accepts visible tabs and rejects invisible tabs.
+- Command palette entries are filtered by feature availability.
+
+## Workstream 12: Dashboard Data Accuracy And Reset Behavior
+
+### Problem
+
+Dashboard stats can accumulate incorrectly and advertise actions that do not exist.
+
+Examples:
+
+- `DashboardTab::update_from_history` increments `today_scans` without resetting it first.
+- `render_welcome` and quick actions advertise Enter/start and `e` export, which are not currently implemented.
+- `reset` only resets state and leaves view/stats as-is.
+
+Relevant file: `crates/slapper/src/tui/tabs/dashboard.rs`.
+
+### Required Fix
+
+- Reset derived counters at the start of `update_from_history`.
+- Correct quick-action copy or implement the advertised actions.
+- Decide what reset means for Dashboard:
+  - Either re-render welcome/session stats from current history, or explicitly no-op with user feedback.
+- Use theme colors consistently.
+
+### Acceptance Criteria
+
+- Calling `update_from_history` twice with the same history yields the same `today_scans`.
+- Dashboard copy matches implemented actions.
+- Reset does not leave stale or misleading data.
+
+### Tests
+
+- `update_from_history` idempotence for `today_scans`.
+- Dashboard reset behavior.
 
 ## Suggested Execution Order
 
-1. Workstream 0: restore `rest-api,ai-integration` compile.
-2. Workstream 1: fix callback URL validation correctness.
-3. Workstream 2: make scheduler state model coherent.
-4. Workstream 3: fix task routes on top of the scheduler model.
-5. Workstream 4: fix lifecycle lock, recovery, and monitor cancellation.
-6. Workstream 5: fix `Agent::run`, `run_once`, and `stop` state.
-7. Workstream 7: finish CLI status/path handling.
-8. Workstream 6: verify scheduled scan persistence.
-9. Workstream 8: add panic-safety regression test.
-10. Workstream 9: run full verification.
+1. Workstream 1: input cursor safety.
+2. Workstream 3: overlay precedence.
+3. Workstream 2: search correctness.
+4. Workstream 5 and 6: visible keybinding/notification truthfulness.
+5. Workstream 7: task result routing.
+6. Workstream 4 and 8: tab hit-testing and focus consistency.
+7. Workstream 9 and 10: layout and theme polish.
+8. Workstream 11 and 12: feature-gated cleanup and dashboard data fixes.
 
-## Review Notes From Current Attempt
+## Verification Checklist
 
-- The current attempt is progress but is partial. Do not assume a workstream is done just because a type or endpoint exists.
-- The largest correctness issue is the scheduler having two conflicting models: removing tasks via `next_task()` and retaining tasks for lease/result APIs.
-- The largest security issue is callback validation checking only the first resolved address and having incorrect IPv6/range checks.
-- The largest reliability issue is lifecycle health checks still awaiting network I/O under a write lock, plus runtime state never being reset.
+- `cargo test --lib -p slapper tui::`
+- `cargo check --lib -p slapper`
+- If feature-gated files are touched, run targeted checks such as:
+
+```bash
+cargo check --lib -p slapper --features nse
+cargo check --lib -p slapper --features python-plugins
+cargo check --lib -p slapper --features full
+```
+
+- Manually run the TUI at least once after implementation and check:
+  - 80x24 terminal
+  - Tab navigation and mouse tab selection
+  - Search prompt and results
+  - Command palette
+  - Help popup
+  - Confirm popup
+  - Export success/no-data feedback

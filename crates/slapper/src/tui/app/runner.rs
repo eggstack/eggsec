@@ -18,6 +18,7 @@ use crate::tui::state;
 use crate::tui::tabs::{Tab, TabWindow};
 use crate::tui::ui;
 use crate::tui::utils::Clipboard;
+use crate::tui::OverlayType;
 
 /// Layout constants matching `ui::draw()` — change these if the layout changes.
 const LAYOUT_MARGIN: u16 = 1;
@@ -78,7 +79,7 @@ pub fn run(config_path: Option<String>) -> Result<()> {
 fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
     let MouseEventKind::Down(button) = mouse_event.kind else {
         if let MouseEventKind::ScrollUp = mouse_event.kind {
-            if !app.show_help && !app.show_search && !app.show_http_options {
+            if !app.is_any_overlay_active() || app.is_command_palette_visible() {
                 if app
                     .command_palette
                     .as_ref()
@@ -93,7 +94,7 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
             return;
         }
         if let MouseEventKind::ScrollDown = mouse_event.kind {
-            if !app.show_help && !app.show_search && !app.show_http_options {
+            if !app.is_any_overlay_active() || app.is_command_palette_visible() {
                 if app
                     .command_palette
                     .as_ref()
@@ -114,7 +115,7 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
         let (term_width, _term_height) = crossterm::terminal::size().unwrap_or((80, 24));
         let tab_area = compute_tab_area(term_width);
 
-        if app.show_help || app.show_search || app.show_http_options {
+        if app.is_any_overlay_active() {
             return;
         }
 
@@ -196,13 +197,27 @@ where
                     }
                     (KeyModifiers::NONE, KeyCode::Esc) => {
                         app.pending_key = None;
-                        if app.show_search {
-                            app.toggle_search();
-                        } else if app.is_confirm_popup_visible() {
-                            app.cancel_action();
-                        } else {
-                            app.mode = InputMode::Normal;
-                            app.handle_escape();
+                        match app.topmost_overlay() {
+                            Some(OverlayType::ConfirmPopup) => {
+                                app.cancel_action();
+                            }
+                            Some(OverlayType::CommandPalette) => {
+                                app.toggle_command_palette();
+                            }
+                            Some(OverlayType::Search) => {
+                                app.toggle_search();
+                            }
+                            Some(OverlayType::HttpOptions) => {
+                                app.show_http_options = false;
+                                app.needs_redraw = true;
+                            }
+                            Some(OverlayType::Help) => {
+                                app.toggle_help();
+                            }
+                            None => {
+                                app.mode = InputMode::Normal;
+                                app.handle_escape();
+                            }
                         }
                     }
                     (KeyModifiers::NONE, KeyCode::Char('i')) if app.mode == InputMode::Normal => {
@@ -334,6 +349,16 @@ where
                                     }
                                 }
                             }
+                             _ => {}
+                         }
+                     }
+                    // Prevent tab content keys when other overlays are active
+                    _ if app.is_search_visible() || app.is_http_options_visible() || app.is_help_visible() => {
+                        // Only allow Esc (handled above) and search input
+                        match (key.modifiers, key.code) {
+                            (KeyModifiers::NONE, KeyCode::Char(c)) if app.is_search_visible() => {
+                                app.search_query.push(c);
+                            }
                             _ => {}
                         }
                     }
@@ -347,6 +372,10 @@ where
                     }
                     (KeyModifiers::SHIFT, KeyCode::BackTab) => {
                         app.handle_focus_prev();
+                    }
+                    (KeyModifiers::NONE, KeyCode::Char('h')) if app.is_http_options_visible() => {
+                        app.show_http_options = false;
+                        app.needs_redraw = true;
                     }
                     (KeyModifiers::NONE, KeyCode::Char('h'))
                     | (KeyModifiers::NONE, KeyCode::Left)

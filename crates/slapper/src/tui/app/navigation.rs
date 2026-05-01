@@ -96,10 +96,6 @@ impl super::App {
         }
     }
 
-    pub(crate) fn is_help_visible(&self) -> bool {
-        self.show_help
-    }
-
     pub(crate) fn get_current_help(&self) -> String {
         match self.current_tab {
             super::tabs::Tab::Recon => {

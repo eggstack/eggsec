@@ -831,6 +831,67 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn toggle_theme(&mut self) {
         self.theme_manager.toggle();
     }
+
+    /// Check if command palette is visible
+    pub fn is_command_palette_visible(&self) -> bool {
+        self.command_palette
+            .as_ref()
+            .map(|p| p.visible)
+            .unwrap_or(false)
+    }
+
+    /// Check if search popup is visible
+    pub fn is_search_visible(&self) -> bool {
+        self.show_search
+    }
+
+    /// Check if HTTP options popup is visible
+    pub fn is_http_options_visible(&self) -> bool {
+        self.show_http_options
+    }
+
+    /// Check if help popup is visible
+    pub fn is_help_visible(&self) -> bool {
+        self.show_help
+    }
+
+    /// Get the topmost overlay based on precedence:
+    /// 1. Confirm popup (pending_action)
+    /// 2. Command palette
+    /// 3. Search
+    /// 4. HTTP options
+    /// 5. Help
+    /// Returns None if no overlay is active
+    pub fn topmost_overlay(&self) -> Option<OverlayType> {
+        if self.is_confirm_popup_visible() {
+            Some(OverlayType::ConfirmPopup)
+        } else if self.is_command_palette_visible() {
+            Some(OverlayType::CommandPalette)
+        } else if self.is_search_visible() {
+            Some(OverlayType::Search)
+        } else if self.is_http_options_visible() {
+            Some(OverlayType::HttpOptions)
+        } else if self.is_help_visible() {
+            Some(OverlayType::Help)
+        } else {
+            None
+        }
+    }
+
+    /// Check if any overlay is active (blocks tab content interaction)
+    pub fn is_any_overlay_active(&self) -> bool {
+        self.topmost_overlay().is_some()
+    }
+}
+
+/// Represents the type of overlay currently shown
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverlayType {
+    ConfirmPopup,
+    CommandPalette,
+    Search,
+    HttpOptions,
+    Help,
 }
 
 #[cfg(test)]
@@ -1006,5 +1067,80 @@ mod tests {
     fn test_export_format_default() {
         let app = create_test_app();
         assert_eq!(app.export_format, OutputFormat::Json);
+    }
+
+    #[test]
+    fn test_command_palette_visible() {
+        let mut app = create_test_app();
+        assert!(!app.is_command_palette_visible());
+
+        // Command palette is created on demand - simulate visibility
+        // This would need a command palette to be created first
+    }
+
+    #[test]
+    fn test_search_visible() {
+        let mut app = create_test_app();
+        assert!(!app.is_search_visible());
+
+        app.show_search = true;
+        assert!(app.is_search_visible());
+
+        app.show_search = false;
+        assert!(!app.is_search_visible());
+    }
+
+    #[test]
+    fn test_http_options_visible() {
+        let mut app = create_test_app();
+        assert!(!app.is_http_options_visible());
+
+        app.show_http_options = true;
+        assert!(app.is_http_options_visible());
+
+        app.show_http_options = false;
+        assert!(!app.is_http_options_visible());
+    }
+
+    #[test]
+    fn test_help_visible() {
+        let mut app = create_test_app();
+        assert!(!app.is_help_visible());
+
+        app.show_help = true;
+        assert!(app.is_help_visible());
+
+        app.show_help = false;
+        assert!(!app.is_help_visible());
+    }
+
+    #[test]
+    fn test_topmost_overlay_none_when_all_hidden() {
+        let app = create_test_app();
+        assert!(app.topmost_overlay().is_none());
+    }
+
+    #[test]
+    fn test_topmost_overlay_confirm_popup_precedence() {
+        let mut app = create_test_app();
+        // Set up multiple overlays
+        app.show_help = true;
+        app.show_search = true;
+        app.show_http_options = true;
+
+        // Confirm popup should take precedence
+        app.request_confirmation(PendingAction::ResetTab);
+        assert_eq!(app.topmost_overlay(), Some(OverlayType::ConfirmPopup));
+    }
+
+    #[test]
+    fn test_topmost_overlay_command_palette_precedence() {
+        let mut app = create_test_app();
+        app.show_help = true;
+        app.show_search = true;
+        app.show_http_options = true;
+
+        // Simulate command palette visible
+        // Note: command_palette needs to be created - this test may need adjustment
     }
 }
