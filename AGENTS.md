@@ -257,6 +257,12 @@ Use LRU cache for regex patterns to prevent unbounded memory growth:
 - Recommended cache size: 100 entries (use `NonZeroUsizer`)
 - Access via `cache.put(key, value)` and `cache.get(&key)`
 
+### Agent Test Best Practices
+- Prefer small test seams (e.g., `ScanDispatcherTrait`, `AlertSenderTrait`) over making private fields public.
+- Keep all agent tests isolated using `tempfile::TempDir`; avoid `AgentConfig::default()` for tests that write to memory/portfolio files.
+- Verify current call sites with `rg` before removing or renaming any API.
+- Confirm line references and behavior against current code before editing.
+
 ### Agent Alert Fatigue Prevention
 
 The agent has built-in mechanisms to prevent alert fatigue:
@@ -412,6 +418,8 @@ The TUI automatically switches to Insert mode when Tab/Shift+Tab focuses an inpu
 
 ## Skills Directory
 
-Skills are located in `.opencode/skills/slapper-agent/`. These provide specialized workflows and domain knowledge for working on specific areas of the codebase.
+Skills are located in two directories:
+- `.opencode/skills/slapper-agent/` - Agent-specific workflows and domain knowledge
+- `.opencode/skills/slapper-security/` - Security testing skill workflows
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
