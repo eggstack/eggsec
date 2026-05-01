@@ -92,7 +92,7 @@ Acceptance criteria:
 
 ---
 
-## Phase 3: Enforce Operational Constraints
+## Phase 3: Enforce Operational Constraints (COMPLETED 2026-04-30)
 
 Objective: make `ConstraintChecker` part of the actual scan path.
 
