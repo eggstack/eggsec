@@ -38,6 +38,8 @@ cargo check --lib -p slapper --features python-plugins,ruby-plugins
 crates/slapper/
 ├── src/
 │   ├── agent/         # Autonomous agent (event loop, portfolio, memory, alerts, skills)
+│   │   ├── constraints/ # ConstraintChecker (OperationalConstraints, DoNotDoList)
+│   │   └── mod.rs       # Agent with ScanDispatcherTrait/AlertSenderTrait seams
 │   ├── cli/           # Command-line argument parsing
 │   ├── commands/      # Command handlers
 │   ├── config/        # Configuration (SlapperConfig, PathsConfig, Scope)
@@ -87,6 +89,11 @@ crates/slapper/
 - `PayloadType` - Enum of 30 payload categories
 - `Severity` - Canonical severity rating (in `types.rs`, re-exported everywhere)
 - `SensitiveString` - Zeroized credential wrapper (in `types.rs`)
+- `AgentConfig` - Agent configuration (includes `operational_constraints: Option<OperationalConstraints>`)
+- `ConstraintChecker` - Enforces operational constraints (in `agent/constraints/checker.rs`)
+- `OperationalConstraints` - Constraint config (forbidden actions/targets, rate limits, etc.)
+- `ScanDispatcherTrait` - Testable seam for scan dispatch (crate-private)
+- `AlertSenderTrait` - Testable seam for alert sending (crate-private)
 
 ### Feature Flags
 
