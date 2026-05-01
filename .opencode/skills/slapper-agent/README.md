@@ -6,7 +6,7 @@ These skills provide specialized workflows and domain knowledge for the Slapper 
 
 | Skill File | Description |
 |-----------|-------------|
-| `agent_observality.md` | Agent logging, observability patterns |
+| `agent_observability.md` | Agent logging, observability patterns |
 | `agent_thread_safety.md` | Thread safety patterns for agent components |
 | `alert_notification.md` | Alert routing, notification channels |
 | `authentication_security_testing.md` | Auth testing workflows |
