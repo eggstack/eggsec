@@ -14,6 +14,21 @@ pub enum TaskStatus {
     Cancelled,
 }
 
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
+fn is_due(task: &ScheduledTask, now: u64) -> bool {
+    task.scheduled_for.map(|s| s <= now).unwrap_or(true)
+}
+
+fn lease_expired(task: &ScheduledTask, now: u64) -> bool {
+    task.leased_until.map(|l| now >= l).unwrap_or(false)
+}
+
 #[derive(Debug, Clone)]
 pub struct ScheduledTask {
     pub id: Uuid,
@@ -27,6 +42,10 @@ pub struct ScheduledTask {
     pub status: TaskStatus,
     pub assigned_agent_id: Option<Uuid>,
     pub leased_until: Option<u64>,
+    pub result: Option<serde_json::Value>,
+    pub error: Option<String>,
+    pub completed_at: Option<u64>,
+    pub updated_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,18 +81,18 @@ pub struct TaskOutcome {
 #[derive(Clone)]
 pub struct TaskScheduler {
     queue: Arc<RwLock<VecDeque<ScheduledTask>>>,
-    retry_queue: Arc<RwLock<VecDeque<ScheduledTask>>>,
     max_retries: usize,
     default_priority: TaskPriority,
+    default_retry_delay_ms: u64,
 }
 
 impl TaskScheduler {
     pub fn new() -> Self {
         Self {
             queue: Arc::new(RwLock::new(VecDeque::new())),
-            retry_queue: Arc::new(RwLock::new(VecDeque::new())),
             max_retries: 3,
             default_priority: TaskPriority::Normal,
+            default_retry_delay_ms: 30000,
         }
     }
 
@@ -84,6 +103,11 @@ impl TaskScheduler {
 
     pub fn with_default_priority(mut self, priority: TaskPriority) -> Self {
         self.default_priority = priority;
+        self
+    }
+
+    pub fn with_default_retry_delay(mut self, delay_ms: u64) -> Self {
+        self.default_retry_delay_ms = delay_ms;
         self
     }
 
@@ -103,17 +127,20 @@ impl TaskScheduler {
         *queue = all_tasks.into();
     }
 
-    pub async fn next_task(&self) -> Option<ScheduledTask> {
+    pub async fn lease_next_task(&self, agent_id: Uuid, lease_duration_ms: u64) -> Option<ScheduledTask> {
         let mut queue = self.queue.write().await;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let now = now_ms();
+        let expiry = now + lease_duration_ms;
+
         if let Some(pos) = queue.iter().position(|t| {
-            t.status == TaskStatus::Pending
-            && t.scheduled_for.map(|s| s <= now).unwrap_or(true)
+            t.status == TaskStatus::Pending && is_due(t, now)
         }) {
-            Some(queue.remove(pos).unwrap())
+            let task = &mut queue[pos];
+            task.status = TaskStatus::Leased;
+            task.assigned_agent_id = Some(agent_id);
+            task.leased_until = Some(expiry);
+            task.updated_at = Some(now);
+            Some(task.clone())
         } else {
             None
         }
@@ -121,14 +148,26 @@ impl TaskScheduler {
 
     pub async fn lease_task(&self, task_id: Uuid, agent_id: Uuid, lease_duration_ms: u64) -> bool {
         let mut queue = self.queue.write().await;
-        if let Some(task) = queue.iter_mut().find(|t| t.id == task_id && t.status == TaskStatus::Pending) {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64;
+        let now = now_ms();
+
+        if let Some(task) = queue.iter_mut().find(|t| t.id == task_id) {
+            if task.status == TaskStatus::Leased {
+                if lease_expired(task, now) {
+                    task.status = TaskStatus::Pending;
+                    task.assigned_agent_id = None;
+                    task.leased_until = None;
+                } else {
+                    return false;
+                }
+            }
+
+            if task.status != TaskStatus::Pending || !is_due(task, now) {
+                return false;
+            }
             task.status = TaskStatus::Leased;
             task.assigned_agent_id = Some(agent_id);
             task.leased_until = Some(now + lease_duration_ms);
+            task.updated_at = Some(now);
             true
         } else {
             false
@@ -137,8 +176,26 @@ impl TaskScheduler {
 
     pub async fn submit_result(&self, task_id: Uuid, success: bool, result: Option<serde_json::Value>, error: Option<String>) -> bool {
         let mut queue = self.queue.write().await;
+        let now = now_ms();
+
         if let Some(task) = queue.iter_mut().find(|t| t.id == task_id && t.status == TaskStatus::Leased) {
-            task.status = if success { TaskStatus::Completed } else { TaskStatus::Failed };
+            if success {
+                task.status = TaskStatus::Completed;
+                task.result = result;
+                task.completed_at = Some(now);
+            } else {
+                if task.retry_count < task.max_retries {
+                    task.retry_count += 1;
+                    task.status = TaskStatus::Pending;
+                    task.scheduled_for = Some(now + self.default_retry_delay_ms);
+                    task.error = error;
+                } else {
+                    task.status = TaskStatus::Failed;
+                    task.error = error;
+                    task.completed_at = Some(now);
+                }
+            }
+            task.updated_at = Some(now);
             true
         } else {
             false
@@ -150,36 +207,33 @@ impl TaskScheduler {
             return false;
         }
 
-        let mut retry_queue = self.retry_queue.write().await;
         let mut updated_task = task;
         updated_task.retry_count += 1;
-        retry_queue.push_back(updated_task);
+        updated_task.status = TaskStatus::Pending;
+        self.schedule(updated_task).await;
         true
     }
 
     pub async fn requeue_with_delay(&self, task: ScheduledTask, delay_ms: u64) {
         let mut updated_task = task;
         updated_task.retry_count += 1;
-        updated_task.scheduled_for = Some(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64 + delay_ms,
-        );
-
-        let mut queue = self.queue.write().await;
-        let mut tasks: Vec<_> = queue.drain(..).collect();
-        tasks.push(updated_task);
-        tasks.sort_by_key(|t| t.priority.as_u8());
-        *queue = tasks.into();
+        updated_task.scheduled_for = Some(now_ms() + delay_ms);
+        updated_task.status = TaskStatus::Pending;
+        self.schedule(updated_task).await;
     }
 
     pub async fn cancel(&self, task_id: Uuid) -> bool {
         let mut queue = self.queue.write().await;
+        let now = now_ms();
+
         if let Some(task) = queue.iter_mut().find(|t| t.id == task_id) {
-            if task.status == TaskStatus::Pending {
-                task.status = TaskStatus::Cancelled;
-                return true;
+            match task.status {
+                TaskStatus::Pending | TaskStatus::Leased | TaskStatus::Failed => {
+                    task.status = TaskStatus::Cancelled;
+                    task.updated_at = Some(now);
+                    return true;
+                }
+                _ => return false,
             }
         }
         false
@@ -191,15 +245,15 @@ impl TaskScheduler {
     }
 
     pub async fn retry_count(&self) -> usize {
-        let retry_queue = self.retry_queue.read().await;
-        retry_queue.len()
+        let queue = self.queue.read().await;
+        queue.iter().filter(|t| {
+            t.status == TaskStatus::Failed && t.retry_count < t.max_retries
+        }).count()
     }
 
     pub async fn clear(&self) {
         let mut queue = self.queue.write().await;
         queue.clear();
-        let mut retry_queue = self.retry_queue.write().await;
-        retry_queue.clear();
     }
 
     pub async fn peek(&self) -> Option<ScheduledTask> {
@@ -234,14 +288,15 @@ impl TaskScheduler {
             priority: self.default_priority,
             retry_count: 0,
             max_retries: self.max_retries,
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
+            created_at: now_ms(),
             scheduled_for: None,
             status: TaskStatus::Pending,
             assigned_agent_id: None,
             leased_until: None,
+            result: None,
+            error: None,
+            completed_at: None,
+            updated_at: None,
         }
     }
 }

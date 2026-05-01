@@ -34,13 +34,27 @@ SSRF testing finds vulnerabilities where server-side applications can be induced
 
 ## Internal Protection (Built-in)
 
-Slapper includes automatic SSRF prevention in `resolve_host()`:
-- Blocks loopback addresses (127.0.0.0/8)
+Slapper includes automatic SSRF prevention in `resolve_host()` and `validate_callback_url()`:
+
+- Blocks loopback addresses (127.0.0.0/8, ::1)
 - Blocks private IPs (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-- Blocks link-local (169.254.0.0/16)
-- IPv6 equivalents (fc00::/7, fe80::/10)
+- Blocks link-local (169.254.0.0/16, fe80::/10)
+- Blocks documentation IPs (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24)
+- Blocks benchmark range (198.18.0.0/15)
+- Blocks unspecified (0.0.0.0) and multicast (224.0.0.1)
+- Rejects `localhost` explicitly (case-insensitive)
+- Validates ALL resolved IPs, not just first (prevents DNS rebinding bypass)
+- IPv6 unique-local: `fc00::/7` via `(segments[0] & 0xfe00) == 0xfc00`
 
 This prevents accidental SSRF when parsing user-provided hostnames in port scanning and other tools.
+
+### Callback URL Validation with Injectable Resolver
+
+For agent callback URLs, `validate_callback_url()` in `tool/protocol/agent_routes.rs` provides:
+- `validate_callback_url(url)` - production wrapper using system DNS
+- `validate_callback_url_with_resolver(url, resolver)` - testable variant accepting `Fn(&str, u16) -> Result<Vec<IpAddr>>`
+
+This enables testing without network access using fake resolvers.
 
 ## Usage
 

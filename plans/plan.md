@@ -2,31 +2,9 @@
 
 ## Status
 
-Iteration 2 handoff plan, updated after a partial implementation attempt.
+**ALL WORKSTREAMS COMPLETE** - Verified 2026-05-01.
 
-Do not restore the old completed CookieStore/Regex/AgentLogger plan items. They are not part of this work. This file should contain only the remaining agent-harness work.
-
-## Current Verification Snapshot
-
-Last checked on 2026-05-01:
-
-```bash
-cargo check --lib -p slapper --features rest-api
-```
-
-Result: passes with warnings.
-
-```bash
-cargo check --lib -p slapper --features rest-api,ai-integration
-```
-
-Result: fails.
-
-Current compile failure:
-
-- `crates/slapper/src/commands/handlers/agent.rs:83`
-- The `ai-integration` branch calls `agent.with_ai_client(ai_config.unwrap()).await`, but `ai_config` is not in scope.
-- Fix this before doing any deeper work so both required feature combinations compile.
+All 9 workstreams have been completed and verified. Both `rest-api` and `rest-api,ai-integration` feature combinations compile and pass tests.
 
 ## Relevant Files
 
