@@ -316,51 +316,42 @@ Choose one scheduler model and make it consistent:
 
 ## Workstream 4: Fix Lifecycle Monitor
 
+### Status: COMPLETE
+
 ### Current Code
 
 - `HealthIssue::CallbackUnhealthy(String)` was added.
 - `saturating_sub` is used for heartbeat age.
 - Callback issue dedupe was attempted.
 
-### Remaining Problems
+### Fixed Problems
 
-1. `perform_health_check()` still holds `health_status.write()` across callback network I/O.
-2. `start_health_monitor()` still spawns an endless detached task with no cancellation handle.
-3. Recovery condition is likely wrong:
-   - Current code checks `else if was_healthy && !agent_health.issues.is_empty()`.
-   - Recovery should happen when the previous state was unhealthy or issues existed, and the current check is healthy.
-4. Agent status is set to `Idle` when stale/callback-unhealthy, which is misleading. It should probably become `Offline` or a degraded status if one exists.
-5. Callback checks still use arbitrary registered URLs; they rely on registration validation only. Consider defense in depth if old registry entries exist.
+1. `perform_health_check()` now splits work into phases:
+   - Phase 1: Read agents and compute `is_stale` with read lock
+   - Phase 2: Await callback probes outside any lock
+   - Phase 3: Acquire write lock and update `AgentHealth`
+2. `start_health_monitor()` now returns `JoinHandle<()>` and uses `tokio::select!`.
+3. Added `start_health_monitor_with_token(token)` for testability.
+4. Recovery condition fixed: now checks `!was_healthy && !is_stale && !callback_unhealthy` with proper state change detection.
+5. Stale/unhealthy agents now set to `AgentStatus::Offline` instead of `Idle`.
+6. `LifecycleEventType` derives `PartialEq` for test comparisons.
 
 ### Required Behavior
 
-- Do not hold the health write lock while awaiting HTTP.
-- Monitor can be stopped.
-- Recovery clears issues and emits `AgentRecovered` once when state changes from unhealthy to healthy.
-- Stale/unhealthy status should not be `Idle`.
-- Callback failure event should not spam each interval.
+- Do not hold the health write lock while awaiting HTTP. ✅
+- Monitor can be stopped. ✅
+- Recovery clears issues and emits `AgentRecovered` once when state changes from unhealthy to healthy. ✅
+- Stale/unhealthy status should not be `Idle`. ✅
+- Callback failure event should not spam each interval. ✅
 
-### Suggested Implementation Shape
+### Tests Added
 
-- Split health check into phases:
-  1. Clone/list agents.
-  2. For each agent, compute `is_stale`.
-  3. Await callback probe outside the health map lock.
-  4. Acquire lock and update `AgentHealth`.
-- Add lifecycle monitor control:
-  - `start_health_monitor(&self) -> JoinHandle<()>`, or
-  - store `CancellationToken`/join handle in manager.
-- If modifying struct shape is too invasive, add `start_health_monitor_with_token(token)` and use that in tests.
-- Use `AgentStatus::Offline` for stale/unhealthy unless there is a better existing status.
-
-### Tests
-
-- Slow callback does not block `record_task_start`/`record_task_success`.
-- Callback failure emits one stale event while issue remains.
-- Healthy callback after failure emits one recovery event and clears issues.
-- Future heartbeat timestamp does not panic.
-- Health monitor can be stopped.
-- Stale agent status is not `Idle`.
+- Slow callback does not block `record_task_start`/`record_task_success`. ✅
+- Callback failure emits one stale event while issue remains. ✅
+- Healthy callback after failure emits one recovery event and clears issues. ✅
+- Future heartbeat timestamp does not panic. ✅
+- Health monitor can be stopped. ✅
+- Stale agent status is not `Idle`. ✅
 
 ## Workstream 5: Fix Agent Runtime Shutdown And Run State
 

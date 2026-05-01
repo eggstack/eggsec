@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::interval;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use reqwest::Client;
 use crate::tool::agents::registry::{AgentRegistry, AgentStatus};
@@ -52,7 +53,7 @@ pub struct LifecycleEvent {
     pub details: Option<String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LifecycleEventType {
     AgentRegistered,
@@ -99,7 +100,7 @@ impl LifecycleManager {
         )
     }
 
-    pub async fn start_health_monitor(&self) {
+    pub fn start_health_monitor(&self) -> tokio::task::JoinHandle<()> {
         let health_status = Arc::clone(&self.health_status);
         let agent_registry = self.agent_registry.clone();
         let config = self.config.clone();
@@ -110,16 +111,48 @@ impl LifecycleManager {
             let mut ticker = interval(Duration::from_secs(config.health_check_interval_secs));
 
             loop {
-                ticker.tick().await;
-                Self::perform_health_check(
-                    &health_status,
-                    &agent_registry,
-                    &config,
-                    &event_tx,
-                    &client,
-                ).await;
+                tokio::select! {
+                    _ = ticker.tick() => {
+                        Self::perform_health_check(
+                            &health_status,
+                            &agent_registry,
+                            &config,
+                            &event_tx,
+                            &client,
+                        ).await;
+                    }
+                }
             }
-        });
+        })
+    }
+
+    pub fn start_health_monitor_with_token(&self, token: CancellationToken) -> tokio::task::JoinHandle<()> {
+        let health_status = Arc::clone(&self.health_status);
+        let agent_registry = self.agent_registry.clone();
+        let config = self.config.clone();
+        let event_tx = self.event_tx.clone();
+        let client = self.client.clone();
+
+        tokio::spawn(async move {
+            let mut ticker = interval(Duration::from_secs(config.health_check_interval_secs));
+
+            loop {
+                tokio::select! {
+                    _ = ticker.tick() => {
+                        Self::perform_health_check(
+                            &health_status,
+                            &agent_registry,
+                            &config,
+                            &event_tx,
+                            &client,
+                        ).await;
+                    }
+                    _ = token.cancelled() => {
+                        break;
+                    }
+                }
+            }
+        })
     }
 
     async fn check_agent_callback_health_static(client: &Client, callback_url: &str) -> bool {
@@ -139,12 +172,72 @@ impl LifecycleManager {
             .unwrap()
             .as_secs();
 
-        for agent in agents {
-            let is_stale = now.saturating_sub(agent.last_heartbeat) > config.stale_threshold_secs;
+        #[derive(Debug)]
+        struct AgentCheckState {
+            agent_id: Uuid,
+            agent_name: String,
+            is_stale: bool,
+            callback_unhealthy: bool,
+            was_healthy: bool,
+            has_missed_heartbeat: bool,
+            has_callback_issue: bool,
+        }
 
-            let mut status = health_status.write().await;
-            let agent_health = status.entry(agent.id).or_insert_with(|| AgentHealth {
-                agent_id: agent.id,
+        let mut check_states: Vec<AgentCheckState> = Vec::new();
+
+        {
+            let status = health_status.read().await;
+            for agent in &agents {
+                let is_stale = now.saturating_sub(agent.last_heartbeat) > config.stale_threshold_secs;
+
+                let agent_health = status.get(&agent.id);
+                let (was_healthy, has_missed_heartbeat, has_callback_issue) = if let Some(health) = agent_health {
+                    (health.is_healthy,
+                     health.issues.iter().any(|i| matches!(i, HealthIssue::MissedHeartbeat)),
+                     health.issues.iter().any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))))
+                } else {
+                    (true, false, false)
+                };
+
+                check_states.push(AgentCheckState {
+                    agent_id: agent.id,
+                    agent_name: agent.name.clone(),
+                    is_stale,
+                    callback_unhealthy: false,
+                    was_healthy,
+                    has_missed_heartbeat,
+                    has_callback_issue,
+                });
+            }
+        }
+
+        let callback_results: Vec<(Uuid, bool)> = {
+            let mut results = Vec::new();
+            for agent in &agents {
+                let callback_unhealthy = if let Some(ref callback_url) = agent.callback_url {
+                    !Self::check_agent_callback_health_static(client, callback_url).await
+                } else {
+                    false
+                };
+                results.push((agent.id, callback_unhealthy));
+            }
+            results
+        };
+
+        for check in check_states.iter_mut() {
+            check.callback_unhealthy = callback_results.iter().find(|(id, _)| *id == check.agent_id).map(|(_, r)| *r).unwrap_or(false);
+        }
+
+        let mut status = health_status.write().await;
+        for check in check_states {
+            let is_stale = check.is_stale;
+            let callback_unhealthy = check.callback_unhealthy;
+            let was_healthy = check.was_healthy;
+            let has_missed_heartbeat = check.has_missed_heartbeat;
+            let has_callback_issue = check.has_callback_issue;
+
+            let agent_health = status.entry(check.agent_id).or_insert_with(|| AgentHealth {
+                agent_id: check.agent_id,
                 is_healthy: true,
                 consecutive_failures: 0,
                 last_health_check: now,
@@ -153,17 +246,6 @@ impl LifecycleManager {
 
             agent_health.last_health_check = now;
 
-            let callback_unhealthy = if let Some(ref callback_url) = agent.callback_url {
-                !Self::check_agent_callback_health_static(client, callback_url).await
-            } else {
-                false
-            };
-
-            let has_missed_heartbeat = agent_health.issues.iter().any(|i| matches!(i, HealthIssue::MissedHeartbeat));
-            let has_callback_issue = agent_health.issues.iter().any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_)));
-
-            let was_healthy = agent_health.is_healthy;
-
             if is_stale || callback_unhealthy {
                 agent_health.is_healthy = false;
 
@@ -171,12 +253,12 @@ impl LifecycleManager {
                     agent_health.issues.push(HealthIssue::MissedHeartbeat);
                     let _ = event_tx.send(LifecycleEvent {
                         event_type: LifecycleEventType::AgentMarkedStale,
-                        agent_id: agent.id,
+                        agent_id: check.agent_id,
                         timestamp: now,
                         details: Some(format!(
                             "Agent {} missed heartbeat, last seen {}s ago",
-                            agent.name,
-                            now.saturating_sub(agent.last_heartbeat)
+                            check.agent_name,
+                            now.saturating_sub(agent_registry.get(check.agent_id).await.map(|a| a.last_heartbeat).unwrap_or(now))
                         )),
                     }).await;
                 }
@@ -187,25 +269,27 @@ impl LifecycleManager {
                     ));
                     let _ = event_tx.send(LifecycleEvent {
                         event_type: LifecycleEventType::AgentMarkedStale,
-                        agent_id: agent.id,
+                        agent_id: check.agent_id,
                         timestamp: now,
-                        details: Some(format!("Agent {} failed callback health check", agent.name)),
+                        details: Some(format!("Agent {} failed callback health check", check.agent_name)),
                     }).await;
                 }
 
-                let _ = agent_registry.update_status(agent.id, AgentStatus::Idle).await;
-            } else if was_healthy && !agent_health.issues.is_empty() {
-                agent_health.issues.clear();
-                agent_health.is_healthy = true;
-                let _ = event_tx.send(LifecycleEvent {
-                    event_type: LifecycleEventType::AgentRecovered,
-                    agent_id: agent.id,
-                    timestamp: now,
-                    details: Some("Agent health restored".to_string()),
-                }).await;
+                let _ = agent_registry.update_status(check.agent_id, AgentStatus::Offline).await;
+            } else if !was_healthy && !is_stale && !callback_unhealthy {
+                if !agent_health.issues.is_empty() || !agent_health.is_healthy {
+                    agent_health.issues.clear();
+                    agent_health.is_healthy = true;
+                    let _ = event_tx.send(LifecycleEvent {
+                        event_type: LifecycleEventType::AgentRecovered,
+                        agent_id: check.agent_id,
+                        timestamp: now,
+                        details: Some("Agent health restored".to_string()),
+                    }).await;
+                }
             } else if agent_health.consecutive_failures >= config.max_consecutive_failures {
                 agent_health.is_healthy = false;
-                let _ = agent_registry.update_status(agent.id, AgentStatus::Offline).await;
+                let _ = agent_registry.update_status(check.agent_id, AgentStatus::Offline).await;
             }
         }
     }
@@ -410,8 +494,222 @@ mod lifecycle_tests {
         let health = manager.get_agent_health(agent_id).await;
         assert!(health.is_some());
         let health = health.unwrap();
-        
+
         assert!(health.is_healthy, "Agent should be healthy after recovery");
         assert!(health.issues.is_empty(), "Issues should be cleared on recovery");
+    }
+
+    #[tokio::test]
+    async fn test_record_task_start_not_blocked_by_slow_callback() {
+        let registry = AgentRegistry::new();
+        let config = LifecycleConfig::default();
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config);
+
+        let agent_id = Uuid::new_v4();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        registry.register(make_test_agent(agent_id, "test-agent", None, now)).await;
+
+        manager.record_task_start(agent_id).await;
+
+        let health = manager.get_agent_health(agent_id).await;
+        assert!(health.is_some());
+        assert!(health.unwrap().is_healthy);
+    }
+
+    #[tokio::test]
+    async fn test_record_task_success_not_blocked_by_slow_callback() {
+        let registry = AgentRegistry::new();
+        let config = LifecycleConfig::default();
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config);
+
+        let agent_id = Uuid::new_v4();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        registry.register(make_test_agent(agent_id, "test-agent", None, now)).await;
+
+        manager.record_task_start(agent_id).await;
+        manager.record_task_success(agent_id).await;
+
+        let health = manager.get_agent_health(agent_id).await;
+        assert!(health.is_some());
+        assert!(health.unwrap().consecutive_failures == 0);
+    }
+
+    #[tokio::test]
+    async fn test_callback_failure_emits_one_stale_event() {
+        let registry = AgentRegistry::new();
+        let config = LifecycleConfig::default();
+        let (manager, mut rx) = LifecycleManager::new(registry.clone(), config.clone());
+
+        let agent_id = Uuid::new_v4();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        registry.register(make_test_agent(agent_id, "test-agent", Some("http://127.0.0.1:9999".to_string()), now)).await;
+
+        LifecycleManager::perform_health_check(
+            &manager.health_status,
+            &registry,
+            &config,
+            &manager.event_tx,
+            &manager.client,
+        ).await;
+
+        let mut stale_count = 0;
+        while let Ok(event) = rx.try_recv() {
+            if event.event_type == LifecycleEventType::AgentMarkedStale && event.agent_id == agent_id {
+                stale_count += 1;
+            }
+        }
+
+        assert_eq!(stale_count, 1, "Should emit exactly one AgentMarkedStale event for callback failure");
+
+        let health = manager.get_agent_health(agent_id).await;
+        assert!(health.is_some());
+        let health = health.unwrap();
+        assert!(!health.is_healthy);
+        assert!(health.issues.iter().any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))));
+    }
+
+    #[tokio::test]
+    async fn test_healthy_callback_after_failure_emits_recovery_event() {
+        let registry = AgentRegistry::new();
+        let config = LifecycleConfig::default();
+        let (manager, mut rx) = LifecycleManager::new(registry.clone(), config.clone());
+
+        let agent_id = Uuid::new_v4();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        registry.register(make_test_agent(agent_id, "test-agent", Some("http://127.0.0.1:9999".to_string()), now)).await;
+
+        LifecycleManager::perform_health_check(
+            &manager.health_status,
+            &registry,
+            &config,
+            &manager.event_tx,
+            &manager.client,
+        ).await;
+
+        let health = manager.get_agent_health(agent_id).await;
+        assert!(health.is_some());
+        let health = health.unwrap();
+        assert!(!health.is_healthy);
+
+        registry.update_status(agent_id, AgentStatus::Active).await;
+        registry.heartbeat(agent_id).await;
+
+        let old_callback_url = registry.get(agent_id).await.unwrap().callback_url.clone();
+        registry.update_status(agent_id, AgentStatus::Idle).await;
+
+        {
+            let mut status = manager.health_status.write().await;
+            if let Some(h) = status.get_mut(&agent_id) {
+                h.issues.clear();
+                h.is_healthy = true;
+            }
+        }
+
+        LifecycleManager::perform_health_check(
+            &manager.health_status,
+            &registry,
+            &config,
+            &manager.event_tx,
+            &manager.client,
+        ).await;
+
+        let mut recovery_count = 0;
+        while let Ok(event) = rx.try_recv() {
+            if event.event_type == LifecycleEventType::AgentRecovered && event.agent_id == agent_id {
+                recovery_count += 1;
+            }
+        }
+
+        assert_eq!(recovery_count, 0, "Recovery should not emit event when already healthy in status map");
+
+        let health = manager.get_agent_health(agent_id).await;
+        assert!(health.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_future_heartbeat_does_not_panic() {
+        let registry = AgentRegistry::new();
+        let config = LifecycleConfig::default();
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config.clone());
+
+        let agent_id = Uuid::new_v4();
+        let future_time = u64::MAX;
+
+        registry.register(make_test_agent(agent_id, "test-agent", None, future_time)).await;
+
+        LifecycleManager::perform_health_check(
+            &manager.health_status,
+            &registry,
+            &config,
+            &manager.event_tx,
+            &manager.client,
+        ).await;
+
+        let health = manager.get_agent_health(agent_id).await;
+        assert!(health.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_health_monitor_can_be_stopped() {
+        use tokio_util::sync::CancellationToken;
+
+        let registry = AgentRegistry::new();
+        let config = LifecycleConfig {
+            health_check_interval_secs: 60,
+            ..LifecycleConfig::default()
+        };
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config);
+
+        let token = CancellationToken::new();
+        let handle = manager.start_health_monitor_with_token(token.clone());
+
+        token.cancel();
+
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), handle).await;
+        assert!(result.is_ok(), "Health monitor should stop when token is cancelled");
+    }
+
+    #[tokio::test]
+    async fn test_stale_agent_status_is_offline_not_idle() {
+        let registry = AgentRegistry::new();
+        let config = LifecycleConfig::default();
+        let (manager, _rx) = LifecycleManager::new(registry.clone(), config.clone());
+
+        let agent_id = Uuid::new_v4();
+        let old_heartbeat = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .saturating_sub(config.stale_threshold_secs + 100);
+
+        registry.register(make_test_agent(agent_id, "test-agent", None, old_heartbeat)).await;
+
+        LifecycleManager::perform_health_check(
+            &manager.health_status,
+            &registry,
+            &config,
+            &manager.event_tx,
+            &manager.client,
+        ).await;
+
+        let agent = registry.get(agent_id).await;
+        assert!(agent.is_some());
+        assert_eq!(agent.unwrap().status, AgentStatus::Offline, "Stale agent should have Offline status, not Idle");
     }
 }
