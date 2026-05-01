@@ -249,8 +249,8 @@ impl CronExpression {
         let s = t.second() as u8;
         let m = t.minute() as u8;
         let h = t.hour() as u8;
-        let d = t.day() as u8;
-        let mo = t.month() as u8;
+        let d = t.date().day() as u8;
+        let mo = t.date().month() as u8;
         let dow = t.weekday().num_days_from_sunday() as u8;
 
         field_matches(self.second, s)

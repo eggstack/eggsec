@@ -127,6 +127,24 @@ pub struct TargetConfig {
     pub off_peak_window: Option<OffPeakWindow>,
 }
 
+impl TargetConfig {
+    pub fn new(target: &str) -> Self {
+        Self {
+            target: target.to_string(),
+            target_type: "url".to_string(),
+            priority: Priority::Normal,
+            schedule: None,
+            alert_channels: Vec::new(),
+            last_scan: None,
+            scan_history: Vec::new(),
+            baseline_findings: Vec::new(),
+            enabled: true,
+            scan_depth: ScanDepth::Shallow,
+            off_peak_window: None,
+        }
+    }
+}
+
 impl Default for TargetConfig {
     fn default() -> Self {
         Self {
@@ -167,6 +185,10 @@ pub struct TargetPortfolio {
 }
 
 impl TargetPortfolio {
+    pub fn file_path(&self) -> Option<&PathBuf> {
+        self.file_path.as_ref()
+    }
+
     pub fn new() -> Self {
         Self {
             data: Arc::new(RwLock::new(PortfolioData::default())),
@@ -189,7 +211,11 @@ impl TargetPortfolio {
                 file_path: Some(path.clone()),
             })
         } else {
-            Ok(Self::new())
+            // Retain file_path even if file doesn't exist (Phase 9 fix)
+            Ok(Self {
+                data: Arc::new(RwLock::new(PortfolioData::default())),
+                file_path: Some(path.clone()),
+            })
         }
     }
 

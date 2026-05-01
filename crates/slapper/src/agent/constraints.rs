@@ -8,6 +8,7 @@ use crate::agent::alerts::AlertRoutingRules;
 use crate::types::Severity;
 
 pub mod checker;
+pub use checker::{ConstraintChecker, ConstraintViolation};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoNotDoList {
@@ -50,6 +51,8 @@ impl DoNotDoList {
         !self.forbidden_targets.iter().any(|t| {
             if t.starts_with('*') {
                 target.contains(&t[1..])
+            } else if t.ends_with('*') {
+                target.starts_with(&t[..t.len()-1])
             } else {
                 target == t || target.starts_with(t)
             }

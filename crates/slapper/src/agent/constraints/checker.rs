@@ -3,6 +3,8 @@ use crate::agent::constraints::{
 };
 use crate::agent::portfolio::{ScanDepth, TargetConfig};
 use crate::types::Severity;
+use chrono::Timelike;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConstraintViolation {
@@ -84,16 +86,16 @@ impl ConstraintViolation {
 
 pub struct ConstraintChecker {
     constraints: OperationalConstraints,
-    request_counts: std::collections::HashMap<String, usize>,
+    request_counts: Arc<Mutex<std::collections::HashMap<String, usize>>>,
 }
 
 impl ConstraintChecker {
-    pub fn new(constraints: OperationalConstraints) -> Self {
-        Self {
-            constraints,
-            request_counts: std::collections::HashMap::new(),
-        }
+pub fn new(constraints: OperationalConstraints) -> Self {
+    Self {
+        constraints,
+        request_counts: Arc::new(Mutex::new(std::collections::HashMap::new())),
     }
+}
 
     pub fn with_constraints(constraints: OperationalConstraints) -> Self {
         Self::new(constraints)
@@ -189,9 +191,10 @@ impl ConstraintChecker {
         Err(ConstraintViolation::ScanDepthNotAllowed { requested, allowed })
     }
 
-    pub fn evaluate_rate_limit(&mut self, key: &str) -> Result<(), ConstraintViolation> {
+    pub fn evaluate_rate_limit(&self, key: &str) -> Result<(), ConstraintViolation> {
         if let Some(limit) = self.constraints.rate_limit_budget {
-            let current = self.request_counts.entry(key.to_string()).or_insert(0);
+            let mut request_counts = self.request_counts.lock().unwrap();
+            let current = request_counts.entry(key.to_string()).or_insert(0);
             if *current >= limit {
                 return Err(ConstraintViolation::RateLimitExceeded {
                     current: *current,
@@ -256,8 +259,9 @@ impl ConstraintChecker {
         violations
     }
 
-    pub fn reset_rate_limits(&mut self) {
-        self.request_counts.clear();
+    pub fn reset_rate_limits(&self) {
+        let mut request_counts = self.request_counts.lock().unwrap();
+        request_counts.clear();
     }
 
     pub fn get_constraints(&self) -> &OperationalConstraints {
@@ -468,6 +472,8 @@ mod tests {
     fn test_get_constraints() {
         let constraints = create_test_constraints();
         let checker = ConstraintChecker::new(constraints.clone());
-        assert_eq!(checker.get_constraints() as *const _, &constraints as *const _);
+        let checker_constraints = checker.get_constraints();
+        assert_eq!(checker_constraints.rate_limit_budget, constraints.rate_limit_budget);
+        assert_eq!(checker_constraints.require_approval_for, constraints.require_approval_for);
     }
 }

@@ -3,12 +3,19 @@ use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 
 pub fn validate_path(base: &Path, user_path: &Path) -> Result<PathBuf> {
-    let canonical = user_path
-        .canonicalize()
-        .map_err(|e| anyhow!("Failed to canonicalize path: {}", e))?;
     let base_canonical = base
         .canonicalize()
         .map_err(|e| anyhow!("Failed to canonicalize base path: {}", e))?;
+
+    // Only canonicalize user path if it exists, otherwise use the path as-is
+    let canonical = if user_path.exists() {
+        user_path
+            .canonicalize()
+            .map_err(|e| anyhow!("Failed to canonicalize path: {}", e))?
+    } else {
+        user_path.to_path_buf()
+    };
+
     if !canonical.starts_with(&base_canonical) {
         return Err(anyhow!(
             "Path traversal detected: {} is not within {}",
