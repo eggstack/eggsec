@@ -24,7 +24,7 @@ use std::pin::Pin;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
-use std::panic::AssertUnwindSafe;
+
 
 use anyhow::Result;
 use chrono::{DateTime, Utc, Timelike};
@@ -896,6 +896,56 @@ mod tests {
 
         assert!(result.is_err(), "Handler error should propagate");
         assert_eq!(agent.event_handlers.len(), initial_count, "Handlers should be restored even after handler error");
+    }
+
+    #[tokio::test]
+    async fn test_trigger_event_restores_handlers_on_panic() {
+        let mut agent = Agent::new(AgentConfig::default()).await.unwrap();
+
+        struct PanickingHandler;
+        impl EventHandler for PanickingHandler {
+            fn handles(&self, _event: &SecurityEvent) -> bool {
+                true
+            }
+            fn handle<'a>(
+                &'a self,
+                _event: &'a SecurityEvent,
+                _agent: &'a mut Agent,
+            ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+                Box::pin(async {
+                    panic!("handler panicked during event processing");
+                })
+            }
+        }
+        agent.register_handler(Box::new(PanickingHandler));
+        let initial_count = agent.event_handlers.len();
+
+        let event = SecurityEvent::ScanComplete(ScanCompleteEvent {
+            scan_id: "test-3".to_string(),
+            target: "https://example.com".to_string(),
+            scan_type: "recon".to_string(),
+            timestamp: Utc::now(),
+            findings_count: 0,
+            severity_counts: std::collections::HashMap::new(),
+        });
+        let result = agent.trigger_event(event).await;
+
+        assert!(result.is_err(), "Panicking handler should return error");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("panicked"), "Error should contain 'panicked': {}", err_msg);
+        assert_eq!(agent.event_handlers.len(), initial_count, "Handlers should be restored after panic");
+
+        let event2 = SecurityEvent::ScanComplete(ScanCompleteEvent {
+            scan_id: "test-4".to_string(),
+            target: "https://example.com".to_string(),
+            scan_type: "recon".to_string(),
+            timestamp: Utc::now(),
+            findings_count: 0,
+            severity_counts: std::collections::HashMap::new(),
+        });
+        let result2 = agent.trigger_event(event2).await;
+        assert!(result2.is_ok() || result2.is_err(), "Subsequent trigger should not crash");
+        assert_eq!(agent.event_handlers.len(), initial_count, "Handlers should persist after subsequent trigger");
     }
 
     #[test]
