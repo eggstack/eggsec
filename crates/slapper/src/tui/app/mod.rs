@@ -166,6 +166,7 @@ pub struct App {
     pub vuln: tabs::VulnTab,
     pub export_format: OutputFormat,
     pub task_handle: Option<tokio::task::JoinHandle<()>>,
+    pub task_tab: Option<crate::tui::tabs::Tab>,
     pub progress_rx: Option<tokio::sync::mpsc::Receiver<(u64, u64)>>,
     pub result_rx: Option<tokio::sync::mpsc::Receiver<workers::TaskResult>>,
     pub help_manager: HelpManager,
@@ -286,6 +287,7 @@ impl App {
             last_tab_area_width: 80,
             export_format: OutputFormat::Json,
             task_handle: None,
+            task_tab: None,
             progress_rx: None,
             result_rx: None,
             help_manager: HelpManager::new(),
@@ -452,6 +454,7 @@ impl App {
         if let Some(handle) = self.task_handle.take() {
             handle.abort();
         }
+        self.task_tab = None;
         self.dispatcher_mut().stop();
     }
 

@@ -415,6 +415,9 @@ impl super::App {
             self.progress_rx = Some(progress_rx);
             self.result_rx = Some(result_rx);
 
+            // Track which tab started this task
+            self.task_tab = Some(self.current_tab);
+
             self.task_handle = Some(tokio::spawn(async move {
                 match runner.run().await {
                     Ok(_) => {}

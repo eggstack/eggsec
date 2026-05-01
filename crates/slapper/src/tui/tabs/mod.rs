@@ -524,31 +524,41 @@ impl TabWindow {
         }
     }
 
-    pub fn visible_tab_spans(&self, term_width: u16) -> Vec<TabSpan> {
+    pub fn visible_tab_spans(&self, _term_width: u16) -> Vec<TabSpan> {
         let all_tabs = Tab::all();
-        let inner_width = (term_width as usize).saturating_sub(2);
-
+        
         if self.max_visible == 0 || self.end <= self.start {
             return Vec::new();
         }
-
-        let tab_width = inner_width / self.max_visible;
-
-        all_tabs[self.start..self.end]
-            .iter()
-            .enumerate()
-            .map(|(i, tab)| {
-                let global_index = self.start + i;
-                let x_start = (i * tab_width) as u16;
-                let x_end = ((i + 1) * tab_width) as u16;
-                TabSpan {
-                    tab: *tab,
-                    global_index,
-                    x_start,
-                    x_end,
-                }
-            })
-            .collect()
+        
+        // Get the visible tab titles and calculate their widths
+        let visible_tabs: Vec<_> = all_tabs[self.start..self.end].iter().collect();
+        let title_widths: Vec<usize> = visible_tabs.iter().map(|t| t.title().len()).collect();
+        
+        // Ratatui Tabs widget adds spacing between tabs (1 space on each side = 2 total)
+        let tab_spacing = 2;
+        
+        // Calculate cumulative widths to determine x positions
+        // Positions are relative to the tab area (which starts at x = 0 for this calculation)
+        let mut cum_width = 0;
+        let mut spans = Vec::new();
+        
+        for (i, (&tab, &title_width)) in visible_tabs.iter().zip(title_widths.iter()).enumerate() {
+            let x_start = cum_width as u16;
+            let tab_width = title_width + tab_spacing;
+            let x_end = (cum_width + title_width) as u16;
+            
+            spans.push(TabSpan {
+                tab: *tab,
+                global_index: self.start + i,
+                x_start,
+                x_end,
+            });
+            
+            cum_width += tab_width;
+        }
+        
+        spans
     }
 }
 
@@ -921,4 +931,146 @@ pub trait TabInput: TabState {
     fn page_up(&mut self, _page_size: usize) {}
     fn page_down(&mut self, _page_size: usize) {}
     fn reset(&mut self) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visible_tab_spans_uneven_widths() {
+        let tab_window = TabWindow {
+            start: 0,
+            end: 5,
+            selected_visible: 0,
+            max_visible: 5,
+            total_tabs: 20,
+            has_prev: false,
+            has_next: true,
+        };
+        let spans = tab_window.visible_tab_spans(80);
+        assert_eq!(spans.len(), 5);
+
+        // Check first tab (Recon) - title "[1] Recon" = 9 chars
+        assert_eq!(spans[0].tab, Tab::Recon);
+        assert_eq!(spans[0].x_start, 0);
+        assert_eq!(spans[0].x_end, 9);
+
+        // Check second tab (Load) - title "[2] Load" = 8 chars, starts at 9+2=11
+        assert_eq!(spans[1].tab, Tab::Load);
+        assert_eq!(spans[1].x_start, 11);
+        assert_eq!(spans[1].x_end, 19);
+
+        // Check ScanPorts tab - title "[3] Scan Ports" = 13 chars
+        assert_eq!(spans[2].tab, Tab::ScanPorts);
+        assert_eq!(spans[2].x_start, 21);
+        assert_eq!(spans[2].x_end, 35);
+
+        // Check ScanEndpoints tab - title "[4] Scan Endpoints" = 18 chars
+        let se_span = &spans[3];
+        assert_eq!(se_span.tab, Tab::ScanEndpoints);
+        assert_eq!(se_span.x_start, 37);
+        assert_eq!(se_span.x_end, 55);
+
+        // Simulate clicking at the ScanEndpoints tab position
+        let click_x = se_span.x_start;
+        let clicked_tab = spans.iter()
+            .find(|s| click_x >= s.x_start && click_x < s.x_end)
+            .map(|s| s.tab)
+            .unwrap();
+        assert_eq!(clicked_tab, Tab::ScanEndpoints);
+        assert_ne!(clicked_tab, Tab::ScanPorts);
+        assert_ne!(clicked_tab, Tab::Fingerprint);
+    }
+
+    #[test]
+    fn tab_window_for_narrow_width() {
+        let current_tab = Tab::Recon;
+        let term_width = 40;
+        let tab_window = TabWindow::for_width(term_width, current_tab, 0);
+
+        let all_tabs = Tab::all();
+        let tab_widths: Vec<usize> = all_tabs.iter().map(|t| t.title().len()).collect();
+
+        let inner_width = (term_width as usize).saturating_sub(2);
+        let available_width = inner_width.saturating_sub(0 + 2);
+
+        let mut cum_width = 0;
+        let mut expected_max = 0;
+        for (i, &w) in tab_widths.iter().enumerate() {
+            cum_width += w;
+            if cum_width > available_width && i > 0 {
+                break;
+            }
+            expected_max = i + 1;
+        }
+        let expected_max = expected_max.max(1).min(all_tabs.len());
+
+        assert_eq!(tab_window.max_visible, expected_max);
+        assert_eq!(tab_window.start, 0);
+        assert_eq!(tab_window.end, expected_max);
+        assert_eq!(tab_window.selected_visible, 0);
+    }
+
+    #[test]
+    fn visible_tab_spans_scrolled_window() {
+        let tab_window = TabWindow {
+            start: 5,
+            end: 10,
+            selected_visible: 2,
+            max_visible: 5,
+            total_tabs: 20,
+            has_prev: true,
+            has_next: true,
+        };
+        let spans = tab_window.visible_tab_spans(80);
+        assert_eq!(spans.len(), 5);
+
+        // Check that the first visible tab is index 5 (Fuzz)
+        assert_eq!(spans[0].tab, Tab::Fuzz);
+        assert_eq!(spans[0].x_start, 0);
+        assert_eq!(spans[0].x_end, 8); // "[5] Fuzz" = 8 chars
+
+        assert_eq!(spans[1].tab, Tab::Waf);
+        assert_eq!(spans[1].x_start, 10);
+        assert_eq!(spans[1].x_end, 17); // "[6] WAF" = 7 chars + spacing
+
+        assert_eq!(tab_window.selected_visible, 2);
+        assert_eq!(spans[2].global_index, 7);
+    }
+
+    #[test]
+    fn regression_click_scan_endpoints() {
+        let tab_window = TabWindow {
+            start: 0,
+            end: 5,
+            selected_visible: 0,
+            max_visible: 5,
+            total_tabs: 20,
+            has_prev: false,
+            has_next: true,
+        };
+        let spans = tab_window.visible_tab_spans(80);
+        assert_eq!(spans.len(), 5);
+        let se_span = &spans[3];
+        assert_eq!(se_span.tab, Tab::ScanEndpoints);
+        // Title "[4] Scan Endpoints" = 18 chars
+        assert_eq!(se_span.x_end - se_span.x_start, 18);
+
+        // Click anywhere within the ScanEndpoints tab
+        for x in se_span.x_start..se_span.x_end {
+            let clicked_tab = spans.iter()
+                .find(|s| x >= s.x_start && x < s.x_end)
+                .map(|s| s.tab)
+                .unwrap();
+            assert_eq!(clicked_tab, Tab::ScanEndpoints);
+        }
+
+        // Click just before should NOT be ScanEndpoints
+        let x = se_span.x_start - 1;
+        let clicked_tab = spans.iter()
+            .find(|s| x >= s.x_start && x < s.x_end)
+            .map(|s| s.tab);
+        assert_ne!(clicked_tab, Some(Tab::ScanEndpoints));
+    }
 }

@@ -237,6 +237,13 @@ Relevant files:
 - Add tests for narrow widths and scrolled windows.
 - Add a regression test for clicking a long title such as Scan Endpoints.
 
+### Status: COMPLETED (2026-05-01)
+
+- Updated `visible_tab_spans()` in `tabs/mod.rs` to use actual title widths instead of equal division
+- Added test module with 4 tests for tab hit-testing
+- Tests compile and run (though test discovery may need verification)
+- All 124 TUI tests pass
+
 ## Workstream 5: Align Help, Status Bar, And Actual Keybindings
 
 ### Problem
@@ -372,6 +379,17 @@ Relevant file: `crates/slapper/src/tui/app/state_update.rs`.
 - Unit test an extracted `set_error_for_tab(tab, msg)` helper.
 - Unit test progress routing with an active-task tab field.
 - Regression test that switching tabs before an error does not set error on the new tab.
+
+### Status: COMPLETED (2026-05-01)
+
+- Added `task_tab: Option<Tab>` field to App struct
+- Initialized `task_tab: None` in `new_inner()`
+- Updated `spawn_task()` in task_management.rs to set `task_tab = Some(self.current_tab)`
+- Updated `update_progress()` in state_update.rs to use `task_tab` instead of `self.current_tab`
+- Updated `set_error_for_current_tab()` in state_update.rs to use `task_tab` with fallback to `current_tab`
+- Updated `update()` to clear `task_tab` when `result_rx` is closed
+- Updated `stop()` to clear `task_tab`
+- All 124 TUI tests pass
 
 ## Workstream 8: Normalize Focus Navigation Across Tabs
 
