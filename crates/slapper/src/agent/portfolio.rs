@@ -307,6 +307,34 @@ impl TargetPortfolio {
     pub fn enabled_count(&self) -> usize {
         self.data.read().targets.values().filter(|t| t.enabled).count()
     }
+
+    /// Reload portfolio data from the file path (if set).
+    /// Returns error if file doesn't exist or is invalid.
+    /// On success, replaces the live data with the loaded data.
+    pub fn reload_from_file(&self) -> Result<()> {
+        if let Some(ref path) = self.file_path {
+            if !path.exists() {
+                return Err(anyhow::anyhow!("Portfolio file does not exist: {:?}", path));
+            }
+            let content = fs::read_to_string(path)?;
+            let new_data: PortfolioData = serde_json::from_str(&content)?;
+            *self.data.write() = new_data;
+            tracing::info!("Portfolio reloaded successfully from {:?}", path);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("No file path set for portfolio"))
+        }
+    }
+
+    /// Create a TargetPortfolio with a file path without path validation.
+    /// For testing purposes only.
+    #[cfg(test)]
+    pub fn new_for_testing(file_path: PathBuf) -> Self {
+        Self {
+            data: Arc::new(RwLock::new(PortfolioData::default())),
+            file_path: Some(file_path),
+        }
+    }
 }
 
 impl Default for TargetPortfolio {

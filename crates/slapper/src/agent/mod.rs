@@ -163,6 +163,7 @@ impl Agent {
             .chain(SlapperConfig::default_path())
             .collect::<Vec<_>>();
         let reloader = Arc::new(SlapperConfigReloader::new(
+            Some(portfolio.clone()),
             config.portfolio_path.clone(),
             SlapperConfig::default_path(),
         ));
