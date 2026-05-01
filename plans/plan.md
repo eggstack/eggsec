@@ -67,7 +67,7 @@ Acceptance criteria:
 
 ---
 
-## Phase 2: Add Testable Agent Seams
+## Phase 2: Add Testable Agent Seams (COMPLETED 2026-04-30)
 
 Objective: make agent behavior testable without real network dispatch or real alert delivery.
 
