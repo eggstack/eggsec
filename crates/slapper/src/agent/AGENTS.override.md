@@ -10,12 +10,15 @@ Specialized guidance for the autonomous agent module.
 - `OperationalConstraints` - Constraint config (forbidden actions/targets, rate limits)
 - `ScanDispatcherTrait` - Testable seam for scan dispatch (crate-private)
 - `AlertSenderTrait` - Testable seam for alert sending (crate-private)
+- `TaskStatus` - Task lifecycle state (`tool/agents/scheduler.rs`): `Pending`, `Leased`, `Completed`, `Failed`, `Cancelled`
+- `TaskScheduler` - Manages task queue with priority and scheduled_for ordering
 
 ## Test Seams
 
 Prefer small test seams over making private fields public:
 - `ScanDispatcherTrait` - dispatch scans to tools
 - `AlertSenderTrait` - send alerts via router
+- `Agent::new_for_test(...)` - create agent with custom dispatch/alert
 
 ## Observability
 
@@ -43,12 +46,30 @@ Prefer small test seams over making private fields public:
 - `LongitudinalMemory::deduplicate_findings` prevents repeat alerts
 - Alerted finding IDs stored in `alerted_findings.json`
 
-**Handler Registry Safety:**
-- `Agent::trigger_event` uses deferred restoration pattern
-- Handlers are taken, processed, then ALWAYS restored regardless of panic/error
+## Handler Registry Safety
+
+`Agent::trigger_event` uses panic-safe restoration:
+- Uses `AssertUnwindSafe` + `catch_unwind()` to catch handler panics
+- Handlers are restored after success, error, or panic
+- Panics are converted to `Err("handler panicked")`
+
+## Scheduled Scan Persistence
+
+`process_scheduled_scans` persists portfolio state after successful dispatch:
+- Calls `self.portfolio.save()` after updating `last_scan`
+- Failure to persist causes the scan result to be treated as error
+- Ensures `last_scan` survives agent restart
+
+## CLI Portfolio Handling
+
+All target commands in `commands/handlers/agent.rs` use consistent portfolio loading:
+- `resolve_portfolio_path()` - expands `~` and resolves default path
+- `load_portfolio_for_cli()` - loads portfolio from resolved path
+- `TargetPortfolio::new()` is NOT used in target commands (would discard state)
 
 ## Test Best Practices
 
 - Use `tempfile::TempDir` for isolated tests
 - Avoid `AgentConfig::default()` for tests that write to memory/portfolio files
 - Verify call sites with `rg` before removing/renaming APIs
+- Use `TaskStatus` enum for task state transitions in tests
