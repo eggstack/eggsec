@@ -204,9 +204,9 @@ where
                             Some(OverlayType::CommandPalette) => {
                                 app.toggle_command_palette();
                             }
-                            Some(OverlayType::Search) => {
-                                app.toggle_search();
-                            }
+                             Some(OverlayType::Search) => {
+                                 app.toggle_search(app.search_is_global);
+                             }
                             Some(OverlayType::HttpOptions) => {
                                 app.show_http_options = false;
                                 app.needs_redraw = true;
@@ -239,19 +239,14 @@ where
                         app.toggle_command_palette();
                     }
                     (KeyModifiers::CONTROL, KeyCode::Char('f')) => {
-                        if let Some(ref mut search) = app.global_search {
-                            let data = vec![
-                                ("Recon", app.recon.target().to_string()),
-                                ("Fingerprint", app.fingerprint.target().to_string()),
-                                ("Fuzz", app.fuzz.target().to_string()),
-                                ("WAF", app.waf.target().to_string()),
-                                ("Scan", app.scan.target().to_string()),
-                                ("Scan Endpoints", app.scan_endpoints.target().to_string()),
-                                ("Scan Ports", app.scan_ports.target().to_string()),
-                                ("Stress", app.stress.target().to_string()),
-                            ];
-                            search.search_from_strings(&app.search_query, &data);
+                        // Toggle global search - just open the prompt, search happens on Enter
+                        if app.show_search {
+                            // If already showing search, perform search with current query
+                            app.perform_search();
+                        } else {
+                            // Open search prompt
                             app.show_search = true;
+                            app.needs_redraw = true;
                         }
                     }
                     (KeyModifiers::CONTROL, KeyCode::Char('z')) => {
@@ -445,7 +440,7 @@ where
                         app.cycle_export_format();
                     }
                     (KeyModifiers::NONE, KeyCode::Char('/')) if app.mode == InputMode::Normal => {
-                        app.toggle_search();
+                        app.toggle_search(false);
                     }
                     (KeyModifiers::NONE, KeyCode::Char('r')) if app.mode == InputMode::Normal => {
                         if !app.is_running() {

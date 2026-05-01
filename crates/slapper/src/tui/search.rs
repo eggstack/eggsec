@@ -1,10 +1,12 @@
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::Span,
     widgets::{Block, Borders, Paragraph, Row, Table},
     Frame,
 };
+
+use crate::tc;
 
 use crate::tui::App;
 use crate::tui::components::centered_rect;
@@ -128,13 +130,13 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
         return;
     }
 
-    f.render_widget(
-        Block::default()
-            .title("Search Results")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan)),
-        search_area,
-    );
+        f.render_widget(
+            Block::default()
+                .title("Search Results")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(tc!(accent))),
+            search_area,
+        );
 
     let inner = Rect {
         x: search_area.x + 1,
@@ -150,7 +152,7 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
             "No results found"
         };
         f.render_widget(
-            Paragraph::new(msg).style(Style::default().fg(Color::Gray)),
+            Paragraph::new(msg).style(Style::default().fg(tc!(text_dim))),
             inner,
         );
         return;
@@ -168,9 +170,9 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
         .enumerate()
         .map(|(i, r)| {
             let style = if start + i == search.selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::REVERSED)
+                Style::default().fg(tc!(warning)).add_modifier(Modifier::REVERSED)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(tc!(text))
             };
             Row::new(vec![
                 Span::raw(&r.tab),

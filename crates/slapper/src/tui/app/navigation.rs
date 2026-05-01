@@ -47,13 +47,14 @@ impl super::App {
         }
     }
 
-    pub(super) fn toggle_search(&mut self) {
+    pub(super) fn toggle_search(&mut self, is_global: bool) {
         if self.show_search {
             self.restore_search();
         }
         self.show_search = !self.show_search;
         if self.show_search {
             self.search_query.clear();
+            self.search_is_global = is_global;
         }
     }
 
@@ -62,7 +63,23 @@ impl super::App {
             return;
         }
 
-        if self.current_tab == super::tabs::Tab::History {
+        if self.search_is_global {
+            // Perform global search using GlobalSearch
+            if let Some(ref mut search) = self.global_search {
+                let data = vec![
+                    ("Recon", self.recon.target().to_string()),
+                    ("Fingerprint", self.fingerprint.target().to_string()),
+                    ("Fuzz", self.fuzz.target().to_string()),
+                    ("WAF", self.waf.target().to_string()),
+                    ("Scan", self.scan.target().to_string()),
+                    ("Scan Endpoints", self.scan_endpoints.target().to_string()),
+                    ("Scan Ports", self.scan_ports.target().to_string()),
+                    ("Stress", self.stress.target().to_string()),
+                ];
+                search.search_from_strings(&self.search_query, &data);
+            }
+            // Keep search open to show results
+        } else if self.current_tab == super::tabs::Tab::History {
             let query = self.search_query.clone();
             let mut h = self.history.lock(); {
 
@@ -78,9 +95,8 @@ impl super::App {
                     h.update_details_view();
                 }
             }
+            self.show_search = false;
         }
-
-        self.show_search = false;
     }
 
     pub(super) fn restore_search(&mut self) {
@@ -256,10 +272,11 @@ mod tests {
         let mut app = create_test_app();
         assert!(!app.show_search);
 
-        app.toggle_search();
+        app.toggle_search(true);
         assert!(app.show_search);
+        assert!(app.search_is_global);
 
-        app.toggle_search();
+        app.toggle_search(false);
         assert!(!app.show_search);
     }
 
@@ -267,7 +284,7 @@ mod tests {
     fn test_toggle_search_clears_query_on_open() {
         let mut app = create_test_app();
         app.search_query = "test query".to_string();
-        app.toggle_search();
+        app.toggle_search(false);
         assert!(app.show_search);
         assert!(app.search_query.is_empty());
     }

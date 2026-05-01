@@ -63,7 +63,7 @@ impl super::App {
                 self.toggle_help();
             }
             "search" => {
-                self.toggle_search();
+                self.toggle_search(true); // Global search from command palette
             }
             "palette" => {
                 self.toggle_command_palette();
@@ -309,6 +309,7 @@ mod tests {
         assert!(!app.show_search);
         app.execute_command("search");
         assert!(app.show_search);
+        assert!(app.search_is_global); // Command palette does global search
     }
 
     #[test]
