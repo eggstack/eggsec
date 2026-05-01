@@ -137,6 +137,7 @@ pub struct Agent {
     running: Arc<tokio::sync::RwLock<bool>>,
     #[allow(dead_code)]
     config_watcher: Option<ConfigWatcher>,
+    logger: Option<logging::AgentLogger>,
 }
 
 impl Agent {
@@ -225,6 +226,7 @@ impl Agent {
             event_handlers: Vec::new(),
              running: Arc::new(tokio::sync::RwLock::new(false)),
              config_watcher,
+             logger: None,
         })
     }
 
@@ -262,6 +264,7 @@ impl Agent {
             event_handlers: Vec::new(),
             running: Arc::new(tokio::sync::RwLock::new(false)),
             config_watcher: None,
+            logger: None,
         })
     }
 
@@ -290,7 +293,7 @@ impl Agent {
         }
 
         let log_dir = self.config.memory_dir.join("logs");
-        let _logger = logging::AgentLogger::init(log_dir)?;
+        self.logger = Some(logging::AgentLogger::init(log_dir)?);
 
         tracing::info!("Starting autonomous security agent");
 
