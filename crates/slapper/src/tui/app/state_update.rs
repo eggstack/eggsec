@@ -26,6 +26,7 @@ impl super::App {
             }
             if rx.is_closed() {
                 self.result_rx = None;
+                self.task_tab = None;
             }
             for result in pending_results {
                 self.handle_result(result);
@@ -40,7 +41,9 @@ impl super::App {
 
     fn update_progress(&mut self, completed: u64, total: u64) {
         use super::tabs::Tab;
-        match self.current_tab {
+        // Use task_tab if set, otherwise fall back to current_tab (for backwards compatibility)
+        let tab = self.task_tab.unwrap_or(self.current_tab);
+        match tab {
             Tab::Recon => self.recon.update_progress(completed, total),
             Tab::Load => self.load.update_progress(completed, total),
             Tab::ScanPorts => self.scan_ports.update_progress(completed, total),
@@ -315,7 +318,9 @@ impl super::App {
 
     fn set_error_for_current_tab(&mut self, msg: String) {
         use super::tabs::Tab;
-        match self.current_tab {
+        // Use task_tab if set, otherwise fall back to current_tab
+        let tab = self.task_tab.unwrap_or(self.current_tab);
+        match tab {
             Tab::Recon => self.recon.set_error(msg),
             Tab::Load => self.load.set_error(msg),
             Tab::ScanPorts => self.scan_ports.set_error(msg),
