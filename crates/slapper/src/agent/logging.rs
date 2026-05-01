@@ -33,7 +33,7 @@ impl AgentLogger {
         tracing_subscriber::registry()
             .with(env_filter)
             .with(file_layer)
-            .init();
+            .try_init();
 
         tracing::info!("Agent logger initialized with log directory: {:?}", log_dir);
 

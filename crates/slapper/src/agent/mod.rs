@@ -137,6 +137,7 @@ pub struct Agent {
     alert_router: Box<dyn AlertSenderTrait + Send + Sync>,
     event_handlers: Vec<Box<dyn EventHandler>>,
     running: Arc<tokio::sync::RwLock<bool>>,
+    shutdown_notify: tokio::sync::Notify,
     #[allow(dead_code)]
     config_watcher: Option<ConfigWatcher>,
     logger: Option<logging::AgentLogger>,
@@ -227,6 +228,7 @@ impl Agent {
             alert_router,
             event_handlers: Vec::new(),
              running: Arc::new(tokio::sync::RwLock::new(false)),
+             shutdown_notify: tokio::sync::Notify::new(),
              config_watcher,
              logger: None,
         })
@@ -265,6 +267,7 @@ impl Agent {
             alert_router,
             event_handlers: Vec::new(),
             running: Arc::new(tokio::sync::RwLock::new(false)),
+            shutdown_notify: tokio::sync::Notify::new(),
             config_watcher: None,
             logger: None,
         })
@@ -299,20 +302,19 @@ impl Agent {
 
         tracing::info!("Starting autonomous security agent");
 
-        let token = CancellationToken::new();
-        let token_clone = token.clone();
-
-        tokio::spawn(async move {
-            tokio::signal::ctrl_c().await.ok();
-            tracing::info!("Received shutdown signal");
-            token_clone.cancel();
-        });
-
         let mut poll_interval = interval(Duration::from_secs(self.config.poll_interval_secs));
+        poll_interval.tick().await;
 
         loop {
             tokio::select! {
-                _ = token.cancelled() => break,
+                _ = self.shutdown_notify.notified() => {
+                    tracing::info!("Shutdown signal received");
+                    break;
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    tracing::info!("Received shutdown signal");
+                    break;
+                }
                 _ = poll_interval.tick() => {
                     if let Err(e) = self.process_scheduled_scans().await {
                         tracing::warn!(error = %e, "Scheduled scan failed");
@@ -321,45 +323,60 @@ impl Agent {
                     }
                 }
             }
-
-            let running = self.running.read().await;
-            if !*running {
-                drop(running);
-                token.cancel();
-                break;
-            }
         }
+
+        let mut running = self.running.write().await;
+        *running = false;
+        drop(running);
 
         tracing::info!("Agent stopped");
         Ok(())
     }
 
     pub async fn run_once(&mut self) -> Result<()> {
-        {
+        let start_running = {
             let mut running = self.running.write().await;
             if *running {
                 return Ok(());
             }
             *running = true;
-        }
+            true
+        };
 
         let log_dir = self.config.memory_dir.join("logs");
         self.logger = Some(logging::AgentLogger::init(log_dir)?);
 
         tracing::info!("Running agent in single-pass mode");
 
-        self.process_scheduled_scans().await?;
+        let result = self.process_scheduled_scans().await;
+
+        if start_running {
+            let mut running = self.running.write().await;
+            *running = false;
+        }
+
+        if let Err(ref e) = result {
+            tracing::warn!(error = %e, "Single pass failed");
+            return Err(anyhow::anyhow!("Single pass failed: {}", e));
+        }
 
         tracing::info!("Single pass completed");
         Ok(())
     }
 
     pub async fn stop(&self) {
-        let mut running = self.running.write().await;
-        *running = false;
+        {
+            let mut running = self.running.write().await;
+            *running = false;
+        }
+        self.shutdown_notify.notify_one();
     }
 
     async fn process_scheduled_scans(&mut self) -> Result<()> {
+        if self.portfolio.file_path().is_none() {
+            tracing::warn!("No portfolio path configured - scheduled scan results will not be persisted");
+        }
+
         let now = Utc::now();
         let targets = self.portfolio.get_all_targets();
 
@@ -413,19 +430,34 @@ impl Agent {
                         .await;
 
                     if let Ok(ref response) = result {
-                        // Only update last_scan after successful dispatch
-                        self.portfolio.update_last_scan(&target_id, &now);
+                        let findings = self.process_findings(response);
+
+                        let mut severity_counts = std::collections::HashMap::new();
+                        for finding in &findings {
+                            let key = format!("{:?}", finding.severity);
+                            *severity_counts.entry(key).or_insert(0) += 1;
+                        }
+
+                        let scan_record = crate::agent::portfolio::ScanRecord {
+                            scan_id: response.request_id.clone(),
+                            scan_type: "pipeline".to_string(),
+                            timestamp: now,
+                            findings_count: findings.len(),
+                            severity_counts,
+                        };
+                        self.portfolio.add_scan_record(&target_id, scan_record);
 
                         if let Err(e) = self.portfolio.save() {
                             tracing::error!(error = %e, "Failed to persist portfolio state after scheduled scan");
                             return Err(anyhow::anyhow!("Portfolio persistence failed: {}", e));
                         }
 
+                        self.portfolio.update_last_scan(&target_id, &now);
+
                         if let Err(e) = self.memory.store_scan_results(&config.target, response).await {
                             tracing::warn!("Failed to store scan results: {}", e);
                         }
 
-                        let findings = self.process_findings(response);
                         if !findings.is_empty() {
                             let baseline_comparison = self.memory.compare_with_baseline(&config.target, &findings).await?;
                             let new_findings = baseline_comparison.new_findings;
@@ -1687,5 +1719,93 @@ mod tests {
         let (to_alert2, deduplicated2) = agent.memory.deduplicate_findings(vec![new_finding.clone()]).await.unwrap();
         assert_eq!(to_alert2.len(), 0);
         assert_eq!(deduplicated2.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_run_once_can_be_called_twice() {
+        use tempfile::TempDir;
+        use std::sync::Arc as StdArc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let mut agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        let result1 = agent.run_once().await;
+        assert!(result1.is_ok());
+
+        let result2 = agent.run_once().await;
+        assert!(result2.is_ok(), "run_once should work after a previous run_once completed");
+    }
+
+    #[tokio::test]
+    async fn test_run_once_resets_running_after_success() {
+        use tempfile::TempDir;
+        use crate::tool::response::ToolResponse;
+        use std::sync::Arc as StdArc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let mock_response = ToolResponse::success("req-1", "pipeline", serde_json::json!({"status": "ok"}));
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(Some(mock_response))),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let mut agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        agent.run_once().await.unwrap();
+
+        let running = agent.running.read().await;
+        assert!(!*running, "running should be reset after successful run_once");
+    }
+
+    #[tokio::test]
+    async fn test_run_once_resets_running_after_error() {
+        use tempfile::TempDir;
+        use std::sync::Arc as StdArc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let mut agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        let result = agent.run_once().await;
+        assert!(result.is_ok(), "run_once should complete even if dispatch returns None");
+
+        let running = agent.running.read().await;
+        assert!(!*running, "running should be reset even when run_once completes");
     }
 }
