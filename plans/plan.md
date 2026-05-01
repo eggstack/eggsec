@@ -82,25 +82,26 @@ Relevant file: `crates/slapper/src/tui/components/input.rs`.
 
 ### Acceptance Criteria
 
-- Typing, left/right movement, backspace, delete, home, and end work for ASCII and multibyte input.
-- Cursor never lands past the visible field area.
-- No panics from slicing a string at a non-character boundary.
+- With HTTP options visible, pressing `h` or `Esc` closes it and does not move focus or tabs.
+- With confirm visible, Enter confirms and Esc cancels; no other tab action runs.
+- Help, search, and command palette cannot all render over each other accidentally from normal key sequences.
 
 ### Tests
 
-- `InputField::with_value("éx")` sets cursor to `value.len()`, not `chars().count()`.
-- Insert in the middle of `éx` produces valid text.
-- Backspace deletes one character, not one byte.
-- `move_end` followed by `insert` appends correctly for multibyte strings.
-- Rendering a long multibyte value does not panic.
+- Unit tests around any extracted overlay-precedence helper.
+- App-level tests for `execute_command("http")` and direct close behavior.
+- Regression test that Enter with a confirm popup does not call `handle_enter` on the active tab.
 
 ### Status: COMPLETED (2026-05-01)
 
-- Fixed `with_value()` and `move_end()` to use byte offsets (`value.len()`) instead of character counts
-- Added `byte_to_char_pos()` helper for render function
-- Fixed `render()` to properly convert byte cursor position to character position for display
-- All 6 acceptance criteria tests pass
-- All 117 TUI tests pass
+- Added `OverlayType` enum to represent active overlay types
+- Added helper methods to `App`: `is_command_palette_visible()`, `is_search_visible()`, `is_http_options_visible()`, `is_help_visible()`, `topmost_overlay()`, `is_any_overlay_active()`
+- Updated `runner.rs` to use `topmost_overlay()` for Esc key handling
+- Added 'h' key handler to close HTTP options popup
+- Prevented tab content key handling when overlays are active
+- Updated mouse event handling to use new helper methods
+- Removed duplicate `is_help_visible()` from `navigation.rs`
+- All 124 TUI tests pass
 
 ## Workstream 2: Make Search Actually Search The User's Query
 
