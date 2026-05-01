@@ -278,6 +278,16 @@ Relevant files:
 - Add tests for any extracted keybinding-description helper.
 - Add a runner/app command test for plain export if implemented outside the event loop.
 
+### Status: COMPLETED (2026-05-01)
+
+- Fixed dashboard help text (h/l -> n/p, Shift+H/L for tab navigation)
+- Fixed popup help text (removed incorrect h/l for tab navigation)
+- Fixed status bar text (Ctrl+Z Pause/Resume, added Ctrl+Y for resume)
+- Implemented 'e' key to export results
+- Implemented Dashboard Enter to jump to Recon tab
+- Added should_quit check in run_app()
+- Added Notification struct and methods to App (infrastructure for Workstream 6)
+
 ## Workstream 6: Add User-Visible Feedback For Export And Unavailable Actions
 
 ### Problem
@@ -318,6 +328,16 @@ Relevant files:
 - `execute_command("quit")` sets `should_quit`, and any extracted loop helper honors it.
 - Export no-data path sets a notification.
 - Invalid export directory sets an error notification.
+
+### Status: PARTIALLY COMPLETED (2026-05-01)
+
+- Added `Notification` struct and methods to `App` (infrastructure)
+- Added `should_quit` check in `run_app()` - DONE
+- Implemented 'e' key to export results - DONE
+- Implemented Dashboard Enter to jump to Recon tab - DONE
+- Fixed keybinding text in dashboard, popup, and status bar - DONE
+- Export notifications: infrastructure added, needs `export.rs` integration (deferred)
+- Note: Full notification display in status bar needs more work (deferred)
 
 ## Workstream 7: Route Background Results To The Tab That Started The Task
 
