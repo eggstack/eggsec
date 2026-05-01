@@ -45,6 +45,7 @@ async fn handle_agent_run_impl(
         memory_dir,
         poll_interval_secs: poll_interval,
         ai_config: None,
+        operational_constraints: None,
     };
 
     if use_ai {

@@ -14,6 +14,7 @@ pub mod channels;
 pub mod events;
 pub mod logging;
 pub mod config_watcher;
+pub mod constraints;
 
 #[cfg(feature = "ai-integration")]
 pub mod skills;
@@ -51,6 +52,9 @@ pub use alerts::{
     WebhookConfig,
 };
 pub use events::{EventHandler, SecurityEvent};
+pub use constraints::{
+    ConstraintChecker, OperationalConstraints, ForbiddenAction, DoNotDoList, OffPeakConfig,
+};
 
 #[cfg(feature = "ai-integration")]
 pub use skills::{Skill, SkillLoader, SkillRegistry};
@@ -98,6 +102,7 @@ pub struct AgentConfig {
     pub memory_dir: PathBuf,
     pub poll_interval_secs: u64,
     pub ai_config: Option<crate::config::AiConfig>,
+    pub operational_constraints: Option<crate::agent::constraints::OperationalConstraints>,
 }
 
 impl Default for AgentConfig {
@@ -111,6 +116,7 @@ impl Default for AgentConfig {
             memory_dir,
             poll_interval_secs: 60,
             ai_config: None,
+            operational_constraints: None,
         }
     }
 }
@@ -119,6 +125,7 @@ pub struct Agent {
     config: AgentConfig,
     #[allow(dead_code)]
     registry: ToolRegistry,
+    constraint_checker: ConstraintChecker,
     dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
@@ -161,9 +168,16 @@ impl Agent {
         ));
         let config_watcher = ConfigWatcher::new(config_paths, reloader).ok();
 
+        let constraint_checker = if let Some(constraints) = config.operational_constraints.clone() {
+            ConstraintChecker::new(constraints)
+        } else {
+            ConstraintChecker::new(OperationalConstraints::default())
+        };
+
         Ok(Self {
             config,
             registry,
+            constraint_checker,
             dispatcher,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
@@ -192,9 +206,15 @@ impl Agent {
         };
         let memory_dir = config.memory_dir.join("memory");
         let memory = LongitudinalMemory::new(memory_dir).await?;
+        let constraint_checker = if let Some(constraints) = config.operational_constraints.clone() {
+            ConstraintChecker::new(constraints)
+        } else {
+            ConstraintChecker::new(OperationalConstraints::default())
+        };
         Ok(Self {
             config,
             registry,
+            constraint_checker,
             dispatcher,
             #[cfg(feature = "ai-integration")]
             ai_client: None,
@@ -300,6 +320,24 @@ impl Agent {
                         target_id
                     );
 
+                    // Check operational constraints for scheduled scan
+                    if let Err(e) = self.constraint_checker.evaluate_action("scan", &config.target) {
+                        tracing::warn!("Scheduled scan blocked for {}: {:?}", target_id, e);
+                        continue;
+                    }
+                    if let Err(e) = self.constraint_checker.evaluate_target(&config.target) {
+                        tracing::warn!("Scheduled scan target forbidden for {}: {:?}", target_id, e);
+                        continue;
+                    }
+                    if let Err(e) = self.constraint_checker.evaluate_scan_depth(config.scan_depth) {
+                        tracing::warn!("Scheduled scan depth not allowed for {}: {:?}", target_id, e);
+                        continue;
+                    }
+                    if let Err(e) = self.constraint_checker.evaluate_rate_limit(&config.target) {
+                        tracing::warn!("Scheduled scan rate limit exceeded for {}: {:?}", target_id, e);
+                        continue;
+                    }
+
                     let result = self
                         .execute_scan_with_depth(&config.target, "pipeline", config.scan_depth, None)
                         .await;
@@ -365,6 +403,16 @@ impl Agent {
         depth: crate::agent::portfolio::ScanDepth,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<ToolResponse> {
+        // Check operational constraints before dispatch
+        self.constraint_checker.evaluate_action("scan", target)
+            .map_err(|e| anyhow::anyhow!("Action forbidden: {:?}", e))?;
+        self.constraint_checker.evaluate_target(target)
+            .map_err(|e| anyhow::anyhow!("Target forbidden: {:?}", e))?;
+        self.constraint_checker.evaluate_scan_depth(depth)
+            .map_err(|e| anyhow::anyhow!("Scan depth not allowed: {:?}", e))?;
+        self.constraint_checker.evaluate_rate_limit(target)
+            .map_err(|e| anyhow::anyhow!("Rate limit exceeded: {:?}", e))?;
+
         let params = match depth {
             crate::agent::portfolio::ScanDepth::Shallow => {
                 serde_json::json!({
@@ -566,6 +614,7 @@ impl CronScheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::constraints::{OperationalConstraints, ForbiddenAction};
     use super::events::ScanCompleteEvent;
     use std::pin::Pin;
     use std::future::Future;
@@ -817,5 +866,67 @@ mod tests {
         // Attempt to execute scan, should fail with mock error
         let result = agent.execute_scan("https://example.com", "recon").await;
         assert!(result.is_err());
+    }
+
+    // Phase3: Constraint enforcement tests
+    #[tokio::test]
+    async fn test_manual_scan_blocked_by_forbidden_target() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        // Add forbidden target to constraints
+        let mut constraints = OperationalConstraints::default();
+        constraints.do_not_do_list.forbidden_targets.push("https://forbidden.com".to_string());
+        config.operational_constraints = Some(constraints);
+
+        let dispatcher = MockDispatcher {
+            response: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        // Attempt to scan forbidden target, should be blocked
+        let result = agent.execute_scan("https://forbidden.com", "recon").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Target forbidden"));
+    }
+
+    #[tokio::test]
+    async fn test_manual_scan_blocked_by_action() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        // Forbid "scan" action
+        let mut constraints = OperationalConstraints::default();
+        constraints.do_not_do_list.forbidden_actions.push(ForbiddenAction::new("scan", "Testing"));
+        config.operational_constraints = Some(constraints);
+
+        let dispatcher = MockDispatcher {
+            response: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        let result = agent.execute_scan("https://example.com", "recon").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Action forbidden"));
     }
 }
