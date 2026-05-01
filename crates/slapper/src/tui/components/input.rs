@@ -37,7 +37,7 @@ impl InputField {
 
     pub fn with_value(mut self, value: impl Into<String>) -> Self {
         let v = value.into();
-        self.cursor_pos = v.chars().count();
+        self.cursor_pos = v.len(); // byte index, not char count
         self.value = v;
         self
     }
@@ -130,7 +130,15 @@ impl InputField {
     }
 
     pub fn move_end(&mut self) {
-        self.cursor_pos = self.value.chars().count();
+        self.cursor_pos = self.value.len(); // byte index at end
+    }
+
+    /// Convert byte offset to character position
+    fn byte_to_char_pos(&self) -> usize {
+        self.value
+            .char_indices()
+            .take_while(|(i, _)| *i < self.cursor_pos)
+            .count()
     }
 
     pub fn clear(&mut self) {
@@ -310,11 +318,14 @@ impl InputField {
             .borders(Borders::ALL)
             .border_style(border_style);
 
+        // Convert byte cursor position to character position for display logic
+        let cursor_char_pos = self.byte_to_char_pos();
+        let char_count = self.value.chars().count();
+
         let display_value = if let Some(w) = self.width {
             let available = w.saturating_sub(2);
-            let char_count = self.value.chars().count();
             if char_count > available {
-                let cursor_char_pos = self.cursor_pos.min(char_count);
+                // Calculate visible window in character space
                 let start = if cursor_char_pos <= available / 2 {
                     0
                 } else if cursor_char_pos >= char_count - available / 2 {
@@ -338,11 +349,10 @@ impl InputField {
         f.render_widget(paragraph, area);
 
         if self.focused && insert_mode {
+            // Calculate display cursor position
             let display_cursor = if let Some(w) = self.width {
                 let available = w.saturating_sub(2);
-                let char_count = self.value.chars().count();
                 if char_count > available {
-                    let cursor_char_pos = self.cursor_pos.min(char_count);
                     let start = if cursor_char_pos <= available / 2 {
                         0
                     } else if cursor_char_pos >= char_count - available / 2 {
@@ -357,10 +367,10 @@ impl InputField {
                         available as u16
                     }
                 } else {
-                    self.cursor_pos as u16
+                    cursor_char_pos as u16
                 }
             } else {
-                self.cursor_pos as u16
+                cursor_char_pos as u16
             };
 
             let cursor_x = area.x + display_cursor + 1;
@@ -512,5 +522,98 @@ impl InputGroup {
 impl Default for InputGroup {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_with_value_sets_byte_cursor() {
+        // "éx" is 3 bytes: é=2 bytes, x=1 byte
+        // chars().count() would be 2, but we want value.len() = 3
+        let field = InputField::new("Test").with_value("éx");
+        assert_eq!(field.cursor_pos, "éx".len()); // 3, not 2
+        assert_ne!(field.cursor_pos, "éx".chars().count()); // Ensure it's not 2
+    }
+
+    #[test]
+    fn test_insert_in_middle_of_multibyte() {
+        let mut field = InputField::new("Test").with_value("éx");
+        field.focused = true; // Need to focus for insert/backspace to work
+        // cursor is at end (byte 3)
+        // move left to be between é and x (byte 2)
+        field.move_left();
+        assert_eq!(field.cursor_pos, 2); // between é (bytes 0-1) and x (byte 2)
+
+        // Insert 'a' at cursor position
+        field.insert('a');
+        assert_eq!(field.value, "éax");
+        assert_eq!(field.cursor_pos, 3); // after 'a' (byte 3)
+    }
+
+    #[test]
+    fn test_backspace_deletes_character_not_byte() {
+        let mut field = InputField::new("Test").with_value("éx");
+        field.focused = true; // Need to focus for insert/backspace to work
+        // cursor at end (byte 3)
+        field.backspace();
+        // Should delete 'x' (1 byte), not just one byte of 'é'
+        assert_eq!(field.value, "é");
+        assert_eq!(field.cursor_pos, 2); // byte position of 'é'
+
+        // Now backspace again to delete 'é' (2 bytes)
+        field.backspace();
+        assert_eq!(field.value, "");
+        assert_eq!(field.cursor_pos, 0);
+    }
+
+    #[test]
+    fn test_move_end_then_insert() {
+        let mut field = InputField::new("Test").with_value("éx");
+        field.focused = true; // Need to focus for insert to work
+        field.move_home();
+        assert_eq!(field.cursor_pos, 0);
+
+        field.move_end();
+        assert_eq!(field.cursor_pos, "éx".len()); // 3
+
+        field.insert('a');
+        assert_eq!(field.value, "éxa");
+        assert_eq!(field.cursor_pos, 4);
+    }
+
+    #[test]
+    fn test_render_long_multibyte_no_panic() {
+        use ratatui::{backend::TestBackend, Terminal};
+        let mut terminal = Terminal::new(TestBackend::new(20, 3)).unwrap();
+
+        let mut field = InputField::new("Test").with_value("ééééééééééé"); // many multibyte chars
+        field.width = Some(20);
+        field.focused = true;
+
+        // This should not panic
+        terminal
+            .draw(|f| {
+                let area = ratatui::layout::Rect::new(0, 0, 20, 3);
+                field.render(f, area, true);
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_byte_to_char_pos() {
+        let field = InputField::new("Test").with_value("éx");
+        // cursor at end (byte 3)
+        let char_pos = field.byte_to_char_pos();
+        assert_eq!(char_pos, 2); // 2 characters
+
+        let mut field2 = InputField::new("Test").with_value("abc");
+        field2.move_home();
+        assert_eq!(field2.byte_to_char_pos(), 0);
+
+        field2.move_end();
+        assert_eq!(field2.byte_to_char_pos(), 3);
     }
 }
