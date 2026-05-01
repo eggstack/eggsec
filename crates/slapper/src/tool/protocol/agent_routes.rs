@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use subtle::ConstantTimeEq;
 
-use crate::tool::agents::{AgentRegistry, AgentInfo, AgentStatus, TaskScheduler, ScheduledTask, TaskPriority};
+use crate::tool::agents::{AgentRegistry, AgentInfo, AgentStatus, TaskScheduler, ScheduledTask, TaskPriority, TaskStatus};
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterAgentRequest {
@@ -169,6 +169,9 @@ async fn create_task(
             .unwrap_or_default()
             .as_millis() as u64,
         scheduled_for: None,
+        status: TaskStatus::Pending,
+        assigned_agent_id: None,
+        leased_until: None,
     };
 
     let task_id = task.id;
@@ -200,8 +203,10 @@ pub struct TaskInfo {
     pub id: Uuid,
     pub task_type: String,
     pub priority: String,
+    pub status: String,
     pub retry_count: usize,
     pub created_at: u64,
+    pub assigned_agent_id: Option<Uuid>,
 }
 
 async fn list_tasks(
@@ -211,11 +216,33 @@ async fn list_tasks(
     if let Err(e) = require_auth(&state.api_key, &headers) {
         return Err(e);
     }
-    let count = state.scheduler.pending_count().await;
-    Ok(Json(ListTasksResponse {
-        tasks: vec![],
-        total: count,
-    }))
+    let tasks_raw = state.scheduler.list_all_tasks().await;
+    let tasks: Vec<TaskInfo> = tasks_raw.iter().map(|t| {
+        let priority_str = match t.priority {
+            TaskPriority::Critical => "critical",
+            TaskPriority::High => "high",
+            TaskPriority::Normal => "normal",
+            TaskPriority::Low => "low",
+        };
+        let status_str = match t.status {
+            TaskStatus::Pending => "pending",
+            TaskStatus::Leased => "leased",
+            TaskStatus::Completed => "completed",
+            TaskStatus::Failed => "failed",
+            TaskStatus::Cancelled => "cancelled",
+        };
+        TaskInfo {
+            id: t.id,
+            task_type: t.task_type.clone(),
+            priority: priority_str.to_string(),
+            status: status_str.to_string(),
+            retry_count: t.retry_count,
+            created_at: t.created_at,
+            assigned_agent_id: t.assigned_agent_id,
+        }
+    }).collect();
+    let total = tasks.len();
+    Ok(Json(ListTasksResponse { tasks, total }))
 }
 
 async fn get_task(
@@ -247,6 +274,85 @@ async fn get_task(
 pub struct CancelTaskResponse {
     pub id: Uuid,
     pub cancelled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LeaseTaskRequest {
+    pub agent_id: Uuid,
+    pub lease_duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LeaseTaskResponse {
+    pub id: Uuid,
+    pub leased: bool,
+    pub task_type: Option<String>,
+    pub payload: Option<serde_json::Value>,
+}
+
+async fn lease_task(
+    State(state): State<AgentState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(req): Json<LeaseTaskRequest>,
+) -> Result<Json<LeaseTaskResponse>, &'static str> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err(e);
+    }
+    let lease_duration_ms = req.lease_duration_ms.unwrap_or(300000);
+    let task = state.scheduler.get_task(id).await;
+    match task {
+        Some(t) if t.status == TaskStatus::Pending => {
+            if state.scheduler.lease_task(id, req.agent_id, lease_duration_ms).await {
+                let task_after = state.scheduler.get_task(id).await;
+                Ok(Json(LeaseTaskResponse {
+                    id,
+                    leased: true,
+                    task_type: task_after.as_ref().map(|t| t.task_type.clone()),
+                    payload: task_after.as_ref().map(|t| t.payload.clone()),
+                }))
+            } else {
+                Ok(Json(LeaseTaskResponse {
+                    id,
+                    leased: false,
+                    task_type: None,
+                    payload: None,
+                }))
+            }
+        }
+        _ => Ok(Json(LeaseTaskResponse {
+            id,
+            leased: false,
+            task_type: None,
+            payload: None,
+        })),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitResultRequest {
+    pub success: bool,
+    pub result: Option<serde_json::Value>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubmitResultResponse {
+    pub id: Uuid,
+    pub accepted: bool,
+}
+
+async fn submit_task_result(
+    State(state): State<AgentState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(req): Json<SubmitResultRequest>,
+) -> Result<Json<SubmitResultResponse>, &'static str> {
+    if let Err(e) = require_auth(&state.api_key, &headers) {
+        return Err(e);
+    }
+    let accepted = state.scheduler.submit_result(id, req.success, req.result, req.error).await;
+    Ok(Json(SubmitResultResponse { id, accepted }))
 }
 
 async fn cancel_task(
@@ -295,6 +401,8 @@ pub fn router(registry: AgentRegistry, scheduler: TaskScheduler, api_key: Option
         .route("/api/v1/tasks", post(create_task))
         .route("/api/v1/tasks", get(list_tasks))
         .route("/api/v1/tasks/{id}", get(get_task))
+        .route("/api/v1/tasks/{id}/lease", post(lease_task))
+        .route("/api/v1/tasks/{id}/result", post(submit_task_result))
         .route("/api/v1/tasks/{id}/cancel", post(cancel_task))
         .with_state(state)
 }
@@ -375,6 +483,76 @@ mod tests {
         );
         scheduler.schedule(task).await;
         assert!(scheduler.pending_count().await > 0);
+    }
+
+    #[tokio::test]
+    async fn test_task_status_pending() {
+        let scheduler = TaskScheduler::new();
+        let task = scheduler.create_task("scan", serde_json::json!({}));
+        assert_eq!(task.status, TaskStatus::Pending);
+        scheduler.schedule(task).await;
+        let next = scheduler.next_task().await;
+        assert!(next.is_some());
+        assert_eq!(next.unwrap().status, TaskStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_task_lease_and_result() {
+        let scheduler = TaskScheduler::new();
+        let task = scheduler.create_task("scan", serde_json::json!({}));
+        let task_id = task.id;
+        scheduler.schedule(task).await;
+        let agent_id = Uuid::new_v4();
+        let leased = scheduler.lease_task(task_id, agent_id, 60000).await;
+        assert!(leased);
+        let updated = scheduler.get_task(task_id).await;
+        assert!(updated.is_some());
+        let updated_task = updated.unwrap();
+        assert_eq!(updated_task.status, TaskStatus::Leased);
+        assert_eq!(updated_task.assigned_agent_id, Some(agent_id));
+        let submitted = scheduler.submit_result(task_id, true, Some(serde_json::json!({"result": "ok"})), None).await;
+        assert!(submitted);
+        let final_task = scheduler.get_task(task_id).await;
+        assert!(final_task.is_some());
+        assert_eq!(final_task.unwrap().status, TaskStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn test_leased_task_invisible_to_next_task() {
+        let scheduler = TaskScheduler::new();
+        let task = scheduler.create_task("scan", serde_json::json!({}));
+        let task_id = task.id;
+        scheduler.schedule(task).await;
+        let agent_id = Uuid::new_v4();
+        scheduler.lease_task(task_id, agent_id, 60000).await;
+        let next = scheduler.next_task().await;
+        assert!(next.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cancel_prevents_lease() {
+        let scheduler = TaskScheduler::new();
+        let task = scheduler.create_task("scan", serde_json::json!({}));
+        let task_id = task.id;
+        scheduler.schedule(task).await;
+        scheduler.cancel(task_id).await;
+        let agent_id = Uuid::new_v4();
+        let leased = scheduler.lease_task(task_id, agent_id, 60000).await;
+        assert!(!leased);
+    }
+
+    #[tokio::test]
+    async fn test_failed_task_with_retry() {
+        let scheduler = TaskScheduler::new();
+        let task = scheduler.create_task("scan", serde_json::json!({}));
+        let task_id = task.id;
+        scheduler.schedule(task).await;
+        let agent_id = Uuid::new_v4();
+        scheduler.lease_task(task_id, agent_id, 60000).await;
+        scheduler.submit_result(task_id, false, None, Some("error".to_string())).await;
+        let failed_task = scheduler.get_task(task_id).await.unwrap();
+        assert_eq!(failed_task.status, TaskStatus::Failed);
+        assert!(failed_task.retry_count < failed_task.max_retries);
     }
 
     #[test]
