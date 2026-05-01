@@ -14,8 +14,43 @@ use crate::agent::channels::{
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// Registry mapping channel names to AlertChannel definitions
+pub struct ChannelRegistry {
+    channels: std::collections::HashMap<String, AlertChannel>,
+}
+
+impl ChannelRegistry {
+    pub fn new() -> Self {
+        Self {
+            channels: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn register(&mut self, name: String, channel: AlertChannel) {
+        self.channels.insert(name, channel);
+    }
+
+    pub fn get(&self, name: &str) -> Option<&AlertChannel> {
+        self.channels.get(name)
+    }
+
+    pub fn get_all(&self) -> Vec<(String, AlertChannel)> {
+        self.channels.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.channels.contains_key(name)
+    }
+}
+
+impl Default for ChannelRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct AlertRouter {
-    channels: Arc<Mutex<Vec<AlertChannel>>>,
+    registry: Arc<Mutex<ChannelRegistry>>,
     recent_alerts: Arc<Mutex<std::collections::HashMap<String, Instant>>>,
     dedup_window_secs: u64,
     client: reqwest::Client,
@@ -33,7 +68,7 @@ impl AlertRouter {
 
     pub fn new() -> Result<Self> {
         Ok(Self {
-            channels: Arc::new(Mutex::new(Vec::new())),
+            registry: Arc::new(Mutex::new(ChannelRegistry::new())),
             recent_alerts: Arc::new(Mutex::new(std::collections::HashMap::new())),
             dedup_window_secs: 300,
             client: Self::create_pooled_client().unwrap_or_else(|_| {
@@ -47,18 +82,25 @@ impl AlertRouter {
 
     fn default() -> Self {
         Self {
-            channels: Arc::new(Mutex::new(Vec::new())),
+            registry: Arc::new(Mutex::new(ChannelRegistry::new())),
             recent_alerts: Arc::new(Mutex::new(std::collections::HashMap::new())),
             dedup_window_secs: 300,
             client: reqwest::Client::new(),
         }
     }
 
-    pub fn add_channel(&self, channel: AlertChannel) {
-        self.channels.lock().push(channel);
+    /// Register a channel with a name for target-specific routing
+    pub fn register_channel(&self, name: String, channel: AlertChannel) {
+        self.registry.lock().register(name, channel);
     }
 
-    pub async fn send(&self, alert: &Alert) -> Result<()> {
+    /// Get a channel by name from the registry
+    pub fn get_channel(&self, name: &str) -> Option<AlertChannel> {
+        self.registry.lock().get(name).cloned()
+    }
+
+    /// Send alert to all channels, or filter by channel_names if provided
+    pub async fn send(&self, alert: &Alert, channel_names: Option<&[String]>) -> Result<()> {
         {
             let recent_alerts = self.recent_alerts.lock();
             if recent_alerts.len() > 1000 {
@@ -78,8 +120,23 @@ impl AlertRouter {
             }
         }
 
-        let channels = self.channels.lock().clone();
-        for channel in &channels {
+        let channels_to_send: Vec<AlertChannel> = if let Some(names) = channel_names {
+            // Filter channels by name from registry
+            let registry = self.registry.lock();
+            names.iter()
+                .filter_map(|name| registry.get(name).cloned())
+                .collect()
+        } else {
+            // Send to all registered channels
+            self.registry.lock().get_all().into_iter().map(|(_, c)| c).collect()
+        };
+
+        if channels_to_send.is_empty() {
+            tracing::debug!("No channels to send alert to (channel_names: {:?})", channel_names);
+            return Ok(());
+        }
+
+        for channel in &channels_to_send {
             self.send_to_channel(channel, alert).await?;
         }
 
@@ -104,14 +161,10 @@ impl AlertRouter {
                 self.send_webhook(&webhook_config, alert).await?;
             }
             AlertChannel::Email(config) => {
-                if let Err(e) = self.send_email(config, alert).await {
-                    tracing::warn!("Failed to send email alert: {}", e);
-                }
+                self.send_email(config, alert).await?;
             }
             AlertChannel::PagerDuty(config) => {
-                if let Err(e) = self.send_pagerduty(config, alert).await {
-                    tracing::warn!("Failed to send PagerDuty alert: {}", e);
-                }
+                self.send_pagerduty(config, alert).await?;
             }
         }
         Ok(())
@@ -242,7 +295,14 @@ impl AlertRouter {
             .await?;
 
         if !response.status().is_success() {
-            tracing::warn!("PagerDuty API failed with status: {}", response.status());
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            tracing::warn!(
+                "PagerDuty API failed with status: {}, body: {}",
+                status,
+                body
+            );
+            return Err(anyhow::anyhow!("PagerDuty API failed with status: {}", status));
         }
 
         Ok(())
@@ -370,16 +430,16 @@ impl AlertRouter {
                 tracing::warn!("Alert escalated to Warning: {}", alert.title);
             }
             EscalationLevel::Urgent => {
-                let channels = self.channels.lock().clone();
-                for channel in &channels {
+                let channels = self.registry.lock().get_all();
+                for (_, channel) in &channels {
                     if matches!(channel, AlertChannel::Slack(_)) {
                         self.send_to_channel(channel, alert).await?;
                     }
                 }
             }
             EscalationLevel::Critical => {
-                let channels = self.channels.lock().clone();
-                for channel in &channels {
+                let channels = self.registry.lock().get_all();
+                for (_, channel) in &channels {
                     self.send_to_channel(channel, alert).await?;
                 }
             }

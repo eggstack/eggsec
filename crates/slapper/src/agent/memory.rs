@@ -5,12 +5,14 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 
 use crate::tool::response::Finding;
 
@@ -88,6 +90,11 @@ impl Default for TargetMemory {
 pub struct LongitudinalMemory {
     storage_dir: PathBuf,
     max_scans_per_target: Option<usize>,
+    // Locks for concurrent access
+    target_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    alerted_lock: Mutex<()>,
+    snapshot_lock: Mutex<()>,
+    patterns_lock: Mutex<()>,
 }
 
 impl LongitudinalMemory {
@@ -113,11 +120,47 @@ impl LongitudinalMemory {
         Ok(Self {
             storage_dir,
             max_scans_per_target: max_scans,
+            target_locks: Mutex::new(HashMap::new()),
+            alerted_lock: Mutex::new(()),
+            snapshot_lock: Mutex::new(()),
+            patterns_lock: Mutex::new(()),
         })
     }
 
     pub fn storage_dir(&self) -> &PathBuf {
         &self.storage_dir
+    }
+
+    async fn get_target_lock(&self, target: &str) -> Arc<Mutex<()>> {
+        let target_path = self.get_target_path(target);
+        let target_hash = target_path.file_stem().unwrap().to_string_lossy().to_string();
+
+        let mut locks = self.target_locks.lock().await;
+        locks.entry(target_hash).or_insert_with(|| Arc::new(Mutex::new(()))).clone()
+    }
+
+    async fn atomic_write(&self, path: &PathBuf, content: &str) -> Result<()> {
+        let tmp_path = path.with_file_name(format!("{}.tmp", path.file_name().unwrap().to_string_lossy()));
+        let mut file = fs::File::create(&tmp_path).await?;
+        file.write_all(content.as_bytes()).await?;
+        file.flush().await?;
+        fs::rename(&tmp_path, path).await?;
+        Ok(())
+    }
+
+    async fn load_target_memory(&self, target: &str) -> Result<TargetMemory> {
+        let target_path = self.get_target_path(target);
+        if !target_path.exists() {
+            return Ok(TargetMemory {
+                target: target.to_string(),
+                ..Default::default()
+            });
+        }
+        let content = fs::read_to_string(&target_path).await?;
+        let memory: TargetMemory = serde_json::from_str(&content).map_err(|e| {
+            anyhow::anyhow!("Corrupt target memory file {}: {}", target_path.display(), e)
+        })?;
+        Ok(memory)
     }
 
     fn get_target_path(&self, target: &str) -> PathBuf {
@@ -149,16 +192,19 @@ impl LongitudinalMemory {
             return Ok(HashSet::new());
         }
         let content = fs::read_to_string(&path).await?;
-        let findings: HashSet<String> = serde_json::from_str(&content)?;
-        Ok(findings)
+        match serde_json::from_str::<HashSet<String>>(&content) {
+            Ok(findings) => Ok(findings),
+            Err(e) => {
+                tracing::warn!("Corrupt alerted findings file, starting fresh: {}", e);
+                Ok(HashSet::new())
+            }
+        }
     }
 
     async fn save_alerted_findings(&self, findings: &HashSet<String>) -> Result<()> {
         let path = self.get_alerted_findings_path();
         let content = serde_json::to_string_pretty(findings)?;
-        let mut file = fs::File::create(&path).await?;
-        file.write_all(content.as_bytes()).await?;
-        Ok(())
+        self.atomic_write(&path, &content).await
     }
 
     pub async fn warm_cache(&self) -> Result<()> {
@@ -170,6 +216,7 @@ impl LongitudinalMemory {
         &self,
         findings: Vec<Finding>,
     ) -> Result<(Vec<Finding>, Vec<Finding>)> {
+        let _lock = self.alerted_lock.lock().await;
         let alerted = self.load_alerted_findings().await?;
         let mut new_alerted = alerted.clone();
 
@@ -193,6 +240,7 @@ impl LongitudinalMemory {
     }
 
     pub async fn write_portfolio_snapshot(&self) -> Result<()> {
+        let _lock = self.snapshot_lock.lock().await;
         let targets_dir = self.storage_dir.join("targets");
 
         let mut unique_targets: HashSet<String> = HashSet::new();
@@ -288,10 +336,7 @@ impl LongitudinalMemory {
 
         let path = self.get_snapshot_path();
         let content = serde_json::to_string_pretty(&snapshot)?;
-        let mut file = fs::File::create(&path).await?;
-        file.write_all(content.as_bytes()).await?;
-
-        Ok(())
+        self.atomic_write(&path, &content).await
     }
 
     pub fn read_portfolio_snapshot(&self) -> Option<PortfolioSnapshot> {
@@ -308,6 +353,9 @@ impl LongitudinalMemory {
         target: &str,
         response: &crate::tool::ToolResponse,
     ) -> Result<()> {
+        let target_lock = self.get_target_lock(target).await;
+        let _lock = target_lock.lock().await;
+
         let scan_memory = ScanMemory {
             scan_id: response.request_id.clone(),
             target: target.to_string(),
@@ -318,16 +366,7 @@ impl LongitudinalMemory {
         };
 
         let target_path = self.get_target_path(target);
-
-        let mut memory = if target_path.exists() {
-            let content = fs::read_to_string(&target_path).await?;
-            serde_json::from_str::<TargetMemory>(&content)?
-        } else {
-            TargetMemory {
-                target: target.to_string(),
-                ..Default::default()
-            }
-        };
+        let mut memory = self.load_target_memory(target).await?;
 
         memory.scans.push(scan_memory);
 
@@ -338,7 +377,7 @@ impl LongitudinalMemory {
         }
 
         let content = serde_json::to_string(&memory)?;
-        fs::write(&target_path, content).await?;
+        self.atomic_write(&target_path, &content).await?;
 
         self.detect_and_record_patterns(target, &memory).await?;
 
@@ -376,27 +415,20 @@ impl LongitudinalMemory {
     }
 
     pub async fn set_baseline(&self, target: &str, finding_ids: Vec<String>) -> Result<()> {
-        let target_path = self.get_target_path(target);
+        let target_lock = self.get_target_lock(target).await;
+        let _lock = target_lock.lock().await;
 
-        let mut memory = if target_path.exists() {
-            let content = fs::read_to_string(&target_path).await?;
-            serde_json::from_str::<TargetMemory>(&content)?
-        } else {
-            TargetMemory {
-                target: target.to_string(),
-                ..Default::default()
-            }
-        };
+        let mut memory = self.load_target_memory(target).await?;
 
         memory.baselines = finding_ids;
 
         let content = serde_json::to_string(&memory)?;
-        fs::write(&target_path, content).await?;
-
-        Ok(())
+        let target_path = self.get_target_path(target);
+        self.atomic_write(&target_path, &content).await
     }
 
     async fn detect_and_record_patterns(&self, _target: &str, memory: &TargetMemory) -> Result<()> {
+        let _lock = self.patterns_lock.lock().await;
         let mut patterns: HashMap<String, PatternEntry> = HashMap::new();
 
         for scan in &memory.scans {
@@ -428,7 +460,7 @@ impl LongitudinalMemory {
         if !patterns.is_empty() {
             let patterns_path = self.get_patterns_path();
             let content = serde_json::to_string(&patterns.values().collect::<Vec<_>>())?;
-            fs::write(&patterns_path, content).await?;
+            self.atomic_write(&patterns_path, &content).await?;
         }
 
         Ok(())
@@ -589,6 +621,7 @@ impl LongitudinalMemory {
     }
 
     pub async fn cleanup_old_patterns(&self, ttl_days: u64) -> Result<usize> {
+        let _lock = self.patterns_lock.lock().await;
         let patterns_path = self.get_patterns_path();
 
         if !patterns_path.exists() {
@@ -596,7 +629,13 @@ impl LongitudinalMemory {
         }
 
         let content = fs::read_to_string(&patterns_path).await?;
-        let patterns: Vec<PatternEntry> = serde_json::from_str(&content)?;
+        let patterns: Vec<PatternEntry> = match serde_json::from_str(&content) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Corrupt patterns file, starting fresh: {}", e);
+                return Ok(0);
+            }
+        };
 
         let cutoff = chrono::Utc::now() - chrono::Duration::days(ttl_days as i64);
         let original_count = patterns.len();
@@ -610,7 +649,7 @@ impl LongitudinalMemory {
 
         if removed_count > 0 {
             let content = serde_json::to_string(&filtered)?;
-            fs::write(&patterns_path, content).await?;
+            self.atomic_write(&patterns_path, &content).await?;
         }
 
         Ok(removed_count)
@@ -685,6 +724,10 @@ impl Default for LongitudinalMemory {
         Self {
             storage_dir: PathBuf::from("~/.config/slapper/memory"),
             max_scans_per_target: None,
+            target_locks: Mutex::new(HashMap::new()),
+            alerted_lock: Mutex::new(()),
+            snapshot_lock: Mutex::new(()),
+            patterns_lock: Mutex::new(()),
         }
     }
 }

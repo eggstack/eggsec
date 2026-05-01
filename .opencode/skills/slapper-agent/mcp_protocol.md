@@ -15,6 +15,8 @@ metadata:
 
 ## Overview
 
+⚠️ **Note**: The `mcp-server` feature has been removed. Use `rest-api` instead for API integrations. This skill is retained for reference only.
+
 The MCP (Model Context Protocol) server provides a JSON-RPC 2.0 API for AI agents to interact with Slapper's security tools. It's designed for integration with LLM-powered assistants that need to execute security testing workflows.
 
 ## Architecture

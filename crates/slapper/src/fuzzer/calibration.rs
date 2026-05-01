@@ -129,6 +129,7 @@ impl Calibrator {
                         status_code: status,
                         response_time_ms: time_ms,
                         response_length: Some(size),
+                        response_body: None,
                         is_waf_blocked: false,
                         is_anomaly: false,
                         is_redos_suspected: false,

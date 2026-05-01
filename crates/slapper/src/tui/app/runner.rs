@@ -126,18 +126,15 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
 
         if tab_area.contains((mouse_event.column, mouse_event.row).into()) {
             let window = TabWindow::for_width(tab_area.width, app.current_tab, app.tab_scroll_offset);
-            if window.max_visible > 0 {
-                let tab_width = tab_area.width / window.max_visible as u16;
-                if tab_width > 0 {
-                    let local_index = ((mouse_event.column.saturating_sub(tab_area.x)) / tab_width) as usize;
-                    let clicked_global_index = window.start + local_index;
-                    if clicked_global_index < window.total_tabs {
-                        if let Some(tab) = Tab::from_visible_index(clicked_global_index) {
-                            app.current_tab = tab;
-                            app.adjust_tab_scroll();
-                            app.needs_redraw = true;
-                        }
-                    }
+            let spans = window.visible_tab_spans(tab_area.width);
+            let click_x = mouse_event.column.saturating_sub(tab_area.x);
+
+            for span in spans {
+                if click_x >= span.x_start && click_x < span.x_end {
+                    app.current_tab = span.tab;
+                    app.adjust_tab_scroll();
+                    app.needs_redraw = true;
+                    break;
                 }
             }
         }

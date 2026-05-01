@@ -4,6 +4,33 @@
 
 Slapper is a Rust-based security testing toolkit for penetration testing, vulnerability scanning, and security assessment. This skill teaches agents how to use Slapper effectively for security testing workflows.
 
+## TUI Mode
+
+Slapper features an interactive terminal UI (TUI) built with ratatui:
+
+```bash
+# Start TUI mode (default)
+slapper
+
+# Navigate tabs with n/p or arrow keys
+# Press Enter to start operations
+# Use / to search, Ctrl+P for command palette
+```
+
+Key TUI features:
+- 29 tabs covering all security testing functions
+- Real-time progress monitoring with spinners
+- Session persistence (resume previous scans)
+- Bookmark favorite tabs with Ctrl+B
+- Command palette (Ctrl+P) for quick navigation
+- Help overlay (Space) with tab-specific commands
+
+Tab navigation:
+- `n` / `p` - Next/previous tab
+- `1-9` / `0` - Jump to tab 1-10
+- `h` / `l` - Within-tab left/right movement
+- `gg` / `G` - Go to top/bottom
+
 ## Core Capabilities
 
 ### 1. Reconnaissance
@@ -62,7 +89,7 @@ slapper scan endpoints --target https://example.com --wordlist paths.txt
 
 ### 4. Fuzzing
 
-Security payload testing across 23+ payload types:
+Security payload testing across 30 payload types:
 
 ```bash
 # SQL injection fuzzing
@@ -72,7 +99,7 @@ slapper fuzz --target https://example.com/api --type sqli
 slapper fuzz --target https://example.com/search --type xss
 
 # Path traversal
-slapper fuzz --target https://example.com/file --type path-traversal
+slapper fuzz --target https://example.com/file --type traversal
 
 # SSRF testing
 slapper fuzz --target https://example.com/fetch --type ssrf
@@ -81,7 +108,9 @@ slapper fuzz --target https://example.com/fetch --type ssrf
 slapper fuzz --target https://example.com --type all
 ```
 
-Available payload types: sqli, xss, ssrf, path-traversal, command-injection, ldap-injection, xpath-injection, ssti, xxe, file-inclusion, header-injection, open-redirect, crlf, graphql, soap, xml-rpc, rce, lfi, rfi, idor, broken-auth, sensitive-data, custom
+Available payload types: sqli, xss, traversal, ssrf, redirect, redos, headers, compression, graphql, oauth, jwt, idor, ssti, grpc, xxe, ldap, cmd, deser, host, cache, csv, soap, websocket, nosql, xpath, expression, prototype, race, massassign, oast
+
+Note: `traversal` is the correct type name for path traversal (not `path-traversal`).
 
 ### 5. WAF Detection & Bypass
 

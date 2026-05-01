@@ -131,6 +131,7 @@ impl WebSocketFuzzer {
                 status_code: 0,
                 response_time_ms: 0,
                 response_length: None,
+                response_body: None,
                 is_waf_blocked: false,
                 is_anomaly: test.success,
                 is_redos_suspected: false,

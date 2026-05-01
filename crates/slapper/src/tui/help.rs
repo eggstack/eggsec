@@ -67,11 +67,13 @@ impl CommandPalette {
     }
 
     pub fn visible_results_height(&self) -> usize {
-        (self.last_content_height as usize).saturating_sub(3).max(5)
+        let computed = (self.last_content_height as usize).saturating_sub(3);
+        computed.min(self.results.len()).max(1)
     }
 
     pub fn visible_results_height_for_area(&self, popup_content_height: u16) -> usize {
-        (popup_content_height as usize).saturating_sub(3).max(5)
+        let computed = (popup_content_height as usize).saturating_sub(3);
+        computed.min(self.results.len()).max(1)
     }
 
     pub fn update_content_height(&mut self, content_height: u16) {
@@ -96,6 +98,92 @@ impl CommandPalette {
         if self.selected_index < self.scroll_offset {
             self.scroll_offset = self.selected_index.min(max_scroll);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_palette_with_results(count: usize) -> CommandPalette {
+        let results: Vec<CommandPaletteResult> = (0..count)
+            .map(|i| CommandPaletteResult {
+                command: format!("cmd_{}", i),
+                description: format!("Description {}", i),
+                category: "Test".to_string(),
+                shortcut: None,
+            })
+            .collect();
+        CommandPalette::new(Arc::new(results))
+    }
+
+    #[test]
+    fn test_visible_results_height_with_reduced_content() {
+        let mut palette = make_palette_with_results(20);
+        palette.last_content_height = 10;
+        assert_eq!(palette.visible_results_height(), 7);
+
+        palette.last_content_height = 5;
+        assert_eq!(palette.visible_results_height(), 2);
+
+        palette.last_content_height = 0;
+        assert_eq!(palette.visible_results_height(), 1);
+    }
+
+    #[test]
+    fn test_scroll_offset_with_small_visible_area() {
+        let mut palette = make_palette_with_results(20);
+        palette.last_content_height = 8;
+        palette.selected_index = 3;
+        palette.scroll_offset = 0;
+        palette.adjust_scroll_for_selection();
+
+        assert!(
+            palette.selected_index >= palette.scroll_offset,
+            "Selected index should be >= scroll offset"
+        );
+        assert!(
+            palette.selected_index < palette.scroll_offset + palette.visible_results_height(),
+            "Selected index should be visible, but sel={} off={} vis={}",
+            palette.selected_index,
+            palette.scroll_offset,
+            palette.visible_results_height()
+        );
+    }
+
+    #[test]
+    fn test_scroll_offset_clamped_when_selection_near_end() {
+        let mut palette = make_palette_with_results(20);
+        palette.last_content_height = 8;
+        palette.selected_index = 18;
+        palette.scroll_offset = 10;
+        palette.adjust_scroll_for_selection();
+
+        let max_scroll = palette.max_scroll_offset();
+        assert!(
+            palette.scroll_offset <= max_scroll,
+            "Scroll offset {} should not exceed max {}",
+            palette.scroll_offset,
+            max_scroll
+        );
+    }
+
+    #[test]
+    fn test_max_scroll_offset_decreases_with_smaller_height() {
+        let mut palette = make_palette_with_results(30);
+
+        palette.last_content_height = 15;
+        let max_scroll_large = palette.max_scroll_offset();
+
+        palette.last_content_height = 8;
+        let max_scroll_small = palette.max_scroll_offset();
+
+        assert!(
+            max_scroll_small > max_scroll_large,
+            "Smaller visible area should allow more scroll: small={}, large={}",
+            max_scroll_small,
+            max_scroll_large
+        );
     }
 }
 

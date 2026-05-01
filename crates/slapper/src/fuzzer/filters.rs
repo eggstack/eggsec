@@ -30,7 +30,7 @@ pub enum PayloadFilter {
     /// Filter by response time range in ms
     ResponseTimeRange { min: u64, max: u64 },
     /// Filter by regex pattern on response body
-    Regex(String),
+    Regex(Regex),
     /// Filter by response size greater than threshold
     SizeGreaterThan(u64),
     /// Filter by response size less than threshold
@@ -42,7 +42,6 @@ pub enum PayloadFilter {
 #[derive(Debug, Clone, Default)]
 pub struct FilterChain {
     filters: Vec<PayloadFilter>,
-    regex_cache: Vec<(String, Regex)>, // Cache compiled regexes
 }
 
 impl FilterChain {
@@ -50,7 +49,6 @@ impl FilterChain {
     pub fn new() -> Self {
         FilterChain {
             filters: Vec::new(),
-            regex_cache: Vec::new(),
         }
     }
 
@@ -90,8 +88,7 @@ impl FilterChain {
     /// Add a regex filter
     pub fn add_regex_filter(&mut self, pattern: String) {
         if let Ok(regex) = Regex::new(&pattern) {
-            self.regex_cache.push((pattern.clone(), regex));
-            self.filters.push(PayloadFilter::Regex(pattern));
+            self.filters.push(PayloadFilter::Regex(regex));
         }
     }
 
@@ -155,11 +152,13 @@ impl FilterChain {
             PayloadFilter::ResponseTimeRange { min, max } => {
                 result.response_time_ms >= *min && result.response_time_ms <= *max
             }
-            PayloadFilter::Regex(_pattern) => {
-                // For regex, we'd need the actual response body
-                // This is a placeholder - in practice, the caller should
-                // provide the body for matching
-                false
+            PayloadFilter::Regex(regex) => {
+                // Match regex against response body if available
+                if let Some(ref body) = result.response_body {
+                    regex.is_match(body)
+                } else {
+                    false
+                }
             }
             PayloadFilter::SizeGreaterThan(threshold) => {
                 if let Some(size) = result.response_length {
@@ -227,6 +226,7 @@ mod tests {
             status_code: status,
             response_time_ms: time_ms,
             response_length: size,
+            response_body: None,
             is_waf_blocked: false,
             is_anomaly: false,
             is_redos_suspected: false,

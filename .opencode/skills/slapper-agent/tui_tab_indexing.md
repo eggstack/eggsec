@@ -47,6 +47,9 @@ tab.stable_id() -> &'static str  // e.g., "dashboard", "settings"
 
 // Restore tab from stable ID (checks availability!)
 Tab::from_stable_id("dashboard") -> Option<Tab>
+
+// Restore tab from enum discriminant (legacy migration only!)
+Tab::from_discriminant(0) -> Option<Tab>  // Legacy migration path only!
 ```
 
 ## TabWindow Helper
@@ -205,17 +208,69 @@ fn test_tab_navigation() {
 }
 ```
 
+## Legacy Migration Helper
+
+`Tab::from_discriminant(discriminant: usize) -> Option<Tab>` maps enum discriminant values directly to Tab variants:
+
+```rust
+// Maps discriminant values (0-28) to Tab variants
+Tab::from_discriminant(0)  // Some(Tab::Recon)
+Tab::from_discriminant(17)  // Some(Tab::Nse)
+Tab::from_discriminant(999) // None
+
+// Use only for explicit legacy numeric session migration
+// Normal code should use Tab::from_stable_id() or Tab::from_index()
+```
+
 ## Implementation Files
 
-- `crates/slapper/src/tui/tabs/mod.rs` - Tab enum, TabWindow, stable IDs
-- `crates/slapper/src/tui/app/navigation.rs` - Keyboard navigation, adjust_tab_scroll
-- `crates/slapper/src/tui/app/runner.rs` - Mouse hit-testing
-- `crates/slapper/src/tui/app/mod.rs` - App struct with bookmarks
+- `crates/slapper/src/tui/tabs/mod.rs` - Tab enum, TabWindow, stable IDs, visible_tab_spans
+- `crates/slapper/src/tui/app/navigation.rs` - Keyboard navigation, adjust_tab_scroll, render tests
+- `crates/slapper/src/tui/app/runner.rs` - Mouse hit-testing using visible_tab_spans
+- `crates/slapper/src/tui/app/mod.rs` - App struct with bookmarks, handle_left/handle_right
 - `crates/slapper/src/tui/session.rs` - Session capture/restore
+
+## Phase 13 Updates (2026-04-30)
+
+### Render-Aware Tab Window
+
+`TabWindow::for_width` now uses actual tab label widths via greedy algorithm:
+- Previous: Used fixed `min_tab_width = 8` for all tabs
+- Now: Sums actual `tab.title().len()` values until width limit reached
+
+### TabSpan for Mouse Hit-Testing
+
+```rust
+pub struct TabSpan {
+    pub tab: Tab,
+    pub global_index: usize,
+    pub x_start: u16,
+    pub x_end: u16,
+}
+
+pub fn visible_tab_spans(&self, term_width: u16) -> Vec<TabSpan>;
+```
+
+Use `visible_tab_spans()` instead of dividing tab area evenly.
+
+### Tab Label Shortcuts
+
+Only tabs 1-10 show numeric shortcut labels:
+- `[1] Recon` through `[9] Scan` have shortcuts
+- `[0] Resume` is tab 10
+- Tabs 11+ (Proxy, Packet, etc.) show names without shortcuts
+
+### Keyboard Navigation Changes
+
+`handle_left()` and `handle_right()` now use edge detection instead of fallback tab switching:
+- Use `is_at_left_edge()` and `is_at_right_edge()` on dispatcher
+- No fallback to `prev_tab()` / `next_tab()` when returning `false`
+- Use explicit keys: `n/p`, `Shift+H/L` for tab switching
 
 ## Verification
 
 ```bash
 cargo test --lib -p slapper -- test_tab_window
 cargo test --lib -p slapper -- test_bookmark_api_uses_stable_ids
+cargo test --lib -p slapper -- render_tests
 ```
