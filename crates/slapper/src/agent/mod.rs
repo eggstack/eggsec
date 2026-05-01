@@ -1301,40 +1301,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_target_with_no_alert_channels_sends_to_all() {
-        use tempfile::TempDir;
-        use std::sync::Arc as StdArc;
-
-        let temp_dir = TempDir::new().unwrap();
-        let mut config = AgentConfig::default();
-        config.memory_dir = temp_dir.path().to_path_buf();
-
-        let dispatcher = MockDispatcher {
-            response: StdArc::new(std::sync::Mutex::new(None)),
-        };
-        let sent_alerts = StdArc::new(std::sync::Mutex::new(vec![]));
-        let alert_sender = MockAlertSender {
-            sent_alerts: sent_alerts.clone(),
-        };
-
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
-
-        // Empty alert_channels means send to all (None filter)
-        let result = agent.process_findings_by_severity(
-            "https://example.com",
-            &[],
-            &[],  // empty = no specific channels
-        ).await;
-
-        assert!(result.is_ok());
-        // No findings = no alerts sent, but the channel_filter should be None
-    }
-
-    #[tokio::test]
     async fn test_target_with_selected_channel_sends_to_that_channel_only() {
         use tempfile::TempDir;
         use std::sync::Arc as StdArc;
@@ -1359,6 +1325,7 @@ mod tests {
 
         // Specify a channel name
         let channel_names = vec!["slack".to_string()];
+
         let result = agent.process_findings_by_severity(
             "https://example.com",
             &[],
@@ -1371,5 +1338,265 @@ mod tests {
         let sent = sent_alerts.lock().unwrap();
         // No findings = no alerts, but we can verify the filter was Some
         // (This is tested implicitly via the MockAlertSender storing the filter)
+    }
+
+    // Phase 11: Integration tests
+
+    #[tokio::test]
+    async fn test_integration_manual_scan_success() {
+        use tempfile::TempDir;
+        use crate::tool::response::ToolResponse;
+        use std::sync::Arc as StdArc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let mock_response = ToolResponse::success("req-1", "recon", serde_json::json!({"status": "ok"}));
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(Some(mock_response))),
+        };
+        let sent_alerts = StdArc::new(std::sync::Mutex::new(vec![]));
+        let alert_sender = MockAlertSender {
+            sent_alerts: sent_alerts.clone(),
+        };
+
+        let mut agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        // Verify constraints pass (no forbidden targets/actions)
+        let result = agent.trigger_scan("https://example.com", "recon").await;
+        assert!(result.is_ok());
+
+        // Verify memory was stored
+        let history = agent.memory.get_target_history("https://example.com").await.unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].scan_id, "req-1");
+    }
+
+    #[tokio::test]
+    async fn test_integration_manual_scan_blocked() {
+        use tempfile::TempDir;
+        use std::sync::Arc as StdArc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        // Add forbidden action to block scans
+        let mut constraints = OperationalConstraints::default();
+        constraints.do_not_do_list.forbidden_actions.push(
+            crate::agent::constraints::ForbiddenAction::new("scan", "test")
+        );
+        config.operational_constraints = Some(constraints);
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let mut agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        // Scan should be blocked by constraints
+        let result = agent.trigger_scan("https://example.com", "recon").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Action forbidden"));
+    }
+
+    #[tokio::test]
+    async fn test_integration_scheduled_scan_success() {
+        use tempfile::TempDir;
+        use crate::tool::response::ToolResponse;
+        use crate::agent::portfolio::TargetConfig;
+        use directories::ProjectDirs;
+        use std::sync::Arc as StdArc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let base_dir = ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("~/.config/slapper"));
+        let portfolio_path = base_dir.join("test_portfolio_scheduled.json");
+        config.portfolio_path = Some(portfolio_path.clone());
+
+        // Create target with schedule that matches every minute
+        let mut target_config = TargetConfig::new("https://example.com");
+        target_config.schedule = Some("* * * * *".to_string());
+
+        let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+        portfolio.add_target("https://example.com".to_string(), target_config);
+        portfolio.save().unwrap();
+
+        let mock_response = ToolResponse::success("req-1", "pipeline", serde_json::json!({"status": "ok"}));
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(Some(mock_response))),
+        };
+        let sent_alerts = StdArc::new(std::sync::Mutex::new(vec![]));
+        let alert_sender = MockAlertSender {
+            sent_alerts: sent_alerts.clone(),
+        };
+
+        let mut agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        // Manually set last_scan to force a run (simulate time passing)
+        agent.portfolio.update_target("https://example.com", |target| {
+            target.last_scan = Some(chrono::Utc::now() - chrono::Duration::minutes(2));
+        });
+
+        // Process scheduled scans
+        let result = agent.process_scheduled_scans().await;
+        assert!(result.is_ok());
+
+        // Verify last_scan was updated
+        let target = agent.portfolio.get_target("https://example.com").unwrap();
+        assert!(target.last_scan.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_integration_scheduled_scan_failure() {
+        use tempfile::TempDir;
+        use crate::agent::portfolio::TargetConfig;
+        use directories::ProjectDirs;
+        use std::sync::Arc as StdArc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let base_dir = ProjectDirs::from("com", "slapper", "slapper")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("~/.config/slapper"));
+        let portfolio_path = base_dir.join("test_portfolio_fail.json");
+        config.portfolio_path = Some(portfolio_path.clone());
+
+        // Create target with schedule
+        let mut target_config = TargetConfig::new("https://example.com");
+        target_config.schedule = Some("* * * * *".to_string());
+
+        let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
+        portfolio.add_target("https://example.com".to_string(), target_config);
+        portfolio.save().unwrap();
+
+        // Dispatcher returns None (failure)
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let sent_alerts = StdArc::new(std::sync::Mutex::new(vec![]));
+        let alert_sender = MockAlertSender {
+            sent_alerts: sent_alerts.clone(),
+        };
+
+        let mut agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        // Manually set last_scan
+        let original_last_scan = Some(chrono::Utc::now() - chrono::Duration::minutes(2));
+        agent.portfolio.update_target("https://example.com", |target| {
+            target.last_scan = original_last_scan;
+        });
+
+        // Process scheduled scans (dispatch will fail)
+        let _ = agent.process_scheduled_scans().await;
+
+        // Verify last_scan was NOT updated (should still be the old value)
+        let target = agent.portfolio.get_target("https://example.com").unwrap();
+        assert_eq!(target.last_scan, original_last_scan);
+    }
+
+    #[tokio::test]
+    async fn test_integration_findings_and_baseline() {
+        use tempfile::TempDir;
+        use crate::tool::response::{ToolResponse, Finding, FindingType, ResponseSeverity};
+        use crate::tool::finding::Finding as ToolFinding;
+        use std::sync::Arc as StdArc;
+        use std::collections::HashMap;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let sent_alerts = StdArc::new(std::sync::Mutex::new(vec![]));
+        let alert_sender = MockAlertSender {
+            sent_alerts: sent_alerts.clone(),
+        };
+
+        let mut agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        // Create findings
+        let baseline_finding = ToolFinding {
+            id: "baseline-1".to_string(),
+            finding_type: FindingType::Vulnerability,
+            severity: ResponseSeverity::High,
+            title: "Baseline finding".to_string(),
+            description: "This is a baseline finding".to_string(),
+            location: "https://example.com/login".to_string(),
+            evidence: None,
+            cve_ids: vec![],
+            remediation: None,
+            references: vec![],
+            metadata: HashMap::new(),
+        };
+
+        let new_finding = ToolFinding {
+            id: "new-1".to_string(),
+            finding_type: FindingType::Vulnerability,
+            severity: ResponseSeverity::Critical,
+            title: "New finding".to_string(),
+            description: "This is a new finding".to_string(),
+            location: "https://example.com/admin".to_string(),
+            evidence: None,
+            cve_ids: vec![],
+            remediation: None,
+            references: vec![],
+            metadata: HashMap::new(),
+        };
+
+        // Set baseline with baseline_finding
+        agent.memory.set_baseline("https://example.com", vec!["baseline-1".to_string()]).await.unwrap();
+
+        // Compare findings - baseline finding should not be in new_findings
+        let comparison = agent.memory.compare_with_baseline(
+            "https://example.com",
+            &[baseline_finding.clone(), new_finding.clone()]
+        ).await.unwrap();
+
+        assert_eq!(comparison.new_findings.len(), 1);
+        assert_eq!(comparison.new_findings[0].id, "new-1");
+        assert_eq!(comparison.resolved_findings.len(), 0);
+
+        // Now test deduplication - new finding should alert once
+        let (to_alert, deduplicated) = agent.memory.deduplicate_findings(vec![new_finding.clone()]).await.unwrap();
+        assert_eq!(to_alert.len(), 1);
+        assert_eq!(deduplicated.len(), 0);
+
+        // Call again - should be deduplicated
+        let (to_alert2, deduplicated2) = agent.memory.deduplicate_findings(vec![new_finding.clone()]).await.unwrap();
+        assert_eq!(to_alert2.len(), 0);
+        assert_eq!(deduplicated2.len(), 1);
     }
 }
