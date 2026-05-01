@@ -19,6 +19,8 @@ pub mod config_watcher;
 pub mod skills;
 
 use std::path::PathBuf;
+use std::pin::Pin;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -53,6 +55,43 @@ pub use events::{EventHandler, SecurityEvent};
 #[cfg(feature = "ai-integration")]
 pub use skills::{Skill, SkillLoader, SkillRegistry};
 
+// Crate-private traits for testable seams (Phase 2)
+trait ScanDispatcherTrait: Send + Sync {
+    fn dispatch<'a>(
+        &'a self,
+        request: ToolRequest,
+    ) -> Pin<Box<dyn Future<Output = std::result::Result<ToolResponse, crate::error::SlapperError>> + Send + 'a>>;
+}
+
+trait AlertSenderTrait: Send + Sync {
+    fn send(
+        &self,
+        alert: Alert,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+}
+
+// Implement traits for existing types
+impl ScanDispatcherTrait for ToolDispatcher {
+    fn dispatch<'a>(
+        &'a self,
+        request: ToolRequest,
+    ) -> Pin<Box<dyn Future<Output = std::result::Result<ToolResponse, crate::error::SlapperError>> + Send + 'a>> {
+        Box::pin(self.dispatch(request))
+    }
+}
+
+impl AlertSenderTrait for AlertRouter {
+    fn send(
+        &self,
+        alert: Alert,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+        let alert = std::sync::Arc::new(alert);
+        Box::pin(async move {
+            self.send(&alert).await
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct AgentConfig {
     pub portfolio_path: Option<PathBuf>,
@@ -80,13 +119,13 @@ pub struct Agent {
     config: AgentConfig,
     #[allow(dead_code)]
     registry: ToolRegistry,
-    dispatcher: ToolDispatcher,
+    dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
     scheduler: CronScheduler,
     portfolio: TargetPortfolio,
     memory: LongitudinalMemory,
-    alert_router: AlertRouter,
+    alert_router: Box<dyn AlertSenderTrait + Send + Sync>,
     event_handlers: Vec<Box<dyn EventHandler>>,
     running: Arc<RwLock<bool>>,
     #[allow(dead_code)]
@@ -97,6 +136,7 @@ impl Agent {
     pub async fn new(config: AgentConfig) -> Result<Self> {
         let registry = create_default_registry();
         let dispatcher = ToolDispatcher::new(registry.clone());
+        let dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync> = Box::new(dispatcher);
 
         let portfolio = if let Some(ref path) = config.portfolio_path {
             TargetPortfolio::load_from_file(path)?
@@ -109,6 +149,7 @@ impl Agent {
         memory.warm_cache().await.ok();
 
         let alert_router = AlertRouter::new()?;
+        let alert_router: Box<dyn AlertSenderTrait + Send + Sync> = Box::new(alert_router);
 
         let config_paths = std::iter::once(config.portfolio_path.clone())
             .flatten()
@@ -133,6 +174,37 @@ impl Agent {
             event_handlers: Vec::new(),
             running: Arc::new(RwLock::new(false)),
             config_watcher,
+        })
+    }
+
+    // Crate-private constructor for testing with custom dispatch/alert sender
+    #[cfg(test)]
+    pub(crate) async fn new_for_test(
+        config: AgentConfig,
+        dispatcher: Box<dyn ScanDispatcherTrait + Send + Sync>,
+        alert_router: Box<dyn AlertSenderTrait + Send + Sync>,
+    ) -> Result<Self> {
+        let registry = create_default_registry();
+        let portfolio = if let Some(ref path) = config.portfolio_path {
+            TargetPortfolio::load_from_file(path)?
+        } else {
+            TargetPortfolio::new()
+        };
+        let memory_dir = config.memory_dir.join("memory");
+        let memory = LongitudinalMemory::new(memory_dir).await?;
+        Ok(Self {
+            config,
+            registry,
+            dispatcher,
+            #[cfg(feature = "ai-integration")]
+            ai_client: None,
+            scheduler: CronScheduler::new(),
+            portfolio,
+            memory,
+            alert_router,
+            event_handlers: Vec::new(),
+            running: Arc::new(RwLock::new(false)),
+            config_watcher: None,
         })
     }
 
@@ -401,7 +473,7 @@ impl Agent {
                     "Consider emergency response".to_string(),
                 ],
             };
-            self.alert_router.send(&alert).await?;
+            self.alert_router.send(alert).await?;
         }
 
         if !high_findings.is_empty() {
@@ -414,7 +486,7 @@ impl Agent {
                 finding_ids: high_findings.iter().map(|f| f.id.clone()).collect(),
                 recommended_actions: vec!["Review within 24 hours".to_string()],
             };
-            self.alert_router.send(&alert).await?;
+            self.alert_router.send(alert).await?;
         }
 
         if !medium_findings.is_empty() {
@@ -427,7 +499,7 @@ impl Agent {
                 finding_ids: medium_findings.iter().map(|f| f.id.clone()).collect(),
                 recommended_actions: vec!["Review in weekly triage".to_string()],
             };
-            self.alert_router.send(&alert).await?;
+            self.alert_router.send(alert).await?;
         }
 
         if !low_findings.is_empty() {
@@ -440,7 +512,7 @@ impl Agent {
                 finding_ids: low_findings.iter().map(|f| f.id.clone()).collect(),
                 recommended_actions: vec!["Add to remediation backlog".to_string()],
             };
-            self.alert_router.send(&alert).await?;
+            self.alert_router.send(alert).await?;
         }
 
         if !info_findings.is_empty() {
@@ -650,5 +722,100 @@ mod tests {
         assert!(config.portfolio_path.is_none());
         assert!(config.ai_config.is_none());
         assert_eq!(config.poll_interval_secs, 60);
+    }
+
+    // Phase 2: Testable seams tests
+    struct MockDispatcher {
+        response: std::sync::Arc<std::sync::Mutex<Option<ToolResponse>>>,
+    }
+
+    impl ScanDispatcherTrait for MockDispatcher {
+        fn dispatch<'a>(
+            &'a self,
+            _request: ToolRequest,
+        ) -> Pin<Box<dyn Future<Output = std::result::Result<ToolResponse, crate::error::SlapperError>> + Send + 'a>> {
+            let response = self.response.lock().unwrap().clone();
+            Box::pin(async move {
+                response.ok_or_else(|| crate::error::SlapperError::Network("Mock no response".into()))
+            })
+        }
+    }
+
+    struct MockAlertSender {
+        sent_alerts: std::sync::Arc<std::sync::Mutex<Vec<Alert>>>,
+    }
+
+    impl AlertSenderTrait for MockAlertSender {
+        fn send(
+            &self,
+            alert: Alert,
+        ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
+            self.sent_alerts.lock().unwrap().push(alert);
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mock_dispatcher_success_scan() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let mock_response = ToolResponse {
+            request_id: "test-1".to_string(),
+            tool_id: "mock-tool".to_string(),
+            status: crate::tool::response::ResponseStatus::Success,
+            results: serde_json::Value::Null,
+            metadata: crate::tool::response::ResponseMetadata {
+                started_at: chrono::Utc::now(),
+                completed_at: chrono::Utc::now(),
+                duration_ms: 0,
+                targets_scanned: 1,
+                findings_count: 0,
+            },
+            errors: vec![],
+            findings: vec![],
+        };
+        let dispatcher = MockDispatcher {
+            response: std::sync::Arc::new(std::sync::Mutex::new(Some(mock_response))),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        // Verify agent was created with test doubles (no network calls)
+        assert_eq!(agent.event_handlers.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_mock_dispatcher_failed_scan() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let agent = Agent::new_for_test(
+            config,
+            Box::new(dispatcher),
+            Box::new(alert_sender),
+        ).await.unwrap();
+
+        // Attempt to execute scan, should fail with mock error
+        let result = agent.execute_scan("https://example.com", "recon").await;
+        assert!(result.is_err());
     }
 }
