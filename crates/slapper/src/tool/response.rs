@@ -300,6 +300,7 @@ mod tests {
             status_code: 200,
             response_time_ms: 150,
             response_length: Some(500),
+            response_body: None,
             is_waf_blocked: waf,
             is_anomaly: anomaly,
             is_redos_suspected: false,

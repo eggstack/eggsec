@@ -262,12 +262,14 @@ impl FuzzEngine {
             Ok(resp) => {
                 let status = resp.status().as_u16();
                 let length = resp.content_length();
+                let body = resp.text().await.ok();
 
                 Ok(FuzzResult {
                     payload: payload.clone(),
                     status_code: status,
                     response_time_ms: elapsed.as_millis() as u64,
                     response_length: length,
+                    response_body: body,
                     is_waf_blocked: false,
                     is_anomaly: false,
                     is_redos_suspected: false,
@@ -282,6 +284,7 @@ impl FuzzEngine {
                 status_code: 0,
                 response_time_ms: elapsed.as_millis() as u64,
                 response_length: None,
+                response_body: None,
                 is_waf_blocked: false,
                 is_anomaly: false,
                 is_redos_suspected: false,

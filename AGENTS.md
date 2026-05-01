@@ -48,6 +48,7 @@ crates/slapper/
 │   ├── fuzzer/        # Fuzzing engine (30 payload types)
 │   │   ├── chain.rs   # ChainExecutor (with LRU regex cache)
 │   │   ├── detection/ # TimingAnalyzer (lock-free with atomics)
+│   │   ├── filters.rs # Response filtering with regex support (stores compiled Regex)
 │   │   └── payloads/
 │   │       └── macros.rs  # payload_vec! macro
 │   ├── scanner/       # Port scanning, endpoint discovery
@@ -85,6 +86,9 @@ crates/slapper/
 - `SlapperConfig` - Main configuration (use `config::load_config()`)
 - `PathsConfig` - Directory paths (flattened into SlapperConfig)
 - `FuzzEngine` - Main fuzzing engine (returns `Result`)
+- `FuzzResult` - Fuzzing result in `fuzzer/engine/types.rs`:
+  - `response_body: Option<String>` - captured response body for regex matching
+  - Used by `filters::FilterChain` for regex-based filtering
 - `PayloadType` - Enum of 30 payload categories
 - `Severity` - Canonical severity rating (in `types.rs`, re-exported everywhere)
 - `SensitiveString` - Zeroized credential wrapper (in `types.rs`)

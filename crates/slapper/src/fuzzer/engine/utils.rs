@@ -199,56 +199,58 @@ pub(crate) async fn send_payload_async(
     let timing_result = timing.record(response_time);
 
     match response {
-        Ok(resp) => {
-            let status = resp.status().as_u16();
-            let content_length = resp.content_length();
+            Ok(resp) => {
+                let status = resp.status().as_u16();
+                let content_length = resp.content_length();
 
-            let body = resp.text().await.unwrap_or_default();
-            let leaks = pattern_matcher.scan(&body);
+                let body = resp.text().await.unwrap_or_default();
+                let leaks = pattern_matcher.scan(&body);
 
-            let is_waf_blocked = status == 403 || status == 406 || status == 429;
+                let is_waf_blocked = status == 403 || status == 406 || status == 429;
 
-            let owasp_str = payload.payload_type.to_string();
-            let detected_severity = compute_severity(
-                &payload.severity,
-                is_waf_blocked,
-                timing_result.is_redos_suspected,
-                !leaks.is_empty(),
-            );
+                let owasp_str = payload.payload_type.to_string();
+                let detected_severity = compute_severity(
+                    &payload.severity,
+                    is_waf_blocked,
+                    timing_result.is_redos_suspected,
+                    !leaks.is_empty(),
+                );
 
-            Ok(FuzzResult {
-                payload: payload.clone(),
-                status_code: status,
-                response_time_ms: timing_result.response_time_ms,
-                response_length: content_length,
-                is_waf_blocked,
-                is_anomaly: timing_result.is_anomaly,
-                is_redos_suspected: timing_result.is_redos_suspected,
-                leaks_found: leaks
-                    .iter()
-                    .map(|l| format!("{}: {}", l.category, l.pattern))
-                    .collect(),
-                error: None,
-                owasp_category: Some(owasp_str),
-                detected_severity,
-            })
-        }
-        Err(e) => {
-            let owasp_str = payload.payload_type.to_string();
-            Ok(FuzzResult {
-                payload: payload.clone(),
-                status_code: 0,
-                response_time_ms: timing_result.response_time_ms,
-                response_length: None,
-                is_waf_blocked: false,
-                is_anomaly: timing_result.is_anomaly,
-                is_redos_suspected: timing_result.is_redos_suspected,
-                leaks_found: Vec::new(),
-                error: Some(e.to_string()),
-                owasp_category: Some(owasp_str),
-                detected_severity: Severity::Info,
-            })
-        }
+                Ok(FuzzResult {
+                    payload: payload.clone(),
+                    status_code: status,
+                    response_time_ms: timing_result.response_time_ms,
+                    response_length: content_length,
+                    response_body: Some(body),
+                    is_waf_blocked,
+                    is_anomaly: timing_result.is_anomaly,
+                    is_redos_suspected: timing_result.is_redos_suspected,
+                    leaks_found: leaks
+                        .iter()
+                        .map(|l| format!("{}: {}", l.category, l.pattern))
+                        .collect(),
+                    error: None,
+                    owasp_category: Some(owasp_str),
+                    detected_severity,
+                })
+            }
+            Err(e) => {
+                let owasp_str = payload.payload_type.to_string();
+                Ok(FuzzResult {
+                    payload: payload.clone(),
+                    status_code: 0,
+                    response_time_ms: timing_result.response_time_ms,
+                    response_length: None,
+                    response_body: None,
+                    is_waf_blocked: false,
+                    is_anomaly: timing_result.is_anomaly,
+                    is_redos_suspected: timing_result.is_redos_suspected,
+                    leaks_found: Vec::new(),
+                    error: Some(e.to_string()),
+                    owasp_category: Some(owasp_str),
+                    detected_severity: Severity::Info,
+                })
+            }
     }
 }
 
