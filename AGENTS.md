@@ -70,9 +70,9 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1180 base, 1388 with full features |
-| Clippy | ~5 warnings (TUI-specific acceptable) |
-| Source files | 506 |
+| Tests | 1186 base, 1394 with full features |
+| Clippy | ~2 warnings (TUI-specific fixed) |
+| Source files | 743 |
 | Payload types | 30 |
 | Tabs | 29 |
 
@@ -82,5 +82,6 @@ Skills are located in:
 - `.opencode/skills/slapper-agent/` - Agent-specific workflows
 - `.opencode/skills/slapper-security/` - Security testing skill workflows
 - `.opencode/skills/slapper-tui/` - TUI module workflows
+- `.opencode/skills/tui-testing/` - TUI testing patterns and guides
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
