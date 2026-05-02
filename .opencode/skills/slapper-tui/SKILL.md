@@ -132,8 +132,22 @@ mod tests {
 2. Use `tc!` colors for severity
 3. Test that notification displays in status bar
 
-## Resources
+## Completed Workstreams (plans/plan.md)
+All 12 TUI workstreams completed as of 2026-05-02:
+1. Input cursor Unicode safety
+2. Search correctness
+3. Overlay input precedence
+4. Tab hit-testing/layout
+5. Keybinding alignment
+6. Export/unavailable action feedback
+7. Background task routing
+8. Focus navigation normalization
+9. Small-terminal layout robustness
+10. Theme/visual consistency
+11. Feature-gated tab consistency
+12. Dashboard data accuracy
 
+## Resources
 - `crates/slapper/src/tui/AGENTS.override.md` - Detailed TUI patterns
-- `plans/plan.md` - TUI improvement plan
+- `plans/plan.md` - TUI improvement plan (all workstreams complete)
 - `ARCHITECTURE.md` - Overall design
