@@ -205,6 +205,16 @@ Relevant files:
 - App-level tests for `execute_command("http")` and direct close behavior.
 - Regression test that Enter with a confirm popup does not call `handle_enter` on the active tab.
 
+### Status: COMPLETED (2026-05-01)
+
+- Added `OverlayType` enum with correct precedence (ConfirmPopup > CommandPalette > Search > HttpOptions > Help)
+- Implemented `topmost_overlay()` helper method in `App` matching required precedence
+- `Esc` key correctly closes only the topmost overlay via `topmost_overlay()`
+- HTTP options popup closes on `h` or `Esc` without affecting tab focus
+- Confirm popup Enter/Esc behavior is isolated from tab content handling
+- Added unit tests for `topmost_overlay()` precedence in `app/mod.rs`
+- All TUI tests pass
+
 ## Workstream 4: Correct Tab Hit-Testing And Tab Window Layout
 
 ### Problem
@@ -433,6 +443,15 @@ Relevant files:
 - Recon focus cycle forward/backward clears stale focused checkboxes and inputs.
 - Fuzz focus cycle includes Results or removes the unused Results variant.
 - Enter on selector/checkbox toggles only that control.
+
+### Status: COMPLETED (2026-05-01)
+
+- Fixed ReconTab::handle_focus_next to clear checkbox focus when leaving Options
+- Fixed ReconTab::handle_focus_prev to blur inputs when going to Results
+- Fixed FuzzTab::handle_focus_next to include Results in the focus cycle
+- Fixed FuzzTab::handle_focus_prev to go back to MutationCheckbox from Results
+- Added tests for Recon and Fuzz focus behavior
+- All 136 TUI tests pass (including new focus tests)
 
 ## Workstream 9: Improve Small-Terminal And Layout Robustness
 
