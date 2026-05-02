@@ -81,5 +81,6 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 Skills are located in:
 - `.opencode/skills/slapper-agent/` - Agent-specific workflows
 - `.opencode/skills/slapper-security/` - Security testing skill workflows
+- `.opencode/skills/slapper-tui/` - TUI module workflows
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.

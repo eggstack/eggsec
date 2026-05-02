@@ -46,7 +46,55 @@ pub struct TabWindow {
 - Don't use `Tab::all().len()` as visible count
 - Don't divide tab area by total tab count for mouse hit-testing
 
-## Theming
+### Feature-Gated Tab Helpers
+
+- `App::set_current_tab_if_available(tab: Tab) -> bool` - Set tab only if available for current feature set
+- Use this helper for mouse selection, `select_tab()`, and session restore
+
+## Notification System
+
+`App` has a `notification: Option<Notification>` field for user-visible feedback.
+
+```rust
+pub struct Notification {
+    pub message: String,
+    pub severity: NotificationSeverity,
+    pub created_at: std::time::Instant,
+    pub timeout_secs: u64,
+}
+
+pub enum NotificationSeverity {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+```
+
+- Set `app.notification = Some(Notification::new(msg, severity))` to show user feedback
+- `Notification::is_expired()` returns true after `timeout_secs` seconds
+- Status bar in `ui.rs` displays active notifications
+
+## Dynamic Layout Pattern
+
+For tabs with fixed-height sections, use dynamic constraints:
+
+```rust
+// Adapt config area to terminal height
+let config_height = if area.height <= 30 {
+    ((area.height as f32 * 0.8) as u16).max(10).min(27)
+} else {
+    27
+};
+
+let chunks = Layout::default()
+    .constraints([Constraint::Length(config_height), Constraint::Min(3)])
+    .split(area);
+```
+
+This ensures small terminals (< 24 rows) still show usable UI.
+
+## Theme
 
 `tc!` macro in `tui/theme.rs`:
 
