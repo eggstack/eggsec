@@ -106,7 +106,7 @@ impl<'a> TabDispatcher<'a> {
     }
 
     pub fn reset(&mut self) {
-        TabInput::reset(self.0);
+        self.0.reset();
     }
 
     pub fn is_running(&self) -> bool {

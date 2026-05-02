@@ -180,6 +180,9 @@ impl DashboardTab {
     pub fn update_from_history(&mut self, history: &[crate::tui::tabs::history::HistoryEntry]) {
         use std::collections::HashSet;
 
+        // Reset counters before recalculating
+        self.today_scans = 0;
+
         self.total_scans = history.len();
         self.successful_scans = history
             .iter()
@@ -439,9 +442,18 @@ impl TabState for DashboardTab {
     fn progress(&self) -> f64 {
         0.0
     }
-
     fn reset(&mut self) {
         self.state = AppState::Idle;
+        self.total_scans = 0;
+        self.successful_scans = 0;
+        self.failed_scans = 0;
+        self.today_scans = 0;
+        self.unique_targets = 0;
+        self.critical_findings = 0;
+        self.last_scan_type.clear();
+        self.last_target.clear();
+        self.sparkline_data.clear();
+        self.render_welcome();
     }
 }
 
@@ -504,5 +516,80 @@ impl DashboardTab {
 
     pub fn page_down(&mut self, count: usize) {
         self.view.scroll_down(count);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::tabs::history::HistoryEntry;
+
+    fn create_test_entry(timestamp: &str, summary: &str, scan_type: &str, target: &str) -> HistoryEntry {
+        use std::collections::VecDeque;
+        static mut NEXT_ID: usize = 0;
+        let id = unsafe {
+            NEXT_ID += 1;
+            NEXT_ID
+        };
+        HistoryEntry {
+            id,
+            timestamp: timestamp.to_string(),
+            scan_type: scan_type.to_string(),
+            target: target.to_string(),
+            summary: summary.to_string(),
+            details: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_update_from_history_idempotent_today_scans() {
+        let mut dashboard = DashboardTab::new();
+
+        // Create entries with today's date
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let entries = vec![
+            create_test_entry(&today, "Scan completed", "recon", "example.com"),
+            create_test_entry(&today, "Scan completed", "fuzz", "example.com"),
+        ];
+
+        // Call update_from_history twice
+        dashboard.update_from_history(&entries);
+        let first_count = dashboard.today_scans;
+
+        dashboard.update_from_history(&entries);
+        let second_count = dashboard.today_scans;
+
+        assert_eq!(first_count, second_count, "today_scans should be idempotent");
+        assert_eq!(second_count, 2, "Should have 2 today scans");
+    }
+
+    #[test]
+    fn test_reset_clears_stats() {
+        let mut dashboard = DashboardTab::new();
+
+        // Simulate some state
+        dashboard.total_scans = 10;
+        dashboard.successful_scans = 8;
+        dashboard.failed_scans = 2;
+        dashboard.today_scans = 5;
+        dashboard.unique_targets = 3;
+        dashboard.critical_findings = 1;
+
+        // Reset
+        dashboard.reset();
+
+        // Verify stats are reset
+        assert_eq!(dashboard.total_scans, 0);
+        assert_eq!(dashboard.successful_scans, 0);
+        assert_eq!(dashboard.failed_scans, 0);
+        assert_eq!(dashboard.today_scans, 0);
+        assert_eq!(dashboard.unique_targets, 0);
+        assert_eq!(dashboard.critical_findings, 0);
+
+        // Verify state is Idle
+        match dashboard.state {
+            crate::tui::tabs::AppState::Idle => (),
+            _ => panic!("State should be Idle after reset"),
+        }
     }
 }

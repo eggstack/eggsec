@@ -865,7 +865,7 @@ pub trait TabState {
     fn is_running(&self) -> bool {
         self.state() == AppState::Running
     }
-    fn reset(&mut self);
+    fn reset(&mut self) {}
     fn set_error(&mut self, _msg: String) {}
 }
 
@@ -930,7 +930,6 @@ pub trait TabInput: TabState {
     fn stop(&mut self) {}
     fn page_up(&mut self, _page_size: usize) {}
     fn page_down(&mut self, _page_size: usize) {}
-    fn reset(&mut self) {}
 }
 
 #[cfg(test)]
