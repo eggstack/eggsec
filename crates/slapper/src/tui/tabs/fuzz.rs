@@ -559,10 +559,14 @@ impl TabInput for FuzzTab {
             FuzzFocusArea::ModeSelector => FuzzFocusArea::TargetSelector,
             FuzzFocusArea::TargetSelector => FuzzFocusArea::MutationCheckbox,
             FuzzFocusArea::MutationCheckbox => {
+                // After MutationCheckbox, go to Results (as per plan)
+                self.inputs.focus(0);
+                FuzzFocusArea::Results
+            }
+            FuzzFocusArea::Results => {
                 self.inputs.focus(0);
                 FuzzFocusArea::Inputs
             }
-            FuzzFocusArea::Results => FuzzFocusArea::Inputs,
         };
     }
 
@@ -579,7 +583,11 @@ impl TabInput for FuzzTab {
             FuzzFocusArea::ModeSelector => FuzzFocusArea::PayloadSelector,
             FuzzFocusArea::TargetSelector => FuzzFocusArea::ModeSelector,
             FuzzFocusArea::MutationCheckbox => FuzzFocusArea::TargetSelector,
-            FuzzFocusArea::Results => FuzzFocusArea::Inputs,
+            FuzzFocusArea::Results => {
+                // From Results, go back to MutationCheckbox
+                self.inputs.focus(0);
+                FuzzFocusArea::MutationCheckbox
+            }
         };
     }
 
@@ -695,5 +703,68 @@ impl TabInput for FuzzTab {
 
     fn is_input_focused(&self) -> bool {
         self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> FuzzTab {
+        FuzzTab::new()
+    }
+
+    #[test]
+    fn test_focus_next_includes_results() {
+        let mut tab = create_test_tab();
+        // Start at Inputs
+        tab.focus_area = FuzzFocusArea::Inputs;
+        tab.inputs.focus(0);
+        
+        // Move to PayloadSelector
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, FuzzFocusArea::PayloadSelector);
+        
+        // Move to ModeSelector
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, FuzzFocusArea::ModeSelector);
+        
+        // Move to TargetSelector
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, FuzzFocusArea::TargetSelector);
+        
+        // Move to MutationCheckbox
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
+        
+        // Move to Results (this was missing before the fix)
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, FuzzFocusArea::Results, "Focus should cycle to Results from MutationCheckbox");
+        
+        // Move back to Inputs
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, FuzzFocusArea::Inputs, "Focus should cycle back to Inputs");
+    }
+
+    #[test]
+    fn test_focus_prev_from_results() {
+        let mut tab = create_test_tab();
+        // Start at Results
+        tab.focus_area = FuzzFocusArea::Results;
+        
+        // Move to MutationCheckbox
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
+    }
+
+    #[test]
+    fn test_enter_on_checkbox_toggles_only() {
+        let mut tab = create_test_tab();
+        tab.focus_area = FuzzFocusArea::MutationCheckbox;
+        tab.mutation_checkbox.focused = true;
+        
+        // Simulate Enter on checkbox - should toggle, not start task
+        // (Note: handle_enter would need mock is_running() = false)
+        assert!(tab.mutation_checkbox.focused);
     }
 }

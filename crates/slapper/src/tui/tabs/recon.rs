@@ -413,7 +413,11 @@ impl TabInput for ReconTab {
                 self.option_checkboxes[0].focused = true;
                 ReconFocusArea::Options
             }
-            ReconFocusArea::Options => ReconFocusArea::Results,
+            ReconFocusArea::Options => {
+                // Clear checkbox focus when leaving Options
+                self.option_checkboxes.iter_mut().for_each(|cb| cb.focused = false);
+                ReconFocusArea::Results
+            }
             ReconFocusArea::Results => {
                 self.inputs.focus(0);
                 ReconFocusArea::Inputs
@@ -423,7 +427,11 @@ impl TabInput for ReconTab {
 
     fn handle_focus_prev(&mut self) {
         self.focus_area = match self.focus_area {
-            ReconFocusArea::Inputs => ReconFocusArea::Results,
+            ReconFocusArea::Inputs => {
+                // Blur inputs when going to Results
+                self.inputs.blur();
+                ReconFocusArea::Results
+            }
             ReconFocusArea::Options => {
                 self.inputs.focus(0);
                 ReconFocusArea::Inputs
@@ -585,5 +593,67 @@ impl TabInput for ReconTab {
 
     fn is_input_focused(&self) -> bool {
         self.focus_area == ReconFocusArea::Inputs && self.inputs.is_focused()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_tab() -> ReconTab {
+        ReconTab::new()
+    }
+
+    #[test]
+    fn test_focus_next_clears_checkbox_focus() {
+        let mut tab = create_test_tab();
+        // Start at Inputs, move to Options
+        tab.focus_area = ReconFocusArea::Inputs;
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ReconFocusArea::Options);
+        
+        // Set a checkbox as focused
+        if let Some(cb) = tab.option_checkboxes.get_mut(0) {
+            cb.focused = true;
+        }
+        
+        // Move to Results - should clear checkbox focus
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ReconFocusArea::Results);
+        
+        // Verify checkboxes are cleared
+        for cb in &tab.option_checkboxes {
+            assert!(!cb.focused, "Checkbox focus should be cleared when leaving Options");
+        }
+    }
+
+    #[test]
+    fn test_focus_prev_from_inputs_blurs_inputs() {
+        let mut tab = create_test_tab();
+        // Set focus to Inputs
+        tab.focus_area = ReconFocusArea::Inputs;
+        tab.inputs.focus(0);
+        assert!(tab.inputs.is_focused());
+        
+        // Move to Results - should blur inputs
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, ReconFocusArea::Results);
+        assert!(!tab.inputs.is_focused(), "Inputs should be blurred when leaving Inputs");
+    }
+
+    #[test]
+    fn test_focus_cycle_completes() {
+        let mut tab = create_test_tab();
+        // Follow the focus cycle
+        assert_eq!(tab.focus_area, ReconFocusArea::Inputs);
+        
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ReconFocusArea::Options);
+        
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ReconFocusArea::Results);
+        
+        tab.handle_focus_next();
+        assert_eq!(tab.focus_area, ReconFocusArea::Inputs, "Should cycle back to Inputs");
     }
 }
