@@ -116,6 +116,61 @@ tc!(field_name)  // primary, secondary, accent, background, text, etc.
 
 Tabs use `FocusArea` enum for navigation between Inputs/Options/Results areas.
 
+## Overlay Precedence
+
+Use `OverlayType` enum and `topmost_overlay()` helper for overlay precedence:
+
+```rust
+pub enum OverlayType {
+    ConfirmPopup,   // Highest priority
+    CommandPalette,
+    Search,
+    HttpOptions,
+    Help,           // Lowest priority
+}
+
+pub fn topmost_overlay(&self) -> Option<OverlayType> {
+    if self.is_confirm_popup_visible() {
+        Some(OverlayType::ConfirmPopup)
+    } else if self.is_command_palette_visible() {
+        Some(OverlayType::CommandPalette)
+    } else if self.is_search_visible() {
+        Some(OverlayType::Search)
+    } else if self.is_http_options_visible() {
+        Some(OverlayType::HttpOptions)
+    } else if self.is_help_visible() {
+        Some(OverlayType::Help)
+    } else {
+        None
+    }
+}
+```
+
+Always use `topmost_overlay()` in event handling to ensure correct Esc key behavior.
+
+## Background Task Routing
+
+Use `task_tab: Option<Tab>` field to route background task results to the correct tab:
+
+```rust
+// When spawning task
+self.task_tab = Some(self.current_tab);
+
+// When processing results
+let tab = self.task_tab.unwrap_or(self.current_tab);
+
+// When task completes
+self.task_tab = None;
+```
+
+## Input Cursor Invariant
+
+`InputField::cursor_pos` uses byte index (not character count):
+- Use `value.len()` for end position
+- Use `c.len_utf8()` when incrementing
+- Use `prev.len_utf8()` when decrementing
+- Convert to char position only during rendering via `byte_to_char_pos()`
+
 ## Auto-Insert Mode
 
 Automatically switches to Insert mode when Tab/Shift+Tab focuses an input.
