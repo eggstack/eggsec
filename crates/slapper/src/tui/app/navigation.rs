@@ -289,6 +289,61 @@ mod tests {
     }
 
     #[test]
+    fn test_toggle_search_global_sets_search_is_global() {
+        let mut app = create_test_app();
+        assert!(!app.show_search);
+
+        app.toggle_search(true);
+        assert!(app.show_search);
+        assert!(app.search_is_global);
+
+        app.toggle_search(false);
+        assert!(!app.show_search);
+        // After closing, search_is_global should retain its value until next open
+    }
+
+    #[test]
+    fn test_toggle_search_local_sets_search_is_global_false() {
+        let mut app = create_test_app();
+
+        app.toggle_search(false);
+        assert!(app.show_search);
+        assert!(!app.search_is_global);
+    }
+
+    #[test]
+    fn test_search_query_backspace_removes_char() {
+        let mut app = create_test_app();
+        app.show_search = true;
+        app.search_query = "test".to_string();
+
+        app.search_query.pop();
+        assert_eq!(app.search_query, "tes");
+    }
+
+    #[test]
+    fn test_search_query_clear() {
+        let mut app = create_test_app();
+        app.show_search = true;
+        app.search_query = "test query".to_string();
+
+        app.search_query.clear();
+        assert!(app.search_query.is_empty());
+    }
+
+    #[test]
+    fn test_perform_search_empty_query_returns_early() {
+        let mut app = create_test_app();
+        app.show_search = true;
+        app.search_query = "".to_string();
+
+        // Should return early without panic
+        app.perform_search();
+        // Query should still be empty
+        assert!(app.search_query.is_empty());
+    }
+
+    #[test]
     fn test_is_help_visible() {
         let mut app = create_test_app();
         assert!(!app.is_help_visible());

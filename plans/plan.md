@@ -1,665 +1,383 @@
-# TUI Improvement Plan
+# TUI Style, Usability, And Navigation Improvement Plan
 
 ## Status
 
-Open. This plan replaces the completed agent-harness plan that previously lived in this file.
+Open. This file has been pruned: previously completed workstreams were removed from the active plan. The items below are not complete yet, or are intentionally deferred until the implementing agent can verify them in code.
 
-Scope is limited to the terminal UI under `crates/slapper/src/tui/`. The next agent should make code changes only after reading:
+Scope is limited to the terminal UI under `crates/slapper/src/tui/`.
+
+Before making changes, read:
 
 - `AGENTS.md`
 - `crates/slapper/src/tui/AGENTS.override.md`
 
 ## Goals
 
-- Make TUI behavior predictable across tabs, overlays, feature flags, and terminal sizes.
-- Fix concrete interaction bugs found in the current shell and shared components.
-- Improve visual consistency without large rewrites or unrelated feature work.
-- Add focused tests around interaction state, rendering helpers, and regression-prone navigation math.
+- Make TUI navigation predictable across normal mode, insert mode, overlays, tabs, selectors, checkboxes, and results panes.
+- Ensure `h` and `l` work correctly as left/right in-pane navigation, and do not conflict with tab switching or overlay close behavior.
+- Fix search and overlay interaction bugs that make visible keybindings lie to users.
+- Improve visual hierarchy and readability without broad rewrites.
+- Add focused regression tests so future TUI changes do not re-break navigation.
 
-## Relevant Files
+## Current Baseline
 
-- `crates/slapper/src/tui/ui.rs`
-- `crates/slapper/src/tui/app/mod.rs`
-- `crates/slapper/src/tui/app/runner.rs`
-- `crates/slapper/src/tui/app/navigation.rs`
-- `crates/slapper/src/tui/app/command.rs`
-- `crates/slapper/src/tui/app/state_update.rs`
-- `crates/slapper/src/tui/app/export.rs`
-- `crates/slapper/src/tui/components/input.rs`
-- `crates/slapper/src/tui/components/selector.rs`
-- `crates/slapper/src/tui/components/scrollable.rs`
-- `crates/slapper/src/tui/components/popup.rs`
-- `crates/slapper/src/tui/search.rs`
-- `crates/slapper/src/tui/session.rs`
-- `crates/slapper/src/tui/tabs/mod.rs`
-- Representative tab files to normalize first:
-  - `crates/slapper/src/tui/tabs/recon.rs`
-  - `crates/slapper/src/tui/tabs/fuzz.rs`
-  - `crates/slapper/src/tui/tabs/dashboard.rs`
-  - `crates/slapper/src/tui/tabs/history.rs`
-  - `crates/slapper/src/tui/tabs/oauth.rs`
-  - `crates/slapper/src/tui/tabs/proxy.rs`
-
-## Implementation Rules For The Next Agent
-
-- Keep changes scoped to the TUI.
-- Do not rewrite all tabs at once. Fix shared shell/components first, then normalize representative tabs, then apply repeated safe patterns across the rest.
-- Use `tc!` theme colors instead of direct `Color::*` in TUI rendering.
-- Preserve `Tab::all()`, `visible_index()`, and `stable_id()` semantics. Do not use enum discriminants for visible tab behavior.
-- Prefer small helper functions for repeated tab dispatch/status/export behavior, but avoid a broad architectural refactor unless tests are in place first.
-- Add or update tests near the changed module. Do not rely on manual terminal inspection alone.
-- After each workstream, run the smallest relevant check:
+Last verified command:
 
 ```bash
 cargo test --lib -p slapper tui::
-cargo check --lib -p slapper
 ```
 
-If a feature-gated tab is touched, also run the relevant feature check.
+Result: `136 passed`, with existing warnings unrelated to this plan.
 
-## Workstream 1: Fix Input Cursor And Unicode Safety
+This means the current TUI unit/render tests pass, but the tests do not cover several important event-loop paths and usability contracts described below.
 
-### Problem
+## Important Existing Constraints
 
-`InputField` mixes byte offsets and character counts. This can corrupt cursor placement and editing around multibyte text.
-
-Current examples:
-
-- `InputField::cursor_pos` is treated as a byte offset by `insert`, `backspace`, `delete`, `move_left`, and `move_right`.
-- `with_value` sets `cursor_pos = v.chars().count()`, which is not a byte index for non-ASCII input.
-- `move_end` also sets `cursor_pos = self.value.chars().count()`.
-- `render` compares `cursor_pos` to character counts and uses it to calculate cursor display position.
-
-Relevant file: `crates/slapper/src/tui/components/input.rs`.
-
-### Required Fix
-
-- Pick one invariant for `cursor_pos`; preferred: byte index at a valid UTF-8 boundary.
-- Update constructors and movement helpers to maintain that invariant.
-- Convert byte index to display character position only during rendering.
-- Ensure truncated display with `...` still places the cursor correctly when the value is wider than the field.
-- Consider `unicode-width` if the crate is already present or acceptable; otherwise document that visual width is char-based and keep byte safety correct.
-
-### Acceptance Criteria
-
-- With HTTP options visible, pressing `h` or `Esc` closes it and does not move focus or tabs.
-- With confirm visible, Enter confirms and Esc cancels; no other tab action runs.
-- Help, search, and command palette cannot all render over each other accidentally from normal key sequences.
-
-### Tests
-
-- Unit tests around any extracted overlay-precedence helper.
-- App-level tests for `execute_command("http")` and direct close behavior.
-- Regression test that Enter with a confirm popup does not call `handle_enter` on the active tab.
-
-### Status: COMPLETED (2026-05-01)
-
-- Added `OverlayType` enum to represent active overlay types
-- Added helper methods to `App`: `is_command_palette_visible()`, `is_search_visible()`, `is_http_options_visible()`, `is_help_visible()`, `topmost_overlay()`, `is_any_overlay_active()`
-- Updated `runner.rs` to use `topmost_overlay()` for Esc key handling
-- Added 'h' key handler to close HTTP options popup
-- Prevented tab content key handling when overlays are active
-- Updated mouse event handling to use new helper methods
-- Removed duplicate `is_help_visible()` from `navigation.rs`
-- All 124 TUI tests pass
-
-## Workstream 2: Make Search Actually Search The User's Query
-
-### Problem
-
-Global search is wired incorrectly.
-
-In `crates/slapper/src/tui/app/runner.rs`, `Ctrl+F` calls `search.search_from_strings(&app.search_query, &data)` before the user has typed the query, then sets `app.show_search = true`. Later typing updates `app.search_query`, but the global result set is not recomputed before `draw_search_results` is shown.
-
-History search is separate and only runs on Enter. The UI title says Search, while keybindings call it both Search and Global.
-
-Relevant files:
-
-- `crates/slapper/src/tui/app/runner.rs`
-- `crates/slapper/src/tui/app/navigation.rs`
-- `crates/slapper/src/tui/search.rs`
-- `crates/slapper/src/tui/ui.rs`
-
-### Required Fix
-
-- Separate "open search prompt" from "execute search".
-- Recompute global search when Enter is pressed or as the query changes, but do it consistently.
-- Define expected behavior:
-  - `/` should search within the current tab only if current-tab search exists; otherwise use the same prompt with a clear scope label.
-  - `Ctrl+F` should open global search.
-  - `Esc` closes search and restores any History filtering.
-  - `Enter` executes search and keeps results visible long enough to navigate them.
-- Add keyboard handling for global search result navigation (`Up`, `Down`, `Enter` to jump to result tab) or remove selected-state UI if navigation is not implemented.
-- Replace direct `Color::*` usage in `search.rs` with `tc!`.
-
-### Acceptance Criteria
-
-- Typing a query after `Ctrl+F` and pressing Enter searches current tab target strings.
-- Search results reflect the typed query, not the stale query from before the prompt opened.
-- Empty search shows a prompt, not stale previous results.
-- History search can be canceled and restores the original list.
-
-### Tests
-
-- `toggle_search` clears query and does not mutate history.
-- `perform_search` with History creates a backup once and restores it on cancel.
-- `GlobalSearch::search_from_strings("foo", data)` clears old selection and results.
-- A runner-level helper, if extracted, distinguishes `/` and `Ctrl+F` scopes.
-
-### Status: COMPLETED (2026-05-01)
-
-- Added `search_is_global` field to App to track search scope
-- Updated `toggle_search()` to accept `is_global` parameter
-- Updated `perform_search()` to handle both global and current-tab search
-- `Ctrl+F` now opens search prompt without searching (search on Enter)
-- `/` key does current-tab search, `Ctrl+F` does global search
-- Replaced `Color::*` with `tc!` theme colors in `search.rs`
-- Updated all callers of `toggle_search()` to pass the parameter
-- All 124 TUI tests pass
-
-## Workstream 3: Fix Modal And Overlay Input Precedence
-
-### Problem
-
-Overlay behavior is inconsistent. Some overlays are rendered after content, but input routing does not always give them first priority.
-
-Specific issues:
-
-- `show_http_options` popup title says "press h to close", but `runner.rs` has no direct `h` close path for that popup. While the popup is visible, `h` can still be processed as normal left navigation.
-- Confirm popups render Yes/No buttons, but there is no Tab/Left/Right selection state wired into `PendingAction`; Enter always confirms and Esc cancels.
-- Help popup renders a "Close" button but button state is not interactive.
-- Command palette input is handled before ordinary Tab focus, but `Esc` is handled earlier globally; verify it consistently closes the topmost overlay first.
-- Search, help, command palette, HTTP options, and confirm popup can potentially conflict because there is no single overlay stack or precedence helper.
-
-Relevant files:
-
-- `crates/slapper/src/tui/ui.rs`
-- `crates/slapper/src/tui/app/runner.rs`
-- `crates/slapper/src/tui/app/command.rs`
-- `crates/slapper/src/tui/components/popup.rs`
-- `crates/slapper/src/tui/app/mod.rs`
-
-### Required Fix
-
-- Introduce a small central "active overlay" decision helper, or equivalent ordered checks, with this precedence:
+- Use `Tab::all()`, `Tab::visible_index()`, and stable IDs for tab availability. Do not use enum discriminants for visible tab navigation.
+- Use `App::set_current_tab_if_available(tab)` when switching tabs from commands, mouse, session restore, or numeric selection.
+- Preserve overlay precedence:
   1. Confirm popup
   2. Command palette
   3. Search
   4. HTTP options
   5. Help
   6. Tab content
-- Ensure `Esc` closes only the topmost overlay.
-- Make popup button labels match behavior. If confirm remains Enter/Esc only, render "Enter: Confirm" and "Esc: Cancel" instead of fake selectable buttons.
-- Make HTTP options close on `h`, `Esc`, or the command palette command, matching visible copy.
-- Prevent tab content navigation and task starts while any overlay is active.
+- `InputField::cursor_pos` should remain a byte index at a valid UTF-8 boundary. Convert to display/char position only during rendering.
+- Use `tc!` semantic theme colors in TUI rendering.
+- Keep changes scoped and incremental. Fix shared shell behavior first, then representative tabs, then repeated patterns.
 
-### Acceptance Criteria
+## Workstream 1: Fix Search Event Routing And Scope
 
-- With HTTP options visible, pressing `h` or `Esc` closes it and does not move focus or tabs.
-- With confirm visible, Enter confirms and Esc cancels; no other tab action runs.
-- Help, search, and command palette cannot all render over each other accidentally from normal key sequences.
+**Status: COMPLETED** (2026-05-02, commit on branch `fix/workstream1-search-routing`)
 
-### Tests
-
-- Unit tests around any extracted overlay-precedence helper.
-- App-level tests for `execute_command("http")` and direct close behavior.
-- Regression test that Enter with a confirm popup does not call `handle_enter` on the active tab.
-
-### Status: COMPLETED (2026-05-01)
-
-- Added `OverlayType` enum with correct precedence (ConfirmPopup > CommandPalette > Search > HttpOptions > Help)
-- Implemented `topmost_overlay()` helper method in `App` matching required precedence
-- `Esc` key correctly closes only the topmost overlay via `topmost_overlay()`
-- HTTP options popup closes on `h` or `Esc` without affecting tab focus
-- Confirm popup Enter/Esc behavior is isolated from tab content handling
-- Added unit tests for `topmost_overlay()` precedence in `app/mod.rs`
-- All TUI tests pass
-
-## Workstream 4: Correct Tab Hit-Testing And Tab Window Layout
+### Changes Made
+- Fixed `Ctrl+F` handler in `runner.rs` to use `toggle_search(true)` instead of directly setting `app.show_search = true`
+- Updated overlay guard to properly handle `Enter` (calls `perform_search()`), `Backspace` (pops from query), and `Ctrl+U` (clears query) when search is visible
+- Removed redundant search handling from later in the match statement (Enter handler and Char handler)
+- Added tests for `search_is_global` flag, search query manipulation, and `perform_search()` with empty query
 
 ### Problem
 
-Tab rendering uses Ratatui `Tabs`, but mouse hit-testing approximates each visible tab with equal widths in `TabWindow::visible_tab_spans`. This does not match the rendered title widths, so clicking long or short tabs can select the wrong tab.
+Search is currently blocked by event routing in `crates/slapper/src/tui/app/runner.rs`.
 
-Relevant files:
+Specific issues:
 
-- `crates/slapper/src/tui/tabs/mod.rs`
-- `crates/slapper/src/tui/ui.rs`
-- `crates/slapper/src/tui/app/runner.rs`
+- The overlay guard at roughly `runner.rs:356` catches `app.is_search_visible()` before the later `Enter`, `Backspace`, and search character handlers.
+- While search is open, plain characters append to `app.search_query`, but `Enter` does not run `perform_search()` and `Backspace` does not edit the query.
+- `Ctrl+F` directly sets `app.show_search = true` around `runner.rs:246`, bypassing `toggle_search(true)`, so `search_is_global` is not reliably set.
+- `/` should open current-tab search and `Ctrl+F` should open global search. The current implementation does not consistently enforce that distinction.
 
 ### Required Fix
 
-- Make hit-testing use the same width model as rendering.
-- Include title widths and any spacing Ratatui applies between tab titles.
-- Account for border offset and range text in the title.
-- Preserve the existing `TabWindow` model and tests.
-- Consider showing previous/next markers in the tab bar content, not only `Slapper[1-8/20]`, so users understand that more tabs exist.
+- Route all key input through the active overlay first. For `OverlayType::Search`, handle:
+  - `Esc`: close search and restore any History backup.
+  - `Enter`: run `perform_search()`.
+  - `Backspace`: remove one char from `search_query`.
+  - Plain chars: append to `search_query`.
+  - Optional: `Ctrl+U` clears the query if that fits existing style.
+- Replace direct `app.show_search = true` in the `Ctrl+F` handler with `app.toggle_search(true)` or an explicit helper that sets `search_is_global = true` and clears stale query/results.
+- Ensure `/` uses `toggle_search(false)`.
+- Clear stale global search results when opening a new empty global search prompt.
+- Keep History local search behavior intact: cancel should restore the original entries.
 
 ### Acceptance Criteria
 
-- Clicking the visible text for every visible tab selects that tab.
-- Clicking between tabs does not select an adjacent tab unexpectedly.
-- Narrow terminal widths still keep current tab visible.
+- Pressing `Ctrl+F`, typing a query, and pressing `Enter` performs global search using the typed query.
+- Pressing `/`, typing a query, and pressing `Enter` performs local/current-tab search where supported.
+- `Backspace` works while the search prompt is open.
+- `Esc` closes search and restores History filtering if applicable.
+- Empty queries do not show stale previous results.
 
 ### Tests
 
-- Add `visible_tab_spans` tests with uneven title widths.
-- Add tests for narrow widths and scrolled windows.
-- Add a regression test for clicking a long title such as Scan Endpoints.
+- Add unit tests for a small extracted search-key handler if one is introduced.
+- Add app-level tests for `toggle_search(true)` and `toggle_search(false)` setting `search_is_global` correctly.
+- Add regression tests for `perform_search()` clearing or replacing stale global results.
+- If event-loop logic remains hard to unit test, extract a pure helper that takes key/modifier plus overlay state and returns the intended action.
 
-### Status: COMPLETED (2026-05-01)
-
-- Updated `visible_tab_spans()` in `tabs/mod.rs` to use actual title widths instead of equal division
-- Added test module with 4 tests for tab hit-testing
-- Tests compile and run (though test discovery may need verification)
-- All 124 TUI tests pass
-
-## Workstream 5: Align Help, Status Bar, And Actual Keybindings
+## Workstream 2: Define And Enforce `h/l` Navigation Semantics
 
 ### Problem
 
-Several visible instructions are stale or misleading.
+The user specifically asked to ensure `h/l` works correctly for navigation. Current behavior is partly correct but inconsistent across tabs and easy to regress.
 
-Examples:
+Current global behavior:
 
-- Help says `e` exports JSON, but runner only implements `Shift+E` to cycle export format and command palette `export` to export. No plain `e` key export path exists in `runner.rs`.
-- Help says `h/l - Previous/Next tab`, but `h/l` are input/result navigation in Normal mode; tab navigation is `n/N`, `p`, `Shift+H`, and `Shift+L`.
-- Status bar says `Ctrl+Z Resume` when paused, but actual resume is `Ctrl+Y`; `Ctrl+Z` toggles pause.
-- Dashboard says Enter starts a scan, but `DashboardTab::handle_enter` is empty.
-- Search help says `Ctrl+F Global`, but search prompt behavior is currently not global-search-complete.
+- In Normal mode, `h` and Left call `app.handle_left()`.
+- In Normal mode, `l` and Right call `app.handle_right()`.
+- `n`, `N`, `p`, `Shift+H`, and `Shift+L` switch tabs.
+- In Insert mode, `h` and `l` should type literal characters into focused inputs.
+- When HTTP options is visible, `h` closes that popup and must not move focus.
 
-Relevant files:
+Risks found:
 
-- `crates/slapper/src/tui/components/popup.rs`
-- `crates/slapper/src/tui/ui.rs`
-- `crates/slapper/src/tui/tabs/dashboard.rs`
-- `crates/slapper/src/tui/app/runner.rs`
+- `App::handle_left()` and `App::handle_right()` check `is_at_left_edge()` / `is_at_right_edge()` before calling tab handlers. Some tab implementations return `true` for non-input regions or incomplete edge state, which can make `h/l` feel dead.
+- `handle_left_or_prev_tab()` and `handle_right_or_next_tab()` exist in `app/mod.rs` but are not wired to the main `h/l` path. Confirm whether they are unused; remove them if dead or use them deliberately.
+- Several tabs implement `handle_left` / `handle_right` ad hoc. Some use left/right to move between controls, some move within inputs, some return `true` without meaningful movement.
+- Recon has `is_at_right_edge()` comparing byte cursor to `field.value.chars().count()`, which is wrong for non-ASCII input and can block or allow `l` incorrectly.
+- Fuzz implements left/right across controls but does not implement `is_at_left_edge()` / `is_at_right_edge()`, so defaults may not reflect actual focus movement.
+
+### Required Contract
+
+Document this contract near `TabInput` or in a short helper comment:
+
+- `h` / Left in Normal mode means "move left within the current focused region."
+- `l` / Right in Normal mode means "move right within the current focused region."
+- `h/l` must not switch tabs. Tab switching remains `n`, `N`, `p`, `Shift+H`, and `Shift+L`.
+- In Insert mode, `h/l` are text input and must not navigate.
+- If a selector/dropdown is focused, `h/l` should change selector value only if the selector supports horizontal movement. If unsupported, they should return `false` without changing unrelated focus.
+- If an input is focused, `h/l` should move the input cursor. Edge checks must use byte-position invariants correctly.
+- If a checkbox group is focused, `h/l` should move among checkboxes only when the checkboxes are visually arranged horizontally. For vertical checkbox lists, prefer `j/k` or Up/Down and let `h/l` return `false`.
+- If Results is focused, `h/l` should either do nothing or move horizontal result focus if implemented. Scrolling remains `j/k`, Up/Down, PageUp/PageDown, `Ctrl+U`, and `Ctrl+D`.
+- Overlay-active states always win over tab content. For example, `h` closes HTTP options; it does not navigate the active tab.
 
 ### Required Fix
 
-- Audit all visible keybinding text against `runner.rs`.
-- Decide whether missing bindings should be implemented or documentation should be corrected. Prefer implementing only low-risk expected bindings:
-  - Plain `e` in Normal mode should call `export_results()` if help continues to advertise it.
-  - Dashboard Enter should either jump to a sensible first scan tab or the text should stop saying it starts a scan.
-- Status bar should prioritize task-relevant hints and avoid overflowing small terminals.
-- Use consistent labels: `Normal`, `Insert`, `Search`, `Palette`, `Paused`.
+- Audit all `impl TabInput for ...` implementations under `crates/slapper/src/tui/tabs/`.
+- For each tab, verify `handle_left`, `handle_right`, `is_at_left_edge`, and `is_at_right_edge` match the contract.
+- Fix byte-vs-char edge checks. Any input cursor edge check should compare against `field.value.len()` if `cursor_pos` is the byte index.
+- For tabs with selector components, inspect `crates/slapper/src/tui/components/selector.rs`; `Selector::handle_left()` and `handle_right()` are currently empty around `selector.rs:238`. Either implement meaningful selector left/right behavior or stop calling these no-op methods from tabs.
+- Decide whether `App::handle_left()` should call tab `handle_left()` even when `is_at_left_edge()` says true. Current pre-check can hide useful tab-specific behavior if edge predicates are inaccurate. A safer pattern may be: call `handle_left()` and let the tab return whether it moved.
+- If keeping the pre-check, add tests proving every representative tab reports edge state correctly.
+- Remove or wire `handle_left_or_prev_tab()` and `handle_right_or_next_tab()` intentionally. Do not leave misleading unused helpers with names suggesting tab switching.
 
-### Acceptance Criteria
-
-- Every key shown in help/status/dashboard either works or is removed.
-- Paused status tells the user the correct resume key.
-- Compact status text remains readable at 80 columns.
-
-### Tests
-
-- Add tests for any extracted keybinding-description helper.
-- Add a runner/app command test for plain export if implemented outside the event loop.
-
-### Status: COMPLETED (2026-05-01)
-
-- Fixed dashboard help text (h/l -> n/p, Shift+H/L for tab navigation)
-- Fixed popup help text (removed incorrect h/l for tab navigation)
-- Fixed status bar text (Ctrl+Z Pause/Resume, added Ctrl+Y for resume)
-- Implemented 'e' key to export results
-- Implemented Dashboard Enter to jump to Recon tab
-- Added should_quit check in run_app()
-- Added Notification struct and methods to App (infrastructure for Workstream 6)
-
-## Workstream 6: Add User-Visible Feedback For Export And Unavailable Actions
-
-### Problem
-
-Export and some unavailable actions only log with `tracing`, which is invisible to most TUI users.
-
-Examples:
-
-- `export_json` silently does nothing when no results exist.
-- Unsupported tab exports log warnings but do not update the UI.
-- `save_export` logs success or failure but status bar does not show the outcome.
-- Command palette `quit` sets `should_quit`, but `run_app` never checks `app.should_quit`, so palette quit likely does not quit.
-
-Relevant files:
-
-- `crates/slapper/src/tui/app/export.rs`
-- `crates/slapper/src/tui/app/command.rs`
-- `crates/slapper/src/tui/app/runner.rs`
-- `crates/slapper/src/tui/ui.rs`
-- `crates/slapper/src/tui/app/mod.rs`
-
-### Required Fix
-
-- Add a lightweight TUI notification/status message field to `App`, with optional severity and timeout.
-- Show export success, no data, invalid export directory, and write errors in the status bar or a small non-blocking message area.
-- Make `CommandPalette` quit/exit honored by the event loop by checking `app.should_quit`.
-- Avoid overwriting task error states with generic notifications.
-
-### Acceptance Criteria
-
-- Export with no data tells the user "No exportable data for this tab."
-- Successful export shows the file path or filename.
-- Palette command `quit` exits when idle.
-- Errors remain visible until the next user action or a short timeout.
-
-### Tests
-
-- `execute_command("quit")` sets `should_quit`, and any extracted loop helper honors it.
-- Export no-data path sets a notification.
-- Invalid export directory sets an error notification.
-
-### Status: COMPLETED (2026-05-02)
-
-- Added `Notification` struct and methods to `App` (infrastructure)
-- Added `should_quit` check in `run_app()` - DONE
-- Implemented 'e' key to export results - DONE
-- Implemented Dashboard Enter to jump to Recon tab - DONE
-- Fixed keybinding text in dashboard, popup, and status bar - DONE
-- Integrated notifications into `export.rs` (replaced tracing calls with user-visible notifications)
-- Implemented full notification display in status bar (`ui.rs` `draw_status_bar`)
-- All TUI tests pass (134 tests)
-
-## Workstream 7: Route Background Results To The Tab That Started The Task
-
-### Problem
-
-Progress and error updates are applied to `current_tab`, not necessarily the tab that started the task.
-
-Examples:
-
-- `update_progress` matches on `self.current_tab`.
-- `TaskResult::Error(msg)` calls `set_error_for_current_tab(msg)`.
-- If a user starts a scan and navigates away, progress or errors can update the wrong tab or disappear.
-- Successful `TaskResult` variants update specific tabs, but error/progress routing is not task-aware.
-
-Relevant file: `crates/slapper/src/tui/app/state_update.rs`.
-
-### Required Fix
-
-- Track the tab associated with the active task when spawning it.
-- Route progress and error updates to that tab.
-- Decide whether multiple concurrent tasks are supported. Current `task_handle: Option<JoinHandle<()>>` implies one active task; document and enforce that.
-- Status bar should show global running state if a task is running in another tab.
-
-### Acceptance Criteria
-
-- Start a task, switch tabs, then progress updates the original tab.
-- Errors from a task appear on the original tab.
-- Status bar indicates a background task is running even when viewing a different tab.
-
-### Tests
-
-- Unit test an extracted `set_error_for_tab(tab, msg)` helper.
-- Unit test progress routing with an active-task tab field.
-- Regression test that switching tabs before an error does not set error on the new tab.
-
-### Status: COMPLETED (2026-05-01)
-
-- Added `task_tab: Option<Tab>` field to App struct
-- Initialized `task_tab: None` in `new_inner()`
-- Updated `spawn_task()` in task_management.rs to set `task_tab = Some(self.current_tab)`
-- Updated `update_progress()` in state_update.rs to use `task_tab` instead of `self.current_tab`
-- Updated `set_error_for_current_tab()` in state_update.rs to use `task_tab` with fallback to `current_tab`
-- Updated `update()` to clear `task_tab` when `result_rx` is closed
-- Updated `stop()` to clear `task_tab`
-- All 124 TUI tests pass
-
-## Workstream 8: Normalize Focus Navigation Across Tabs
-
-### Problem
-
-Focus behavior differs between tabs and sometimes strands focus.
-
-Examples:
-
-- `ReconTab::handle_focus_next` moves from Options to Results without clearing checkbox focus.
-- `ReconTab::handle_focus_prev` from Inputs to Results does not blur the current input.
-- `FuzzTab::FuzzFocusArea::Results` exists but `handle_focus_next` never reaches Results from MutationCheckbox; results scrolling is mostly reached indirectly.
-- Many tabs use ad hoc `FocusArea` and input handling, leading to inconsistent Tab/Shift+Tab, Enter, Escape, and arrow behavior.
-
-Relevant files:
+### Representative Tabs To Normalize First
 
 - `crates/slapper/src/tui/tabs/recon.rs`
 - `crates/slapper/src/tui/tabs/fuzz.rs`
-- Other tab files with `FocusArea` enums.
-- `crates/slapper/src/tui/app/mod.rs`
+- `crates/slapper/src/tui/tabs/load.rs`
+- `crates/slapper/src/tui/tabs/proxy.rs`
+- `crates/slapper/src/tui/tabs/packet.rs`
+- `crates/slapper/src/tui/tabs/settings/input.rs`
+- `crates/slapper/src/tui/tabs/history.rs`
 
-### Required Fix
+After those are correct, apply the same pattern to feature-gated tabs:
 
-- Define a focus contract in comments or a small helper:
-  - `Tab` cycles focus regions.
-  - `Shift+Tab` cycles backward.
-  - `Enter` edits/toggles focused controls; starts task only when not editing a field/control.
-  - `Esc` closes dropdowns or blurs inputs; second Esc returns to Normal mode.
-  - Results focus enables scroll keys.
-- Normalize Recon and Fuzz first, then apply the same pattern to tabs with obvious drift.
-- Ensure auto-insert mode in `App::handle_focus_next/prev` still matches focused input state.
+- `browser.rs`
+- `compliance.rs`
+- `integrations.rs`
+- `workflow.rs`
+- `vuln.rs`
+- `nse.rs`
+- `plugin.rs`
+- `storage.rs`
+- `hunt.rs`
 
 ### Acceptance Criteria
 
-- Focus indicators are visible and only one control group appears focused at a time.
-- Results panes can be focused and scrolled predictably.
-- Enter does not accidentally start a task while a selector or checkbox has focus.
+- In Normal mode, `h/l` move within focused controls consistently and never switch tabs.
+- In Insert mode, typing `h` or `l` inserts text into the focused field.
+- In HTTP options overlay, `h` closes only the overlay.
+- On an input containing non-ASCII text, repeated `l` reaches the true end and repeated `h` reaches the beginning without getting stuck or splitting a character.
+- On selector-focused tabs, `h/l` either visibly change the selector value or do nothing predictably; they must not silently move unrelated focus.
+- On checkbox groups, `h/l` behavior matches the visual layout.
 
 ### Tests
 
-- Recon focus cycle forward/backward clears stale focused checkboxes and inputs.
-- Fuzz focus cycle includes Results or removes the unused Results variant.
-- Enter on selector/checkbox toggles only that control.
+- Add tests for App-level mode behavior: Normal `h/l` dispatches movement; Insert `h/l` inserts characters.
+- Add Recon regression test for non-ASCII cursor edge behavior.
+- Add Fuzz tests for left/right focus movement across `PayloadSelector`, `ModeSelector`, `TargetSelector`, and `MutationCheckbox`.
+- Add Load/Proxy/Packet selector tests if selector left/right is implemented.
+- Add a test that HTTP options visible plus `h` closes the overlay without changing the current tab or focus region.
 
-### Status: COMPLETED (2026-05-01)
-
-- Fixed ReconTab::handle_focus_next to clear checkbox focus when leaving Options
-- Fixed ReconTab::handle_focus_prev to blur inputs when going to Results
-- Fixed FuzzTab::handle_focus_next to include Results in the focus cycle
-- Fixed FuzzTab::handle_focus_prev to go back to MutationCheckbox from Results
-- Added tests for Recon and Fuzz focus behavior
-- All 136 TUI tests pass (including new focus tests)
-
-## Workstream 9: Improve Small-Terminal And Layout Robustness
+## Workstream 3: Align Help And Status Text With Real Navigation
 
 ### Problem
 
-Several layouts assume more height than the runner only warns about. At small sizes, fixed `Constraint::Length` blocks can leave no useful results area or cause overlays to dominate the screen.
+Visible hints are too long and some are ambiguous.
 
-Examples:
+Current areas:
 
-- Fuzz uses a fixed 27-line config area.
-- Recon uses a fixed 16-line config area.
-- OAuth uses fixed 16 + 6 + min 5 structure.
-- Help popup requests 70x35 even though the runner only recommends 80x24.
-- Status bar horizontally splits into fixed and percentage chunks that can truncate both status and help.
+- `crates/slapper/src/tui/ui.rs` status bar around `draw_status_bar`.
+- `crates/slapper/src/tui/components/popup.rs` help popup.
+- Per-tab empty states and quick-action text.
 
-Relevant files:
+Known issues:
 
-- `crates/slapper/src/tui/ui.rs`
-- `crates/slapper/src/tui/components/popup.rs`
-- `crates/slapper/src/tui/tabs/fuzz.rs`
-- `crates/slapper/src/tui/tabs/recon.rs`
-- `crates/slapper/src/tui/tabs/oauth.rs`
-- Similar tab files with large fixed input sections.
+- The status bar help string is much wider than the help chunk at 80 columns. At roughly `ui.rs:628`, the chunks reserve fixed mode width plus percentage status/help widths; the help string can be truncated to around 30 columns.
+- The help text should make clear that `h/l` are in-pane navigation, while tabs use `n/p` and `Shift+H/L`.
+- Paused state should show the correct resume key. `Ctrl+Z` toggles pause; `Ctrl+Y` resumes if paused.
+- Help text should not advertise commands that are blocked by overlays or current mode.
 
 ### Required Fix
 
-- Add small-area fallbacks for major tab layouts.
-- For input-heavy tabs, consider a two-column layout on wide terminals and a scrollable config/results split on short terminals.
-- Clamp popup height and content display; use scrollable help content if needed.
-- Ensure status bar text does not overlap or become nonsensical at 80 columns and below.
+- Create a concise keybinding summary helper based on mode and overlay state. This can live in `ui.rs` or a small helper module.
+- Prefer short, accurate status hints over exhaustive shortcut lists.
+- At 80 columns, show only the most important actions:
+  - Normal: `[n/p] Tabs [h/j/k/l] Move [/] Search [Space] Help [q] Quit`
+  - Insert: `[Esc] Normal [Ctrl+V] Paste`
+  - Search: `[Enter] Search [Backspace] Edit [Esc] Close`
+  - Palette: `[Enter] Run [Up/Down] Select [Esc] Close`
+  - Confirm: `[Enter] Confirm [Esc] Cancel`
+- Keep detailed keybindings in the help popup, but audit every line against `runner.rs`.
+- Ensure help popup explicitly says `h/l` are left/right within the current pane, not previous/next tab.
 
 ### Acceptance Criteria
 
-- At 80x24, all core tabs show at least one usable input region and one meaningful results/status region.
-- At smaller sizes, the UI shows a clear "terminal too small" or compact fallback rather than broken layout.
-- Help popup fits within the screen and remains readable.
+- Every visible keybinding either works or is removed.
+- `h/l` help copy matches the navigation contract from Workstream 2.
+- Status bar is readable at 80x24 and does not depend on a huge third column.
+- Overlay-specific hints appear when overlays are active.
 
 ### Tests
 
-- Snapshot-like rendering tests using `ratatui::backend::TestBackend` for 80x24 on Recon, Fuzz, Dashboard, and History.
-- Tests that popup `centered_rect` never creates zero-width/zero-height invalid areas for small screens.
+- Unit test any keybinding summary helper for Normal, Insert, Search, Palette, Confirm, and Help contexts.
+- Render tests using `TestBackend` for 80x24 should assert no panic and optionally inspect buffer text for the compact hints.
 
-### Status: COMPLETED (2026-05-02)
-
-- Made fuzz.rs layout dynamic (config area adapts to terminal height)
-- Made recon.rs layout dynamic (input area adapts to terminal height)
-- Made oauth.rs layout dynamic (input/options/results adapt to terminal height)
-- Help popup already clamped via `centered_rect` function
-- All 134 TUI tests pass
-- Small terminals (height < 24) now show compact layouts
-
-## Workstream 10: Theme And Visual Consistency Pass
+## Workstream 4: Improve Small-Terminal Layout Robustness
 
 ### Problem
 
-The TUI has partial theming but still uses direct colors and inconsistent emphasis.
+Some tabs still reserve too much fixed height or width for common terminal sizes.
 
 Examples:
 
-- `search.rs` uses `Color::Cyan`, `Color::Gray`, `Color::Yellow`, `Color::White`.
-- Some tab files import direct `Color` or use hard-coded Unicode status glyphs without fallback.
-- Checkboxes use `[✓]`, while the codebase otherwise tries to stay simple and terminal-compatible.
-- Empty states vary between CLI examples, instructions, and blank placeholder copy.
-
-Relevant files:
-
-- `crates/slapper/src/tui/search.rs`
-- `crates/slapper/src/tui/tabs/vuln.rs`
-- `crates/slapper/src/tui/tabs/dashboard.rs`
-- `crates/slapper/src/tui/components/selector.rs`
-- `crates/slapper/src/tui/components/popup.rs`
+- `crates/slapper/src/tui/tabs/load.rs` reserves `6 + 15` rows before results, leaving almost no results area after global chrome on a 24-row terminal.
+- `crates/slapper/src/tui/tabs/settings/render.rs` reserves a fixed 20-column sidebar, which is heavy on narrow terminals.
+- Similar fixed-height input regions remain in tabs such as `scan_ports.rs`, `scan_endpoints.rs`, `waf.rs`, `packet.rs`, `graphql.rs`, `report.rs`, and `cluster.rs`.
+- The runner only warns below 80x24; it does not prevent broken layouts.
 
 ### Required Fix
 
-- Replace direct `Color::*` with semantic `tc!` colors.
-- Standardize empty states:
-  - Title
-  - One concise instruction
-  - Optional CLI equivalent
-- Standardize success/warning/error color usage.
-- Decide whether Unicode glyphs are acceptable. If keeping them, verify common terminals; otherwise use ASCII-friendly symbols in shared controls.
-- Keep visual polish restrained and information-dense; this is a security toolkit, not a landing-page UI.
+- Add dynamic layout helpers for common patterns:
+  - Input section plus results section.
+  - Selector plus input block plus results section.
+  - Sidebar plus content.
+- For height-constrained terminals, preserve at least one usable input/control area and one meaningful status/results area.
+- For very small screens, show a clear compact fallback or "terminal too small" message instead of rendering cramped controls.
+- Avoid copying Fuzz's exact dynamic layout everywhere if a helper can capture the pattern cleanly.
 
 ### Acceptance Criteria
 
-- No direct `Color::White`, `Color::Gray`, `Color::Green`, or `Color::Red` in TUI rendering.
-- Search, popup, selector, checkbox, and status visuals follow theme semantics.
-- Empty states look consistent across representative tabs.
+- At 80x24, core tabs render a visible input/control region and visible results/status region.
+- At 60x20 and 40x20, core tabs do not panic and do not render obviously incoherent layouts.
+- Settings remains navigable on narrow terminals.
+- Load, Recon, Fuzz, History, Dashboard, Settings, Proxy, and Packet have explicit render tests.
 
 ### Tests
 
-- Add lightweight grep/check guidance in PR notes; do not add brittle tests for every color.
-- Existing TUI tests should still pass.
+- Add or extend `ratatui::backend::TestBackend` render tests for:
+  - 80x24
+  - 60x20
+  - 40x20
+  - 120x24
+- Include late/scrolled tab positions so the tab strip remains covered.
 
-### Status: COMPLETED (2026-05-02)
-
-- Direct `Color::*` usage replaced with `tc!` theme colors (completed in Workstream 5)
-- Unicode glyphs (✓/✗) use `tc!` colors for consistency
-- Empty states follow pattern: Title + Instruction + Optional CLI example
-- All 134 TUI tests pass
-
-## Workstream 11: Feature-Gated Tabs And Command Palette Consistency
+## Workstream 5: Theme And Visual Consistency Pass
 
 ### Problem
 
-Some code paths still refer to feature-gated tabs even when unavailable. `Tab::all()` filters them, but command execution and fallback render/dispatch paths can still select unavailable tabs or route them to Dashboard internals.
+The TUI has semantic theme colors, but visual weight and contrast are inconsistent.
 
 Examples:
 
-- `dispatcher_mut` maps unavailable feature tabs to `dashboard`.
-- `draw_content` has no-op branches for unavailable tabs.
-- Command palette can navigate to commands without verifying `Tab::all()` availability if entries include gated commands.
-- Session restore correctly drops unavailable stable IDs, but command execution should use the same availability discipline.
-
-Relevant files:
-
-- `crates/slapper/src/tui/tabs/mod.rs`
-- `crates/slapper/src/tui/app/mod.rs`
-- `crates/slapper/src/tui/app/command.rs`
-- `crates/slapper/src/tui/session.rs`
-- `crates/slapper/src/tui/help.rs`
+- Light theme uses `LightGreen` surface and `LightBlue` borders/inactive tabs, which can look noisy and low-contrast.
+- `Theme::style_for_mode()` hardcodes `Color::Black` foreground for both modes.
+- The status bar uses `tc!(background)` as text over mode colors; verify contrast in both themes.
+- Empty states vary in tone and density.
 
 ### Required Fix
 
-- Add a helper like `App::set_current_tab_if_available(tab) -> bool`.
-- Use it in command palette navigation, session restore if useful, mouse selection, and numeric tab jumps where appropriate.
-- Filter command palette entries for feature-gated tabs unless the command explains the missing feature and does not switch tabs.
-- Avoid dispatching unavailable tabs to Dashboard; unreachable unavailable tabs should be impossible through normal state transitions.
+- Review `crates/slapper/src/tui/theme.rs` and adjust light/dark theme colors conservatively.
+- Replace hardcoded foregrounds in reusable theme methods with semantic colors where possible.
+- Keep the UI information-dense and work-focused. Avoid decorative styling.
+- Standardize empty-state structure:
+  - Short title.
+  - One concise action sentence.
+  - Optional CLI equivalent.
+- Run a grep for direct `Color::*` in TUI rendering. Direct colors are acceptable in theme definitions; elsewhere prefer `tc!`.
 
 ### Acceptance Criteria
 
-- With default features, commands for unavailable tabs do not switch `current_tab` to an unavailable tab.
-- Session restore and bookmarks still drop unavailable tabs.
-- No-op unavailable tab render branches are either unreachable or documented.
+- Normal and Insert mode labels have readable contrast in dark and light themes.
+- Inactive tabs are visible but clearly secondary.
+- Empty states are consistent across representative tabs.
+- Direct `Color::White`, `Color::Gray`, `Color::Green`, and `Color::Red` are not used in rendering outside theme definitions unless there is a documented reason.
 
 ### Tests
 
-- `execute_command("nse")` or any added gated command does not select `Tab::Nse` when the feature is off.
-- `set_current_tab_if_available` accepts visible tabs and rejects invisible tabs.
-- Command palette entries are filtered by feature availability.
+- Existing TUI tests should pass.
+- Add small unit tests only if helper behavior changes. Do not add brittle color snapshot tests unless the project already uses them.
 
-### Status: COMPLETED (2026-05-02)
-
-- Added `set_current_tab_if_available()` helper to App
-- Updated mouse selection to use the helper
-- Updated `select_tab()` to use the helper
-- Updated `execute_command()` to use the helper for tab switching
-- Added comment to `dispatcher_mut()` about unavailable tab fallback
-- All 1180 tests pass
-
-## Workstream 12: Dashboard Data Accuracy And Reset Behavior
+## Workstream 6: Command Palette And Overlay Polish
 
 ### Problem
 
-Dashboard stats can accumulate incorrectly and advertise actions that do not exist.
+Overlay infrastructure exists, but behavior needs usability polish.
 
-Examples:
+Areas to verify:
 
-- `DashboardTab::update_from_history` increments `today_scans` without resetting it first.
-- `render_welcome` and quick actions advertise Enter/start and `e` export, which are not currently implemented.
-- `reset` only resets state and leaves view/stats as-is.
-
-Relevant file: `crates/slapper/src/tui/tabs/dashboard.rs`.
+- Command palette should not allow tab-content actions while open.
+- Search results should be navigable if a selected state is shown.
+- Confirm popups render button-like UI, but actual behavior is Enter/Esc only.
+- HTTP options title says `press h to close`; that should remain true after the event routing changes.
 
 ### Required Fix
 
-- Reset derived counters at the start of `update_from_history`.
-- Correct quick-action copy or implement the advertised actions.
-- Decide what reset means for Dashboard:
-  - Either re-render welcome/session stats from current history, or explicitly no-op with user feedback.
-- Use theme colors consistently.
+- Audit `runner.rs` overlay handling after Workstream 1 so every overlay has a clear key path.
+- Make confirm popup labels match behavior. If buttons are not selectable, copy should say `Enter: Confirm` and `Esc: Cancel`.
+- If search results show selection, wire Up/Down and Enter to navigate or remove selected-state visuals.
+- Make mouse scroll behavior explicit when overlays are open. Current code ignores command palette scroll, and page-scrolls content only when overlays are not active. Keep or revise intentionally.
 
 ### Acceptance Criteria
 
-- Calling `update_from_history` twice with the same history yields the same `today_scans`.
-- Dashboard copy matches implemented actions.
-- Reset does not leave stale or misleading data.
+- Overlay key handling is centralized or at least visibly ordered by `topmost_overlay()`.
+- No tab task starts or focus moves while an overlay is active.
+- Popup copy accurately describes available actions.
+- Search, palette, HTTP options, help, and confirm overlays are mutually sane when opened and closed in sequence.
 
 ### Tests
 
-- `update_from_history` idempotence for `today_scans`.
-- Dashboard reset behavior.
+- Add app-level tests for overlay precedence and key action mapping.
+- Add search overlay key tests if a pure helper is extracted.
+- Add confirm popup test: Enter confirms, Esc cancels, `h/l` do not leak to tab content while confirm is visible.
 
-### Status: COMPLETED (2026-05-02)
+## Workstream 7: Feature-Gated And Cached Tab Rendering Audit
 
-- Fixed `update_from_history()` to reset `today_scans` before incrementing (idempotency fix)
-- Fixed `reset()` to properly clear all dashboard stats (total_scans, today_scans, unique_targets, etc.)
-- Moved `reset()` implementation to `impl TabState for DashboardTab`
-- Added tests for update_from_history idempotency and reset behavior
-- All 1180 tests pass
+### Problem
+
+Tab availability is mostly handled correctly, but there is one suspicious rendering pattern:
+
+- `draw_tabs()` in `crates/slapper/src/tui/ui.rs` uses a static `LazyLock<Vec<Line>>` built from `Tab::all()`.
+- `Tab::all()` itself is feature-set dependent but stable per binary. This is likely safe in normal builds, but the static cache can hide assumptions in tests or future dynamic availability changes.
+
+### Required Fix
+
+- Decide whether static tab title caching is worth keeping. Simpler and safer: build visible titles directly from `Tab::all()[window.start..window.end]` each render.
+- Ensure the visible title list and `TabWindow` always come from the same `Tab::all()` view.
+- Keep mouse hit testing aligned with rendered titles.
+
+### Acceptance Criteria
+
+- Tab strip rendering uses the same tab list as navigation/hit-testing.
+- Feature-gated builds do not show unavailable tabs.
+- Existing tab window and mouse hit tests still pass.
+
+### Tests
+
+- Existing tab window tests should continue passing.
+- If possible, add a test around `draw_tabs` helper or `TabWindow` to assert visible titles correspond to visible tabs.
 
 ## Suggested Execution Order
 
-1. Workstream 1: input cursor safety.
-2. Workstream 3: overlay precedence.
-3. Workstream 2: search correctness.
-4. Workstream 5 and 6: visible keybinding/notification truthfulness.
-5. Workstream 7: task result routing.
-6. Workstream 4 and 8: tab hit-testing and focus consistency.
-7. Workstream 9 and 10: layout and theme polish.
-8. Workstream 11 and 12: feature-gated cleanup and dashboard data fixes.
+1. Workstream 1: search event routing and scope. This is a concrete bug and affects visible keybindings.
+2. Workstream 2: `h/l` navigation contract and representative tab fixes.
+3. Workstream 3: help/status text alignment with the corrected navigation model.
+4. Workstream 6: overlay polish after search routing is fixed.
+5. Workstream 4: small-terminal layout robustness.
+6. Workstream 5: theme and visual consistency.
+7. Workstream 7: feature-gated/cached tab rendering audit.
 
 ## Verification Checklist
 
-- `cargo test --lib -p slapper tui::`
-- `cargo check --lib -p slapper`
-- If feature-gated files are touched, run targeted checks such as:
+Run after each meaningful batch:
+
+```bash
+cargo test --lib -p slapper tui::
+cargo check --lib -p slapper
+```
+
+If feature-gated files are touched, also run targeted checks:
 
 ```bash
 cargo check --lib -p slapper --features nse
@@ -667,11 +385,15 @@ cargo check --lib -p slapper --features python-plugins
 cargo check --lib -p slapper --features full
 ```
 
-- Manually run the TUI at least once after implementation and check:
-  - 80x24 terminal
-  - Tab navigation and mouse tab selection
-  - Search prompt and results
-  - Command palette
-  - Help popup
-  - Confirm popup
-  - Export success/no-data feedback
+Manual smoke test before handoff:
+
+- Launch the TUI at 80x24.
+- Verify `n`, `N`, `p`, `Shift+H`, and `Shift+L` switch tabs.
+- Verify `h/l` move within the current focused control and do not switch tabs.
+- Verify Insert mode typing `h` and `l` inserts characters.
+- Verify `/` search and `Ctrl+F` global search both accept input, support Backspace, run on Enter, and close on Esc.
+- Verify command palette opens/closes and does not leak keys to tab content.
+- Verify HTTP options closes with `h` and Esc.
+- Verify confirm popup Enter/Esc behavior.
+- Verify Help popup copy matches actual keys.
+- Verify Load, Recon, Fuzz, Settings, History, Dashboard, Proxy, and Packet at 80x24 and 60x20.

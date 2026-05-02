@@ -244,13 +244,13 @@ where
                         app.toggle_command_palette();
                     }
                     (KeyModifiers::CONTROL, KeyCode::Char('f')) => {
-                        // Toggle global search - just open the prompt, search happens on Enter
+                        // Toggle global search
                         if app.show_search {
                             // If already showing search, perform search with current query
                             app.perform_search();
                         } else {
-                            // Open search prompt
-                            app.show_search = true;
+                            // Open global search prompt using toggle_search to set search_is_global
+                            app.toggle_search(true);
                             app.needs_redraw = true;
                         }
                     }
@@ -354,8 +354,17 @@ where
                      }
                     // Prevent tab content keys when other overlays are active
                     _ if app.is_search_visible() || app.is_http_options_visible() || app.is_help_visible() => {
-                        // Only allow Esc (handled above) and search input
+                        // Handle keys for active overlays; Esc is handled above
                         match (key.modifiers, key.code) {
+                            (KeyModifiers::NONE, KeyCode::Enter) if app.is_search_visible() => {
+                                app.perform_search();
+                            }
+                            (KeyModifiers::NONE, KeyCode::Backspace) if app.is_search_visible() => {
+                                app.search_query.pop();
+                            }
+                            (KeyModifiers::CONTROL, KeyCode::Char('u')) if app.is_search_visible() => {
+                                app.search_query.clear();
+                            }
                             (KeyModifiers::NONE, KeyCode::Char(c)) if app.is_search_visible() => {
                                 app.search_query.push(c);
                             }
@@ -482,16 +491,11 @@ where
                         app.export_results();
                     }
                     (KeyModifiers::NONE, KeyCode::Enter) => {
-                        if app.show_search {
-                            app.perform_search();
-                        } else if app.is_confirm_popup_visible() {
+                        if app.is_confirm_popup_visible() {
                             app.confirm_action();
                         } else {
                             app.handle_enter();
                         }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Char(c)) if app.show_search => {
-                        app.search_query.push(c);
                     }
                     (KeyModifiers::NONE, KeyCode::Char(c)) if app.mode == InputMode::Insert => {
                         app.handle_char(c);
