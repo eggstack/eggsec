@@ -74,7 +74,7 @@ impl InputField {
 
     pub fn apply_autocomplete(&mut self, suggestion: &str) {
         self.value = suggestion.to_string();
-        self.cursor_pos = self.value.chars().count();
+        self.cursor_pos = self.value.len(); // byte index at end
     }
 
     pub fn insert(&mut self, c: char) {

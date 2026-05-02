@@ -899,13 +899,13 @@ impl Default for HelpContent {
                     command: "next-tab".to_string(),
                     description: "Go to next tab".to_string(),
                     category: "Navigation".to_string(),
-                    shortcut: Some("l".to_string()),
+                    shortcut: Some("n".to_string()),
                 },
                 CommandPaletteResult {
                     command: "prev-tab".to_string(),
                     description: "Go to previous tab".to_string(),
                     category: "Navigation".to_string(),
-                    shortcut: Some("h".to_string()),
+                    shortcut: Some("p".to_string()),
                 },
                 CommandPaletteResult {
                     command: "page-up".to_string(),
