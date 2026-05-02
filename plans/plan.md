@@ -346,15 +346,16 @@ Relevant files:
 - Export no-data path sets a notification.
 - Invalid export directory sets an error notification.
 
-### Status: PARTIALLY COMPLETED (2026-05-01)
+### Status: COMPLETED (2026-05-02)
 
 - Added `Notification` struct and methods to `App` (infrastructure)
 - Added `should_quit` check in `run_app()` - DONE
 - Implemented 'e' key to export results - DONE
 - Implemented Dashboard Enter to jump to Recon tab - DONE
 - Fixed keybinding text in dashboard, popup, and status bar - DONE
-- Export notifications: infrastructure added, needs `export.rs` integration (deferred)
-- Note: Full notification display in status bar needs more work (deferred)
+- Integrated notifications into `export.rs` (replaced tracing calls with user-visible notifications)
+- Implemented full notification display in status bar (`ui.rs` `draw_status_bar`)
+- All TUI tests pass (134 tests)
 
 ## Workstream 7: Route Background Results To The Tab That Started The Task
 

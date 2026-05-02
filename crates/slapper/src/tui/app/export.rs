@@ -1,4 +1,5 @@
 use crate::types::OutputFormat;
+use super::{Notification, NotificationSeverity};
 
 impl super::App {
     pub(super) fn export_results(&mut self) {
@@ -75,24 +76,45 @@ impl super::App {
                 if let Some(results) = self.recon.get_results() {
                     match serde_json::to_string_pretty(results) {
                         Ok(json) => self.save_export("recon_results.json", json),
-                        Err(e) => tracing::error!("Failed to serialize recon results: {}", e),
+                        Err(e) => {
+                            let msg = format!("Failed to serialize recon results: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                        }
                     }
+                } else {
+                    let msg = "No exportable data for Recon tab.".to_string();
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
             super::tabs::Tab::Load => {
                 if let Some(results) = self.load.get_results() {
                     match serde_json::to_string_pretty(results) {
                         Ok(json) => self.save_export("load_results.json", json),
-                        Err(e) => tracing::error!("Failed to serialize load results: {}", e),
+                        Err(e) => {
+                            let msg = format!("Failed to serialize load results: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                        }
                     }
+                } else {
+                    let msg = "No exportable data for Load tab.".to_string();
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
             super::tabs::Tab::ScanPorts => {
                 if let Some(results) = self.scan_ports.get_results() {
                     match serde_json::to_string_pretty(results) {
                         Ok(json) => self.save_export("port_scan_results.json", json),
-                        Err(e) => tracing::error!("Failed to serialize port scan results: {}", e),
+                        Err(e) => {
+                            let msg = format!("Failed to serialize port scan results: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                        }
                     }
+                } else {
+                    let msg = "No exportable data for Scan Ports tab.".to_string();
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
             super::tabs::Tab::ScanEndpoints => {
@@ -100,46 +122,81 @@ impl super::App {
                     match serde_json::to_string_pretty(results) {
                         Ok(json) => self.save_export("endpoint_scan_results.json", json),
                         Err(e) => {
-                            tracing::error!("Failed to serialize endpoint scan results: {}", e)
+                            let msg = format!("Failed to serialize endpoint scan results: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
+                } else {
+                    let msg = "No exportable data for Scan Endpoints tab.".to_string();
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
             super::tabs::Tab::Fingerprint => {
                 if let Some(results) = self.fingerprint.get_results() {
                     match serde_json::to_string_pretty(results) {
                         Ok(json) => self.save_export("fingerprint_results.json", json),
-                        Err(e) => tracing::error!("Failed to serialize fingerprint results: {}", e),
+                        Err(e) => {
+                            let msg = format!("Failed to serialize fingerprint results: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                        }
                     }
+                } else {
+                    let msg = "No exportable data for Fingerprint tab.".to_string();
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
             super::tabs::Tab::Fuzz => {
                 if let Some(results) = self.fuzz.get_results() {
                     match serde_json::to_string_pretty(results) {
                         Ok(json) => self.save_export("fuzz_results.json", json),
-                        Err(e) => tracing::error!("Failed to serialize fuzz results: {}", e),
+                        Err(e) => {
+                            let msg = format!("Failed to serialize fuzz results: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                        }
                     }
+                } else {
+                    let msg = "No exportable data for Fuzz tab.".to_string();
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
             super::tabs::Tab::Waf => {
+                let mut has_data = false;
                 if let Some(results) = self.waf.get_detection_result() {
+                    has_data = true;
                     match serde_json::to_string_pretty(results) {
                         Ok(json) => self.save_export("waf_detection_results.json", json),
                         Err(e) => {
-                            tracing::error!("Failed to serialize WAF detection results: {}", e)
+                            let msg = format!("Failed to serialize WAF detection results: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 }
                 if let Some(results) = self.waf.get_bypass_results() {
+                    has_data = true;
                     match serde_json::to_string_pretty(results) {
                         Ok(json) => self.save_export("waf_bypass_results.json", json),
-                        Err(e) => tracing::error!("Failed to serialize WAF bypass results: {}", e),
+                        Err(e) => {
+                            let msg = format!("Failed to serialize WAF bypass results: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                        }
                     }
+                }
+                if !has_data {
+                    let msg = "No exportable data for WAF tab.".to_string();
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
             super::tabs::Tab::WafStress => {
                 if let Some(results) = self.waf_stress.get_results() {
                     self.save_export("waf_stress_results.json", results);
+                } else {
+                    let msg = "No exportable data for WAF Stress tab.".to_string();
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
             super::tabs::Tab::Scan => {
@@ -147,76 +204,98 @@ impl super::App {
                     match serde_json::to_string_pretty(report) {
                         Ok(json) => self.save_export("pipeline_scan_report.json", json),
                         Err(e) => {
-                            tracing::error!("Failed to serialize pipeline scan report: {}", e)
+                            let msg = format!("Failed to serialize pipeline scan report: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
+                } else {
+                    let msg = "No exportable data for Scan tab.".to_string();
+                    self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
                 }
             }
             super::tabs::Tab::Resume => {
-                tracing::warn!("Resume tab: no exportable data (use original scan results)");
+                let msg = "Resume tab: no exportable data (use original scan results)".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::GraphQl => {
-                tracing::warn!("GraphQL tab: no exportable data available");
+                let msg = "GraphQL tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::OAuth => {
-                tracing::warn!("OAuth tab: no exportable data available");
+                let msg = "OAuth tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Cluster => {
-                tracing::warn!("Cluster tab: no exportable data available");
+                let msg = "Cluster tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Stress => {
-                tracing::warn!("Stress tab: no exportable data available");
+                let msg = "Stress tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Report => {
-                tracing::warn!(
-                    "Report tab: use conversion endpoints (HTML/Markdown/SARIF) instead"
-                );
+                let msg = "Report tab: use conversion endpoints (HTML/Markdown/SARIF) instead".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Nse => {
-                tracing::warn!("NSE tab: no exportable data available");
+                let msg = "NSE tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Plugin => {
-                tracing::warn!("Plugin tab: no exportable data available");
+                let msg = "Plugin tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Settings => {
-                tracing::warn!("Settings tab: no exportable data available");
+                let msg = "Settings tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::History => {
-                let h = self.history.lock(); {
-
-                    let history_data = h.export();
-                    self.save_export("history.json", history_data);
-                }
+                let history_data = {
+                    let h = self.history.lock();
+                    h.export()
+                };
+                self.save_export("history.json", history_data);
             }
             super::tabs::Tab::Dashboard => {
-                tracing::warn!("Dashboard tab: no exportable data available");
+                let msg = "Dashboard tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Proxy => {
-                tracing::warn!("Proxy tab: no exportable data available");
+                let msg = "Proxy tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Packet => {
-                tracing::warn!("Packet tab: no exportable data available");
+                let msg = "Packet tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Hunt => {
-                tracing::warn!("Hunt tab: no exportable data available");
+                let msg = "Hunt tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Browser => {
-                tracing::warn!("Browser tab: no exportable data available");
+                let msg = "Browser tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Compliance => {
-                tracing::warn!("Compliance tab: no exportable data available");
+                let msg = "Compliance tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Storage => {
-                tracing::warn!("Storage tab: no exportable data available");
+                let msg = "Storage tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Integrations => {
-                tracing::warn!("Integrations tab: no exportable data available");
+                let msg = "Integrations tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Workflow => {
-                tracing::warn!("Workflow tab: no exportable data available");
+                let msg = "Workflow tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Vuln => {
-                tracing::warn!("Vuln tab: no exportable data available");
+                let msg = "Vuln tab: no exportable data available".to_string();
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
         }
     }
@@ -316,7 +395,7 @@ impl super::App {
         }
     }
 
-    fn save_export(&self, filename: &str, data: String) {
+    fn save_export(&mut self, filename: &str, data: String) {
         use std::io::Write;
 
         let export_dir = self
@@ -328,28 +407,41 @@ impl super::App {
 
         let base_dir = std::path::Path::new(crate::constants::DEFAULT_EXPORT_DIR);
         if let Err(e) = crate::utils::validation::validate_path_string(base_dir, export_dir) {
-            tracing::error!("Invalid export directory: {}", e);
+            let msg = format!("Invalid export directory: {}", e);
+            tracing::error!("{}", msg);
+            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
             return;
         }
 
         let path = format!("{}/{}", export_dir, filename);
         let dir = std::path::Path::new(export_dir);
         if !dir.exists() {
-            let _ = std::fs::create_dir_all(dir);
+            if let Err(e) = std::fs::create_dir_all(dir) {
+                let msg = format!("Could not create export directory: {}", e);
+                tracing::error!("{}", msg);
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                return;
+            }
         }
 
         let mut file = match std::fs::File::create(&path) {
             Ok(file) => file,
             Err(e) => {
-                tracing::error!("Could not create export file: {}", e);
+                let msg = format!("Could not create export file: {}", e);
+                tracing::error!("{}", msg);
+                self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
                 return;
             }
         };
 
         if let Err(e) = file.write_all(data.as_bytes()) {
-            tracing::error!("Could not write to export file: {}", e);
+            let msg = format!("Could not write to export file: {}", e);
+            tracing::error!("{}", msg);
+            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
         } else {
-            tracing::info!("Exported results to: {}", path);
+            let msg = format!("Exported to: {}", path);
+            tracing::info!("{}", msg);
+            self.notification = Some(Notification::new(msg, NotificationSeverity::Success));
         }
     }
 }

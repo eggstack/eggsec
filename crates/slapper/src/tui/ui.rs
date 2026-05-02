@@ -493,8 +493,8 @@ fn get_tab_status(state: &crate::tui::tabs::AppState) -> (String, ratatui::style
     }
 }
 
-fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
-    let (status_text, status_color) = match app.current_tab {
+fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
+    match app.current_tab {
         crate::tui::tabs::Tab::Recon => get_tab_status(&app.recon.state),
         crate::tui::tabs::Tab::Load => get_tab_status(&app.load.state),
         crate::tui::tabs::Tab::ScanPorts => get_tab_status(&app.scan_ports.state),
@@ -566,6 +566,25 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         crate::tui::tabs::Tab::Vuln => get_tab_status(&app.vuln.state),
         #[cfg(not(feature = "vuln-management"))]
         crate::tui::tabs::Tab::Vuln => ("Vuln management not enabled".to_string(), tc!(status_idle)),
+    }
+}
+
+fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
+    let (status_text, status_color) = if let Some(notif) = &app.notification {
+        if !notif.is_expired() {
+            let color = match notif.severity {
+                super::app::NotificationSeverity::Info => tc!(status_idle),
+                super::app::NotificationSeverity::Success => tc!(success),
+                super::app::NotificationSeverity::Warning => tc!(status_running),
+                super::app::NotificationSeverity::Error => tc!(error),
+            };
+            (notif.message.clone(), color)
+        } else {
+            // Notification expired, fall back to normal status
+            get_normal_status(app)
+        }
+    } else {
+        get_normal_status(app)
     };
 
     let help_text = if app.is_help_visible() {
