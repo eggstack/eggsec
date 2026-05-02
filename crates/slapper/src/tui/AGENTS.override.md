@@ -171,6 +171,70 @@ self.task_tab = None;
 - Use `prev.len_utf8()` when decrementing
 - Convert to char position only during rendering via `byte_to_char_pos()`
 
-## Auto-Insert Mode
+## Help Text Helper
 
-Automatically switches to Insert mode when Tab/Shift+Tab focuses an input.
+Use `get_help_text()` helper in `ui.rs` for context-sensitive help:
+```rust
+fn get_help_text(app: &App, area: Rect) -> String {
+    // Check overlays first (highest precedence)
+    if app.pending_action.is_some() {
+        return "[Enter] Confirm [Esc] Cancel".to_string();
+    }
+    // Then command palette, search, help, etc.
+    // Finally, mode-specific help (Normal/Insert)
+}
+```
+
+This ensures help text always matches current overlay and mode state.
+
+## Dynamic Layout Pattern (Extended)
+
+For tabs with fixed-height sections, use dynamic constraints based on terminal height:
+```rust
+let input_height = if area.height <= 24 {
+    ((area.height as f32 * 0.6) as u16).max(6).min(15)
+} else {
+    15
+};
+
+let results_height = if area.height <= 24 {
+    ((area.height as f32 * 0.4) as u16).max(3)
+} else {
+    0
+};
+
+let chunks = Layout::default()
+    .constraints([
+        Constraint::Length(6),  // Selector or header
+        Constraint::Length(input_height),
+        Constraint::Min(results_height),
+    ])
+    .split(area);
+```
+
+## Static Cache Removal
+
+Avoid static caching for tab titles. Build from `Tab::all()` each render:
+```rust
+// Don't do this:
+// static TAB_TITLES: LazyLock<Vec<Line>> = ...;
+
+// Do this:
+let all_tabs: Vec<Line> = Tab::all().iter().map(|t| Line::from(t.title())).collect();
+let visible_titles: Vec<Line> = all_tabs[window.start..window.end].to_vec();
+```
+
+Ensures visible title list and `TabWindow` always come from same `Tab::all()` view.
+
+## InputField Byte Index Invariant (Extended)
+
+Always use byte length (not character count) for `cursor_pos` comparisons:
+```rust
+// Wrong:
+field.cursor_pos >= field.value.chars().count()
+
+// Correct:
+field.cursor_pos >= field.value.len()
+```
+
+This affects `is_at_right_edge()` implementations in all tabs.
