@@ -1,6 +1,66 @@
 use std::sync::Arc;
 
-use crate::tui::help::CommandPalette;
+use crate::tui::help::{CommandPalette, CommandPaletteResult};
+use crate::tui::tabs::Tab;
+
+fn command_to_tab(command: &str) -> Option<Tab> {
+    match command {
+        "history" => Some(Tab::History),
+        "settings" => Some(Tab::Settings),
+        "dashboard" => Some(Tab::Dashboard),
+        "recon" => Some(Tab::Recon),
+        "load" => Some(Tab::Load),
+        "ports" | "port" | "portscan" => Some(Tab::ScanPorts),
+        "endpoints" | "endpoint" => Some(Tab::ScanEndpoints),
+        "fingerprint" | "fingerprinting" => Some(Tab::Fingerprint),
+        "fuzz" | "fuzzing" => Some(Tab::Fuzz),
+        "waf" => Some(Tab::Waf),
+        "wafstress" | "waf-stress" => Some(Tab::WafStress),
+        "pipeline" | "scan" => Some(Tab::Scan),
+        "resume" | "session" => Some(Tab::Resume),
+        "proxy" => Some(Tab::Proxy),
+        "packet" => Some(Tab::Packet),
+        "graphql" => Some(Tab::GraphQl),
+        "oauth" => Some(Tab::OAuth),
+        "cluster" => Some(Tab::Cluster),
+        "stress" => Some(Tab::Stress),
+        "report" => Some(Tab::Report),
+        #[cfg(feature = "nse")]
+        "nse" => Some(Tab::Nse),
+        #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+        "plugin" => Some(Tab::Plugin),
+        #[cfg(feature = "advanced-hunting")]
+        "hunt" => Some(Tab::Hunt),
+        #[cfg(feature = "headless-browser")]
+        "browser" => Some(Tab::Browser),
+        #[cfg(feature = "compliance")]
+        "compliance" => Some(Tab::Compliance),
+        #[cfg(feature = "database")]
+        "storage" => Some(Tab::Storage),
+        #[cfg(feature = "external-integrations")]
+        "integrations" => Some(Tab::Integrations),
+        #[cfg(feature = "finding-workflow")]
+        "workflow" => Some(Tab::Workflow),
+        #[cfg(feature = "vuln-management")]
+        "vuln" => Some(Tab::Vuln),
+        _ => None,
+    }
+}
+
+fn filter_commands_by_availability(entries: &mut Arc<Vec<CommandPaletteResult>>) {
+    let available_tabs = Tab::all();
+    let mut filtered = Vec::new();
+    for entry in entries.iter() {
+        if let Some(tab) = command_to_tab(&entry.command) {
+            if available_tabs.contains(&tab) {
+                filtered.push(entry.clone());
+            }
+        } else {
+            filtered.push(entry.clone()); // Non-tab commands are always available
+        }
+    }
+    *entries = Arc::new(filtered);
+}
 
 impl super::App {
     pub(super) fn toggle_command_palette(&mut self) {
@@ -9,6 +69,7 @@ impl super::App {
             if palette.visible {
                 palette.query.clear();
                 palette.results = self.help_manager.get_command_palette_entries().clone();
+                filter_commands_by_availability(&mut palette.results);
                 palette.selected_index = 0;
                 palette.scroll_offset = 0;
             }
@@ -22,8 +83,9 @@ impl super::App {
     pub(super) fn update_command_palette_query(&mut self, query: &str) {
         if let Some(ref mut palette) = self.command_palette {
             palette.query = query.to_string();
-            palette.results = Arc::new(self.help_manager.search_commands(query));
-            palette.selected_index = 0;
+                palette.results = Arc::new(self.help_manager.search_commands(query));
+                filter_commands_by_availability(&mut palette.results);
+                palette.selected_index = 0;
             palette.scroll_offset = 0;
         }
     }
