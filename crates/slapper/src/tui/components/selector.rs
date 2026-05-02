@@ -235,8 +235,16 @@ impl Selector {
         }
     }
 
-    pub fn handle_left(&mut self) {}
-    pub fn handle_right(&mut self) {}
+    pub fn handle_left(&mut self) {
+        if self.selected > 0 {
+            self.selected -= 1;
+        }
+    }
+    pub fn handle_right(&mut self) {
+        if self.items.len() > 0 && self.selected < self.items.len() - 1 {
+            self.selected += 1;
+        }
+    }
 
     pub fn handle_char(&mut self, _c: char) {}
     pub fn handle_backspace(&mut self) {}

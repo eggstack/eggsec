@@ -627,40 +627,6 @@ impl App {
         }
     }
 
-    pub fn handle_left_or_prev_tab(&mut self) -> bool {
-        if self.show_help {
-            return false;
-        }
-        let at_left_edge = match self.current_tab {
-            Tab::History => true,
-            Tab::Dashboard => true,
-            _ => self.dispatcher_mut().is_at_left_edge(),
-        };
-        if at_left_edge {
-            false
-        } else {
-            self.dispatcher_mut().handle_left();
-            true
-        }
-    }
-
-pub fn handle_right_or_next_tab(&mut self) -> bool {
-        if self.show_help {
-            return false;
-        }
-        let at_right_edge = match self.current_tab {
-            Tab::History => true,
-            Tab::Dashboard => true,
-            _ => self.dispatcher_mut().is_at_right_edge(),
-        };
-        if at_right_edge {
-            false
-        } else {
-            self.dispatcher_mut().handle_right();
-            true
-        }
-    }
-
     pub fn reset_current_tab(&mut self) {
         if self.current_tab == Tab::History {
             let mut h = self.history.lock();

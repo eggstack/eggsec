@@ -574,7 +574,7 @@ impl TabInput for ReconTab {
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == ReconFocusArea::Inputs {
             let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.chars().count()
+            field.cursor_pos >= field.value.len()
         } else if self.focus_area == ReconFocusArea::Options {
             let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
             focused_idx == Some(self.option_checkboxes.len() - 1)
@@ -585,5 +585,47 @@ impl TabInput for ReconTab {
 
     fn is_input_focused(&self) -> bool {
         self.focus_area == ReconFocusArea::Inputs && self.inputs.is_focused()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::components::InputField;
+
+    #[test]
+    fn test_is_at_right_edge_non_ascii() {
+        let mut tab = ReconTab::default();
+        tab.focus_area = ReconFocusArea::Inputs;
+        
+        // Set a non-ASCII value (e.g., "café" - é is 2 bytes in UTF-8)
+        tab.inputs.fields[0].value = "café".to_string();  // 5 characters, 6 bytes
+        tab.inputs.fields[0].cursor_pos = tab.inputs.fields[0].value.len();  // Should be 6 (byte len)
+        
+        // is_at_right_edge should return true when cursor is at byte len
+        assert!(tab.is_at_right_edge());
+        
+        // Move cursor to before 'é' (position 4 in bytes)
+        tab.inputs.fields[0].cursor_pos = 4;
+        assert!(!tab.is_at_right_edge());
+    }
+
+    #[test]
+    fn test_cursor_pos_is_byte_index() {
+        let mut tab = ReconTab::default();
+        tab.focus_area = ReconFocusArea::Inputs;
+        
+        tab.inputs.fields[0].value = "hello".to_string();
+        tab.inputs.fields[0].cursor_pos = 5;  // End of "hello" (5 bytes, 5 chars)
+        
+        assert!(tab.is_at_right_edge());
+        
+        // Test with non-ASCII
+        tab.inputs.fields[0].value = "café".to_string();  // 5 bytes, 4 chars
+        tab.inputs.fields[0].cursor_pos = 5;  // End (byte len)
+        assert!(tab.is_at_right_edge());
+        
+        tab.inputs.fields[0].cursor_pos = 3;  // Before 'é' (which starts at byte 3)
+        assert!(!tab.is_at_right_edge());
     }
 }

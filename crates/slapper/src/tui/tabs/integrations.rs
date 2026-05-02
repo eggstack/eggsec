@@ -462,7 +462,7 @@ impl TabInput for IntegrationsTab {
             }
             IntegrationsFocusArea::Config => {
                 let f = &self.config_inputs.fields[0];
-                f.cursor_pos >= f.value.chars().count()
+                f.cursor_pos >= f.value.len()
             }
             IntegrationsFocusArea::Issue => !self.issue_inputs.can_move_right(),
             _ => true,
