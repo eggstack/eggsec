@@ -271,12 +271,9 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
 
     let window = TabWindow::for_width(area.width, app.current_tab, app.tab_scroll_offset);
 
-    use std::sync::LazyLock;
-    static TAB_TITLES: LazyLock<Vec<Line>> = LazyLock::new(|| {
-        Tab::all().iter().map(|t| Line::from(t.title())).collect()
-    });
-
-    let visible_titles: Vec<Line> = TAB_TITLES[window.start..window.end].to_vec();
+    // Build visible titles directly from Tab::all() to ensure consistency
+    let all_tabs: Vec<Line> = Tab::all().iter().map(|t| Line::from(t.title())).collect();
+    let visible_titles: Vec<Line> = all_tabs[window.start..window.end].to_vec();
 
     let tabs = Tabs::new(visible_titles)
         .block(Block::default().borders(Borders::ALL).title(format!("Slapper{}", window.range_text())))
