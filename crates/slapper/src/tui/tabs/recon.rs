@@ -324,7 +324,7 @@ impl TabRender for ReconTab {
         // Dynamic layout based on terminal height
         let (input_height, results_min) = if area.height < 24 {
             // Small terminal: use 75% for inputs, ensure some results area visible
-            let h = ((area.height as f32 * 0.75) as u16).max(6).min(16);
+            let h = ((area.height as f32 * 0.75) as u16).clamp(6, 16);
             (h, 2)
         } else {
             (16, 3)

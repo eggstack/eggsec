@@ -70,7 +70,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1155 base, 1388 with full features |
+| Tests | 1180 base, 1388 with full features |
 | Clippy | ~5 warnings (TUI-specific acceptable) |
 | Source files | 506 |
 | Payload types | 30 |
