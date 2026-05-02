@@ -453,7 +453,7 @@ impl TabInput for BrowserTab {
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == BrowserFocusArea::Inputs {
             let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.chars().count()
+            field.cursor_pos >= field.value.len()
         } else if self.focus_area == BrowserFocusArea::Options {
             self.option_checkboxes.iter().position(|cb| cb.focused)
                 == Some(self.option_checkboxes.len() - 1)

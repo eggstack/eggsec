@@ -545,7 +545,7 @@ impl TabInput for WafTab {
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == WafFocusArea::Inputs {
             let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.chars().count()
+            field.cursor_pos >= field.value.len()
         } else if self.focus_area == WafFocusArea::Techniques {
             let focused_idx = self.technique_checkboxes.iter().position(|cb| cb.focused);
             focused_idx == Some(self.technique_checkboxes.len() - 1)

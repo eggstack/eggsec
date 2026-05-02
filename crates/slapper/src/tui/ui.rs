@@ -271,12 +271,9 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
 
     let window = TabWindow::for_width(area.width, app.current_tab, app.tab_scroll_offset);
 
-    use std::sync::LazyLock;
-    static TAB_TITLES: LazyLock<Vec<Line>> = LazyLock::new(|| {
-        Tab::all().iter().map(|t| Line::from(t.title())).collect()
-    });
-
-    let visible_titles: Vec<Line> = TAB_TITLES[window.start..window.end].to_vec();
+    // Build visible titles directly from Tab::all() to ensure consistency
+    let all_tabs: Vec<Line> = Tab::all().iter().map(|t| Line::from(t.title())).collect();
+    let visible_titles: Vec<Line> = all_tabs[window.start..window.end].to_vec();
 
     let tabs = Tabs::new(visible_titles)
         .block(Block::default().borders(Borders::ALL).title(format!("Slapper{}", window.range_text())))
@@ -569,6 +566,64 @@ fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
     }
 }
 
+/// Returns the appropriate help text based on current mode and overlay state.
+/// The text is adjusted for terminal width.
+fn get_help_text(app: &App, area: Rect) -> String {
+    let is_narrow = area.width < 80;
+    
+    // Check overlays first (highest precedence)
+    if app.pending_action.is_some() {
+        return "[Enter] Confirm [Esc] Cancel".to_string();
+    }
+    
+    if app.get_command_palette().map(|p| p.visible).unwrap_or(false) {
+        return if is_narrow {
+            "[Enter] Run [↑↓] Sel [Esc] Close".to_string()
+        } else {
+            "[Enter] Run [Up/Down] Select [Esc] Close".to_string()
+        };
+    }
+    
+    if app.show_search {
+        return if is_narrow {
+            "[Enter] Search [Bksp] Edit [Esc] Close".to_string()
+        } else {
+            "[Enter] Search [Backspace] Edit [Esc] Close".to_string()
+        };
+    }
+    
+    if app.show_help {
+        return if is_narrow {
+            "[Esc] Close | [h/l] Pane Nav".to_string()
+        } else {
+            "[Esc] Close Help | [h/l] Pane Navigation".to_string()
+        };
+    }
+    
+    match app.mode {
+        super::InputMode::Normal => {
+            if is_narrow {
+                format!(
+                    "[n/p] Tabs [hjkl] Move [/] Search{} [q] Quit",
+                    if app.is_paused() { " [P]" } else { "" }
+                )
+            } else {
+                format!(
+                    "[n/p] Tabs [h/j/k/l] Move [/] Search [Space] Help [q] Quit{}",
+                    if app.is_paused() { " [Ctrl+Y] Resume" } else { "" }
+                )
+            }
+        }
+        super::InputMode::Insert => {
+            if is_narrow {
+                "[Esc] Normal [Ctrl+V] Paste".to_string()
+            } else {
+                "[Esc] Normal Mode | Type to input | [Ctrl+V] Paste".to_string()
+            }
+        }
+    }
+}
+
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let (status_text, status_color) = if let Some(notif) = &app.notification {
         if !notif.is_expired() {
@@ -587,43 +642,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         get_normal_status(app)
     };
 
-    let help_text = if app.is_help_visible() {
-        " [Esc] Close | [Space] Help | [Enter] Confirm | [j/k] Nav | [w/b] Word | [gg/G] Top/Bot | [n/p] Tab | [h/l] Input | [q] Quit ".to_string()
-    } else {
-        match app.mode {
-            super::InputMode::Normal => {
-                let mut help = if area.width < 80 {
-                    format!(
-                        " [n/p]Tab [j/k]Nav [Ctrl+F]Search [Ctrl+Z]{} [i]Insert [q]Quit",
-                        if app.is_paused() { "[Paused]" } else { "" }
-                    )
-                } else {
-                    format!(
-                        " [n/p] Tab | [j/k] Nav | [/] Search | [Ctrl+F] Global | [Ctrl+Z]{} | [1-9] Jump | [Space] Help | [i] Insert | [q] Quit | [b] Bookmark | [Ctrl+T] Theme",
-                        if app.is_paused() { " Resume" } else { " Pause" }
-                    )
-                };
-                if let Some(palette) = app.get_command_palette() {
-                    if palette.visible {
-                        help.push_str(" [Ctrl+P] Close");
-                    } else {
-                        help.push_str(" [Ctrl+P] Palette");
-                    }
-                }
-                if !app.get_bookmarked_tab_ids().is_empty() {
-                    help.push_str(&format!(" [{}]", app.get_bookmarked_tab_ids().len()));
-                }
-                help
-            }
-            super::InputMode::Insert => {
-                if area.width < 60 {
-                    " [Esc] Normal | Type | [Ctrl+C] Cancel | [Ctrl+V] Paste".to_string()
-                } else {
-                    " [Esc] Normal | Type to input | [Ctrl+C] Cancel | [Ctrl+V] Paste".to_string()
-                }
-            }
-        }
-    };
+    let help_text = get_help_text(app, area);
 
     let use_compact = area.width < 100;
     let chunks = Layout::default()

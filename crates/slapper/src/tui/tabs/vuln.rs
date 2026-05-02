@@ -564,7 +564,7 @@ impl TabInput for VulnTab {
             }
             VulnFocusArea::Inputs => {
                 let f = &self.inputs.fields[0];
-                f.cursor_pos >= f.value.chars().count()
+                f.cursor_pos >= f.value.len()
             }
             _ => true,
         }

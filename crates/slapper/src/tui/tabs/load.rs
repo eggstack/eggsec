@@ -381,12 +381,24 @@ impl TabState for LoadTab {
 
 impl TabRender for LoadTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        // Use dynamic height for input section based on terminal height
+        let input_height = if area.height <= 24 {
+            ((area.height as f32 * 0.6) as u16).max(6).min(15)
+        } else {
+            15
+        };
+        let results_height = if area.height <= 24 {
+            ((area.height as f32 * 0.4) as u16).max(3)
+        } else {
+            0
+        };
+        
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(6),
-                Constraint::Length(15),
-                Constraint::Min(0),
+                Constraint::Length(6),  // Selector
+                Constraint::Length(input_height),  // Inputs
+                Constraint::Min(results_height),  // Results
             ])
             .split(area);
 

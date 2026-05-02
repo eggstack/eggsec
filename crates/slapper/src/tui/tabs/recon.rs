@@ -593,7 +593,7 @@ impl TabInput for ReconTab {
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == ReconFocusArea::Inputs {
             let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.chars().count()
+            field.cursor_pos >= field.value.len()
         } else if self.focus_area == ReconFocusArea::Options {
             let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
             focused_idx == Some(self.option_checkboxes.len() - 1)
