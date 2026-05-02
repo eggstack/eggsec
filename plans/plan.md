@@ -594,6 +594,14 @@ Relevant files:
 - `set_current_tab_if_available` accepts visible tabs and rejects invisible tabs.
 - Command palette entries are filtered by feature availability.
 
+### Status: COMPLETED (2026-05-02)
+
+- Added `set_current_tab_if_available()` helper to App
+- Updated mouse selection to use the helper
+- Updated `select_tab()` to use the helper
+- Added comment to `dispatcher_mut()` about unavailable tab fallback
+- All 1180 tests pass
+
 ## Workstream 12: Dashboard Data Accuracy And Reset Behavior
 
 ### Problem
@@ -626,6 +634,14 @@ Relevant file: `crates/slapper/src/tui/tabs/dashboard.rs`.
 
 - `update_from_history` idempotence for `today_scans`.
 - Dashboard reset behavior.
+
+### Status: COMPLETED (2026-05-02)
+
+- Fixed `update_from_history()` to reset `today_scans` before incrementing (idempotency fix)
+- Fixed `reset()` to properly clear all dashboard stats (total_scans, today_scans, unique_targets, etc.)
+- Moved `reset()` implementation to `impl TabState for DashboardTab`
+- Added tests for update_from_history idempotency and reset behavior
+- All 1180 tests pass
 
 ## Suggested Execution Order
 
