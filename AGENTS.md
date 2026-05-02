@@ -80,8 +80,19 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 
 Skills are located in:
 - `.opencode/skills/slapper-agent/` - Agent-specific workflows
+- `.opencode/skills/slapper-ai/` - AI module workflows
+- `.opencode/skills/slapper-config/` - Config module workflows
+- `.opencode/skills/slapper-distributed/` - Distributed module workflows
+- `.opencode/skills/slapper-fuzzer/` - Fuzzer module workflows
+- `.opencode/skills/slapper-output/` - Output module workflows
+- `.opencode/skills/slapper-proxy/` - Proxy module workflows
+- `.opencode/skills/slapper-recon/` - Recon module workflows
+- `.opencode/skills/slapper-scanner/` - Scanner module workflows
 - `.opencode/skills/slapper-security/` - Security testing skill workflows
+- `.opencode/skills/slapper-stress/` - Stress module workflows
+- `.opencode/skills/slapper-tool/` - Tool module workflows
 - `.opencode/skills/slapper-tui/` - TUI module workflows
+- `.opencode/skills/slapper-waf/` - WAF module workflows
 - `.opencode/skills/tui-testing/` - TUI testing patterns and guides
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
