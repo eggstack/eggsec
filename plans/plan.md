@@ -547,6 +547,13 @@ Relevant files:
 - Add lightweight grep/check guidance in PR notes; do not add brittle tests for every color.
 - Existing TUI tests should still pass.
 
+### Status: COMPLETED (2026-05-02)
+
+- Direct `Color::*` usage replaced with `tc!` theme colors (completed in Workstream 5)
+- Unicode glyphs (✓/✗) use `tc!` colors for consistency
+- Empty states follow pattern: Title + Instruction + Optional CLI example
+- All 134 TUI tests pass
+
 ## Workstream 11: Feature-Gated Tabs And Command Palette Consistency
 
 ### Problem
