@@ -427,26 +427,32 @@ impl TabRender for FuzzTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        // Dynamic config height: use at most 27 lines, but leave at least 3 lines for results
+        let config_height = if area.height <= 30 {
+            // Small terminal: use 80% of height, min 10, max 27
+            ((area.height as f32 * 0.8) as u16).max(10).min(27)
+        } else {
+            27
+        };
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(27), Constraint::Min(0)])
+            .constraints([Constraint::Length(config_height), Constraint::Min(3)])
             .split(area);
 
         let config_area = chunks[0];
         let results_area = chunks[1];
 
+        // Dynamic field height based on available config area
+        let num_fields = 8;
+        let field_height = (config_area.height / num_fields).max(2);
+        let config_constraints: Vec<Constraint> = (0..num_fields)
+            .map(|_| Constraint::Length(field_height))
+            .collect();
+
         let config_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-            ])
+            .constraints(config_constraints)
             .split(config_area);
 
         self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
@@ -514,26 +520,30 @@ impl TabRender for FuzzTab {
     }
 
     fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        // Match render() - use same dynamic height
+        let config_height = if area.height <= 30 {
+            ((area.height as f32 * 0.8) as u16).max(10).min(27)
+        } else {
+            27
+        };
+
         let config_area = Rect {
             x: area.x,
             y: area.y,
             width: area.width,
-            height: 27,
+            height: config_height,
         };
+
+        // Dynamic field height based on available config area
+        let num_fields = 9; // 8 fields + 1 status
+        let field_height = (config_area.height / num_fields).max(2);
+        let config_constraints: Vec<Constraint> = (0..num_fields)
+            .map(|_| Constraint::Length(field_height))
+            .collect();
 
         let config_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-            ])
+            .constraints(config_constraints)
             .split(config_area);
 
         if let Some(info) = self.payload_selector.dropdown_info(config_chunks[3]) {

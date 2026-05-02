@@ -321,20 +321,31 @@ impl TabRender for ReconTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        // Dynamic layout based on terminal height
+        let (input_height, results_min) = if area.height < 24 {
+            // Small terminal: use 75% for inputs, ensure some results area visible
+            let h = ((area.height as f32 * 0.75) as u16).max(6).min(16);
+            (h, 2)
+        } else {
+            (16, 3)
+        };
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(16), Constraint::Min(0)])
+            .constraints([Constraint::Length(input_height), Constraint::Min(results_min)])
             .split(area);
 
         let input_area = chunks[0];
         let results_area = chunks[1];
 
+        // Simple 3-row layout: 2 input rows + options row
+        let row_height = (input_area.height / 3).max(2);
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(10),
+                Constraint::Length(row_height.min(input_area.height)),
+                Constraint::Length(row_height.min(input_area.height.saturating_sub(row_height))),
+                Constraint::Min(0),
             ])
             .split(input_area);
 

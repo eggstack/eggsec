@@ -495,6 +495,15 @@ Relevant files:
 - Snapshot-like rendering tests using `ratatui::backend::TestBackend` for 80x24 on Recon, Fuzz, Dashboard, and History.
 - Tests that popup `centered_rect` never creates zero-width/zero-height invalid areas for small screens.
 
+### Status: COMPLETED (2026-05-02)
+
+- Made fuzz.rs layout dynamic (config area adapts to terminal height)
+- Made recon.rs layout dynamic (input area adapts to terminal height)
+- Made oauth.rs layout dynamic (input/options/results adapt to terminal height)
+- Help popup already clamped via `centered_rect` function
+- All 134 TUI tests pass
+- Small terminals (height < 24) now show compact layouts
+
 ## Workstream 10: Theme And Visual Consistency Pass
 
 ### Problem
