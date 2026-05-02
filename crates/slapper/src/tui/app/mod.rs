@@ -1155,7 +1155,7 @@ mod tests {
 
     #[test]
     fn test_command_palette_visible() {
-        let mut app = create_test_app();
+        let app = create_test_app();
         assert!(!app.is_command_palette_visible());
 
         // Command palette is created on demand - simulate visibility

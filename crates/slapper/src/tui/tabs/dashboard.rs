@@ -525,7 +525,6 @@ mod tests {
     use crate::tui::tabs::history::HistoryEntry;
 
     fn create_test_entry(timestamp: &str, summary: &str, scan_type: &str, target: &str) -> HistoryEntry {
-        use std::collections::VecDeque;
         static mut NEXT_ID: usize = 0;
         let id = unsafe {
             NEXT_ID += 1;

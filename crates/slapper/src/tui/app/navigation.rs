@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn test_tab_from_discriminant() {
         use crate::tui::tabs::Tab;
-        for (i, tab) in Tab::all().iter().enumerate() {
+        for (_i, tab) in Tab::all().iter().enumerate() {
             assert_eq!(
                 Tab::from_discriminant(*tab as usize),
                 Some(*tab),
