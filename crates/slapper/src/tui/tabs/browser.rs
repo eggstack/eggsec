@@ -1,6 +1,6 @@
 use crate::browser::{BrowserConfig, BrowserReport};
 use crate::tc;
-use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tui::components::{empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -269,15 +269,10 @@ impl TabRender for BrowserTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            use ratatui::widgets::{Block, Borders, Paragraph};
-            let placeholder =
-                Paragraph::new("Enter target URL and press Enter to start browser scan")
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Headless Browser Testing"),
-                    )
-                    .style(ratatui::style::Style::default().fg(tc!(text_dim)));
+            let placeholder = empty_state_paragraph(
+                "Headless Browser Testing",
+                "Enter target URL and press Enter to start browser scan",
+            );
             f.render_widget(placeholder, results_area);
         }
     }

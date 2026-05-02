@@ -1,6 +1,6 @@
 use crate::scanner::endpoints::EndpointScanResults;
 use crate::tc;
-use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tui::components::{empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -312,9 +312,7 @@ impl TabRender for ScanEndpointsTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder = Paragraph::new("Results will appear here after running")
-                .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(tc!(text_dim)));
+            let placeholder = empty_state_paragraph("Results", "Results will appear here after running");
             f.render_widget(placeholder, results_area);
         }
     }

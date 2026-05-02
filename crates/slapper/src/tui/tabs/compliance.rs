@@ -1,6 +1,6 @@
 use crate::compliance::{ComplianceFramework, ComplianceReport};
 use crate::tc;
-use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
+use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -228,14 +228,10 @@ impl TabRender for ComplianceTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder =
-                ratatui::widgets::Paragraph::new("Enter target, select framework, and press Enter")
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Compliance Reporting"),
-                    )
-                    .style(Style::default().fg(tc!(text_dim)));
+            let placeholder = empty_state_paragraph(
+                "Compliance Reporting",
+                "Enter target, select framework, and press Enter",
+            );
             f.render_widget(placeholder, results_area);
         }
     }

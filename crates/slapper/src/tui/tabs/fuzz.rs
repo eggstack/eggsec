@@ -2,7 +2,8 @@ use crate::tc;
 use crate::fuzzer::engine::FuzzSession;
 use crate::fuzzer::PayloadType;
 use crate::tui::components::{
-    Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText, Selector, SelectorItem,
+    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
+    Selector, SelectorItem,
 };
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -513,9 +514,8 @@ impl TabRender for FuzzTab {
                 )),
             ];
 
-            let info = Paragraph::new(info_text)
-                .block(Block::default().borders(Borders::ALL).title("Results"));
-            f.render_widget(info, results_area);
+            let placeholder = empty_state_paragraph("Results", info_text);
+            f.render_widget(placeholder, results_area);
         }
     }
 

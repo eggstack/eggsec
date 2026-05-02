@@ -1,6 +1,6 @@
 use crate::loadtest::metrics::LoadTestResults;
 use crate::tc;
-use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText, Selector};
+use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText, Selector};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -446,11 +446,7 @@ impl TabRender for LoadTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            use ratatui::style::Style;
-            use ratatui::widgets::{Block, Borders, Paragraph};
-            let placeholder = Paragraph::new("Results will appear here after running")
-                .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(tc!(text_dim)));
+            let placeholder = empty_state_paragraph("Results", "Results will appear here after running");
             f.render_widget(placeholder, results_area);
         }
     }

@@ -1,6 +1,6 @@
 use crate::hunt::{HuntConfig, HuntReport};
 use crate::tc;
-use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tui::components::{empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -317,15 +317,10 @@ impl TabRender for HuntTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            use ratatui::widgets::{Block, Borders, Paragraph};
-            let placeholder =
-                Paragraph::new("Enter target and press Enter to start vulnerability hunting")
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Vulnerability Hunting"),
-                    )
-                    .style(Style::default().fg(tc!(text_dim)));
+            let placeholder = empty_state_paragraph(
+                "Vulnerability Hunting",
+                "Enter target and press Enter to start vulnerability hunting",
+            );
             f.render_widget(placeholder, results_area);
         }
     }

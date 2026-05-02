@@ -1,5 +1,5 @@
 use crate::tc;
-use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
+use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::vuln::{
     AssetCriticality, CvssScore, ExploitInfo, PrioritizedFinding, Remediation, TriageResult,
@@ -436,13 +436,10 @@ impl TabRender for VulnTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder = ratatui::widgets::Paragraph::new("Select mode and press Enter")
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Vulnerability Prioritization"),
-                )
-                .style(Style::default().fg(tc!(text_dim)));
+            let placeholder = empty_state_paragraph(
+                "Vulnerability Prioritization",
+                "Select mode and press Enter",
+            );
             f.render_widget(placeholder, results_area);
         }
     }

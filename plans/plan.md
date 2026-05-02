@@ -78,7 +78,7 @@ Result: `111 passed; 0 failed` (tests run on each branch)
 
 ## Future Work
 
-- Add remaining tests for Workstream 2 (HTTP options + h closes overlay, more TabInput audits)
-- Add more render tests for small terminals (60x20, 40x20)
-- Standardize empty-state structure across tabs (Workstream 5)
-- Update help popup to explicitly describe `h/l` navigation (Workstream 3)
+- ✅ Add remaining tests for Workstream 2 (HTTP options + h closes overlay, more TabInput audits) - COMPLETED (commit 82b1e42)
+- ✅ Add more render tests for small terminals (60x20, 40x20) - COMPLETED (tests already exist)
+- Standardize empty-state structure across tabs (Workstream 5) - IN PROGRESS
+- ✅ Update help popup to explicitly describe `h/l` navigation (Workstream 3) - COMPLETED (already implemented)

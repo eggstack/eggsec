@@ -1,10 +1,9 @@
 use crate::tc;
-use crate::tui::components::{InputField, InputGroup, ScrollableText};
+use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     text::Line,
-    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -141,14 +140,13 @@ impl TabRender for ResumeTab {
         if !self.results_view.is_empty() {
             self.results_view.render(f, results_area, Some(tc!(info)));
         } else {
-            let placeholder = Paragraph::new(
+            let placeholder = empty_state_paragraph(
+                "Session Info",
                 "Enter session file path and press Enter to resume a previous scan.\n\n\
                  Examples:\n\
-                   slapper resume session.json\n\
-                   slapper resume /path/to/session.json",
-            )
-            .block(Block::default().borders(Borders::ALL).title("Session Info"))
-            .style(tc!(text_dim));
+                    slapper resume session.json\n\
+                    slapper resume /path/to/session.json",
+            );
             f.render_widget(placeholder, results_area);
         }
     }

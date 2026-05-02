@@ -3,7 +3,8 @@ use crate::pipeline::{PipelineReport, Stage};
 use crate::tc;
 use crate::tui::app::error::make_friendly_error;
 use crate::tui::components::{
-    InputField, InputGroup, ProgressGauge, ScrollableText, Selector, SelectorItem,
+    empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText, Selector,
+    SelectorItem,
 };
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -350,13 +351,8 @@ impl TabRender for ScanTab {
         if !self.current_stage_output.is_empty() {
             self.current_stage_output.render(f, output_area, None);
         } else {
-            let placeholder = Paragraph::new("Stage output will appear here")
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Current Stage Output"),
-                )
-                .style(Style::default().fg(tc!(text_dim)));
+            let placeholder =
+                empty_state_paragraph("Current Stage Output", "Stage output will appear here");
             f.render_widget(placeholder, output_area);
         }
     }

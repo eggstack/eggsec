@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 
 use crate::tc;
-use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector};
+use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
     Frame,
 };
 
@@ -596,10 +596,10 @@ impl TabRender for PacketTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder =
-                Paragraph::new("Select a tool, enter parameters, and press Enter to run")
-                    .block(Block::default().borders(Borders::ALL).title("Results"))
-                    .style(Style::default().fg(tc!(text_dim)));
+            let placeholder = empty_state_paragraph(
+                "Results",
+                "Select a tool, enter parameters, and press Enter to run",
+            );
             f.render_widget(placeholder, results_area);
         }
     }

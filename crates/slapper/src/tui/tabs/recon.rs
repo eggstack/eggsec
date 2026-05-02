@@ -1,6 +1,6 @@
 use crate::tc;
 use crate::recon::FullReconResult;
-use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tui::components::{empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -395,19 +395,14 @@ impl TabRender for ReconTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            use ratatui::style::Style;
-            use ratatui::widgets::{Block, Borders, Paragraph};
             let cli_example = "slapper recon example.com --no-tech --no-whois";
-            let placeholder = Paragraph::new(format!(
-                "Enter target and press Enter to start recon\n\nCLI equivalent: {}",
-                cli_example
-            ))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Reconnaissance"),
-            )
-            .style(Style::default().fg(tc!(text_dim)));
+            let placeholder = empty_state_paragraph(
+                "Reconnaissance",
+                format!(
+                    "Enter target and press Enter to start recon\n\nCLI equivalent: {}",
+                    cli_example
+                ),
+            );
             f.render_widget(placeholder, results_area);
         }
     }

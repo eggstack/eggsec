@@ -1,14 +1,13 @@
 use crate::config::ProxyConfigEntry;
 use crate::proxy::{HealthCheckConfig, HealthChecker, ProxyEntry, ProxyType};
 use crate::tc;
-use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector};
+use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::types::SensitiveString;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -442,9 +441,7 @@ impl TabRender for ProxyTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder = Paragraph::new("Results will appear here")
-                .block(Block::default().borders(Borders::ALL).title("Results"))
-                .style(Style::default().fg(tc!(text_dim)));
+            let placeholder = empty_state_paragraph("Results", "Results will appear here");
             f.render_widget(placeholder, results_area);
         }
     }

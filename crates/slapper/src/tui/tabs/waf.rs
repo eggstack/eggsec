@@ -1,6 +1,7 @@
 use crate::tc;
 use crate::tui::components::{
-    Checkbox, InputField, InputGroup, ProgressGauge, RadioGroup, ScrollableText,
+    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, RadioGroup,
+    ScrollableText,
 };
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::waf::{BypassResult, WafDetectionResult};
@@ -8,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+
     Frame,
 };
 
@@ -366,26 +367,16 @@ impl TabRender for WafTab {
             if !self.detection_view.is_empty() {
                 self.detection_view.render(f, results_chunks[0], None);
             } else {
-                let placeholder = Paragraph::new("Detection results will appear here")
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Detection Result"),
-                    )
-                    .style(Style::default().fg(tc!(text_dim)));
+                let placeholder =
+                    empty_state_paragraph("Detection Result", "Detection results will appear here");
                 f.render_widget(placeholder, results_chunks[0]);
             }
 
             if !self.bypass_view.is_empty() {
                 self.bypass_view.render(f, results_chunks[1], None);
             } else {
-                let placeholder = Paragraph::new("Bypass results will appear here")
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Bypass Results"),
-                    )
-                    .style(Style::default().fg(tc!(text_dim)));
+                let placeholder =
+                    empty_state_paragraph("Bypass Results", "Bypass results will appear here");
                 f.render_widget(placeholder, results_chunks[1]);
             }
         }
