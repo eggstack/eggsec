@@ -389,6 +389,8 @@ impl App {
     }
 
     fn dispatcher_mut(&mut self) -> TabDispatcher<'_> {
+        // Note: Unavailable tabs should not be set as current_tab (use set_current_tab_if_available()).
+        // This mapping is a safety fallback - unavailable tabs map to dashboard.
         let tab_input: &mut dyn TabInput = match self.current_tab {
             Tab::Recon => &mut self.recon,
             Tab::Load => &mut self.load,
@@ -741,6 +743,17 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
 
     pub fn cancel_action(&mut self) {
         self.pending_action = None;
+    }
+
+    /// Set current tab only if it's available for the current feature set.
+    /// Returns true if the tab was set, false if unavailable.
+    pub fn set_current_tab_if_available(&mut self, tab: Tab) -> bool {
+        if Tab::all().contains(&tab) {
+            self.current_tab = tab;
+            true
+        } else {
+            false
+        }
     }
 
     pub fn is_confirm_popup_visible(&self) -> bool {

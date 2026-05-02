@@ -132,9 +132,10 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
 
             for span in spans {
                 if click_x >= span.x_start && click_x < span.x_end {
-                    app.current_tab = span.tab;
-                    app.adjust_tab_scroll();
-                    app.needs_redraw = true;
+                    if app.set_current_tab_if_available(span.tab) {
+                        app.adjust_tab_scroll();
+                        app.needs_redraw = true;
+                    }
                     break;
                 }
             }

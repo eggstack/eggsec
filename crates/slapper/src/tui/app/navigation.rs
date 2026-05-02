@@ -14,8 +14,7 @@ impl super::App {
     pub(super) fn select_tab(&mut self, index: usize) {
         self.clear_search_on_tab_switch();
         if let Some(tab) = super::tabs::Tab::from_index(index) {
-            self.current_tab = tab;
-            self.adjust_tab_scroll();
+            let _ = self.set_current_tab_if_available(tab);
         }
     }
 
