@@ -128,7 +128,7 @@ impl SessionManager {
                 state.legacy_current_tab.and_then(Tab::from_index)
             })
             .unwrap_or(Tab::Recon);
-        app.current_tab = tab_to_restore;
+        let _ = app.set_current_tab_if_available(tab_to_restore);
 
         for bookmark_id in &state.bookmarks {
             if let Some(tab) = Tab::from_stable_id(bookmark_id) {

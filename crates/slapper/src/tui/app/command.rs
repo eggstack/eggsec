@@ -72,43 +72,43 @@ impl super::App {
                 self.export_results();
             }
             "history" => {
-                self.current_tab = super::tabs::Tab::History;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::History);
             }
             "settings" => {
-                self.current_tab = super::tabs::Tab::Settings;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::Settings);
             }
             "dashboard" => {
-                self.current_tab = super::tabs::Tab::Dashboard;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::Dashboard);
             }
             "recon" => {
-                self.current_tab = super::tabs::Tab::Recon;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::Recon);
             }
             "load" => {
-                self.current_tab = super::tabs::Tab::Load;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::Load);
             }
             "ports" | "port" | "portscan" => {
-                self.current_tab = super::tabs::Tab::ScanPorts;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::ScanPorts);
             }
             "endpoints" | "endpoint" => {
-                self.current_tab = super::tabs::Tab::ScanEndpoints;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::ScanEndpoints);
             }
             "fingerprint" | "fingerprinting" => {
-                self.current_tab = super::tabs::Tab::Fingerprint;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::Fingerprint);
             }
             "fuzz" | "fuzzing" => {
-                self.current_tab = super::tabs::Tab::Fuzz;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::Fuzz);
             }
             "waf" => {
-                self.current_tab = super::tabs::Tab::Waf;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::Waf);
             }
             "wafstress" | "waf-stress" => {
-                self.current_tab = super::tabs::Tab::WafStress;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::WafStress);
             }
             "pipeline" | "scan" => {
-                self.current_tab = super::tabs::Tab::Scan;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::Scan);
             }
             "resume" | "session" => {
-                self.current_tab = super::tabs::Tab::Resume;
+                let _ = self.set_current_tab_if_available(super::tabs::Tab::Resume);
             }
             "next-tab" | "next" => {
                 self.next_tab();
