@@ -599,6 +599,7 @@ Relevant files:
 - Added `set_current_tab_if_available()` helper to App
 - Updated mouse selection to use the helper
 - Updated `select_tab()` to use the helper
+- Updated `execute_command()` to use the helper for tab switching
 - Added comment to `dispatcher_mut()` about unavailable tab fallback
 - All 1180 tests pass
 
