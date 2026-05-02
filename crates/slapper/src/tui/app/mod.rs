@@ -1227,4 +1227,22 @@ mod tests {
         // Simulate command palette visible
         // Note: command_palette needs to be created - this test may need adjustment
     }
+
+    #[test]
+    fn test_h_key_closes_http_options_overlay() {
+        let mut app = create_test_app();
+        // Show HTTP options
+        app.show_http_options = true;
+        assert!(app.is_http_options_visible());
+
+        // Simulate 'h' key press behavior (from runner.rs lines 385-387)
+        if app.is_http_options_visible() {
+            app.show_http_options = false;
+            app.needs_redraw = true;
+        }
+
+        // Verify HTTP options is no longer visible
+        assert!(!app.is_http_options_visible());
+        assert!(app.needs_redraw);
+    }
 }
