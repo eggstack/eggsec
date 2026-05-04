@@ -31,7 +31,7 @@ impl KeyHandler {
             (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
                 self.handle_ctrl_c(app);
             }
-            (KeyModifiers::CONTROL, KeyCode::Char('g')) => {
+            (KeyModifiers::CONTROL, KeyCode::Char('x')) => {
                 app.toggle_quick_switch();
             }
             (KeyModifiers::CONTROL, KeyCode::Char('u')) => {
@@ -186,17 +186,6 @@ impl KeyHandler {
             }
             (KeyModifiers::NONE, KeyCode::Char('r')) if app.mode == InputMode::Normal => {
                 self.handle_reset(app);
-            }
-            (KeyModifiers::NONE, KeyCode::Char('0')) if app.mode == InputMode::Normal => {
-                app.select_tab(9);
-            }
-            (KeyModifiers::NONE, KeyCode::Char(c))
-                if app.mode == InputMode::Normal && ('1'..='9').contains(&c) =>
-            {
-                let idx = c.to_digit(10).unwrap() as usize - 1;
-                if idx < Tab::all().len() {
-                    app.select_tab(idx);
-                }
             }
             (KeyModifiers::NONE, KeyCode::Char('s')) if app.mode == InputMode::Normal => {
                 self.handle_save_settings(app);

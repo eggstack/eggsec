@@ -114,16 +114,16 @@ pub enum Tab {
 
 impl Tab {
     const TAB_TITLES: &'static [&'static str] = &[
-        "[1] Recon",
-        "[2] Load",
-        "[3] Scan Ports",
-        "[4] Scan Endpoints",
-        "[5] Fingerprint",
-        "[6] Fuzz",
-        "[7] WAF",
-        "[8] WAF Stress",
-        "[9] Scan",
-        "[0] Resume",
+        "Recon",
+        "Load",
+        "Scan Ports",
+        "Scan Endpoints",
+        "Fingerprint",
+        "Fuzz",
+        "WAF",
+        "WAF Stress",
+        "Scan",
+        "Resume",
         "Proxy",
         "Packet",
         "GraphQL",
@@ -950,26 +950,26 @@ mod tests {
         let spans = tab_window.visible_tab_spans(80);
         assert_eq!(spans.len(), 5);
 
-        // Check first tab (Recon) - title "[1] Recon" = 9 chars
+        // Check first tab (Recon) - title "Recon" = 5 chars
         assert_eq!(spans[0].tab, Tab::Recon);
         assert_eq!(spans[0].x_start, 0);
-        assert_eq!(spans[0].x_end, 9);
+        assert_eq!(spans[0].x_end, 5);
 
-        // Check second tab (Load) - title "[2] Load" = 8 chars, starts at 9+2=11
+        // Check second tab (Load) - title "Load" = 4 chars, starts at 5+2=7
         assert_eq!(spans[1].tab, Tab::Load);
-        assert_eq!(spans[1].x_start, 11);
-        assert_eq!(spans[1].x_end, 19);
+        assert_eq!(spans[1].x_start, 7);
+        assert_eq!(spans[1].x_end, 11);
 
-        // Check ScanPorts tab - title "[3] Scan Ports" = 13 chars
+        // Check ScanPorts tab - title "Scan Ports" = 10 chars
         assert_eq!(spans[2].tab, Tab::ScanPorts);
-        assert_eq!(spans[2].x_start, 21);
-        assert_eq!(spans[2].x_end, 35);
+        assert_eq!(spans[2].x_start, 13);
+        assert_eq!(spans[2].x_end, 23);
 
-        // Check ScanEndpoints tab - title "[4] Scan Endpoints" = 18 chars
+        // Check ScanEndpoints tab - title "Scan Endpoints" = 14 chars
         let se_span = &spans[3];
         assert_eq!(se_span.tab, Tab::ScanEndpoints);
-        assert_eq!(se_span.x_start, 37);
-        assert_eq!(se_span.x_end, 55);
+        assert_eq!(se_span.x_start, 25);
+        assert_eq!(se_span.x_end, 39);
 
         // Simulate clicking at the ScanEndpoints tab position
         let click_x = se_span.x_start;
@@ -1028,11 +1028,11 @@ mod tests {
         // Check that the first visible tab is index 5 (Fuzz)
         assert_eq!(spans[0].tab, Tab::Fuzz);
         assert_eq!(spans[0].x_start, 0);
-        assert_eq!(spans[0].x_end, 8); // "[5] Fuzz" = 8 chars
+        assert_eq!(spans[0].x_end, 4); // "Fuzz" = 4 chars
 
         assert_eq!(spans[1].tab, Tab::Waf);
-        assert_eq!(spans[1].x_start, 10);
-        assert_eq!(spans[1].x_end, 17); // "[6] WAF" = 7 chars + spacing
+        assert_eq!(spans[1].x_start, 6);
+        assert_eq!(spans[1].x_end, 9); // "WAF" = 3 chars + spacing
 
         assert_eq!(tab_window.selected_visible, 2);
         assert_eq!(spans[2].global_index, 7);
@@ -1053,8 +1053,8 @@ mod tests {
         assert_eq!(spans.len(), 5);
         let se_span = &spans[3];
         assert_eq!(se_span.tab, Tab::ScanEndpoints);
-        // Title "[4] Scan Endpoints" = 18 chars
-        assert_eq!(se_span.x_end - se_span.x_start, 18);
+        // Title "Scan Endpoints" = 14 chars
+        assert_eq!(se_span.x_end - se_span.x_start, 14);
 
         // Click anywhere within the ScanEndpoints tab
         for x in se_span.x_start..se_span.x_end {

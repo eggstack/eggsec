@@ -45,7 +45,7 @@ crates/slapper/src/tui/
 
 ## Quick Switch Panel
 
-Ctrl+G shows ALL tabs with fuzzy search (not just bookmarked):
+Ctrl+X shows ALL tabs with fuzzy search (not just bookmarked):
 
 ```rust
 // Toggle quick switch

@@ -281,7 +281,7 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     f.render_widget(Clear, popup_area);
 
     let block = Block::default()
-        .title("Tab Search (Ctrl+G to close, Enter to select, Up/Down to navigate)")
+        .title("Tab Search (Ctrl+X to close, Enter to select, Up/Down to navigate)")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(tc!(primary)));
 

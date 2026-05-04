@@ -472,7 +472,7 @@ mod tests {
     fn test_tab_window_calculation_80_cols() {
         use crate::tui::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(80, Tab::Recon, 0);
-        assert_eq!(window.max_visible, 6);
+        assert_eq!(window.max_visible, 11);
         assert_eq!(window.start, 0);
         assert!(window.end <= window.total_tabs);
         assert!(window.selected_visible < window.max_visible);
@@ -482,7 +482,7 @@ mod tests {
     fn test_tab_window_calculation_40_cols() {
         use crate::tui::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(40, Tab::Recon, 0);
-        assert_eq!(window.max_visible, 3);
+        assert_eq!(window.max_visible, 4);
         assert!(window.start <= window.total_tabs);
     }
 
@@ -490,7 +490,7 @@ mod tests {
     fn test_tab_window_calculation_120_cols() {
         use crate::tui::tabs::{Tab, TabWindow};
         let window = TabWindow::for_width(120, Tab::Recon, 0);
-        assert_eq!(window.max_visible, 11);
+        assert_eq!(window.max_visible, 17);
     }
 
     #[test]
