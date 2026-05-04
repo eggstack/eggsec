@@ -2,6 +2,40 @@
 
 Specialized guidance for the terminal UI module.
 
+## Module Structure
+
+```
+crates/slapper/src/tui/
+├── app/          # App state, event loop, command handling
+│   ├── mod.rs           # App struct, notifications, helpers
+│   ├── runner.rs        # Event loop, input handling
+│   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
+│   ├── state_update.rs  # Background task handling, result dispatch
+│   ├── notifications.rs # Notification and NotificationSeverity types
+│   ├── bookmarks.rs    # Bookmark helper functions
+│   ├── confirmation.rs  # PendingAction enum
+│   ├── help_config.rs   # Static help content
+│   ├── navigation.rs   # Tab navigation, scrolling
+│   ├── command.rs      # Command palette commands
+│   ├── export.rs       # Export functionality
+│   └── ...
+├── tabs/         # Individual tab implementations
+│   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits
+│   ├── dashboard.rs    # Dashboard tab
+│   ├── fuzz.rs         # Fuzz tab
+│   └── ...
+├── components/   # Reusable UI components
+│   ├── input.rs         # InputField with focus colors
+│   ├── selector.rs      # Selector dropdown
+│   ├── popup.rs         # Popup overlays
+│   ├── palette.rs       # Command palette
+│   ├── help_bar.rs      # Help bar component
+│   └── ...
+├── theme.rs      # Theme system (tc! macro)
+├── search.rs     # Global search
+└── ui.rs         # Main rendering, status bar with mode indicator
+```
+
 ## Event Loop Order
 
 `runner.rs` follows `update() -> draw() -> poll()` order:
@@ -9,7 +43,65 @@ Specialized guidance for the terminal UI module.
 - `draw()` renders only if `needs_redraw` is set
 - `poll()` waits for user input with 100ms timeout
 
-## Channel Draining
+## Quick Switch Panel
+
+Ctrl+G shows bookmarked tabs with fuzzy search:
+
+```rust
+// Toggle quick switch
+pub fn toggle_quick_switch(&mut self) {
+    if self.is_any_overlay_active() {
+        return;
+    }
+    self.show_quick_switch = true;
+    self.quick_switch_query.clear();
+    self.quick_switch_selected = 0;
+    self.needs_redraw = true;
+}
+
+// Get filtered bookmarked tabs
+pub fn get_quick_switch_results(&self) -> Vec<&'static Tab> {
+    let query = self.quick_switch_query.to_lowercase();
+    Tab::all().iter()
+        .filter(|tab| self.bookmarks.contains(&tab.stable_id().to_string()))
+        .filter(|tab| {
+            if query.is_empty() {
+                true
+            } else {
+                tab.title().to_lowercase().contains(&query) ||
+                tab.stable_id().contains(&query)
+            }
+        })
+        .collect()
+}
+```
+
+## Mode Indicator
+
+Status bar (leftmost section) shows current input mode as a colored badge:
+- **NORMAL** shown in green (`tc!(mode_normal)`) when in Normal mode
+- **INSERT** shown in yellow/red (`tc!(mode_insert)`) when in Insert mode
+
+Theme colors defined in `ThemeColors` struct:
+```rust
+pub struct ThemeColors {
+    // ...
+    pub mode_normal: Color,
+    pub mode_insert: Color,
+}
+```
+
+Render in ui.rs `draw_status_bar()`:
+```rust
+let mode_text = match app.mode {
+    super::InputMode::Normal => "NORMAL",
+    super::InputMode::Insert => "INSERT",
+};
+let mode_color = match app.mode {
+    super::InputMode::Normal => tc!(mode_normal),
+    super::InputMode::Insert => tc!(mode_insert),
+};
+```
 
 `App::update` drains ALL pending messages from `progress_rx` and `result_rx`:
 - Uses collected `pending_updates` / `pending_results` vectors
