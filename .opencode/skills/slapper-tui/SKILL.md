@@ -9,9 +9,15 @@ crates/slapper/src/tui/
 ├── app/          # App state, event loop, command handling
 │   ├── mod.rs           # App struct, notifications, helpers
 │   ├── runner.rs        # Event loop, input handling
-│   ├── navigation.rs   # Tab navigation, scrolling
-│   ├── command.rs      # Command palette commands
-│   ├── export.rs       # Export functionality
+│   ├── key_handler.rs   # Key handling methods (extracted from mod.rs)
+│   ├── state_update.rs  # Background task handling, result dispatch
+│   ├── notifications.rs # Notification and NotificationSeverity types
+│   ├── bookmarks.rs     # Bookmark helper functions
+│   ├── confirmation.rs  # PendingAction enum
+│   ├── help_config.rs   # Static help content
+│   ├── navigation.rs    # Tab navigation, scrolling
+│   ├── command.rs       # Command palette commands
+│   ├── export.rs        # Export functionality
 │   └── ...
 ├── tabs/         # Individual tab implementations
 │   ├── mod.rs          # Tab enum, TabState/TabInput/TabRender traits
@@ -19,12 +25,15 @@ crates/slapper/src/tui/
 │   ├── fuzz.rs         # Fuzz tab
 │   └── ...
 ├── components/   # Reusable UI components
-│   ├── input.rs         # InputField
-│   ├── selector.rs     # Selector dropdown
+│   ├── input.rs         # InputField with focus colors
+│   ├── selector.rs      # Selector dropdown
+│   ├── popup.rs         # Popup overlays
+│   ├── palette.rs       # Command palette
+│   ├── help_bar.rs      # Help bar component
 │   └── ...
 ├── theme.rs      # Theme system (tc! macro)
 ├── search.rs     # Global search
-└── ui.rs         # Main rendering
+└── ui.rs         # Main rendering, status bar with mode indicator
 ```
 
 ## Key Patterns
@@ -134,5 +143,26 @@ mod tests {
 
 ## Resources
 - `crates/slapper/src/tui/AGENTS.override.md` - Detailed TUI patterns
-- `plans/plan.md` - TUI improvement plan (all workstreams complete)
+- `plans/plan.md` - TUI improvement plan (most phases complete, 2 items deferred)
 - `ARCHITECTURE.md` - Overall design
+
+## Focus Indicators
+
+InputField uses theme colors for focus states:
+- `focus_normal` - Tab navigation highlight
+- `focus_input` - Input field when focused
+- `focus_results` - Results area highlight
+
+## Mode Indicator
+
+Status bar shows current input mode:
+- **NORMAL** - Green badge, tab navigation active
+- **INSERT** - Yellow/Red badge, input field focused
+
+Use `app.mode` to check current mode (`InputMode::Normal` / `InputMode::Insert`).
+
+## Quick Switch Panel
+
+Ctrl+G opens bookmarked tabs with fuzzy search:
+- `toggle_quick_switch()` / `close_quick_switch()` methods
+- `get_quick_switch_results()` filters bookmarks by query
