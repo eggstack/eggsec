@@ -46,6 +46,24 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::PageDown) => {
                 app.page_down();
             }
+            (KeyModifiers::NONE, KeyCode::Home) => {
+                app.handle_home();
+            }
+            (KeyModifiers::NONE, KeyCode::End) => {
+                app.handle_end();
+            }
+            (KeyModifiers::NONE, KeyCode::Up) => {
+                app.handle_up();
+            }
+            (KeyModifiers::NONE, KeyCode::Down) => {
+                app.handle_down();
+            }
+            (KeyModifiers::NONE, KeyCode::Left) => {
+                app.handle_left();
+            }
+            (KeyModifiers::NONE, KeyCode::Right) => {
+                app.handle_right();
+            }
             (KeyModifiers::NONE, KeyCode::Esc) => {
                 self.handle_escape(app);
             }
@@ -114,28 +132,16 @@ impl KeyHandler {
                 app.show_http_options = false;
                 app.needs_redraw = true;
             }
-            (KeyModifiers::NONE, KeyCode::Char('h'))
-            | (KeyModifiers::NONE, KeyCode::Left)
-                if app.mode == InputMode::Normal =>
-            {
+            (KeyModifiers::NONE, KeyCode::Char('h')) if app.mode == InputMode::Normal => {
                 app.handle_left();
             }
-            (KeyModifiers::NONE, KeyCode::Char('j'))
-            | (KeyModifiers::NONE, KeyCode::Down)
-                if app.mode == InputMode::Normal =>
-            {
+            (KeyModifiers::NONE, KeyCode::Char('j')) if app.mode == InputMode::Normal => {
                 app.handle_down();
             }
-            (KeyModifiers::NONE, KeyCode::Char('k'))
-            | (KeyModifiers::NONE, KeyCode::Up)
-                if app.mode == InputMode::Normal =>
-            {
+            (KeyModifiers::NONE, KeyCode::Char('k')) if app.mode == InputMode::Normal => {
                 app.handle_up();
             }
-            (KeyModifiers::NONE, KeyCode::Char('l'))
-            | (KeyModifiers::NONE, KeyCode::Right)
-                if app.mode == InputMode::Normal =>
-            {
+            (KeyModifiers::NONE, KeyCode::Char('l')) if app.mode == InputMode::Normal => {
                 app.handle_right();
             }
             (KeyModifiers::NONE, KeyCode::Char('H')) if app.mode == InputMode::Normal => {

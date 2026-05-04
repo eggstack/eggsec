@@ -107,23 +107,23 @@ impl DashboardTab {
         self.view.add_line(Line::from(""));
         self.view.add_line(Line::from("Available Scans:"));
         self.view
-            .add_line(Line::from("  [1] Recon      - Domain/IP reconnaissance"));
+            .add_line(Line::from("  Recon      - Domain/IP reconnaissance"));
         self.view
-            .add_line(Line::from("  [2] Load       - HTTP load testing"));
+            .add_line(Line::from("  Load       - HTTP load testing"));
         self.view
-            .add_line(Line::from("  [3] Scan Ports - Port scanning"));
+            .add_line(Line::from("  Scan Ports - Port scanning"));
         self.view
-            .add_line(Line::from("  [4] Endpoints  - Endpoint discovery"));
+            .add_line(Line::from("  Endpoints  - Endpoint discovery"));
         self.view
-            .add_line(Line::from("  [5] Fingerprint- Service fingerprinting"));
+            .add_line(Line::from("  Fingerprint- Service fingerprinting"));
         self.view
-            .add_line(Line::from("  [6] Fuzz       - Security fuzzing"));
+            .add_line(Line::from("  Fuzz       - Security fuzzing"));
         self.view
-            .add_line(Line::from("  [7] WAF        - WAF detection/bypass"));
+            .add_line(Line::from("  WAF        - WAF detection/bypass"));
         self.view
-            .add_line(Line::from("  [8] WAF Stress - WAF stress testing"));
+            .add_line(Line::from("  WAF Stress - WAF stress testing"));
         self.view
-            .add_line(Line::from("  [9] Scan       - Pipeline scan"));
+            .add_line(Line::from("  Scan       - Pipeline scan"));
         self.view.add_line(Line::from(""));
         self.view.add_line(Line::styled(
             "Additional Tabs:",
@@ -132,21 +132,21 @@ impl DashboardTab {
                 .add_modifier(ratatui::style::Modifier::BOLD),
         ));
         self.view
-            .add_line(Line::from("  [10] Proxy      - Proxy management"));
+            .add_line(Line::from("  Proxy      - Proxy management"));
         self.view.add_line(Line::from(
-            "  [11] Packet     - Network tools (ICMP, Traceroute)",
+            "  Packet     - Network tools (ICMP, Traceroute)",
         ));
         self.view
-            .add_line(Line::from("  [12] GraphQL    - GraphQL security testing"));
+            .add_line(Line::from("  GraphQL    - GraphQL security testing"));
         self.view.add_line(Line::from(
-            "  [13] OAuth      - OAuth/OIDC security testing",
+            "  OAuth      - OAuth/OIDC security testing",
         ));
         self.view
-            .add_line(Line::from("  [14] Cluster    - Distributed scanning"));
+            .add_line(Line::from("  Cluster    - Distributed scanning"));
         self.view
-            .add_line(Line::from("  [15] Stress     - Stress/load testing"));
+            .add_line(Line::from("  Stress     - Stress/load testing"));
         self.view
-            .add_line(Line::from("  [16] Report     - Report conversion & trends"));
+            .add_line(Line::from("  Report     - Report conversion & trends"));
         self.view.add_line(Line::from(""));
         self.view.add_line(Line::styled(
             "Available Services:",
@@ -168,9 +168,11 @@ impl DashboardTab {
         self.view
             .add_line(Line::from("  n/p or Shift+H/L - Previous/Next tab"));
         self.view
-            .add_line(Line::from("  j/k          - Scroll up/down"));
+            .add_line(Line::from("  Ctrl+X       - Quick switch tab"));
         self.view
-            .add_line(Line::from("  Enter        - Jump to scan tab"));
+            .add_line(Line::from("  j/k          - Scroll up/down / Navigate"));
+        self.view
+            .add_line(Line::from("  Enter        - Select / Start scan"));
         self.view
             .add_line(Line::from("  e            - Export results"));
         self.view

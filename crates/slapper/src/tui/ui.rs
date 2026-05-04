@@ -1,7 +1,6 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
-    text::Span,
     widgets::{Block, Borders, Paragraph, Tabs},
     Frame,
 };
@@ -360,39 +359,43 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
-    use ratatui::text::Line;
+    use ratatui::text::{Line, Span};
 
-    let breadcrumb_parts: Vec<Line> = app
+    let parts = app
         .current_tab
         .as_tab_render(app)
         .breadcrumb()
-        .unwrap_or_else(|| app.current_tab.default_breadcrumb())
-    .iter()
-    .enumerate()
-    .map(|(i, part)| {
-        if i == 0 {
-            Line::from(Span::styled(
-                *part,
-                Style::default()
-                    .fg(tc!(text))
-                    .add_modifier(Modifier::BOLD),
-            ))
-        } else {
-            Line::from(vec![
-                Span::raw(" > "),
-                Span::styled(*part, Style::default().fg(tc!(primary))),
-            ])
-        }
-    })
-    .collect();
+        .unwrap_or_else(|| app.current_tab.default_breadcrumb());
 
-    let breadcrumb_line: Line = breadcrumb_parts.into_iter().flatten().collect();
+    let mut spans = Vec::new();
+    let total_parts = parts.len();
+
+    for (i, part) in parts.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(" > ", Style::default().fg(tc!(text_dim))));
+        }
+
+        let is_last = i == total_parts - 1;
+        let style = if is_last {
+            Style::default()
+                .fg(tc!(accent))
+                .add_modifier(Modifier::BOLD)
+        } else if i == 0 {
+            Style::default()
+                .fg(tc!(text))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(tc!(primary))
+        };
+
+        spans.push(Span::styled(*part, style));
+    }
 
     let block = Block::default()
         .borders(Borders::NONE)
         .border_style(Style::default().fg(tc!(border)));
 
-    let paragraph = Paragraph::new(breadcrumb_line)
+    let paragraph = Paragraph::new(Line::from(spans))
         .block(block)
         .style(Style::default().fg(tc!(text)));
 
@@ -675,21 +678,21 @@ fn get_help_text(app: &App, area: Rect) -> String {
         super::InputMode::Normal => {
             if is_narrow {
                 format!(
-                    "[n/p] Tabs [hjkl] Move [/] Search{} [q] Quit",
+                    "[n/p] Tabs [hjkl] Move [/] Search [^X] Quick{} [q] Quit",
                     if app.is_paused() { " [P]" } else { "" }
                 )
             } else {
                 format!(
-                    "[n/p] Tabs [h/j/k/l] Move [/] Search [Space] Help [q] Quit{}",
+                    "[n/p] Tabs [hjkl] Move [/] Search [Ctrl+X] Quick Switch [Space] Help [q] Quit{}",
                     if app.is_paused() { " [Ctrl+Y] Resume" } else { "" }
                 )
             }
         }
         super::InputMode::Insert => {
             if is_narrow {
-                "[Esc] Normal [Ctrl+V] Paste".to_string()
+                "[Esc] Normal [Tab] Next [Arw] Move [^V] Paste".to_string()
             } else {
-                "[Esc] Normal Mode | Type to input | [Ctrl+V] Paste".to_string()
+                "[Esc] Normal Mode | [Tab/S-Tab] Focus | [Arrows] Move | [Ctrl+V] Paste".to_string()
             }
         }
     }

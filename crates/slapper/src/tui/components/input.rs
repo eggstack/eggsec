@@ -301,20 +301,29 @@ impl InputField {
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        let border_style = if self.focused {
-            Style::default().fg(tc!(focus_input))
+        let (border_style, title_style) = if self.focused {
+            (
+                Style::default().fg(tc!(focus_input)).add_modifier(ratatui::style::Modifier::BOLD),
+                Style::default().fg(tc!(focus_input)).add_modifier(ratatui::style::Modifier::BOLD)
+            )
         } else if let Some(ref validation) = self.validation {
             if validation.valid {
-                Style::default().fg(tc!(success))
+                (Style::default().fg(tc!(success)), Style::default().fg(tc!(text_dim)))
             } else {
-                Style::default().fg(tc!(error))
+                (Style::default().fg(tc!(error)), Style::default().fg(tc!(error)).add_modifier(ratatui::style::Modifier::BOLD))
             }
         } else {
-            Style::default().fg(tc!(border))
+            (Style::default().fg(tc!(border)), Style::default().fg(tc!(text_dim)))
+        };
+
+        let title = if self.focused {
+            format!("▶ {}", self.label)
+        } else {
+            self.label.clone()
         };
 
         let block = Block::default()
-            .title(self.label.as_str())
+            .title(ratatui::text::Span::styled(title, title_style))
             .borders(Borders::ALL)
             .border_style(border_style);
 

@@ -323,8 +323,10 @@ impl App {
     }
 
     fn dispatcher_mut(&mut self) -> TabDispatcher<'_> {
-        // Note: Unavailable tabs should not be set as current_tab (use set_current_tab_if_available()).
-        // This mapping is a safety fallback - unavailable tabs map to dashboard.
+        if self.current_tab == Tab::History {
+            return TabDispatcher::new_locked(self.history.lock());
+        }
+
         let tab_input: &mut dyn TabInput = match self.current_tab {
             Tab::Recon => &mut self.recon,
             Tab::Load => &mut self.load,
@@ -352,7 +354,7 @@ impl App {
             #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => &mut self.dashboard,
             Tab::Settings => &mut self.settings,
-            Tab::History => &mut self.dashboard,
+            Tab::History => unreachable!("History tab handled separately above"),
             Tab::Dashboard => &mut self.dashboard,
             #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => &mut self.hunt,
@@ -464,21 +466,14 @@ impl App {
             self.show_help = false;
             return;
         }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_escape();
-            return;
+        if self.mode == InputMode::Insert {
+            self.mode = InputMode::Normal;
         }
         self.dispatcher_mut().handle_escape();
     }
 
     pub fn handle_char(&mut self, c: char) {
         if self.show_help {
-            return;
-        }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_char(c);
             return;
         }
         self.dispatcher_mut().handle_char(c);
@@ -488,11 +483,6 @@ impl App {
         if self.show_help {
             return;
         }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_backspace();
-            return;
-        }
         self.dispatcher_mut().handle_backspace();
     }
 
@@ -500,21 +490,11 @@ impl App {
         if self.show_help || self.mode != InputMode::Insert {
             return false;
         }
-
-        match self.current_tab {
-            Tab::History => false,
-            Tab::Dashboard => false,
-            _ => self.dispatcher_mut().handle_autocomplete(),
-        }
+        self.dispatcher_mut().handle_autocomplete()
     }
 
     pub fn handle_up(&mut self) {
         if self.show_help {
-            return;
-        }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_up();
             return;
         }
         self.dispatcher_mut().handle_up();
@@ -524,11 +504,6 @@ impl App {
         if self.show_help {
             return;
         }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_down();
-            return;
-        }
         self.dispatcher_mut().handle_down();
     }
 
@@ -536,12 +511,7 @@ impl App {
         if self.show_help {
             return;
         }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-            h.handle_left();
-            return;
-        }
-        if self.dispatcher_mut().is_at_left_edge() {
+        if self.mode == InputMode::Normal && self.dispatcher_mut().is_at_left_edge() {
             return;
         }
         let _ = self.dispatcher_mut().handle_left();
@@ -551,12 +521,7 @@ impl App {
         if self.show_help {
             return;
         }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-            h.handle_right();
-            return;
-        }
-        if self.dispatcher_mut().is_at_right_edge() {
+        if self.mode == InputMode::Normal && self.dispatcher_mut().is_at_right_edge() {
             return;
         }
         let _ = self.dispatcher_mut().handle_right();
@@ -564,16 +529,6 @@ impl App {
 
     pub fn handle_focus_next(&mut self) {
         if self.show_help {
-            return;
-        }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-            h.handle_focus_next();
-            if h.is_input_focused() {
-                self.mode = InputMode::Insert;
-            } else {
-                self.mode = InputMode::Normal;
-            }
             return;
         }
         self.dispatcher_mut().handle_focus_next();
@@ -588,16 +543,6 @@ impl App {
         if self.show_help {
             return;
         }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-            h.handle_focus_prev();
-            if h.is_input_focused() {
-                self.mode = InputMode::Insert;
-            } else {
-                self.mode = InputMode::Normal;
-            }
-            return;
-        }
         self.dispatcher_mut().handle_focus_prev();
         if self.dispatcher_mut().is_input_focused() {
             self.mode = InputMode::Insert;
@@ -610,12 +555,7 @@ impl App {
         if self.show_help {
             return false;
         }
-        let at_left_edge = match self.current_tab {
-            Tab::History => true,
-            Tab::Dashboard => true,
-            _ => self.dispatcher_mut().is_at_left_edge(),
-        };
-        if at_left_edge {
+        if self.dispatcher_mut().is_at_left_edge() {
             false
         } else {
             self.dispatcher_mut().handle_left();
@@ -623,16 +563,11 @@ impl App {
         }
     }
 
-pub fn handle_right_or_next_tab(&mut self) -> bool {
+    pub fn handle_right_or_next_tab(&mut self) -> bool {
         if self.show_help {
             return false;
         }
-        let at_right_edge = match self.current_tab {
-            Tab::History => true,
-            Tab::Dashboard => true,
-            _ => self.dispatcher_mut().is_at_right_edge(),
-        };
-        if at_right_edge {
+        if self.dispatcher_mut().is_at_right_edge() {
             false
         } else {
             self.dispatcher_mut().handle_right();
@@ -641,11 +576,6 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     }
 
     pub fn reset_current_tab(&mut self) {
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.clear_all();
-            return;
-        }
         self.dispatcher_mut().reset();
     }
 
@@ -696,81 +626,41 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
 
     pub fn page_up(&mut self) {
         const PAGE_SIZE: usize = 10;
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.page_up(PAGE_SIZE);
-            return;
-        }
         self.dispatcher_mut().page_up(PAGE_SIZE);
     }
 
     pub fn page_down(&mut self) {
         const PAGE_SIZE: usize = 10;
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.page_down(PAGE_SIZE);
-            return;
-        }
         self.dispatcher_mut().page_down(PAGE_SIZE);
     }
 
     pub fn handle_word_forward(&mut self) {
         if self.show_help { return; }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_word_forward();
-            return;
-        }
         self.dispatcher_mut().handle_word_forward();
     }
 
     pub fn handle_word_backward(&mut self) {
         if self.show_help { return; }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_word_backward();
-            return;
-        }
         self.dispatcher_mut().handle_word_backward();
     }
 
     pub fn handle_home(&mut self) {
         if self.show_help { return; }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_home();
-            return;
-        }
         self.dispatcher_mut().handle_home();
     }
 
     pub fn handle_end(&mut self) {
         if self.show_help { return; }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_end();
-            return;
-        }
         self.dispatcher_mut().handle_end();
     }
 
     pub fn handle_top(&mut self) {
         if self.show_help { return; }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_top();
-            return;
-        }
         self.dispatcher_mut().handle_top();
     }
 
     pub fn handle_bottom(&mut self) {
         if self.show_help { return; }
-        if self.current_tab == Tab::History {
-            let mut h = self.history.lock();
-        h.handle_bottom();
-            return;
-        }
         self.dispatcher_mut().handle_bottom();
     }
 
@@ -851,17 +741,27 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
 
     pub fn get_quick_switch_results(&self) -> Vec<&'static Tab> {
         let query = self.quick_switch_query.to_lowercase();
-        Tab::all().iter()
-            .filter(|tab| {
-                if query.is_empty() {
-                    true
+        if query.is_empty() {
+            return Tab::all().iter().collect();
+        }
+
+        use crate::tui::utils::fuzzy::fuzzy_score;
+        let mut scored: Vec<(u32, &'static Tab)> = Tab::all().iter()
+            .filter_map(|tab| {
+                let score = fuzzy_score(&tab.title().to_lowercase(), &query)
+                    .max(fuzzy_score(&tab.stable_id().to_lowercase(), &query))
+                    .max(fuzzy_score(&tab.description().to_lowercase(), &query));
+                
+                if score > 0 {
+                    Some((score, tab))
                 } else {
-                    tab.title().to_lowercase().contains(&query) ||
-                    tab.stable_id().contains(&query) ||
-                    tab.description().to_lowercase().contains(&query)
+                    None
                 }
             })
-            .collect()
+            .collect();
+        
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.into_iter().map(|(_, tab)| tab).collect()
     }
 
     /// Check if command palette is visible

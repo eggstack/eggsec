@@ -1,115 +1,200 @@
 use crate::tui::tabs::{AppState, TabInput, TabState};
+use parking_lot::MutexGuard;
+use crate::tui::tabs::HistoryTab;
 
-pub struct TabDispatcher<'a>(&'a mut dyn TabInput);
-
-impl<'a> TabDispatcher<'a> {
-    pub fn handle_enter(&mut self) {
-        self.0.handle_enter();
-    }
+pub enum TabDispatcher<'a> {
+    Standard(&'a mut dyn TabInput),
+    LockedHistory(MutexGuard<'a, HistoryTab>),
 }
 
 impl<'a> TabDispatcher<'a> {
     pub fn new(tab_input: &'a mut dyn TabInput) -> Self {
-        Self(tab_input)
+        Self::Standard(tab_input)
+    }
+
+    pub fn new_locked(history: MutexGuard<'a, HistoryTab>) -> Self {
+        Self::LockedHistory(history)
     }
 
     pub fn handle_focus_next(&mut self) {
-        self.0.handle_focus_next();
+        match self {
+            Self::Standard(t) => t.handle_focus_next(),
+            Self::LockedHistory(h) => h.handle_focus_next(),
+        }
     }
 
     pub fn handle_focus_prev(&mut self) {
-        self.0.handle_focus_prev();
+        match self {
+            Self::Standard(t) => t.handle_focus_prev(),
+            Self::LockedHistory(h) => h.handle_focus_prev(),
+        }
     }
 
     pub fn handle_char(&mut self, c: char) {
-        self.0.handle_char(c);
+        match self {
+            Self::Standard(t) => t.handle_char(c),
+            Self::LockedHistory(h) => h.handle_char(c),
+        }
     }
 
     pub fn handle_backspace(&mut self) {
-        self.0.handle_backspace();
+        match self {
+            Self::Standard(t) => t.handle_backspace(),
+            Self::LockedHistory(h) => h.handle_backspace(),
+        }
+    }
+
+    pub fn handle_enter(&mut self) {
+        match self {
+            Self::Standard(t) => t.handle_enter(),
+            Self::LockedHistory(h) => h.handle_enter(),
+        }
     }
 
     pub fn handle_escape(&mut self) {
-        self.0.handle_escape();
+        match self {
+            Self::Standard(t) => t.handle_escape(),
+            Self::LockedHistory(h) => h.handle_escape(),
+        }
     }
 
     pub fn handle_up(&mut self) {
-        self.0.handle_up();
+        match self {
+            Self::Standard(t) => t.handle_up(),
+            Self::LockedHistory(h) => h.handle_up(),
+        }
     }
 
     pub fn handle_down(&mut self) {
-        self.0.handle_down();
+        match self {
+            Self::Standard(t) => t.handle_down(),
+            Self::LockedHistory(h) => h.handle_down(),
+        }
     }
 
     pub fn handle_left(&mut self) -> bool {
-        self.0.handle_left()
+        match self {
+            Self::Standard(t) => t.handle_left(),
+            Self::LockedHistory(h) => h.handle_left(),
+        }
     }
 
     pub fn handle_right(&mut self) -> bool {
-        self.0.handle_right()
+        match self {
+            Self::Standard(t) => t.handle_right(),
+            Self::LockedHistory(h) => h.handle_right(),
+        }
     }
 
     pub fn handle_word_forward(&mut self) {
-        self.0.handle_word_forward();
+        match self {
+            Self::Standard(t) => t.handle_word_forward(),
+            Self::LockedHistory(h) => h.handle_word_forward(),
+        }
     }
 
     pub fn handle_word_backward(&mut self) {
-        self.0.handle_word_backward();
+        match self {
+            Self::Standard(t) => t.handle_word_backward(),
+            Self::LockedHistory(h) => h.handle_word_backward(),
+        }
     }
 
     pub fn handle_home(&mut self) {
-        self.0.handle_home();
+        match self {
+            Self::Standard(t) => t.handle_home(),
+            Self::LockedHistory(h) => h.handle_home(),
+        }
     }
 
     pub fn handle_end(&mut self) {
-        self.0.handle_end();
+        match self {
+            Self::Standard(t) => t.handle_end(),
+            Self::LockedHistory(h) => h.handle_end(),
+        }
     }
 
     pub fn handle_top(&mut self) {
-        self.0.handle_top();
+        match self {
+            Self::Standard(t) => t.handle_top(),
+            Self::LockedHistory(h) => h.handle_top(),
+        }
     }
 
     pub fn handle_bottom(&mut self) {
-        self.0.handle_bottom();
+        match self {
+            Self::Standard(t) => t.handle_bottom(),
+            Self::LockedHistory(h) => h.handle_bottom(),
+        }
     }
 
     pub fn handle_autocomplete(&mut self) -> bool {
-        self.0.handle_autocomplete()
+        match self {
+            Self::Standard(t) => t.handle_autocomplete(),
+            Self::LockedHistory(h) => h.handle_autocomplete(),
+        }
     }
 
     pub fn is_input_focused(&self) -> bool {
-        self.0.is_input_focused()
+        match self {
+            Self::Standard(t) => t.is_input_focused(),
+            Self::LockedHistory(h) => h.is_input_focused(),
+        }
     }
 
     pub fn is_at_left_edge(&self) -> bool {
-        self.0.is_at_left_edge()
+        match self {
+            Self::Standard(t) => t.is_at_left_edge(),
+            Self::LockedHistory(h) => h.is_at_left_edge(),
+        }
     }
 
-    pub fn is_at_right_edge(&mut self) -> bool {
-        self.0.is_at_right_edge()
+    pub fn is_at_right_edge(&self) -> bool {
+        match self {
+            Self::Standard(t) => t.is_at_right_edge(),
+            Self::LockedHistory(h) => h.is_at_right_edge(),
+        }
     }
 
     pub fn stop(&mut self) {
-        self.0.stop();
+        match self {
+            Self::Standard(t) => t.stop(),
+            Self::LockedHistory(h) => h.stop(),
+        }
     }
 
     pub fn page_up(&mut self, page_size: usize) {
-        self.0.page_up(page_size);
+        match self {
+            Self::Standard(t) => t.page_up(page_size),
+            Self::LockedHistory(h) => h.page_up(page_size),
+        }
     }
 
     pub fn page_down(&mut self, page_size: usize) {
-        self.0.page_down(page_size);
+        match self {
+            Self::Standard(t) => t.page_down(page_size),
+            Self::LockedHistory(h) => h.page_down(page_size),
+        }
     }
 
     pub fn handle_paste(&mut self, text: &str) {
-        self.0.handle_paste(text);
+        match self {
+            Self::Standard(t) => t.handle_paste(text),
+            Self::LockedHistory(h) => h.handle_paste(text),
+        }
     }
 
     pub fn reset(&mut self) {
-        self.0.reset();
+        match self {
+            Self::Standard(t) => t.reset(),
+            Self::LockedHistory(h) => h.reset(),
+        }
     }
 
     pub fn is_running(&self) -> bool {
-        TabState::state(self.0) == AppState::Running
+        match self {
+            Self::Standard(t) => TabState::state(*t) == AppState::Running,
+            Self::LockedHistory(h) => TabState::state(&**h) == AppState::Running,
+        }
     }
 }

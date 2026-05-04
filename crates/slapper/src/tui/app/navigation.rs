@@ -11,13 +11,6 @@ impl super::App {
         self.adjust_tab_scroll();
     }
 
-    pub(super) fn select_tab(&mut self, index: usize) {
-        self.clear_search_on_tab_switch();
-        if let Some(tab) = super::tabs::Tab::from_index(index) {
-            let _ = self.set_current_tab_if_available(tab);
-        }
-    }
-
     pub(super) fn adjust_tab_scroll(&mut self) {
         use super::tabs::TabWindow;
         let tab_index = self.current_tab.visible_index().unwrap_or(0);
@@ -214,28 +207,6 @@ mod tests {
     }
 
     #[test]
-    fn test_select_tab_by_index() {
-        let mut app = create_test_app();
-        app.select_tab(5);
-        assert_eq!(app.current_tab, Tab::Fuzz);
-    }
-
-    #[test]
-    fn test_select_tab_by_invalid_index_ignores() {
-        let mut app = create_test_app();
-        let initial_tab = app.current_tab;
-        app.select_tab(999);
-        assert_eq!(app.current_tab, initial_tab);
-    }
-
-    #[test]
-    fn test_select_tab_by_zero_index() {
-        let mut app = create_test_app();
-        app.select_tab(0);
-        assert_eq!(app.current_tab, Tab::Recon);
-    }
-
-    #[test]
     fn test_toggle_help() {
         let mut app = create_test_app();
         assert!(!app.show_help);
@@ -398,18 +369,6 @@ mod tests {
         app.search_query = "test query".to_string();
 
         app.prev_tab();
-
-        assert!(!app.show_search);
-        assert!(app.search_query.is_empty());
-    }
-
-    #[test]
-    fn test_select_tab_clears_search() {
-        let mut app = create_test_app();
-        app.show_search = true;
-        app.search_query = "test query".to_string();
-
-        app.select_tab(3);
 
         assert!(!app.show_search);
         assert!(app.search_query.is_empty());
