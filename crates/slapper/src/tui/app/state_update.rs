@@ -1,5 +1,6 @@
 use crate::tui::tabs::TabState;
 use crate::tui::workers::TaskResult;
+use super::NotificationSeverity;
 
 impl super::App {
     pub(super) fn update(&mut self) {
@@ -142,7 +143,7 @@ impl super::App {
 
                     h.add_waf_result("<target>", r.waf_name.is_some(), &waf_name, 0);
                 }
-                self.waf.set_detection_result(r);
+                self.waf.set_results(r);
             }
             TaskResult::WafBypass {
                 detection,
@@ -159,7 +160,7 @@ impl super::App {
                         success_count,
                     );
                 }
-                self.waf.set_detection_result(detection);
+                self.waf.set_results(detection);
                 self.waf.set_bypass_results(bypasses);
             }
             TaskResult::WafStress(bypasses) => {
@@ -342,53 +343,55 @@ impl super::App {
             Tab::Nse => self.nse.set_error(msg),
             #[cfg(not(feature = "nse"))]
             Tab::Nse => {
-                tracing::error!("NSE tab is not available: {}", msg);
+                self.set_notification(format!("NSE tab unavailable: {}", msg), NotificationSeverity::Error);
             }
             #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
             Tab::Plugin => self.plugin.set_error(msg),
             #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => {
-                tracing::error!("Plugin tab is not available: {}", msg);
+                self.set_notification(format!("Plugin tab unavailable: {}", msg), NotificationSeverity::Error);
             }
             #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => self.hunt.set_error(msg),
             #[cfg(not(feature = "advanced-hunting"))]
             Tab::Hunt => {
-                tracing::error!("Hunt feature not available: {}", msg);
+                self.set_notification(format!("Hunt feature not available: {}", msg), NotificationSeverity::Error);
             }
             #[cfg(feature = "headless-browser")]
             Tab::Browser => self.browser.set_error(msg),
             #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {}
+            Tab::Browser => {
+                self.set_notification(format!("Browser feature not available: {}", msg), NotificationSeverity::Error);
+            }
             #[cfg(feature = "compliance")]
             Tab::Compliance => self.compliance.set_error(msg),
             #[cfg(not(feature = "compliance"))]
             Tab::Compliance => {
-                tracing::error!("Compliance feature not available: {}", msg);
+                self.set_notification(format!("Compliance feature not available: {}", msg), NotificationSeverity::Error);
             }
             #[cfg(feature = "database")]
             Tab::Storage => self.storage.set_error(msg),
             #[cfg(not(feature = "database"))]
             Tab::Storage => {
-                tracing::error!("Storage feature not available: {}", msg);
+                self.set_notification(format!("Storage feature not available: {}", msg), NotificationSeverity::Error);
             }
             #[cfg(feature = "external-integrations")]
             Tab::Integrations => self.integrations.set_error(msg),
             #[cfg(not(feature = "external-integrations"))]
             Tab::Integrations => {
-                tracing::error!("Integrations feature not available: {}", msg);
+                self.set_notification(format!("Integrations feature not available: {}", msg), NotificationSeverity::Error);
             }
             #[cfg(feature = "finding-workflow")]
             Tab::Workflow => self.workflow.set_error(msg),
             #[cfg(not(feature = "finding-workflow"))]
             Tab::Workflow => {
-                tracing::error!("Workflow feature not available: {}", msg);
+                self.set_notification(format!("Workflow feature not available: {}", msg), NotificationSeverity::Error);
             }
             #[cfg(feature = "vuln-management")]
             Tab::Vuln => self.vuln.set_error(msg),
             #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => {
-                tracing::error!("Vuln management not available: {}", msg);
+                self.set_notification(format!("Vuln management not available: {}", msg), NotificationSeverity::Error);
             }
             Tab::Settings => {
                 tracing::error!("Settings tab does not support error state: {}", msg);

@@ -1,18 +1,28 @@
-pub(crate) mod dispatch;
+pub(crate) mod bookmarks;
 pub(crate) mod command;
+pub(crate) mod confirmation;
+pub(crate) mod dispatch;
 pub(crate) mod error;
 pub(crate) mod export;
+pub(crate) mod help_config;
 pub(crate) mod input;
+pub(crate) mod key_handler;
 pub(crate) mod navigation;
 mod options;
 pub(crate) mod runner;
 pub(crate) mod state_update;
 pub(crate) mod task_management;
 
-pub use crate::tui::state::create_shared_history;
+pub use bookmarks::{get_bookmarked_tab_ids, is_bookmarked, toggle_bookmark};
+pub use confirmation::PendingAction;
 pub use input::InputMode;
+pub use key_handler::KeyHandler;
+pub use notifications::{Notification, NotificationSeverity};
 pub use options::GlobalHttpOptions;
 pub use runner::run;
+pub use crate::tui::state::create_shared_history;
+
+pub(crate) mod notifications;
 
 use crossterm::event::KeyCode;
 use super::error::make_friendly_error;
@@ -26,88 +36,6 @@ use dispatch::TabDispatcher;
 use crate::tui::workers;
 use crate::types::OutputFormat;
 use task_management::TaskBuilder;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PendingAction {
-    ResetTab,
-    SaveSettings,
-    DeleteHistoryEntry,
-    ClearHistory,
-}
-
-impl PendingAction {
-    pub fn message(&self) -> (String, Vec<String>) {
-        match self {
-            PendingAction::ResetTab => (
-                "Confirm Reset".to_string(),
-                vec![
-                    "Are you sure you want to reset this tab?".to_string(),
-                    "All current input will be lost.".to_string(),
-                ],
-            ),
-            PendingAction::SaveSettings => (
-                "Confirm Save Settings".to_string(),
-                vec![
-                    "Are you sure you want to save settings?".to_string(),
-                    "This will overwrite your configuration file.".to_string(),
-                ],
-            ),
-            PendingAction::DeleteHistoryEntry => (
-                "Confirm Delete".to_string(),
-                vec![
-                    "Are you sure you want to delete this history entry?".to_string(),
-                    "This action cannot be undone.".to_string(),
-                ],
-            ),
-            PendingAction::ClearHistory => (
-                "Confirm Clear History".to_string(),
-                vec![
-                    "Are you sure you want to clear all history?".to_string(),
-                    "This action cannot be undone.".to_string(),
-                ],
-            ),
-        }
-    }
-
-    pub fn execute(self, app: &mut App) {
-        match self {
-            PendingAction::ResetTab => app.reset_current_tab(),
-            PendingAction::SaveSettings => app.save_settings(),
-            PendingAction::DeleteHistoryEntry => app.delete_history_entry(),
-            PendingAction::ClearHistory => app.clear_all_history(),
-        }
-    }
-}
-
-pub struct Notification {
-    pub message: String,
-    pub severity: NotificationSeverity,
-    pub created_at: std::time::Instant,
-    pub timeout_secs: u64,
-}
-
-impl Notification {
-    pub fn new(message: String, severity: NotificationSeverity) -> Self {
-        Self {
-            message,
-            severity,
-            created_at: std::time::Instant::now(),
-            timeout_secs: 5, // Default 5 seconds
-        }
-    }
-
-    pub fn is_expired(&self) -> bool {
-        self.created_at.elapsed().as_secs() > self.timeout_secs
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NotificationSeverity {
-    Info,
-    Success,
-    Warning,
-    Error,
-}
 
 pub struct App {
     pub current_tab: Tab,
@@ -181,6 +109,9 @@ pub struct App {
     pub paused: bool,
     pub spinner_tick: u64,
     pub notification: Option<Notification>,
+    pub show_quick_switch: bool,
+    pub quick_switch_query: String,
+    pub quick_switch_selected: usize,
 }
 
 impl App {
@@ -300,6 +231,9 @@ impl App {
             bookmarks: restored_bookmarks,
             paused: false,
             spinner_tick: 0,
+            show_quick_switch: false,
+            quick_switch_query: String::new(),
+            quick_switch_selected: 0,
         }
     }
 
@@ -841,20 +775,15 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     }
 
     pub fn toggle_bookmark(&mut self, tab: Tab) {
-        let id = tab.stable_id().to_string();
-        if self.bookmarks.contains(&id) {
-            self.bookmarks.remove(&id);
-        } else {
-            self.bookmarks.insert(id);
-        }
+        bookmarks::toggle_bookmark(&mut self.bookmarks, tab);
     }
 
     pub fn is_bookmarked(&self, tab: Tab) -> bool {
-        self.bookmarks.contains(tab.stable_id())
+        bookmarks::is_bookmarked(&self.bookmarks, tab)
     }
 
     pub fn get_bookmarked_tab_ids(&self) -> Vec<String> {
-        self.bookmarks.iter().cloned().collect()
+        bookmarks::get_bookmarked_tab_ids(&self.bookmarks)
     }
 
     pub fn toggle_pause(&mut self) {
@@ -888,6 +817,53 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
         self.theme_manager.toggle();
     }
 
+    pub fn set_dark_mode(&mut self, enabled: bool) {
+        let target_mode = if enabled { "light" } else { "dark" };
+        if self.theme_manager.set_theme(target_mode) {
+            self.needs_redraw = true;
+        }
+    }
+
+    pub fn set_accent_color(&mut self, color: &str) {
+        self.theme_manager.set_accent_color(color);
+        self.needs_redraw = true;
+    }
+
+    pub fn toggle_quick_switch(&mut self) {
+        if self.is_any_overlay_active() {
+            return;
+        }
+        self.show_quick_switch = true;
+        self.quick_switch_query.clear();
+        self.quick_switch_selected = 0;
+        self.needs_redraw = true;
+    }
+
+    pub fn close_quick_switch(&mut self) {
+        self.show_quick_switch = false;
+        self.quick_switch_query.clear();
+        self.needs_redraw = true;
+    }
+
+    pub fn is_quick_switch_visible(&self) -> bool {
+        self.show_quick_switch
+    }
+
+    pub fn get_quick_switch_results(&self) -> Vec<&'static Tab> {
+        let query = self.quick_switch_query.to_lowercase();
+        Tab::all().iter()
+            .filter(|tab| self.bookmarks.contains(&tab.stable_id().to_string()))
+            .filter(|tab| {
+                if query.is_empty() {
+                    true
+                } else {
+                    tab.title().to_lowercase().contains(&query) ||
+                    tab.stable_id().contains(&query)
+                }
+            })
+            .collect()
+    }
+
     /// Check if command palette is visible
     pub fn is_command_palette_visible(&self) -> bool {
         self.command_palette
@@ -914,15 +890,18 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     /// Get the topmost overlay based on precedence:
     /// 1. Confirm popup (pending_action)
     /// 2. Command palette
-    /// 3. Search
-    /// 4. HTTP options
-    /// 5. Help
+    /// 3. Quick switch
+    /// 4. Search
+    /// 5. HTTP options
+    /// 6. Help
     /// Returns None if no overlay is active
     pub fn topmost_overlay(&self) -> Option<OverlayType> {
         if self.is_confirm_popup_visible() {
             Some(OverlayType::ConfirmPopup)
         } else if self.is_command_palette_visible() {
             Some(OverlayType::CommandPalette)
+        } else if self.is_quick_switch_visible() {
+            Some(OverlayType::QuickSwitch)
         } else if self.is_search_visible() {
             Some(OverlayType::Search)
         } else if self.is_http_options_visible() {
@@ -973,6 +952,7 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
 pub enum OverlayType {
     ConfirmPopup,
     CommandPalette,
+    QuickSwitch,
     Search,
     HttpOptions,
     Help,
