@@ -428,6 +428,24 @@ impl KeyHandler {
                     app.quick_switch_selected += 1;
                 }
             }
+            (KeyModifiers::CONTROL, KeyCode::Char('u')) | (KeyModifiers::NONE, KeyCode::PageUp) => {
+                if app.quick_switch_selected >= 10 {
+                    app.quick_switch_selected -= 10;
+                } else {
+                    app.quick_switch_selected = 0;
+                }
+            }
+            (KeyModifiers::CONTROL, KeyCode::Char('d')) | (KeyModifiers::NONE, KeyCode::PageDown) => {
+                let results = app.get_quick_switch_results();
+                app.quick_switch_selected = (app.quick_switch_selected + 10).min(results.len().saturating_sub(1));
+            }
+            (KeyModifiers::NONE, KeyCode::Home) => {
+                app.quick_switch_selected = 0;
+            }
+            (KeyModifiers::NONE, KeyCode::End) => {
+                let results = app.get_quick_switch_results();
+                app.quick_switch_selected = results.len().saturating_sub(1);
+            }
             (KeyModifiers::NONE, KeyCode::Backspace) => {
                 app.quick_switch_query.pop();
             }

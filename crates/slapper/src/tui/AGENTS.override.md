@@ -45,7 +45,7 @@ crates/slapper/src/tui/
 
 ## Quick Switch Panel
 
-Ctrl+G shows bookmarked tabs with fuzzy search:
+Ctrl+G shows ALL tabs with fuzzy search (not just bookmarked):
 
 ```rust
 // Toggle quick switch
@@ -59,22 +59,31 @@ pub fn toggle_quick_switch(&mut self) {
     self.needs_redraw = true;
 }
 
-// Get filtered bookmarked tabs
+// Get all tabs filtered by query (searches title, stable_id, description)
 pub fn get_quick_switch_results(&self) -> Vec<&'static Tab> {
     let query = self.quick_switch_query.to_lowercase();
     Tab::all().iter()
-        .filter(|tab| self.bookmarks.contains(&tab.stable_id().to_string()))
         .filter(|tab| {
             if query.is_empty() {
                 true
             } else {
                 tab.title().to_lowercase().contains(&query) ||
-                tab.stable_id().contains(&query)
+                tab.stable_id().contains(&query) ||
+                tab.description().to_lowercase().contains(&query)
             }
         })
         .collect()
 }
 ```
+
+**Navigation within quick switch:**
+- `Up/Down` - Navigate results
+- `PageUp/PageDown` or `Ctrl+U/D` - Jump 10 items
+- `Home/End` - Go to first/last item
+- `Enter` - Select and switch to tab
+- `Esc` - Close without switching
+- `Backspace` - Delete last character of filter
+- Regular characters filter the list
 
 ## Mode Indicator
 

@@ -852,13 +852,13 @@ pub fn handle_right_or_next_tab(&mut self) -> bool {
     pub fn get_quick_switch_results(&self) -> Vec<&'static Tab> {
         let query = self.quick_switch_query.to_lowercase();
         Tab::all().iter()
-            .filter(|tab| self.bookmarks.contains(&tab.stable_id().to_string()))
             .filter(|tab| {
                 if query.is_empty() {
                     true
                 } else {
                     tab.title().to_lowercase().contains(&query) ||
-                    tab.stable_id().contains(&query)
+                    tab.stable_id().contains(&query) ||
+                    tab.description().to_lowercase().contains(&query)
                 }
             })
             .collect()

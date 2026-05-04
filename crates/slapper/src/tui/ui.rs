@@ -272,8 +272,8 @@ fn draw_search_popup(f: &mut Frame, app: &App) {
 fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     use ratatui::widgets::{Clear, List, ListItem, Paragraph};
 
-    let popup_width = 50;
-    let popup_height = 12;
+    let popup_width = 60;
+    let popup_height = 18;
 
     let area = f.area();
     let popup_area = centered_rect(popup_width, popup_height, area);
@@ -281,7 +281,7 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     f.render_widget(Clear, popup_area);
 
     let block = Block::default()
-        .title("Quick Switch - Bookmark Search (Ctrl+G to close, Enter to select)")
+        .title("Tab Search (Ctrl+G to close, Enter to select, Up/Down to navigate)")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(tc!(primary)));
 
@@ -318,13 +318,12 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
         } else {
             Style::default().fg(tc!(text))
         };
-        let bookmark_indicator = if app.is_bookmarked(**tab) { " *" } else { "" };
-        let item_text = format!("{}{} - {}", tab.title(), bookmark_indicator, tab.description());
+        let item_text = format!("{} - {}", tab.title(), tab.description());
         items.push(ListItem::new(item_text).style(style));
     }
 
     if items.is_empty() {
-        items.push(ListItem::new("(No bookmarks - press Ctrl+B to bookmark current tab)").style(Style::default().fg(tc!(text_dim))));
+        items.push(ListItem::new("(No matching tabs found)").style(Style::default().fg(tc!(text_dim))));
     }
 
     let list = List::new(items)
