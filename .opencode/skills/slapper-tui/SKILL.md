@@ -143,7 +143,7 @@ mod tests {
 
 ## Resources
 - `crates/slapper/src/tui/AGENTS.override.md` - Detailed TUI patterns
-- `plans/plan.md` - TUI improvement plan (most phases complete, 2 items deferred)
+- `plans/plan.md` - TUI improvement plan (all phases complete)
 - `ARCHITECTURE.md` - Overall design
 
 ## Focus Indicators
@@ -166,3 +166,33 @@ Use `app.mode` to check current mode (`InputMode::Normal` / `InputMode::Insert`)
 Ctrl+G opens bookmarked tabs with fuzzy search:
 - `toggle_quick_switch()` / `close_quick_switch()` methods
 - `get_quick_switch_results()` filters bookmarks by query
+
+## Overlay Precedence
+
+When multiple overlays are active, use `topmost_overlay()` to determine which handles input:
+
+```rust
+pub enum OverlayType {
+    ConfirmPopup,   // Highest priority
+    CommandPalette,
+    QuickSwitch,
+    Search,
+    HttpOptions,
+    Help,           // Lowest priority
+}
+```
+
+## Confirmation System
+
+Use `PendingAction` for destructive/confirmation actions:
+```rust
+app.request_confirmation(PendingAction::ResetTab);
+// Later: app.confirm_action() or app.cancel_action()
+```
+
+## Help System
+
+Help content is extracted to `help_config.rs::get_static_help_data()`:
+- Returns `StaticHelpData` with `sections: HashMap<Tab, HelpSection>`
+- Each `HelpSection` contains title, content, and commands list
+- `HelpManager` in `help.rs` handles runtime state and rendering

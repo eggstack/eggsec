@@ -216,6 +216,7 @@ Use `OverlayType` enum and `topmost_overlay()` helper for overlay precedence:
 pub enum OverlayType {
     ConfirmPopup,   // Highest priority
     CommandPalette,
+    QuickSwitch,
     Search,
     HttpOptions,
     Help,           // Lowest priority
@@ -226,6 +227,8 @@ pub fn topmost_overlay(&self) -> Option<OverlayType> {
         Some(OverlayType::ConfirmPopup)
     } else if self.is_command_palette_visible() {
         Some(OverlayType::CommandPalette)
+    } else if self.is_quick_switch_visible() {
+        Some(OverlayType::QuickSwitch)
     } else if self.is_search_visible() {
         Some(OverlayType::Search)
     } else if self.is_http_options_visible() {
@@ -239,6 +242,53 @@ pub fn topmost_overlay(&self) -> Option<OverlayType> {
 ```
 
 Always use `topmost_overlay()` in event handling to ensure correct Esc key behavior.
+
+## Confirmation System
+
+Use `PendingAction` enum for destructive/confirmation actions:
+
+```rust
+pub enum PendingAction {
+    ResetTab,
+    SaveSettings,
+    DeleteHistoryEntry,
+    ClearHistory,
+}
+
+impl PendingAction {
+    pub fn message(&self) -> (&str, &str) { ... }
+    pub fn execute(&self, app: &mut App) { ... }
+}
+```
+
+Request confirmation before executing:
+```rust
+app.request_confirmation(PendingAction::ResetTab);
+```
+
+Confirm/cancel in event handlers:
+```rust
+app.confirm_action();  // Executes the pending action
+app.cancel_action();   // Dismisses without executing
+```
+
+## Help System Architecture
+
+Help content is statically defined in `help_config.rs` and referenced via `HelpManager`:
+
+- `help_config.rs::get_static_help_data()` - Returns `StaticHelpData` with sections per Tab
+- `HelpManager` in `help.rs` - Runtime help state, keyboard shortcuts, pagination
+- Help overlay rendered via `draw_help_overlay()` in `ui.rs`
+
+**Help text helper:**
+```rust
+fn get_help_text(app: &App, area: Rect) -> String {
+    if app.pending_action.is_some() {
+        return "[Enter] Confirm [Esc] Cancel".to_string();
+    }
+    // ... overlay-specific help
+}
+```
 
 ## Background Task Routing
 

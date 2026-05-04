@@ -95,7 +95,7 @@ impl WafTab {
             .collect()
     }
 
-    pub fn set_detection_result(&mut self, result: WafDetectionResult) {
+    pub fn set_results(&mut self, result: WafDetectionResult) {
         self.detection_result = Some(result.clone());
         self.update_detection_view(&result);
         if !self.is_bypass_mode() {

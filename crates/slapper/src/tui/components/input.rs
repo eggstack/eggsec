@@ -302,7 +302,7 @@ impl InputField {
 
     pub fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let border_style = if self.focused {
-            Style::default().fg(tc!(border_focused))
+            Style::default().fg(tc!(focus_input))
         } else if let Some(ref validation) = self.validation {
             if validation.valid {
                 Style::default().fg(tc!(success))

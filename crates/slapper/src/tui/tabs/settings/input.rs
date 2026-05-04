@@ -11,6 +11,9 @@ impl TabInput for SettingsTab {
             SettingsSection::Report => self.report_inputs.focus_next(),
             SettingsSection::Schedule => self.schedule_inputs.focus_next(),
             SettingsSection::Notifications => self.notify_inputs.focus_next(),
+            SettingsSection::Theme => {
+                self.dark_mode.focused = true;
+            }
         }
     }
 
@@ -23,6 +26,10 @@ impl TabInput for SettingsTab {
             SettingsSection::Report => self.report_inputs.focus_prev(),
             SettingsSection::Schedule => self.schedule_inputs.focus_prev(),
             SettingsSection::Notifications => self.notify_inputs.focus_prev(),
+            SettingsSection::Theme => {
+                self.accent_color.focused = true;
+                self.dark_mode.focused = false;
+            }
         }
     }
 
@@ -35,6 +42,7 @@ impl TabInput for SettingsTab {
             SettingsSection::Report => self.report_inputs.insert(c),
             SettingsSection::Schedule => self.schedule_inputs.insert(c),
             SettingsSection::Notifications => self.notify_inputs.insert(c),
+            SettingsSection::Theme => {}
         }
     }
 
@@ -47,6 +55,7 @@ impl TabInput for SettingsTab {
             SettingsSection::Report => self.report_inputs.backspace(),
             SettingsSection::Schedule => self.schedule_inputs.backspace(),
             SettingsSection::Notifications => self.notify_inputs.backspace(),
+            SettingsSection::Theme => {}
         }
     }
 
@@ -101,6 +110,13 @@ impl TabInput for SettingsTab {
                     self.severity_selector.toggle();
                 }
             }
+            SettingsSection::Theme => {
+                if self.dark_mode.focused {
+                    self.dark_mode.toggle();
+                } else if self.accent_color.focused {
+                    self.accent_color.toggle();
+                }
+            }
         }
     }
 
@@ -113,6 +129,10 @@ impl TabInput for SettingsTab {
             SettingsSection::Report => self.report_inputs.blur(),
             SettingsSection::Schedule => self.schedule_inputs.blur(),
             SettingsSection::Notifications => self.notify_inputs.blur(),
+            SettingsSection::Theme => {
+                self.dark_mode.focused = false;
+                self.accent_color.focused = false;
+            }
         }
     }
 
@@ -125,6 +145,7 @@ impl TabInput for SettingsTab {
             SettingsSection::Report,
             SettingsSection::Schedule,
             SettingsSection::Notifications,
+            SettingsSection::Theme,
         ];
         if let Some(idx) = sections.iter().position(|s| *s == self.current_section) {
             if idx > 0 {
@@ -144,6 +165,7 @@ impl TabInput for SettingsTab {
             SettingsSection::Report,
             SettingsSection::Schedule,
             SettingsSection::Notifications,
+            SettingsSection::Theme,
         ];
         if let Some(idx) = sections.iter().position(|s| *s == self.current_section) {
             if idx < sections.len() - 1 {
@@ -160,9 +182,17 @@ impl TabInput for SettingsTab {
             SettingsSection::Scan => self.scan_inputs.move_left(),
             SettingsSection::Proxy => self.proxy_inputs.move_left(),
             SettingsSection::Scope => self.scope_inputs.move_left(),
-            SettingsSection::Report => self.report_inputs.move_left(),
+            SettingsSection::Report => self.report_inputs.move_right(),
             SettingsSection::Schedule => self.schedule_inputs.move_left(),
             SettingsSection::Notifications => self.notify_inputs.move_left(),
+            SettingsSection::Theme => {
+                if self.accent_color.focused {
+                    self.accent_color.toggle();
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -175,10 +205,18 @@ impl TabInput for SettingsTab {
             SettingsSection::Report => self.report_inputs.move_right(),
             SettingsSection::Schedule => self.schedule_inputs.move_right(),
             SettingsSection::Notifications => self.notify_inputs.move_right(),
+            SettingsSection::Theme => {
+                if self.accent_color.focused {
+                    self.accent_color.toggle();
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 
-    fn is_input_focused(&self) -> bool {
+fn is_input_focused(&self) -> bool {
         SettingsTab::is_input_focused(self)
     }
 }

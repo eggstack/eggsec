@@ -30,6 +30,8 @@ pub struct SettingsTab {
     pub config: Option<SlapperConfig>,
     pub config_path: Option<String>,
     pub status_message: String,
+    pub dark_mode: Checkbox,
+    pub accent_color: Selector,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,6 +43,7 @@ pub enum SettingsSection {
     Report,
     Schedule,
     Notifications,
+    Theme,
 }
 
 impl SettingsTab {
@@ -96,6 +99,17 @@ impl SettingsTab {
             SelectorItem::new("Critical", "critical"),
         ]);
 
+        let accent_color = Selector::new("Accent Color").items(vec![
+            SelectorItem::new("Cyan", "cyan"),
+            SelectorItem::new("Blue", "blue"),
+            SelectorItem::new("Green", "green"),
+            SelectorItem::new("Yellow", "yellow"),
+            SelectorItem::new("Red", "red"),
+            SelectorItem::new("Magenta", "magenta"),
+            SelectorItem::new("White", "white"),
+            SelectorItem::new("Black", "black"),
+        ]);
+
         Self {
             http_inputs,
             scan_inputs,
@@ -116,6 +130,8 @@ impl SettingsTab {
             config: None,
             config_path: Some("slapper.toml".to_string()),
             status_message: String::new(),
+            dark_mode: Checkbox::new("Dark Mode").checked(true),
+            accent_color,
         }
     }
 
@@ -405,6 +421,7 @@ impl SettingsTab {
             SettingsSection::Report => self.report_inputs.is_focused(),
             SettingsSection::Schedule => self.schedule_inputs.is_focused(),
             SettingsSection::Notifications => self.notify_inputs.is_focused(),
+            SettingsSection::Theme => false,
         }
     }
 }

@@ -75,6 +75,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         draw_http_options_popup(f, app);
     }
 
+    if app.show_quick_switch {
+        draw_quick_switch(f, app);
+    }
+
     if let Some(action) = app.pending_action {
         let (title, message) = action.message();
         let popup = confirm_popup(&title, &message);
@@ -263,6 +267,74 @@ fn draw_search_popup(f: &mut Frame, app: &App) {
 
     let paragraph = Paragraph::new(search_content).style(Style::default().fg(tc!(text)));
     f.render_widget(paragraph, inner);
+}
+
+fn draw_quick_switch(f: &mut Frame, app: &mut App) {
+    use ratatui::widgets::{Clear, List, ListItem, Paragraph};
+
+    let popup_width = 50;
+    let popup_height = 12;
+
+    let area = f.area();
+    let popup_area = centered_rect(popup_width, popup_height, area);
+
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title("Quick Switch - Bookmark Search (Ctrl+G to close, Enter to select)")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(tc!(primary)));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Min(1),
+        ])
+        .split(inner);
+
+    let query_paragraph = Paragraph::new(format!("Filter: {}", app.quick_switch_query))
+        .style(Style::default().fg(tc!(text)).bg(tc!(surface)));
+    f.render_widget(query_paragraph, chunks[0]);
+
+    let results = app.get_quick_switch_results();
+    let status_text = format!("{}/{}", results.len().min(app.quick_switch_selected + 1), results.len());
+    let status_paragraph =
+        Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
+    f.render_widget(status_paragraph, chunks[1]);
+
+    let mut items: Vec<ListItem> = Vec::new();
+    for (i, tab) in results.iter().enumerate() {
+        let style = if i == app.quick_switch_selected {
+            Style::default()
+                .fg(tc!(background))
+                .bg(tc!(highlight))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(tc!(text))
+        };
+        let bookmark_indicator = if app.is_bookmarked(**tab) { " *" } else { "" };
+        let item_text = format!("{}{} - {}", tab.title(), bookmark_indicator, tab.description());
+        items.push(ListItem::new(item_text).style(style));
+    }
+
+    if items.is_empty() {
+        items.push(ListItem::new("(No bookmarks - press Ctrl+B to bookmark current tab)").style(Style::default().fg(tc!(text_dim))));
+    }
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(tc!(border))),
+        )
+        .style(Style::default().fg(tc!(text)));
+    f.render_widget(list, chunks[2]);
 }
 
 fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {

@@ -46,6 +46,9 @@ pub struct ThemeColors {
     pub status_running: Color,
     pub status_idle: Color,
     pub status_error: Color,
+    pub focus_normal: Color,
+    pub focus_input: Color,
+    pub focus_results: Color,
 }
 
 impl Default for Theme {
@@ -84,6 +87,9 @@ pub fn dark_theme() -> Theme {
             status_running: Color::Green,
             status_idle: Color::DarkGray,
             status_error: Color::Red,
+            focus_normal: Color::Indexed(220),
+            focus_input: Color::Indexed(51),
+            focus_results: Color::Indexed(82),
         },
     }
 }
@@ -118,6 +124,9 @@ pub fn light_theme() -> Theme {
             status_running: Color::Green,
             status_idle: Color::DarkGray,
             status_error: Color::Red,
+            focus_normal: Color::Indexed(21),
+            focus_input: Color::Indexed(196),
+            focus_results: Color::Indexed(28),
         },
     }
 }
@@ -223,6 +232,21 @@ impl ThemeManager {
 
     pub fn list_themes(&self) -> Vec<&'static str> {
         vec!["dark", "light"]
+    }
+
+    pub fn set_accent_color(&mut self, color_name: &str) {
+        let color = match color_name.to_lowercase().as_str() {
+            "cyan" => Color::Cyan,
+            "blue" => Color::Blue,
+            "green" => Color::Green,
+            "yellow" => Color::Yellow,
+            "red" => Color::Red,
+            "magenta" => Color::Magenta,
+            "white" => Color::White,
+            "black" => Color::Black,
+            _ => return,
+        };
+        self.current.colors.accent = color;
     }
 }
 

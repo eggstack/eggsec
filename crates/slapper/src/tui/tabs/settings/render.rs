@@ -27,6 +27,7 @@ impl TabRender for super::SettingsTab {
             ("Report", SettingsSection::Report),
             ("Schedule", SettingsSection::Schedule),
             ("Notifications", SettingsSection::Notifications),
+            ("Theme", SettingsSection::Theme),
         ];
 
         let mut nav_lines = Vec::new();
@@ -54,6 +55,7 @@ impl TabRender for super::SettingsTab {
                     SettingsSection::Report => "Report Conversion",
                     SettingsSection::Schedule => "Schedule Management",
                     SettingsSection::Notifications => "Notification Settings",
+                    SettingsSection::Theme => "Theme Settings",
                 });
         let inner = content_block.inner(content_area);
         f.render_widget(content_block, content_area);
@@ -183,6 +185,28 @@ impl TabRender for super::SettingsTab {
                 let mut severity_sel = self.severity_selector.clone();
                 severity_sel.focused = self.is_input_focused();
                 severity_sel.render(f, input_chunks[6]);
+            }
+            SettingsSection::Theme => {
+                let input_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(3),
+                        Constraint::Length(3),
+                        Constraint::Length(3),
+                    ])
+                    .split(inner);
+
+                let dm = self.dark_mode.clone();
+                let mut dm = dm;
+                dm.focused = self.is_input_focused();
+                dm.render(f, input_chunks[0]);
+
+                let mut accent_sel = self.accent_color.clone();
+                accent_sel.focused = self.is_input_focused();
+                accent_sel.render(f, input_chunks[1]);
+
+                let theme_hint = Paragraph::new("Use Ctrl+T to toggle theme instantly");
+                f.render_widget(theme_hint, input_chunks[2]);
             }
         }
 
