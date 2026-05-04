@@ -6,10 +6,10 @@
 
 ### Phase 1: Architectural Refactoring
 
-**1.1 Tab Registry**: PARTIAL - TabRegistry created for dispatch, direct tab fields remain for other consumers
-- `app/tab_registry.rs` - TabRegistry with `update_progress_for()`, `set_error_for()`
-- state_update.rs uses registry for dispatch
-- Direct tab field access remains for render/input handling
+**1.1 Tab Registry**: PARTIAL - Direct tab field access retained
+- TabRegistry implementation explored but not integrated (dead code removed)
+- Direct tab field access maintained for App struct
+- state_update.rs uses direct tab field access (not registry)
 
 **1.2 vertical_list_state**: NOT NEEDED - Field was already removed or never existed
 
