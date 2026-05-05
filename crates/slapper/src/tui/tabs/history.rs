@@ -422,7 +422,19 @@ impl TabInput for HistoryTab {
         };
     }
 
-    fn handle_char(&mut self, _c: char) {}
+    fn handle_char(&mut self, c: char) {
+        match c {
+            'd' | 'D' => {
+                if self.selected.is_some() {
+                    self.delete_selected();
+                }
+            }
+            'c' | 'C' if self.focus_area == HistoryFocusArea::List => {
+                self.clear_all();
+            }
+            _ => {}
+        }
+    }
     fn handle_backspace(&mut self) {}
 
     fn handle_paste(&mut self, _text: &str) {}
