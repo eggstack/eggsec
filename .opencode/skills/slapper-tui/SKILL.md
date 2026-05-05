@@ -196,3 +196,37 @@ Help content is extracted to `help_config.rs::get_static_help_data()`:
 - Returns `StaticHelpData` with `sections: HashMap<Tab, HelpSection>`
 - Each `HelpSection` contains title, content, and commands list
 - `HelpManager` in `help.rs` handles runtime state and rendering
+
+## TabError System
+
+Tabs use structured error handling via `TabError` enum in `tui/app/tab_error.rs`:
+```rust
+pub enum TabError {
+    Network(String),
+    Auth(String),
+    Config(String),
+    Resource(String),
+    Target(String),
+    Internal(String),
+    Unknown(String),
+}
+```
+
+- `set_error(error: TabError)` method on TabState trait
+- `TabError::is_recoverable()` checks for Network/Auth/Resource errors
+- `TabError::message()` returns the error string for display
+- Error display happens in render() method: `error.message()`
+
+## Visual Regression Testing
+
+Use `TestBackend` for render tests:
+```rust
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
+
+let backend = TestBackend::new(80, 24);
+let mut terminal = Terminal::new(backend).unwrap();
+terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+let buf = terminal.backend().buffer();
+// Check buf.content for expected symbols
+```

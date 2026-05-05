@@ -54,6 +54,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 
 - `SlapperConfig` - Main configuration (`config::load_config()`)
 - `Severity` - Unified severity (in `types.rs`, re-exported everywhere)
+- `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `tui/app/tab_error.rs`
 - `SensitiveString` - Zeroized credential wrapper
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine
 - `PayloadType` - Enum of 30 payload categories
@@ -61,16 +62,18 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 ### Important Patterns
 
 - **Severity Enum**: Single canonical definition in `types.rs`. Re-export, don't recreate.
+- **TabError Enum**: Structured error handling for tabs with `is_recoverable()` method for auto-recovery logic
 - **Tool Abstraction**: `tool/traits.rs` has `SecurityTool` trait, `tool/registry.rs` has `ToolRegistry`
 - **Regex Caching**: Use `lru = "0.18"` with cache size 100 (NonZeroUsizer)
 - **Circuit Breaker**: `utils/circuit_breaker.rs` - `CircuitBreaker` + `CircuitBreakerRegistry`
 - **Truncation**: `utils/formatting.rs` - `strip_controls` (recommended) and `preserve_all`
+- **Visual Regression Testing**: Use `TestBackend` + `Terminal::new()` with `terminal.backend().buffer()` to verify rendered content
 
 ### Codebase Health
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1186 base, 1394 with full features |
+| Tests | 1190 base, 1394 with full features |
 | Clippy | ~2 warnings (TUI-specific fixed) |
 | Source files | 743 |
 | Payload types | 30 |
