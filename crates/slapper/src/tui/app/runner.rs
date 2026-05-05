@@ -1,6 +1,6 @@
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, MouseEvent, MouseEventKind},
+    event::{DisableMouseCapture, EnableMouseCapture, Event, MouseEvent, MouseEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -141,33 +141,45 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
 where
     B::Error: Send + Sync + 'static,
 {
+    use crossterm::event::EventStream;
+    use futures::{FutureExt, StreamExt};
+
     let mut key_handler = KeyHandler::new();
+    let mut event_stream = EventStream::new();
+    let auto_save_interval_secs = app.session_manager.auto_save_interval();
+    let mut pending_redraw = false;
 
     loop {
         app.spinner_tick = app.spinner_tick.wrapping_add(1);
 
         app.update();
-        app.auto_save_if_due();
+
+        if app.last_auto_save.elapsed().as_secs() >= auto_save_interval_secs {
+            app.auto_save_if_due();
+            app.last_auto_save = std::time::Instant::now();
+        }
 
         if app.should_quit {
             return Ok(());
         }
 
-        if app.needs_redraw {
+        if app.needs_redraw || pending_redraw {
             terminal.draw(|f| ui::draw(f, app))?;
             app.needs_redraw = false;
+            pending_redraw = false;
         }
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            let event = event::read()?;
-
-            if let Event::Key(key) = &event {
-                key_handler.handle_key_event(app, key);
+        let event = event_stream.next().now_or_never();
+        if let Some(Some(Ok(event))) = event {
+            match event {
+                Event::Key(key) => key_handler.handle_key_event(app, &key),
+                Event::Mouse(mouse_event) => handle_mouse_event(mouse_event, app),
+                Event::FocusGained | Event::FocusLost | Event::Paste(_) | Event::Resize(_, _) => {
+                    pending_redraw = true;
+                }
             }
-
-            if let Event::Mouse(mouse_event) = event {
-                handle_mouse_event(mouse_event, app);
-            }
+        } else {
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 }

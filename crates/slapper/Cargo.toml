@@ -29,7 +29,7 @@ rustls = { version = "0.23", features = ["ring"] }
 pem = "3"
 reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2", "form", "query", "blocking", "cookies"], default-features = false }
 ratatui = "0.30"
-crossterm = "0.29"
+crossterm = { version = "0.29", features = ["event-stream"] }
 clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
 serde = { workspace = true }
