@@ -564,7 +564,7 @@ impl TabInput for StorageTab {
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            StorageFocusArea::Config => self.config_inputs.fields[0].cursor_pos == 0,
+            StorageFocusArea::Config => self.config_inputs.is_at_left_edge(),
             StorageFocusArea::Mode => self.mode_selector.selected == 0,
             StorageFocusArea::Query => !self.query_inputs.can_move_left(),
             _ => true,
@@ -573,10 +573,7 @@ impl TabInput for StorageTab {
 
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
-            StorageFocusArea::Config => {
-                let f = &self.config_inputs.fields[0];
-                f.cursor_pos >= f.value.len()
-            }
+            StorageFocusArea::Config => self.config_inputs.is_at_right_edge(),
             StorageFocusArea::Mode => {
                 self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)
             }
