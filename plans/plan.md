@@ -34,17 +34,19 @@
 - Supports FieldVariant enum for Input, Checkbox, and Selector types
 - SettingsTab and WafTab refactoring planned for future iteration
 
-## Actionable Tasks (Next Phases)
-
 ### Phase 10: Testing Rigor ✅
 - **Visual Regression Testing**: Added integration tests using `ratatui::backend::TestBackend`
 - 17 render tests now verify TUI rendering at various terminal sizes
 - Tests verify that tabs render content without panicking
 - New tests check specific tabs: Recon, Fuzz, Dashboard, Settings, WAF
 
----
-
 ## Deferred Items (Low Priority - Intentionally Deferred)
+
+### SettingsTab/WafTab FormBuilder Refactoring
+- FormBuilder component is available but full refactoring was not performed
+- Existing render() methods continue to use manual layout constraints
+- This refactoring can be done in a future iteration when needed
+- **Status**: Deferred, FormBuilder available for future use
 
 ### Derive Help from Tab State
 - Would require updating `key_hints()` trait method across all tabs
