@@ -1,6 +1,7 @@
 use crate::fuzzer::engine::FuzzSession;
 use crate::fuzzer::PayloadType;
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
     Selector, SelectorItem,
@@ -32,7 +33,7 @@ pub struct FuzzTab {
     pub results_view: ScrollableText,
     pub focus_area: FuzzFocusArea,
     pub session: Option<FuzzSession>,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -111,7 +112,7 @@ impl FuzzTab {
             results_view: ScrollableText::new("Results"),
             focus_area: FuzzFocusArea::Inputs,
             session: None,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -396,7 +397,7 @@ impl TabState for FuzzTab {
         self.progress.current = 0;
         self.results_view.clear();
         self.session = None;
-        self.error_message = None;
+        self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -416,9 +417,9 @@ impl TabState for FuzzTab {
         self.target_selector.select(0);
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
         self.progress.current = 0;
     }
 }
@@ -501,8 +502,8 @@ impl TabRender for FuzzTab {
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
-        } else if let Some(ref err_msg) = self.error_message {
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+        } else if let Some(ref err) = self.error {
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

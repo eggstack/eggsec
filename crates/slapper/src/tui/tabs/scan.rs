@@ -2,6 +2,7 @@ use crate::cli::ScanProfile;
 use crate::pipeline::{PipelineReport, Stage};
 use crate::tc;
 use crate::tui::app::error::make_friendly_error;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText, Selector,
     SelectorItem,
@@ -25,7 +26,7 @@ pub struct ScanTab {
     pub progress: ProgressGauge,
     pub state: AppState,
     pub focus_area: ScanFocusArea,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone)]
@@ -83,7 +84,7 @@ impl ScanTab {
             progress: ProgressGauge::new("Pipeline Progress"),
             state: AppState::Idle,
             focus_area: ScanFocusArea::Inputs,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -260,7 +261,7 @@ impl TabState for ScanTab {
         self.report = None;
         self.progress.current = 0;
         self.reset_stages();
-        self.error_message = None;
+        self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -270,9 +271,9 @@ impl TabState for ScanTab {
         self.output_selector.select(0);
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
         self.progress.current = 0;
     }
 }
@@ -357,8 +358,8 @@ impl TabRender for ScanTab {
             .block(Block::default().borders(Borders::ALL).title(progress_text));
         f.render_widget(stages_block, stages_area);
 
-        if let Some(ref err_msg) = self.error_message {
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+        if let Some(ref err) = self.error {
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(Block::default().borders(Borders::ALL).title("Scan - Error"))
                 .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, output_area);

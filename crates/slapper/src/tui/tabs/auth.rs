@@ -1,4 +1,5 @@
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{InputField, InputGroup};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -20,7 +21,7 @@ pub struct AuthTab {
     pub results: String,
     pub state: AppState,
     pub focus_area: AuthFocusArea,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 impl AuthTab {
@@ -33,13 +34,13 @@ impl AuthTab {
             results: "Ready for authentication testing".to_string(),
             state: AppState::Idle,
             focus_area: AuthFocusArea::Target,
-            error_message: None,
+            error: None,
         }
     }
 
     pub fn start(&mut self) {
         self.state = AppState::Running;
-        self.error_message = None;
+        self.error = None;
     }
 
     pub fn stop(&mut self) {
@@ -48,15 +49,15 @@ impl AuthTab {
 
     pub fn reset(&mut self) {
         self.state = AppState::Idle;
-        self.error_message = None;
+        self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 
@@ -110,8 +111,8 @@ impl TabRender for AuthTab {
             input_text.push_str(&format!("{}{}: {}", focus marker, label, value));
         }
 
-        if let Some(ref err) = self.error_message {
-            input_text.push_str(&format!("\nError: {}", err));
+        if let Some(ref err) = self.error {
+            input_text.push_str(&format!("\nError: {}", err.message()));
         }
 
         let input_display = Paragraph::new(input_text)

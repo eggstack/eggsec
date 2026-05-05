@@ -11,8 +11,8 @@ use ratatui::{
 
 impl TabRender for super::SettingsTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+        if let Some(ref err) = self.error {
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

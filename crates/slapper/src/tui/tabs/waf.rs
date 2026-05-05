@@ -1,4 +1,5 @@
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, RadioGroup,
     ScrollableText,
@@ -23,7 +24,7 @@ pub struct WafTab {
     pub detection_view: ScrollableText,
     pub bypass_view: ScrollableText,
     pub focus_area: WafFocusArea,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -60,7 +61,7 @@ impl WafTab {
             detection_view: ScrollableText::new("Detection Result"),
             bypass_view: ScrollableText::new("Bypass Results"),
             focus_area: WafFocusArea::Inputs,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -297,7 +298,7 @@ impl TabState for WafTab {
         self.progress.current = 0;
         self.detection_view.clear();
         self.bypass_view.clear();
-        self.error_message = None;
+        self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -308,9 +309,9 @@ impl TabState for WafTab {
         self.technique_checkboxes[2].checked = true;
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
         self.progress.current = 0;
     }
 }
@@ -327,9 +328,9 @@ impl TabRender for WafTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
+        if let Some(ref err) = self.error {
             use ratatui::widgets::{Block, Borders, Paragraph};
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(Block::default().borders(Borders::ALL).title("WAF - Error"))
                 .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, area);

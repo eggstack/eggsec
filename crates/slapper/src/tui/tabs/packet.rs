@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector,
 };
@@ -32,7 +33,7 @@ pub struct PacketTab {
     pub results_view: ScrollableText,
     pub is_root: bool,
     pub privileges_required: bool,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 impl PacketTab {
@@ -67,7 +68,7 @@ impl PacketTab {
             results_view: ScrollableText::new("Results"),
             is_root,
             privileges_required,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -525,16 +526,16 @@ impl TabState for PacketTab {
         self.state = AppState::Idle;
         self.results.clear();
         self.results_view.clear();
-        self.error_message = None;
+        self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
         self.inputs.fields[2].value = "100".to_string();
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 
@@ -552,9 +553,9 @@ impl TabRender for PacketTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, _insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
+        if let Some(ref err) = self.error {
             use ratatui::widgets::{Block, Borders, Paragraph};
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

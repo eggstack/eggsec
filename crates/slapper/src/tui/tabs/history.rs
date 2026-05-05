@@ -1,4 +1,5 @@
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::ScrollableText;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -38,7 +39,7 @@ pub struct HistoryTab {
     pub focus_area: HistoryFocusArea,
     pub scroll_offset: usize,
     pub visible_rows: usize,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -65,7 +66,7 @@ impl HistoryTab {
             focus_area: HistoryFocusArea::List,
             scroll_offset: 0,
             visible_rows: 20,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -286,18 +287,18 @@ impl TabState for HistoryTab {
 
     fn reset(&mut self) {
         self.clear_all();
-        self.error_message = None;
+        self.error = None;
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.error = Some(error);
     }
 }
 
 impl TabRender for HistoryTab {
     fn render(&self, f: &mut Frame, area: Rect, _insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+        if let Some(ref err) = self.error {
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

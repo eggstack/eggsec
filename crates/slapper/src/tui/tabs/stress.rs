@@ -1,4 +1,5 @@
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     InputField, InputGroup, ProgressGauge, ScrollableText, Selector, SelectorItem,
 };
@@ -27,7 +28,7 @@ pub struct StressTab {
     pub state: AppState,
     pub results_view: ScrollableText,
     pub focus_area: StressFocusArea,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -66,7 +67,7 @@ impl StressTab {
             state: AppState::Idle,
             results_view: ScrollableText::new("Stress Test Results"),
             focus_area: StressFocusArea::Inputs,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -187,20 +188,20 @@ impl TabState for StressTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.progress.current = 0;
-        self.error_message = None;
+        self.error = None;
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 
 impl TabRender for StressTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
+        if let Some(ref err) = self.error {
             use ratatui::widgets::Paragraph;
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

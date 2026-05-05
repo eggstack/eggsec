@@ -1,4 +1,5 @@
 use super::NotificationSeverity;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::tabs::TabState;
 use crate::tui::workers::TaskResult;
 
@@ -307,122 +308,121 @@ impl super::App {
                 self.plugin.plugin_list = plugins;
             }
             TaskResult::Error(msg) => {
-                self.set_error_for_current_tab(msg);
+                self.set_error_for_current_tab(TabError::Unknown(msg));
             }
         }
     }
 
-    fn set_error_for_current_tab(&mut self, msg: String) {
+    fn set_error_for_current_tab(&mut self, error: TabError) {
         use super::tabs::Tab;
-        // Use task_tab if set, otherwise fall back to current_tab
         let tab = self.task_tab.unwrap_or(self.current_tab);
         match tab {
-            Tab::Recon => self.recon.set_error(msg),
-            Tab::Load => self.load.set_error(msg),
-            Tab::ScanPorts => self.scan_ports.set_error(msg),
-            Tab::ScanEndpoints => self.scan_endpoints.set_error(msg),
-            Tab::Fingerprint => self.fingerprint.set_error(msg),
-            Tab::Fuzz => self.fuzz.set_error(msg),
-            Tab::Waf => self.waf.set_error(msg),
-            Tab::WafStress => self.waf_stress.set_error(msg),
-            Tab::Scan => self.scan.set_error(msg),
-            Tab::Resume => self.resume.set_error(msg),
-            Tab::Proxy => self.proxy.set_error(msg),
-            Tab::Packet => self.packet.set_error(msg),
-            Tab::GraphQl => self.graphql.set_error(msg),
-            Tab::OAuth => self.oauth.set_error(msg),
-            Tab::Cluster => self.cluster.set_error(msg),
-            Tab::Stress => self.stress.set_error(msg),
-            Tab::Report => self.report.set_error(msg),
+            Tab::Recon => self.recon.set_error(error.clone()),
+            Tab::Load => self.load.set_error(error.clone()),
+            Tab::ScanPorts => self.scan_ports.set_error(error.clone()),
+            Tab::ScanEndpoints => self.scan_endpoints.set_error(error.clone()),
+            Tab::Fingerprint => self.fingerprint.set_error(error.clone()),
+            Tab::Fuzz => self.fuzz.set_error(error.clone()),
+            Tab::Waf => self.waf.set_error(error.clone()),
+            Tab::WafStress => self.waf_stress.set_error(error.clone()),
+            Tab::Scan => self.scan.set_error(error.clone()),
+            Tab::Resume => self.resume.set_error(error.clone()),
+            Tab::Proxy => self.proxy.set_error(error.clone()),
+            Tab::Packet => self.packet.set_error(error.clone()),
+            Tab::GraphQl => self.graphql.set_error(error.clone()),
+            Tab::OAuth => self.oauth.set_error(error.clone()),
+            Tab::Cluster => self.cluster.set_error(error.clone()),
+            Tab::Stress => self.stress.set_error(error.clone()),
+            Tab::Report => self.report.set_error(error.clone()),
             #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.set_error(msg),
+            Tab::Nse => self.nse.set_error(error.clone()),
             #[cfg(not(feature = "nse"))]
             Tab::Nse => {
                 self.set_notification(
-                    format!("NSE tab unavailable: {}", msg),
+                    format!("NSE tab unavailable: {}", error),
                     NotificationSeverity::Error,
                 );
             }
             #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.set_error(msg),
+            Tab::Plugin => self.plugin.set_error(error.clone()),
             #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => {
                 self.set_notification(
-                    format!("Plugin tab unavailable: {}", msg),
+                    format!("Plugin tab unavailable: {}", error),
                     NotificationSeverity::Error,
                 );
             }
             #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.set_error(msg),
+            Tab::Hunt => self.hunt.set_error(error.clone()),
             #[cfg(not(feature = "advanced-hunting"))]
             Tab::Hunt => {
                 self.set_notification(
-                    format!("Hunt feature not available: {}", msg),
+                    format!("Hunt feature not available: {}", error),
                     NotificationSeverity::Error,
                 );
             }
             #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.set_error(msg),
+            Tab::Browser => self.browser.set_error(error.clone()),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => {
                 self.set_notification(
-                    format!("Browser feature not available: {}", msg),
+                    format!("Browser feature not available: {}", error),
                     NotificationSeverity::Error,
                 );
             }
             #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.set_error(msg),
+            Tab::Compliance => self.compliance.set_error(error.clone()),
             #[cfg(not(feature = "compliance"))]
             Tab::Compliance => {
                 self.set_notification(
-                    format!("Compliance feature not available: {}", msg),
+                    format!("Compliance feature not available: {}", error),
                     NotificationSeverity::Error,
                 );
             }
             #[cfg(feature = "database")]
-            Tab::Storage => self.storage.set_error(msg),
+            Tab::Storage => self.storage.set_error(error.clone()),
             #[cfg(not(feature = "database"))]
             Tab::Storage => {
                 self.set_notification(
-                    format!("Storage feature not available: {}", msg),
+                    format!("Storage feature not available: {}", error),
                     NotificationSeverity::Error,
                 );
             }
             #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.set_error(msg),
+            Tab::Integrations => self.integrations.set_error(error.clone()),
             #[cfg(not(feature = "external-integrations"))]
             Tab::Integrations => {
                 self.set_notification(
-                    format!("Integrations feature not available: {}", msg),
+                    format!("Integrations feature not available: {}", error),
                     NotificationSeverity::Error,
                 );
             }
             #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.set_error(msg),
+            Tab::Workflow => self.workflow.set_error(error.clone()),
             #[cfg(not(feature = "finding-workflow"))]
             Tab::Workflow => {
                 self.set_notification(
-                    format!("Workflow feature not available: {}", msg),
+                    format!("Workflow feature not available: {}", error),
                     NotificationSeverity::Error,
                 );
             }
             #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.set_error(msg),
+            Tab::Vuln => self.vuln.set_error(error.clone()),
             #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => {
                 self.set_notification(
-                    format!("Vuln management not available: {}", msg),
+                    format!("Vuln management not available: {}", error),
                     NotificationSeverity::Error,
                 );
             }
             Tab::Settings => {
-                tracing::error!("Settings tab does not support error state: {}", msg);
+                tracing::error!("Settings tab does not support error state: {}", error);
             }
             Tab::History => {
-                tracing::error!("History tab does not support error state: {}", msg);
+                tracing::error!("History tab does not support error state: {}", error);
             }
             Tab::Dashboard => {
-                tracing::error!("Dashboard tab does not support error state: {}", msg);
+                tracing::error!("Dashboard tab does not support error state: {}", error);
             }
         }
     }

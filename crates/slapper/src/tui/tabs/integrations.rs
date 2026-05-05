@@ -1,5 +1,6 @@
 use crate::integrations::{IntegrationConfig, Issue};
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
 };
@@ -20,7 +21,7 @@ pub struct IntegrationsTab {
     pub results_view: ScrollableText,
     pub focus_area: IntegrationsFocusArea,
     pub current_mode: IntegrationsMode,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -67,7 +68,7 @@ impl IntegrationsTab {
             results_view: ScrollableText::new("Results"),
             focus_area: IntegrationsFocusArea::Tracker,
             current_mode: IntegrationsMode::Configure,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -242,7 +243,7 @@ impl TabState for IntegrationsTab {
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
-        self.error_message = None;
+        self.error = None;
         for field in &mut self.config_inputs.fields {
             field.clear();
         }
@@ -251,11 +252,11 @@ impl TabState for IntegrationsTab {
         }
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg.clone());
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error.clone());
         self.results_view.add_line(Line::from(Span::styled(
-            format!("Error: {}", msg),
+            format!("Error: {}", error.message()),
             Style::default().fg(tc!(error)),
         )));
     }

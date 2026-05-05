@@ -1,6 +1,7 @@
 use crate::config::{
     HttpConfig, NotificationConfig, OutputConfig, ScanConfig, ScheduledScan, SlapperConfig,
 };
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{Checkbox, InputField, InputGroup, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabState};
 
@@ -33,7 +34,7 @@ pub struct SettingsTab {
     pub status_message: String,
     pub dark_mode: Checkbox,
     pub accent_color: Selector,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -135,7 +136,7 @@ impl SettingsTab {
             status_message: String::new(),
             dark_mode: Checkbox::new("Dark Mode").checked(true),
             accent_color,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -562,11 +563,11 @@ impl TabState for SettingsTab {
     }
 
     fn reset(&mut self) {
-        self.error_message = None;
+        self.error = None;
         SettingsTab::reset(self);
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.error = Some(error);
     }
 }

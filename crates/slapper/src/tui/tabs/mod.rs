@@ -78,6 +78,8 @@ pub use workflow::WorkflowTab;
 
 use ratatui::{layout::Rect, Frame};
 
+use crate::tui::app::tab_error::TabError;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tab {
     Recon = 0,
@@ -869,7 +871,7 @@ pub trait TabState {
         self.state() == AppState::Running
     }
     fn reset(&mut self) {}
-    fn set_error(&mut self, _msg: String) {}
+    fn set_error(&mut self, _error: TabError) {}
 }
 
 pub trait TabRender {

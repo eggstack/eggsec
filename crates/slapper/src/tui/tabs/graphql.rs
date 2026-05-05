@@ -1,4 +1,5 @@
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -20,7 +21,7 @@ pub struct GraphQlTab {
     pub results_view: ScrollableText,
     pub focus_area: GraphQlFocusArea,
     pub checkbox_focus_index: usize,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -59,7 +60,7 @@ impl GraphQlTab {
             results_view: ScrollableText::new("Results"),
             focus_area: GraphQlFocusArea::Inputs,
             checkbox_focus_index: 0,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -165,14 +166,14 @@ impl TabState for GraphQlTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.progress.current = 0;
-        self.error_message = None;
+        self.error = None;
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg.clone());
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error.clone());
         self.results_view.add_line(Line::from(Span::styled(
-            format!("Error: {}", msg),
+            format!("Error: {}", error.message()),
             Style::default().fg(tc!(error)),
         )));
     }

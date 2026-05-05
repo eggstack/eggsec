@@ -1,6 +1,7 @@
 use crate::config::ProxyConfigEntry;
 use crate::proxy::{HealthCheckConfig, HealthChecker, ProxyEntry, ProxyType};
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector,
 };
@@ -30,7 +31,7 @@ pub struct ProxyTab {
     pub current_view: ProxyView,
     pub state: AppState,
     pub results_view: ScrollableText,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Clone)]
@@ -65,7 +66,7 @@ impl ProxyTab {
             current_view: ProxyView::List,
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
-            error_message: None,
+            error: None,
         }
     }
 
@@ -389,15 +390,15 @@ impl TabState for ProxyTab {
         self.health_results.clear();
         self.test_result = None;
         self.results_view.clear();
-        self.error_message = None;
+        self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 
@@ -413,9 +414,9 @@ impl TabRender for ProxyTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, _insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
+        if let Some(ref err) = self.error {
             use ratatui::widgets::{Block, Borders, Paragraph};
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

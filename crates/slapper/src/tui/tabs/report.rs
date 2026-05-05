@@ -1,4 +1,5 @@
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -26,7 +27,7 @@ pub struct ReportTab {
     pub results_view: ScrollableText,
     pub current_view: ReportView,
     pub focus_area: ReportFocusArea,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -81,7 +82,7 @@ impl ReportTab {
             results_view: ScrollableText::new("Report Results"),
             current_view: ReportView::Convert,
             focus_area: ReportFocusArea::ViewSelector,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -223,20 +224,20 @@ impl TabState for ReportTab {
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
-        self.error_message = None;
+        self.error = None;
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 
 impl TabRender for ReportTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
+        if let Some(ref err) = self.error {
             use ratatui::widgets::Paragraph;
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

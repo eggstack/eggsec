@@ -1,5 +1,6 @@
 use crate::scanner::ports::PortScanResults;
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::ValidationResult;
 use crate::tui::components::{
     empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
@@ -25,7 +26,7 @@ pub struct ScanPortsTab {
     pub results_view: ScrollableText,
     pub udp_checkbox: Checkbox,
     pub focus_area: ScanPortsFocusArea,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 impl ScanPortsTab {
@@ -44,7 +45,7 @@ impl ScanPortsTab {
             results_view: ScrollableText::new("Results"),
             udp_checkbox: Checkbox::new("Enable UDP (requires root/sudo)").checked(false),
             focus_area: ScanPortsFocusArea::Inputs,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -158,7 +159,7 @@ impl ScanPortsTab {
         let target = self.target();
         if target.is_empty() {
             self.state = AppState::Error("Target cannot be empty".to_string());
-            self.error_message = Some("Target cannot be empty".to_string());
+            self.error = Some(TabError::Target("Target cannot be empty".to_string()));
             return;
         }
 
@@ -171,8 +172,8 @@ impl ScanPortsTab {
             if !validation.valid && !t.contains('.') && !t.contains(':') {
                 self.state =
                     AppState::Error(format!("Invalid target: {} - {}", t, validation.message));
-                self.error_message =
-                    Some(format!("Invalid target: {} - {}", t, validation.message));
+                self.error =
+                    Some(TabError::Target(format!("Invalid target: {} - {}", t, validation.message)));
                 return;
             }
         }
@@ -181,7 +182,7 @@ impl ScanPortsTab {
         if !port_validation.valid {
             self.state =
                 AppState::Error(format!("Invalid port range: {}", port_validation.message));
-            self.error_message = Some(format!("Invalid port range: {}", port_validation.message));
+            self.error = Some(TabError::Config(format!("Invalid port range: {}", port_validation.message)));
             return;
         }
 
@@ -189,7 +190,7 @@ impl ScanPortsTab {
         self.progress.current = 0;
         self.results = None;
         self.results_view.clear();
-        self.error_message = None;
+        self.error = None;
     }
 
     pub fn stop(&mut self) {
@@ -260,7 +261,7 @@ impl TabState for ScanPortsTab {
         self.results = None;
         self.progress.current = 0;
         self.results_view.clear();
-        self.error_message = None;
+        self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -273,9 +274,9 @@ impl TabState for ScanPortsTab {
         self.focus_area = ScanPortsFocusArea::Inputs;
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
         self.progress.current = 0;
     }
 }
@@ -310,10 +311,10 @@ impl TabRender for ScanPortsTab {
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
-        } else if let Some(ref err_msg) = self.error_message {
+        } else if let Some(ref err) = self.error {
             use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

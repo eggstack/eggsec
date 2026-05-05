@@ -1,4 +1,5 @@
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::ScrollableText;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use chrono::{DateTime, Utc};
@@ -39,7 +40,7 @@ pub struct DashboardTab {
     pub unique_targets: usize,
     pub critical_findings: usize,
     pub today_scans: usize,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 impl DashboardTab {
@@ -57,7 +58,7 @@ impl DashboardTab {
             unique_targets: 0,
             critical_findings: 0,
             today_scans: 0,
-            error_message: None,
+            error: None,
         };
         tab.render_welcome();
         tab
@@ -455,7 +456,7 @@ impl TabState for DashboardTab {
     }
     fn reset(&mut self) {
         self.state = AppState::Idle;
-        self.error_message = None;
+        self.error = None;
         self.total_scans = 0;
         self.successful_scans = 0;
         self.failed_scans = 0;
@@ -468,18 +469,18 @@ impl TabState for DashboardTab {
         self.render_welcome();
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 
 impl TabRender for DashboardTab {
     fn render(&self, f: &mut Frame, area: ratatui::layout::Rect, _insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
+        if let Some(ref err) = self.error {
             use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

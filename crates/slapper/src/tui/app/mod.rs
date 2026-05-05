@@ -11,6 +11,7 @@ pub(crate) mod navigation;
 mod options;
 pub(crate) mod runner;
 pub(crate) mod state_update;
+pub(crate) mod tab_error;
 pub(crate) mod task_management;
 
 pub use crate::tui::state::create_shared_history;
