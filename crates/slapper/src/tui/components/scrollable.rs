@@ -1,3 +1,4 @@
+use crate::tc;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::{
@@ -7,7 +8,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
-use crate::tc;
 
 #[derive(Clone)]
 pub struct ScrollableText {
@@ -89,12 +89,34 @@ impl ScrollableText {
         self.scroll_down(page_size);
     }
 
+    pub fn is_at_left_edge(&self) -> bool {
+        self.horizontal_offset == 0
+    }
+
+    pub fn is_at_right_edge(&self) -> bool {
+        let max_offset = self.lines.iter().map(|l| l.width()).max().unwrap_or(0);
+        self.horizontal_offset >= max_offset
+    }
+
     pub fn len(&self) -> usize {
         self.lines.len()
     }
 
     pub fn is_empty(&self) -> bool {
         self.lines.is_empty()
+    }
+
+    pub fn get_content(&self) -> String {
+        self.lines
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect, border_color: Option<Color>) {
@@ -111,15 +133,10 @@ impl ScrollableText {
 
         let visible_height = area.height.saturating_sub(2) as usize;
         let scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1));
-        let visible_lines: Vec<_> = self
-            .lines
-            .iter()
-            .skip(scroll_offset)
-            .take(visible_height)
-            .cloned()
-            .collect();
 
-        let paragraph = Paragraph::new(visible_lines).block(block);
+        let paragraph = Paragraph::new(self.lines.clone())
+            .block(block)
+            .scroll((self.scroll_offset as u16, self.horizontal_offset as u16));
         f.render_widget(paragraph, area);
 
         if self.lines.len() > visible_height {

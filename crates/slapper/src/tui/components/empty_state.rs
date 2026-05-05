@@ -1,4 +1,7 @@
-pub fn empty_state_paragraph(title: &'static str, text: impl Into<ratatui::text::Text<'static>>) -> ratatui::widgets::Paragraph<'static> {
+pub fn empty_state_paragraph(
+    title: &'static str,
+    text: impl Into<ratatui::text::Text<'static>>,
+) -> ratatui::widgets::Paragraph<'static> {
     use ratatui::style::Style;
     use ratatui::widgets::{Block, Borders, Paragraph};
 

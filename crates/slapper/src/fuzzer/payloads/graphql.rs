@@ -228,9 +228,9 @@ impl GraphQLFuzzer {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
                 if let Some(data) = json.get("data") {
                     if let Some(schema_val) = data.get("__schema") {
-                        if let Ok(schema) = serde_json::from_value::<GraphQLSchema>(
-                            schema_val.clone(),
-                        ) {
+                        if let Ok(schema) =
+                            serde_json::from_value::<GraphQLSchema>(schema_val.clone())
+                        {
                             self.introspected_schema = Some(schema);
                             return Ok(true);
                         }
@@ -494,9 +494,16 @@ pub fn get_payloads() -> Vec<Payload> {
         payloads.push(Payload {
             payload_type: PayloadType::GraphQL,
             payload: depth_query.clone(),
-            description: format!("Depth limit bypass (depth: {})", depth_query.matches('{').count()),
+            description: format!(
+                "Depth limit bypass (depth: {})",
+                depth_query.matches('{').count()
+            ),
             severity: Severity::Medium,
-            tags: vec!["graphql".to_string(), "depth-bypass".to_string(), "dos".to_string()],
+            tags: vec![
+                "graphql".to_string(),
+                "depth-bypass".to_string(),
+                "dos".to_string(),
+            ],
         });
     }
 
@@ -506,13 +513,18 @@ pub fn get_payloads() -> Vec<Payload> {
             payload: alias_query.clone(),
             description: "Alias overload DoS attempt".to_string(),
             severity: Severity::Medium,
-            tags: vec!["graphql".to_string(), "alias-overload".to_string(), "dos".to_string()],
+            tags: vec![
+                "graphql".to_string(),
+                "alias-overload".to_string(),
+                "dos".to_string(),
+            ],
         });
     }
 
     payloads.push(Payload {
         payload_type: PayloadType::GraphQL,
-        payload: r#"[{"query":"{__schema{queryType{name}}}"},{"query":"{__typename}"}]"#.to_string(),
+        payload: r#"[{"query":"{__schema{queryType{name}}}"},{"query":"{__typename}"}]"#
+            .to_string(),
         description: "Batch query bypass".to_string(),
         severity: Severity::Medium,
         tags: vec!["graphql".to_string(), "batch".to_string()],
@@ -549,15 +561,25 @@ mod tests {
     #[test]
     fn contains_introspection_query() {
         let payloads = get_payloads();
-        let has_intro = payloads.iter().any(|p| p.payload.contains("__schema") || p.payload.contains("__type"));
-        assert!(has_intro, "Must contain introspection queries (__schema, __type)");
+        let has_intro = payloads
+            .iter()
+            .any(|p| p.payload.contains("__schema") || p.payload.contains("__type"));
+        assert!(
+            has_intro,
+            "Must contain introspection queries (__schema, __type)"
+        );
     }
 
     #[test]
     fn contains_sqli_via_graphql() {
         let payloads = get_payloads();
-        let has_sqli = payloads.iter().any(|p| p.payload.contains("' OR") || p.payload.contains("1=1"));
-        assert!(has_sqli, "Must contain SQL injection payloads delivered via GraphQL");
+        let has_sqli = payloads
+            .iter()
+            .any(|p| p.payload.contains("' OR") || p.payload.contains("1=1"));
+        assert!(
+            has_sqli,
+            "Must contain SQL injection payloads delivered via GraphQL"
+        );
     }
 
     #[test]
@@ -579,16 +601,29 @@ mod tests {
         };
         fuzzer.introspected_schema = Some(schema);
         let results = fuzzer.generate_injection_queries(true, true);
-        assert!(!results.is_empty(), "generate_injection_queries must return results when schema is set");
+        assert!(
+            !results.is_empty(),
+            "generate_injection_queries must return results when schema is set"
+        );
     }
 
     #[test]
     fn depth_bypass_generates_nested_queries() {
         let queries = generate_depth_limit_bypass();
-        assert_eq!(queries.len(), 6, "Must generate depth bypass queries for depths [5,10,15,20,30,50]");
+        assert_eq!(
+            queries.len(),
+            6,
+            "Must generate depth bypass queries for depths [5,10,15,20,30,50]"
+        );
         for q in &queries {
-            assert!(q.contains("user"), "Depth queries must start from user field");
-            assert!(q.matches('{').count() > 5, "Depth queries must be deeply nested");
+            assert!(
+                q.contains("user"),
+                "Depth queries must start from user field"
+            );
+            assert!(
+                q.matches('{').count() > 5,
+                "Depth queries must be deeply nested"
+            );
         }
     }
 
@@ -596,7 +631,10 @@ mod tests {
     fn alias_overload_generates_batched_aliases() {
         let queries = generate_alias_overload();
         assert!(!queries.is_empty(), "Must generate alias overload queries");
-        assert!(queries.iter().any(|q| q.contains(":")), "At least one alias overload query must use alias syntax");
+        assert!(
+            queries.iter().any(|q| q.contains(":")),
+            "At least one alias overload query must use alias syntax"
+        );
     }
 
     #[test]
@@ -604,13 +642,23 @@ mod tests {
         let inj = get_injection_payloads();
         assert!(inj.iter().any(|p| p.contains("OR")), "Must include SQLi");
         assert!(inj.iter().any(|p| p.contains("jndi")), "Must include JNDI");
-        assert!(inj.iter().any(|p| p.contains("<script")), "Must include XSS");
-        assert!(inj.iter().any(|p| p.contains("../")), "Must include path traversal");
+        assert!(
+            inj.iter().any(|p| p.contains("<script")),
+            "Must include XSS"
+        );
+        assert!(
+            inj.iter().any(|p| p.contains("../")),
+            "Must include path traversal"
+        );
     }
 
     #[test]
     fn minimum_payload_count() {
         let payloads = get_payloads();
-        assert!(payloads.len() >= 4, "Must have GraphQL payload coverage, got {}", payloads.len());
+        assert!(
+            payloads.len() >= 4,
+            "Must have GraphQL payload coverage, got {}",
+            payloads.len()
+        );
     }
 }

@@ -4,8 +4,8 @@ use super::App;
 use super::InputMode;
 use super::PendingAction;
 use crate::tui::tabs::Tab;
-use crate::tui::OverlayType;
 use crate::tui::utils::Clipboard;
+use crate::tui::OverlayType;
 
 pub struct KeyHandler;
 
@@ -99,6 +99,13 @@ impl KeyHandler {
             (KeyModifiers::CONTROL, KeyCode::Char('y')) => {
                 if app.is_paused() {
                     app.resume();
+                } else if let Some(text) = app.dispatcher_mut().handle_copy() {
+                    Clipboard::set(&text);
+                }
+            }
+            (KeyModifiers::NONE, KeyCode::Char('y')) if app.mode == InputMode::Normal => {
+                if let Some(text) = app.dispatcher_mut().handle_copy() {
+                    Clipboard::set(&text);
                 }
             }
             (KeyModifiers::CONTROL, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
@@ -114,7 +121,10 @@ impl KeyHandler {
             {
                 self.handle_command_palette(app, key);
             }
-            _ if app.is_search_visible() || app.is_http_options_visible() || app.is_help_visible() => {
+            _ if app.is_search_visible()
+                || app.is_http_options_visible()
+                || app.is_help_visible() =>
+            {
                 self.handle_overlay_input(app, key);
             }
             (KeyModifiers::NONE, KeyCode::Tab) => {
@@ -162,8 +172,7 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
                 app.handle_word_backward();
             }
-            (KeyModifiers::NONE, KeyCode::Char('n'))
-            | (KeyModifiers::NONE, KeyCode::Char('N'))
+            (KeyModifiers::NONE, KeyCode::Char('n')) | (KeyModifiers::NONE, KeyCode::Char('N'))
                 if app.mode == InputMode::Normal =>
             {
                 if key.code == KeyCode::Char('n') {
@@ -430,9 +439,11 @@ impl KeyHandler {
                     app.quick_switch_selected = 0;
                 }
             }
-            (KeyModifiers::CONTROL, KeyCode::Char('d')) | (KeyModifiers::NONE, KeyCode::PageDown) => {
+            (KeyModifiers::CONTROL, KeyCode::Char('d'))
+            | (KeyModifiers::NONE, KeyCode::PageDown) => {
                 let results = app.get_quick_switch_results();
-                app.quick_switch_selected = (app.quick_switch_selected + 10).min(results.len().saturating_sub(1));
+                app.quick_switch_selected =
+                    (app.quick_switch_selected + 10).min(results.len().saturating_sub(1));
             }
             (KeyModifiers::NONE, KeyCode::Home) => {
                 app.quick_switch_selected = 0;

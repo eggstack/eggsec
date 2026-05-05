@@ -1,4 +1,7 @@
-
+#[cfg(feature = "rest-api")]
+pub mod agent_routes;
+#[cfg(feature = "rest-api")]
+pub mod ai_routes;
 #[cfg(feature = "grpc-api")]
 pub mod grpc;
 #[cfg(feature = "rest-api")]
@@ -9,7 +12,3 @@ pub mod openai;
 pub mod openresponses;
 #[cfg(feature = "rest-api")]
 pub mod rest;
-#[cfg(feature = "rest-api")]
-pub mod ai_routes;
-#[cfg(feature = "rest-api")]
-pub mod agent_routes;

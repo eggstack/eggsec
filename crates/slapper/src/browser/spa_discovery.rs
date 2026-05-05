@@ -127,13 +127,17 @@ pub async fn discover_routes(target: &str, config: &BrowserConfig) -> Result<Vec
 
     let result = tab.evaluate(js_script, true)?;
 
-    let data: HashSet<String> = result.value
+    let data: HashSet<String> = result
+        .value
         .as_ref()
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    let discovered_routes: Vec<SpaRoute> = data.iter()
-        .filter(|path| path.starts_with('/') && !path.starts_with("/api/") && !path.starts_with("/rest/"))
+    let discovered_routes: Vec<SpaRoute> = data
+        .iter()
+        .filter(|path| {
+            path.starts_with('/') && !path.starts_with("/api/") && !path.starts_with("/rest/")
+        })
         .map(|path| SpaRoute {
             path: path.clone(),
             method: "GET".to_string(),
@@ -142,7 +146,8 @@ pub async fn discover_routes(target: &str, config: &BrowserConfig) -> Result<Vec
         })
         .collect();
 
-    let api_routes: Vec<SpaRoute> = data.iter()
+    let api_routes: Vec<SpaRoute> = data
+        .iter()
         .filter(|path| path.starts_with("/api/") || path.starts_with("/rest/"))
         .map(|path| SpaRoute {
             path: path.clone(),
@@ -164,7 +169,7 @@ fn extract_parameters(path: &str) -> Vec<String> {
 
     for segment in segments {
         if segment.starts_with('{') && segment.ends_with('}') {
-            params.push(segment[1..segment.len()-1].to_string());
+            params.push(segment[1..segment.len() - 1].to_string());
         } else if segment.starts_with(':') {
             params.push(segment[1..].to_string());
         }
@@ -180,13 +185,18 @@ mod tests {
     #[tokio::test]
     async fn test_discover_routes() {
         let config = BrowserConfig::default();
-        let routes = discover_routes("http://example.com", &config).await.unwrap();
+        let routes = discover_routes("http://example.com", &config)
+            .await
+            .unwrap();
         assert!(!routes.is_empty());
     }
 
     #[test]
     fn test_discovery_methods() {
         assert_eq!(DiscoveryMethod::Crawl, DiscoveryMethod::Crawl);
-        assert_eq!(DiscoveryMethod::XhrInterception, DiscoveryMethod::XhrInterception);
+        assert_eq!(
+            DiscoveryMethod::XhrInterception,
+            DiscoveryMethod::XhrInterception
+        );
     }
 }

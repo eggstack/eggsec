@@ -51,7 +51,13 @@ impl MetadataTester {
         };
 
         for endpoint in METADATA_ENDPOINTS {
-            match self.client.get(*endpoint).timeout(std::time::Duration::from_secs(3)).send().await {
+            match self
+                .client
+                .get(*endpoint)
+                .timeout(std::time::Duration::from_secs(3))
+                .send()
+                .await
+            {
                 Ok(resp) if resp.status().is_success() => {
                     result.metadata_accessible = true;
                     result.imdsv1_accessible = true;
@@ -61,7 +67,10 @@ impl MetadataTester {
                         result.findings.push(MetadataFinding {
                             severity: Severity::Critical,
                             title: "IAM credentials exposed via metadata".to_string(),
-                            description: format!("IAM security credentials accessible at {}", endpoint),
+                            description: format!(
+                                "IAM security credentials accessible at {}",
+                                endpoint
+                            ),
                             recommendation: "Use IMDSv2 and restrict metadata access".to_string(),
                         });
                     }
@@ -78,7 +87,8 @@ impl MetadataTester {
             }
         }
 
-        let token_response = self.client
+        let token_response = self
+            .client
             .put("http://169.254.169.254/latest/api/token")
             .header("X-aws-ec2-metadata-token-ttl-seconds", "21600")
             .timeout(std::time::Duration::from_secs(3))
@@ -91,7 +101,9 @@ impl MetadataTester {
             result.findings.push(MetadataFinding {
                 severity: Severity::High,
                 title: "IMDSv1 accessible without IMDSv2 enforcement".to_string(),
-                description: "Instance Metadata Service v1 is accessible and not requiring v2 tokens".to_string(),
+                description:
+                    "Instance Metadata Service v1 is accessible and not requiring v2 tokens"
+                        .to_string(),
                 recommendation: "Enable IMDSv2 enforcement (hop limit = 1)".to_string(),
             });
         }
@@ -100,7 +112,8 @@ impl MetadataTester {
             result.findings.push(MetadataFinding {
                 severity: Severity::Info,
                 title: "Metadata endpoint not accessible".to_string(),
-                description: "Could not reach cloud metadata endpoints from current network".to_string(),
+                description: "Could not reach cloud metadata endpoints from current network"
+                    .to_string(),
                 recommendation: "Test from within the cloud environment".to_string(),
             });
         }
@@ -122,7 +135,9 @@ mod tests {
     #[test]
     fn test_metadata_endpoints_not_empty() {
         assert!(!METADATA_ENDPOINTS.is_empty());
-        assert!(METADATA_ENDPOINTS.iter().any(|e| e.contains("security-credentials")));
+        assert!(METADATA_ENDPOINTS
+            .iter()
+            .any(|e| e.contains("security-credentials")));
     }
 
     #[test]

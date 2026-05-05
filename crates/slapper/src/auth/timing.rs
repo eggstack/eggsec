@@ -36,15 +36,7 @@ impl TimingTester {
             analysis: String::new(),
         };
 
-        let test_passwords = vec![
-            "a",
-            "aa",
-            "aaa",
-            "aaaa",
-            "aaaaa",
-            "wrong",
-            "wrongpassword",
-        ];
+        let test_passwords = vec!["a", "aa", "aaa", "aaaa", "aaaaa", "wrong", "wrongpassword"];
 
         let mut measurements = Vec::new();
         for password in &test_passwords {
@@ -57,7 +49,10 @@ impl TimingTester {
         }
 
         if measurements.len() >= 2 {
-            let times: Vec<f64> = measurements.iter().map(|m| m.avg_response_time_ms).collect();
+            let times: Vec<f64> = measurements
+                .iter()
+                .map(|m| m.avg_response_time_ms)
+                .collect();
             let max_time = times.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
             let min_time = times.iter().cloned().fold(f64::INFINITY, f64::min);
             let diff = max_time - min_time;
@@ -69,10 +64,8 @@ impl TimingTester {
                     diff, max_time, min_time
                 );
             } else {
-                result.analysis = format!(
-                    "No significant timing difference: {:.2}ms variance",
-                    diff
-                );
+                result.analysis =
+                    format!("No significant timing difference: {:.2}ms variance", diff);
             }
         }
 
@@ -81,14 +74,24 @@ impl TimingTester {
         Ok(result)
     }
 
-    async fn measure_timing(&self, target: &str, username: &str, password: &str, samples: usize) -> f64 {
+    async fn measure_timing(
+        &self,
+        target: &str,
+        username: &str,
+        password: &str,
+        samples: usize,
+    ) -> f64 {
         let mut total_ms = 0.0;
 
         for _ in 0..samples {
             let start = Instant::now();
-            let _ = self.client
+            let _ = self
+                .client
                 .post(target)
-                .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(
+                    reqwest::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
                 .body(format!("username={}&password={}", username, password))
                 .send()
                 .await;

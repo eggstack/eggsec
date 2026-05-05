@@ -15,8 +15,8 @@ pub mod macros;
 pub mod cmd;
 pub mod mass_assign;
 pub mod nosql;
-pub mod oauth;
 pub mod oast;
+pub mod oauth;
 pub mod prototype;
 pub mod race;
 pub mod redirect;
@@ -27,8 +27,8 @@ pub mod ssrf;
 pub mod ssti;
 pub mod traversal;
 pub mod websocket;
-pub mod xss;
 pub mod xpath;
+pub mod xss;
 pub mod xxe;
 
 use serde::{Deserialize, Serialize};
@@ -121,7 +121,8 @@ impl PayloadType {
 
     pub fn all_variants() -> &'static [PayloadType] {
         use std::sync::LazyLock;
-        static VARIANTS: LazyLock<Vec<PayloadType>> = LazyLock::new(|| PayloadType::iter().collect());
+        static VARIANTS: LazyLock<Vec<PayloadType>> =
+            LazyLock::new(|| PayloadType::iter().collect());
         &VARIANTS
     }
 }
@@ -146,9 +147,8 @@ static PAYLOAD_CACHE: LazyLock<rustc_hash::FxHashMap<PayloadType, Vec<Payload>>>
         map
     });
 
-static ALL_PAYLOADS_CACHE: LazyLock<Vec<Payload>> = LazyLock::new(|| {
-    PAYLOAD_CACHE.values().flatten().cloned().collect()
-});
+static ALL_PAYLOADS_CACHE: LazyLock<Vec<Payload>> =
+    LazyLock::new(|| PAYLOAD_CACHE.values().flatten().cloned().collect());
 
 pub fn get_payloads(payload_type: PayloadType) -> Vec<Payload> {
     match payload_type {

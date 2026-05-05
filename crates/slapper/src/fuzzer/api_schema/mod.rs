@@ -83,7 +83,9 @@ impl ApiSchemaFuzzer {
                 if let Some(methods_obj) = methods.as_object() {
                     for (method, details) in methods_obj {
                         let method_upper = method.to_uppercase();
-                        if !["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"].contains(&method_upper.as_str()) {
+                        if !["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
+                            .contains(&method_upper.as_str())
+                        {
                             continue;
                         }
 
@@ -92,7 +94,9 @@ impl ApiSchemaFuzzer {
                         let mut request_body = None;
 
                         if let Some(details_obj) = details.as_object() {
-                            if let Some(params) = details_obj.get("parameters").and_then(|v| v.as_array()) {
+                            if let Some(params) =
+                                details_obj.get("parameters").and_then(|v| v.as_array())
+                            {
                                 for param in params {
                                     if let Some(p) = Self::parse_parameter(param) {
                                         parameters.push(p);
@@ -104,7 +108,9 @@ impl ApiSchemaFuzzer {
                                 request_body = Self::parse_request_body(rb);
                             }
 
-                            if let Some(sec) = details_obj.get("security").and_then(|v| v.as_array()) {
+                            if let Some(sec) =
+                                details_obj.get("security").and_then(|v| v.as_array())
+                            {
                                 for s in sec {
                                     if let Some(s_obj) = s.as_object() {
                                         for key in s_obj.keys() {
@@ -130,7 +136,11 @@ impl ApiSchemaFuzzer {
         Ok(endpoints)
     }
 
-    pub fn generate_fuzz_payloads(&self, endpoints: &[ApiEndpoint], base_url: &str) -> Vec<SchemaFuzzTarget> {
+    pub fn generate_fuzz_payloads(
+        &self,
+        endpoints: &[ApiEndpoint],
+        base_url: &str,
+    ) -> Vec<SchemaFuzzTarget> {
         let mut targets = Vec::new();
 
         for endpoint in endpoints {
@@ -176,7 +186,10 @@ impl ApiSchemaFuzzer {
         payloads
     }
 
-    pub fn generate_oversized_payloads(&self, endpoints: &[ApiEndpoint]) -> Vec<(String, String, String)> {
+    pub fn generate_oversized_payloads(
+        &self,
+        endpoints: &[ApiEndpoint],
+    ) -> Vec<(String, String, String)> {
         let mut payloads = Vec::new();
         let sizes = [1_000, 10_000, 100_000, 1_000_000];
 
@@ -185,11 +198,7 @@ impl ApiSchemaFuzzer {
                 if param.param_type == "string" {
                     for size in sizes {
                         let oversized = "A".repeat(size);
-                        payloads.push((
-                            endpoint.path.clone(),
-                            param.name.clone(),
-                            oversized,
-                        ));
+                        payloads.push((endpoint.path.clone(), param.name.clone(), oversized));
                     }
                 }
             }
@@ -198,11 +207,7 @@ impl ApiSchemaFuzzer {
                 if body.content_type.contains("json") {
                     for size in sizes {
                         let oversized_body = format!("{{\"data\": \"{}\"}}", "A".repeat(size));
-                        payloads.push((
-                            endpoint.path.clone(),
-                            "body".to_string(),
-                            oversized_body,
-                        ));
+                        payloads.push((endpoint.path.clone(), "body".to_string(), oversized_body));
                     }
                 }
             }
@@ -211,7 +216,11 @@ impl ApiSchemaFuzzer {
         payloads
     }
 
-    pub fn generate_auth_bypass_payloads(&self, endpoints: &[ApiEndpoint], base_url: &str) -> Vec<(String, String, HashMap<String, String>)> {
+    pub fn generate_auth_bypass_payloads(
+        &self,
+        endpoints: &[ApiEndpoint],
+        base_url: &str,
+    ) -> Vec<(String, String, HashMap<String, String>)> {
         let mut payloads = Vec::new();
 
         for endpoint in endpoints {
@@ -245,15 +254,16 @@ impl ApiSchemaFuzzer {
         payloads
     }
 
-    pub fn generate_required_omission_payloads(&self, endpoints: &[ApiEndpoint], base_url: &str) -> Vec<(String, String)> {
+    pub fn generate_required_omission_payloads(
+        &self,
+        endpoints: &[ApiEndpoint],
+        base_url: &str,
+    ) -> Vec<(String, String)> {
         let mut payloads = Vec::new();
 
         for endpoint in endpoints {
-            let required_params: Vec<&ApiParameter> = endpoint
-                .parameters
-                .iter()
-                .filter(|p| p.required)
-                .collect();
+            let required_params: Vec<&ApiParameter> =
+                endpoint.parameters.iter().filter(|p| p.required).collect();
 
             if !required_params.is_empty() {
                 let mut url = format!("{}{}", base_url, endpoint.path);
@@ -298,7 +308,9 @@ impl ApiSchemaFuzzer {
                 let status = response.status().as_u16();
                 let is_error = status >= 500;
                 let body = response.text().await.unwrap_or_default();
-                let has_error = body.contains("SQL syntax") || body.contains("stack trace") || body.contains("exception");
+                let has_error = body.contains("SQL syntax")
+                    || body.contains("stack trace")
+                    || body.contains("exception");
 
                 results.push(SchemaFuzzResult {
                     endpoint: endpoint.path.clone(),
@@ -314,7 +326,12 @@ impl ApiSchemaFuzzer {
         Ok(results)
     }
 
-    async fn send_request(&self, method: &str, url: &str, body: Option<String>) -> Result<reqwest::Response> {
+    async fn send_request(
+        &self,
+        method: &str,
+        url: &str,
+        body: Option<String>,
+    ) -> Result<reqwest::Response> {
         let client = self.client.clone();
         let req = match method {
             "GET" => client.get(url),
@@ -326,7 +343,8 @@ impl ApiSchemaFuzzer {
         };
 
         let req = if let Some(b) = body {
-            req.header(reqwest::header::CONTENT_TYPE, "application/json").body(b)
+            req.header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(b)
         } else {
             req
         };
@@ -334,7 +352,12 @@ impl ApiSchemaFuzzer {
         Ok(req.send().await?)
     }
 
-    fn build_url(base_url: &str, endpoint: &ApiEndpoint, param: &ApiParameter, value: &str) -> String {
+    fn build_url(
+        base_url: &str,
+        endpoint: &ApiEndpoint,
+        param: &ApiParameter,
+        value: &str,
+    ) -> String {
         let mut url = format!("{}{}", base_url, endpoint.path);
 
         if param.location == ParamLocation::Path {
@@ -358,17 +381,35 @@ impl ApiSchemaFuzzer {
             "body" => ParamLocation::Body,
             _ => ParamLocation::Query,
         };
-        let required = param.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
+        let required = param
+            .get("required")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let schema = param.get("schema").unwrap_or(param);
 
-        let param_type = schema.get("type").and_then(|v| v.as_str()).unwrap_or("string").to_string();
-        let format = schema.get("format").and_then(|v| v.as_str()).map(|s| s.to_string());
-        let example = schema.get("example").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let param_type = schema
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("string")
+            .to_string();
+        let format = schema
+            .get("format")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let example = schema
+            .get("example")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         let min_value = schema.get("minimum").map(|v| v.to_string());
         let max_value = schema.get("maximum").map(|v| v.to_string());
-        let pattern = schema.get("pattern").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let pattern = schema
+            .get("pattern")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         let enum_values = schema.get("enum").and_then(|v| v.as_array()).map(|arr| {
-            arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
         });
 
         Some(ApiParameter {
@@ -392,7 +433,10 @@ impl ApiSchemaFuzzer {
                 return Some(RequestBody {
                     content_type: content_type.clone(),
                     schema: schema.clone(),
-                    required: body.get("required").and_then(|v| v.as_bool()).unwrap_or(false),
+                    required: body
+                        .get("required")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
                 });
             }
         }

@@ -1,10 +1,20 @@
-use axum::{routing::get, routing::post, routing::delete, extract::{State, Path}, response::{IntoResponse, Response}, Json, Router, http::{HeaderMap, StatusCode}};
+use axum::{
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
+    routing::delete,
+    routing::get,
+    routing::post,
+    Json, Router,
+};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use subtle::ConstantTimeEq;
 use std::net::IpAddr;
+use subtle::ConstantTimeEq;
+use uuid::Uuid;
 
-use crate::tool::agents::{AgentRegistry, AgentInfo, AgentStatus, TaskScheduler, ScheduledTask, TaskPriority, TaskStatus};
+use crate::tool::agents::{
+    AgentInfo, AgentRegistry, AgentStatus, ScheduledTask, TaskPriority, TaskScheduler, TaskStatus,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CallbackUrlValidationError {
@@ -24,12 +34,17 @@ pub fn validate_callback_url(url_str: &str) -> Result<(), CallbackUrlValidationE
         };
         std::net::ToSocketAddrs::to_socket_addrs(addr_str.as_str())
             .map(|iter| iter.map(|a| a.ip()).collect())
-            .map_err(|e| CallbackUrlValidationError::ResolvesToForbiddenIp(format!("DNS failed: {}", e)))
+            .map_err(|e| {
+                CallbackUrlValidationError::ResolvesToForbiddenIp(format!("DNS failed: {}", e))
+            })
     };
     validate_callback_url_with_resolver(url_str, resolver)
 }
 
-pub fn validate_callback_url_with_resolver<F>(url_str: &str, resolver: F) -> Result<(), CallbackUrlValidationError>
+pub fn validate_callback_url_with_resolver<F>(
+    url_str: &str,
+    resolver: F,
+) -> Result<(), CallbackUrlValidationError>
 where
     F: Fn(&str, u16) -> Result<Vec<IpAddr>, CallbackUrlValidationError>,
 {
@@ -38,7 +53,9 @@ where
 
     let scheme = parsed.scheme();
     if scheme != "http" && scheme != "https" {
-        return Err(CallbackUrlValidationError::UnsupportedScheme(scheme.to_string()));
+        return Err(CallbackUrlValidationError::UnsupportedScheme(
+            scheme.to_string(),
+        ));
     }
 
     let has_cred = !parsed.username().is_empty() || parsed.password().is_some();
@@ -46,29 +63,34 @@ where
         return Err(CallbackUrlValidationError::ContainsCredentials);
     }
 
-    let host = parsed.host_str()
+    let host = parsed
+        .host_str()
         .ok_or(CallbackUrlValidationError::MissingHost)?;
 
     let host_lower = host.to_lowercase();
     if host_lower == "localhost" || host_lower == "localhost." {
-        return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(host.to_string()));
+        return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(
+            host.to_string(),
+        ));
     }
 
-    let port = parsed.port().unwrap_or_else(|| {
-        match scheme {
-            "https" => 443,
-            _ => 80,
-        }
+    let port = parsed.port().unwrap_or_else(|| match scheme {
+        "https" => 443,
+        _ => 80,
     });
 
     if let Ok(ip) = host.parse::<IpAddr>() {
         if is_forbidden_ip(&ip) {
-            return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(host.to_string()));
+            return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(
+                host.to_string(),
+            ));
         }
     } else {
         let addrs = resolver(host, port)?;
         if addrs.iter().any(|ip| is_forbidden_ip(ip)) {
-            return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(host.to_string()));
+            return Err(CallbackUrlValidationError::ResolvesToForbiddenIp(
+                host.to_string(),
+            ));
         }
     }
 
@@ -159,7 +181,10 @@ async fn register_agent(
     }
     if let Some(ref callback_url) = req.callback_url {
         if let Err(e) = validate_callback_url(callback_url) {
-            return Err((StatusCode::BAD_REQUEST, format!("Invalid callback URL: {:?}", e)));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Invalid callback URL: {:?}", e),
+            ));
         }
     }
     let id = Uuid::new_v4();
@@ -227,10 +252,12 @@ async fn unregister_agent(
     Ok(Response::builder()
         .status(StatusCode::NO_CONTENT)
         .body("".to_string())
-        .unwrap_or_else(|_| Response::builder()
-            .status(StatusCode::NO_CONTENT)
-            .body("".to_string())
-            .unwrap()))
+        .unwrap_or_else(|_| {
+            Response::builder()
+                .status(StatusCode::NO_CONTENT)
+                .body("".to_string())
+                .unwrap()
+        }))
 }
 
 #[derive(Debug, Serialize)]
@@ -292,10 +319,7 @@ async fn create_task(
     };
 
     let scheduler = state.scheduler.clone();
-    let mut task = scheduler.create_task(
-        req.task_type.clone(),
-        req.payload.clone(),
-    );
+    let mut task = scheduler.create_task(req.task_type.clone(), req.payload.clone());
     task.priority = priority;
     if let Some(agent_id) = req.agent_id {
         task.assigned_agent_id = Some(agent_id);
@@ -342,30 +366,33 @@ async fn list_tasks(
         return Err((StatusCode::UNAUTHORIZED, e));
     }
     let tasks_raw = state.scheduler.list_all_tasks().await;
-    let tasks: Vec<TaskInfo> = tasks_raw.iter().map(|t| {
-        let priority_str = match t.priority {
-            TaskPriority::Critical => "critical",
-            TaskPriority::High => "high",
-            TaskPriority::Normal => "normal",
-            TaskPriority::Low => "low",
-        };
-        let status_str = match t.status {
-            TaskStatus::Pending => "pending",
-            TaskStatus::Leased => "leased",
-            TaskStatus::Completed => "completed",
-            TaskStatus::Failed => "failed",
-            TaskStatus::Cancelled => "cancelled",
-        };
-        TaskInfo {
-            id: t.id,
-            task_type: t.task_type.clone(),
-            priority: priority_str.to_string(),
-            status: status_str.to_string(),
-            retry_count: t.retry_count,
-            created_at: t.created_at,
-            assigned_agent_id: t.assigned_agent_id,
-        }
-    }).collect();
+    let tasks: Vec<TaskInfo> = tasks_raw
+        .iter()
+        .map(|t| {
+            let priority_str = match t.priority {
+                TaskPriority::Critical => "critical",
+                TaskPriority::High => "high",
+                TaskPriority::Normal => "normal",
+                TaskPriority::Low => "low",
+            };
+            let status_str = match t.status {
+                TaskStatus::Pending => "pending",
+                TaskStatus::Leased => "leased",
+                TaskStatus::Completed => "completed",
+                TaskStatus::Failed => "failed",
+                TaskStatus::Cancelled => "cancelled",
+            };
+            TaskInfo {
+                id: t.id,
+                task_type: t.task_type.clone(),
+                priority: priority_str.to_string(),
+                status: status_str.to_string(),
+                retry_count: t.retry_count,
+                created_at: t.created_at,
+                assigned_agent_id: t.assigned_agent_id,
+            }
+        })
+        .collect();
     let total = tasks.len();
     Ok(Json(ListTasksResponse { tasks, total }))
 }
@@ -475,7 +502,11 @@ async fn lease_task(
     let task = state.scheduler.get_task(id).await;
     match task {
         Some(t) if t.status == TaskStatus::Pending => {
-            if state.scheduler.lease_task(id, req.agent_id, lease_duration_ms).await {
+            if state
+                .scheduler
+                .lease_task(id, req.agent_id, lease_duration_ms)
+                .await
+            {
                 let task_after = state.scheduler.get_task(id).await;
                 Ok(Json(LeaseTaskResponse {
                     id,
@@ -530,7 +561,10 @@ async fn lease_next_task(
         _ => {}
     }
     let lease_duration_ms = req.lease_duration_ms.unwrap_or(300000);
-    let task = state.scheduler.lease_next_task(agent_id, lease_duration_ms).await;
+    let task = state
+        .scheduler
+        .lease_next_task(agent_id, lease_duration_ms)
+        .await;
     Ok(Json(LeaseNextTaskResponse {
         task: task.as_ref().map(TaskDetail::from),
     }))
@@ -563,14 +597,20 @@ async fn submit_task_result(
     match task {
         None => return Err((StatusCode::NOT_FOUND, "Task not found".to_string())),
         Some(t) if t.assigned_agent_id != Some(req.agent_id) => {
-            return Err((StatusCode::FORBIDDEN, "Agent does not own this task lease".to_string()));
+            return Err((
+                StatusCode::FORBIDDEN,
+                "Agent does not own this task lease".to_string(),
+            ));
         }
         Some(t) if t.status != TaskStatus::Leased => {
             return Err((StatusCode::BAD_REQUEST, "Task is not leased".to_string()));
         }
         _ => {}
     }
-    let accepted = state.scheduler.submit_result(id, req.success, req.result, req.error).await;
+    let accepted = state
+        .scheduler
+        .submit_result(id, req.success, req.result, req.error)
+        .await;
     Ok(Json(SubmitResultResponse { id, accepted }))
 }
 
@@ -609,8 +649,16 @@ fn require_auth(api_key: &Option<String>, headers: &HeaderMap) -> Result<(), Str
     }
 }
 
-pub fn router(registry: AgentRegistry, scheduler: TaskScheduler, api_key: Option<String>) -> Router {
-    let state = AgentState { registry, scheduler, api_key };
+pub fn router(
+    registry: AgentRegistry,
+    scheduler: TaskScheduler,
+    api_key: Option<String>,
+) -> Router {
+    let state = AgentState {
+        registry,
+        scheduler,
+        api_key,
+    };
     Router::new()
         .route("/api/v1/agents", post(register_agent))
         .route("/api/v1/agents", get(list_agents))
@@ -665,8 +713,12 @@ mod tests {
     #[tokio::test]
     async fn test_list_agents_after_register() {
         let registry = AgentRegistry::new();
-        registry.register(make_agent("agent1", vec!["scan".to_string()])).await;
-        registry.register(make_agent("agent2", vec!["fuzz".to_string()])).await;
+        registry
+            .register(make_agent("agent1", vec!["scan".to_string()]))
+            .await;
+        registry
+            .register(make_agent("agent2", vec!["fuzz".to_string()]))
+            .await;
         let agents = registry.list().await;
         assert_eq!(agents.len(), 2);
     }
@@ -697,15 +749,13 @@ mod tests {
     #[tokio::test]
     async fn test_scheduler_create_task() {
         let scheduler = TaskScheduler::new();
-        let task = scheduler.create_task(
-            "scan",
-            serde_json::json!({"target": "http://example.com"}),
-        );
+        let task =
+            scheduler.create_task("scan", serde_json::json!({"target": "http://example.com"}));
         scheduler.schedule(task).await;
         assert!(scheduler.pending_count().await > 0);
     }
 
-#[tokio::test]
+    #[tokio::test]
     async fn test_task_status_pending() {
         let scheduler = TaskScheduler::new();
         let task = scheduler.create_task("scan", serde_json::json!({}));
@@ -745,7 +795,14 @@ mod tests {
         let updated_task = updated.unwrap();
         assert_eq!(updated_task.status, TaskStatus::Leased);
         assert_eq!(updated_task.assigned_agent_id, Some(agent_id));
-        let submitted = scheduler.submit_result(task_id, true, Some(serde_json::json!({"result": "ok"})), None).await;
+        let submitted = scheduler
+            .submit_result(
+                task_id,
+                true,
+                Some(serde_json::json!({"result": "ok"})),
+                None,
+            )
+            .await;
         assert!(submitted);
         let final_task = scheduler.get_task(task_id).await;
         assert!(final_task.is_some());
@@ -777,7 +834,7 @@ mod tests {
         assert!(!leased);
     }
 
-#[tokio::test]
+    #[tokio::test]
     async fn test_failed_task_with_retries_becomes_pending() {
         let scheduler = TaskScheduler::new();
         let task = scheduler.create_task("scan", serde_json::json!({}));
@@ -785,7 +842,9 @@ mod tests {
         scheduler.schedule(task).await;
         let agent_id = Uuid::new_v4();
         scheduler.lease_task(task_id, agent_id, 60000).await;
-        scheduler.submit_result(task_id, false, None, Some("error".to_string())).await;
+        scheduler
+            .submit_result(task_id, false, None, Some("error".to_string()))
+            .await;
         let failed_task = scheduler.get_task(task_id).await.unwrap();
         assert_eq!(failed_task.status, TaskStatus::Pending);
         assert_eq!(failed_task.retry_count, 1);
@@ -890,36 +949,46 @@ mod tests {
         use std::net::IpAddr;
         use std::str::FromStr;
 
-        assert!(is_forbidden_ip(&IpAddr::from_str("127.255.255.255").unwrap()));
-        assert!(is_forbidden_ip(&IpAddr::from_str("172.31.255.255").unwrap()));
+        assert!(is_forbidden_ip(
+            &IpAddr::from_str("127.255.255.255").unwrap()
+        ));
+        assert!(is_forbidden_ip(
+            &IpAddr::from_str("172.31.255.255").unwrap()
+        ));
         assert!(is_forbidden_ip(&IpAddr::from_str("224.0.0.1").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("192.0.2.55").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("198.51.100.55").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("203.0.113.55").unwrap()));
-        assert!(is_forbidden_ip(&IpAddr::from_str("198.19.255.255").unwrap()));
+        assert!(is_forbidden_ip(
+            &IpAddr::from_str("198.19.255.255").unwrap()
+        ));
         assert!(is_forbidden_ip(&IpAddr::from_str("::1").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("fc00::1").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("fd00::1").unwrap()));
         assert!(is_forbidden_ip(&IpAddr::from_str("fe80::1").unwrap()));
-        assert!(is_forbidden_ip(&IpAddr::from_str("169.254.169.254").unwrap()));
+        assert!(is_forbidden_ip(
+            &IpAddr::from_str("169.254.169.254").unwrap()
+        ));
     }
 
     #[test]
     fn test_callback_url_rejects_non_first_private_ip() {
-        let resolver = |_host: &str, _port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
-            Ok(vec![
-                "8.8.8.8".parse().unwrap(),
-                "10.0.0.1".parse().unwrap(),
-            ])
-        };
+        let resolver =
+            |_host: &str, _port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
+                Ok(vec![
+                    "8.8.8.8".parse().unwrap(),
+                    "10.0.0.1".parse().unwrap(),
+                ])
+            };
         assert!(validate_callback_url_with_resolver("http://example.com", resolver).is_err());
     }
 
     #[test]
     fn test_callback_url_accepts_safe_with_fake_resolver() {
-        let resolver = |_host: &str, _port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
-            Ok(vec!["8.8.8.8".parse().unwrap()])
-        };
+        let resolver =
+            |_host: &str, _port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
+                Ok(vec!["8.8.8.8".parse().unwrap()])
+            };
         assert!(validate_callback_url_with_resolver("http://example.com", resolver).is_ok());
     }
 
@@ -934,7 +1003,8 @@ mod tests {
     async fn test_create_task_then_get_by_id_returns_details() {
         let registry = AgentRegistry::new();
         let scheduler = TaskScheduler::new();
-        let task = scheduler.create_task("scan", serde_json::json!({"target": "http://example.com"}));
+        let task =
+            scheduler.create_task("scan", serde_json::json!({"target": "http://example.com"}));
         let task_id = task.id;
         scheduler.schedule(task).await;
 
@@ -958,7 +1028,8 @@ mod tests {
     async fn test_create_task_with_agent_id_preserves_assignment() {
         let scheduler = TaskScheduler::new();
         let agent_id = Uuid::new_v4();
-        let mut task = scheduler.create_task("scan", serde_json::json!({"target": "http://example.com"}));
+        let mut task =
+            scheduler.create_task("scan", serde_json::json!({"target": "http://example.com"}));
         task.assigned_agent_id = Some(agent_id);
         let task_id = task.id;
         scheduler.schedule(task).await;
@@ -1003,7 +1074,14 @@ mod tests {
         let task_for_check = scheduler.get_task(task_id).await.unwrap();
         assert_ne!(task_for_check.assigned_agent_id, Some(wrong_agent_id));
 
-        let submitted = scheduler.submit_result(task_id, true, Some(serde_json::json!({"result": "ok"})), None).await;
+        let submitted = scheduler
+            .submit_result(
+                task_id,
+                true,
+                Some(serde_json::json!({"result": "ok"})),
+                None,
+            )
+            .await;
         assert!(submitted);
     }
 
@@ -1016,7 +1094,14 @@ mod tests {
         let agent_id = Uuid::new_v4();
         scheduler.lease_task(task_id, agent_id, 60000).await;
 
-        let submitted = scheduler.submit_result(task_id, true, Some(serde_json::json!({"result": "ok"})), None).await;
+        let submitted = scheduler
+            .submit_result(
+                task_id,
+                true,
+                Some(serde_json::json!({"result": "ok"})),
+                None,
+            )
+            .await;
         assert!(submitted);
 
         let final_task = scheduler.get_task(task_id).await.unwrap();
@@ -1033,7 +1118,9 @@ mod tests {
         let agent_id = Uuid::new_v4();
         scheduler.lease_task(task_id, agent_id, 60000).await;
 
-        scheduler.submit_result(task_id, false, None, Some("Test error".to_string())).await;
+        scheduler
+            .submit_result(task_id, false, None, Some("Test error".to_string()))
+            .await;
 
         let failed_task = scheduler.get_task(task_id).await.unwrap();
         assert_eq!(failed_task.error, Some("Test error".to_string()));
@@ -1058,7 +1145,8 @@ mod tests {
     #[tokio::test]
     async fn test_task_detail_serialization() {
         let scheduler = TaskScheduler::new();
-        let task = scheduler.create_task("scan", serde_json::json!({"target": "http://example.com"}));
+        let task =
+            scheduler.create_task("scan", serde_json::json!({"target": "http://example.com"}));
         let task_id = task.id;
         scheduler.schedule(task).await;
 

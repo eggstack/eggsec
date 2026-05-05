@@ -1,13 +1,13 @@
 pub mod cargo;
-pub mod npm;
 pub mod go;
+pub mod npm;
 
 pub use crate::error::Result;
 pub use crate::types::Severity;
 
 pub use self::cargo::CargoScanner;
-pub use self::npm::NpmScanner;
 pub use self::go::GoScanner;
+pub use self::npm::NpmScanner;
 
 use crate::utils::create_http_client;
 use serde::{Deserialize, Serialize};
@@ -89,19 +89,39 @@ impl DependencyScanner {
         let summary = DependencySummary {
             critical: ecosystems
                 .iter()
-                .map(|e| e.vulnerabilities.iter().filter(|v| v.severity == Severity::Critical).count())
+                .map(|e| {
+                    e.vulnerabilities
+                        .iter()
+                        .filter(|v| v.severity == Severity::Critical)
+                        .count()
+                })
                 .sum(),
             high: ecosystems
                 .iter()
-                .map(|e| e.vulnerabilities.iter().filter(|v| v.severity == Severity::High).count())
+                .map(|e| {
+                    e.vulnerabilities
+                        .iter()
+                        .filter(|v| v.severity == Severity::High)
+                        .count()
+                })
                 .sum(),
             medium: ecosystems
                 .iter()
-                .map(|e| e.vulnerabilities.iter().filter(|v| v.severity == Severity::Medium).count())
+                .map(|e| {
+                    e.vulnerabilities
+                        .iter()
+                        .filter(|v| v.severity == Severity::Medium)
+                        .count()
+                })
                 .sum(),
             low: ecosystems
                 .iter()
-                .map(|e| e.vulnerabilities.iter().filter(|v| v.severity == Severity::Low).count())
+                .map(|e| {
+                    e.vulnerabilities
+                        .iter()
+                        .filter(|v| v.severity == Severity::Low)
+                        .count()
+                })
                 .sum(),
         };
 
@@ -116,19 +136,45 @@ impl DependencyScanner {
 
     fn find_manifests(&self, path: &Path) -> Vec<PathBuf> {
         let mut found = Vec::new();
-        let targets = vec!["Cargo.toml", "Cargo.lock", "package.json", "package-lock.json", "yarn.lock", "requirements.txt", "go.mod", "go.sum", "Gemfile", "Gemfile.lock", "composer.json", "pom.xml"];
+        let targets = vec![
+            "Cargo.toml",
+            "Cargo.lock",
+            "package.json",
+            "package-lock.json",
+            "yarn.lock",
+            "requirements.txt",
+            "go.mod",
+            "go.sum",
+            "Gemfile",
+            "Gemfile.lock",
+            "composer.json",
+            "pom.xml",
+        ];
 
         if path.is_dir() {
             if let Ok(entries) = std::fs::read_dir(path) {
                 for entry in entries.flatten() {
                     let file_path = entry.path();
-                    let name_str = file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    let name_str = file_path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
                     if file_path.is_file() && targets.contains(&name_str.as_ref()) {
                         found.push(file_path);
                     }
                 }
             }
-        } else if path.is_file() && targets.contains(&path.file_name().unwrap_or_default().to_string_lossy().to_string().as_ref()) {
+        } else if path.is_file()
+            && targets.contains(
+                &path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string()
+                    .as_ref(),
+            )
+        {
             found.push(path.to_path_buf());
         }
 
@@ -136,7 +182,11 @@ impl DependencyScanner {
     }
 
     async fn parse_manifest(&self, path: &Path) -> Result<DependencyEcosystem> {
-        let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let file_name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
 
         let ecosystem = match file_name.as_str() {
             "Cargo.toml" => CargoScanner::scan_cargo_toml(path),
@@ -147,7 +197,10 @@ impl DependencyScanner {
             "requirements.txt" => NpmScanner::scan_requirements_txt(path),
             "go.mod" => GoScanner::scan_go_mod(path),
             "go.sum" => GoScanner::scan_go_sum(path),
-            _ => Err(crate::error::SlapperError::Runtime(format!("Unknown manifest file: {}", file_name))),
+            _ => Err(crate::error::SlapperError::Runtime(format!(
+                "Unknown manifest file: {}",
+                file_name
+            ))),
         };
 
         ecosystem

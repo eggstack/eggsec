@@ -32,11 +32,19 @@ impl GoScanner {
                 continue;
             }
 
-            if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with("module") || trimmed.starts_with("go ") {
+            if trimmed.is_empty()
+                || trimmed.starts_with("//")
+                || trimmed.starts_with("module")
+                || trimmed.starts_with("go ")
+            {
                 continue;
             }
 
-            if in_require || (!trimmed.starts_with("replace") && !trimmed.starts_with("exclude") && !trimmed.starts_with("=>")) {
+            if in_require
+                || (!trimmed.starts_with("replace")
+                    && !trimmed.starts_with("exclude")
+                    && !trimmed.starts_with("=>"))
+            {
                 let parts: Vec<&str> = trimmed.split_whitespace().collect();
                 if parts.len() >= 2 {
                     dependencies.push(DependencyInfo {

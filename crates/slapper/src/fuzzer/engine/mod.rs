@@ -5,6 +5,8 @@ mod execution;
 mod types;
 mod utils;
 
-pub use types::*;
-pub use chained::{ChainedFuzzInput, ChainedFuzzOutput, StatefulFuzzer, FuzzChainStep, StepResults};
+pub use chained::{
+    ChainedFuzzInput, ChainedFuzzOutput, FuzzChainStep, StatefulFuzzer, StepResults,
+};
 pub use core::FuzzEngine;
+pub use types::*;

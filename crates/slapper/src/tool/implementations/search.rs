@@ -10,9 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::SlapperError;
 use crate::output::AgentSeverity;
-use crate::tool::traits::{
-    SecurityTool, ToolCapability, ToolCategory, ToolResult,
-};
+use crate::tool::traits::{SecurityTool, ToolCapability, ToolCategory, ToolResult};
 use crate::tool::{ToolRequest, ToolResponse};
 
 #[derive(Clone)]
@@ -59,15 +57,24 @@ impl SearchTool {
         }
     }
 
-    async fn search_searxng(&self, query: &str, categories: Option<&str>) -> Result<Vec<SearchResult>, crate::error::SlapperError> {
-        let mut url = format!("{}/search?q={}", self.searxng_url, urlencoding::encode(query));
-        
+    async fn search_searxng(
+        &self,
+        query: &str,
+        categories: Option<&str>,
+    ) -> Result<Vec<SearchResult>, crate::error::SlapperError> {
+        let mut url = format!(
+            "{}/search?q={}",
+            self.searxng_url,
+            urlencoding::encode(query)
+        );
+
         if let Some(cats) = categories {
             url.push_str(&format!("&categories={}", cats));
         }
         url.push_str("&format=json");
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -75,7 +82,10 @@ impl SearchTool {
             .map_err(|e| SlapperError::Network(format!("SearXNG request failed: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(SlapperError::Network(format!("SearXNG returned status: {}", response.status())));
+            return Err(SlapperError::Network(format!(
+                "SearXNG returned status: {}",
+                response.status()
+            )));
         }
 
         let results: serde_json::Value = response
@@ -99,9 +109,12 @@ impl SearchTool {
         Ok(search_results)
     }
 
-    async fn search_osv(&self, query: &str) -> Result<Vec<CveSearchResult>, crate::error::SlapperError> {
+    async fn search_osv(
+        &self,
+        query: &str,
+    ) -> Result<Vec<CveSearchResult>, crate::error::SlapperError> {
         let client = crate::utils::get_shared_http_client();
-        
+
         let response = client
             .get("https://api.osv.dev/v1/query")
             .json(&serde_json::json!({
@@ -116,7 +129,10 @@ impl SearchTool {
             .map_err(|e| SlapperError::Network(format!("OSV request failed: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(SlapperError::Network(format!("OSV returned status: {}", response.status())));
+            return Err(SlapperError::Network(format!(
+                "OSV returned status: {}",
+                response.status()
+            )));
         }
 
         let results: serde_json::Value = response
@@ -130,14 +146,14 @@ impl SearchTool {
             for item in vulns {
                 let cve_id = item["id"].as_str().unwrap_or("UNKNOWN").to_string();
                 let description = item["summary"].as_str().unwrap_or("").to_string();
-                
+
                 let cvss_score = item["severity"]
                     .as_array()
                     .and_then(|arr| arr.first())
                     .and_then(|sev| sev.get("score"))
                     .and_then(|s| s.as_str())
                     .and_then(|s| s.parse::<f32>().ok());
-                
+
                 cve_results.push(CveSearchResult {
                     cve_id,
                     description,
@@ -152,9 +168,12 @@ impl SearchTool {
         Ok(cve_results)
     }
 
-    async fn search_nvd(&self, query: &str) -> Result<Vec<CveSearchResult>, crate::error::SlapperError> {
+    async fn search_nvd(
+        &self,
+        query: &str,
+    ) -> Result<Vec<CveSearchResult>, crate::error::SlapperError> {
         let client = crate::utils::get_shared_http_client();
-        
+
         let url = format!(
             "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={}",
             urlencoding::encode(query)
@@ -169,7 +188,10 @@ impl SearchTool {
             .map_err(|e| SlapperError::Network(format!("NVD request failed: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(SlapperError::Network(format!("NVD returned status: {}", response.status())));
+            return Err(SlapperError::Network(format!(
+                "NVD returned status: {}",
+                response.status()
+            )));
         }
 
         let results: serde_json::Value = response
@@ -250,63 +272,63 @@ impl SecurityTool for SearchTool {
             .unwrap_or("searxng");
 
         let results = match source {
-            "osv" => {
-                match self.search_osv(&query).await {
-                    Ok(cves) => {
-                        let json_results: Vec<serde_json::Value> = cves.iter().map(|cve| {
+            "osv" => match self.search_osv(&query).await {
+                Ok(cves) => {
+                    let json_results: Vec<serde_json::Value> = cves
+                        .iter()
+                        .map(|cve| {
                             serde_json::json!({
                                 "cve_id": cve.cve_id,
                                 "description": cve.description,
                                 "cvss_score": cve.cvss_score,
                                 "published": cve.published,
                             })
-                        }).collect();
-                        
-                        serde_json::json!({
-                            "results": json_results,
-                            "source": "osv",
-                            "query": query,
-                            "count": cves.len()
                         })
-                    }
-                    Err(e) => serde_json::json!({ "error": e.to_string() }),
+                        .collect();
+
+                    serde_json::json!({
+                        "results": json_results,
+                        "source": "osv",
+                        "query": query,
+                        "count": cves.len()
+                    })
                 }
-            }
-            "nvd" => {
-                match self.search_nvd(&query).await {
-                    Ok(cves) => {
-                        let json_results: Vec<serde_json::Value> = cves.iter().map(|cve| {
+                Err(e) => serde_json::json!({ "error": e.to_string() }),
+            },
+            "nvd" => match self.search_nvd(&query).await {
+                Ok(cves) => {
+                    let json_results: Vec<serde_json::Value> = cves
+                        .iter()
+                        .map(|cve| {
                             serde_json::json!({
                                 "cve_id": cve.cve_id,
                                 "description": cve.description,
                                 "cvss_score": cve.cvss_score,
                                 "published": cve.published,
                             })
-                        }).collect();
-                        
-                        serde_json::json!({
-                            "results": json_results,
-                            "source": "nvd",
-                            "query": query,
-                            "count": cves.len()
                         })
-                    }
-                    Err(e) => serde_json::json!({ "error": e.to_string() }),
+                        .collect();
+
+                    serde_json::json!({
+                        "results": json_results,
+                        "source": "nvd",
+                        "query": query,
+                        "count": cves.len()
+                    })
                 }
-            }
-            _ => {
-                match self.search_searxng(&query, Some("general")).await {
-                    Ok(results) => {
-                        serde_json::json!({
-                            "results": results,
-                            "source": "searxng",
-                            "query": query,
-                            "count": results.len()
-                        })
-                    }
-                    Err(e) => serde_json::json!({ "error": e.to_string() }),
+                Err(e) => serde_json::json!({ "error": e.to_string() }),
+            },
+            _ => match self.search_searxng(&query, Some("general")).await {
+                Ok(results) => {
+                    serde_json::json!({
+                        "results": results,
+                        "source": "searxng",
+                        "query": query,
+                        "count": results.len()
+                    })
                 }
-            }
+                Err(e) => serde_json::json!({ "error": e.to_string() }),
+            },
         };
 
         let completed_at = Utc::now();
@@ -343,7 +365,8 @@ impl SecurityTool for SearchTool {
             },
             ToolCapability {
                 name: "cve_search".to_string(),
-                description: "Search CVE databases (OSV.dev, NVD) for vulnerability information".to_string(),
+                description: "Search CVE databases (OSV.dev, NVD) for vulnerability information"
+                    .to_string(),
                 parameters: vec![],
                 examples: vec![],
                 attack_surface: vec![],

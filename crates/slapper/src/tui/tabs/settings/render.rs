@@ -11,6 +11,18 @@ use ratatui::{
 
 impl TabRender for super::SettingsTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        if let Some(ref err_msg) = self.error_message {
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Settings - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, area);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Length(20), Constraint::Min(0)])
@@ -77,15 +89,8 @@ impl TabRender for super::SettingsTab {
                     field.render(f, input_chunks[i], insert_mode);
                 }
 
-                let fr = self.follow_redirects.clone();
-                let mut fr = fr;
-                fr.focused = self.http_inputs.is_focused();
-                fr.render(f, input_chunks[3]);
-
-                let vt = self.verify_tls.clone();
-                let mut vt = vt;
-                vt.focused = self.http_inputs.is_focused();
-                vt.render(f, input_chunks[4]);
+                self.follow_redirects.render(f, input_chunks[3]);
+                self.verify_tls.render(f, input_chunks[4]);
             }
             SettingsSection::Scan => {
                 let input_chunks = Layout::default()
@@ -102,8 +107,7 @@ impl TabRender for super::SettingsTab {
                     field.render(f, input_chunks[i], insert_mode);
                 }
 
-                let sm = self.stealth_mode.clone();
-                sm.render(f, input_chunks[3]);
+                self.stealth_mode.render(f, input_chunks[3]);
             }
             SettingsSection::Proxy => {
                 let input_chunks = Layout::default()
@@ -119,8 +123,7 @@ impl TabRender for super::SettingsTab {
                     field.render(f, input_chunks[i], insert_mode);
                 }
 
-                let sel = self.proxy_rotation_selector.clone();
-                sel.render(f, input_chunks[2]);
+                self.proxy_rotation_selector.render(f, input_chunks[2]);
             }
             SettingsSection::Scope => {
                 let input_chunks = Layout::default()
@@ -181,10 +184,7 @@ impl TabRender for super::SettingsTab {
                 }
                 self.notify_on_complete.render(f, input_chunks[4]);
                 self.notify_on_findings.render(f, input_chunks[5]);
-
-                let mut severity_sel = self.severity_selector.clone();
-                severity_sel.focused = self.is_input_focused();
-                severity_sel.render(f, input_chunks[6]);
+                self.severity_selector.render(f, input_chunks[6]);
             }
             SettingsSection::Theme => {
                 let input_chunks = Layout::default()
@@ -196,14 +196,8 @@ impl TabRender for super::SettingsTab {
                     ])
                     .split(inner);
 
-                let dm = self.dark_mode.clone();
-                let mut dm = dm;
-                dm.focused = self.is_input_focused();
-                dm.render(f, input_chunks[0]);
-
-                let mut accent_sel = self.accent_color.clone();
-                accent_sel.focused = self.is_input_focused();
-                accent_sel.render(f, input_chunks[1]);
+                self.dark_mode.render(f, input_chunks[0]);
+                self.accent_color.render(f, input_chunks[1]);
 
                 let theme_hint = Paragraph::new("Use Ctrl+T to toggle theme instantly");
                 f.render_widget(theme_hint, input_chunks[2]);

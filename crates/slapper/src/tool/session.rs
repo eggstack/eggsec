@@ -14,17 +14,16 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-static CSRF_INPUT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"<input[^>]*name="([^"]+)"[^>]*value="([^"]+)"[^>]*>"#).unwrap()
-});
+static CSRF_INPUT_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"<input[^>]*name="([^"]+)"[^>]*value="([^"]+)"[^>]*>"#).unwrap());
 
-static CSRF_META_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"<meta[^>]*name="csrf-token"[^>]*content="([^"]+)""#).unwrap()
-});
+static CSRF_META_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"<meta[^>]*name="csrf-token"[^>]*content="([^"]+)""#).unwrap());
 
 static FORM_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"<form[^>]*>"#).unwrap());
 
-static INPUT_TAG_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"<input[^>]*>"#).unwrap());
+static INPUT_TAG_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"<input[^>]*>"#).unwrap());
 
 static LOGGED_IN_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
@@ -45,8 +44,13 @@ static LOGGED_OUT_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AuthMethod {
-    Basic { username: String, password: SensitiveString },
-    Bearer { token: SensitiveString },
+    Basic {
+        username: String,
+        password: SensitiveString,
+    },
+    Bearer {
+        token: SensitiveString,
+    },
     OAuth2 {
         client_id: String,
         client_secret: SensitiveString,
@@ -197,9 +201,22 @@ impl Default for LoginSequence {
             name: "default".to_string(),
             steps: Vec::new(),
             csrf_required: true,
-            session_cookie_names: vec!["session".to_string(), "PHPSESSID".to_string(), "JSESSIONID".to_string()],
-            logged_in_indicators: vec!["logout".to_string(), "signout".to_string(), "dashboard".to_string(), "welcome".to_string()],
-            logged_out_indicators: vec!["login".to_string(), "signin".to_string(), "log in".to_string()],
+            session_cookie_names: vec![
+                "session".to_string(),
+                "PHPSESSID".to_string(),
+                "JSESSIONID".to_string(),
+            ],
+            logged_in_indicators: vec![
+                "logout".to_string(),
+                "signout".to_string(),
+                "dashboard".to_string(),
+                "welcome".to_string(),
+            ],
+            logged_out_indicators: vec![
+                "login".to_string(),
+                "signin".to_string(),
+                "log in".to_string(),
+            ],
         }
     }
 }
@@ -228,14 +245,9 @@ pub enum LoginStep {
         variable_name: String,
     },
     /// Set a header from a variable
-    SetHeader {
-        header_name: String,
-        value: String,
-    },
+    SetHeader { header_name: String, value: String },
     /// Wait for a specified duration (for dynamic content)
-    Wait {
-        milliseconds: u64,
-    },
+    Wait { milliseconds: u64 },
     /// Conditional step based on response
     Conditional {
         condition: Condition,
@@ -384,7 +396,11 @@ impl SessionState {
     pub fn is_authenticated(&self) -> bool {
         self.auth_method.is_some()
             || !self.cookies.is_empty()
-            || self.login_result.as_ref().map(|r| r.success).unwrap_or(false)
+            || self
+                .login_result
+                .as_ref()
+                .map(|r| r.success)
+                .unwrap_or(false)
     }
 
     pub fn apply_to_request(
@@ -398,8 +414,7 @@ impl SessionState {
         // Add session cookies
         for (name, value) in &self.cookies {
             let cookie_str = format!("{}={}", name, value);
-            if let Some(existing) = request.params.get("cookie_header").and_then(|v| v.as_str())
-            {
+            if let Some(existing) = request.params.get("cookie_header").and_then(|v| v.as_str()) {
                 request.params["cookie_header"] =
                     serde_json::json!(format!("{}; {}", existing, cookie_str));
             } else {
@@ -447,7 +462,8 @@ impl LoginExecutor {
         let session_cookies: HashMap<String, String> = HashMap::new();
         let final_url: Option<String> = None;
         let mut response_code: Option<u16> = None;
-        let mut response_headers: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut response_headers: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
 
         for step in &sequence.steps {
             match step {
@@ -460,7 +476,9 @@ impl LoginExecutor {
                     // Substitute variables in URL
                     let url = self.substitute_variables(url, &variables);
                     // Substitute variables in body
-                    let body = body.as_ref().map(|b| self.substitute_variables(b, &variables));
+                    let body = body
+                        .as_ref()
+                        .map(|b| self.substitute_variables(b, &variables));
 
                     let mut request = self.client.request(
                         match method.to_uppercase().as_str() {
@@ -483,7 +501,10 @@ impl LoginExecutor {
                     // Add body if present
                     if let Some(body) = body {
                         request = request
-                            .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                            .header(
+                                reqwest::header::CONTENT_TYPE,
+                                "application/x-www-form-urlencoded",
+                            )
                             .body(body);
                     }
 
@@ -495,7 +516,8 @@ impl LoginExecutor {
                     let _final_url = response.url().to_string();
 
                     // Store response for extraction steps
-                    let headers_map: std::collections::HashMap<String, String> = response.headers()
+                    let headers_map: std::collections::HashMap<String, String> = response
+                        .headers()
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                         .collect();
@@ -504,7 +526,10 @@ impl LoginExecutor {
 
                     // Store response body for extraction
                     variables.insert("_response_body".to_string(), body.clone());
-                    variables.insert("_response_status".to_string(), response_code.unwrap_or(0).to_string());
+                    variables.insert(
+                        "_response_status".to_string(),
+                        response_code.unwrap_or(0).to_string(),
+                    );
                 }
                 LoginStep::ExtractField {
                     from_response_field,
@@ -520,7 +545,10 @@ impl LoginExecutor {
                         }
                         ResponseField::SetCookie => {
                             // Extract from cookies
-                            session_cookies.get(variable_name).cloned().unwrap_or_default()
+                            session_cookies
+                                .get(variable_name)
+                                .cloned()
+                                .unwrap_or_default()
                         }
                         ResponseField::JsonPath(path) => {
                             // Simple JSON extraction (expand for full JSONPath support)
@@ -537,7 +565,9 @@ impl LoginExecutor {
                         ResponseField::Regex(pattern) => {
                             if let Some(body) = variables.get("_response_body") {
                                 if let Ok(re) = Regex::new(pattern) {
-                                    re.find(body).map(|m| m.as_str().to_string()).unwrap_or_default()
+                                    re.find(body)
+                                        .map(|m| m.as_str().to_string())
+                                        .unwrap_or_default()
                                 } else {
                                     String::new()
                                 }
@@ -550,7 +580,9 @@ impl LoginExecutor {
                     // Apply optional pattern
                     let value = if let Some(pat) = pattern {
                         if let Ok(re) = Regex::new(pat) {
-                            re.find(&value).map(|m| m.as_str().to_string()).unwrap_or(value)
+                            re.find(&value)
+                                .map(|m| m.as_str().to_string())
+                                .unwrap_or(value)
                         } else {
                             value
                         }
@@ -560,7 +592,10 @@ impl LoginExecutor {
 
                     variables.insert(variable_name.clone(), value);
                 }
-                LoginStep::ExtractCookie { cookie_name, variable_name } => {
+                LoginStep::ExtractCookie {
+                    cookie_name,
+                    variable_name,
+                } => {
                     if let Some(value) = session_cookies.get(cookie_name) {
                         variables.insert(variable_name.clone(), value.clone());
                     }
@@ -572,9 +607,17 @@ impl LoginExecutor {
                 LoginStep::Wait { milliseconds } => {
                     tokio::time::sleep(Duration::from_millis(*milliseconds)).await;
                 }
-                LoginStep::Conditional { condition, then_steps, else_steps } => {
+                LoginStep::Conditional {
+                    condition,
+                    then_steps,
+                    else_steps,
+                } => {
                     let matches = self.evaluate_condition(condition, &variables);
-                    let steps = if matches { then_steps } else { else_steps.as_ref().unwrap_or(then_steps) };
+                    let steps = if matches {
+                        then_steps
+                    } else {
+                        else_steps.as_ref().unwrap_or(then_steps)
+                    };
                     // Recursively execute nested steps
                     // (simplified - full implementation would need recursive execution)
                     for step in steps {
@@ -615,22 +658,34 @@ impl LoginExecutor {
         Some(current.as_str().unwrap_or("").to_string())
     }
 
-    fn evaluate_condition(&self, condition: &Condition, variables: &HashMap<String, String>) -> bool {
+    fn evaluate_condition(
+        &self,
+        condition: &Condition,
+        variables: &HashMap<String, String>,
+    ) -> bool {
         match condition {
-            Condition::Contains(text) => {
-                variables.get("_response_body").map(|b| b.contains(text)).unwrap_or(false)
-            }
-            Condition::StatusCode(code) => {
-                variables.get("_response_status").and_then(|s| s.parse::<u16>().ok()).map(|c| c == *code).unwrap_or(false)
-            }
-            Condition::Redirects => {
-                variables.get("_response_status").and_then(|s| s.parse::<i32>().ok())
-                    .map(|c: i32| c >= 300 && c < 400).unwrap_or(false)
-            }
+            Condition::Contains(text) => variables
+                .get("_response_body")
+                .map(|b| b.contains(text))
+                .unwrap_or(false),
+            Condition::StatusCode(code) => variables
+                .get("_response_status")
+                .and_then(|s| s.parse::<u16>().ok())
+                .map(|c| c == *code)
+                .unwrap_or(false),
+            Condition::Redirects => variables
+                .get("_response_status")
+                .and_then(|s| s.parse::<i32>().ok())
+                .map(|c: i32| c >= 300 && c < 400)
+                .unwrap_or(false),
         }
     }
 
-    fn check_login_success(&self, indicators: &[String], variables: &HashMap<String, String>) -> bool {
+    fn check_login_success(
+        &self,
+        indicators: &[String],
+        variables: &HashMap<String, String>,
+    ) -> bool {
         if let Some(body) = variables.get("_response_body") {
             for indicator in indicators {
                 if body.to_lowercase().contains(&indicator.to_lowercase()) {
@@ -714,7 +769,12 @@ impl CsrfExtractor {
 
         // Check common JSON token paths
         let token_paths = vec![
-            "token", "csrf_token", "csrf", "authenticity_token", "data.token", "response.token",
+            "token",
+            "csrf_token",
+            "csrf",
+            "authenticity_token",
+            "data.token",
+            "response.token",
         ];
 
         for path in token_paths {
@@ -740,7 +800,9 @@ impl CsrfExtractor {
 
     fn is_csrf_token_name(&self, name: &str) -> bool {
         let name_lower = name.to_lowercase();
-        self.token_names.iter().any(|n| name_lower.contains(&n.to_lowercase()))
+        self.token_names
+            .iter()
+            .any(|n| name_lower.contains(&n.to_lowercase()))
     }
 }
 
@@ -799,7 +861,8 @@ impl FormDetector {
 
             if has_username && has_password {
                 // Extract form action
-                let action = self.extract_attribute(full_form, "action")
+                let action = self
+                    .extract_attribute(full_form, "action")
                     .map(|a| {
                         if a.starts_with("http") {
                             a
@@ -812,14 +875,17 @@ impl FormDetector {
                     .unwrap_or_else(|| base_url.to_string());
 
                 // Extract method
-                let method = self.extract_attribute(full_form, "method")
+                let method = self
+                    .extract_attribute(full_form, "method")
                     .map(|m| m.to_uppercase())
                     .unwrap_or_else(|| "POST".to_string());
 
                 // Extract field names
-                let username_field = self.find_field_name(full_form, &self.username_fields)
+                let username_field = self
+                    .find_field_name(full_form, &self.username_fields)
                     .unwrap_or_else(|| "username".to_string());
-                let password_field = self.find_field_name(full_form, &self.password_fields)
+                let password_field = self
+                    .find_field_name(full_form, &self.password_fields)
                     .unwrap_or_else(|| "password".to_string());
 
                 return Some(LoginForm {
@@ -855,7 +921,9 @@ impl FormDetector {
     fn extract_attribute(&self, html: &str, attr: &str) -> Option<String> {
         let pattern = format!(r#"{}=["']([^"']+)["']"#, attr);
         let re = Regex::new(&pattern).ok()?;
-        re.captures(html).and_then(|c| c.get(1)).map(|m| m.as_str().to_string())
+        re.captures(html)
+            .and_then(|c| c.get(1))
+            .map(|m| m.as_str().to_string())
     }
 
     fn extract_other_fields(&self, html: &str) -> Vec<FormField> {
@@ -913,7 +981,7 @@ pub struct SessionVerifier {
 impl SessionVerifier {
     pub fn new(timeout_secs: u64) -> crate::error::Result<Self> {
         let client = create_insecure_http_client(timeout_secs)?;
-        
+
         Ok(Self {
             client,
             logged_in_patterns: LOGGED_IN_PATTERNS.clone(),
@@ -934,19 +1002,22 @@ impl SessionVerifier {
             .collect::<Vec<_>>()
             .join("; ");
 
-        let response = self.client
+        let response = self
+            .client
             .get(verification_url)
             .header(reqwest::header::COOKIE, &cookie_str)
             .send()
             .await
-            .map_err(|e| crate::error::SlapperError::Network(format!("Verification request failed: {}", e)))?;
+            .map_err(|e| {
+                crate::error::SlapperError::Network(format!("Verification request failed: {}", e))
+            })?;
 
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
 
         // Check for logged in indicators
         let logged_in = self.logged_in_patterns.iter().any(|p| p.is_match(&body));
-        
+
         // Check for logged out indicators
         let logged_out = self.logged_out_patterns.iter().any(|p| p.is_match(&body));
 
@@ -974,18 +1045,12 @@ impl SessionVerifier {
 
     /// Update verification patterns
     pub fn with_logged_in_patterns(mut self, patterns: Vec<String>) -> Self {
-        self.logged_in_patterns = patterns
-            .iter()
-            .filter_map(|p| Regex::new(p).ok())
-            .collect();
+        self.logged_in_patterns = patterns.iter().filter_map(|p| Regex::new(p).ok()).collect();
         self
     }
 
     pub fn with_logged_out_patterns(mut self, patterns: Vec<String>) -> Self {
-        self.logged_out_patterns = patterns
-            .iter()
-            .filter_map(|p| Regex::new(p).ok())
-            .collect();
+        self.logged_out_patterns = patterns.iter().filter_map(|p| Regex::new(p).ok()).collect();
         self
     }
 }
@@ -1087,20 +1152,30 @@ impl AuthenticatedSessionManager {
     }
 
     /// Verify session is still valid and attempt re-authentication if expired
-    pub async fn verify_and_refresh(&self, session_id: &str) -> crate::error::Result<SessionVerification> {
-        let session = self.sessions.read().await.get(session_id).cloned()
+    pub async fn verify_and_refresh(
+        &self,
+        session_id: &str,
+    ) -> crate::error::Result<SessionVerification> {
+        let session = self
+            .sessions
+            .read()
+            .await
+            .get(session_id)
+            .cloned()
             .ok_or_else(|| crate::error::SlapperError::Config("Session not found".to_string()))?;
 
         // If no verification URL set, assume session is valid
         let verification_url = match &self.verification_url {
             Some(url) => url.clone(),
-            None => return Ok(SessionVerification {
-                status: SessionStatus::Authenticated,
-                logged_in_indicators_found: false,
-                logged_out_indicators_found: false,
-                response_status: 0,
-                timestamp: chrono::Utc::now(),
-            }),
+            None => {
+                return Ok(SessionVerification {
+                    status: SessionStatus::Authenticated,
+                    logged_in_indicators_found: false,
+                    logged_out_indicators_found: false,
+                    response_status: 0,
+                    timestamp: chrono::Utc::now(),
+                })
+            }
         };
 
         let verifier = SessionVerifier::new(self.default_ttl_seconds as u64)?;
@@ -1108,9 +1183,15 @@ impl AuthenticatedSessionManager {
 
         // If session expired and we have login sequence, try re-auth
         if verification.status == SessionStatus::Expired {
-            if let (Some(sequence), Some(auth_method)) = (&session.login_sequence, &session.auth_method) {
+            if let (Some(sequence), Some(auth_method)) =
+                (&session.login_sequence, &session.auth_method)
+            {
                 let result = self.login(session_id, sequence, auth_method).await?;
-                tracing::info!("Re-authenticated session {}: success={}", session_id, result.success);
+                tracing::info!(
+                    "Re-authenticated session {}: success={}",
+                    session_id,
+                    result.success
+                );
             }
         }
 
@@ -1120,7 +1201,7 @@ impl AuthenticatedSessionManager {
     /// Extract and store CSRF tokens for a URL
     pub async fn extract_csrf_tokens(&self, session_id: &str, url: &str, response_body: &str) {
         let extractor = CsrfExtractor::new();
-        
+
         // Try HTML extraction first
         let tokens = if response_body.contains("<html") || response_body.contains("<form") {
             extractor.extract_from_html(response_body, url)
@@ -1152,7 +1233,9 @@ impl AuthenticatedSessionManager {
 
     /// Check if session is authenticated
     pub async fn is_authenticated(&self, session_id: &str) -> bool {
-        self.sessions.read().await
+        self.sessions
+            .read()
+            .await
             .get(session_id)
             .map(|s| s.is_authenticated())
             .unwrap_or(false)
@@ -1252,7 +1335,10 @@ mod tests {
     fn test_session_state_custom_data() {
         let mut state = SessionState::new();
         state.set_custom_data("key", serde_json::json!("value"));
-        assert_eq!(state.get_custom_data("key"), Some(&serde_json::json!("value")));
+        assert_eq!(
+            state.get_custom_data("key"),
+            Some(&serde_json::json!("value"))
+        );
     }
 
     #[test]

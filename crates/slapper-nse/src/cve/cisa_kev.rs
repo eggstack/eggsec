@@ -34,16 +34,23 @@ impl CisaKevClient {
             }
         }
 
-        let response = self.client.get(&self.base_url)
+        let response = self
+            .client
+            .get(&self.base_url)
             .send()
             .await
             .map_err(|e| CveError::NetworkError(e.to_string()))?;
 
         if !response.status().is_success() {
-            return Err(CveError::ApiError(format!("CISA KEV API error: {}", response.status())));
+            return Err(CveError::ApiError(format!(
+                "CISA KEV API error: {}",
+                response.status()
+            )));
         }
 
-        let catalog: CisaKevCatalog = response.json().await
+        let catalog: CisaKevCatalog = response
+            .json()
+            .await
             .map_err(|e| CveError::ParseError(e.to_string()))?;
 
         *self.catalog.write().await = Some(catalog.vulnerabilities);
@@ -78,7 +85,10 @@ impl CveClient for CisaKevClient {
                         severity_type: SeverityType::None,
                         published: Some(entry.date_added.clone()),
                         modified: None,
-                        references: vec![format!("https://www.cisa.gov/known-exploited-vulnerabilities-catalog?cve={}", cve_id)],
+                        references: vec![format!(
+                            "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?cve={}",
+                            cve_id
+                        )],
                         weaknesses: Vec::new(),
                         configurations: Vec::new(),
                         known_exploited: true,
@@ -107,7 +117,10 @@ impl CveClient for CisaKevClient {
                 if entry.cve_id.to_lowercase().contains(&query_lower)
                     || entry.product.to_lowercase().contains(&query_lower)
                     || entry.vendor_project.to_lowercase().contains(&query_lower)
-                    || entry.short_description.to_lowercase().contains(&query_lower)
+                    || entry
+                        .short_description
+                        .to_lowercase()
+                        .contains(&query_lower)
                 {
                     results.push(CveRecord {
                         id: entry.cve_id.clone(),
@@ -116,7 +129,10 @@ impl CveClient for CisaKevClient {
                         severity_type: SeverityType::None,
                         published: Some(entry.date_added.clone()),
                         modified: None,
-                        references: vec![format!("https://www.cisa.gov/known-exploited-vulnerabilities-catalog?cve={}", entry.cve_id)],
+                        references: vec![format!(
+                            "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?cve={}",
+                            entry.cve_id
+                        )],
                         weaknesses: Vec::new(),
                         configurations: Vec::new(),
                         known_exploited: true,
@@ -133,7 +149,11 @@ impl CveClient for CisaKevClient {
         Ok(results)
     }
 
-    async fn get_for_product(&self, package: &str, _ecosystem: &str) -> Result<Vec<CveRecord>, CveError> {
+    async fn get_for_product(
+        &self,
+        package: &str,
+        _ecosystem: &str,
+    ) -> Result<Vec<CveRecord>, CveError> {
         self.fetch_catalog().await?;
 
         let catalog = self.catalog.read().await;
@@ -152,7 +172,10 @@ impl CveClient for CisaKevClient {
                         severity_type: SeverityType::None,
                         published: Some(entry.date_added.clone()),
                         modified: None,
-                        references: vec![format!("https://www.cisa.gov/known-exploited-vulnerabilities-catalog?cve={}", entry.cve_id)],
+                        references: vec![format!(
+                            "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?cve={}",
+                            entry.cve_id
+                        )],
                         weaknesses: Vec::new(),
                         configurations: Vec::new(),
                         known_exploited: true,

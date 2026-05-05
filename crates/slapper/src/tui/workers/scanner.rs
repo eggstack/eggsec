@@ -46,12 +46,13 @@ pub async fn run_endpoint_scan(
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
-    use crate::scanner::endpoints::{scan_endpoints, DEFAULT_ENDPOINTS, EndpointScanConfig};
+    use crate::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_ENDPOINTS};
 
     let _ = progress_tx.send((0, 100)).await;
 
     let endpoints: Vec<String> = if let Some(ref wl) = wordlist {
-        tokio::fs::read_to_string(wl).await?
+        tokio::fs::read_to_string(wl)
+            .await?
             .lines()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
@@ -77,7 +78,9 @@ pub async fn run_endpoint_scan(
 
     let total = results.endpoints_scanned as u64;
     let _ = result_tx.send(TaskResult::EndpointScan(results)).await;
-    let _ = progress_tx.send((total.max(1), total_endpoints.max(1))).await;
+    let _ = progress_tx
+        .send((total.max(1), total_endpoints.max(1)))
+        .await;
     Ok(())
 }
 

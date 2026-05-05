@@ -1,8 +1,8 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {

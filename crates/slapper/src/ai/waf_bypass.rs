@@ -1,11 +1,11 @@
+use crate::ai::cache::AiCache;
+use crate::ai::cache::CacheKeyBuilder;
+use crate::ai::client::AiClient;
+use crate::ai::errors::{AiError, Result};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
-use crate::ai::cache::AiCache;
-use crate::ai::client::AiClient;
-use crate::ai::errors::{AiError, Result};
-use crate::ai::cache::CacheKeyBuilder;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WafBypassEntry {
@@ -81,10 +81,13 @@ impl SmartWafBypass {
             if entry.waf_name == waf && entry.original_payload == blocked_payload && entry.success {
                 return Ok(Some(entry.bypass_payload.clone()));
             }
-            if entry.waf_name == waf && entry.original_payload == blocked_payload && !entry.success {
+            if entry.waf_name == waf && entry.original_payload == blocked_payload && !entry.success
+            {
                 tracing::debug!(
                     "Skipping WAF bypass query for {}/{} - previously failed {} attempts",
-                    waf, blocked_payload, entry.failed_attempts
+                    waf,
+                    blocked_payload,
+                    entry.failed_attempts
                 );
                 return Ok(None);
             }
@@ -97,7 +100,9 @@ impl SmartWafBypass {
 
         let suggestions = self.client.suggest_waf_bypass(waf, blocked_payload).await?;
         if let Some(bypass) = suggestions.first().cloned() {
-            self.cache.set(&cache_key, &bypass, Some(Duration::from_secs(1800))).await;
+            self.cache
+                .set(&cache_key, &bypass, Some(Duration::from_secs(1800)))
+                .await;
             return Ok(Some(bypass));
         }
 
@@ -126,7 +131,11 @@ impl SmartWafBypass {
     }
 
     pub fn record_success(&mut self, waf: &str, original: &str, bypass: &str, technique: &str) {
-        if let Some(entry) = self.knowledge_base.iter_mut().find(|e| e.waf_name == waf && e.original_payload == original) {
+        if let Some(entry) = self
+            .knowledge_base
+            .iter_mut()
+            .find(|e| e.waf_name == waf && e.original_payload == original)
+        {
             entry.bypass_payload = bypass.to_string();
             entry.technique = technique.to_string();
             entry.success = true;
@@ -145,7 +154,11 @@ impl SmartWafBypass {
     }
 
     pub fn record_failure(&mut self, waf: &str, original: &str) {
-        if let Some(entry) = self.knowledge_base.iter_mut().find(|e| e.waf_name == waf && e.original_payload == original) {
+        if let Some(entry) = self
+            .knowledge_base
+            .iter_mut()
+            .find(|e| e.waf_name == waf && e.original_payload == original)
+        {
             entry.failed_attempts += 1;
             entry.success = false;
         } else {
@@ -265,7 +278,10 @@ mod tests {
         let mut bypass = create_test_bypass();
         bypass.record_success("cloudflare", "p1", "b1", "t1");
         let bypass_clone = bypass.clone();
-        assert_eq!(bypass_clone.knowledge_base.len(), bypass.knowledge_base.len());
+        assert_eq!(
+            bypass_clone.knowledge_base.len(),
+            bypass.knowledge_base.len()
+        );
         assert_eq!(bypass_clone.knowledge_base[0].waf_name, "cloudflare");
     }
 }

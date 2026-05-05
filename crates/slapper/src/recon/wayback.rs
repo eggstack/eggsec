@@ -1,11 +1,10 @@
-
 #![allow(dead_code)]
 
 use crate::error::Result;
 use crate::types::SensitiveString;
 use reqwest::Client;
-use urlencoding;
 use serde::{Deserialize, Serialize};
+use urlencoding;
 
 use crate::utils::create_http_client_with_options;
 
@@ -202,15 +201,13 @@ mod tests {
     fn test_wayback_result_serialization() {
         let result = WaybackResult {
             domain: "example.com".to_string(),
-            snapshots: vec![
-                WaybackSnapshot {
-                    url: "https://web.archive.org/web/20230101/https://example.com".to_string(),
-                    timestamp: "20230101000000".to_string(),
-                    original_url: "https://example.com".to_string(),
-                    mimetype: Some("text/html".to_string()),
-                    status_code: Some(200),
-                },
-            ],
+            snapshots: vec![WaybackSnapshot {
+                url: "https://web.archive.org/web/20230101/https://example.com".to_string(),
+                timestamp: "20230101000000".to_string(),
+                original_url: "https://example.com".to_string(),
+                mimetype: Some("text/html".to_string()),
+                status_code: Some(200),
+            }],
             total_snapshots: 1,
             endpoints_discovered: vec!["/".to_string(), "/page".to_string()],
         };

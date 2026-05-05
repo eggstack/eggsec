@@ -302,7 +302,10 @@ mod tests {
     #[test]
     fn payloads_non_empty() {
         let payloads = get_payloads();
-        assert!(!payloads.is_empty(), "Expression injection payloads must not be empty");
+        assert!(
+            !payloads.is_empty(),
+            "Expression injection payloads must not be empty"
+        );
     }
 
     #[test]
@@ -332,9 +335,9 @@ mod tests {
     #[test]
     fn contains_runtime_exec() {
         let payloads = get_payloads();
-        let has_exec = payloads.iter().any(|p| {
-            p.payload.contains("exec(") || p.payload.contains("Runtime")
-        });
+        let has_exec = payloads
+            .iter()
+            .any(|p| p.payload.contains("exec(") || p.payload.contains("Runtime"));
         assert!(has_exec, "Must contain RCE payloads");
     }
 

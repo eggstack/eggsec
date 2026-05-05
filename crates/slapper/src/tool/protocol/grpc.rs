@@ -5,9 +5,7 @@ use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use tonic::{Request, Response, Status};
 
-use crate::tool::{
-    ToolDispatcher, ToolRegistry, ToolRequest,
-};
+use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest};
 
 // Include the proto-generated code
 tonic::include_proto!("slapper.tool.v1");
@@ -105,7 +103,11 @@ fn convert_tool_info_to_proto(info: GrpcToolInfo) -> ToolInfo {
         category: info.category,
         description: info.description,
         protocols: info.protocols,
-        capabilities: info.capabilities.into_iter().map(convert_capability_to_proto).collect(),
+        capabilities: info
+            .capabilities
+            .into_iter()
+            .map(convert_capability_to_proto)
+            .collect(),
     }
 }
 
@@ -113,7 +115,11 @@ fn convert_capability_to_proto(cap: GrpcToolCapability) -> ToolCapability {
     ToolCapability {
         name: cap.name,
         description: cap.description,
-        parameters: cap.parameters.into_iter().map(convert_param_to_proto).collect(),
+        parameters: cap
+            .parameters
+            .into_iter()
+            .map(convert_param_to_proto)
+            .collect(),
     }
 }
 
@@ -135,21 +141,26 @@ fn serde_json_value_to_proto(value: Option<serde_json::Value>) -> prost_types::V
         Some(serde_json::Value::Bool(b)) => prost_types::Value {
             kind: Some(prost_types::value::Kind::BoolValue(b)),
         },
-        Some(serde_json::Value::Number(n)) => {
-            prost_types::Value {
-                kind: Some(prost_types::value::Kind::NumberValue(n.as_f64().unwrap_or(0.0))),
-            }
-        }
+        Some(serde_json::Value::Number(n)) => prost_types::Value {
+            kind: Some(prost_types::value::Kind::NumberValue(
+                n.as_f64().unwrap_or(0.0),
+            )),
+        },
         Some(serde_json::Value::String(s)) => prost_types::Value {
             kind: Some(prost_types::value::Kind::StringValue(s)),
         },
         Some(serde_json::Value::Array(arr)) => prost_types::Value {
-            kind: Some(prost_types::value::Kind::ListValue(prost_types::ListValue {
-                values: arr.into_iter().map(|v| {
-                    let opt: Option<serde_json::Value> = Some(v);
-                    serde_json_value_to_proto(opt)
-                }).collect(),
-            })),
+            kind: Some(prost_types::value::Kind::ListValue(
+                prost_types::ListValue {
+                    values: arr
+                        .into_iter()
+                        .map(|v| {
+                            let opt: Option<serde_json::Value> = Some(v);
+                            serde_json_value_to_proto(opt)
+                        })
+                        .collect(),
+                },
+            )),
         },
         Some(serde_json::Value::Object(obj)) => prost_types::Value {
             kind: Some(prost_types::value::Kind::StructValue(prost_types::Struct {
@@ -166,11 +177,7 @@ fn serde_json_value_to_proto(value: Option<serde_json::Value>) -> prost_types::V
 }
 
 // Server implementation
-pub async fn start_grpc_server(
-    host: &str,
-    port: u16,
-    service: GrpcService,
-) -> Result<(), String> {
+pub async fn start_grpc_server(host: &str, port: u16, service: GrpcService) -> Result<(), String> {
     use tonic::{transport::Server, Request, Response, Status};
 
     let addr_str = format!("{}:{}", host, port);
@@ -181,7 +188,10 @@ pub async fn start_grpc_server(
 
     // Register the file descriptor set for reflection
     let reflection_service = tonic_reflection::server::Builder::configure()
-        .register_encoded_file_descriptor_set(include_bytes!(concat!(env!("OUT_DIR"), "/tool_descriptor.bin")))
+        .register_encoded_file_descriptor_set(include_bytes!(concat!(
+            env!("OUT_DIR"),
+            "/tool_descriptor.bin"
+        )))
         .build_v1()
         .map_err(|e| e.to_string())?;
 
@@ -191,9 +201,7 @@ pub async fn start_grpc_server(
 
     Server::builder()
         .add_service(reflection_service)
-        .add_service(
-            tool_service_server::ToolServiceServer::new(tool_service),
-        )
+        .add_service(tool_service_server::ToolServiceServer::new(tool_service))
         .serve(addr)
         .await
         .map_err(|e| e.to_string())?;

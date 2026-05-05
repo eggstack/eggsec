@@ -46,9 +46,7 @@ pub async fn run_graphql(
                         if tr.success {
                             let finding = format!(
                                 "[{}] Introspection {}: {}",
-                                tr.severity,
-                                tr.vulnerability,
-                                tr.description
+                                tr.severity, tr.vulnerability, tr.description
                             );
                             injection_findings.push(finding);
                         }
@@ -196,7 +194,9 @@ pub async fn run_oauth(
     let start_time = std::time::Instant::now();
     let client = crate::utils::get_shared_insecure_http_client();
 
-    let default_client_id = client_id.clone().unwrap_or_else(|| "test_client".to_string());
+    let default_client_id = client_id
+        .clone()
+        .unwrap_or_else(|| "test_client".to_string());
     let default_redirect_uri = redirect_uri
         .clone()
         .unwrap_or_else(|| format!("{}/callback", url.trim_end_matches('/')));
@@ -312,8 +312,9 @@ pub async fn run_nse(
         }
 
         let script_content = if let Some(ref script_path) = custom_script {
-            std::fs::read_to_string(script_path)
-                .map_err(|e| anyhow::anyhow!("Failed to read custom script '{}': {}", script_path, e))?
+            std::fs::read_to_string(script_path).map_err(|e| {
+                anyhow::anyhow!("Failed to read custom script '{}': {}", script_path, e)
+            })?
         } else {
             slapper_nse::get_builtin_script(&script_clone)
         };

@@ -50,7 +50,9 @@ impl Skill {
         let fm: SkillFrontmatter = serde_yaml_neo::from_str(&frontmatter)
             .map_err(|e| anyhow::anyhow!("Failed to parse frontmatter: {}", e))?;
 
-        let version = fm.version.or(fm.metadata.as_ref().and_then(|m| m.version.clone()));
+        let version = fm
+            .version
+            .or(fm.metadata.as_ref().and_then(|m| m.version.clone()));
 
         let skill = Skill {
             name: fm.name,
@@ -117,7 +119,10 @@ impl Skill {
         #[cfg(feature = "ai-integration")]
         {
             if let Some(ref self_version) = self.version {
-                if let (Ok(sv), Ok(rv)) = (Version::parse(self_version), VersionReq::parse(required_version)) {
+                if let (Ok(sv), Ok(rv)) = (
+                    Version::parse(self_version),
+                    VersionReq::parse(required_version),
+                ) {
                     return rv.matches(&sv);
                 }
             }

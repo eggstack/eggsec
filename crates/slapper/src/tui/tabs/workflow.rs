@@ -1,5 +1,7 @@
 use crate::tc;
-use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem};
+use crate::tui::components::{
+    empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::workflow::finding::Finding;
 use crate::workflow::finding::FindingStatus;
@@ -349,10 +351,8 @@ impl TabRender for WorkflowTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder = empty_state_paragraph(
-                "Finding Management",
-                "Select mode and press Enter",
-            );
+            let placeholder =
+                empty_state_paragraph("Finding Management", "Select mode and press Enter");
             f.render_widget(placeholder, results_area);
         }
     }
@@ -394,6 +394,59 @@ impl TabInput for WorkflowTab {
         if self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.backspace();
         }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if self.focus_area == WorkflowFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == WorkflowFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else if self.focus_area == WorkflowFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else {
+            None
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == WorkflowFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == WorkflowFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == WorkflowFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == WorkflowFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == WorkflowFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == WorkflowFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = WorkflowFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = WorkflowFocusArea::Results;
     }
 
     fn handle_enter(&mut self) {

@@ -25,15 +25,16 @@ pub fn register_sslv2_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             // SSLv2 client hello
             let client_hello = [
@@ -93,15 +94,16 @@ pub fn register_sslv2_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             // Try SSLv2 client hello
             let client_hello_v2 = [

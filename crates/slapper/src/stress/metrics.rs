@@ -1,4 +1,3 @@
-
 #![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
@@ -140,9 +139,9 @@ impl RateLimiter {
                     .tokens
                     .compare_exchange(tokens, tokens - 1, Ordering::Relaxed, Ordering::Relaxed)
                     .is_ok()
-                {
-                    return;
-                }
+            {
+                return;
+            }
 
             let sleep_ns = self.interval_ns.min(1_000_000);
             tokio::time::sleep(Duration::from_nanos(sleep_ns)).await;

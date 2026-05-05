@@ -302,7 +302,11 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     f.render_widget(query_paragraph, chunks[0]);
 
     let results = app.get_quick_switch_results();
-    let status_text = format!("{}/{}", results.len().min(app.quick_switch_selected + 1), results.len());
+    let status_text = format!(
+        "{}/{}",
+        results.len().min(app.quick_switch_selected + 1),
+        results.len()
+    );
     let status_paragraph =
         Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
     f.render_widget(status_paragraph, chunks[1]);
@@ -322,7 +326,9 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     }
 
     if items.is_empty() {
-        items.push(ListItem::new("(No matching tabs found)").style(Style::default().fg(tc!(text_dim))));
+        items.push(
+            ListItem::new("(No matching tabs found)").style(Style::default().fg(tc!(text_dim))),
+        );
     }
 
     let list = List::new(items)
@@ -346,7 +352,11 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
     let visible_titles: Vec<Line> = all_tabs[window.start..window.end].to_vec();
 
     let tabs = Tabs::new(visible_titles)
-        .block(Block::default().borders(Borders::ALL).title(format!("Slapper{}", window.range_text())))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!("Slapper{}", window.range_text())),
+        )
         .select(window.selected_visible)
         .style(Style::default().fg(tc!(tab_active)))
         .highlight_style(
@@ -381,9 +391,7 @@ fn draw_breadcrumb(f: &mut Frame, app: &App, area: Rect) {
                 .fg(tc!(accent))
                 .add_modifier(Modifier::BOLD)
         } else if i == 0 {
-            Style::default()
-                .fg(tc!(text))
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(tc!(text)).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(tc!(primary))
         };
@@ -580,15 +588,15 @@ fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
         crate::tui::tabs::Tab::Packet => get_tab_status(&app.packet.state),
         crate::tui::tabs::Tab::Settings => (
             "Press 's' to save settings, 'r' to reset".to_string(),
-            tc!(status_idle)
+            tc!(status_idle),
         ),
         crate::tui::tabs::Tab::History => (
             "↑↓ Navigate | 'd' Delete | 'r' Clear all".to_string(),
-            tc!(status_idle)
+            tc!(status_idle),
         ),
         crate::tui::tabs::Tab::Dashboard => (
             "Dashboard - View scan results overview".to_string(),
-            tc!(status_idle)
+            tc!(status_idle),
         ),
         crate::tui::tabs::Tab::GraphQl => get_tab_status(&app.graphql.state),
         crate::tui::tabs::Tab::OAuth => get_tab_status(&app.oauth.state),
@@ -606,27 +614,35 @@ fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
         #[cfg(feature = "advanced-hunting")]
         crate::tui::tabs::Tab::Hunt => get_tab_status(&app.hunt.state),
         #[cfg(not(feature = "advanced-hunting"))]
-        crate::tui::tabs::Tab::Hunt => ("Hunting feature not enabled".to_string(), tc!(status_idle)),
+        crate::tui::tabs::Tab::Hunt => {
+            ("Hunting feature not enabled".to_string(), tc!(status_idle))
+        }
         #[cfg(feature = "headless-browser")]
         crate::tui::tabs::Tab::Browser => get_tab_status(&app.browser.state),
         #[cfg(not(feature = "headless-browser"))]
-        crate::tui::tabs::Tab::Browser => ("Browser feature not enabled".to_string(), tc!(status_idle)),
+        crate::tui::tabs::Tab::Browser => {
+            ("Browser feature not enabled".to_string(), tc!(status_idle))
+        }
         #[cfg(feature = "compliance")]
         crate::tui::tabs::Tab::Compliance => get_tab_status(&app.compliance.state),
         #[cfg(not(feature = "compliance"))]
-        crate::tui::tabs::Tab::Compliance => {
-            ("Compliance feature not enabled".to_string(), tc!(status_idle))
-        }
+        crate::tui::tabs::Tab::Compliance => (
+            "Compliance feature not enabled".to_string(),
+            tc!(status_idle),
+        ),
         #[cfg(feature = "database")]
         crate::tui::tabs::Tab::Storage => get_tab_status(&app.storage.state),
         #[cfg(not(feature = "database"))]
-        crate::tui::tabs::Tab::Storage => ("Storage feature not enabled".to_string(), tc!(status_idle)),
+        crate::tui::tabs::Tab::Storage => {
+            ("Storage feature not enabled".to_string(), tc!(status_idle))
+        }
         #[cfg(feature = "external-integrations")]
         crate::tui::tabs::Tab::Integrations => get_tab_status(&app.integrations.state),
         #[cfg(not(feature = "external-integrations"))]
-        crate::tui::tabs::Tab::Integrations => {
-            ("Integrations feature not enabled".to_string(), tc!(status_idle))
-        }
+        crate::tui::tabs::Tab::Integrations => (
+            "Integrations feature not enabled".to_string(),
+            tc!(status_idle),
+        ),
         #[cfg(feature = "finding-workflow")]
         crate::tui::tabs::Tab::Workflow => get_tab_status(&app.workflow.state),
         #[cfg(not(feature = "finding-workflow"))]
@@ -636,7 +652,9 @@ fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
         #[cfg(feature = "vuln-management")]
         crate::tui::tabs::Tab::Vuln => get_tab_status(&app.vuln.state),
         #[cfg(not(feature = "vuln-management"))]
-        crate::tui::tabs::Tab::Vuln => ("Vuln management not enabled".to_string(), tc!(status_idle)),
+        crate::tui::tabs::Tab::Vuln => {
+            ("Vuln management not enabled".to_string(), tc!(status_idle))
+        }
     }
 }
 
@@ -644,20 +662,24 @@ fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
 /// The text is adjusted for terminal width.
 fn get_help_text(app: &App, area: Rect) -> String {
     let is_narrow = area.width < 80;
-    
+
     // Check overlays first (highest precedence)
     if app.pending_action.is_some() {
         return "[Enter] Confirm [Esc] Cancel".to_string();
     }
-    
-    if app.get_command_palette().map(|p| p.visible).unwrap_or(false) {
+
+    if app
+        .get_command_palette()
+        .map(|p| p.visible)
+        .unwrap_or(false)
+    {
         return if is_narrow {
             "[Enter] Run [↑↓] Sel [Esc] Close".to_string()
         } else {
             "[Enter] Run [Up/Down] Select [Esc] Close".to_string()
         };
     }
-    
+
     if app.show_search {
         return if is_narrow {
             "[Enter] Search [Bksp] Edit [Esc] Close".to_string()
@@ -665,7 +687,7 @@ fn get_help_text(app: &App, area: Rect) -> String {
             "[Enter] Search [Backspace] Edit [Esc] Close".to_string()
         };
     }
-    
+
     if app.show_help {
         return if is_narrow {
             "[Esc] Close | [h/l] Pane Nav".to_string()
@@ -673,7 +695,7 @@ fn get_help_text(app: &App, area: Rect) -> String {
             "[Esc] Close Help | [h/l] Pane Navigation".to_string()
         };
     }
-    
+
     match app.mode {
         super::InputMode::Normal => {
             if is_narrow {
@@ -742,10 +764,9 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         super::InputMode::Insert => "INSERT",
     };
     let mode_color = match app.mode {
-super::InputMode::Normal => tc!(mode_normal),
+        super::InputMode::Normal => tc!(mode_normal),
 
         super::InputMode::Insert => tc!(mode_insert),
-
     };
     let mode_indicator_widget = ratatui::widgets::Paragraph::new(format!(" {} ", mode_text)).style(
         Style::default()

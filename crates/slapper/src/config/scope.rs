@@ -219,8 +219,9 @@ impl TargetScope {
                 .ok_or_else(|| ScopeError::InvalidTarget(target.to_string()))?
                 .to_string();
 
-let ip = Some(Self::resolve_host(&host)
-                .map_err(|e| ScopeError::InvalidTarget(format!("DNS resolution failed for '{}': {}", host, e)))?);
+            let ip = Some(Self::resolve_host(&host).map_err(|e| {
+                ScopeError::InvalidTarget(format!("DNS resolution failed for '{}': {}", host, e))
+            })?);
 
             return Ok(Self { host, ip });
         }
@@ -403,13 +404,19 @@ mod tests {
             host: "10.255.255.255".to_string(),
             ip: Some("10.255.255.255".parse().unwrap()),
         };
-        assert!(rule.matches(&target1), "10.255.255.255 should be in 10.0.0.0/8");
+        assert!(
+            rule.matches(&target1),
+            "10.255.255.255 should be in 10.0.0.0/8"
+        );
 
         let target2 = TargetScope {
             host: "11.0.0.1".to_string(),
             ip: Some("11.0.0.1".parse().unwrap()),
         };
-        assert!(!rule.matches(&target2), "11.0.0.1 should NOT be in 10.0.0.0/8");
+        assert!(
+            !rule.matches(&target2),
+            "11.0.0.1 should NOT be in 10.0.0.0/8"
+        );
     }
 
     #[test]
@@ -420,12 +427,18 @@ mod tests {
             host: "10.255.255.255".to_string(),
             ip: Some("10.255.255.255".parse().unwrap()),
         };
-        assert!(rule.matches(&target1), "10.255.255.255 should be in 10.0.0.0/8");
+        assert!(
+            rule.matches(&target1),
+            "10.255.255.255 should be in 10.0.0.0/8"
+        );
 
         let target2 = TargetScope {
             host: "11.0.0.1".to_string(),
             ip: Some("11.0.0.1".parse().unwrap()),
         };
-        assert!(!rule.matches(&target2), "11.0.0.1 should NOT be in 10.0.0.0/8");
+        assert!(
+            !rule.matches(&target2),
+            "11.0.0.1 should NOT be in 10.0.0.0/8"
+        );
     }
 }

@@ -48,23 +48,18 @@ pub fn register_matchs_library(lua: &Lua) -> LuaResult<()> {
         match RegexBuilder::new(&format!("^{}$", regex_pattern))
             .size_limit(50_000)
             .build()
-        { Ok(re) => {
-            Ok(re.is_match(&text))
-        } _ => {
-            Ok(pattern == text)
-        }}
+        {
+            Ok(re) => Ok(re.is_match(&text)),
+            _ => Ok(pattern == text),
+        }
     })?;
     matchs.set("wildcard", wildcard_fn)?;
 
     let regex_fn = lua.create_function(|_lua, (pattern, text): (String, String)| {
-        match RegexBuilder::new(&pattern)
-            .size_limit(50_000)
-            .build()
-        { Ok(re) => {
-            Ok(re.is_match(&text))
-        } _ => {
-            Ok(false)
-        }}
+        match RegexBuilder::new(&pattern).size_limit(50_000).build() {
+            Ok(re) => Ok(re.is_match(&text)),
+            _ => Ok(false),
+        }
     })?;
     matchs.set("regex", regex_fn)?;
 

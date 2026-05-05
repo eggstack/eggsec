@@ -139,20 +139,23 @@ pub fn register_sslcert_library(lua: &Lua) -> LuaResult<()> {
         if let Ok(decoded) =
             base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &cert_data)
         {
-            match X509::from_der(&decoded) { Ok(cert) => {
-                result.set("subject", parse_x509_name(cert.subject_name()))?;
-                result.set("issuer", parse_x509_name(cert.issuer_name()))?;
-                result.set("notbefore", cert.not_before().to_string())?;
-                result.set("notafter", cert.not_after().to_string())?;
-                result.set("version", cert.version() as i32)?;
-                result.set("serial", "unknown")?;
+            match X509::from_der(&decoded) {
+                Ok(cert) => {
+                    result.set("subject", parse_x509_name(cert.subject_name()))?;
+                    result.set("issuer", parse_x509_name(cert.issuer_name()))?;
+                    result.set("notbefore", cert.not_before().to_string())?;
+                    result.set("notafter", cert.not_after().to_string())?;
+                    result.set("version", cert.version() as i32)?;
+                    result.set("serial", "unknown")?;
 
-                if let Ok(fingerprint) = cert.digest(openssl::hash::MessageDigest::sha256()) {
-                    result.set("fingerprint", hex::encode(fingerprint))?;
+                    if let Ok(fingerprint) = cert.digest(openssl::hash::MessageDigest::sha256()) {
+                        result.set("fingerprint", hex::encode(fingerprint))?;
+                    }
                 }
-            } _ => {
-                result.set("error", "Failed to parse certificate")?;
-            }}
+                _ => {
+                    result.set("error", "Failed to parse certificate")?;
+                }
+            }
         } else {
             result.set("error", "Failed to decode certificate")?;
         }

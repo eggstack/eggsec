@@ -14,11 +14,16 @@ impl super::App {
     pub(super) fn adjust_tab_scroll(&mut self) {
         use super::tabs::TabWindow;
         let tab_index = self.current_tab.visible_index().unwrap_or(0);
-        let window = TabWindow::for_width(self.last_tab_area_width, self.current_tab, self.tab_scroll_offset);
+        let window = TabWindow::for_width(
+            self.last_tab_area_width,
+            self.current_tab,
+            self.tab_scroll_offset,
+        );
         if tab_index < window.start {
             self.tab_scroll_offset = tab_index as u16;
         } else if tab_index >= window.end {
-            self.tab_scroll_offset = (tab_index.saturating_sub(window.max_visible) + 1).max(0) as u16;
+            self.tab_scroll_offset =
+                (tab_index.saturating_sub(window.max_visible) + 1).max(0) as u16;
         }
     }
 
@@ -73,8 +78,8 @@ impl super::App {
             // Keep search open to show results
         } else if self.current_tab == super::tabs::Tab::History {
             let query = self.search_query.clone();
-            let mut h = self.history.lock(); {
-
+            let mut h = self.history.lock();
+            {
                 self.search_backup = Some(h.entries.clone());
 
                 let results: Vec<_> = h.search(&query).into_iter().cloned().collect();
@@ -94,8 +99,8 @@ impl super::App {
     pub(super) fn restore_search(&mut self) {
         if self.current_tab == super::tabs::Tab::History {
             if let Some(backup) = self.search_backup.take() {
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.entries = backup;
                     h.selected = Some(0);
                     h.update_details_view();
@@ -379,7 +384,13 @@ mod tests {
         use crate::tui::tabs::Tab;
         let all_tabs = Tab::all();
         for (i, tab) in all_tabs.iter().enumerate() {
-            assert_eq!(tab.visible_index(), Some(i), "Tab {:?} should have visible_index {}", tab, i);
+            assert_eq!(
+                tab.visible_index(),
+                Some(i),
+                "Tab {:?} should have visible_index {}",
+                tab,
+                i
+            );
         }
     }
 
@@ -388,18 +399,29 @@ mod tests {
         use crate::tui::tabs::Tab;
         let all_tabs = Tab::all();
         for (i, tab) in all_tabs.iter().enumerate() {
-            assert_eq!(Tab::from_visible_index(i), Some(*tab), "from_visible_index({}) should return {:?}", i, tab);
+            assert_eq!(
+                Tab::from_visible_index(i),
+                Some(*tab),
+                "from_visible_index({}) should return {:?}",
+                i,
+                tab
+            );
         }
         assert_eq!(Tab::from_visible_index(999), None);
     }
 
-#[test]
+    #[test]
     fn test_tab_stable_id_roundtrip() {
         use crate::tui::tabs::Tab;
         let all_tabs = Tab::all();
         for tab in all_tabs {
             let id = tab.stable_id();
-            assert_eq!(Tab::from_stable_id(id), Some(*tab), "stable_id {:?} should roundtrip", id);
+            assert_eq!(
+                Tab::from_stable_id(id),
+                Some(*tab),
+                "stable_id {:?} should roundtrip",
+                id
+            );
         }
     }
 
@@ -457,7 +479,10 @@ mod tests {
         use crate::tui::tabs::{Tab, TabWindow};
         let first_window = TabWindow::for_width(80, Tab::Recon, 0);
         assert!(!first_window.has_prev, "First tab should not have prev");
-        assert!(first_window.has_next || first_window.end < first_window.total_tabs, "Should have next or be at end");
+        assert!(
+            first_window.has_next || first_window.end < first_window.total_tabs,
+            "Should have next or be at end"
+        );
 
         let last_tab = Tab::all().last().copied().unwrap_or(Tab::Recon);
         let last_window = TabWindow::for_width(80, last_tab, 0);
@@ -502,7 +527,11 @@ mod tests {
                 assert!(
                     window.start <= tab_idx && tab_idx < window.end,
                     "Tab {:?} at index {} should be visible in window [{}, {}) for width {}",
-                    tab, tab_idx, window.start, window.end, width
+                    tab,
+                    tab_idx,
+                    window.start,
+                    window.end,
+                    width
                 );
             }
         }
@@ -556,7 +585,11 @@ mod tests {
         app.tab_scroll_offset = 0;
         app.adjust_tab_scroll();
 
-        let window = TabWindow::for_width(app.last_tab_area_width, app.current_tab, app.tab_scroll_offset);
+        let window = TabWindow::for_width(
+            app.last_tab_area_width,
+            app.current_tab,
+            app.tab_scroll_offset,
+        );
         let tab_idx = app.current_tab.visible_index().unwrap_or(0);
         assert!(
             window.start <= tab_idx && tab_idx < window.end,
@@ -569,10 +602,10 @@ mod tests {
 mod render_tests {
     use ratatui::{backend::TestBackend, Terminal};
 
+    use crate::tui::app::App;
+    use crate::tui::state::create_shared_history;
     use crate::tui::tabs::Tab;
     use crate::tui::ui;
-    use crate::tui::state::create_shared_history;
-    use crate::tui::app::App;
 
     fn create_test_app() -> App {
         App::new_for_testing(create_shared_history())

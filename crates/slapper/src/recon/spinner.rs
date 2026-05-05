@@ -1,6 +1,6 @@
+use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use parking_lot::Mutex;
 
 pub struct Spinner {
     chars: &'static [&'static str],

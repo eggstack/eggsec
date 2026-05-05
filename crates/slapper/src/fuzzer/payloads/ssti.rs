@@ -1,4 +1,3 @@
-
 use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -446,7 +445,9 @@ mod tests {
     #[test]
     fn contains_jinja2_syntax() {
         let payloads = get_payloads();
-        let has_jinja = payloads.iter().any(|p| p.payload.contains("{{7*7}}") || p.payload.contains("{{config}}"));
+        let has_jinja = payloads
+            .iter()
+            .any(|p| p.payload.contains("{{7*7}}") || p.payload.contains("{{config}}"));
         assert!(has_jinja, "Must contain Jinja2 {{}} syntax");
     }
 
@@ -467,25 +468,42 @@ mod tests {
     #[test]
     fn contains_command_execution_payloads() {
         let payloads = get_payloads();
-        let has_exec = payloads.iter().any(|p| p.payload.contains("system(") || p.payload.contains("popen") || p.payload.contains("exec("));
+        let has_exec = payloads.iter().any(|p| {
+            p.payload.contains("system(")
+                || p.payload.contains("popen")
+                || p.payload.contains("exec(")
+        });
         assert!(has_exec, "Must contain template command execution payloads");
     }
 
     #[test]
     fn config_leak_is_critical() {
         let payloads = get_payloads();
-        let config: Vec<&Payload> = payloads.iter().filter(|p| p.payload.contains("{{config}}")).collect();
+        let config: Vec<&Payload> = payloads
+            .iter()
+            .filter(|p| p.payload.contains("{{config}}"))
+            .collect();
         assert!(!config.is_empty(), "Must have config leak payload");
         for p in config {
-            assert_eq!(p.severity, Severity::Critical, "Config leak payloads must be Critical");
+            assert_eq!(
+                p.severity,
+                Severity::Critical,
+                "Config leak payloads must be Critical"
+            );
         }
     }
 
     #[test]
     fn ssti_fuzzer_has_test_strings() {
         let fuzzer = SstiFuzzer::new();
-        assert!(!fuzzer.test_strings.is_empty(), "SstiFuzzer must have test strings");
-        assert!(fuzzer.test_strings.iter().any(|s| s.contains("7*7")), "Must test arithmetic evaluation");
+        assert!(
+            !fuzzer.test_strings.is_empty(),
+            "SstiFuzzer must have test strings"
+        );
+        assert!(
+            fuzzer.test_strings.iter().any(|s| s.contains("7*7")),
+            "Must test arithmetic evaluation"
+        );
     }
 
     #[test]
@@ -493,13 +511,23 @@ mod tests {
         let fuzzer = SstiFuzzer::new();
         let results = fuzzer.generate_payloads();
         assert!(!results.is_empty(), "generate_payloads must return results");
-        assert!(results.iter().any(|r| r.engine == TemplateEngine::Jinja2), "Must cover Jinja2");
-        assert!(results.iter().any(|r| r.engine == TemplateEngine::ERB), "Must cover ERB");
+        assert!(
+            results.iter().any(|r| r.engine == TemplateEngine::Jinja2),
+            "Must cover Jinja2"
+        );
+        assert!(
+            results.iter().any(|r| r.engine == TemplateEngine::ERB),
+            "Must cover ERB"
+        );
     }
 
     #[test]
     fn minimum_payload_count() {
         let payloads = get_payloads();
-        assert!(payloads.len() >= 8, "Must have SSTI coverage across engines, got {}", payloads.len());
+        assert!(
+            payloads.len() >= 8,
+            "Must have SSTI coverage across engines, got {}",
+            payloads.len()
+        );
     }
 }

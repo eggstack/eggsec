@@ -18,10 +18,22 @@ pub struct DiscoveredService {
 
 const SERVICE_ENDPOINTS: &[(&str, &str, &str)] = &[
     ("AWS Lambda", "https://{}.lambda.amazonaws.com", "lambda"),
-    ("AWS API Gateway", "https://{}.execute-api.amazonaws.com", "api-gateway"),
+    (
+        "AWS API Gateway",
+        "https://{}.execute-api.amazonaws.com",
+        "api-gateway",
+    ),
     ("AWS CloudFront", "https://{}.cloudfront.net", "cloudfront"),
-    ("Azure Functions", "https://{}.azurewebsites.net", "azure-functions"),
-    ("GCP Cloud Functions", "https://{}.cloudfunctions.net", "gcp-functions"),
+    (
+        "Azure Functions",
+        "https://{}.azurewebsites.net",
+        "azure-functions",
+    ),
+    (
+        "GCP Cloud Functions",
+        "https://{}.cloudfunctions.net",
+        "gcp-functions",
+    ),
 ];
 
 pub struct CloudServiceEnumerator {

@@ -40,9 +40,13 @@ impl RateLimitTester {
         };
 
         for i in 0..50 {
-            let response = self.client
+            let response = self
+                .client
                 .post(target)
-                .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(
+                    reqwest::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
                 .body(format!("username=admin&password=wrong{}", i))
                 .send()
                 .await;
@@ -55,11 +59,13 @@ impl RateLimitTester {
 
                         if let Some(limit) = resp.headers().get("X-RateLimit-Limit") {
                             result.rate_limit_header = Some("X-RateLimit-Limit".to_string());
-                            result.rate_limit_value = Some(limit.to_str().unwrap_or("").to_string());
+                            result.rate_limit_value =
+                                Some(limit.to_str().unwrap_or("").to_string());
                         }
                         if let Some(limit) = resp.headers().get("RateLimit-Limit") {
                             result.rate_limit_header = Some("RateLimit-Limit".to_string());
-                            result.rate_limit_value = Some(limit.to_str().unwrap_or("").to_string());
+                            result.rate_limit_value =
+                                Some(limit.to_str().unwrap_or("").to_string());
                         }
                         break;
                     }
@@ -89,9 +95,13 @@ impl RateLimitTester {
         ];
 
         for (header, value) in xff_headers {
-            let response = self.client
+            let response = self
+                .client
                 .post(target)
-                .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(
+                    reqwest::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
                 .header(header, value)
                 .body("username=admin&password=wrong")
                 .send()

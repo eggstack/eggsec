@@ -78,10 +78,14 @@ pub fn load_scope(scope_path: Option<&str>) -> Result<Scope> {
 
     tracing::info!("Loading scope from {:?}", canonical_path);
 
-    let path_str = canonical_path
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("Scope file path contains invalid UTF-8: {:?}", canonical_path))?;
-    let scope = Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))?;
+    let path_str = canonical_path.to_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Scope file path contains invalid UTF-8: {:?}",
+            canonical_path
+        )
+    })?;
+    let scope =
+        Scope::from_file(path_str).map_err(|e| anyhow::anyhow!("Failed to load scope: {}", e))?;
     check_config_file_permissions(&canonical_path);
     Ok(scope)
 }

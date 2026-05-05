@@ -115,17 +115,18 @@ pub async fn run_recon(
 
         let progress_handle = tokio::spawn(async move {
             let mut last_stage = stage_rx.borrow().clone();
-            let stages = [
-                "resolving", "recon (parallel)", "takeover", "cve", "done",
-            ];
+            let stages = ["resolving", "recon (parallel)", "takeover", "cve", "done"];
             let total_stages = stages.len() as u64;
             while stage_rx.changed().await.is_ok() {
                 let current = stage_rx.borrow().clone();
                 if current != last_stage {
                     last_stage.clone_from(&current);
-                    let completed = stages.iter().take_while(|&&s| {
-                        current.contains(s) || (s == "done" && current.is_empty())
-                    }).count() as u64;
+                    let completed = stages
+                        .iter()
+                        .take_while(|&&s| {
+                            current.contains(s) || (s == "done" && current.is_empty())
+                        })
+                        .count() as u64;
                     let pct = (completed.min(total_stages) * 90) / total_stages + 5;
                     let _ = ptx.send((pct, 100)).await;
                 }
@@ -176,11 +177,7 @@ pub async fn run_recon(
                     let _ = progress_tx.send(((attempt as u64) * 20, 100)).await;
                     tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
                 } else {
-                    tracing::error!(
-                        "Recon failed after {} attempts: {:?}",
-                        max_retries,
-                        e
-                    );
+                    tracing::error!("Recon failed after {} attempts: {:?}", max_retries, e);
                     return Err(e.into());
                 }
             }

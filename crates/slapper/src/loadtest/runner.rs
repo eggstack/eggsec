@@ -1,4 +1,3 @@
-
 use crate::error::{Result, SlapperError};
 use crate::utils::stealth::tool_user_agent;
 use base64::{engine::general_purpose, Engine as _};
@@ -49,10 +48,14 @@ impl LoadTestRunner {
         tui_mode: bool,
     ) -> Result<Self> {
         if concurrency == 0 {
-            return Err(SlapperError::Validation("Concurrency must be greater than 0".to_string()));
+            return Err(SlapperError::Validation(
+                "Concurrency must be greater than 0".to_string(),
+            ));
         }
         if total_requests == 0 {
-            return Err(SlapperError::Validation("Total requests must be greater than 0".to_string()));
+            return Err(SlapperError::Validation(
+                "Total requests must be greater than 0".to_string(),
+            ));
         }
 
         Ok(Self {
@@ -166,7 +169,11 @@ impl LoadTestRunner {
     pub fn set_common_with_config(&mut self, common: CommonHttpArgs, config: &SlapperConfig) {
         self.insecure = common.insecure || !config.http.verify_tls;
         self.proxy = common.proxy.or(config.http.proxy.clone());
-        self.proxy_auth = common.proxy_auth.or(config.http.proxy_auth.as_ref().map(|s| s.expose_secret().to_string()));
+        self.proxy_auth = common.proxy_auth.or(config
+            .http
+            .proxy_auth
+            .as_ref()
+            .map(|s| s.expose_secret().to_string()));
         self.rate_limit = common.rate_limit.or(config.scan.rate_limit_per_second);
 
         if let Some(ua) = common.user_agent {

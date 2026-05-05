@@ -1,4 +1,3 @@
-
 #![allow(dead_code)]
 
 use crate::error::Result;
@@ -251,13 +250,11 @@ struct CrtShEntry {
     name_value: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Deserialize, Default)]
 struct ThreatMinerResponse {
     #[serde(default)]
     results: Vec<String>,
 }
-
 
 pub async fn enumerate_subdomains(domain: &str, concurrency: usize) -> Result<SubdomainResult> {
     let enumerator = SubdomainEnumerator::new(concurrency)?;
@@ -281,15 +278,13 @@ mod tests {
     fn test_subdomain_result_serialization() {
         let result = SubdomainResult {
             domain: "example.com".to_string(),
-            subdomains: vec![
-                SubdomainInfo {
-                    subdomain: "www".to_string(),
-                    ip_addresses: vec!["93.184.216.34".to_string()],
-                    has_mx: false,
-                    has_cname: false,
-                    has_txt: true,
-                },
-            ],
+            subdomains: vec![SubdomainInfo {
+                subdomain: "www".to_string(),
+                ip_addresses: vec!["93.184.216.34".to_string()],
+                has_mx: false,
+                has_cname: false,
+                has_txt: true,
+            }],
             sources: vec!["crt.sh".to_string()],
         };
         let json = serde_json::to_string(&result).unwrap();
@@ -381,7 +376,11 @@ mod tests {
         let result = SubdomainResult {
             domain: "example.com".to_string(),
             subdomains: vec![],
-            sources: vec!["crt.sh".to_string(), "alexa".to_string(), "threatminer".to_string()],
+            sources: vec![
+                "crt.sh".to_string(),
+                "alexa".to_string(),
+                "threatminer".to_string(),
+            ],
         };
         assert_eq!(result.sources.len(), 3);
     }

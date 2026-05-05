@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::tui::tabs::Tab;
 use crate::tui::help::{CommandPaletteResult, HelpCommand, HelpSection};
+use crate::tui::tabs::Tab;
 
 pub struct StaticHelpData {
     pub sections: HashMap<Tab, HelpSection>,
@@ -30,10 +30,20 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Load,
         HelpSection {
             title: "Load Testing".to_string(),
-            content: "HTTP load testing with configurable concurrency, duration, and request patterns.".to_string(),
+            content:
+                "HTTP load testing with configurable concurrency, duration, and request patterns."
+                    .to_string(),
             commands: vec![
-                HelpCommand { key: "Enter".to_string(), description: "Start load test".to_string(), category: "Action".to_string() },
-                HelpCommand { key: "Space".to_string(), description: "Pause/Resume".to_string(), category: "Control".to_string() },
+                HelpCommand {
+                    key: "Enter".to_string(),
+                    description: "Start load test".to_string(),
+                    category: "Action".to_string(),
+                },
+                HelpCommand {
+                    key: "Space".to_string(),
+                    description: "Pause/Resume".to_string(),
+                    category: "Control".to_string(),
+                },
             ],
         },
     );
@@ -54,7 +64,8 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::ScanEndpoints,
         HelpSection {
             title: "Endpoint Discovery".to_string(),
-            content: "Directory and file discovery using wordlists. Supports recursive scanning.".to_string(),
+            content: "Directory and file discovery using wordlists. Supports recursive scanning."
+                .to_string(),
             commands: vec![
                 HelpCommand {
                     key: "Enter".to_string(),
@@ -100,7 +111,9 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Waf,
         HelpSection {
             title: "WAF Detection".to_string(),
-            content: "Detect and identify Web Application Firewalls. Use payload testing to bypass.".to_string(),
+            content:
+                "Detect and identify Web Application Firewalls. Use payload testing to bypass."
+                    .to_string(),
             commands: vec![HelpCommand {
                 key: "Enter".to_string(),
                 description: "Start detection".to_string(),
@@ -126,10 +139,20 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Scan,
         HelpSection {
             title: "Pipeline Scan".to_string(),
-            content: "Run multiple scan types in sequence: port scan -> endpoint discovery -> fuzzing.".to_string(),
+            content:
+                "Run multiple scan types in sequence: port scan -> endpoint discovery -> fuzzing."
+                    .to_string(),
             commands: vec![
-                HelpCommand { key: "Enter".to_string(), description: "Start pipeline".to_string(), category: "Action".to_string() },
-                HelpCommand { key: "p".to_string(), description: "Configure pipeline".to_string(), category: "Config".to_string() },
+                HelpCommand {
+                    key: "Enter".to_string(),
+                    description: "Start pipeline".to_string(),
+                    category: "Action".to_string(),
+                },
+                HelpCommand {
+                    key: "p".to_string(),
+                    description: "Configure pipeline".to_string(),
+                    category: "Config".to_string(),
+                },
             ],
         },
     );
@@ -191,10 +214,20 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::GraphQl,
         HelpSection {
             title: "GraphQL Testing".to_string(),
-            content: "Test GraphQL endpoints for introspection, query injection, and depth limit bypass.".to_string(),
+            content:
+                "Test GraphQL endpoints for introspection, query injection, and depth limit bypass."
+                    .to_string(),
             commands: vec![
-                HelpCommand { key: "Enter".to_string(), description: "Start test".to_string(), category: "Action".to_string() },
-                HelpCommand { key: "i".to_string(), description: "Introspection".to_string(), category: "Test".to_string() },
+                HelpCommand {
+                    key: "Enter".to_string(),
+                    description: "Start test".to_string(),
+                    category: "Action".to_string(),
+                },
+                HelpCommand {
+                    key: "i".to_string(),
+                    description: "Introspection".to_string(),
+                    category: "Test".to_string(),
+                },
             ],
         },
     );
@@ -203,7 +236,8 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::OAuth,
         HelpSection {
             title: "OAuth Testing".to_string(),
-            content: "Test OAuth/OIDC authorization endpoints for security misconfigurations.".to_string(),
+            content: "Test OAuth/OIDC authorization endpoints for security misconfigurations."
+                .to_string(),
             commands: vec![HelpCommand {
                 key: "Enter".to_string(),
                 description: "Start test".to_string(),
@@ -216,7 +250,8 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Cluster,
         HelpSection {
             title: "Cluster".to_string(),
-            content: "Manage distributed scanning cluster. Add workers and orchestrate scans.".to_string(),
+            content: "Manage distributed scanning cluster. Add workers and orchestrate scans."
+                .to_string(),
             commands: vec![
                 HelpCommand {
                     key: "a".to_string(),
@@ -236,10 +271,14 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Stress,
         HelpSection {
             title: "Stress Testing".to_string(),
-            content: "Stress test targets with high-volume requests. Supports various attack patterns.".to_string(),
-            commands: vec![
-                HelpCommand { key: "Enter".to_string(), description: "Start stress test".to_string(), category: "Action".to_string() },
-            ],
+            content:
+                "Stress test targets with high-volume requests. Supports various attack patterns."
+                    .to_string(),
+            commands: vec![HelpCommand {
+                key: "Enter".to_string(),
+                description: "Start stress test".to_string(),
+                category: "Action".to_string(),
+            }],
         },
     );
 
@@ -247,7 +286,8 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Report,
         HelpSection {
             title: "Reporting".to_string(),
-            content: "Generate reports in various formats: JSON, HTML, Markdown, SARIF, JUnit.".to_string(),
+            content: "Generate reports in various formats: JSON, HTML, Markdown, SARIF, JUnit."
+                .to_string(),
             commands: vec![
                 HelpCommand {
                     key: "Enter".to_string(),
@@ -300,10 +340,20 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Settings,
         HelpSection {
             title: "Settings".to_string(),
-            content: "Configure global options: HTTP settings, timeouts, proxies, API keys, wordlists.".to_string(),
+            content:
+                "Configure global options: HTTP settings, timeouts, proxies, API keys, wordlists."
+                    .to_string(),
             commands: vec![
-                HelpCommand { key: "s".to_string(), description: "Save settings".to_string(), category: "Action".to_string() },
-                HelpCommand { key: "r".to_string(), description: "Reset to defaults".to_string(), category: "Action".to_string() },
+                HelpCommand {
+                    key: "s".to_string(),
+                    description: "Save settings".to_string(),
+                    category: "Action".to_string(),
+                },
+                HelpCommand {
+                    key: "r".to_string(),
+                    description: "Reset to defaults".to_string(),
+                    category: "Action".to_string(),
+                },
             ],
         },
     );
@@ -350,6 +400,98 @@ pub fn get_static_help_data() -> StaticHelpData {
                     category: "Filter".to_string(),
                 },
             ],
+        },
+    );
+
+    sections.insert(
+        Tab::Hunt,
+        HelpSection {
+            title: "Vulnerability Hunting".to_string(),
+            content: "Advanced vulnerability hunting with intelligent discovery rules.".to_string(),
+            commands: vec![HelpCommand {
+                key: "Enter".to_string(),
+                description: "Start hunting".to_string(),
+                category: "Action".to_string(),
+            }],
+        },
+    );
+
+    sections.insert(
+        Tab::Browser,
+        HelpSection {
+            title: "Headless Browser".to_string(),
+            content: "Headless browser testing for modern single-page applications.".to_string(),
+            commands: vec![HelpCommand {
+                key: "Enter".to_string(),
+                description: "Open browser".to_string(),
+                category: "Action".to_string(),
+            }],
+        },
+    );
+
+    sections.insert(
+        Tab::Compliance,
+        HelpSection {
+            title: "Compliance".to_string(),
+            content: "Generate compliance reports for various standards (OWASP, PCI, etc.)."
+                .to_string(),
+            commands: vec![HelpCommand {
+                key: "Enter".to_string(),
+                description: "Run check".to_string(),
+                category: "Action".to_string(),
+            }],
+        },
+    );
+
+    sections.insert(
+        Tab::Storage,
+        HelpSection {
+            title: "Database Storage".to_string(),
+            content: "Manage database storage for scan results and findings.".to_string(),
+            commands: vec![HelpCommand {
+                key: "Enter".to_string(),
+                description: "Query DB".to_string(),
+                category: "Action".to_string(),
+            }],
+        },
+    );
+
+    sections.insert(
+        Tab::Integrations,
+        HelpSection {
+            title: "Integrations".to_string(),
+            content: "Integrate with issue trackers and external security tools.".to_string(),
+            commands: vec![HelpCommand {
+                key: "Enter".to_string(),
+                description: "Sync findings".to_string(),
+                category: "Action".to_string(),
+            }],
+        },
+    );
+
+    sections.insert(
+        Tab::Workflow,
+        HelpSection {
+            title: "Workflow".to_string(),
+            content: "Manage security finding lifecycles and remediation workflows.".to_string(),
+            commands: vec![HelpCommand {
+                key: "Enter".to_string(),
+                description: "Update status".to_string(),
+                category: "Action".to_string(),
+            }],
+        },
+    );
+
+    sections.insert(
+        Tab::Vuln,
+        HelpSection {
+            title: "Vulnerability Management".to_string(),
+            content: "Track and prioritize vulnerabilities across multiple targets.".to_string(),
+            commands: vec![HelpCommand {
+                key: "Enter".to_string(),
+                description: "Manage findings".to_string(),
+                category: "Action".to_string(),
+            }],
         },
     );
 
@@ -596,6 +738,48 @@ pub fn get_static_help_data() -> StaticHelpData {
             description: "Go to Dashboard".to_string(),
             category: "Tabs".to_string(),
             shortcut: Some("21".to_string()),
+        },
+        CommandPaletteResult {
+            command: "hunt".to_string(),
+            description: "Go to Vulnerability Hunting".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: Some("22".to_string()),
+        },
+        CommandPaletteResult {
+            command: "browser".to_string(),
+            description: "Go to Headless Browser".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: Some("23".to_string()),
+        },
+        CommandPaletteResult {
+            command: "compliance".to_string(),
+            description: "Go to Compliance".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: Some("24".to_string()),
+        },
+        CommandPaletteResult {
+            command: "storage".to_string(),
+            description: "Go to Database Storage".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: Some("25".to_string()),
+        },
+        CommandPaletteResult {
+            command: "integrations".to_string(),
+            description: "Go to Integrations".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: Some("26".to_string()),
+        },
+        CommandPaletteResult {
+            command: "workflow".to_string(),
+            description: "Go to Workflow".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: Some("27".to_string()),
+        },
+        CommandPaletteResult {
+            command: "vuln".to_string(),
+            description: "Go to Vulnerability Management".to_string(),
+            category: "Tabs".to_string(),
+            shortcut: Some("28".to_string()),
         },
         CommandPaletteResult {
             command: "next-tab".to_string(),

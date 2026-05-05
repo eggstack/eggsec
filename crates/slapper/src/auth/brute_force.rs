@@ -33,7 +33,12 @@ impl BruteForceTester {
         Ok(Self { engine, client })
     }
 
-    pub async fn test(&self, target: &str, username: &str, passwords: &[String]) -> Result<BruteForceResult> {
+    pub async fn test(
+        &self,
+        target: &str,
+        username: &str,
+        passwords: &[String],
+    ) -> Result<BruteForceResult> {
         let mut result = BruteForceResult {
             target: target.to_string(),
             attempts_made: 0,
@@ -48,9 +53,13 @@ impl BruteForceTester {
                 break;
             }
 
-            let response = self.client
+            let response = self
+                .client
                 .post(target)
-                .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(
+                    reqwest::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
                 .body(format!("username={}&password={}", username, password))
                 .send()
                 .await;
@@ -63,20 +72,26 @@ impl BruteForceTester {
                     let body = resp.text().await.unwrap_or_default();
 
                     if (status == 302 || status == 200)
-                        && !body.contains("invalid") && !body.contains("error") && !body.contains("failed") {
-                            result.successful_logins += 1;
-                            result.weak_credentials.push(WeakCredential {
-                                username: username.to_string(),
-                                password: password.clone(),
-                                response_status: status,
-                                response_indicators: self.analyze_response(&body),
-                            });
-                        }
+                        && !body.contains("invalid")
+                        && !body.contains("error")
+                        && !body.contains("failed")
+                    {
+                        result.successful_logins += 1;
+                        result.weak_credentials.push(WeakCredential {
+                            username: username.to_string(),
+                            password: password.clone(),
+                            response_status: status,
+                            response_indicators: self.analyze_response(&body),
+                        });
+                    }
 
                     if status == 429 {
                         result.rate_limited = true;
                     }
-                    if status == 423 || body.contains("locked") || body.contains("too many attempts") {
+                    if status == 423
+                        || body.contains("locked")
+                        || body.contains("too many attempts")
+                    {
                         result.lockout_detected = true;
                         if self.engine.stop_on_lockout {
                             self.engine.stop();

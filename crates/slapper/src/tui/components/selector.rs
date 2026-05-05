@@ -1,3 +1,4 @@
+use crate::tc;
 use ratatui::prelude::Stylize;
 use ratatui::{
     layout::Rect,
@@ -7,7 +8,6 @@ use ratatui::{
     Frame,
 };
 use std::cell::RefCell;
-use crate::tc;
 
 #[derive(Clone, Debug)]
 pub struct DropdownInfo {

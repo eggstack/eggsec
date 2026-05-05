@@ -31,7 +31,12 @@ impl LockoutDetector {
         Ok(Self { client })
     }
 
-    pub async fn detect(&self, target: &str, username: &str, max_attempts: usize) -> Result<LockoutDetectionResult> {
+    pub async fn detect(
+        &self,
+        target: &str,
+        username: &str,
+        max_attempts: usize,
+    ) -> Result<LockoutDetectionResult> {
         let mut result = LockoutDetectionResult {
             target: target.to_string(),
             lockout_threshold: None,
@@ -44,9 +49,13 @@ impl LockoutDetector {
         let mut prev_status: Option<u16> = None;
 
         for i in 0..max_attempts {
-            let response = self.client
+            let response = self
+                .client
                 .post(target)
-                .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(
+                    reqwest::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
                 .body(format!("username={}&password=wrongpassword{}", username, i))
                 .send()
                 .await;
@@ -75,7 +84,9 @@ impl LockoutDetector {
                     result.lockout_threshold = Some(i);
                     result.attempts_before_lockout = i;
                     result.lockout_type = LockoutType::HardLockout;
-                    result.indicators.push("Connection failed after attempts".to_string());
+                    result
+                        .indicators
+                        .push("Connection failed after attempts".to_string());
                     break;
                 }
             }
@@ -169,7 +180,10 @@ mod tests {
     fn test_classify_lockout_hard() {
         let detector = LockoutDetector::new(10).unwrap();
         assert_eq!(detector.classify_lockout(423, ""), LockoutType::HardLockout);
-        assert_eq!(detector.classify_lockout(200, "account locked"), LockoutType::HardLockout);
+        assert_eq!(
+            detector.classify_lockout(200, "account locked"),
+            LockoutType::HardLockout
+        );
     }
 
     #[test]
@@ -181,7 +195,10 @@ mod tests {
     #[test]
     fn test_classify_lockout_captcha() {
         let detector = LockoutDetector::new(10).unwrap();
-        assert_eq!(detector.classify_lockout(200, "please solve captcha"), LockoutType::Captcha);
+        assert_eq!(
+            detector.classify_lockout(200, "please solve captcha"),
+            LockoutType::Captcha
+        );
     }
 
     #[test]

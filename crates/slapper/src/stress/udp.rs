@@ -46,11 +46,8 @@ mod raw_udp {
         packet[12..16].copy_from_slice(&src_ip.octets());
         packet[16..20].copy_from_slice(&dst_ip.octets());
 
-        let checksum = calculate_udp_checksum(
-            src_ip, dst_ip,
-            src_port, dst_port,
-            payload, udp_len as u16
-        );
+        let checksum =
+            calculate_udp_checksum(src_ip, dst_ip, src_port, dst_port, payload, udp_len as u16);
 
         packet[20 + 0] = (src_port >> 8) as u8;
         packet[20 + 1] = (src_port & 0xff) as u8;
@@ -117,7 +114,10 @@ mod raw_udp {
 }
 
 #[cfg(feature = "stress-testing")]
-pub async fn run_udp_flood(config: &StressConfig, metrics: Arc<StressMetrics>) -> Result<StressStats> {
+pub async fn run_udp_flood(
+    config: &StressConfig,
+    metrics: Arc<StressMetrics>,
+) -> Result<StressStats> {
     let target_ip = resolve_target(&config.target).await?;
     let target_addr = SocketAddr::new(target_ip, config.port);
 
@@ -216,13 +216,7 @@ async fn run_udp_flood_spoofed(
             0
         };
 
-        let packet = build_udp_packet(
-            src_ip,
-            src_port,
-            target_ip_v4,
-            target_addr.port(),
-            &payload,
-        );
+        let packet = build_udp_packet(src_ip, src_port, target_ip_v4, target_addr.port(), &payload);
 
         let socket = socket.clone();
         let metrics = metrics.clone();
@@ -231,7 +225,9 @@ async fn run_udp_flood_spoofed(
             let dst = libc::sockaddr_in {
                 sin_family: libc::AF_INET as u16,
                 sin_port: target_addr.port().to_be(),
-                sin_addr: libc::in_addr { s_addr: u32::from_be_bytes(target_ip_v4.octets()) },
+                sin_addr: libc::in_addr {
+                    s_addr: u32::from_be_bytes(target_ip_v4.octets()),
+                },
                 sin_zero: [0; 8],
             };
 
@@ -315,7 +311,6 @@ async fn run_udp_flood_standard(
     payload: Vec<u8>,
     metrics: StressMetrics,
 ) -> Result<StressStats> {
-
     let start_time = Instant::now();
     let duration = Duration::from_secs(config.duration_secs);
     let interval = Duration::from_micros(1_000_000 / config.rate_pps.max(1));
@@ -380,9 +375,7 @@ async fn resolve_target(target: &str) -> Result<IpAddr> {
         return Ok(ip);
     }
 
-    let addrs: Vec<_> = tokio::net::lookup_host((target, 0))
-        .await?
-        .collect();
+    let addrs: Vec<_> = tokio::net::lookup_host((target, 0)).await?.collect();
 
     addrs
         .first()

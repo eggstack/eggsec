@@ -394,7 +394,9 @@ impl super::App {
     pub(crate) fn spawn_task(&mut self, config: Option<workers::TaskConfig>) {
         if let Some(config) = config {
             if self.task_handle.is_some() {
-                tracing::warn!("A task is already running. Aborting previous task before starting new one.");
+                tracing::warn!(
+                    "A task is already running. Aborting previous task before starting new one."
+                );
                 if let Some(handle) = self.task_handle.take() {
                     handle.abort();
                 }
@@ -424,7 +426,9 @@ impl super::App {
                     Err(e) => {
                         let friendly_error = super::make_friendly_error(&e);
                         tracing::error!("Task failed: {}", friendly_error);
-                        let _ = error_tx.send(workers::TaskResult::Error(friendly_error)).await;
+                        let _ = error_tx
+                            .send(workers::TaskResult::Error(friendly_error))
+                            .await;
                     }
                 }
             }));

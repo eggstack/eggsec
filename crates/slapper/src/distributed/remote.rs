@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
@@ -247,7 +246,10 @@ impl RemoteListener {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!(addr = %addr, "TLS handshake failed: {}", e);
-                    return Err(SlapperError::Network(format!("TLS handshake failed from {}: {}", addr, e)));
+                    return Err(SlapperError::Network(format!(
+                        "TLS handshake failed from {}: {}",
+                        addr, e
+                    )));
                 }
             },
             None => StreamWrapper::plain(stream),
@@ -257,15 +259,19 @@ impl RemoteListener {
 
         // Read auth message
         let auth_line = line_writer.read_line().await?;
-        let auth: AuthMessage =
-            serde_json::from_str(&auth_line.ok_or_else(|| SlapperError::Validation("No auth".to_string()))?)?;
+        let auth: AuthMessage = serde_json::from_str(
+            &auth_line.ok_or_else(|| SlapperError::Validation("No auth".to_string()))?,
+        )?;
 
         if !bool::from(auth.psk.as_bytes().ct_eq(psk.as_bytes())) {
             let error = ResponseMessage::error("auth".to_string(), "Invalid PSK".to_string(), None);
             line_writer
                 .write_line(&serde_json::to_string(&error)?)
                 .await?;
-            return Err(SlapperError::Validation(format!("Invalid PSK from {}", addr)));
+            return Err(SlapperError::Validation(format!(
+                "Invalid PSK from {}",
+                addr
+            )));
         }
 
         // Register connection
@@ -397,9 +403,13 @@ impl RemoteClient {
     }
 
     pub fn with_tls(psk: String, domain: &str) -> Result<Self> {
-        let tls = TlsClient::new(domain)
-            .map_err(|e| SlapperError::Network(format!("Failed to initialize TLS client: {}", e)))?;
-        Ok(Self { psk, tls: Some(tls) })
+        let tls = TlsClient::new(domain).map_err(|e| {
+            SlapperError::Network(format!("Failed to initialize TLS client: {}", e))
+        })?;
+        Ok(Self {
+            psk,
+            tls: Some(tls),
+        })
     }
 
     pub fn new_plaintext(psk: String) -> Self {
@@ -453,7 +463,10 @@ impl RemoteClient {
                     Ok(s) => s,
                     Err(e) => {
                         tracing::error!("TLS handshake failed: {}", e);
-                        return Err(SlapperError::Network(format!("TLS handshake failed: {}", e)));
+                        return Err(SlapperError::Network(format!(
+                            "TLS handshake failed: {}",
+                            e
+                        )));
                     }
                 }
             }
@@ -479,7 +492,9 @@ impl RemoteClient {
                 Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&line)?)
             })
             .await
-            .map_err(|_| SlapperError::Network("Authentication response timed out".to_string()))??;
+            .map_err(|_| {
+                SlapperError::Network("Authentication response timed out".to_string())
+            })??;
 
         if !auth_response.success {
             return Err(SlapperError::Validation(format!(

@@ -96,7 +96,9 @@ async fn test_endpoint_scan_interesting() {
 #[tokio::test]
 async fn test_endpoint_scan_json_response() {
     let server = create_test_server().await;
-    mock_json("/api/data", r#"{"status": "ok"}"#).mount(&server).await;
+    mock_json("/api/data", r#"{"status": "ok"}"#)
+        .mount(&server)
+        .await;
 
     let endpoints = vec!["/api/data".to_string()];
     let spoof_config = SpoofConfig::default();
@@ -122,7 +124,9 @@ async fn test_endpoint_scan_json_response() {
 #[tokio::test]
 async fn test_endpoint_scan_waf_blocked() {
     let server = create_test_server().await;
-    mock_waf_response("/api", "cf-ray", "123456789-ABC").mount(&server).await;
+    mock_waf_response("/api", "cf-ray", "123456789-ABC")
+        .mount(&server)
+        .await;
 
     let endpoints = vec!["/api".to_string()];
     let spoof_config = SpoofConfig::default();
@@ -261,20 +265,7 @@ async fn test_port_scan_results_display() {
 #[tokio::test]
 async fn test_spoof_config_from_args_default() {
     let config = SpoofConfig::from_args(
-        None,
-        None,
-        false,
-        None,
-        None,
-        None,
-        None,
-        false,
-        None,
-        false,
-        false,
-        None,
-        None,
-        None,
+        None, None, false, None, None, None, None, false, None, false, false, None, None, None,
         None,
     );
     assert!(config.is_ok());
@@ -304,7 +295,10 @@ async fn test_spoof_config_with_ip() {
     assert!(config.is_ok());
     let config = config.unwrap();
     assert!(config.enabled);
-    assert_eq!(config.source_ip.map(|ip| ip.to_string()), Some("192.168.1.100".to_string()));
+    assert_eq!(
+        config.source_ip.map(|ip| ip.to_string()),
+        Some("192.168.1.100".to_string())
+    );
 }
 
 #[tokio::test]

@@ -2,20 +2,20 @@ pub mod capture;
 pub mod craft;
 pub mod hexdump;
 pub mod parse_impl;
+pub mod traceroute;
 pub mod types;
 pub mod validation;
-pub mod traceroute;
 
 pub use capture::{CaptureBuilder, CaptureConfig, CaptureError, CaptureStats, PacketCapture};
 pub use craft::PacketBuilder;
 pub use hexdump::{hexdump, hexdump_with_offset};
+pub use traceroute::{TracerouteConfig, TracerouteError, TracerouteHop, TracerouteResult};
 pub use types::ParsedPacket;
 pub use types::{
     AppLayer, DnsAnswer, DnsQuestion, DnsRecord, EthernetFrame, HttpHeader, HttpRequest,
     HttpResponse, IcmpHeader, IpFlags, IpOption, IpPacket, TcpFlags, TcpHeader, TcpOption,
     TlsClientHello, TlsHandshake, TlsServerHello, TransportProtocol, UdpHeader,
 };
-pub use traceroute::{TracerouteConfig, TracerouteError, TracerouteHop, TracerouteResult};
 
 #[cfg(feature = "packet-inspection")]
 pub mod cli;

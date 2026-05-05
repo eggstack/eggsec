@@ -1,10 +1,9 @@
-
 use lru::LruCache;
-use std::num::NonZeroUsize;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroUsize;
 use std::sync::LazyLock;
 
 const REGEX_CACHE_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(100) };
@@ -330,9 +329,7 @@ impl ChainExecutor {
     }
 
     fn interpolate_string(&self, input: &str) -> String {
-        static RE: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"\$\{(\w+)\}").unwrap()
-        });
+        static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\{(\w+)\}").unwrap());
 
         let mut result = input.to_string();
         for cap in RE.captures_iter(input) {

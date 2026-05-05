@@ -96,7 +96,7 @@ impl Remediation {
             "low" => Severity::Low,
             _ => Severity::Info,
         };
-Self::for_finding("default", "Finding", sev)
+        Self::for_finding("default", "Finding", sev)
     }
 
     pub fn priority(&self) -> &RemediationPriority {

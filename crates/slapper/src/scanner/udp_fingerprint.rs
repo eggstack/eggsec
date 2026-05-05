@@ -1,4 +1,3 @@
-
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
@@ -385,17 +384,14 @@ mod tests {
             "invalid-host-that-does-not-exist.local",
             53,
             Duration::from_millis(10),
-        ).await;
+        )
+        .await;
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn test_fingerprint_udp_services_empty_ports() {
-        let result = fingerprint_udp_services(
-            "127.0.0.1",
-            vec![],
-            Duration::from_millis(10),
-        ).await;
+        let result = fingerprint_udp_services("127.0.0.1", vec![], Duration::from_millis(10)).await;
         assert!(result.is_ok());
         let results = result.unwrap();
         assert_eq!(results.ports_scanned, 0);
@@ -404,11 +400,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_fingerprint_udp_services_unreachable_host() {
-        let result = fingerprint_udp_services(
-            "192.0.2.1",
-            vec![53],
-            Duration::from_millis(10),
-        ).await;
+        let result =
+            fingerprint_udp_services("192.0.2.1", vec![53], Duration::from_millis(10)).await;
         assert!(result.is_ok());
         let results = result.unwrap();
         assert_eq!(results.ports_scanned, 1);

@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
 use crate::cli::ai_analyze::AiAnalyzeArgs;
 use crate::output::ai_schema::{AiEvidence, AiFinding, AiOutput, AiRemediation};
 use crate::types::Severity;
+use anyhow::{Context, Result};
 
 pub async fn handle_ai_analyze(args: AiAnalyzeArgs) -> Result<()> {
     let config = crate::config::load_config(None)?;
@@ -23,7 +23,8 @@ pub async fn handle_ai_analyze(args: AiAnalyzeArgs) -> Result<()> {
         let mut input = String::new();
         use tokio::io::AsyncBufReadExt;
         let mut stdin = tokio::io::BufReader::new(tokio::io::stdin());
-        stdin.read_line(&mut input)
+        stdin
+            .read_line(&mut input)
             .await
             .context("Failed to read from stdin")?;
         serde_json::from_str(&input).context("Failed to parse findings JSON from stdin")?
@@ -40,7 +41,9 @@ pub async fn handle_ai_analyze(args: AiAnalyzeArgs) -> Result<()> {
     eprintln!("Analyzing {} finding(s) with AI...", findings_list.len());
 
     let client = crate::ai::AiClient::new(ai_config);
-    let ai_response = client.analyze_findings(&findings_list).await
+    let ai_response = client
+        .analyze_findings(&findings_list)
+        .await
         .context("AI analysis failed")?;
 
     let ai_text = ai_response
@@ -73,21 +76,28 @@ pub async fn handle_ai_analyze(args: AiAnalyzeArgs) -> Result<()> {
     Ok(())
 }
 
-fn parse_ai_analysis(ai_text: &str, raw_findings: &[serde_json::Value], analysis_type: &str) -> Vec<AiFinding> {
+fn parse_ai_analysis(
+    ai_text: &str,
+    raw_findings: &[serde_json::Value],
+    analysis_type: &str,
+) -> Vec<AiFinding> {
     let mut findings = Vec::new();
 
     for raw in raw_findings {
-        let severity = raw.get("severity")
+        let severity = raw
+            .get("severity")
             .and_then(|s| s.as_str())
             .and_then(|s| s.parse::<Severity>().ok())
             .unwrap_or(Severity::Medium);
 
-        let title = raw.get("title")
+        let title = raw
+            .get("title")
             .and_then(|t| t.as_str())
             .unwrap_or("Unknown finding")
             .to_string();
 
-        let description = raw.get("description")
+        let description = raw
+            .get("description")
             .and_then(|d| d.as_str())
             .unwrap_or("")
             .to_string();
@@ -124,7 +134,12 @@ fn parse_ai_analysis(ai_text: &str, raw_findings: &[serde_json::Value], analysis
                     Severity::Info => 5,
                 },
                 action: format!("Address {}: {}", severity.as_str().to_uppercase(), title),
-                effort: if severity.as_int() >= 4 { "high" } else { "medium" }.to_string(),
+                effort: if severity.as_int() >= 4 {
+                    "high"
+                } else {
+                    "medium"
+                }
+                .to_string(),
             });
         }
 
@@ -157,11 +172,13 @@ fn format_ai_output(output: &AiOutput) -> String {
 
     let summary = &output.summary;
     s.push_str(&format!("Total Findings: {}\n", summary.total_findings));
-    s.push_str(&format!("Critical: {} | High: {} | Medium: {} | Low: {} | Info: {}\n",
+    s.push_str(&format!(
+        "Critical: {} | High: {} | Medium: {} | Low: {} | Info: {}\n",
         summary.critical_count,
         summary.high_count,
         summary.total_findings - summary.critical_count - summary.high_count,
-        0, 0
+        0,
+        0
     ));
     s.push_str(&format!("Risk Score: {:.1}/10\n\n", summary.risk_score));
 
@@ -172,23 +189,37 @@ fn format_ai_output(output: &AiOutput) -> String {
 
     for (i, finding) in output.findings.iter().enumerate() {
         s.push_str(&format!("--- Finding #{} ---\n", i + 1));
-        s.push_str(&format!("[{}] {}\n", finding.severity.as_str().to_uppercase(), finding.title));
+        s.push_str(&format!(
+            "[{}] {}\n",
+            finding.severity.as_str().to_uppercase(),
+            finding.title
+        ));
         if !finding.description.is_empty() {
             s.push_str(&format!("  {}\n", finding.description));
         }
-        s.push_str(&format!("  Confidence: {:.0}%\n", finding.confidence * 100.0));
+        s.push_str(&format!(
+            "  Confidence: {:.0}%\n",
+            finding.confidence * 100.0
+        ));
 
         if !finding.evidence.is_empty() {
             s.push_str("  Evidence:\n");
             for ev in &finding.evidence {
-                s.push_str(&format!("    - [{}] {}\n", ev.source, ev.content.chars().take(100).collect::<String>()));
+                s.push_str(&format!(
+                    "    - [{}] {}\n",
+                    ev.source,
+                    ev.content.chars().take(100).collect::<String>()
+                ));
             }
         }
 
         if !finding.remediation.is_empty() {
             s.push_str("  Remediation:\n");
             for rem in &finding.remediation {
-                s.push_str(&format!("    [P{}] {} (effort: {})\n", rem.priority, rem.action, rem.effort));
+                s.push_str(&format!(
+                    "    [P{}] {} (effort: {})\n",
+                    rem.priority, rem.action, rem.effort
+                ));
             }
         }
         s.push('\n');

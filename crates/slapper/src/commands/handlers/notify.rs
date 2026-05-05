@@ -1,9 +1,9 @@
-use anyhow::Result;
 use crate::commands::handlers::CommandContext;
+use anyhow::Result;
 
 pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) -> Result<()> {
     use crate::cli::NotifyCommand;
-    use crate::notify::{NotificationPayload, WebhookEvent, FindingSummary, ScanStats};
+    use crate::notify::{FindingSummary, NotificationPayload, ScanStats, WebhookEvent};
     use chrono::Utc;
 
     match &args.command {
@@ -40,14 +40,26 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
             if !crate::commands::webhook::has_any_webhook(&test_config) {
                 crate::commands::webhook::print_webhook_usage();
             } else {
-                if let Err(e) = crate::commands::webhook::send_webhook_notifications(&test_config, &test_payload, None).await {
+                if let Err(e) = crate::commands::webhook::send_webhook_notifications(
+                    &test_config,
+                    &test_payload,
+                    None,
+                )
+                .await
+                {
                     tracing::warn!("Failed to send test webhook notifications: {}", e);
                 }
             }
         }
         NotifyCommand::Send(send_args) => {
-            let severity = send_args.severity.clone().unwrap_or_else(|| "info".to_string());
-            let target = send_args.target.clone().unwrap_or_else(|| "N/A".to_string());
+            let severity = send_args
+                .severity
+                .clone()
+                .unwrap_or_else(|| "info".to_string());
+            let target = send_args
+                .target
+                .clone()
+                .unwrap_or_else(|| "N/A".to_string());
 
             let payload = NotificationPayload {
                 event: if severity == "critical" || severity == "high" {
@@ -76,7 +88,13 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
                 println!("Configure webhooks in config file or use:");
                 println!("  slapper notify send --slack <url> --message 'your message'");
             } else {
-                if let Err(e) = crate::commands::webhook::send_webhook_notifications(&send_config, &payload, None).await {
+                if let Err(e) = crate::commands::webhook::send_webhook_notifications(
+                    &send_config,
+                    &payload,
+                    None,
+                )
+                .await
+                {
                     tracing::warn!("Failed to send webhook notifications: {}", e);
                 }
             }
@@ -88,13 +106,13 @@ pub async fn handle_notify(_ctx: &CommandContext, args: crate::cli::NotifyArgs) 
 
 #[cfg(feature = "rest-api")]
 pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) -> Result<()> {
-    use std::net::SocketAddr;
-    use tokio::net::TcpListener;
-    use axum::serve;
-    use std::path::PathBuf;
     use crate::config::Scope;
     use crate::distributed::TlsConfig;
     use crate::tool::{create_default_registry, protocol::rest::create_router};
+    use axum::serve;
+    use std::net::SocketAddr;
+    use std::path::PathBuf;
+    use tokio::net::TcpListener;
 
     let scope = if let Some(ref scope_file) = args.scope_file {
         Some(Scope::from_file(scope_file)?)
@@ -137,11 +155,11 @@ pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) ->
 
 #[cfg(feature = "rest-api")]
 pub async fn handle_mcp_serve(_ctx: &CommandContext, args: crate::cli::McpServeArgs) -> Result<()> {
-    use std::net::SocketAddr;
-    use tokio::net::TcpListener;
-    use axum::serve;
     use crate::tool::create_default_registry;
     use crate::tool::protocol::mcp::{create_mcp_router, run_stdio};
+    use axum::serve;
+    use std::net::SocketAddr;
+    use tokio::net::TcpListener;
 
     let registry = create_default_registry();
 
@@ -158,7 +176,8 @@ pub async fn handle_mcp_serve(_ctx: &CommandContext, args: crate::cli::McpServeA
 
         tracing::info!("Starting MCP server on {}", addr);
 
-        let listener = TcpListener::bind(addr).await
+        let listener = TcpListener::bind(addr)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
 
         serve(listener, router)

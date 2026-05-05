@@ -1,4 +1,3 @@
-
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -83,7 +82,10 @@ impl SslAnalyzer {
             if response.status().as_u16() != 0 {
                 analysis.has_ssl = port == 443 || connect_url.contains("https");
 
-                if let Some(cert) = response.extensions().get::<rustls_pki_types::CertificateDer<'_>>() {
+                if let Some(cert) = response
+                    .extensions()
+                    .get::<rustls_pki_types::CertificateDer<'_>>()
+                {
                     if let Ok(cert_info) = self.extract_certificate_info(cert) {
                         analysis.certificate = Some(cert_info);
                     }
@@ -105,7 +107,10 @@ impl SslAnalyzer {
         Ok(analysis)
     }
 
-    fn extract_certificate_info(&self, _cert: &rustls_pki_types::CertificateDer<'_>) -> Result<CertificateInfo> {
+    fn extract_certificate_info(
+        &self,
+        _cert: &rustls_pki_types::CertificateDer<'_>,
+    ) -> Result<CertificateInfo> {
         Ok(CertificateInfo {
             subject: "Certificate info not available".to_string(),
             issuer: "Certificate info not available".to_string(),
@@ -207,15 +212,16 @@ mod tests {
             key_size: Some(2048),
             is_expired: false,
             days_until_expiry: Some(180),
-            subject_alternative_names: vec!["example.com".to_string(), "www.example.com".to_string()],
-            certificate_chain: vec![
-                CertificateChainEntry {
-                    subject: "CN=example.com".to_string(),
-                    issuer: "CN=DigiCert".to_string(),
-                    valid_from: "2024-01-01".to_string(),
-                    valid_until: "2025-01-01".to_string(),
-                },
+            subject_alternative_names: vec![
+                "example.com".to_string(),
+                "www.example.com".to_string(),
             ],
+            certificate_chain: vec![CertificateChainEntry {
+                subject: "CN=example.com".to_string(),
+                issuer: "CN=DigiCert".to_string(),
+                valid_from: "2024-01-01".to_string(),
+                valid_until: "2025-01-01".to_string(),
+            }],
         };
         let json = serde_json::to_string(&cert).unwrap();
         assert!(json.contains("example.com"));
@@ -223,7 +229,9 @@ mod tests {
         let decoded: CertificateInfo = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.subject, "CN=example.com");
         assert!(decoded.key_size.is_some());
-        assert!(decoded.subject_alternative_names.contains(&"www.example.com".to_string()));
+        assert!(decoded
+            .subject_alternative_names
+            .contains(&"www.example.com".to_string()));
     }
 
     #[test]
@@ -268,13 +276,11 @@ mod tests {
             certificate: None,
             supported_versions: vec!["TLSv1.2".to_string(), "TLSv1.3".to_string()],
             supported_cipher_suites: vec!["TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384".to_string()],
-            issues: vec![
-                SslIssue {
-                    severity: "medium".to_string(),
-                    code: "TLSv1_ENABLED".to_string(),
-                    description: "TLSv1.0 is enabled (deprecated)".to_string(),
-                },
-            ],
+            issues: vec![SslIssue {
+                severity: "medium".to_string(),
+                code: "TLSv1_ENABLED".to_string(),
+                description: "TLSv1.0 is enabled (deprecated)".to_string(),
+            }],
         };
         let json = serde_json::to_string(&analysis).unwrap();
         let decoded: SslAnalysis = serde_json::from_str(&json).unwrap();

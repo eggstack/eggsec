@@ -1,9 +1,6 @@
 use anyhow::Result;
 use crossterm::{
-    event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, MouseEvent,
-        MouseEventKind,
-    },
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, MouseEvent, MouseEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -122,7 +119,8 @@ fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
         }
 
         if tab_area.contains((mouse_event.column, mouse_event.row).into()) {
-            let window = TabWindow::for_width(tab_area.width, app.current_tab, app.tab_scroll_offset);
+            let window =
+                TabWindow::for_width(tab_area.width, app.current_tab, app.tab_scroll_offset);
             let spans = window.visible_tab_spans(tab_area.width);
             let click_x = mouse_event.column.saturating_sub(tab_area.x);
 

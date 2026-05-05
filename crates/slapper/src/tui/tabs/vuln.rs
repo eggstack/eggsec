@@ -1,5 +1,7 @@
 use crate::tc;
-use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem};
+use crate::tui::components::{
+    empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::vuln::{
     AssetCriticality, CvssScore, ExploitInfo, PrioritizedFinding, Remediation, TriageResult,
@@ -481,6 +483,57 @@ impl TabInput for VulnTab {
         if self.focus_area == VulnFocusArea::Inputs {
             self.inputs.backspace();
         }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if self.focus_area == VulnFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == VulnFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else {
+            Some(self.results_view.get_content())
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == VulnFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == VulnFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == VulnFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == VulnFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == VulnFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == VulnFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = VulnFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = VulnFocusArea::Results;
     }
 
     fn handle_enter(&mut self) {

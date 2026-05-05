@@ -38,9 +38,7 @@ impl ConnectionTester {
                 let headers: Vec<(String, String)> = response
                     .headers()
                     .iter()
-                    .filter_map(|(k, v)| {
-                        v.to_str().ok().map(|vs| (k.to_string(), vs.to_string()))
-                    })
+                    .filter_map(|(k, v)| v.to_str().ok().map(|vs| (k.to_string(), vs.to_string())))
                     .collect();
 
                 let subprotocols: Vec<String> = response
@@ -90,7 +88,9 @@ impl ConnectionTester {
             subprotocols: Vec::new(),
             extensions: Vec::new(),
             latency_ms: None,
-            error: Some("WebSocket feature not enabled. Build with --features websocket".to_string()),
+            error: Some(
+                "WebSocket feature not enabled. Build with --features websocket".to_string(),
+            ),
         })
     }
 }

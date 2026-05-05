@@ -10,7 +10,7 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
     match args.command {
         SbomCommand::Generate(gen_args) => {
             let project_path = validate_project_path(&gen_args.project)?;
-            
+
             let gen = crate::supply_chain::sbom::SbomGenerator::new();
 
             let report = if project_path.join("Cargo.toml").exists() {
@@ -21,8 +21,10 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
                 gen.generate_from_requirements(project_path.to_str().unwrap())?
             } else {
                 return Err(crate::error::SlapperError::Validation(
-                    "No supported manifest file found (Cargo.toml, package.json, requirements.txt)".to_string(),
-                ).into());
+                    "No supported manifest file found (Cargo.toml, package.json, requirements.txt)"
+                        .to_string(),
+                )
+                .into());
             };
 
             let output = match gen_args.format.as_str() {
@@ -34,7 +36,8 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
 
             if let Some(ref output_file) = gen_args.output {
                 let output_path = validate_project_path(output_file)?;
-                tokio::fs::write(output_path.to_str().unwrap(), &output).await
+                tokio::fs::write(output_path.to_str().unwrap(), &output)
+                    .await
                     .with_context(|| format!("Failed to write output to {}", output_file))?;
                 eprintln!("SBOM written to {}", output_file);
             } else {
@@ -43,7 +46,8 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
         }
         SbomCommand::CheckTyposquat(typo_args) => {
             let project_path = validate_project_path(&typo_args.project)?;
-            let detector = crate::supply_chain::typosquat::TyposquatDetector::new(typo_args.threshold);
+            let detector =
+                crate::supply_chain::typosquat::TyposquatDetector::new(typo_args.threshold);
 
             let mut packages = Vec::new();
 
@@ -108,7 +112,8 @@ pub async fn handle_sbom(_ctx: &crate::commands::CommandContext, args: SbomArgs)
             println!();
 
             for finding in &report.suspicious_packages {
-                println!("[{}] {} -> {} (similarity: {:.2})",
+                println!(
+                    "[{}] {} -> {} (similarity: {:.2})",
                     finding.severity.as_str().to_uppercase(),
                     finding.package_name,
                     finding.suspected_target,

@@ -56,7 +56,13 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
                         Err(e) => {
                             IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                             let result = lua.create_table()?;
-                            result.set("error", format!("Path '{}' could not be resolved: {} - blocked by sandbox", filename, e))?;
+                            result.set(
+                                "error",
+                                format!(
+                                    "Path '{}' could not be resolved: {} - blocked by sandbox",
+                                    filename, e
+                                ),
+                            )?;
                             return Ok(result);
                         }
                     };
@@ -246,7 +252,13 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
                         Ok(c) => c,
                         Err(e) => {
                             let result = lua.create_table()?;
-                            result.set("error", format!("Path '{}' could not be resolved: {} - blocked by sandbox", filename, e))?;
+                            result.set(
+                                "error",
+                                format!(
+                                    "Path '{}' could not be resolved: {} - blocked by sandbox",
+                                    filename, e
+                                ),
+                            )?;
                             return Ok(result);
                         }
                     };
@@ -382,7 +394,9 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
         lua.create_function(move |lua, _: ()| {
             use std::fs;
             let temp_dir = if sandbox_for_tmpfile.enabled {
-                sandbox_for_tmpfile.allowed_dir.clone()
+                sandbox_for_tmpfile
+                    .allowed_dir
+                    .clone()
                     .unwrap_or_else(std::env::temp_dir)
             } else {
                 std::env::temp_dir()

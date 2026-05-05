@@ -67,6 +67,7 @@
 //! - External API rate limiting (crt.sh, Shodan, etc.)
 //! - Timeout during long-running enumeration
 
+pub mod api_schema;
 pub mod cloud;
 pub mod content;
 pub mod cors;
@@ -77,7 +78,6 @@ pub mod email;
 pub mod email_security;
 pub mod geolocation;
 pub mod git_secrets;
-pub mod api_schema;
 pub mod js;
 pub mod reverse_dns;
 pub mod runner;
@@ -94,10 +94,10 @@ pub mod whois;
 use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
 use crate::error::Result;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use parking_lot::Mutex;
 
 pub use spinner::Spinner;
 
@@ -135,7 +135,11 @@ impl FullReconResult {
 }
 
 #[cfg(feature = "tool-api")]
-pub async fn run_cli_with_callback<F>(args: ReconArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+pub async fn run_cli_with_callback<F>(
+    args: ReconArgs,
+    config: &SlapperConfig,
+    mut callback: F,
+) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {
@@ -186,7 +190,10 @@ where
                 references: vec![],
                 metadata: {
                     let mut m = std::collections::HashMap::new();
-                    m.insert("technology".to_string(), serde_json::Value::String(server.clone()));
+                    m.insert(
+                        "technology".to_string(),
+                        serde_json::Value::String(server.clone()),
+                    );
                     m
                 },
             });
@@ -209,13 +216,24 @@ where
                 location: result.target.subdomain.clone(),
                 evidence: result.target.cname.clone(),
                 cve_ids: vec![],
-                remediation: Some("Register the dormant subdomain or remove the DNS record".to_string()),
+                remediation: Some(
+                    "Register the dormant subdomain or remove the DNS record".to_string(),
+                ),
                 references: vec![],
                 metadata: {
                     let mut m = std::collections::HashMap::new();
-                    m.insert("cname".to_string(), serde_json::to_value(&result.target.cname).unwrap_or_default());
-                    m.insert("ns".to_string(), serde_json::to_value(&result.target.ns).unwrap_or_default());
-                    m.insert("service".to_string(), serde_json::to_value(&result.service).unwrap_or_default());
+                    m.insert(
+                        "cname".to_string(),
+                        serde_json::to_value(&result.target.cname).unwrap_or_default(),
+                    );
+                    m.insert(
+                        "ns".to_string(),
+                        serde_json::to_value(&result.target.ns).unwrap_or_default(),
+                    );
+                    m.insert(
+                        "service".to_string(),
+                        serde_json::to_value(&result.service).unwrap_or_default(),
+                    );
                     m
                 },
             });

@@ -98,7 +98,10 @@ pub fn validate_python_plugin(content: &str, block_suspicious_plugins: bool) -> 
 }
 
 #[cfg(not(feature = "python-plugins"))]
-pub fn validate_python_plugin(_content: &str, _block_suspicious_plugins: bool) -> anyhow::Result<()> {
+pub fn validate_python_plugin(
+    _content: &str,
+    _block_suspicious_plugins: bool,
+) -> anyhow::Result<()> {
     anyhow::bail!("Python plugins support is not enabled");
 }
 
@@ -159,7 +162,10 @@ mod tests {
         let content = "import os\nos.system('ls')\n";
         let result = validate_python_plugin(content, true);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("suspicious patterns"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("suspicious patterns"));
     }
 
     #[test]

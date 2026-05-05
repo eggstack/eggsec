@@ -16,8 +16,16 @@ fn make_result(task_id: &str, success: bool) -> TaskResult {
     TaskResult {
         task_id: task_id.to_string(),
         success,
-        output: if success { "ok".to_string() } else { String::new() },
-        error: if success { None } else { Some("error".to_string()) },
+        output: if success {
+            "ok".to_string()
+        } else {
+            String::new()
+        },
+        error: if success {
+            None
+        } else {
+            Some("error".to_string())
+        },
         duration_millis: 100,
     }
 }

@@ -1,8 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -127,14 +127,19 @@ impl TaskScheduler {
         *queue = all_tasks.into();
     }
 
-    pub async fn lease_next_task(&self, agent_id: Uuid, lease_duration_ms: u64) -> Option<ScheduledTask> {
+    pub async fn lease_next_task(
+        &self,
+        agent_id: Uuid,
+        lease_duration_ms: u64,
+    ) -> Option<ScheduledTask> {
         let mut queue = self.queue.write().await;
         let now = now_ms();
         let expiry = now + lease_duration_ms;
 
-        if let Some(pos) = queue.iter().position(|t| {
-            t.status == TaskStatus::Pending && is_due(t, now)
-        }) {
+        if let Some(pos) = queue
+            .iter()
+            .position(|t| t.status == TaskStatus::Pending && is_due(t, now))
+        {
             let task = &mut queue[pos];
             task.status = TaskStatus::Leased;
             task.assigned_agent_id = Some(agent_id);
@@ -174,11 +179,20 @@ impl TaskScheduler {
         }
     }
 
-    pub async fn submit_result(&self, task_id: Uuid, success: bool, result: Option<serde_json::Value>, error: Option<String>) -> bool {
+    pub async fn submit_result(
+        &self,
+        task_id: Uuid,
+        success: bool,
+        result: Option<serde_json::Value>,
+        error: Option<String>,
+    ) -> bool {
         let mut queue = self.queue.write().await;
         let now = now_ms();
 
-        if let Some(task) = queue.iter_mut().find(|t| t.id == task_id && t.status == TaskStatus::Leased) {
+        if let Some(task) = queue
+            .iter_mut()
+            .find(|t| t.id == task_id && t.status == TaskStatus::Leased)
+        {
             if success {
                 task.status = TaskStatus::Completed;
                 task.result = result;
@@ -241,14 +255,18 @@ impl TaskScheduler {
 
     pub async fn pending_count(&self) -> usize {
         let queue = self.queue.read().await;
-        queue.iter().filter(|t| t.status == TaskStatus::Pending).count()
+        queue
+            .iter()
+            .filter(|t| t.status == TaskStatus::Pending)
+            .count()
     }
 
     pub async fn retry_count(&self) -> usize {
         let queue = self.queue.read().await;
-        queue.iter().filter(|t| {
-            t.status == TaskStatus::Failed && t.retry_count < t.max_retries
-        }).count()
+        queue
+            .iter()
+            .filter(|t| t.status == TaskStatus::Failed && t.retry_count < t.max_retries)
+            .count()
     }
 
     pub async fn clear(&self) {
@@ -268,7 +286,11 @@ impl TaskScheduler {
 
     pub async fn list_by_status(&self, status: TaskStatus) -> Vec<ScheduledTask> {
         let queue = self.queue.read().await;
-        queue.iter().filter(|t| t.status == status).cloned().collect()
+        queue
+            .iter()
+            .filter(|t| t.status == status)
+            .cloned()
+            .collect()
     }
 
     pub async fn list_all_tasks(&self) -> Vec<ScheduledTask> {
@@ -333,8 +355,10 @@ impl TaskQueue {
         }
     }
 
-    pub async fn send(&self, task: ScheduledTask) -> Result<(), mpsc::error::SendError<ScheduledTask>> {
+    pub async fn send(
+        &self,
+        task: ScheduledTask,
+    ) -> Result<(), mpsc::error::SendError<ScheduledTask>> {
         self.sender.send(task).await
     }
 }
-

@@ -1,8 +1,8 @@
-
+use crate::error::Result;
 use crate::scanner::spoof::{format_spoof_warning, SpoofConfig};
 use crate::utils::preserve_all;
 use crate::utils::sanitize_for_logging;
-use crate::error::Result;
+use dashmap::DashMap;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
@@ -11,7 +11,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use dashmap::DashMap;
 use tracing;
 
 use crate::cli::EndpointScanArgs;
@@ -360,12 +359,19 @@ fn is_interesting(path: &str, status_code: u16) -> bool {
 }
 
 #[cfg(feature = "tool-api")]
-pub async fn run_cli_with_callback<F>(args: EndpointScanArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+pub async fn run_cli_with_callback<F>(
+    args: EndpointScanArgs,
+    config: &SlapperConfig,
+    mut callback: F,
+) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {
     if args.verbose {
-        eprintln!("Starting endpoint enumeration on {}", sanitize_for_logging(&args.url));
+        eprintln!(
+            "Starting endpoint enumeration on {}",
+            sanitize_for_logging(&args.url)
+        );
     }
 
     let endpoints = if let Some(wordlist_path) = args.wordlist {
@@ -429,7 +435,9 @@ where
     }
 
     for endpoint_result in &results.results {
-        callback(crate::tool::response::Finding::from(endpoint_result.clone()));
+        callback(crate::tool::response::Finding::from(
+            endpoint_result.clone(),
+        ));
     }
 
     let output = if args.json {
@@ -452,7 +460,10 @@ where
 
 pub async fn run_cli(args: EndpointScanArgs, config: &SlapperConfig) -> Result<()> {
     if args.verbose {
-        eprintln!("Starting endpoint enumeration on {}", sanitize_for_logging(&args.url));
+        eprintln!(
+            "Starting endpoint enumeration on {}",
+            sanitize_for_logging(&args.url)
+        );
     }
 
     let endpoints = if let Some(wordlist_path) = args.wordlist {
@@ -678,7 +689,11 @@ mod tests {
         sorted.sort();
         let before_len = sorted.len();
         sorted.dedup();
-        assert_eq!(sorted.len(), before_len, "DEFAULT_ENDPOINTS contains duplicates");
+        assert_eq!(
+            sorted.len(),
+            before_len,
+            "DEFAULT_ENDPOINTS contains duplicates"
+        );
     }
 }
 
@@ -693,7 +708,11 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         .timeout(config.timeout_duration)
         .danger_accept_invalid_certs(!config.verify_tls)
         .redirect(reqwest::redirect::Policy::limited(5))
-        .build().map_err(|e| crate::error::SlapperError::from(e).with_timeout(config.timeout_duration.as_millis() as u64))?;
+        .build()
+        .map_err(|e| {
+            crate::error::SlapperError::from(e)
+                .with_timeout(config.timeout_duration.as_millis() as u64)
+        })?;
 
     let results: Arc<DashMap<usize, EndpointResult>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(Mutex::new(0u64));
@@ -765,22 +784,28 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
                     let interesting = is_interesting(&endpoint_path, status_code);
 
                     let should_insert = match max_results {
-Some(limit) => {
-                    let old = results_count.fetch_add(1, Ordering::Relaxed);
-                    old < limit as u64
-                }
+                        Some(limit) => {
+                            let old = results_count.fetch_add(1, Ordering::Relaxed);
+                            old < limit as u64
+                        }
                         None => true,
                     };
                     if should_insert {
-                        results.insert(idx, EndpointResult {
-                            path: endpoint_path,
-                            status_code,
-                            status_text: status.canonical_reason().unwrap_or("Unknown").to_string(),
-                            content_length,
-                            response_time_ms: request_start.elapsed().as_millis() as u64,
-                            redirect,
-                            interesting,
-                        });
+                        results.insert(
+                            idx,
+                            EndpointResult {
+                                path: endpoint_path,
+                                status_code,
+                                status_text: status
+                                    .canonical_reason()
+                                    .unwrap_or("Unknown")
+                                    .to_string(),
+                                content_length,
+                                response_time_ms: request_start.elapsed().as_millis() as u64,
+                                redirect,
+                                interesting,
+                            },
+                        );
                     }
                 }
             }

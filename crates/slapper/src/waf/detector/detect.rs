@@ -1,9 +1,9 @@
-use crate::error::Result;
 use crate::constants::waf;
+use crate::error::Result;
 use crate::waf::waf_patterns::get_common_waf_response_patterns;
 
-use super::WafDetector;
 use super::types::WafDetectionResult;
+use super::WafDetector;
 
 impl WafDetector {
     pub async fn detect(&self, url: &str) -> Result<WafDetectionResult> {
@@ -67,11 +67,7 @@ impl WafDetector {
                         || value_lower.contains(header_pattern_lower.as_str())
                     {
                         score += waf::HEADER_MATCH_SCORE;
-                        sig_matched_headers.push(format!(
-                            "{}: {}",
-                            name_lower,
-                            value_lower
-                        ));
+                        sig_matched_headers.push(format!("{}: {}", name_lower, value_lower));
                     }
                 }
             }
@@ -80,7 +76,14 @@ impl WafDetector {
                 if let Some(ref cookie_lower) = cookie_header_lower {
                     if cookie_lower.contains(cookie_pattern_lower.as_str()) {
                         score += waf::COOKIE_MATCH_SCORE;
-                        sig_matched_cookies.push(signature.cookies[sig_lower.cookies.iter().position(|c| c == cookie_pattern_lower).unwrap_or(0)].clone());
+                        sig_matched_cookies.push(
+                            signature.cookies[sig_lower
+                                .cookies
+                                .iter()
+                                .position(|c| c == cookie_pattern_lower)
+                                .unwrap_or(0)]
+                            .clone(),
+                        );
                     }
                 }
             }
@@ -187,10 +190,7 @@ mod tests {
     #[test]
     fn test_normalize_url_without_scheme() {
         let detector = test_detector();
-        assert_eq!(
-            detector.normalize_url("example.com"),
-            "https://example.com"
-        );
+        assert_eq!(detector.normalize_url("example.com"), "https://example.com");
     }
 
     #[test]

@@ -1,4 +1,3 @@
-
 use serde::Serialize;
 
 pub fn print_json<T: Serialize>(value: &T) -> anyhow::Result<()> {

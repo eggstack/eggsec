@@ -1,6 +1,8 @@
 use crate::scanner::fingerprint::FingerprintResults;
 use crate::tc;
-use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tui::components::{
+    empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -248,14 +250,19 @@ impl TabRender for FingerprintTab {
         } else if let Some(ref err_msg) = self.error_message {
             use ratatui::style::Style;
             let error_text = Paragraph::new(format!("Error: {}", err_msg))
-                .block(Block::default().borders(Borders::ALL).title("Fingerprint - Error"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Fingerprint - Error"),
+                )
                 .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder = empty_state_paragraph("Results", "Results will appear here after running");
+            let placeholder =
+                empty_state_paragraph("Results", "Results will appear here after running");
             f.render_widget(placeholder, results_area);
         }
     }
@@ -280,6 +287,50 @@ impl TabInput for FingerprintTab {
         if !self.is_running() {
             self.inputs.backspace();
         }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == FingerprintFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == FingerprintFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == FingerprintFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == FingerprintFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == FingerprintFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == FingerprintFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = FingerprintFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = FingerprintFocusArea::Results;
+        self.inputs.blur();
     }
 
     fn handle_enter(&mut self) {
@@ -326,5 +377,21 @@ impl TabInput for FingerprintTab {
 
     fn is_input_focused(&self) -> bool {
         self.inputs.is_focused()
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        if self.focus_area == FingerprintFocusArea::Inputs {
+            self.inputs.is_at_left_edge()
+        } else {
+            true
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        if self.focus_area == FingerprintFocusArea::Inputs {
+            self.inputs.is_at_right_edge()
+        } else {
+            true
+        }
     }
 }

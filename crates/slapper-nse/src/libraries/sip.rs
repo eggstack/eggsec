@@ -72,7 +72,7 @@ pub fn register_sip_library(lua: &Lua) -> LuaResult<()> {
             match TcpStream::connect_timeout(
                 &addr
                     .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 5060))),
+                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 5060))),
                 Duration::from_secs(5),
             ) {
                 Ok(mut stream) => {
@@ -174,7 +174,7 @@ pub fn register_sip_library(lua: &Lua) -> LuaResult<()> {
             match TcpStream::connect_timeout(
                 &addr
                     .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 5060))),
+                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 5060))),
                 Duration::from_secs(5),
             ) {
                 Ok(mut stream) => {
@@ -240,7 +240,7 @@ pub fn register_sip_library(lua: &Lua) -> LuaResult<()> {
             match TcpStream::connect_timeout(
                 &addr
                     .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 5060))),
+                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 5060))),
                 Duration::from_secs(5),
             ) {
                 Ok(mut stream) => {

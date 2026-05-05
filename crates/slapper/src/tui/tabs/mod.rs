@@ -1,5 +1,8 @@
-
+#[cfg(feature = "headless-browser")]
+pub mod browser;
 mod cluster;
+#[cfg(feature = "compliance")]
+pub mod compliance;
 mod dashboard;
 mod fingerprint;
 mod fuzz;
@@ -7,6 +10,8 @@ pub mod graphql;
 pub mod history;
 #[cfg(feature = "advanced-hunting")]
 pub mod hunt;
+#[cfg(feature = "external-integrations")]
+pub mod integrations;
 mod load;
 #[cfg(feature = "nse")]
 pub mod nse;
@@ -25,20 +30,18 @@ mod settings;
 #[cfg(feature = "database")]
 pub mod storage;
 mod stress;
-#[cfg(feature = "compliance")]
-pub mod compliance;
-#[cfg(feature = "external-integrations")]
-pub mod integrations;
-#[cfg(feature = "finding-workflow")]
-pub mod workflow;
 #[cfg(feature = "vuln-management")]
 pub mod vuln;
-#[cfg(feature = "headless-browser")]
-pub mod browser;
 mod waf;
 mod waf_stress;
+#[cfg(feature = "finding-workflow")]
+pub mod workflow;
 
+#[cfg(feature = "headless-browser")]
+pub use browser::BrowserTab;
 pub use cluster::ClusterTab;
+#[cfg(feature = "compliance")]
+pub use compliance::ComplianceTab;
 pub use dashboard::DashboardTab;
 pub use fingerprint::FingerprintTab;
 pub use fuzz::FuzzTab;
@@ -46,13 +49,15 @@ pub use graphql::GraphQlTab;
 pub use history::HistoryTab;
 #[cfg(feature = "advanced-hunting")]
 pub use hunt::HuntTab;
+#[cfg(feature = "external-integrations")]
+pub use integrations::IntegrationsTab;
 pub use load::LoadTab;
 #[cfg(feature = "nse")]
 pub use nse::NseTab;
 pub use oauth::OAuthTab;
 pub use packet::PacketTab;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-pub use plugin::{PluginTab, PluginInfo};
+pub use plugin::{PluginInfo, PluginTab};
 pub use proxy::ProxyTab;
 pub use recon::ReconTab;
 pub use report::ReportTab;
@@ -64,18 +69,12 @@ pub use settings::SettingsTab;
 #[cfg(feature = "database")]
 pub use storage::StorageTab;
 pub use stress::StressTab;
-#[cfg(feature = "compliance")]
-pub use compliance::ComplianceTab;
-#[cfg(feature = "external-integrations")]
-pub use integrations::IntegrationsTab;
-#[cfg(feature = "finding-workflow")]
-pub use workflow::WorkflowTab;
 #[cfg(feature = "vuln-management")]
 pub use vuln::VulnTab;
-#[cfg(feature = "headless-browser")]
-pub use browser::BrowserTab;
 pub use waf::WafTab;
 pub use waf_stress::WafStressTab;
+#[cfg(feature = "finding-workflow")]
+pub use workflow::WorkflowTab;
 
 use ratatui::{layout::Rect, Frame};
 
@@ -114,16 +113,16 @@ pub enum Tab {
 
 impl Tab {
     const TAB_TITLES: &'static [&'static str] = &[
-        "Recon",
-        "Load",
-        "Scan Ports",
-        "Scan Endpoints",
-        "Fingerprint",
-        "Fuzz",
-        "WAF",
-        "WAF Stress",
-        "Scan",
-        "Resume",
+        "[1] Recon",
+        "[2] Load",
+        "[3] Scan Ports",
+        "[4] Scan Endpoints",
+        "[5] Fingerprint",
+        "[6] Fuzz",
+        "[7] WAF",
+        "[8] WAF Stress",
+        "[9] Scan",
+        "[0] Resume",
         "Proxy",
         "Packet",
         "GraphQL",
@@ -476,7 +475,10 @@ impl TabWindow {
         }
         max_visible = max_visible.max(1).min(total_tabs);
 
-        let current_idx = current_tab.visible_index().unwrap_or(0).min(total_tabs.saturating_sub(1));
+        let current_idx = current_tab
+            .visible_index()
+            .unwrap_or(0)
+            .min(total_tabs.saturating_sub(1));
         let previous_offset = previous_offset as usize;
 
         let clamped_offset = previous_offset.min(total_tabs.saturating_sub(max_visible));
@@ -526,38 +528,39 @@ impl TabWindow {
 
     pub fn visible_tab_spans(&self, _term_width: u16) -> Vec<TabSpan> {
         let all_tabs = Tab::all();
-        
+
         if self.max_visible == 0 || self.end <= self.start {
             return Vec::new();
         }
-        
+
         // Get the visible tab titles and calculate their widths
         let visible_tabs: Vec<_> = all_tabs[self.start..self.end].iter().collect();
         let title_widths: Vec<usize> = visible_tabs.iter().map(|t| t.title().len()).collect();
-        
+
         // Ratatui Tabs widget adds spacing between tabs (1 space on each side = 2 total)
         let tab_spacing = 2;
-        
+
         // Calculate cumulative widths to determine x positions
         // Positions are relative to the tab area (which starts at x = 0 for this calculation)
         let mut cum_width = 0;
         let mut spans = Vec::new();
-        
+
         for (i, (&tab, &title_width)) in visible_tabs.iter().zip(title_widths.iter()).enumerate() {
-            let x_start = cum_width as u16;
+            // +1 to account for the left border of the block
+            let x_start = (cum_width + 1) as u16;
             let tab_width = title_width + tab_spacing;
-            let x_end = (cum_width + title_width) as u16;
-            
+            // The clickable area includes the title and half of the spacing on each side
+            let x_end = x_start + tab_width as u16;
+
             spans.push(TabSpan {
                 tab: *tab,
                 global_index: self.start + i,
                 x_start,
                 x_end,
             });
-            
+
             cum_width += tab_width;
         }
-        
         spans
     }
 }
@@ -890,32 +893,15 @@ pub trait TabInput: TabState {
     fn handle_left(&mut self) -> bool;
     fn handle_right(&mut self) -> bool;
     fn handle_paste(&mut self, _text: &str) {}
-    fn handle_word_forward(&mut self) {
-        for _ in 0..5 {
-            self.handle_right();
-        }
+    fn handle_copy(&mut self) -> Option<String> {
+        None
     }
-    fn handle_word_backward(&mut self) {
-        for _ in 0..5 {
-            self.handle_left();
-        }
-    }
-    fn handle_home(&mut self) {
-        // Default: go to left edge - single step should suffice
-        let _ = self.handle_left();
-    }
-    fn handle_end(&mut self) {
-        // Default: go to right edge - single step should suffice
-        let _ = self.handle_right();
-    }
-    fn handle_top(&mut self) {
-        // Default: go to first item - single step should suffice
-        self.handle_up();
-    }
-    fn handle_bottom(&mut self) {
-        // Default: go to last item - single step should suffice
-        self.handle_down();
-    }
+    fn handle_word_forward(&mut self) {}
+    fn handle_word_backward(&mut self) {}
+    fn handle_home(&mut self) {}
+    fn handle_end(&mut self) {}
+    fn handle_top(&mut self) {}
+    fn handle_bottom(&mut self) {}
     fn handle_autocomplete(&mut self) -> bool {
         false
     }
@@ -950,30 +936,31 @@ mod tests {
         let spans = tab_window.visible_tab_spans(80);
         assert_eq!(spans.len(), 5);
 
-        // Check first tab (Recon) - title "Recon" = 5 chars
+        // Check first tab (Recon) - title "[1] Recon" = 9 chars
         assert_eq!(spans[0].tab, Tab::Recon);
-        assert_eq!(spans[0].x_start, 0);
-        assert_eq!(spans[0].x_end, 5);
+        assert_eq!(spans[0].x_start, 1);
+        assert_eq!(spans[0].x_end, 12); // 1 + 9 + 2
 
-        // Check second tab (Load) - title "Load" = 4 chars, starts at 5+2=7
+        // Check second tab (Load) - title "[2] Load" = 8 chars, starts at 1+11=12
         assert_eq!(spans[1].tab, Tab::Load);
-        assert_eq!(spans[1].x_start, 7);
-        assert_eq!(spans[1].x_end, 11);
+        assert_eq!(spans[1].x_start, 12);
+        assert_eq!(spans[1].x_end, 22); // 12 + 8 + 2
 
-        // Check ScanPorts tab - title "Scan Ports" = 10 chars
+        // Check ScanPorts tab - title "[3] Scan Ports" = 14 chars
         assert_eq!(spans[2].tab, Tab::ScanPorts);
-        assert_eq!(spans[2].x_start, 13);
-        assert_eq!(spans[2].x_end, 23);
+        assert_eq!(spans[2].x_start, 22);
+        assert_eq!(spans[2].x_end, 38); // 22 + 14 + 2
 
-        // Check ScanEndpoints tab - title "Scan Endpoints" = 14 chars
+        // Check ScanEndpoints tab - title "[4] Scan Endpoints" = 18 chars
         let se_span = &spans[3];
         assert_eq!(se_span.tab, Tab::ScanEndpoints);
-        assert_eq!(se_span.x_start, 25);
-        assert_eq!(se_span.x_end, 39);
+        assert_eq!(se_span.x_start, 38);
+        assert_eq!(se_span.x_end, 58); // 38 + 18 + 2
 
         // Simulate clicking at the ScanEndpoints tab position
         let click_x = se_span.x_start;
-        let clicked_tab = spans.iter()
+        let clicked_tab = spans
+            .iter()
             .find(|s| click_x >= s.x_start && click_x < s.x_end)
             .map(|s| s.tab)
             .unwrap();
@@ -1027,12 +1014,12 @@ mod tests {
 
         // Check that the first visible tab is index 5 (Fuzz)
         assert_eq!(spans[0].tab, Tab::Fuzz);
-        assert_eq!(spans[0].x_start, 0);
-        assert_eq!(spans[0].x_end, 4); // "Fuzz" = 4 chars
+        assert_eq!(spans[0].x_start, 1);
+        assert_eq!(spans[0].x_end, 11); // "[6] Fuzz" = 8 chars + 2 spacing + 1 border
 
         assert_eq!(spans[1].tab, Tab::Waf);
-        assert_eq!(spans[1].x_start, 6);
-        assert_eq!(spans[1].x_end, 9); // "WAF" = 3 chars + spacing
+        assert_eq!(spans[1].x_start, 11); // Starts after Fuzz (1 + 8 + 2)
+        assert_eq!(spans[1].x_end, 20); // "[7] WAF" = 7 chars + 2 spacing (11 + 9)
 
         assert_eq!(tab_window.selected_visible, 2);
         assert_eq!(spans[2].global_index, 7);
@@ -1053,12 +1040,13 @@ mod tests {
         assert_eq!(spans.len(), 5);
         let se_span = &spans[3];
         assert_eq!(se_span.tab, Tab::ScanEndpoints);
-        // Title "Scan Endpoints" = 14 chars
-        assert_eq!(se_span.x_end - se_span.x_start, 14);
+        // Title "[4] Scan Endpoints" = 18 chars + 2 spacing
+        assert_eq!(se_span.x_end - se_span.x_start, 20);
 
         // Click anywhere within the ScanEndpoints tab
         for x in se_span.x_start..se_span.x_end {
-            let clicked_tab = spans.iter()
+            let clicked_tab = spans
+                .iter()
                 .find(|s| x >= s.x_start && x < s.x_end)
                 .map(|s| s.tab)
                 .unwrap();
@@ -1067,7 +1055,8 @@ mod tests {
 
         // Click just before should NOT be ScanEndpoints
         let x = se_span.x_start - 1;
-        let clicked_tab = spans.iter()
+        let clicked_tab = spans
+            .iter()
             .find(|s| x >= s.x_start && x < s.x_end)
             .map(|s| s.tab);
         assert_ne!(clicked_tab, Some(Tab::ScanEndpoints));

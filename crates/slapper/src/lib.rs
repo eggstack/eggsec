@@ -65,13 +65,36 @@
 //! `From` impls (e.g., `From<std::io::Error>`) for automatic conversion from
 //! third-party error types.
 
+pub mod auth;
+#[cfg(feature = "headless-browser")]
+pub mod browser;
 pub mod cli;
 pub mod commands;
+#[cfg(feature = "compliance")]
+pub mod compliance;
+#[cfg(not(feature = "compliance"))]
+#[allow(dead_code)]
+mod compliance;
 pub mod config;
 pub mod constants;
+#[cfg(feature = "container")]
+pub mod container;
+#[cfg(not(feature = "container"))]
+#[allow(dead_code)]
+mod container;
 pub mod distributed;
 pub mod error;
 pub mod fuzzer;
+#[cfg(feature = "advanced-hunting")]
+pub mod hunt;
+#[cfg(not(feature = "advanced-hunting"))]
+#[allow(dead_code)]
+mod hunt;
+#[cfg(feature = "external-integrations")]
+pub mod integrations;
+#[cfg(not(feature = "external-integrations"))]
+#[allow(dead_code)]
+mod integrations;
 pub mod loadtest;
 pub mod logging;
 pub mod notify;
@@ -80,63 +103,36 @@ pub mod pipeline;
 pub mod proxy;
 pub mod recon;
 pub mod scanner;
-pub mod auth;
-#[cfg(feature = "container")]
-pub mod container;
-#[cfg(not(feature = "container"))]
-#[allow(dead_code)]
-mod container;
 #[cfg(feature = "database")]
 pub mod storage;
 #[cfg(not(feature = "database"))]
 #[allow(dead_code)]
 mod storage;
+#[cfg(feature = "stress-testing")]
+pub mod stress;
 #[cfg(feature = "sbom")]
 pub mod supply_chain;
 #[cfg(not(feature = "sbom"))]
 #[allow(dead_code)]
 mod supply_chain;
-#[cfg(feature = "advanced-hunting")]
-pub mod hunt;
-#[cfg(not(feature = "advanced-hunting"))]
-#[allow(dead_code)]
-mod hunt;
-#[cfg(feature = "compliance")]
-pub mod compliance;
-#[cfg(not(feature = "compliance"))]
-#[allow(dead_code)]
-mod compliance;
-#[cfg(feature = "external-integrations")]
-pub mod integrations;
-#[cfg(not(feature = "external-integrations"))]
-#[allow(dead_code)]
-mod integrations;
-#[cfg(feature = "finding-workflow")]
-pub mod workflow;
-#[cfg(not(feature = "finding-workflow"))]
-#[allow(dead_code)]
-mod workflow;
+pub mod tui;
+pub mod types;
+pub mod utils;
 #[cfg(feature = "vuln-management")]
 pub mod vuln;
 #[cfg(not(feature = "vuln-management"))]
 #[allow(dead_code)]
 mod vuln;
+pub mod waf;
 #[cfg(feature = "websocket")]
 pub mod websocket;
-#[cfg(feature = "headless-browser")]
-pub mod browser;
-#[cfg(feature = "stress-testing")]
-pub mod stress;
-pub mod tui;
-pub mod types;
-pub mod utils;
-pub mod waf;
+#[cfg(feature = "finding-workflow")]
+pub mod workflow;
+#[cfg(not(feature = "finding-workflow"))]
+#[allow(dead_code)]
+mod workflow;
 
-#[cfg(any(
-    feature = "tool-api",
-    feature = "rest-api",
-    feature = "grpc-api"
-))]
+#[cfg(any(feature = "tool-api", feature = "rest-api", feature = "grpc-api"))]
 pub mod tool;
 
 #[cfg(feature = "ai-integration")]
@@ -162,7 +158,6 @@ pub mod packet;
 
 #[cfg(feature = "wireless")]
 pub mod wireless;
-
 
 pub use config::{load_config, load_scope, Scope, SlapperConfig};
 pub use error::{Result, SlapperError};

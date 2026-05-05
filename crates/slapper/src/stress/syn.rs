@@ -169,9 +169,7 @@ async fn resolve_target(target: &str) -> Result<IpAddr> {
         return Ok(ip);
     }
 
-    let addrs: Vec<_> = tokio::net::lookup_host((target, 0))
-        .await?
-        .collect();
+    let addrs: Vec<_> = tokio::net::lookup_host((target, 0)).await?.collect();
 
     addrs
         .first()
@@ -201,8 +199,13 @@ fn create_channel(
 
     match datalink::channel(interface, config) {
         Ok(Ethernet(tx, rx)) => Ok((tx, rx)),
-        Ok(_) => Err(SlapperError::Runtime("Unsupported channel type".to_string())),
-        Err(e) => Err(SlapperError::Runtime(format!("Failed to create channel: {}", e))),
+        Ok(_) => Err(SlapperError::Runtime(
+            "Unsupported channel type".to_string(),
+        )),
+        Err(e) => Err(SlapperError::Runtime(format!(
+            "Failed to create channel: {}",
+            e
+        ))),
     }
 }
 

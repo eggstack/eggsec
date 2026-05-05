@@ -154,8 +154,10 @@ impl ExecutorCore {
         SandboxMetrics {
             io_handles,
             io_violations,
-            lfs_violations: crate::libraries::lfs::LFS_SANDBOX_VIOLATIONS.load(std::sync::atomic::Ordering::SeqCst),
-            os_violations: crate::libraries::os::OS_SANDBOX_VIOLATIONS.load(std::sync::atomic::Ordering::SeqCst),
+            lfs_violations: crate::libraries::lfs::LFS_SANDBOX_VIOLATIONS
+                .load(std::sync::atomic::Ordering::SeqCst),
+            os_violations: crate::libraries::os::OS_SANDBOX_VIOLATIONS
+                .load(std::sync::atomic::Ordering::SeqCst),
         }
     }
 

@@ -1,12 +1,12 @@
+use crate::error::SlapperError;
+use crate::tool::dispatcher::ToolDispatcher;
+use crate::tool::planner::{ExecutionPlan, ToolExecution};
+use crate::tool::request::ToolRequest;
+use crate::tool::response::ToolResponse;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
-use crate::tool::planner::{ExecutionPlan, ToolExecution};
-use crate::tool::dispatcher::ToolDispatcher;
-use crate::tool::request::ToolRequest;
-use crate::tool::response::ToolResponse;
-use crate::error::SlapperError;
 
 #[derive(Clone)]
 pub struct Orchestrator {
@@ -63,7 +63,8 @@ impl Orchestrator {
         let overall_start = std::time::Instant::now();
 
         for stage in &execution_order {
-            self.execute_stage(plan, stage, target, progress_tx.clone()).await?;
+            self.execute_stage(plan, stage, target, progress_tx.clone())
+                .await?;
         }
 
         let state = self.execution_state.read().await;
@@ -180,15 +181,20 @@ impl Orchestrator {
         };
 
         let mut state = self.execution_state.write().await;
-        state.stage_results.insert(stage_name.to_string(), stage_result);
+        state
+            .stage_results
+            .insert(stage_name.to_string(), stage_result);
 
         if let Some(tx) = progress_tx {
-            let _ = tx.send(StageProgress {
-                execution_id: state.execution_id,
-                stage: stage_name.to_string(),
-                progress: state.completed_count as f32 / (state.completed_count + state.failed_count + 1).max(1) as f32,
-                message: format!("Completed stage: {}", stage_name),
-            }).await;
+            let _ = tx
+                .send(StageProgress {
+                    execution_id: state.execution_id,
+                    stage: stage_name.to_string(),
+                    progress: state.completed_count as f32
+                        / (state.completed_count + state.failed_count + 1).max(1) as f32,
+                    message: format!("Completed stage: {}", stage_name),
+                })
+                .await;
         }
 
         Ok(())

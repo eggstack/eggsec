@@ -150,8 +150,8 @@ impl AstScanner {
 #[cfg(feature = "python-plugins")]
 /// Use Python's ast module via pyo3 to perform AST analysis
 fn python_ast_analyze(content: &str) -> anyhow::Result<AstAnalysisResult> {
-    use pyo3::{Python, types::PyModule};
     use pyo3::types::PyAnyMethods;
+    use pyo3::{types::PyModule, Python};
 
     let mut result = AstAnalysisResult::new();
 
@@ -248,8 +248,10 @@ fn analyze_ast_dump(dump: &str, result: &mut AstAnalysisResult, scanner: &AstSca
     }
 
     // Also check for attribute access like os.system, subprocess.run, etc.
-    static ATTR_PATTERN: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r#"Attribute\(value=Name\(id=['"]([^'"]+)['"][^)]*\),attr=['"]([^'"]+)['"]"#).unwrap());
+    static ATTR_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r#"Attribute\(value=Name\(id=['"]([^'"]+)['"][^)]*\),attr=['"]([^'"]+)['"]"#)
+            .unwrap()
+    });
 
     let dangerous_attrs: HashSet<(&str, &str)> = [
         ("os", "system"),

@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::commands::handlers::CommandContext;
+use anyhow::Result;
 
 pub async fn handle_packet(_ctx: &CommandContext, _args: crate::cli::PacketArgs) -> Result<()> {
     #[cfg(feature = "packet-inspection")]
@@ -44,12 +44,8 @@ pub async fn handle_icmp(ctx: &CommandContext, args: crate::cli::IcmpArgs) -> Re
     let timeout = Duration::from_secs(args.timeout);
     let interval = Duration::from_secs_f64(args.interval);
 
-    let (results, stats) = icmp_probe::ping_host(
-        &args.target,
-        args.count,
-        timeout,
-        interval,
-    ).await?;
+    let (results, stats) =
+        icmp_probe::ping_host(&args.target, args.count, timeout, interval).await?;
 
     if ctx.json {
         use crate::scanner::PingResult;
@@ -84,18 +80,33 @@ pub async fn handle_icmp(ctx: &CommandContext, args: crate::cli::IcmpArgs) -> Re
     } else {
         println!("PING {}: {} data bytes", args.target, 56);
         for r in &results {
-            println!("{} bytes from {}: icmp_seq={} ttl={} time={:.3} ms",
-                r.payload_size, r.target, r.sequence, r.ttl, r.rtt.as_secs_f64() * 1000.0);
+            println!(
+                "{} bytes from {}: icmp_seq={} ttl={} time={:.3} ms",
+                r.payload_size,
+                r.target,
+                r.sequence,
+                r.ttl,
+                r.rtt.as_secs_f64() * 1000.0
+            );
         }
         println!("\n--- {} ping statistics ---", args.target);
-        println!("{} packets transmitted, {} packets received, {}% packet loss",
-            stats.sent, stats.received,
-            if stats.sent > 0 { (stats.lost as f64 / stats.sent as f64 * 100.0) as u32 } else { 0 });
+        println!(
+            "{} packets transmitted, {} packets received, {}% packet loss",
+            stats.sent,
+            stats.received,
+            if stats.sent > 0 {
+                (stats.lost as f64 / stats.sent as f64 * 100.0) as u32
+            } else {
+                0
+            }
+        );
         if let Some(rtt) = stats.min_rtt {
-            println!("round-trip min/avg/max = {:.3}/{:.3}/{:.3} ms",
+            println!(
+                "round-trip min/avg/max = {:.3}/{:.3}/{:.3} ms",
                 rtt.as_secs_f64() * 1000.0,
                 stats.avg_rtt.unwrap_or_default().as_secs_f64() * 1000.0,
-                stats.max_rtt.unwrap_or_default().as_secs_f64() * 1000.0);
+                stats.max_rtt.unwrap_or_default().as_secs_f64() * 1000.0
+            );
         }
     }
 
@@ -103,7 +114,10 @@ pub async fn handle_icmp(ctx: &CommandContext, args: crate::cli::IcmpArgs) -> Re
 }
 
 #[cfg(feature = "stress-testing")]
-pub async fn handle_traceroute(ctx: &CommandContext, args: crate::cli::TracerouteArgs) -> Result<()> {
+pub async fn handle_traceroute(
+    ctx: &CommandContext,
+    args: crate::cli::TracerouteArgs,
+) -> Result<()> {
     use crate::packet::traceroute::{Traceroute, TracerouteConfig};
     use std::time::Duration;
 
@@ -128,11 +142,16 @@ pub async fn handle_traceroute(ctx: &CommandContext, args: crate::cli::Tracerout
     if ctx.json {
         println!("{}", serde_json::to_string_pretty(&result)?);
     } else {
-        println!("traceroute to {} ({}), {} hops max\n",
-            result.target, result.resolved_address, result.total_hops);
+        println!(
+            "traceroute to {} ({}), {} hops max\n",
+            result.target, result.resolved_address, result.total_hops
+        );
         for hop in &result.hops {
             let addr = hop.address.clone().unwrap_or_else(|| "*".to_string());
-            let rtt_str = hop.rtt_ms.map(|ms| format!("{:.3} ms", ms)).unwrap_or_else(|| "*".to_string());
+            let rtt_str = hop
+                .rtt_ms
+                .map(|ms| format!("{:.3} ms", ms))
+                .unwrap_or_else(|| "*".to_string());
             println!(" {:2}  {:<20} {}", hop.hop, addr, rtt_str);
         }
         if !result.success {

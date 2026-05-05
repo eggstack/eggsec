@@ -61,14 +61,24 @@ fn test_registry_new() {
 #[test]
 fn test_registry_register() {
     let registry = ToolRegistry::new();
-    let result = registry.register(MockTool::new("test", "Test Tool", ToolCategory::Reconnaissance));
+    let result = registry.register(MockTool::new(
+        "test",
+        "Test Tool",
+        ToolCategory::Reconnaissance,
+    ));
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_registry_register_duplicate() {
     let registry = ToolRegistry::new();
-    registry.register(MockTool::new("test", "Test Tool", ToolCategory::Reconnaissance)).unwrap();
+    registry
+        .register(MockTool::new(
+            "test",
+            "Test Tool",
+            ToolCategory::Reconnaissance,
+        ))
+        .unwrap();
     let result = registry.register(MockTool::new("test", "Test Tool 2", ToolCategory::Scanner));
     assert!(result.is_err());
 }
@@ -76,7 +86,13 @@ fn test_registry_register_duplicate() {
 #[test]
 fn test_registry_unregister() {
     let registry = ToolRegistry::new();
-    registry.register(MockTool::new("test", "Test Tool", ToolCategory::Reconnaissance)).unwrap();
+    registry
+        .register(MockTool::new(
+            "test",
+            "Test Tool",
+            ToolCategory::Reconnaissance,
+        ))
+        .unwrap();
     let removed = registry.unregister("test");
     assert!(removed.is_some());
     assert_eq!(removed.unwrap().id(), "test");
@@ -92,7 +108,13 @@ fn test_registry_unregister_not_found() {
 #[test]
 fn test_registry_get() {
     let registry = ToolRegistry::new();
-    registry.register(MockTool::new("test", "Test Tool", ToolCategory::Reconnaissance)).unwrap();
+    registry
+        .register(MockTool::new(
+            "test",
+            "Test Tool",
+            ToolCategory::Reconnaissance,
+        ))
+        .unwrap();
     let tool = registry.get("test");
     assert!(tool.is_some());
     assert_eq!(tool.unwrap().id(), "test");
@@ -108,9 +130,17 @@ fn test_registry_get_not_found() {
 #[test]
 fn test_registry_list() {
     let registry = ToolRegistry::new();
-    registry.register(MockTool::new("test1", "Test Tool 1", ToolCategory::Reconnaissance)).unwrap();
-    registry.register(MockTool::new("test2", "Test Tool 2", ToolCategory::Scanner)).unwrap();
-    
+    registry
+        .register(MockTool::new(
+            "test1",
+            "Test Tool 1",
+            ToolCategory::Reconnaissance,
+        ))
+        .unwrap();
+    registry
+        .register(MockTool::new("test2", "Test Tool 2", ToolCategory::Scanner))
+        .unwrap();
+
     let tools = registry.list();
     assert_eq!(tools.len(), 2);
 }
@@ -118,9 +148,17 @@ fn test_registry_list() {
 #[test]
 fn test_registry_list_by_category() {
     let registry = ToolRegistry::new();
-    registry.register(MockTool::new("recon", "Recon", ToolCategory::Reconnaissance)).unwrap();
-    registry.register(MockTool::new("scan", "Scanner", ToolCategory::Scanner)).unwrap();
-    
+    registry
+        .register(MockTool::new(
+            "recon",
+            "Recon",
+            ToolCategory::Reconnaissance,
+        ))
+        .unwrap();
+    registry
+        .register(MockTool::new("scan", "Scanner", ToolCategory::Scanner))
+        .unwrap();
+
     let recon_tools = registry.list_by_category(ToolCategory::Reconnaissance);
     assert_eq!(recon_tools.len(), 1);
     assert_eq!(recon_tools[0].id, "recon");
@@ -129,10 +167,20 @@ fn test_registry_list_by_category() {
 #[test]
 fn test_registry_categories() {
     let registry = ToolRegistry::new();
-    registry.register(MockTool::new("recon", "Recon", ToolCategory::Reconnaissance)).unwrap();
-    registry.register(MockTool::new("scan", "Scanner", ToolCategory::Scanner)).unwrap();
-    registry.register(MockTool::new("fuzz", "Fuzzer", ToolCategory::Fuzzer)).unwrap();
-    
+    registry
+        .register(MockTool::new(
+            "recon",
+            "Recon",
+            ToolCategory::Reconnaissance,
+        ))
+        .unwrap();
+    registry
+        .register(MockTool::new("scan", "Scanner", ToolCategory::Scanner))
+        .unwrap();
+    registry
+        .register(MockTool::new("fuzz", "Fuzzer", ToolCategory::Fuzzer))
+        .unwrap();
+
     let categories = registry.categories();
     assert!(categories.contains(&ToolCategory::Reconnaissance));
     assert!(categories.contains(&ToolCategory::Scanner));
@@ -142,8 +190,10 @@ fn test_registry_categories() {
 #[test]
 fn test_registry_clone() {
     let registry = ToolRegistry::new();
-    registry.register(MockTool::new("test", "Test", ToolCategory::Reconnaissance)).unwrap();
-    
+    registry
+        .register(MockTool::new("test", "Test", ToolCategory::Reconnaissance))
+        .unwrap();
+
     let cloned = registry.clone();
     assert_eq!(cloned.list().len(), 1);
 }
@@ -154,23 +204,23 @@ async fn test_registry_concurrent_access() {
     use tokio::task;
 
     let registry = Arc::new(ToolRegistry::new());
-    
+
     let mut handles = Vec::new();
     for i in 0..10 {
         let reg = registry.clone();
         let handle = task::spawn(async move {
             reg.register(MockTool::new(
-                format!("tool{}", i), 
-                format!("Tool {}", i), 
-                ToolCategory::Reconnaissance
+                format!("tool{}", i),
+                format!("Tool {}", i),
+                ToolCategory::Reconnaissance,
             ))
         });
         handles.push(handle);
     }
-    
+
     for handle in handles {
         handle.await.unwrap().unwrap();
     }
-    
+
     assert_eq!(registry.list().len(), 10);
 }

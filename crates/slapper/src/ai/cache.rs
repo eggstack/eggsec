@@ -1,10 +1,10 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CacheEntry {
@@ -50,7 +50,11 @@ impl Default for CacheEntry {
 
 impl CacheEntry {
     pub fn is_expired(&self) -> bool {
-        Utc::now().signed_duration_since(self.created_at).to_std().map(|d| d > self.ttl).unwrap_or(true)
+        Utc::now()
+            .signed_duration_since(self.created_at)
+            .to_std()
+            .map(|d| d > self.ttl)
+            .unwrap_or(true)
     }
 
     fn new(value: String, ttl: Duration) -> Self {
@@ -94,15 +98,18 @@ impl From<AiCacheSerialized> for AiCache {
             .into_iter()
             .map(|(k, v)| {
                 let ttl = Duration::from_nanos(v.ttl_nanos);
-                (k, CacheEntry {
-                    value: v.value,
-                    created_at: v.created_at,
-                    ttl,
-                    hit_count: v.hit_count,
-                })
+                (
+                    k,
+                    CacheEntry {
+                        value: v.value,
+                        created_at: v.created_at,
+                        ttl,
+                        hit_count: v.hit_count,
+                    },
+                )
             })
             .collect();
-        
+
         AiCache {
             entries: Arc::new(RwLock::new(entries)),
             max_entries: serialized.max_entries,
@@ -115,7 +122,7 @@ impl From<AiCacheSerialized> for AiCache {
 impl From<AiCache> for AiCacheSerialized {
     fn from(cache: AiCache) -> Self {
         // Need to extract entries from the Arc<RwLock>
-        // This is a simplified version - for proper serialization we'd need to 
+        // This is a simplified version - for proper serialization we'd need to
         // access the inner HashMap. For now, just serialize metadata.
         // The actual entries are serialized in the persist() method.
         AiCacheSerialized {
@@ -167,7 +174,8 @@ impl AiCache {
         if entries.len() >= self.max_entries {
             self.evict_expired(&mut entries);
             if entries.len() >= self.max_entries {
-                if let Some((oldest_key, _)) = entries.iter()
+                if let Some((oldest_key, _)) = entries
+                    .iter()
                     .min_by_key(|(_, v)| v.created_at)
                     .map(|(k, v)| (k.clone(), v.clone()))
                 {
@@ -175,7 +183,10 @@ impl AiCache {
                 }
             }
         }
-        entries.insert(key.to_string(), CacheEntry::new(value.to_string(), ttl.unwrap_or(self.default_ttl)));
+        entries.insert(
+            key.to_string(),
+            CacheEntry::new(value.to_string(), ttl.unwrap_or(self.default_ttl)),
+        );
         drop(entries);
         self.persist().await;
     }
@@ -231,26 +242,29 @@ impl AiCache {
             if let Some(parent) = path.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
-            
+
             let entries = self.entries.read().await;
             let serialized_entries: HashMap<String, CacheEntrySer> = entries
                 .iter()
                 .map(|(k, v)| {
-                    (k.clone(), CacheEntrySer {
-                        value: v.value.clone(),
-                        created_at: v.created_at,
-                        ttl_nanos: v.ttl.as_nanos() as u64,
-                        hit_count: v.hit_count,
-                    })
+                    (
+                        k.clone(),
+                        CacheEntrySer {
+                            value: v.value.clone(),
+                            created_at: v.created_at,
+                            ttl_nanos: v.ttl.as_nanos() as u64,
+                            hit_count: v.hit_count,
+                        },
+                    )
                 })
                 .collect();
-            
+
             let serialized = AiCacheSerialized {
                 entries: serialized_entries,
                 max_entries: self.max_entries,
                 default_ttl_nanos: self.default_ttl.as_nanos() as u64,
             };
-            
+
             if let Ok(json) = serde_json::to_string(&serialized) {
                 let _ = std::fs::write(path, json);
             }

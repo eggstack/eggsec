@@ -1,5 +1,5 @@
-use std::time::Duration;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct TimingResult {
@@ -83,24 +83,43 @@ impl TimingAnalyzer {
 
     fn update_atomic_stats(&self, response_time_ms: u64) {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
-        self.total_response_time.fetch_add(response_time_ms, Ordering::Relaxed);
-        
+        self.total_response_time
+            .fetch_add(response_time_ms, Ordering::Relaxed);
+
         loop {
             let current_min = self.min_response_time.load(Ordering::Relaxed);
             if response_time_ms >= current_min {
                 break;
             }
-            if self.min_response_time.compare_exchange(current_min, response_time_ms, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+            if self
+                .min_response_time
+                .compare_exchange(
+                    current_min,
+                    response_time_ms,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                )
+                .is_ok()
+            {
                 break;
             }
         }
-        
+
         loop {
             let current_max = self.max_response_time.load(Ordering::Relaxed);
             if response_time_ms <= current_max {
                 break;
             }
-            if self.max_response_time.compare_exchange(current_max, response_time_ms, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+            if self
+                .max_response_time
+                .compare_exchange(
+                    current_max,
+                    response_time_ms,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                )
+                .is_ok()
+            {
                 break;
             }
         }
@@ -109,7 +128,7 @@ impl TimingAnalyzer {
     pub fn record(&mut self, duration: Duration) -> TimingResult {
         let response_time_ms = duration.as_millis() as u64;
         self.update_atomic_stats(response_time_ms);
-        
+
         let response_time_f = response_time_ms as f64;
         self.samples.push(response_time_f);
 
@@ -119,7 +138,7 @@ impl TimingAnalyzer {
 
         let (is_anomaly, anomaly_factor) = self.check_anomaly(response_time_f);
         let is_redos_suspected = response_time_ms >= self.redos_threshold_ms;
-        
+
         if is_anomaly {
             self.anomaly_count.fetch_add(1, Ordering::Relaxed);
         }

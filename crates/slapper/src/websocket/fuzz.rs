@@ -27,8 +27,8 @@ impl FuzzTester {
 
     #[cfg(feature = "websocket")]
     pub async fn run_fuzz_tests(&self, url: &str) -> Result<Vec<FuzzTestResult>> {
-        use tokio_tungstenite::connect_async;
         use futures::{SinkExt, StreamExt};
+        use tokio_tungstenite::connect_async;
         use tokio_tungstenite::tungstenite::Message;
 
         let mut results = Vec::new();
@@ -48,18 +48,25 @@ impl FuzzTester {
             match connect_async(url).await {
                 Ok((mut ws_stream, _)) => {
                     let large_payload = "A".repeat(size);
-                    if ws_stream.send(Message::Text(large_payload.into())).await.is_ok() {
+                    if ws_stream
+                        .send(Message::Text(large_payload.into()))
+                        .await
+                        .is_ok()
+                    {
                         result.sent = true;
                         match tokio::time::timeout(
                             std::time::Duration::from_secs(10),
-                            ws_stream.next()
-                        ).await {
+                            ws_stream.next(),
+                        )
+                        .await
+                        {
                             Ok(Some(Ok(msg))) => {
                                 if let Message::Text(text) = msg {
                                     result.server_response = Some(text.to_string());
                                     if text.len() > size {
                                         result.vulnerability_detected = true;
-                                        result.details = "Server echoed back more data than sent".to_string();
+                                        result.details =
+                                            "Server echoed back more data than sent".to_string();
                                     }
                                 }
                             }
@@ -99,13 +106,18 @@ impl FuzzTester {
 
             match connect_async(url).await {
                 Ok((mut ws_stream, _)) => {
-                    let binary_data: tokio_tungstenite::tungstenite::Bytes = (0..size).map(|i| (i % 256) as u8).collect::<Vec<u8>>().into();
+                    let binary_data: tokio_tungstenite::tungstenite::Bytes = (0..size)
+                        .map(|i| (i % 256) as u8)
+                        .collect::<Vec<u8>>()
+                        .into();
                     if ws_stream.send(Message::Binary(binary_data)).await.is_ok() {
                         result.sent = true;
                         if let Ok(Some(Ok(_msg))) = tokio::time::timeout(
                             std::time::Duration::from_secs(5),
-                            ws_stream.next()
-                        ).await {
+                            ws_stream.next(),
+                        )
+                        .await
+                        {
                             result.server_response = Some("Received response".to_string());
                         }
                     }
@@ -133,10 +145,8 @@ impl FuzzTester {
         let mut connected = 0;
         let mut failed = 0;
         for _ in 0..50 {
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(2),
-                connect_async(url)
-            ).await {
+            match tokio::time::timeout(std::time::Duration::from_secs(2), connect_async(url)).await
+            {
                 Ok(Ok((mut ws, _))) => {
                     connected += 1;
                     let _ = ws.close(None).await;

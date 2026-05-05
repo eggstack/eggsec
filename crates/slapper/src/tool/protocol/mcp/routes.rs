@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_stream::stream;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -8,10 +9,9 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use async_stream::stream;
 use futures::Stream;
 
-use crate::tool::{ChainPlanner, OpenApiGenerator, PlanRequest, ExecutionPlan, ToolRegistry};
+use crate::tool::{ChainPlanner, ExecutionPlan, OpenApiGenerator, PlanRequest, ToolRegistry};
 
 use super::handlers::McpServer;
 use super::streaming::StreamEvent;
@@ -23,19 +23,14 @@ struct AppState {
     openapi_generator: OpenApiGenerator,
 }
 
-async fn handle_openapi_json(
-    State(state): State<Arc<AppState>>,
-) -> axum::Json<serde_json::Value> {
+async fn handle_openapi_json(State(state): State<Arc<AppState>>) -> axum::Json<serde_json::Value> {
     let spec = state.openapi_generator.generate(&state.mcp_server.registry);
     axum::Json(serde_json::from_str(&spec.to_json()).unwrap_or_default())
 }
 
 async fn handle_openapi_yaml(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let spec = state.openapi_generator.generate(&state.mcp_server.registry);
-    (
-        [("Content-Type", "application/x-yaml")],
-        spec.to_yaml(),
-    )
+    ([("Content-Type", "application/x-yaml")], spec.to_yaml())
 }
 
 async fn handle_create_plan(
@@ -44,15 +39,15 @@ async fn handle_create_plan(
 ) -> axum::Json<ExecutionPlan> {
     let plan = state.planner.plan(&request);
     let validation = state.planner.validate_plan(&plan);
-    
+
     if !validation.valid {
         tracing::warn!("Plan validation failed: {:?}", validation.errors);
     }
-    
+
     if !validation.warnings.is_empty() {
         tracing::info!("Plan warnings: {:?}", validation.warnings);
     }
-    
+
     axum::Json(plan)
 }
 
@@ -60,7 +55,7 @@ pub async fn create_mcp_router(registry: ToolRegistry, api_key: Option<String>) 
     let server = Arc::new(McpServer::new(registry.clone(), api_key));
     let planner = ChainPlanner::new(registry.clone());
     let openapi_generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
-    
+
     let app_state = Arc::new(AppState {
         mcp_server: server,
         planner,
@@ -96,21 +91,21 @@ async fn handle_sse_stream(
     Path(request_id): Path<String>,
 ) -> Sse<impl Stream<Item = Result<SseEvent, axum::Error>>> {
     let receiver = state.mcp_server.subscribe_to_stream();
-    
+
     let state = Arc::new(tokio::sync::Mutex::new(SseStreamState {
         receiver,
         request_id: request_id.clone(),
     }));
-    
+
     let stream = stream! {
         let mut tick_interval = tokio::time::interval(Duration::from_secs(30));
-        
+
         loop {
             let event = {
                 let mut s = state.lock().await;
                 s.receiver.recv().await
             };
-            
+
             match event {
                 Ok(event) => {
                     let current_request_id = {
@@ -147,8 +142,7 @@ async fn handle_sse_stream(
     };
 
     Sse::new(stream)
-        .keep_alive(axum::response::sse::KeepAlive::new()
-            .interval(Duration::from_secs(15)))
+        .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(15)))
 }
 
 async fn handle_mcp(

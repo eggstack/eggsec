@@ -10,9 +10,9 @@ pub mod misc;
 pub mod packet;
 pub mod plan;
 pub mod scan;
+pub mod storage;
 pub mod stress;
 pub mod vuln;
-pub mod storage;
 
 pub use ci::*;
 pub use cluster::*;
@@ -22,8 +22,8 @@ pub use misc::*;
 pub use packet::*;
 pub use plan::*;
 pub use scan::*;
-pub use vuln::*;
 pub use storage::*;
+pub use vuln::*;
 
 #[cfg(feature = "stress-testing")]
 pub use stress::*;

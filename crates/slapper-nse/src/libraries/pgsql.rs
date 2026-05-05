@@ -34,18 +34,16 @@ pub fn register_pgsql_library(lua: &Lua) -> LuaResult<()> {
                         result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                         return Ok(result);
                     }
-                    };
-                    let mut stream = match TcpStream::connect_timeout(
-                        &socket_addr,
-                        Duration::from_secs(10),
-                    ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
                 };
+                let mut stream =
+                    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            result.set("status", "error")?;
+                            result.set("error", e.to_string())?;
+                            return Ok(result);
+                        }
+                    };
 
                 let startup_msg = format!(
                     "user={}\0database={}\0application_name=lua\0",
@@ -83,15 +81,16 @@ pub fn register_pgsql_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             let mut query_packet = vec![b'Q'];
             let len = (sql.len() as u32 + 4).to_be_bytes();
@@ -130,18 +129,16 @@ pub fn register_pgsql_library(lua: &Lua) -> LuaResult<()> {
                         result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                         return Ok(result);
                     }
-                    };
-                    let mut stream = match TcpStream::connect_timeout(
-                        &socket_addr,
-                        Duration::from_secs(10),
-                    ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
                 };
+                let mut stream =
+                    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            result.set("status", "error")?;
+                            result.set("error", e.to_string())?;
+                            return Ok(result);
+                        }
+                    };
 
                 let exec_msg = format!("EXECUTE {} 1", stmt);
                 let mut query_packet = vec![b'Q'];
@@ -179,15 +176,16 @@ pub fn register_pgsql_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             let query_packet = vec![b'Q', 0, 0, 0, 13, b'l', b'i', b's', b't', b'd', b'b', 0];
             stream.write_all(&query_packet).ok();

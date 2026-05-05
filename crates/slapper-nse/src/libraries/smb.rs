@@ -5,9 +5,9 @@
 //! session establishment, and file operations.
 
 use mlua::{Lua, Result as LuaResult, Table};
-use std::sync::LazyLock;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -840,11 +840,11 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
                 // Attempt basic SMB connection to verify share is accessible
                 let addr = format!("{}:{}", host, port);
                 match std::net::TcpStream::connect_timeout(
-                    &addr
-                        .parse::<std::net::SocketAddr>()
-                        .unwrap_or_else(|_| {
+                    &addr.parse::<std::net::SocketAddr>().unwrap_or_else(|_| {
                         let addr_str = format!("{}:{}", host, 445);
-                        addr_str.parse().unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 445)))
+                        addr_str
+                            .parse()
+                            .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 445)))
                     }),
                     std::time::Duration::from_secs(5),
                 ) {
@@ -881,11 +881,11 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
             } else {
                 let addr = format!("{}:{}", host, port);
                 match std::net::TcpStream::connect_timeout(
-                    &addr
-                        .parse::<std::net::SocketAddr>()
-                        .unwrap_or_else(|_| {
+                    &addr.parse::<std::net::SocketAddr>().unwrap_or_else(|_| {
                         let addr_str = format!("{}:{}", host, 445);
-                        addr_str.parse().unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 445)))
+                        addr_str
+                            .parse()
+                            .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 445)))
                     }),
                     std::time::Duration::from_secs(5),
                 ) {
@@ -927,11 +927,11 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
                 // Try to connect and get info
                 let addr = format!("{}:{}", host, port);
                 match std::net::TcpStream::connect_timeout(
-                    &addr
-                        .parse::<std::net::SocketAddr>()
-                        .unwrap_or_else(|_| {
+                    &addr.parse::<std::net::SocketAddr>().unwrap_or_else(|_| {
                         let addr_str = format!("{}:{}", host, 445);
-                        addr_str.parse().unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 445)))
+                        addr_str
+                            .parse()
+                            .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 445)))
                     }),
                     std::time::Duration::from_secs(5),
                 ) {

@@ -1,6 +1,8 @@
-use crate::tc;
 use crate::recon::FullReconResult;
-use crate::tui::components::{empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tc;
+use crate::tui::components::{
+    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -332,7 +334,10 @@ impl TabRender for ReconTab {
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(input_height), Constraint::Min(results_min)])
+            .constraints([
+                Constraint::Length(input_height),
+                Constraint::Min(results_min),
+            ])
             .split(area);
 
         let input_area = chunks[0];
@@ -421,7 +426,9 @@ impl TabInput for ReconTab {
             }
             ReconFocusArea::Options => {
                 // Clear checkbox focus when leaving Options
-                self.option_checkboxes.iter_mut().for_each(|cb| cb.focused = false);
+                self.option_checkboxes
+                    .iter_mut()
+                    .for_each(|cb| cb.focused = false);
                 ReconFocusArea::Results
             }
             ReconFocusArea::Results => {
@@ -462,6 +469,59 @@ impl TabInput for ReconTab {
         if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
             self.inputs.backspace();
         }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == ReconFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else if self.focus_area == ReconFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else {
+            None
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == ReconFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == ReconFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == ReconFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == ReconFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == ReconFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == ReconFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = ReconFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = ReconFocusArea::Results;
     }
 
     fn handle_enter(&mut self) {
@@ -575,11 +635,12 @@ impl TabInput for ReconTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.focus_area == ReconFocusArea::Inputs {
-            let cursor_pos = self.inputs.fields[0].cursor_pos;
-            cursor_pos == 0
+            self.inputs.is_at_left_edge()
         } else if self.focus_area == ReconFocusArea::Options {
             let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
             focused_idx == Some(0)
+        } else if self.focus_area == ReconFocusArea::Results {
+            self.results_view.is_at_left_edge()
         } else {
             true
         }
@@ -587,11 +648,12 @@ impl TabInput for ReconTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == ReconFocusArea::Inputs {
-            let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.len()
+            self.inputs.is_at_right_edge()
         } else if self.focus_area == ReconFocusArea::Options {
             let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
             focused_idx == Some(self.option_checkboxes.len() - 1)
+        } else if self.focus_area == ReconFocusArea::Results {
+            self.results_view.is_at_right_edge()
         } else {
             true
         }
@@ -617,19 +679,22 @@ mod tests {
         tab.focus_area = ReconFocusArea::Inputs;
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, ReconFocusArea::Options);
-        
+
         // Set a checkbox as focused
         if let Some(cb) = tab.option_checkboxes.get_mut(0) {
             cb.focused = true;
         }
-        
+
         // Move to Results - should clear checkbox focus
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, ReconFocusArea::Results);
-        
+
         // Verify checkboxes are cleared
         for cb in &tab.option_checkboxes {
-            assert!(!cb.focused, "Checkbox focus should be cleared when leaving Options");
+            assert!(
+                !cb.focused,
+                "Checkbox focus should be cleared when leaving Options"
+            );
         }
     }
 
@@ -640,11 +705,14 @@ mod tests {
         tab.focus_area = ReconFocusArea::Inputs;
         tab.inputs.focus(0);
         assert!(tab.inputs.is_focused());
-        
+
         // Move to Results - should blur inputs
         tab.handle_focus_prev();
         assert_eq!(tab.focus_area, ReconFocusArea::Results);
-        assert!(!tab.inputs.is_focused(), "Inputs should be blurred when leaving Inputs");
+        assert!(
+            !tab.inputs.is_focused(),
+            "Inputs should be blurred when leaving Inputs"
+        );
     }
 
     #[test]
@@ -652,14 +720,18 @@ mod tests {
         let mut tab = create_test_tab();
         // Follow the focus cycle
         assert_eq!(tab.focus_area, ReconFocusArea::Inputs);
-        
+
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, ReconFocusArea::Options);
-        
+
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, ReconFocusArea::Results);
-        
+
         tab.handle_focus_next();
-        assert_eq!(tab.focus_area, ReconFocusArea::Inputs, "Should cycle back to Inputs");
+        assert_eq!(
+            tab.focus_area,
+            ReconFocusArea::Inputs,
+            "Should cycle back to Inputs"
+        );
     }
 }

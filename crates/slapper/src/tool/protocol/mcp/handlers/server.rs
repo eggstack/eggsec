@@ -8,18 +8,22 @@ use tokio::time::{Duration, Interval};
 use crate::config::Scope;
 
 use crate::tool::{
-    CancellationToken, ExecutionHistory, RateLimitConfig, RateLimiter, RequestOptions, SessionManager, Target, ToolDispatcher, 
-    ToolRegistry, ToolRequest, ToolResponse,
+    CancellationToken, ExecutionHistory, RateLimitConfig, RateLimiter, RequestOptions,
+    SessionManager, Target, ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse,
 };
 
 #[cfg(feature = "ai-integration")]
 use crate::ai::AiClient;
 
 use crate::tool::protocol::mcp::auth::{validate_auth, validate_auth_params};
+use crate::tool::protocol::mcp::handlers::helpers::{
+    build_capabilities_summary, build_input_schema,
+};
 use crate::tool::protocol::mcp::prompts::get_builtin_prompts;
-use crate::tool::protocol::mcp::types::{McpError, McpRequest, McpResource, McpResponse, McpRoot, McpTool};
 use crate::tool::protocol::mcp::streaming::StreamEvent;
-use crate::tool::protocol::mcp::handlers::helpers::{build_capabilities_summary, build_input_schema};
+use crate::tool::protocol::mcp::types::{
+    McpError, McpRequest, McpResource, McpResponse, McpRoot, McpTool,
+};
 
 #[derive(Clone)]
 pub struct McpServer {
@@ -43,7 +47,11 @@ impl McpServer {
         Self::with_scope(registry, api_key, None)
     }
 
-    pub fn with_scope(registry: ToolRegistry, api_key: Option<String>, scope: Option<Scope>) -> Self {
+    pub fn with_scope(
+        registry: ToolRegistry,
+        api_key: Option<String>,
+        scope: Option<Scope>,
+    ) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
         let (stream_events, _) = tokio::sync::broadcast::channel(1000);
 
@@ -72,11 +80,13 @@ impl McpServer {
     }
 
     pub fn request_shutdown(&self) {
-        self.shutdown_requested.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.shutdown_requested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn is_shutdown_requested(&self) -> bool {
-        self.shutdown_requested.load(std::sync::atomic::Ordering::SeqCst)
+        self.shutdown_requested
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     pub fn with_session_manager(mut self, session_manager: SessionManager) -> Self {
@@ -143,17 +153,15 @@ impl McpServer {
 
         tokio::spawn(async move {
             let mut interval: Interval = tokio::time::interval(Duration::from_secs(interval_secs));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 const ENTRY_TTL_SECS: i64 = 300;
 
                 {
                     let mut pending = pending_cancellations.write().await;
-                    pending.retain(|_, token| {
-                        !token.is_cancelled()
-                    });
+                    pending.retain(|_, token| !token.is_cancelled());
                 }
 
                 let mut to_remove: Vec<String> = Vec::new();
@@ -292,20 +300,20 @@ impl McpServer {
     async fn handle_tools_list_by_category(&self, req: McpRequest) -> McpResponse {
         let tools = self.registry.list();
         let total_tools = tools.len();
-        
+
         let mut categorized: HashMap<String, Vec<McpTool>> = HashMap::new();
-        
+
         for info in tools {
             let input_schema = build_input_schema(&info);
             let capabilities = build_capabilities_summary(&info);
-            
+
             let mcp_tool = McpTool {
                 name: info.id,
                 description: info.description,
                 input_schema,
                 capabilities: Some(capabilities),
             };
-            
+
             let category = format!("{:?}", info.category).to_lowercase();
             categorized.entry(category).or_default().push(mcp_tool);
         }
@@ -324,8 +332,11 @@ impl McpServer {
             None => return req.error_response(McpError::invalid_params("Missing params")),
         };
 
-        let client_id = params.get("api_key").and_then(|v| v.as_str()).unwrap_or("anonymous");
-        
+        let client_id = params
+            .get("api_key")
+            .and_then(|v| v.as_str())
+            .unwrap_or("anonymous");
+
         if let Err(e) = self.rate_limiter.check_rate_limit(client_id) {
             return req.error_response(McpError::rate_limited(&e.to_string()));
         }
@@ -445,7 +456,8 @@ impl McpServer {
             McpResource {
                 uri: "slapper://manifest".to_string(),
                 name: "Tool Manifest".to_string(),
-                description: "Complete manifest of all tools, capabilities, and attack surfaces".to_string(),
+                description: "Complete manifest of all tools, capabilities, and attack surfaces"
+                    .to_string(),
                 mime_type: Some("application/json".to_string()),
             },
             McpResource {
@@ -520,12 +532,12 @@ impl McpServer {
 
     async fn handle_prompts_list(&self, req: McpRequest) -> McpResponse {
         let prompts = get_builtin_prompts();
-        
+
         let result = serde_json::json!({
             "prompts": prompts,
             "count": prompts.len()
         });
-        
+
         req.success_response(result)
     }
 
@@ -534,29 +546,32 @@ impl McpServer {
             Some(p) => p,
             None => return req.error_response(McpError::invalid_params("Missing params")),
         };
-        
+
         let name = match params.get("name").and_then(|v| v.as_str()) {
             Some(name) => name,
             None => return req.error_response(McpError::invalid_params("Missing prompt name")),
         };
-        
+
         let prompts = get_builtin_prompts();
-        
+
         if let Some(prompt) = prompts.into_iter().find(|p| p.name == name) {
             let result = serde_json::json!({
                 "prompt": prompt
             });
             req.success_response(result)
         } else {
-            req.error_response(McpError::invalid_params(&format!("Unknown prompt: {}", name)))
+            req.error_response(McpError::invalid_params(&format!(
+                "Unknown prompt: {}",
+                name
+            )))
         }
     }
 
     fn build_manifest(&self) -> serde_json::Value {
         let tools = self.registry.list();
-        
+
         let mut attack_surfaces: HashMap<String, Vec<String>> = HashMap::new();
-        
+
         for tool in &tools {
             for cap in &tool.capabilities {
                 for surface in &cap.attack_surface {
@@ -568,7 +583,7 @@ impl McpServer {
                 }
             }
         }
-        
+
         serde_json::json!({
             "tools": tools,
             "attack_surfaces": attack_surfaces
@@ -595,7 +610,7 @@ impl McpServer {
             "status": "ok",
             "timestamp": Utc::now().to_rfc3339()
         });
-        
+
         req.success_response(result)
     }
 
@@ -610,7 +625,12 @@ impl McpServer {
             None => return req.error_response(McpError::invalid_params("Missing request_id")),
         };
 
-        if self.pending_cancellations.write().await.contains_key(request_id) {
+        if self
+            .pending_cancellations
+            .write()
+            .await
+            .contains_key(request_id)
+        {
             let result = serde_json::json!({
                 "cancelled": false,
                 "request_id": request_id,
@@ -620,7 +640,10 @@ impl McpServer {
         }
 
         let token = CancellationToken::new();
-        self.pending_cancellations.write().await.insert(request_id.to_string(), token);
+        self.pending_cancellations
+            .write()
+            .await
+            .insert(request_id.to_string(), token);
 
         let result = serde_json::json!({
             "request_id": request_id,
@@ -731,9 +754,9 @@ impl McpServer {
                     if let Some(t) = target {
                         session.context.target = Some(t);
                     }
-                    
+
                     let _ = manager.update_session(&session).await;
-                    
+
                     let result = serde_json::json!({
                         "session_id": session.session_id,
                         "created_at": session.created_at.to_rfc3339(),
@@ -742,7 +765,7 @@ impl McpServer {
                         "scopes": session.context.stages_completed.len(),
                         "findings_count": session.findings.len()
                     });
-                    
+
                     return req.success_response(result);
                 }
                 Err(e) => {
@@ -750,9 +773,9 @@ impl McpServer {
                 }
             }
         }
-        
+
         let session_id = uuid::Uuid::new_v4().to_string();
-        
+
         let session = serde_json::json!({
             "session_id": session_id,
             "created_at": Utc::now().to_rfc3339(),
@@ -821,12 +844,8 @@ impl McpServer {
     async fn handle_session_list(&self, req: McpRequest) -> McpResponse {
         let (offset, limit) = match &req.params {
             Some(p) => {
-                let offset = p.get("offset")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as usize;
-                let limit = p.get("limit")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(50) as usize;
+                let offset = p.get("offset").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                let limit = p.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
                 (offset, limit.clamp(1, 100))
             }
             None => (0, 50),
@@ -835,7 +854,7 @@ impl McpServer {
         if let Some(ref manager) = self.session_manager {
             let all_sessions = manager.list_sessions().await;
             let total = all_sessions.len();
-            
+
             let paginated_sessions: Vec<serde_json::Value> = all_sessions
                 .iter()
                 .skip(offset)
@@ -851,14 +870,14 @@ impl McpServer {
                     })
                 })
                 .collect();
-            
+
             let result = serde_json::json!({
                 "sessions": paginated_sessions,
                 "total": total,
                 "offset": offset,
                 "limit": limit
             });
-            
+
             return req.success_response(result);
         }
 
@@ -880,7 +899,7 @@ impl McpServer {
             .unwrap_or("anonymous");
 
         let status = self.rate_limiter.get_status(client_id);
-        
+
         let result = serde_json::json!({
             "client_id": client_id,
             "tokens_available": status.tokens_available,

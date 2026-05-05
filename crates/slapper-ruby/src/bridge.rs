@@ -92,7 +92,12 @@ impl RubyPluginClient {
             .map_err(|_| anyhow!("Ruby VM thread did not respond"))?
     }
 
-    pub fn run_plugin(&self, plugin: &RubyPlugin, target: &str, timeout_secs: u64) -> Result<RubyPluginResult> {
+    pub fn run_plugin(
+        &self,
+        plugin: &RubyPlugin,
+        target: &str,
+        timeout_secs: u64,
+    ) -> Result<RubyPluginResult> {
         let (tx, rx) = mpsc::channel();
         self.tx
             .send(RubyRequest::RunPlugin {
@@ -104,10 +109,7 @@ impl RubyPluginClient {
         match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
             Ok(result) => result,
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                anyhow::bail!(
-                    "Plugin execution timed out after {} seconds",
-                    timeout_secs
-                )
+                anyhow::bail!("Plugin execution timed out after {} seconds", timeout_secs)
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 anyhow::bail!("Ruby VM thread has shut down")

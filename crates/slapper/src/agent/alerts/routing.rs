@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -8,8 +8,8 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
 use crate::agent::channels::{
-    Alert, AlertChannel, AggregatedAlert, EmailChannel, EscalationLevel,
-    PagerDutyChannel, ReportSummary, ScanReport, WebhookConfig,
+    AggregatedAlert, Alert, AlertChannel, EmailChannel, EscalationLevel, PagerDutyChannel,
+    ReportSummary, ScanReport, WebhookConfig,
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -35,7 +35,10 @@ impl ChannelRegistry {
     }
 
     pub fn get_all(&self) -> Vec<(String, AlertChannel)> {
-        self.channels.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        self.channels
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     pub fn contains(&self, name: &str) -> bool {
@@ -123,16 +126,25 @@ impl AlertRouter {
         let channels_to_send: Vec<AlertChannel> = if let Some(names) = channel_names {
             // Filter channels by name from registry
             let registry = self.registry.lock();
-            names.iter()
+            names
+                .iter()
                 .filter_map(|name| registry.get(name).cloned())
                 .collect()
         } else {
             // Send to all registered channels
-            self.registry.lock().get_all().into_iter().map(|(_, c)| c).collect()
+            self.registry
+                .lock()
+                .get_all()
+                .into_iter()
+                .map(|(_, c)| c)
+                .collect()
         };
 
         if channels_to_send.is_empty() {
-            tracing::debug!("No channels to send alert to (channel_names: {:?})", channel_names);
+            tracing::debug!(
+                "No channels to send alert to (channel_names: {:?})",
+                channel_names
+            );
             return Ok(());
         }
 
@@ -171,10 +183,10 @@ impl AlertRouter {
     }
 
     async fn send_email(&self, config: &EmailChannel, alert: &Alert) -> Result<()> {
+        use lettre::message::Mailbox;
         use lettre::transport::smtp::SmtpTransport;
         use lettre::transport::Transport;
         use lettre::Message;
-        use lettre::message::Mailbox;
 
         let mailer = SmtpTransport::relay(&config.smtp_host)?
             .port(config.smtp_port)
@@ -201,10 +213,7 @@ impl AlertRouter {
 
         let email = email_builder.body(body)?;
 
-        tokio::task::spawn_blocking(move || {
-            mailer.send(&email)
-        })
-        .await??;
+        tokio::task::spawn_blocking(move || mailer.send(&email)).await??;
 
         tracing::info!(
             "Email alert sent via {}:{} from {} to {:?}",
@@ -251,11 +260,7 @@ impl AlertRouter {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            tracing::warn!(
-                "Webhook failed with status: {}, body: {}",
-                status,
-                body
-            );
+            tracing::warn!("Webhook failed with status: {}, body: {}", status, body);
             return Err(anyhow::anyhow!("Webhook failed with status: {}", status));
         }
 
@@ -287,7 +292,8 @@ impl AlertRouter {
             }
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post("https://events.pagerduty.com/v2/enqueue")
             .header("Content-Type", "application/json")
             .json(&payload)
@@ -302,15 +308,18 @@ impl AlertRouter {
                 status,
                 body
             );
-            return Err(anyhow::anyhow!("PagerDuty API failed with status: {}", status));
+            return Err(anyhow::anyhow!(
+                "PagerDuty API failed with status: {}",
+                status
+            ));
         }
 
         Ok(())
     }
 
     fn make_dedup_key(&self, alert: &Alert) -> String {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
         let mut sorted_ids = alert.finding_ids.clone();
         sorted_ids.sort();
@@ -334,26 +343,27 @@ impl AlertRouter {
     }
 
     pub async fn aggregate_findings(&self, alerts: &[Alert]) -> AggregatedAlert {
-        let mut severity_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut severity_counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         let mut all_finding_ids = Vec::new();
         let mut targets: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for alert in alerts {
-            *severity_counts.entry(alert.severity.as_str().to_string()).or_insert(0) += 1;
+            *severity_counts
+                .entry(alert.severity.as_str().to_string())
+                .or_insert(0) += 1;
             all_finding_ids.extend(alert.finding_ids.clone());
             targets.insert(alert.target.clone());
         }
 
         let max_severity = severity_counts
             .iter()
-            .max_by_key(|(sev, _)| {
-                match sev.as_str() {
-                    "critical" => 5,
-                    "high" => 4,
-                    "medium" => 3,
-                    "low" => 2,
-                    _ => 1,
-                }
+            .max_by_key(|(sev, _)| match sev.as_str() {
+                "critical" => 5,
+                "high" => 4,
+                "medium" => 3,
+                "low" => 2,
+                _ => 1,
             })
             .map(|(sev, _)| sev.clone())
             .unwrap_or_else(|| "info".to_string());
@@ -374,11 +384,26 @@ impl AlertRouter {
         alerts: &[Alert],
         findings: &[crate::tool::response::Finding],
     ) -> ScanReport {
-        let critical_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::Critical).count();
-        let high_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::High).count();
-        let medium_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::Medium).count();
-        let low_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::Low).count();
-        let info_count = alerts.iter().filter(|a| a.severity == crate::types::Severity::Info).count();
+        let critical_count = alerts
+            .iter()
+            .filter(|a| a.severity == crate::types::Severity::Critical)
+            .count();
+        let high_count = alerts
+            .iter()
+            .filter(|a| a.severity == crate::types::Severity::High)
+            .count();
+        let medium_count = alerts
+            .iter()
+            .filter(|a| a.severity == crate::types::Severity::Medium)
+            .count();
+        let low_count = alerts
+            .iter()
+            .filter(|a| a.severity == crate::types::Severity::Low)
+            .count();
+        let info_count = alerts
+            .iter()
+            .filter(|a| a.severity == crate::types::Severity::Info)
+            .count();
 
         ScanReport {
             id: uuid::Uuid::new_v4().to_string(),
@@ -391,7 +416,10 @@ impl AlertRouter {
                 medium_count,
                 low_count,
                 info_count,
-                risk_score: (critical_count * 10 + high_count * 7 + medium_count * 4 + low_count * 1) as f64,
+                risk_score: (critical_count * 10
+                    + high_count * 7
+                    + medium_count * 4
+                    + low_count * 1) as f64,
             },
             findings: findings.to_vec(),
             alerts: alerts.to_vec(),
@@ -411,20 +439,26 @@ impl AlertRouter {
             recommendations.push("Implement parameterized queries or use an ORM".to_string());
         }
         if vuln_types.contains("Xss") {
-            recommendations.push("Implement Content Security Policy and output encoding".to_string());
+            recommendations
+                .push("Implement Content Security Policy and output encoding".to_string());
         }
         if vuln_types.contains("Ssrf") {
             recommendations.push("Validate and sanitize all user-supplied URLs".to_string());
         }
 
         if recommendations.is_empty() {
-            recommendations.push("Continue regular security scanning and patch management".to_string());
+            recommendations
+                .push("Continue regular security scanning and patch management".to_string());
         }
 
         recommendations
     }
 
-    pub async fn escalate_alert(&self, alert: &Alert, escalation_level: EscalationLevel) -> Result<()> {
+    pub async fn escalate_alert(
+        &self,
+        alert: &Alert,
+        escalation_level: EscalationLevel,
+    ) -> Result<()> {
         match escalation_level {
             EscalationLevel::Warning => {
                 tracing::warn!("Alert escalated to Warning: {}", alert.title);

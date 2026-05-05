@@ -1,3 +1,4 @@
+use crate::tc;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -5,7 +6,6 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
-use crate::tc;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
@@ -18,8 +18,7 @@ pub enum PopupKind {
     Destructive,
 }
 
-impl PopupKind {
-}
+impl PopupKind {}
 
 pub struct Popup {
     pub title: String,

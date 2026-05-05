@@ -1,6 +1,6 @@
 use serde::Serialize;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Model {
@@ -63,7 +63,9 @@ fn slapper_models() -> Vec<Model> {
 }
 
 pub async fn list_models(
-    axum::extract::State(_state): axum::extract::State<Arc<crate::tool::protocol::openai::OpenAiState>>,
+    axum::extract::State(_state): axum::extract::State<
+        Arc<crate::tool::protocol::openai::OpenAiState>,
+    >,
 ) -> axum::Json<ModelList> {
     axum::Json(ModelList {
         object: "list".to_string(),
@@ -72,7 +74,9 @@ pub async fn list_models(
 }
 
 pub async fn get_model(
-    axum::extract::State(_state): axum::extract::State<Arc<crate::tool::protocol::openai::OpenAiState>>,
+    axum::extract::State(_state): axum::extract::State<
+        Arc<crate::tool::protocol::openai::OpenAiState>,
+    >,
     axum::extract::Path(model_id): axum::extract::Path<String>,
 ) -> Result<impl axum::response::IntoResponse, impl axum::response::IntoResponse> {
     let models = slapper_models();

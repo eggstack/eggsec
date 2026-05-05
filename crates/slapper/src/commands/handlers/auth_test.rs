@@ -1,9 +1,12 @@
 use crate::auth::{AuthEngine, AuthFinding, AuthTestReport, AuthTestType, AUTH_BANNER};
 use crate::cli::AuthTestArgs;
-use anyhow::Result;
 use crate::types::Severity;
+use anyhow::Result;
 
-pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: AuthTestArgs) -> Result<()> {
+pub async fn handle_auth_test(
+    _ctx: &crate::commands::CommandContext,
+    args: AuthTestArgs,
+) -> Result<()> {
     eprintln!("{}", AUTH_BANNER);
 
     let engine = AuthEngine::new(args.max_attempts, args.concurrency, args.timeout)?;
@@ -36,19 +39,30 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
                     test_type: AuthTestType::RateLimitBypass,
                     severity: Severity::Medium,
                     title: "Rate limiting detected".to_string(),
-                    description: format!("Rate limit enforced after {} requests", result.requests_until_limited),
-                    recommendation: "Ensure rate limiting is properly configured with appropriate thresholds".to_string(),
+                    description: format!(
+                        "Rate limit enforced after {} requests",
+                        result.requests_until_limited
+                    ),
+                    recommendation:
+                        "Ensure rate limiting is properly configured with appropriate thresholds"
+                            .to_string(),
                 });
             }
             if !result.bypass_techniques.is_empty() {
-                let bypassed: Vec<_> = result.bypass_techniques.iter().filter(|b| b.successful).collect();
+                let bypassed: Vec<_> = result
+                    .bypass_techniques
+                    .iter()
+                    .filter(|b| b.successful)
+                    .collect();
                 if !bypassed.is_empty() {
                     report.findings.push(AuthFinding {
                         test_type: AuthTestType::RateLimitBypass,
                         severity: Severity::High,
                         title: "Rate limit bypass possible".to_string(),
                         description: format!("{} bypass technique(s) successful", bypassed.len()),
-                        recommendation: "Implement IP-based rate limiting that cannot be bypassed via headers".to_string(),
+                        recommendation:
+                            "Implement IP-based rate limiting that cannot be bypassed via headers"
+                                .to_string(),
                     });
                 }
             }
@@ -69,7 +83,8 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
                     severity: Severity::Medium,
                     title: "Timing attack vulnerability detected".to_string(),
                     description: result.analysis.clone(),
-                    recommendation: "Use constant-time string comparison for credential validation".to_string(),
+                    recommendation: "Use constant-time string comparison for credential validation"
+                        .to_string(),
                 });
             }
             report.timing = Some(result);
@@ -99,7 +114,8 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
                         severity: Severity::Medium,
                         title: "Session cookie issue".to_string(),
                         description: issue.clone(),
-                        recommendation: "Set HttpOnly and Secure flags on all session cookies".to_string(),
+                        recommendation: "Set HttpOnly and Secure flags on all session cookies"
+                            .to_string(),
                     });
                 }
             }
@@ -120,7 +136,8 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
                     severity: Severity::Critical,
                     title: "MFA bypass possible".to_string(),
                     description: format!("{} bypass method(s) found", result.bypass_methods.len()),
-                    recommendation: "Implement proper MFA validation and prevent skip parameters".to_string(),
+                    recommendation: "Implement proper MFA validation and prevent skip parameters"
+                        .to_string(),
                 });
             }
             report.mfa = Some(result);
@@ -131,18 +148,30 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
         if let Some(ref username) = args.username {
             report.tests_run.push(AuthTestType::BruteForce);
             if args.verbose {
-                eprintln!("[*] Testing brute force resistance for user '{}'...", username);
+                eprintln!(
+                    "[*] Testing brute force resistance for user '{}'...",
+                    username
+                );
             }
             let passwords = load_passwords(&args.wordlist)?;
-            let bf_tester = crate::auth::BruteForceTester::new(args.max_attempts, args.concurrency, args.timeout)?;
+            let bf_tester = crate::auth::BruteForceTester::new(
+                args.max_attempts,
+                args.concurrency,
+                args.timeout,
+            )?;
             if let Ok(result) = bf_tester.test(&args.target, username, &passwords).await {
                 if result.successful_logins > 0 {
                     report.findings.push(AuthFinding {
                         test_type: AuthTestType::BruteForce,
                         severity: Severity::Critical,
                         title: "Weak credentials found".to_string(),
-                        description: format!("{} weak password(s) discovered for user '{}'", result.successful_logins, username),
-                        recommendation: "Enforce strong password policy and implement account lockout".to_string(),
+                        description: format!(
+                            "{} weak password(s) discovered for user '{}'",
+                            result.successful_logins, username
+                        ),
+                        recommendation:
+                            "Enforce strong password policy and implement account lockout"
+                                .to_string(),
                     });
                 }
                 report.brute_force = Some(result);
@@ -156,7 +185,11 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
             if args.verbose {
                 eprintln!("[*] Testing credential stuffing...");
             }
-            let stuffer = crate::auth::CredentialStuffer::new(args.max_attempts, args.concurrency, args.timeout)?;
+            let stuffer = crate::auth::CredentialStuffer::new(
+                args.max_attempts,
+                args.concurrency,
+                args.timeout,
+            )?;
             let credentials = stuffer.load_breach_list(cred_file)?;
             if let Ok(result) = stuffer.test(&args.target, &credentials).await {
                 if result.successful_logins > 0 {
@@ -164,8 +197,12 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
                         test_type: AuthTestType::CredentialStuffing,
                         severity: Severity::Critical,
                         title: "Compromised accounts found".to_string(),
-                        description: format!("{} compromised account(s) discovered", result.successful_logins),
-                        recommendation: "Implement credential stuffing detection and MFA".to_string(),
+                        description: format!(
+                            "{} compromised account(s) discovered",
+                            result.successful_logins
+                        ),
+                        recommendation: "Implement credential stuffing detection and MFA"
+                            .to_string(),
                     });
                 }
                 report.credential_stuffing = Some(result);
@@ -180,14 +217,22 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
                 eprintln!("[*] Testing account lockout...");
             }
             let detector = crate::auth::LockoutDetector::new(args.timeout)?;
-            if let Ok(result) = detector.detect(&args.target, username, args.max_attempts.min(20)).await {
+            if let Ok(result) = detector
+                .detect(&args.target, username, args.max_attempts.min(20))
+                .await
+            {
                 if result.lockout_type != crate::auth::lockout::LockoutType::None {
                     report.findings.push(AuthFinding {
                         test_type: AuthTestType::AccountLockout,
                         severity: Severity::Info,
                         title: "Account lockout detected".to_string(),
-                        description: format!("Lockout after {} attempts", result.attempts_before_lockout),
-                        recommendation: "Ensure lockout duration is appropriate and does not enable DoS".to_string(),
+                        description: format!(
+                            "Lockout after {} attempts",
+                            result.attempts_before_lockout
+                        ),
+                        recommendation:
+                            "Ensure lockout duration is appropriate and does not enable DoS"
+                                .to_string(),
                     });
                 } else {
                     report.findings.push(AuthFinding {
@@ -195,7 +240,8 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
                         severity: Severity::High,
                         title: "No account lockout".to_string(),
                         description: "No account lockout mechanism detected".to_string(),
-                        recommendation: "Implement account lockout after repeated failed attempts".to_string(),
+                        recommendation: "Implement account lockout after repeated failed attempts"
+                            .to_string(),
                     });
                 }
                 report.lockout_detection = Some(result);
@@ -203,7 +249,9 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
         }
     }
 
-    report.total_attempts = engine.attempt_counter.load(std::sync::atomic::Ordering::SeqCst);
+    report.total_attempts = engine
+        .attempt_counter
+        .load(std::sync::atomic::Ordering::SeqCst);
 
     let output = if args.json {
         serde_json::to_string_pretty(&report)?
@@ -224,7 +272,11 @@ pub async fn handle_auth_test(_ctx: &crate::commands::CommandContext, args: Auth
 fn load_passwords(wordlist_path: &Option<String>) -> Result<Vec<String>> {
     if let Some(path) = wordlist_path {
         let content = std::fs::read_to_string(path)?;
-        Ok(content.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+        Ok(content
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect())
     } else {
         Ok(vec![
             "password".to_string(),

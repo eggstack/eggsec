@@ -343,7 +343,11 @@ mod tests {
     #[test]
     fn test_grpc_payloads_count() {
         let payloads = get_payloads();
-        assert!(payloads.len() >= 2, "Expected at least 2 gRPC payloads, got {}", payloads.len());
+        assert!(
+            payloads.len() >= 2,
+            "Expected at least 2 gRPC payloads, got {}",
+            payloads.len()
+        );
     }
 
     #[test]
@@ -373,14 +377,20 @@ mod tests {
 
     #[test]
     fn test_grpc_fuzzer_with_metadata() {
-        let fuzzer = GrpcFuzzer::new("http://localhost:50051".to_string())
-            .with_metadata("auth", "token123");
+        let fuzzer =
+            GrpcFuzzer::new("http://localhost:50051".to_string()).with_metadata("auth", "token123");
         assert_eq!(fuzzer.metadata.get("auth"), Some(&"token123".to_string()));
     }
 
     #[test]
     fn test_grpc_vulnerability_display() {
-        assert_eq!(GrpcVulnerability::ReflectionEnabled.to_string(), "gRPC Reflection Enabled");
-        assert_eq!(GrpcVulnerability::AuthBypass.to_string(), "Authentication Bypass");
+        assert_eq!(
+            GrpcVulnerability::ReflectionEnabled.to_string(),
+            "gRPC Reflection Enabled"
+        );
+        assert_eq!(
+            GrpcVulnerability::AuthBypass.to_string(),
+            "Authentication Bypass"
+        );
     }
 }

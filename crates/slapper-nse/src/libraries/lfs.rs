@@ -243,31 +243,33 @@ pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()>
 
     // lfs.link(source, link, symbolic) - Create link
     let check_path_link = check_path.clone();
-    let link_fn = lua.create_function(move |_lua, (source, link, symbolic): (String, String, bool)| {
-        if !check_path_link(&source) || !check_path_link(&link) {
-            LFS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
-            return Err(mlua::Error::RuntimeError(
-                "Link creation blocked by sandbox".to_string(),
-            ));
-        }
-        if symbolic {
-            match std::os::unix::fs::symlink(&source, &link) {
-                Ok(()) => Ok(true),
-                Err(e) => Err(mlua::Error::RuntimeError(format!(
-                    "Failed to create symlink: {}",
-                    e
-                ))),
+    let link_fn = lua.create_function(
+        move |_lua, (source, link, symbolic): (String, String, bool)| {
+            if !check_path_link(&source) || !check_path_link(&link) {
+                LFS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
+                return Err(mlua::Error::RuntimeError(
+                    "Link creation blocked by sandbox".to_string(),
+                ));
             }
-        } else {
-            match fs::hard_link(&source, &link) {
-                Ok(()) => Ok(true),
-                Err(e) => Err(mlua::Error::RuntimeError(format!(
-                    "Failed to create hard link: {}",
-                    e
-                ))),
+            if symbolic {
+                match std::os::unix::fs::symlink(&source, &link) {
+                    Ok(()) => Ok(true),
+                    Err(e) => Err(mlua::Error::RuntimeError(format!(
+                        "Failed to create symlink: {}",
+                        e
+                    ))),
+                }
+            } else {
+                match fs::hard_link(&source, &link) {
+                    Ok(()) => Ok(true),
+                    Err(e) => Err(mlua::Error::RuntimeError(format!(
+                        "Failed to create hard link: {}",
+                        e
+                    ))),
+                }
             }
-        }
-    })?;
+        },
+    )?;
     lfs.set("link", link_fn)?;
 
     // lfs.currentdir() - Get current directory

@@ -75,11 +75,10 @@ mod tests {
     #[tokio::test]
     async fn test_compliance_report_generation() {
         let findings = vec![];
-        let report = generate_compliance_report(
-            "http://example.com",
-            ComplianceFramework::OWASP,
-            &findings,
-        ).await.unwrap();
+        let report =
+            generate_compliance_report("http://example.com", ComplianceFramework::OWASP, &findings)
+                .await
+                .unwrap();
         assert_eq!(report.framework, "OWASP Top 10");
     }
 }

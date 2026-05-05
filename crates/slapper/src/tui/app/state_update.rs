@@ -1,6 +1,6 @@
+use super::NotificationSeverity;
 use crate::tui::tabs::TabState;
 use crate::tui::workers::TaskResult;
-use super::NotificationSeverity;
 
 impl super::App {
     pub(super) fn update(&mut self) {
@@ -68,8 +68,8 @@ impl super::App {
     pub(super) fn handle_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::LoadTest(r) => {
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.add_load_test_result(
                         &r.target_url,
                         r.total_requests,
@@ -88,8 +88,8 @@ impl super::App {
                 } else {
                     0
                 };
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.add_load_test_result(
                         "stress-test",
                         stats.packets_sent,
@@ -102,8 +102,8 @@ impl super::App {
                 self.load.set_stress_results(target.clone(), stats);
             }
             TaskResult::PortScan(r) => {
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.add_port_scan_result(
                         &r.host,
                         r.ports_scanned as usize,
@@ -113,8 +113,8 @@ impl super::App {
                 self.scan_ports.set_results(r);
             }
             TaskResult::EndpointScan(r) => {
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.add_endpoint_scan_result(
                         &r.base_url,
                         r.endpoints_found,
@@ -124,8 +124,8 @@ impl super::App {
                 self.scan_endpoints.set_results(r);
             }
             TaskResult::Fingerprint(r) => {
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.add_fingerprint_result(
                         &r.host,
                         r.services_identified,
@@ -139,8 +139,8 @@ impl super::App {
             }
             TaskResult::WafDetection(r) => {
                 let waf_name = r.waf_name.clone().unwrap_or_default();
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.add_waf_result("<target>", r.waf_name.is_some(), &waf_name, 0);
                 }
                 self.waf.set_results(r);
@@ -151,8 +151,8 @@ impl super::App {
             } => {
                 let success_count = bypasses.iter().filter(|b| b.success).count();
                 let waf_name = detection.waf_name.clone().unwrap_or_default();
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.add_waf_result(
                         "<target>",
                         detection.waf_name.is_some(),
@@ -165,21 +165,16 @@ impl super::App {
             }
             TaskResult::WafStress(bypasses) => {
                 let success_count = bypasses.iter().filter(|b| b.success).count();
-                let mut h = self.history.lock(); {
-
-                    h.add_waf_result(
-                        "<target>",
-                        true,
-                        "WAF Stress",
-                        success_count,
-                    );
+                let mut h = self.history.lock();
+                {
+                    h.add_waf_result("<target>", true, "WAF Stress", success_count);
                 }
                 self.waf.set_bypass_results(bypasses);
             }
             TaskResult::Pipeline(r) => {
                 let completed = r.stage_results.iter().filter(|s| s.success).count();
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.add_pipeline_result(
                         &r.target,
                         completed,
@@ -193,8 +188,8 @@ impl super::App {
                 self.fuzz.set_results(session);
             }
             TaskResult::Recon(r) => {
-                let mut h = self.history.lock(); {
-
+                let mut h = self.history.lock();
+                {
                     h.add_recon_result(
                         &r.target,
                         r.domain.clone().unwrap_or_default(),
@@ -343,55 +338,82 @@ impl super::App {
             Tab::Nse => self.nse.set_error(msg),
             #[cfg(not(feature = "nse"))]
             Tab::Nse => {
-                self.set_notification(format!("NSE tab unavailable: {}", msg), NotificationSeverity::Error);
+                self.set_notification(
+                    format!("NSE tab unavailable: {}", msg),
+                    NotificationSeverity::Error,
+                );
             }
             #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
             Tab::Plugin => self.plugin.set_error(msg),
             #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
             Tab::Plugin => {
-                self.set_notification(format!("Plugin tab unavailable: {}", msg), NotificationSeverity::Error);
+                self.set_notification(
+                    format!("Plugin tab unavailable: {}", msg),
+                    NotificationSeverity::Error,
+                );
             }
             #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => self.hunt.set_error(msg),
             #[cfg(not(feature = "advanced-hunting"))]
             Tab::Hunt => {
-                self.set_notification(format!("Hunt feature not available: {}", msg), NotificationSeverity::Error);
+                self.set_notification(
+                    format!("Hunt feature not available: {}", msg),
+                    NotificationSeverity::Error,
+                );
             }
             #[cfg(feature = "headless-browser")]
             Tab::Browser => self.browser.set_error(msg),
             #[cfg(not(feature = "headless-browser"))]
             Tab::Browser => {
-                self.set_notification(format!("Browser feature not available: {}", msg), NotificationSeverity::Error);
+                self.set_notification(
+                    format!("Browser feature not available: {}", msg),
+                    NotificationSeverity::Error,
+                );
             }
             #[cfg(feature = "compliance")]
             Tab::Compliance => self.compliance.set_error(msg),
             #[cfg(not(feature = "compliance"))]
             Tab::Compliance => {
-                self.set_notification(format!("Compliance feature not available: {}", msg), NotificationSeverity::Error);
+                self.set_notification(
+                    format!("Compliance feature not available: {}", msg),
+                    NotificationSeverity::Error,
+                );
             }
             #[cfg(feature = "database")]
             Tab::Storage => self.storage.set_error(msg),
             #[cfg(not(feature = "database"))]
             Tab::Storage => {
-                self.set_notification(format!("Storage feature not available: {}", msg), NotificationSeverity::Error);
+                self.set_notification(
+                    format!("Storage feature not available: {}", msg),
+                    NotificationSeverity::Error,
+                );
             }
             #[cfg(feature = "external-integrations")]
             Tab::Integrations => self.integrations.set_error(msg),
             #[cfg(not(feature = "external-integrations"))]
             Tab::Integrations => {
-                self.set_notification(format!("Integrations feature not available: {}", msg), NotificationSeverity::Error);
+                self.set_notification(
+                    format!("Integrations feature not available: {}", msg),
+                    NotificationSeverity::Error,
+                );
             }
             #[cfg(feature = "finding-workflow")]
             Tab::Workflow => self.workflow.set_error(msg),
             #[cfg(not(feature = "finding-workflow"))]
             Tab::Workflow => {
-                self.set_notification(format!("Workflow feature not available: {}", msg), NotificationSeverity::Error);
+                self.set_notification(
+                    format!("Workflow feature not available: {}", msg),
+                    NotificationSeverity::Error,
+                );
             }
             #[cfg(feature = "vuln-management")]
             Tab::Vuln => self.vuln.set_error(msg),
             #[cfg(not(feature = "vuln-management"))]
             Tab::Vuln => {
-                self.set_notification(format!("Vuln management not available: {}", msg), NotificationSeverity::Error);
+                self.set_notification(
+                    format!("Vuln management not available: {}", msg),
+                    NotificationSeverity::Error,
+                );
             }
             Tab::Settings => {
                 tracing::error!("Settings tab does not support error state: {}", msg);

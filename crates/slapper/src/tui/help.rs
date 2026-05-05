@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::tui::Tab;
 use crate::tui::utils::fuzzy::fuzzy_score;
+use crate::tui::Tab;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HelpContext {
@@ -82,7 +82,9 @@ impl CommandPalette {
     }
 
     pub fn max_scroll_offset(&self) -> usize {
-        self.results.len().saturating_sub(self.visible_results_height())
+        self.results
+            .len()
+            .saturating_sub(self.visible_results_height())
     }
 
     pub fn max_scroll_offset_for_height(&self, content_height: u16) -> usize {
@@ -94,7 +96,11 @@ impl CommandPalette {
         let vis = self.visible_results_height();
         let max_scroll = self.max_scroll_offset();
         if self.selected_index >= self.scroll_offset + vis {
-            self.scroll_offset = self.selected_index.saturating_sub(vis).min(max_scroll).max(0);
+            self.scroll_offset = self
+                .selected_index
+                .saturating_sub(vis)
+                .min(max_scroll)
+                .max(0);
         }
         if self.selected_index < self.scroll_offset {
             self.scroll_offset = self.selected_index.min(max_scroll);

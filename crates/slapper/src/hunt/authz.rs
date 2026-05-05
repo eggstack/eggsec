@@ -45,9 +45,11 @@ async fn check_idor(target: &str, _config: &HuntConfig) -> Result<Vec<AuthzBypas
         id: id.clone(),
         bypass_type: BypassType::Idor,
         severity: Severity::High,
-        description: "Insecure Direct Object Reference - user can access other users' resources".to_string(),
+        description: "Insecure Direct Object Reference - user can access other users' resources"
+            .to_string(),
         endpoint: format!("{}/api/users/{{user_id}}/profile", target),
-        evidence: "Resource ID is directly exposed in URL without server-side ownership validation".to_string(),
+        evidence: "Resource ID is directly exposed in URL without server-side ownership validation"
+            .to_string(),
         remediation: "Implement ownership validation on all resource access endpoints".to_string(),
         cvss_score: Some(7.1),
     });
@@ -116,13 +118,18 @@ mod tests {
     #[tokio::test]
     async fn test_check_authz_bypass() {
         let config = HuntConfig::default();
-        let bypasses = check_authz_bypass("http://example.com", &config).await.unwrap();
+        let bypasses = check_authz_bypass("http://example.com", &config)
+            .await
+            .unwrap();
         assert!(!bypasses.is_empty());
     }
 
     #[test]
     fn test_bypass_types() {
         assert_eq!(BypassType::Idor, BypassType::Idor);
-        assert_eq!(BypassType::MissingAuthorization, BypassType::MissingAuthorization);
+        assert_eq!(
+            BypassType::MissingAuthorization,
+            BypassType::MissingAuthorization
+        );
     }
 }

@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 use crate::config::ScopeRule;
 
@@ -45,7 +45,10 @@ impl McpConstraintContext {
     }
 
     pub fn is_action_allowed(&self, action: &str) -> bool {
-        !self.disallowed_actions.iter().any(|a| a.eq_ignore_ascii_case(action))
+        !self
+            .disallowed_actions
+            .iter()
+            .any(|a| a.eq_ignore_ascii_case(action))
     }
 
     pub fn requires_approval(&self, action: &str) -> bool {
@@ -58,12 +61,15 @@ impl McpConstraintContext {
         if self.allowed_targets.is_empty() {
             return true;
         }
-        let target_scope = crate::config::TargetScope::parse(target)
-            .unwrap_or_else(|_| crate::config::TargetScope {
+        let target_scope = crate::config::TargetScope::parse(target).unwrap_or_else(|_| {
+            crate::config::TargetScope {
                 host: target.to_string(),
                 ip: None,
-            });
-        self.allowed_targets.iter().any(|rule| rule.matches(&target_scope))
+            }
+        });
+        self.allowed_targets
+            .iter()
+            .any(|rule| rule.matches(&target_scope))
     }
 
     pub fn get_allowed_tools(&self) -> HashSet<String> {
@@ -104,8 +110,7 @@ mod tests {
 
     #[test]
     fn test_approval_required() {
-        let ctx = McpConstraintContext::new()
-            .with_approval_required(vec!["exploit".to_string()]);
+        let ctx = McpConstraintContext::new().with_approval_required(vec!["exploit".to_string()]);
 
         assert!(!ctx.requires_approval("scan"));
         assert!(ctx.requires_approval("exploit"));
@@ -113,8 +118,7 @@ mod tests {
 
     #[test]
     fn test_allowed_tools() {
-        let ctx = McpConstraintContext::new()
-            .with_disallowed_actions(vec!["waf".to_string()]);
+        let ctx = McpConstraintContext::new().with_disallowed_actions(vec!["waf".to_string()]);
 
         let tools = ctx.get_allowed_tools();
         assert!(tools.contains("scan"));

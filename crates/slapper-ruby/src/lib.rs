@@ -1,13 +1,13 @@
 mod api;
 mod bridge;
 mod loader;
-mod validation;
 pub mod msf;
+mod validation;
 
 pub use api::SlapperApi;
 pub use bridge::RubyPluginClient;
 pub use loader::{PluginLoader, RubyPluginAdapter};
-pub use msf::{MsfClient, MsfConfig, ModuleType, SessionCache};
+pub use msf::{ModuleType, MsfClient, MsfConfig, SessionCache};
 pub use validation::validate_plugin_path;
 
 use serde::{Deserialize, Serialize};

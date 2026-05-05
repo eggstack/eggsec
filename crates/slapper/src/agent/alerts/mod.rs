@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use chrono::Timelike;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use chrono::Timelike;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::types::Severity;
 
@@ -12,8 +12,8 @@ pub use routing::AlertRouter;
 
 pub use crate::agent::channels::{
     AggregatedAlert, Alert, AlertChannel, AlertTemplate, EmailChannel, EmailFormattedAlert,
-    EmailTemplate, EscalationLevel, PagerDutyChannel, PagerDutyTemplate, ReportSummary,
-    ScanReport, SlackChannel, SlackFormattedAlert, SlackTemplate, WebhookConfig,
+    EmailTemplate, EscalationLevel, PagerDutyChannel, PagerDutyTemplate, ReportSummary, ScanReport,
+    SlackChannel, SlackFormattedAlert, SlackTemplate, WebhookConfig,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,10 +81,10 @@ impl AlertRoutingRules {
         if let Some(time_routing) = &self.by_time {
             for time_range in &time_routing.time_ranges {
                 if time_range.is_active() {
-                    if let Some(time_channels) = time_routing.channel_assignments.get(&format!(
-                        "{:02}:00",
-                        time_range.start_hour
-                    )) {
+                    if let Some(time_channels) = time_routing
+                        .channel_assignments
+                        .get(&format!("{:02}:00", time_range.start_hour))
+                    {
                         channels.extend(time_channels.clone());
                     }
                 }
@@ -134,8 +134,10 @@ mod tests {
 
     #[test]
     fn test_vulnerability_routing() {
-        let rules = AlertRoutingRules::new()
-            .with_vulnerability_routing("SQL Injection".to_string(), vec!["sql_injection_channel".to_string()]);
+        let rules = AlertRoutingRules::new().with_vulnerability_routing(
+            "SQL Injection".to_string(),
+            vec!["sql_injection_channel".to_string()],
+        );
 
         let channels = rules.get_channels_for_alert(&Severity::High, Some("SQL Injection"));
         assert!(channels.contains(&"sql_injection_channel".to_string()));

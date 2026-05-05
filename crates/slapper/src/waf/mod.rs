@@ -219,7 +219,8 @@ impl WafEngine {
             eprintln!("Attempting WAF bypasses...");
         }
 
-        let bypass_results = self.bypass_engine
+        let bypass_results = self
+            .bypass_engine
             .as_ref()
             .expect("bypass engine must be initialized")
             .run_bypasses(&detection)
@@ -327,7 +328,10 @@ impl WafEngine {
                         .await
                     {
                         if let Some(suggestion) = suggestion {
-                            eprintln!("[AI] Suggested bypass for {:?}: {}", br.technique, suggestion);
+                            eprintln!(
+                                "[AI] Suggested bypass for {:?}: {}",
+                                br.technique, suggestion
+                            );
                         }
                     }
                 }

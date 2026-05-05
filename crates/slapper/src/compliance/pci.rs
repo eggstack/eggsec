@@ -25,8 +25,16 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         } else {
             "No default credentials detected".to_string()
         },
-        severity: if has_critical { Severity::Critical } else { Severity::Low },
-        status: if has_critical { ComplianceStatus::Fail } else { ComplianceStatus::Pass },
+        severity: if has_critical {
+            Severity::Critical
+        } else {
+            Severity::Low
+        },
+        status: if has_critical {
+            ComplianceStatus::Fail
+        } else {
+            ComplianceStatus::Pass
+        },
         remediation: "Change all default credentials immediately".to_string(),
     });
 
@@ -37,8 +45,16 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         } else {
             "TLS encryption in use".to_string()
         },
-        severity: if !is_https { Severity::Critical } else { Severity::Low },
-        status: if !is_https { ComplianceStatus::Fail } else { ComplianceStatus::Pass },
+        severity: if !is_https {
+            Severity::Critical
+        } else {
+            Severity::Low
+        },
+        status: if !is_https {
+            ComplianceStatus::Fail
+        } else {
+            ComplianceStatus::Pass
+        },
         remediation: "Implement AES-256 encryption for stored card data".to_string(),
     });
 
@@ -49,8 +65,16 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         } else {
             "No injection vulnerabilities detected".to_string()
         },
-        severity: if has_high { Severity::High } else { Severity::Info },
-        status: if has_high { ComplianceStatus::Fail } else { ComplianceStatus::Pass },
+        severity: if has_high {
+            Severity::High
+        } else {
+            Severity::Info
+        },
+        status: if has_high {
+            ComplianceStatus::Fail
+        } else {
+            ComplianceStatus::Pass
+        },
         remediation: "Use parameterized queries; validate all inputs".to_string(),
     });
 
@@ -61,12 +85,24 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         } else {
             "No significant misconfigurations found".to_string()
         },
-        severity: if has_medium { Severity::Medium } else { Severity::Info },
-        status: if has_medium { ComplianceStatus::NeedsReview } else { ComplianceStatus::Pass },
+        severity: if has_medium {
+            Severity::Medium
+        } else {
+            Severity::Info
+        },
+        status: if has_medium {
+            ComplianceStatus::NeedsReview
+        } else {
+            ComplianceStatus::Pass
+        },
         remediation: "Conduct regular penetration testing".to_string(),
     });
 
-    let failed_count = report.findings.iter().filter(|f| f.status == ComplianceStatus::Fail).count();
+    let failed_count = report
+        .findings
+        .iter()
+        .filter(|f| f.status == ComplianceStatus::Fail)
+        .count();
     let total = report.findings.len();
     report.total_requirements = total;
     report.passed = total - failed_count;
@@ -87,14 +123,18 @@ mod tests {
     #[tokio::test]
     async fn test_pci_report_with_findings() {
         let findings = vec![Severity::Critical, Severity::High];
-        let report = generate_report("http://example.com", &findings).await.unwrap();
+        let report = generate_report("http://example.com", &findings)
+            .await
+            .unwrap();
         assert!(report.failed > 0);
     }
 
     #[tokio::test]
     async fn test_pci_report_clean() {
         let findings = vec![Severity::Info];
-        let report = generate_report("https://example.com", &findings).await.unwrap();
+        let report = generate_report("https://example.com", &findings)
+            .await
+            .unwrap();
         assert_eq!(report.failed, 0);
     }
 }

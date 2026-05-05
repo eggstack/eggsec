@@ -1,8 +1,7 @@
-
+use parking_lot::Mutex;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use parking_lot::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CircuitState {
@@ -67,7 +66,7 @@ impl CircuitBreaker {
     pub fn record_success(&self) {
         let mut state = self.state.lock();
         self.total_calls.fetch_add(1, Ordering::Relaxed);
-        
+
         if state.state == CircuitState::HalfOpen {
             let successes = self.success_count.fetch_add(1, Ordering::Relaxed) + 1;
             if successes >= self.success_threshold {
@@ -84,7 +83,7 @@ impl CircuitBreaker {
         let mut state = self.state.lock();
         self.total_calls.fetch_add(1, Ordering::Relaxed);
         self.total_failures.fetch_add(1, Ordering::Relaxed);
-        
+
         state.last_failure = Some(Instant::now());
 
         if state.state == CircuitState::HalfOpen || state.state == CircuitState::Closed {

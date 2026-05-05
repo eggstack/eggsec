@@ -6,37 +6,27 @@
 use regex::Regex;
 use std::sync::LazyLock;
 
-static PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(/[\w\.-]+)+").unwrap()
-});
+static PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(/[\w\.-]+)+").unwrap());
 
-static STACK_TRACE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(at\s+[\w.$]+\([^)]*\)\s*(in\s+)?[^\n]+)").unwrap()
-});
+static STACK_TRACE_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(at\s+[\w.$]+\([^)]*\)\s*(in\s+)?[^\n]+)").unwrap());
 
-static INTERNAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(internal|impl|thread\s+'[\w-]+').*").unwrap()
-});
+static INTERNAL_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(internal|impl|thread\s+'[\w-]+').*").unwrap());
 
-static RATE_LIMIT_DETAIL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(RateLimiter|rate_limit|check_rate_limit).*").unwrap()
-});
+static RATE_LIMIT_DETAIL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(RateLimiter|rate_limit|check_rate_limit).*").unwrap());
 
-static RUST_PANIC: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"thread\s+'[^']+'\s+panicked\s+at").unwrap()
-});
+static RUST_PANIC: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"thread\s+'[^']+'\s+panicked\s+at").unwrap());
 
-static PYTHON_TRACEBACK: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"Traceback \(most recent call last\):").unwrap()
-});
+static PYTHON_TRACEBACK: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"Traceback \(most recent call last\):").unwrap());
 
-static GO_PANIC: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(panic:\s+runtime\s+error:|goroutine\s+\d+\s+\[)").unwrap()
-});
+static GO_PANIC: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(panic:\s+runtime\s+error:|goroutine\s+\d+\s+\[)").unwrap());
 
-static WINDOWS_PATH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[A-Za-z]:\\[\w\\]+").unwrap()
-});
+static WINDOWS_PATH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[A-Za-z]:\\[\w\\]+").unwrap());
 
 pub fn sanitize_error_message(error: &str) -> String {
     let mut sanitized = error.to_string();

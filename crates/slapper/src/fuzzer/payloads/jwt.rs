@@ -1,4 +1,3 @@
-
 use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use reqwest::Client;
@@ -695,43 +694,68 @@ mod tests {
     #[test]
     fn contains_none_algorithm_payload() {
         let payloads = get_payloads();
-        let has_none = payloads.iter().any(|p| p.payload.contains("none") || p.description.to_lowercase().contains("none"));
+        let has_none = payloads
+            .iter()
+            .any(|p| p.payload.contains("none") || p.description.to_lowercase().contains("none"));
         assert!(has_none, "Must contain 'none' algorithm bypass payload");
     }
 
     #[test]
     fn none_algorithm_payload_is_valid_jwt_format() {
         let payloads = get_payloads();
-        let none_payload = payloads.iter().find(|p| p.description.contains("none algorithm")).expect("Must have none algorithm payload");
+        let none_payload = payloads
+            .iter()
+            .find(|p| p.description.contains("none algorithm"))
+            .expect("Must have none algorithm payload");
         let parts: Vec<&str> = none_payload.payload.split('.').collect();
-        assert_eq!(parts.len(), 3, "None algorithm token must have 3 JWT parts (header.payload.signature)");
+        assert_eq!(
+            parts.len(),
+            3,
+            "None algorithm token must have 3 JWT parts (header.payload.signature)"
+        );
     }
 
     #[test]
     fn none_algorithm_is_critical() {
         let payloads = get_payloads();
-        let none = payloads.iter().find(|p| p.description.contains("none algorithm")).unwrap();
-        assert_eq!(none.severity, Severity::Critical, "None algorithm bypass must be Critical");
+        let none = payloads
+            .iter()
+            .find(|p| p.description.contains("none algorithm"))
+            .unwrap();
+        assert_eq!(
+            none.severity,
+            Severity::Critical,
+            "None algorithm bypass must be Critical"
+        );
     }
 
     #[test]
     fn contains_algorithm_confusion() {
         let payloads = get_payloads();
-        let has_confusion = payloads.iter().any(|p| p.description.to_lowercase().contains("confusion"));
-        assert!(has_confusion, "Must contain algorithm confusion (RS->HS) payload");
+        let has_confusion = payloads
+            .iter()
+            .any(|p| p.description.to_lowercase().contains("confusion"));
+        assert!(
+            has_confusion,
+            "Must contain algorithm confusion (RS->HS) payload"
+        );
     }
 
     #[test]
     fn contains_jku_injection() {
         let payloads = get_payloads();
-        let has_jku = payloads.iter().any(|p| p.payload.contains("jku") || p.description.to_lowercase().contains("jku"));
+        let has_jku = payloads
+            .iter()
+            .any(|p| p.payload.contains("jku") || p.description.to_lowercase().contains("jku"));
         assert!(has_jku, "Must contain JKU header injection payload");
     }
 
     #[test]
     fn contains_expiration_bypass() {
         let payloads = get_payloads();
-        let has_exp = payloads.iter().any(|p| p.payload.contains("exp=") || p.description.to_lowercase().contains("expiration"));
+        let has_exp = payloads.iter().any(|p| {
+            p.payload.contains("exp=") || p.description.to_lowercase().contains("expiration")
+        });
         assert!(has_exp, "Must contain expiration claim bypass payload");
     }
 
@@ -739,28 +763,45 @@ mod tests {
     fn fuzzer_test_none_algorithm_generates_tokens() {
         let fuzzer = JwtFuzzer::new();
         let results = fuzzer.test_none_algorithm();
-        assert!(results.len() >= 5, "Must generate multiple none algorithm variations");
-        assert!(results.iter().all(|r| r.vulnerability == JwtVulnerability::NoneAlgorithm));
+        assert!(
+            results.len() >= 5,
+            "Must generate multiple none algorithm variations"
+        );
+        assert!(results
+            .iter()
+            .all(|r| r.vulnerability == JwtVulnerability::NoneAlgorithm));
     }
 
     #[test]
     fn fuzzer_brute_force_has_weak_keys() {
         let fuzzer = JwtFuzzer::new();
         let results = fuzzer.brute_force_weak_key("dummy");
-        assert!(results.len() >= 15, "Must test at least 15 weak signing keys");
-        assert!(results.iter().all(|r| r.vulnerability == JwtVulnerability::WeakSigning));
+        assert!(
+            results.len() >= 15,
+            "Must test at least 15 weak signing keys"
+        );
+        assert!(results
+            .iter()
+            .all(|r| r.vulnerability == JwtVulnerability::WeakSigning));
     }
 
     #[test]
     fn fuzzer_claim_bypass_generates_tokens() {
         let fuzzer = JwtFuzzer::new();
         let results = fuzzer.test_claim_bypass();
-        assert!(results.len() >= 4, "Must generate multiple claim bypass tokens");
+        assert!(
+            results.len() >= 4,
+            "Must generate multiple claim bypass tokens"
+        );
     }
 
     #[test]
     fn minimum_payload_count() {
         let payloads = get_payloads();
-        assert!(payloads.len() >= 3, "Must have JWT payload coverage, got {}", payloads.len());
+        assert!(
+            payloads.len() >= 3,
+            "Must have JWT payload coverage, got {}",
+            payloads.len()
+        );
     }
 }

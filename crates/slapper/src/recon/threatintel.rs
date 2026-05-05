@@ -1,11 +1,10 @@
-
 #![allow(dead_code)]
 
 use crate::error::{Result, SlapperError};
 use crate::types::SensitiveString;
 use reqwest::Client;
-use urlencoding;
 use serde::{Deserialize, Serialize};
+use urlencoding;
 
 use crate::utils::create_http_client;
 
@@ -112,13 +111,19 @@ impl ThreatIntelClient {
         };
 
         if let Some(ref key) = self.virustotal_key {
-            if let Ok(reputation) = self.check_virustotal_domain(domain, key.expose_secret()).await {
+            if let Ok(reputation) = self
+                .check_virustotal_domain(domain, key.expose_secret())
+                .await
+            {
                 intel.domain_reputation = Some(reputation);
             }
         }
 
         if let Some(ref key) = self.alienvault_key {
-            if let Ok(pdns) = self.check_alienvault_domain_pdns(domain, key.expose_secret()).await {
+            if let Ok(pdns) = self
+                .check_alienvault_domain_pdns(domain, key.expose_secret())
+                .await
+            {
                 intel.passive_dns = pdns;
             }
         }
@@ -275,7 +280,11 @@ impl ThreatIntelClient {
     }
 
     async fn check_shodan_ip(&self, ip: &str, api_key: &str) -> Result<IpReputation> {
-        let url = format!("https://api.shodan.io/shodan/host/{}?key={}", ip, urlencoding::encode(api_key));
+        let url = format!(
+            "https://api.shodan.io/shodan/host/{}?key={}",
+            ip,
+            urlencoding::encode(api_key)
+        );
 
         let response = self.client.get(&url).send().await?;
 
@@ -582,15 +591,13 @@ mod tests {
                 source: "VirusTotal".to_string(),
             }),
             domain_reputation: None,
-            passive_dns: vec![
-                PassiveDnsRecord {
-                    record_type: "A".to_string(),
-                    value: "8.8.8.8".to_string(),
-                    first_seen: None,
-                    last_seen: None,
-                    source: "AlienVault OTX".to_string(),
-                },
-            ],
+            passive_dns: vec![PassiveDnsRecord {
+                record_type: "A".to_string(),
+                value: "8.8.8.8".to_string(),
+                first_seen: None,
+                last_seen: None,
+                source: "AlienVault OTX".to_string(),
+            }],
         };
         let json = serde_json::to_string(&intel).unwrap();
         let decoded: ThreatIntel = serde_json::from_str(&json).unwrap();

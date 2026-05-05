@@ -1,6 +1,6 @@
-use crate::tc;
 use crate::fuzzer::engine::FuzzSession;
 use crate::fuzzer::PayloadType;
+use crate::tc;
 use crate::tui::components::{
     empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
     Selector, SelectorItem,
@@ -32,6 +32,7 @@ pub struct FuzzTab {
     pub results_view: ScrollableText,
     pub focus_area: FuzzFocusArea,
     pub session: Option<FuzzSession>,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -110,6 +111,7 @@ impl FuzzTab {
             results_view: ScrollableText::new("Results"),
             focus_area: FuzzFocusArea::Inputs,
             session: None,
+            error_message: None,
         }
     }
 
@@ -394,6 +396,7 @@ impl TabState for FuzzTab {
         self.progress.current = 0;
         self.results_view.clear();
         self.session = None;
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -411,6 +414,12 @@ impl TabState for FuzzTab {
         self.payload_selector.select(0);
         self.mode_selector.select(0);
         self.target_selector.select(0);
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+        self.progress.current = 0;
     }
 }
 
@@ -477,7 +486,10 @@ impl TabRender for FuzzTab {
         mutation_cb.render(f, config_chunks[6]);
 
         let (status_text, status_color) = match &self.state {
-            AppState::Idle => ("Ready - Enter target and press Enter to start", tc!(text_dim)),
+            AppState::Idle => (
+                "Ready - Enter target and press Enter to start",
+                tc!(text_dim),
+            ),
             AppState::Running => ("Running...", tc!(status_running)),
             AppState::Completed => ("Completed - Press r to reset", tc!(success)),
             AppState::Error(e) => (e.as_str(), tc!(error)),
@@ -489,6 +501,15 @@ impl TabRender for FuzzTab {
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
+        } else if let Some(ref err_msg) = self.error_message {
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Fuzzing - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view.render(f, results_area, Some(tc!(info)));
         } else {
@@ -613,6 +634,60 @@ impl TabInput for FuzzTab {
         }
     }
 
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == FuzzFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == FuzzFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else if self.focus_area == FuzzFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else {
+            None
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == FuzzFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == FuzzFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == FuzzFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == FuzzFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == FuzzFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == FuzzFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = FuzzFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = FuzzFocusArea::Results;
+        self.inputs.blur();
+    }
+
     fn handle_enter(&mut self) {
         if self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.blur();
@@ -652,6 +727,8 @@ impl TabInput for FuzzTab {
             self.payload_selector.prev();
         } else if self.mode_selector.expanded {
             self.mode_selector.prev();
+        } else if self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused() {
+            self.inputs.focus_prev();
         } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
             self.scroll_results_up();
         } else {
@@ -664,6 +741,8 @@ impl TabInput for FuzzTab {
             self.payload_selector.next();
         } else if self.mode_selector.expanded {
             self.mode_selector.next();
+        } else if self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused() {
+            self.inputs.focus_next();
         } else {
             self.handle_focus_next();
         }
@@ -714,6 +793,22 @@ impl TabInput for FuzzTab {
     fn is_input_focused(&self) -> bool {
         self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused()
     }
+
+    fn is_at_left_edge(&self) -> bool {
+        if self.focus_area == FuzzFocusArea::Inputs {
+            self.inputs.is_at_left_edge()
+        } else {
+            true
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        if self.focus_area == FuzzFocusArea::Inputs {
+            self.inputs.is_at_right_edge()
+        } else {
+            true
+        }
+    }
 }
 
 #[cfg(test)]
@@ -730,30 +825,38 @@ mod tests {
         // Start at Inputs
         tab.focus_area = FuzzFocusArea::Inputs;
         tab.inputs.focus(0);
-        
+
         // Move to PayloadSelector
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, FuzzFocusArea::PayloadSelector);
-        
+
         // Move to ModeSelector
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, FuzzFocusArea::ModeSelector);
-        
+
         // Move to TargetSelector
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, FuzzFocusArea::TargetSelector);
-        
+
         // Move to MutationCheckbox
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
-        
+
         // Move to Results (this was missing before the fix)
         tab.handle_focus_next();
-        assert_eq!(tab.focus_area, FuzzFocusArea::Results, "Focus should cycle to Results from MutationCheckbox");
-        
+        assert_eq!(
+            tab.focus_area,
+            FuzzFocusArea::Results,
+            "Focus should cycle to Results from MutationCheckbox"
+        );
+
         // Move back to Inputs
         tab.handle_focus_next();
-        assert_eq!(tab.focus_area, FuzzFocusArea::Inputs, "Focus should cycle back to Inputs");
+        assert_eq!(
+            tab.focus_area,
+            FuzzFocusArea::Inputs,
+            "Focus should cycle back to Inputs"
+        );
     }
 
     #[test]
@@ -761,7 +864,7 @@ mod tests {
         let mut tab = create_test_tab();
         // Start at Results
         tab.focus_area = FuzzFocusArea::Results;
-        
+
         // Move to MutationCheckbox
         tab.handle_focus_prev();
         assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
@@ -772,7 +875,7 @@ mod tests {
         let mut tab = create_test_tab();
         tab.focus_area = FuzzFocusArea::MutationCheckbox;
         tab.mutation_checkbox.focused = true;
-        
+
         // Simulate Enter on checkbox - should toggle, not start task
         // (Note: handle_enter would need mock is_running() = false)
         assert!(tab.mutation_checkbox.focused);

@@ -1,6 +1,6 @@
 use crate::error::Result;
-use serde::{Deserialize, Serialize};
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 
 use crate::utils::create_insecure_client_with_options;
 
@@ -99,9 +99,10 @@ impl TechDetector {
                 stack.servers.push("Apache".to_string());
             }
             if (s.contains("microsoft-iis") || s.contains("iis"))
-                && !stack.servers.contains(&"IIS".to_string()) {
-                    stack.servers.push("IIS".to_string());
-                }
+                && !stack.servers.contains(&"IIS".to_string())
+            {
+                stack.servers.push("IIS".to_string());
+            }
             if s.contains("cloudflare") && !stack.cdns.contains(&"Cloudflare".to_string()) {
                 stack.cdns.push("Cloudflare".to_string());
             }
@@ -115,17 +116,16 @@ impl TechDetector {
                 stack.cdns.push("Fastly".to_string());
             }
             if (s.contains("lite-speed") || s.contains("litespeed"))
-                && !stack.servers.contains(&"LiteSpeed".to_string()) {
-                    stack.servers.push("LiteSpeed".to_string());
-                }
-            if s.contains("openresty")
-                && !stack.servers.contains(&"OpenResty".to_string()) {
-                    stack.servers.push("OpenResty".to_string());
-                }
-            if s.contains("caddy")
-                && !stack.servers.contains(&"Caddy".to_string()) {
-                    stack.servers.push("Caddy".to_string());
-                }
+                && !stack.servers.contains(&"LiteSpeed".to_string())
+            {
+                stack.servers.push("LiteSpeed".to_string());
+            }
+            if s.contains("openresty") && !stack.servers.contains(&"OpenResty".to_string()) {
+                stack.servers.push("OpenResty".to_string());
+            }
+            if s.contains("caddy") && !stack.servers.contains(&"Caddy".to_string()) {
+                stack.servers.push("Caddy".to_string());
+            }
             if s.contains("traefik") && !stack.frameworks.contains(&"Traefik".to_string()) {
                 stack.frameworks.push("Traefik".to_string());
             }
@@ -149,9 +149,10 @@ impl TechDetector {
                 stack.frameworks.push("Django".to_string());
             }
             if (pb.contains("rails") || pb.contains("ruby on rails"))
-                && !stack.frameworks.contains(&"Ruby on Rails".to_string()) {
-                    stack.frameworks.push("Ruby on Rails".to_string());
-                }
+                && !stack.frameworks.contains(&"Ruby on Rails".to_string())
+            {
+                stack.frameworks.push("Ruby on Rails".to_string());
+            }
             if pb.contains("laravel") && !stack.frameworks.contains(&"Laravel".to_string()) {
                 stack.frameworks.push("Laravel".to_string());
             }
@@ -178,9 +179,10 @@ impl TechDetector {
                 stack.frameworks.push("FastAPI".to_string());
             }
             if (pb.contains("next.js") || pb.contains("nextjs"))
-                && !stack.frameworks.contains(&"Next.js".to_string()) {
-                    stack.frameworks.push("Next.js".to_string());
-                }
+                && !stack.frameworks.contains(&"Next.js".to_string())
+            {
+                stack.frameworks.push("Next.js".to_string());
+            }
             if pb.contains("nuxt") && !stack.frameworks.contains(&"Nuxt.js".to_string()) {
                 stack.frameworks.push("Nuxt.js".to_string());
             }
@@ -205,46 +207,56 @@ impl TechDetector {
         }
 
         if (body.contains("wp-content") || body.contains("wp-includes"))
-            && !stack.cms.contains(&"WordPress".to_string()) {
-                stack.cms.push("WordPress".to_string());
-            }
+            && !stack.cms.contains(&"WordPress".to_string())
+        {
+            stack.cms.push("WordPress".to_string());
+        }
         if (body.contains("drupal") || body.contains("Drupal"))
-            && !stack.cms.contains(&"Drupal".to_string()) {
-                stack.cms.push("Drupal".to_string());
-            }
+            && !stack.cms.contains(&"Drupal".to_string())
+        {
+            stack.cms.push("Drupal".to_string());
+        }
         if (body.contains("joomla") || body.contains("Joomla"))
-            && !stack.cms.contains(&"Joomla".to_string()) {
-                stack.cms.push("Joomla".to_string());
-            }
+            && !stack.cms.contains(&"Joomla".to_string())
+        {
+            stack.cms.push("Joomla".to_string());
+        }
         if (body.contains("magento") || body.contains("Magento"))
-            && !stack.cms.contains(&"Magento".to_string()) {
-                stack.cms.push("Magento".to_string());
-            }
+            && !stack.cms.contains(&"Magento".to_string())
+        {
+            stack.cms.push("Magento".to_string());
+        }
         if (body.contains("shopify") || body.contains("Shopify"))
-            && !stack.cms.contains(&"Shopify".to_string()) {
-                stack.cms.push("Shopify".to_string());
-            }
+            && !stack.cms.contains(&"Shopify".to_string())
+        {
+            stack.cms.push("Shopify".to_string());
+        }
         if (body.contains("wp-json") || body.contains("wordpress"))
-            && !stack.cms.contains(&"WordPress".to_string()) {
-                stack.cms.push("WordPress".to_string());
-            }
+            && !stack.cms.contains(&"WordPress".to_string())
+        {
+            stack.cms.push("WordPress".to_string());
+        }
 
         if (body.contains("__vue") || body.contains("vue.js"))
-            && !stack.javascript.contains(&"Vue.js".to_string()) {
-                stack.javascript.push("Vue.js".to_string());
-            }
-        if body.contains("react") && body.contains("node_modules")
-            && !stack.javascript.contains(&"React".to_string()) {
-                stack.javascript.push("React".to_string());
-            }
-        if body.contains("angular") && body.contains("ng-")
-            && !stack.javascript.contains(&"Angular".to_string()) {
-                stack.javascript.push("Angular".to_string());
-            }
-        if body.contains("svelte")
-            && !stack.javascript.contains(&"Svelte".to_string()) {
-                stack.javascript.push("Svelte".to_string());
-            }
+            && !stack.javascript.contains(&"Vue.js".to_string())
+        {
+            stack.javascript.push("Vue.js".to_string());
+        }
+        if body.contains("react")
+            && body.contains("node_modules")
+            && !stack.javascript.contains(&"React".to_string())
+        {
+            stack.javascript.push("React".to_string());
+        }
+        if body.contains("angular")
+            && body.contains("ng-")
+            && !stack.javascript.contains(&"Angular".to_string())
+        {
+            stack.javascript.push("Angular".to_string());
+        }
+        if body.contains("svelte") && !stack.javascript.contains(&"Svelte".to_string()) {
+            stack.javascript.push("Svelte".to_string());
+        }
     }
 
     fn detect_cms(&self, powered_by_lower: Option<&str>, stack: &mut TechStack) {
@@ -267,41 +279,50 @@ impl TechDetector {
             let value_lower = value.to_lowercase();
 
             if (key_lower.contains("cf-ray") || value_lower.contains("cloudflare"))
-                && !stack.cdns.contains(&"Cloudflare".to_string()) {
-                    stack.cdns.push("Cloudflare".to_string());
-                }
+                && !stack.cdns.contains(&"Cloudflare".to_string())
+            {
+                stack.cdns.push("Cloudflare".to_string());
+            }
             if (key_lower.contains("akamai") || value_lower.contains("akamai"))
-                && !stack.cdns.contains(&"Akamai".to_string()) {
-                    stack.cdns.push("Akamai".to_string());
-                }
+                && !stack.cdns.contains(&"Akamai".to_string())
+            {
+                stack.cdns.push("Akamai".to_string());
+            }
             if (key_lower.contains("fastly") || value_lower.contains("fastly"))
-                && !stack.cdns.contains(&"Fastly".to_string()) {
-                    stack.cdns.push("Fastly".to_string());
-                }
+                && !stack.cdns.contains(&"Fastly".to_string())
+            {
+                stack.cdns.push("Fastly".to_string());
+            }
             if (key_lower.contains("cloudfront") || value_lower.contains("cloudfront"))
-                && !stack.cdns.contains(&"CloudFront".to_string()) {
-                    stack.cdns.push("CloudFront".to_string());
-                }
+                && !stack.cdns.contains(&"CloudFront".to_string())
+            {
+                stack.cdns.push("CloudFront".to_string());
+            }
             if (key_lower.contains("bunny") || value_lower.contains("bunny"))
-                && !stack.cdns.contains(&"BunnyCDN".to_string()) {
-                    stack.cdns.push("BunnyCDN".to_string());
-                }
+                && !stack.cdns.contains(&"BunnyCDN".to_string())
+            {
+                stack.cdns.push("BunnyCDN".to_string());
+            }
             if (key_lower.contains("keycdn") || value_lower.contains("keycdn"))
-                && !stack.cdns.contains(&"KeyCDN".to_string()) {
-                    stack.cdns.push("KeyCDN".to_string());
-                }
+                && !stack.cdns.contains(&"KeyCDN".to_string())
+            {
+                stack.cdns.push("KeyCDN".to_string());
+            }
             if (key_lower.contains("cdnjs") || value_lower.contains("cdnjs"))
-                && !stack.cdns.contains(&"cdnjs".to_string()) {
-                    stack.cdns.push("cdnjs".to_string());
-                }
+                && !stack.cdns.contains(&"cdnjs".to_string())
+            {
+                stack.cdns.push("cdnjs".to_string());
+            }
             if (key_lower.contains("unpkg") || value_lower.contains("unpkg"))
-                && !stack.cdns.contains(&"unpkg".to_string()) {
-                    stack.cdns.push("unpkg".to_string());
-                }
+                && !stack.cdns.contains(&"unpkg".to_string())
+            {
+                stack.cdns.push("unpkg".to_string());
+            }
             if (key_lower.contains("jsdelivr") || value_lower.contains("jsdelivr"))
-                && !stack.cdns.contains(&"jsDelivr".to_string()) {
-                    stack.cdns.push("jsDelivr".to_string());
-                }
+                && !stack.cdns.contains(&"jsDelivr".to_string())
+            {
+                stack.cdns.push("jsDelivr".to_string());
+            }
         }
     }
 
@@ -311,13 +332,15 @@ impl TechDetector {
                 stack.databases.push("MySQL".to_string());
             }
             if (s.contains("postgresql") || s.contains("postgres"))
-                && !stack.databases.contains(&"PostgreSQL".to_string()) {
-                    stack.databases.push("PostgreSQL".to_string());
-                }
+                && !stack.databases.contains(&"PostgreSQL".to_string())
+            {
+                stack.databases.push("PostgreSQL".to_string());
+            }
             if (s.contains("mongodb") || s.contains("mongo"))
-                && !stack.databases.contains(&"MongoDB".to_string()) {
-                    stack.databases.push("MongoDB".to_string());
-                }
+                && !stack.databases.contains(&"MongoDB".to_string())
+            {
+                stack.databases.push("MongoDB".to_string());
+            }
             if s.contains("redis") && !stack.databases.contains(&"Redis".to_string()) {
                 stack.databases.push("Redis".to_string());
             }
@@ -373,29 +396,33 @@ impl TechDetector {
                 stack.languages.push("Ruby".to_string());
             }
             if (pb.contains("python") || pb.contains("django") || pb.contains("flask"))
-                && !stack.languages.contains(&"Python".to_string()) {
-                    stack.languages.push("Python".to_string());
-                }
+                && !stack.languages.contains(&"Python".to_string())
+            {
+                stack.languages.push("Python".to_string());
+            }
             if (pb.contains("node") || pb.contains("express"))
-                && !stack.languages.contains(&"Node.js".to_string()) {
-                    stack.languages.push("Node.js".to_string());
-                }
+                && !stack.languages.contains(&"Node.js".to_string())
+            {
+                stack.languages.push("Node.js".to_string());
+            }
             if (pb.contains("java") || pb.contains("spring"))
-                && !stack.languages.contains(&"Java".to_string()) {
-                    stack.languages.push("Java".to_string());
-                }
+                && !stack.languages.contains(&"Java".to_string())
+            {
+                stack.languages.push("Java".to_string());
+            }
             if (pb.contains(".net") || pb.contains("asp"))
-                && !stack.languages.contains(&"C#".to_string()) {
-                    stack.languages.push("C#".to_string());
-                }
+                && !stack.languages.contains(&"C#".to_string())
+            {
+                stack.languages.push("C#".to_string());
+            }
             if (pb.contains("go") || pb.contains("golang"))
-                && !stack.languages.contains(&"Go".to_string()) {
-                    stack.languages.push("Go".to_string());
-                }
-            if pb.contains("rust")
-                && !stack.languages.contains(&"Rust".to_string()) {
-                    stack.languages.push("Rust".to_string());
-                }
+                && !stack.languages.contains(&"Go".to_string())
+            {
+                stack.languages.push("Go".to_string());
+            }
+            if pb.contains("rust") && !stack.languages.contains(&"Rust".to_string()) {
+                stack.languages.push("Rust".to_string());
+            }
         }
     }
 }

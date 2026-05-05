@@ -54,15 +54,16 @@ pub fn register_informix_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             let connect_str = format!("{}:INFORMIXSERVER\t\n", host);
             stream.write_all(connect_str.as_bytes()).ok();
@@ -92,15 +93,16 @@ pub fn register_informix_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             let exec_cmd = format!("execute\t{}\n", sql);
             stream.write_all(exec_cmd.as_bytes()).ok();
@@ -132,15 +134,16 @@ pub fn register_informix_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             let query_cmd = format!("sqlexec\t{}\n", sql);
             stream.write_all(query_cmd.as_bytes()).ok();
@@ -177,15 +180,16 @@ pub fn register_informix_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             stream.write_all(b"databases\t\n").ok();
 
@@ -224,18 +228,16 @@ pub fn register_informix_library(lua: &Lua) -> LuaResult<()> {
                         result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                         return Ok(result);
                     }
-                    };
-                    let mut stream = match TcpStream::connect_timeout(
-                        &socket_addr,
-                        Duration::from_secs(10),
-                    ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
                 };
+                let mut stream =
+                    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            result.set("status", "error")?;
+                            result.set("error", e.to_string())?;
+                            return Ok(result);
+                        }
+                    };
 
                 stream.write_all(b"tables\t\n").ok();
 

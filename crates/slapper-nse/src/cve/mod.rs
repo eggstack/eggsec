@@ -3,15 +3,15 @@
 //! Provides multiple CVE/vulnerability data sources for the NSE vulns library.
 //! Supports free sources (NVD, OSV, CISA KEV) and configurable paid sources.
 
-pub mod traits;
+pub mod cisa_kev;
 pub mod nvd;
 pub mod osv;
-pub mod cisa_kev;
+pub mod traits;
 
-pub use traits::*;
+pub use cisa_kev::CisaKevClient;
 pub use nvd::NvdClient;
 pub use osv::OsvClient;
-pub use cisa_kev::CisaKevClient;
+pub use traits::*;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -49,7 +49,11 @@ impl CveClientEnum {
         }
     }
 
-    pub async fn get_for_product(&self, package: &str, ecosystem: &str) -> Result<Vec<CveRecord>, CveError> {
+    pub async fn get_for_product(
+        &self,
+        package: &str,
+        ecosystem: &str,
+    ) -> Result<Vec<CveRecord>, CveError> {
         match self {
             CveClientEnum::Nvd(c) => c.get_for_product(package, ecosystem).await,
             CveClientEnum::Osv(c) => c.get_for_product(package, ecosystem).await,
@@ -146,13 +150,23 @@ pub trait CveClient: Send + Sync {
     fn source(&self) -> CveSource;
 
     /// Lookup CVE by ID
-    fn lookup(&self, cve_id: &str) -> impl std::future::Future<Output = Result<Option<CveRecord>, CveError>> + Send;
+    fn lookup(
+        &self,
+        cve_id: &str,
+    ) -> impl std::future::Future<Output = Result<Option<CveRecord>, CveError>> + Send;
 
     /// Search CVEs by keyword
-    fn search(&self, query: &str) -> impl std::future::Future<Output = Result<Vec<CveRecord>, CveError>> + Send;
+    fn search(
+        &self,
+        query: &str,
+    ) -> impl std::future::Future<Output = Result<Vec<CveRecord>, CveError>> + Send;
 
     /// Get vulnerabilities for a product
-    fn get_for_product(&self, package: &str, ecosystem: &str) -> impl std::future::Future<Output = Result<Vec<CveRecord>, CveError>> + Send;
+    fn get_for_product(
+        &self,
+        package: &str,
+        ecosystem: &str,
+    ) -> impl std::future::Future<Output = Result<Vec<CveRecord>, CveError>> + Send;
 }
 
 /// Cache for CVE results
@@ -264,7 +278,11 @@ impl CveAggregator {
         Ok(results)
     }
 
-    pub async fn get_for_product(&self, package: &str, ecosystem: &str) -> Result<Vec<CveRecord>, CveError> {
+    pub async fn get_for_product(
+        &self,
+        package: &str,
+        ecosystem: &str,
+    ) -> Result<Vec<CveRecord>, CveError> {
         let mut results = Vec::new();
         let mut seen = std::collections::HashSet::new();
 
@@ -333,7 +351,9 @@ mod tests {
             known_exploited: false,
             vendor_advisories: vec![],
         };
-        cache.set("CVE-2021-44228".to_string(), record.clone()).await;
+        cache
+            .set("CVE-2021-44228".to_string(), record.clone())
+            .await;
         let cached = cache.get("CVE-2021-44228").await;
         assert!(cached.is_some());
         assert_eq!(cached.unwrap().id, "CVE-2021-44228");

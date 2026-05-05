@@ -1,3 +1,5 @@
+use crate::tool::agents::registry::{AgentRegistry, AgentStatus};
+use reqwest::Client;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -5,8 +7,6 @@ use tokio::sync::{mpsc, RwLock};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use reqwest::Client;
-use crate::tool::agents::registry::{AgentRegistry, AgentStatus};
 
 #[derive(Debug, Clone)]
 pub struct LifecycleConfig {
@@ -126,7 +126,10 @@ impl LifecycleManager {
         })
     }
 
-    pub fn start_health_monitor_with_token(&self, token: CancellationToken) -> tokio::task::JoinHandle<()> {
+    pub fn start_health_monitor_with_token(
+        &self,
+        token: CancellationToken,
+    ) -> tokio::task::JoinHandle<()> {
         let health_status = Arc::clone(&self.health_status);
         let agent_registry = self.agent_registry.clone();
         let config = self.config.clone();
@@ -156,7 +159,12 @@ impl LifecycleManager {
     }
 
     async fn check_agent_callback_health_static(client: &Client, callback_url: &str) -> bool {
-        client.get(callback_url).send().await.map(|resp| resp.status().is_success()).unwrap_or(false)
+        client
+            .get(callback_url)
+            .send()
+            .await
+            .map(|resp| resp.status().is_success())
+            .unwrap_or(false)
     }
 
     async fn perform_health_check(
@@ -188,16 +196,26 @@ impl LifecycleManager {
         {
             let status = health_status.read().await;
             for agent in &agents {
-                let is_stale = now.saturating_sub(agent.last_heartbeat) > config.stale_threshold_secs;
+                let is_stale =
+                    now.saturating_sub(agent.last_heartbeat) > config.stale_threshold_secs;
 
                 let agent_health = status.get(&agent.id);
-                let (was_healthy, has_missed_heartbeat, has_callback_issue) = if let Some(health) = agent_health {
-                    (health.is_healthy,
-                     health.issues.iter().any(|i| matches!(i, HealthIssue::MissedHeartbeat)),
-                     health.issues.iter().any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))))
-                } else {
-                    (true, false, false)
-                };
+                let (was_healthy, has_missed_heartbeat, has_callback_issue) =
+                    if let Some(health) = agent_health {
+                        (
+                            health.is_healthy,
+                            health
+                                .issues
+                                .iter()
+                                .any(|i| matches!(i, HealthIssue::MissedHeartbeat)),
+                            health
+                                .issues
+                                .iter()
+                                .any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))),
+                        )
+                    } else {
+                        (true, false, false)
+                    };
 
                 check_states.push(AgentCheckState {
                     agent_id: agent.id,
@@ -225,7 +243,11 @@ impl LifecycleManager {
         };
 
         for check in check_states.iter_mut() {
-            check.callback_unhealthy = callback_results.iter().find(|(id, _)| *id == check.agent_id).map(|(_, r)| *r).unwrap_or(false);
+            check.callback_unhealthy = callback_results
+                .iter()
+                .find(|(id, _)| *id == check.agent_id)
+                .map(|(_, r)| *r)
+                .unwrap_or(false);
         }
 
         let mut status = health_status.write().await;
@@ -251,45 +273,64 @@ impl LifecycleManager {
 
                 if is_stale && !has_missed_heartbeat {
                     agent_health.issues.push(HealthIssue::MissedHeartbeat);
-                    let _ = event_tx.send(LifecycleEvent {
-                        event_type: LifecycleEventType::AgentMarkedStale,
-                        agent_id: check.agent_id,
-                        timestamp: now,
-                        details: Some(format!(
-                            "Agent {} missed heartbeat, last seen {}s ago",
-                            check.agent_name,
-                            now.saturating_sub(agent_registry.get(check.agent_id).await.map(|a| a.last_heartbeat).unwrap_or(now))
-                        )),
-                    }).await;
+                    let _ = event_tx
+                        .send(LifecycleEvent {
+                            event_type: LifecycleEventType::AgentMarkedStale,
+                            agent_id: check.agent_id,
+                            timestamp: now,
+                            details: Some(format!(
+                                "Agent {} missed heartbeat, last seen {}s ago",
+                                check.agent_name,
+                                now.saturating_sub(
+                                    agent_registry
+                                        .get(check.agent_id)
+                                        .await
+                                        .map(|a| a.last_heartbeat)
+                                        .unwrap_or(now)
+                                )
+                            )),
+                        })
+                        .await;
                 }
 
                 if callback_unhealthy && !has_callback_issue {
                     agent_health.issues.push(HealthIssue::CallbackUnhealthy(
-                        "Callback health check failed".to_string()
+                        "Callback health check failed".to_string(),
                     ));
-                    let _ = event_tx.send(LifecycleEvent {
-                        event_type: LifecycleEventType::AgentMarkedStale,
-                        agent_id: check.agent_id,
-                        timestamp: now,
-                        details: Some(format!("Agent {} failed callback health check", check.agent_name)),
-                    }).await;
+                    let _ = event_tx
+                        .send(LifecycleEvent {
+                            event_type: LifecycleEventType::AgentMarkedStale,
+                            agent_id: check.agent_id,
+                            timestamp: now,
+                            details: Some(format!(
+                                "Agent {} failed callback health check",
+                                check.agent_name
+                            )),
+                        })
+                        .await;
                 }
 
-                let _ = agent_registry.update_status(check.agent_id, AgentStatus::Offline).await;
+                let _ = agent_registry
+                    .update_status(check.agent_id, AgentStatus::Offline)
+                    .await;
             } else if !was_healthy && !is_stale && !callback_unhealthy {
                 if !agent_health.issues.is_empty() || !agent_health.is_healthy {
                     agent_health.issues.clear();
                     agent_health.is_healthy = true;
-                    let _ = event_tx.send(LifecycleEvent {
-                        event_type: LifecycleEventType::AgentRecovered,
-                        agent_id: check.agent_id,
-                        timestamp: now,
-                        details: Some("Agent health restored".to_string()),
-                    }).await;
+                    let _ = event_tx
+                        .send(LifecycleEvent {
+                            event_type: LifecycleEventType::AgentRecovered,
+                            agent_id: check.agent_id,
+                            timestamp: now,
+                            details: Some("Agent health restored".to_string()),
+                        })
+                        .await;
                 }
             } else if agent_health.consecutive_failures >= config.max_consecutive_failures {
                 agent_health.is_healthy = false;
-                let _ = agent_registry.update_status(check.agent_id, AgentStatus::Offline).await;
+                let _ = agent_registry
+                    .update_status(check.agent_id, AgentStatus::Offline)
+                    .await;
             }
         }
     }
@@ -328,18 +369,21 @@ impl LifecycleManager {
 
             if health.consecutive_failures >= self.config.max_consecutive_failures {
                 health.is_healthy = false;
-                let _ = self.event_tx.send(LifecycleEvent {
-                    event_type: LifecycleEventType::HealthCheckFailed,
-                    agent_id,
-                    timestamp: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
-                    details: Some(format!(
-                        "Agent exceeded max failures ({}) due to: {}",
-                        self.config.max_consecutive_failures, reason
-                    )),
-                }).await;
+                let _ = self
+                    .event_tx
+                    .send(LifecycleEvent {
+                        event_type: LifecycleEventType::HealthCheckFailed,
+                        agent_id,
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs(),
+                        details: Some(format!(
+                            "Agent exceeded max failures ({}) due to: {}",
+                            self.config.max_consecutive_failures, reason
+                        )),
+                    })
+                    .await;
             }
         }
     }
@@ -356,37 +400,40 @@ impl LifecycleManager {
 
     pub async fn get_unhealthy_agents(&self) -> Vec<AgentHealth> {
         let status = self.health_status.read().await;
-        status.values()
-            .filter(|h| !h.is_healthy)
-            .cloned()
-            .collect()
+        status.values().filter(|h| !h.is_healthy).cloned().collect()
     }
 
     pub async fn initiate_graceful_shutdown(&self, agent_id: Uuid) -> bool {
-        let _ = self.event_tx.send(LifecycleEvent {
-            event_type: LifecycleEventType::GracefulShutdown,
-            agent_id,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            details: None,
-        }).await;
+        let _ = self
+            .event_tx
+            .send(LifecycleEvent {
+                event_type: LifecycleEventType::GracefulShutdown,
+                agent_id,
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+                details: None,
+            })
+            .await;
 
         let _ = self.agent_registry.unregister(agent_id).await;
         true
     }
 
     pub async fn force_shutdown(&self, agent_id: Uuid) {
-        let _ = self.event_tx.send(LifecycleEvent {
-            event_type: LifecycleEventType::ForcedShutdown,
-            agent_id,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            details: Some("Agent force shutdown initiated".to_string()),
-        }).await;
+        let _ = self
+            .event_tx
+            .send(LifecycleEvent {
+                event_type: LifecycleEventType::ForcedShutdown,
+                agent_id,
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+                details: Some("Agent force shutdown initiated".to_string()),
+            })
+            .await;
 
         let _ = self.agent_registry.unregister(agent_id).await;
 
@@ -401,7 +448,12 @@ mod lifecycle_tests {
     use crate::tool::agents::AgentInfo;
     use uuid::Uuid;
 
-    fn make_test_agent(id: Uuid, name: &str, callback_url: Option<String>, last_heartbeat: u64) -> AgentInfo {
+    fn make_test_agent(
+        id: Uuid,
+        name: &str,
+        callback_url: Option<String>,
+        last_heartbeat: u64,
+    ) -> AgentInfo {
         AgentInfo {
             id,
             name: name.to_string(),
@@ -443,22 +495,28 @@ mod lifecycle_tests {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
         let (manager, _rx) = LifecycleManager::new(registry.clone(), config);
-        
+
         let agent_id = Uuid::new_v4();
-        
+
         {
             let mut status = manager.health_status.write().await;
             status.insert(agent_id, make_health_with_callback_issue(agent_id));
         }
-        
+
         let health = manager.get_agent_health(agent_id).await;
         assert!(health.is_some());
         let health = health.unwrap();
-        
+
         assert!(!health.is_healthy);
-        assert!(health.issues.iter().any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))));
-        
-        let has_callback = health.issues.iter().any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_)));
+        assert!(health
+            .issues
+            .iter()
+            .any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))));
+
+        let has_callback = health
+            .issues
+            .iter()
+            .any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_)));
         assert!(has_callback, "CallbackUnhealthy issue should be tracked");
     }
 
@@ -467,22 +525,24 @@ mod lifecycle_tests {
         let registry = AgentRegistry::new();
         let config = LifecycleConfig::default();
         let (manager, mut rx) = LifecycleManager::new(registry.clone(), config);
-        
+
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
-        registry.register(make_test_agent(agent_id, "test-agent", None, now)).await;
-        
+
+        registry
+            .register(make_test_agent(agent_id, "test-agent", None, now))
+            .await;
+
         {
             let mut status = manager.health_status.write().await;
             status.insert(agent_id, make_health_with_callback_issue(agent_id));
         }
-        
+
         registry.heartbeat(agent_id).await;
-        
+
         {
             let mut status = manager.health_status.write().await;
             if let Some(health) = status.get_mut(&agent_id) {
@@ -490,13 +550,16 @@ mod lifecycle_tests {
                 health.is_healthy = true;
             }
         }
-        
+
         let health = manager.get_agent_health(agent_id).await;
         assert!(health.is_some());
         let health = health.unwrap();
 
         assert!(health.is_healthy, "Agent should be healthy after recovery");
-        assert!(health.issues.is_empty(), "Issues should be cleared on recovery");
+        assert!(
+            health.issues.is_empty(),
+            "Issues should be cleared on recovery"
+        );
     }
 
     #[tokio::test]
@@ -511,7 +574,9 @@ mod lifecycle_tests {
             .unwrap()
             .as_secs();
 
-        registry.register(make_test_agent(agent_id, "test-agent", None, now)).await;
+        registry
+            .register(make_test_agent(agent_id, "test-agent", None, now))
+            .await;
 
         manager.record_task_start(agent_id).await;
 
@@ -532,7 +597,9 @@ mod lifecycle_tests {
             .unwrap()
             .as_secs();
 
-        registry.register(make_test_agent(agent_id, "test-agent", None, now)).await;
+        registry
+            .register(make_test_agent(agent_id, "test-agent", None, now))
+            .await;
 
         manager.record_task_start(agent_id).await;
         manager.record_task_success(agent_id).await;
@@ -554,7 +621,14 @@ mod lifecycle_tests {
             .unwrap()
             .as_secs();
 
-        registry.register(make_test_agent(agent_id, "test-agent", Some("http://127.0.0.1:9999".to_string()), now)).await;
+        registry
+            .register(make_test_agent(
+                agent_id,
+                "test-agent",
+                Some("http://127.0.0.1:9999".to_string()),
+                now,
+            ))
+            .await;
 
         LifecycleManager::perform_health_check(
             &manager.health_status,
@@ -562,22 +636,31 @@ mod lifecycle_tests {
             &config,
             &manager.event_tx,
             &manager.client,
-        ).await;
+        )
+        .await;
 
         let mut stale_count = 0;
         while let Ok(event) = rx.try_recv() {
-            if event.event_type == LifecycleEventType::AgentMarkedStale && event.agent_id == agent_id {
+            if event.event_type == LifecycleEventType::AgentMarkedStale
+                && event.agent_id == agent_id
+            {
                 stale_count += 1;
             }
         }
 
-        assert_eq!(stale_count, 1, "Should emit exactly one AgentMarkedStale event for callback failure");
+        assert_eq!(
+            stale_count, 1,
+            "Should emit exactly one AgentMarkedStale event for callback failure"
+        );
 
         let health = manager.get_agent_health(agent_id).await;
         assert!(health.is_some());
         let health = health.unwrap();
         assert!(!health.is_healthy);
-        assert!(health.issues.iter().any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))));
+        assert!(health
+            .issues
+            .iter()
+            .any(|i| matches!(i, HealthIssue::CallbackUnhealthy(_))));
     }
 
     #[tokio::test]
@@ -592,7 +675,14 @@ mod lifecycle_tests {
             .unwrap()
             .as_secs();
 
-        registry.register(make_test_agent(agent_id, "test-agent", Some("http://127.0.0.1:9999".to_string()), now)).await;
+        registry
+            .register(make_test_agent(
+                agent_id,
+                "test-agent",
+                Some("http://127.0.0.1:9999".to_string()),
+                now,
+            ))
+            .await;
 
         LifecycleManager::perform_health_check(
             &manager.health_status,
@@ -600,7 +690,8 @@ mod lifecycle_tests {
             &config,
             &manager.event_tx,
             &manager.client,
-        ).await;
+        )
+        .await;
 
         let health = manager.get_agent_health(agent_id).await;
         assert!(health.is_some());
@@ -627,16 +718,21 @@ mod lifecycle_tests {
             &config,
             &manager.event_tx,
             &manager.client,
-        ).await;
+        )
+        .await;
 
         let mut recovery_count = 0;
         while let Ok(event) = rx.try_recv() {
-            if event.event_type == LifecycleEventType::AgentRecovered && event.agent_id == agent_id {
+            if event.event_type == LifecycleEventType::AgentRecovered && event.agent_id == agent_id
+            {
                 recovery_count += 1;
             }
         }
 
-        assert_eq!(recovery_count, 0, "Recovery should not emit event when already healthy in status map");
+        assert_eq!(
+            recovery_count, 0,
+            "Recovery should not emit event when already healthy in status map"
+        );
 
         let health = manager.get_agent_health(agent_id).await;
         assert!(health.is_some());
@@ -651,7 +747,9 @@ mod lifecycle_tests {
         let agent_id = Uuid::new_v4();
         let future_time = u64::MAX;
 
-        registry.register(make_test_agent(agent_id, "test-agent", None, future_time)).await;
+        registry
+            .register(make_test_agent(agent_id, "test-agent", None, future_time))
+            .await;
 
         LifecycleManager::perform_health_check(
             &manager.health_status,
@@ -659,7 +757,8 @@ mod lifecycle_tests {
             &config,
             &manager.event_tx,
             &manager.client,
-        ).await;
+        )
+        .await;
 
         let health = manager.get_agent_health(agent_id).await;
         assert!(health.is_some());
@@ -682,7 +781,10 @@ mod lifecycle_tests {
         token.cancel();
 
         let result = tokio::time::timeout(std::time::Duration::from_secs(2), handle).await;
-        assert!(result.is_ok(), "Health monitor should stop when token is cancelled");
+        assert!(
+            result.is_ok(),
+            "Health monitor should stop when token is cancelled"
+        );
     }
 
     #[tokio::test]
@@ -698,7 +800,9 @@ mod lifecycle_tests {
             .as_secs()
             .saturating_sub(config.stale_threshold_secs + 100);
 
-        registry.register(make_test_agent(agent_id, "test-agent", None, old_heartbeat)).await;
+        registry
+            .register(make_test_agent(agent_id, "test-agent", None, old_heartbeat))
+            .await;
 
         LifecycleManager::perform_health_check(
             &manager.health_status,
@@ -706,10 +810,15 @@ mod lifecycle_tests {
             &config,
             &manager.event_tx,
             &manager.client,
-        ).await;
+        )
+        .await;
 
         let agent = registry.get(agent_id).await;
         assert!(agent.is_some());
-        assert_eq!(agent.unwrap().status, AgentStatus::Offline, "Stale agent should have Offline status, not Idle");
+        assert_eq!(
+            agent.unwrap().status,
+            AgentStatus::Offline,
+            "Stale agent should have Offline status, not Idle"
+        );
     }
 }

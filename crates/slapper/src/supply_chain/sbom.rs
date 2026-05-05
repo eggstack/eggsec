@@ -321,7 +321,9 @@ impl SbomGenerator {
         for line in content.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("name") {
-                return trimmed.split_once('=').map(|x| x.1)
+                return trimmed
+                    .split_once('=')
+                    .map(|x| x.1)
                     .map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string());
             }
         }
@@ -332,7 +334,9 @@ impl SbomGenerator {
         for line in content.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("version") {
-                return trimmed.split_once('=').map(|x| x.1)
+                return trimmed
+                    .split_once('=')
+                    .map(|x| x.1)
                     .map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string());
             }
         }

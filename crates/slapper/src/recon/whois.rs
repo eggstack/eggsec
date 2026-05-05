@@ -1,6 +1,6 @@
 use crate::error::{Result, SlapperError};
-use crate::utils::extract_target_from_url;
 use crate::utils::connect_with_nodelay;
+use crate::utils::extract_target_from_url;
 use serde::{Deserialize, Serialize};
 use std::net::ToSocketAddrs;
 use std::time::Duration;
@@ -207,16 +207,12 @@ fn parse_whois_response(domain: &str, response: &str) -> WhoisResult {
             || line_lower.starts_with("modified date:")
         {
             result.updated_date = Some(extract_value(line));
-        } else if line_lower.starts_with("name server:")
-            || line_lower.starts_with("nserver:")
-        {
+        } else if line_lower.starts_with("name server:") || line_lower.starts_with("nserver:") {
             let ns = extract_value(line);
             if !ns.is_empty() && !result.nameservers.contains(&ns) {
                 result.nameservers.push(ns);
             }
-        } else if line_lower.starts_with("domain status:")
-            || line_lower.starts_with("status:")
-        {
+        } else if line_lower.starts_with("domain status:") || line_lower.starts_with("status:") {
             let status = extract_value(line);
             if !status.is_empty() && !result.status.contains(&status) {
                 result.status.push(status);

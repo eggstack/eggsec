@@ -54,9 +54,13 @@ impl MfaTester {
     async fn check_mfa_enabled(&self, target: &str) -> Vec<String> {
         let mut findings = Vec::new();
 
-        let response = self.client
+        let response = self
+            .client
             .post(target)
-            .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
             .body("username=admin&password=admin")
             .send()
             .await;
@@ -65,8 +69,13 @@ impl MfaTester {
             let body = resp.text().await.unwrap_or_default();
             let lower = body.to_lowercase();
 
-            if lower.contains("two-factor") || lower.contains("mfa") || lower.contains("verification code")
-                || lower.contains("authenticator") || lower.contains("totp") || lower.contains("2fa") {
+            if lower.contains("two-factor")
+                || lower.contains("mfa")
+                || lower.contains("verification code")
+                || lower.contains("authenticator")
+                || lower.contains("totp")
+                || lower.contains("2fa")
+            {
                 findings.push("MFA/2FA detected in login flow".to_string());
             }
             if lower.contains("enter code") || lower.contains("enter token") {
@@ -80,9 +89,13 @@ impl MfaTester {
     async fn test_bypass_methods(&self, target: &str) -> Vec<MfaBypassMethod> {
         let mut methods = Vec::new();
 
-        let response = self.client
+        let response = self
+            .client
             .post(target)
-            .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
             .body("username=admin&password=admin&mfa_code=000000")
             .send()
             .await;
@@ -98,9 +111,13 @@ impl MfaTester {
             }
         }
 
-        let response = self.client
+        let response = self
+            .client
             .post(target)
-            .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
             .body("username=admin&password=admin&mfa_skip=true")
             .send()
             .await;

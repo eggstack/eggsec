@@ -1,8 +1,8 @@
 use crate::cli::FuzzArgs;
 use crate::error::Result;
 use crate::fuzzer::chain::ExtractRule;
-use crate::fuzzer::FuzzEngine;
 use crate::fuzzer::engine::types::FuzzSession;
+use crate::fuzzer::FuzzEngine;
 use reqwest::Client;
 use rustc_hash::FxHashMap;
 
@@ -99,10 +99,8 @@ impl StatefulFuzzer {
 
     fn extract_variables_from_session(&mut self, session: &FuzzSession) {
         if let Some(result) = session.results.last() {
-            self.variables.insert(
-                "_last_status".to_string(),
-                result.status_code.to_string(),
-            );
+            self.variables
+                .insert("_last_status".to_string(), result.status_code.to_string());
         }
 
         for result in &session.results {
@@ -115,18 +113,16 @@ impl StatefulFuzzer {
         }
     }
 
-    fn apply_extract_rule(
-        &self,
-        _session: &mut FuzzSession,
-        _rule: &ExtractRule,
-    ) {
-    }
+    fn apply_extract_rule(&self, _session: &mut FuzzSession, _rule: &ExtractRule) {}
 
     fn apply_variables_to_args(&self, mut args: FuzzArgs) -> FuzzArgs {
         if args.param.is_none() {
             if let Some(idx) = args.url.find("${") {
                 let start = idx + 2;
-                let end = args.url[start..].find('}').map(|i| start + i).unwrap_or(idx);
+                let end = args.url[start..]
+                    .find('}')
+                    .map(|i| start + i)
+                    .unwrap_or(idx);
                 let var_name = &args.url[start..end];
                 if let Some(value) = self.variables.get(var_name) {
                     let placeholder = format!("${{{}}}", var_name);
@@ -258,7 +254,10 @@ mod tests {
         let mut fuzzer = StatefulFuzzer::new(client);
 
         fuzzer.set_variable("test_key", "test_value");
-        assert_eq!(fuzzer.get_variable("test_key"), Some(&"test_value".to_string()));
+        assert_eq!(
+            fuzzer.get_variable("test_key"),
+            Some(&"test_value".to_string())
+        );
         assert_eq!(fuzzer.get_variable("nonexistent"), None);
     }
 

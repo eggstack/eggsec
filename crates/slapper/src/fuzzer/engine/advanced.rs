@@ -23,7 +23,10 @@ impl FuzzEngine {
             .timeout(Duration::from_secs(self.args.timeout))
             .danger_accept_invalid_certs(insecure)
             .redirect(reqwest::redirect::Policy::limited(5))
-            .build().map_err(|e| crate::error::SlapperError::from(e).with_timeout(self.args.timeout * 1000))?;
+            .build()
+            .map_err(|e| {
+                crate::error::SlapperError::from(e).with_timeout(self.args.timeout * 1000)
+            })?;
 
         match fuzzer_type {
             "graphql" => {
@@ -96,11 +99,17 @@ impl FuzzEngine {
             }
             "websocket" => {
                 let mut fuzzer = WebSocketFuzzer::new(self.args.url.clone());
-                fuzzer.fuzz(&client).await.map_err(crate::error::SlapperError::from)
+                fuzzer
+                    .fuzz(&client)
+                    .await
+                    .map_err(crate::error::SlapperError::from)
             }
             "grpc" => {
                 let mut fuzzer = GrpcFuzzer::new(self.args.url.clone());
-                fuzzer.fuzz(&client).await.map_err(crate::error::SlapperError::from)
+                fuzzer
+                    .fuzz(&client)
+                    .await
+                    .map_err(crate::error::SlapperError::from)
             }
             _ => Ok(Vec::new()),
         }
@@ -166,7 +175,9 @@ impl FuzzEngine {
             .collect();
 
         if types.is_empty() {
-            return Err(SlapperError::Payload("No valid payload types specified".to_string()));
+            return Err(SlapperError::Payload(
+                "No valid payload types specified".to_string(),
+            ));
         }
 
         Ok(types)

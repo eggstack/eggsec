@@ -29,8 +29,11 @@ async fn test_fingerprint_http_service() {
     .await
     .unwrap();
 
-    assert!(!results.results.is_empty(), "Should identify at least one service");
-    
+    assert!(
+        !results.results.is_empty(),
+        "Should identify at least one service"
+    );
+
     // Should identify HTTP
     let http_result = results.results.iter().find(|r| r.service == "HTTP");
     assert!(http_result.is_some(), "Should identify HTTP service");
@@ -44,7 +47,7 @@ async fn test_fingerprint_unreachable_port() {
         vec![1], // TCPMUX port, typically closed
         std::time::Duration::from_secs(1),
         true,
-        10, // concurrency
+        10,   // concurrency
         None, // progress_tx
         None, // max_results
     )
@@ -68,7 +71,7 @@ fn test_probes_not_empty() {
         extra: None,
         confidence: 90,
     };
-    
+
     assert_eq!(fp.port, 80);
     assert_eq!(fp.service, "HTTP");
     assert!(fp.confidence > 0);
@@ -102,7 +105,7 @@ fn test_fingerprint_results_display() {
             },
         ],
     };
-    
+
     let display = format!("{}", results);
     assert!(display.contains("example.com"));
     assert!(display.contains("HTTP"));

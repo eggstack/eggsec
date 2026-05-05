@@ -9,7 +9,6 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-
     Frame,
 };
 
@@ -24,6 +23,7 @@ pub struct WafTab {
     pub detection_view: ScrollableText,
     pub bypass_view: ScrollableText,
     pub focus_area: WafFocusArea,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -60,6 +60,7 @@ impl WafTab {
             detection_view: ScrollableText::new("Detection Result"),
             bypass_view: ScrollableText::new("Bypass Results"),
             focus_area: WafFocusArea::Inputs,
+            error_message: None,
         }
     }
 
@@ -209,10 +210,7 @@ impl WafTab {
 
             self.bypass_view.add_line(Line::from(vec![
                 Span::styled(format!("[{}] ", icon), Style::default().fg(color)),
-                Span::styled(
-                    format!("{:?}", technique),
-                    Style::default().fg(tc!(accent)),
-                ),
+                Span::styled(format!("{:?}", technique), Style::default().fg(tc!(accent))),
             ]));
 
             if !description.is_empty() {
@@ -299,6 +297,7 @@ impl TabState for WafTab {
         self.progress.current = 0;
         self.detection_view.clear();
         self.bypass_view.clear();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -307,6 +306,12 @@ impl TabState for WafTab {
         }
         self.technique_checkboxes[1].checked = true;
         self.technique_checkboxes[2].checked = true;
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+        self.progress.current = 0;
     }
 }
 
@@ -322,6 +327,15 @@ impl TabRender for WafTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        if let Some(ref err_msg) = self.error_message {
+            use ratatui::widgets::{Block, Borders, Paragraph};
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(Block::default().borders(Borders::ALL).title("WAF - Error"))
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, area);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(17), Constraint::Min(0)])
@@ -400,22 +414,30 @@ impl TabInput for WafTab {
                 WafFocusArea::Techniques
             }
             WafFocusArea::Techniques => {
+                self.technique_checkboxes
+                    .iter_mut()
+                    .for_each(|cb| cb.focused = false);
+                WafFocusArea::Results
+            }
+            WafFocusArea::Results => {
                 self.inputs.focus(0);
                 WafFocusArea::Inputs
             }
-            WafFocusArea::Results => WafFocusArea::Inputs,
         };
     }
 
     fn handle_focus_prev(&mut self) {
         self.focus_area = match self.focus_area {
-            WafFocusArea::Inputs => WafFocusArea::Techniques,
+            WafFocusArea::Inputs => WafFocusArea::Results,
             WafFocusArea::ModeRadio => {
                 self.inputs.focus(0);
                 WafFocusArea::Inputs
             }
             WafFocusArea::Techniques => WafFocusArea::ModeRadio,
-            WafFocusArea::Results => WafFocusArea::Inputs,
+            WafFocusArea::Results => {
+                self.technique_checkboxes[0].focused = true;
+                WafFocusArea::Techniques
+            }
         };
     }
 
@@ -429,6 +451,64 @@ impl TabInput for WafTab {
         if !self.is_running() && self.focus_area == WafFocusArea::Inputs {
             self.inputs.backspace();
         }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == WafFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        match self.focus_area {
+            WafFocusArea::Inputs => self.inputs.get_focused_value(),
+            WafFocusArea::Results => {
+                let mut content = self.detection_view.get_content();
+                content.push_str("\n\n");
+                content.push_str(&self.bypass_view.get_content());
+                Some(content)
+            }
+            _ => None,
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == WafFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == WafFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == WafFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == WafFocusArea::Results {
+            self.detection_view.scroll_to_top();
+            self.bypass_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == WafFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == WafFocusArea::Results {
+            self.detection_view.scroll_to_bottom();
+            self.bypass_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = WafFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = WafFocusArea::Results;
     }
 
     fn handle_enter(&mut self) {
@@ -523,8 +603,7 @@ impl TabInput for WafTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.focus_area == WafFocusArea::Inputs {
-            let cursor_pos = self.inputs.fields[0].cursor_pos;
-            cursor_pos == 0
+            self.inputs.is_at_left_edge()
         } else if self.focus_area == WafFocusArea::Techniques {
             let focused_idx = self.technique_checkboxes.iter().position(|cb| cb.focused);
             focused_idx == Some(0)
@@ -535,8 +614,7 @@ impl TabInput for WafTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == WafFocusArea::Inputs {
-            let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.len()
+            self.inputs.is_at_right_edge()
         } else if self.focus_area == WafFocusArea::Techniques {
             let focused_idx = self.technique_checkboxes.iter().position(|cb| cb.focused);
             focused_idx == Some(self.technique_checkboxes.len() - 1)

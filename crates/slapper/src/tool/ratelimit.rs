@@ -78,11 +78,7 @@ impl RateLimitConfig {
             .as_integer()?
             .try_into()
             .ok()?;
-        let burst_size = value
-            .get("burst_size")?
-            .as_integer()?
-            .try_into()
-            .ok()?;
+        let burst_size = value.get("burst_size")?.as_integer()?.try_into().ok()?;
 
         let per_endpoint_limits = if let Some(ep) = value.get("per_endpoint_limits") {
             let mut map = HashMap::new();
@@ -224,7 +220,10 @@ impl RateLimiter {
     }
 
     pub fn check_rate_limit(&self, key: &str) -> Result<(), SlapperError> {
-        let mut bucket = self.tokens.entry(key.to_string()).or_insert_with(|| TokenBucket::new(&self.config));
+        let mut bucket = self
+            .tokens
+            .entry(key.to_string())
+            .or_insert_with(|| TokenBucket::new(&self.config));
 
         if bucket.try_consume(1.0, self.config.requests_per_minute) {
             Ok(())
@@ -235,38 +234,54 @@ impl RateLimiter {
         }
     }
 
-    pub fn check_rate_limit_endpoint(&self, key: &str, endpoint: &str, client_ip: Option<&str>) -> Result<(), SlapperError> {
+    pub fn check_rate_limit_endpoint(
+        &self,
+        key: &str,
+        endpoint: &str,
+        client_ip: Option<&str>,
+    ) -> Result<(), SlapperError> {
         if let Some(global_limit) = self.config.global_rate_limit {
             let current = self.global_counter.fetch_add(1, Ordering::SeqCst);
             if current >= global_limit as usize {
                 self.global_counter.fetch_sub(1, Ordering::SeqCst);
                 return Err(SlapperError::RateLimited(
-                    "Global rate limit exceeded. Please wait before making more requests.".to_string(),
+                    "Global rate limit exceeded. Please wait before making more requests."
+                        .to_string(),
                 ));
             }
         }
 
         if self.config.enable_ip_based_limiting {
             if let Some(ip) = client_ip {
-                let mut ip_bucket = self.ip_tokens.entry(ip.to_string()).or_insert_with(|| TokenBucket::new(&self.config));
+                let mut ip_bucket = self
+                    .ip_tokens
+                    .entry(ip.to_string())
+                    .or_insert_with(|| TokenBucket::new(&self.config));
                 if !ip_bucket.try_consume(1.0, self.config.requests_per_minute) {
                     if self.config.global_rate_limit.is_some() {
                         self.global_counter.fetch_sub(1, Ordering::SeqCst);
                     }
                     return Err(SlapperError::RateLimited(
-                        "Rate limit exceeded for your IP. Please wait before making more requests.".to_string(),
+                        "Rate limit exceeded for your IP. Please wait before making more requests."
+                            .to_string(),
                     ));
                 }
             }
         }
 
         let (rpm, burst) = if let Some(ep_limit) = self.config.per_endpoint_limits.get(endpoint) {
-            (ep_limit.requests_per_minute, ep_limit.burst_size.unwrap_or(self.config.burst_size))
+            (
+                ep_limit.requests_per_minute,
+                ep_limit.burst_size.unwrap_or(self.config.burst_size),
+            )
         } else {
             (self.config.requests_per_minute, self.config.burst_size)
         };
 
-        let mut bucket = self.tokens.entry(key.to_string()).or_insert_with(|| TokenBucket::new_with_burst(burst));
+        let mut bucket = self
+            .tokens
+            .entry(key.to_string())
+            .or_insert_with(|| TokenBucket::new_with_burst(burst));
 
         if bucket.try_consume(1.0, rpm) {
             Ok(())
@@ -274,13 +289,17 @@ impl RateLimiter {
             if self.config.global_rate_limit.is_some() {
                 self.global_counter.fetch_sub(1, Ordering::SeqCst);
             }
-            Err(SlapperError::RateLimited(
-                format!("Rate limit exceeded for endpoint {}. Please wait before making more requests.", endpoint),
-            ))
+            Err(SlapperError::RateLimited(format!(
+                "Rate limit exceeded for endpoint {}. Please wait before making more requests.",
+                endpoint
+            )))
         }
     }
 
-    pub async fn try_acquire_concurrent(&self, key: &str) -> Result<ConcurrentPermit, SlapperError> {
+    pub async fn try_acquire_concurrent(
+        &self,
+        key: &str,
+    ) -> Result<ConcurrentPermit, SlapperError> {
         let current = self.concurrent_count.fetch_add(1, Ordering::SeqCst);
 
         if current >= self.concurrent_limit {
@@ -309,7 +328,9 @@ impl RateLimiter {
                 tokens_available: bucket.available_tokens(),
                 requests_this_minute: bucket.requests_this_minute,
                 requests_per_minute: self.config.requests_per_minute,
-                concurrent_available: self.concurrent_limit.saturating_sub(self.concurrent_count.load(Ordering::SeqCst)),
+                concurrent_available: self
+                    .concurrent_limit
+                    .saturating_sub(self.concurrent_count.load(Ordering::SeqCst)),
                 concurrent_limit: self.config.concurrent_scans,
                 concurrent_in_use: self.concurrent_count.load(Ordering::SeqCst),
             }
@@ -318,7 +339,9 @@ impl RateLimiter {
                 tokens_available: self.config.burst_size as f64,
                 requests_this_minute: 0,
                 requests_per_minute: self.config.requests_per_minute,
-                concurrent_available: self.concurrent_limit.saturating_sub(self.concurrent_count.load(Ordering::SeqCst)),
+                concurrent_available: self
+                    .concurrent_limit
+                    .saturating_sub(self.concurrent_count.load(Ordering::SeqCst)),
                 concurrent_limit: self.config.concurrent_scans,
                 concurrent_in_use: self.concurrent_count.load(Ordering::SeqCst),
             }
@@ -327,7 +350,10 @@ impl RateLimiter {
 
     pub fn get_endpoint_status(&self, key: &str, endpoint: &str) -> RateLimitStatus {
         let (rpm, burst) = if let Some(ep_limit) = self.config.per_endpoint_limits.get(endpoint) {
-            (ep_limit.requests_per_minute, ep_limit.burst_size.unwrap_or(self.config.burst_size))
+            (
+                ep_limit.requests_per_minute,
+                ep_limit.burst_size.unwrap_or(self.config.burst_size),
+            )
         } else {
             (self.config.requests_per_minute, self.config.burst_size)
         };
@@ -338,7 +364,9 @@ impl RateLimiter {
                 tokens_available: bucket.available_tokens(),
                 requests_this_minute: bucket.requests_this_minute,
                 requests_per_minute: rpm,
-                concurrent_available: self.concurrent_limit.saturating_sub(self.concurrent_count.load(Ordering::SeqCst)),
+                concurrent_available: self
+                    .concurrent_limit
+                    .saturating_sub(self.concurrent_count.load(Ordering::SeqCst)),
                 concurrent_limit: self.config.concurrent_scans,
                 concurrent_in_use: self.concurrent_count.load(Ordering::SeqCst),
             }
@@ -347,7 +375,9 @@ impl RateLimiter {
                 tokens_available: burst as f64,
                 requests_this_minute: 0,
                 requests_per_minute: rpm,
-                concurrent_available: self.concurrent_limit.saturating_sub(self.concurrent_count.load(Ordering::SeqCst)),
+                concurrent_available: self
+                    .concurrent_limit
+                    .saturating_sub(self.concurrent_count.load(Ordering::SeqCst)),
                 concurrent_limit: self.config.concurrent_scans,
                 concurrent_in_use: self.concurrent_count.load(Ordering::SeqCst),
             }
@@ -468,7 +498,9 @@ mod tests {
         let limiter = RateLimiter::new(config);
 
         for _ in 0..2 {
-            assert!(limiter.check_rate_limit_endpoint("test", "/api/scan", None).is_ok());
+            assert!(limiter
+                .check_rate_limit_endpoint("test", "/api/scan", None)
+                .is_ok());
         }
 
         let result = limiter.check_rate_limit_endpoint("test", "/api/scan", None);
@@ -482,7 +514,9 @@ mod tests {
         let limiter = RateLimiter::new(config);
 
         for _ in 0..5 {
-            assert!(limiter.check_rate_limit_endpoint("test", "/api/scan", None).is_ok());
+            assert!(limiter
+                .check_rate_limit_endpoint("test", "/api/scan", None)
+                .is_ok());
         }
 
         let result = limiter.check_rate_limit_endpoint("test", "/api/scan", None);
@@ -499,7 +533,9 @@ mod tests {
         let limiter = RateLimiter::new(config);
 
         for _ in 0..10 {
-            assert!(limiter.check_rate_limit_endpoint("test", "/api/scan", Some("192.168.1.1")).is_ok());
+            assert!(limiter
+                .check_rate_limit_endpoint("test", "/api/scan", Some("192.168.1.1"))
+                .is_ok());
         }
 
         let result = limiter.check_rate_limit_endpoint("test", "/api/scan", Some("192.168.1.1"));

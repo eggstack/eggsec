@@ -290,7 +290,10 @@ impl TakeoverDetector {
         if let Some(ref cname_val) = cname {
             for fingerprint in FINGERPRINTS.iter() {
                 let cname_matches = fingerprint.cnames.iter().any(|c| cname_val.contains(c));
-                let nxdomain_matches = fingerprint.nxdomain_cnames.iter().any(|c| cname_val.contains(c));
+                let nxdomain_matches = fingerprint
+                    .nxdomain_cnames
+                    .iter()
+                    .any(|c| cname_val.contains(c));
 
                 if cname_matches || nxdomain_matches {
                     let http_result = self.check_http_indicators(subdomain, fingerprint).await;
@@ -376,7 +379,11 @@ impl TakeoverDetector {
         })
     }
 
-    async fn check_http_indicators(&self, subdomain: &str, fingerprint: &TakeoverFingerprint) -> HttpCheckResult {
+    async fn check_http_indicators(
+        &self,
+        subdomain: &str,
+        fingerprint: &TakeoverFingerprint,
+    ) -> HttpCheckResult {
         let url = format!("https://{}", subdomain);
 
         match self.client.get(&url).send().await {
@@ -397,7 +404,10 @@ impl TakeoverDetector {
             }
             Err(e) => {
                 let err_str = e.to_string();
-                if err_str.contains("dns error") || err_str.contains("resolve") || err_str.contains("NXDOMAIN") {
+                if err_str.contains("dns error")
+                    || err_str.contains("resolve")
+                    || err_str.contains("NXDOMAIN")
+                {
                     for cname_pattern in fingerprint.nxdomain_cnames {
                         if let Some(cname) = fingerprint.cnames.first() {
                             if err_str.contains(*cname) || cname_pattern.contains(*cname) {
@@ -414,7 +424,12 @@ impl TakeoverDetector {
         }
     }
 
-    pub async fn detect_single(&self, subdomain: &str, cname: Option<String>, ns: Option<String>) -> Result<TakeoverResult> {
+    pub async fn detect_single(
+        &self,
+        subdomain: &str,
+        cname: Option<String>,
+        ns: Option<String>,
+    ) -> Result<TakeoverResult> {
         let target = TakeoverTarget {
             subdomain: subdomain.to_string(),
             cname,
@@ -430,7 +445,11 @@ enum HttpCheckResult {
     Unknown(String),
 }
 
-pub async fn detect_takeovers(subdomains: &[String], dns_records: Option<&crate::recon::dns_records::DnsRecords>, timeout_secs: u64) -> Result<Vec<TakeoverResult>> {
+pub async fn detect_takeovers(
+    subdomains: &[String],
+    dns_records: Option<&crate::recon::dns_records::DnsRecords>,
+    timeout_secs: u64,
+) -> Result<Vec<TakeoverResult>> {
     let detector = TakeoverDetector::new(timeout_secs)?;
 
     let mut cname_map: HashMap<String, String> = HashMap::new();
@@ -478,7 +497,10 @@ mod tests {
         assert!(s3.is_some());
         let s3 = s3.unwrap();
         assert!(s3.cnames.iter().any(|c| c.contains("amazonaws")));
-        assert!(s3.http_indicators.iter().any(|i| i.contains("NoSuchBucket")));
+        assert!(s3
+            .http_indicators
+            .iter()
+            .any(|i| i.contains("NoSuchBucket")));
     }
 
     #[test]

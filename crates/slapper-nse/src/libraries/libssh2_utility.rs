@@ -37,15 +37,16 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             let mut banner = [0u8; 1024];
             let n = stream.read(&mut banner).unwrap_or(0);
@@ -87,18 +88,16 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
                         result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                         return Ok(result);
                     }
-                    };
-                    let mut stream = match TcpStream::connect_timeout(
-                        &socket_addr,
-                        Duration::from_secs(10),
-                    ) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
                 };
+                let mut stream =
+                    match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            result.set("status", "error")?;
+                            result.set("error", e.to_string())?;
+                            return Ok(result);
+                        }
+                    };
 
                 let mut banner = [0u8; 1024];
                 let _n = stream.read(&mut banner).unwrap_or(0);
@@ -124,15 +123,16 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
                     result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
                     return Ok(result);
                 }
-                };
-                let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
-                        return Ok(result);
-                    }
-                };
+            };
+            let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10))
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    result.set("status", "error")?;
+                    result.set("error", e.to_string())?;
+                    return Ok(result);
+                }
+            };
 
             let mut banner = [0u8; 1024];
             let _n = stream.read(&mut banner).unwrap_or(0);

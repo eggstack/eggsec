@@ -1,4 +1,4 @@
-use crate::cli::{GraphQlArgs, OAuthArgs, FuzzArgs, FuzzMode, CommonHttpArgs};
+use crate::cli::{CommonHttpArgs, FuzzArgs, FuzzMode, GraphQlArgs, OAuthArgs};
 use anyhow::Result;
 
 struct BaseFuzzConfig {
@@ -103,10 +103,14 @@ impl From<OAuthArgs> for FuzzArgs {
 
 pub async fn run_graphql(args: GraphQlArgs) -> Result<()> {
     let fuzz_args = FuzzArgs::from(args);
-    crate::fuzzer::run_cli(fuzz_args).await.map_err(|e| anyhow::anyhow!("{}", e))
+    crate::fuzzer::run_cli(fuzz_args)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))
 }
 
 pub async fn run_oauth(args: OAuthArgs) -> Result<()> {
     let fuzz_args = FuzzArgs::from(args);
-    crate::fuzzer::run_cli(fuzz_args).await.map_err(|e| anyhow::anyhow!("{}", e))
+    crate::fuzzer::run_cli(fuzz_args)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))
 }

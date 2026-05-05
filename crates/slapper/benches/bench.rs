@@ -1,4 +1,4 @@
-use slapper::scanner::endpoints::{scan_endpoints, DEFAULT_ENDPOINTS, EndpointScanConfig};
+use slapper::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_ENDPOINTS};
 use slapper::scanner::ports::scan_ports_optimized;
 use slapper::scanner::spoof::SpoofConfig;
 use slapper::scanner::timing::{PortPriority, TimingConfig, TimingPreset};

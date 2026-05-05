@@ -76,7 +76,10 @@ mod tests {
     #[test]
     fn payloads_non_empty() {
         let payloads = get_payloads();
-        assert!(!payloads.is_empty(), "Mass assignment payloads must not be empty");
+        assert!(
+            !payloads.is_empty(),
+            "Mass assignment payloads must not be empty"
+        );
     }
 
     #[test]
@@ -99,9 +102,14 @@ mod tests {
     fn contains_sensitive_field_assignment() {
         let payloads = get_payloads();
         let has_sensitive = payloads.iter().any(|p| {
-            p.payload.contains("password") || p.payload.contains("secret") || p.payload.contains("token")
+            p.payload.contains("password")
+                || p.payload.contains("secret")
+                || p.payload.contains("token")
         });
-        assert!(has_sensitive, "Must contain sensitive field assignment payloads");
+        assert!(
+            has_sensitive,
+            "Must contain sensitive field assignment payloads"
+        );
     }
 
     #[test]
@@ -116,9 +124,9 @@ mod tests {
     #[test]
     fn contains_nested_objects() {
         let payloads = get_payloads();
-        let has_nested = payloads.iter().any(|p| {
-            p.payload.contains("[") && p.payload.contains("]=")
-        });
+        let has_nested = payloads
+            .iter()
+            .any(|p| p.payload.contains("[") && p.payload.contains("]="));
         assert!(has_nested, "Must contain nested object assignment payloads");
     }
 

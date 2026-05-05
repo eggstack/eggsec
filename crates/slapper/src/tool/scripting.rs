@@ -17,8 +17,6 @@ pub trait ScriptEngine: Send + Sync + std::fmt::Debug {
     fn set_sandbox(&mut self, enabled: bool);
 }
 
-
-
 #[derive(Debug, Clone)]
 pub struct ScriptContext {
     pub target: Option<String>,
@@ -103,13 +101,11 @@ impl ScriptEngineRegistry {
         context: &ScriptContext,
     ) -> Result<ScriptResult, ScriptError> {
         let engines = self.engines.read().await;
-        let engine = engines
-            .get(engine_id)
-            .ok_or_else(|| ScriptError {
-                code: "ENGINE_NOT_FOUND".to_string(),
-                message: format!("Script engine '{}' not found", engine_id),
-                line: None,
-            })?;
+        let engine = engines.get(engine_id).ok_or_else(|| ScriptError {
+            code: "ENGINE_NOT_FOUND".to_string(),
+            message: format!("Script engine '{}' not found", engine_id),
+            line: None,
+        })?;
 
         let start = std::time::Instant::now();
         let result = engine.execute(script, context);
@@ -127,11 +123,7 @@ impl ScriptEngineRegistry {
     pub async fn stats(&self) -> ScriptEngineStats {
         let count = *self.execution_count.read().await;
         let total_time = *self.total_execution_time_ms.read().await;
-        let avg_time = if count > 0 {
-            total_time / count
-        } else {
-            0
-        };
+        let avg_time = if count > 0 { total_time / count } else { 0 };
 
         ScriptEngineStats {
             total_executions: count,
@@ -222,7 +214,9 @@ impl ScriptSandbox {
         if self.allowed_paths.is_empty() {
             return true;
         }
-        self.allowed_paths.iter().any(|allowed| path.starts_with(allowed))
+        self.allowed_paths
+            .iter()
+            .any(|allowed| path.starts_with(allowed))
     }
 }
 

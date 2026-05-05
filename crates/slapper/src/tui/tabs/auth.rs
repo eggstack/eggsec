@@ -159,6 +159,46 @@ impl TabInput for AuthTab {
         }
     }
 
+    fn handle_paste(&mut self, text: &str) {
+        if let Some(idx) = self.current_input_index() {
+            self.inputs.fields[idx].paste(text);
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if let Some(idx) = self.current_input_index() {
+            self.inputs.fields[idx].move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if let Some(idx) = self.current_input_index() {
+            self.inputs.fields[idx].move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if let Some(idx) = self.current_input_index() {
+            self.inputs.fields[idx].move_home();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if let Some(idx) = self.current_input_index() {
+            self.inputs.fields[idx].move_end();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = AuthFocusArea::Target;
+        self.sync_input_focus();
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = AuthFocusArea::Results;
+        self.sync_input_focus();
+    }
+
     fn handle_enter(&mut self) {
         if self.is_running() {
             self.stop();
@@ -167,7 +207,9 @@ impl TabInput for AuthTab {
         }
     }
 
-    fn handle_escape(&mut self) {}
+    fn handle_escape(&mut self) {
+        self.inputs.blur();
+    }
 
     fn handle_up(&mut self) {
         if self.focus_area == AuthFocusArea::Results {
@@ -202,18 +244,26 @@ impl TabInput for AuthTab {
     }
 
     fn handle_left(&mut self) -> bool {
-        if let Some(idx) = self.current_input_index() {
-            self.inputs.fields[idx].move_left()
-        } else {
-            false
-        }
+        self.inputs.move_left()
     }
 
     fn handle_right(&mut self) -> bool {
-        if let Some(idx) = self.current_input_index() {
-            self.inputs.fields[idx].move_right()
+        self.inputs.move_right()
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        if self.is_input_focused() {
+            self.inputs.is_at_left_edge()
         } else {
-            false
+            true
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        if self.is_input_focused() {
+            self.inputs.is_at_right_edge()
+        } else {
+            true
         }
     }
 

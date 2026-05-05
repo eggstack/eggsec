@@ -8,8 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::types::*;
 use super::AppState;
-use crate::tool::request::ToolRequest;
 use crate::tool::request::Target;
+use crate::tool::request::ToolRequest;
 use crate::tool::response::ResponseSeverity;
 
 pub async fn create_response(
@@ -49,7 +49,9 @@ pub async fn create_response(
                             location: Some(finding.location.clone()),
                             evidence: vec![AiEvidence {
                                 description: "Tool execution result".to_string(),
-                                raw_data: Some(serde_json::to_string(&finding.metadata).unwrap_or_default()),
+                                raw_data: Some(
+                                    serde_json::to_string(&finding.metadata).unwrap_or_default(),
+                                ),
                                 source: Some(tool_info.name.clone()),
                             }],
                             remediation: finding.remediation.as_ref().map(|r| AiRemediation {
@@ -94,7 +96,10 @@ pub async fn create_response(
     let response = ResponsesResponse {
         id: format!("resp_{}", uuid::Uuid::new_v4()),
         object: "response".to_string(),
-        created_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+        created_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
         status: "completed".to_string(),
         output: output_items,
         model: req.model,
@@ -111,7 +116,10 @@ pub async fn create_response(
     Json(response).into_response()
 }
 
-fn validate_auth(api_key: &Option<String>, headers: &HeaderMap) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+fn validate_auth(
+    api_key: &Option<String>,
+    headers: &HeaderMap,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
     if let Some(expected) = api_key {
         let provided = headers
             .get("authorization")
@@ -140,9 +148,12 @@ fn extract_target(input: &Input) -> Target {
     for pattern in &["http://", "https://"] {
         if let Some(idx) = text_lower.find(pattern) {
             let rest = &text[idx..];
-            let end = rest.find(|c: char| c.is_whitespace() || c == '\n' || c == '\r')
+            let end = rest
+                .find(|c: char| c.is_whitespace() || c == '\n' || c == '\r')
                 .unwrap_or(rest.len());
-            let url = rest[..end].trim_end_matches(|c: char| c.is_ascii_punctuation() && c != '/' && c != ':').to_string();
+            let url = rest[..end]
+                .trim_end_matches(|c: char| c.is_ascii_punctuation() && c != '/' && c != ':')
+                .to_string();
             if !url.is_empty() {
                 return Target::url(url);
             }
@@ -153,7 +164,11 @@ fn extract_target(input: &Input) -> Target {
         if word.parse::<std::net::IpAddr>().is_ok() {
             return Target::ip(word.to_string());
         }
-        if word.contains('.') && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') {
+        if word.contains('.')
+            && word
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+        {
             return Target::domain(word.to_string());
         }
     }
@@ -173,7 +188,10 @@ fn input_to_string(input: &Input) -> String {
     }
 }
 
-fn find_matching_tools(query: &str, tools: &[crate::tool::registry::ToolInfo]) -> Vec<crate::tool::registry::ToolInfo> {
+fn find_matching_tools(
+    query: &str,
+    tools: &[crate::tool::registry::ToolInfo],
+) -> Vec<crate::tool::registry::ToolInfo> {
     let query_lower = query.to_lowercase();
     tools
         .iter()
@@ -181,7 +199,9 @@ fn find_matching_tools(query: &str, tools: &[crate::tool::registry::ToolInfo]) -
             let name_lower = t.name.to_lowercase();
             let desc_lower = t.description.to_lowercase();
             query_lower.contains(&name_lower)
-                || desc_lower.split_whitespace().any(|w| query_lower.contains(w))
+                || desc_lower
+                    .split_whitespace()
+                    .any(|w| query_lower.contains(w))
                 || t.capabilities.iter().any(|c| {
                     c.name.to_lowercase().contains(&query_lower)
                         || c.description.to_lowercase().contains(&query_lower)
@@ -192,7 +212,10 @@ fn find_matching_tools(query: &str, tools: &[crate::tool::registry::ToolInfo]) -
         .collect()
 }
 
-fn generate_text_response(query: &str, matched_tools: &[crate::tool::registry::ToolInfo]) -> String {
+fn generate_text_response(
+    query: &str,
+    matched_tools: &[crate::tool::registry::ToolInfo],
+) -> String {
     if !matched_tools.is_empty() {
         let tool_names: Vec<&str> = matched_tools.iter().map(|t| t.name.as_str()).collect();
         format!(
@@ -235,8 +258,20 @@ mod tests {
     #[test]
     fn test_input_to_string_items() {
         let input = Input::Items(vec![
-            InputItem { item_type: "input_text".to_string(), content: Some("hello".to_string()), name: None, call_id: None, output: None },
-            InputItem { item_type: "input_text".to_string(), content: Some("world".to_string()), name: None, call_id: None, output: None },
+            InputItem {
+                item_type: "input_text".to_string(),
+                content: Some("hello".to_string()),
+                name: None,
+                call_id: None,
+                output: None,
+            },
+            InputItem {
+                item_type: "input_text".to_string(),
+                content: Some("world".to_string()),
+                name: None,
+                call_id: None,
+                output: None,
+            },
         ]);
         assert_eq!(input_to_string(&input), "hello\nworld");
     }

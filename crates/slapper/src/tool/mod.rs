@@ -65,9 +65,11 @@ pub mod protocol;
 pub use dispatcher::ToolDispatcher;
 pub use history::{ExecutionEntry, ExecutionHistory};
 pub use openapi::OpenApiGenerator;
-pub use orchestrator::{ExecutionResult, Orchestrator, StageProgress, StageResult, StageToolResult};
+pub use orchestrator::{
+    ExecutionResult, Orchestrator, StageProgress, StageResult, StageToolResult,
+};
 pub use planner::{ChainPlanner, ExecutionPlan, PlanRequest, PlanValidation};
-pub use ratelimit::{RateLimitConfig, RateLimiter, RateLimitStatus};
+pub use ratelimit::{RateLimitConfig, RateLimitStatus, RateLimiter};
 pub use registry::{ToolInfo, ToolRegistry};
 pub use request::{
     CancellationToken, CancellationTokenHandle, RequestOptions, Target, TargetType, ToolRequest,
@@ -82,7 +84,7 @@ pub use session::{
     ResponseField, SessionState, SessionStatus, SessionVerification, SessionVerifier,
 };
 pub use state::{AgentSession, ScanContext, SessionManager, SessionStatus as ToolSessionStatus};
-pub use traits::{ToolResult, AttackSurface};
+pub use traits::{AttackSurface, ToolResult};
 
 pub fn create_default_registry() -> ToolRegistry {
     let registry = ToolRegistry::new();
@@ -93,10 +95,14 @@ pub fn create_default_registry() -> ToolRegistry {
     if let Err(e) = registry.register(crate::tool::implementations::scanner::ScannerTool::ports()) {
         tracing::warn!("Failed to register tool: ports: {}", e);
     }
-    if let Err(e) = registry.register(crate::tool::implementations::scanner::ScannerTool::fingerprint()) {
+    if let Err(e) =
+        registry.register(crate::tool::implementations::scanner::ScannerTool::fingerprint())
+    {
         tracing::warn!("Failed to register tool: fingerprint: {}", e);
     }
-    if let Err(e) = registry.register(crate::tool::implementations::scanner::ScannerTool::endpoints()) {
+    if let Err(e) =
+        registry.register(crate::tool::implementations::scanner::ScannerTool::endpoints())
+    {
         tracing::warn!("Failed to register tool: endpoints: {}", e);
     }
     if let Err(e) = registry.register(crate::tool::implementations::fuzzer::FuzzerTool::new()) {

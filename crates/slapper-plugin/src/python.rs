@@ -9,7 +9,9 @@ use std::time::{Duration, Instant};
 
 use super::security::validate_python_plugin;
 use super::validation::validate_plugin_path;
-use super::{Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult, HealthStatus};
+use super::{
+    HealthStatus, Plugin, PluginCheck, PluginConfig, PluginInfo, PluginLanguage, PluginResult,
+};
 
 #[cfg(feature = "python-plugins")]
 use tokio::time::timeout;
@@ -48,8 +50,10 @@ fn py_value_to_json(_py: Python<'_>, val: &pyo3::Bound<'_, pyo3::PyAny>) -> serd
             .map(serde_json::Value::Number)
             .unwrap_or(serde_json::Value::Null)
     } else if let Ok(list) = val.cast::<PyList>() {
-        let items: Vec<serde_json::Value> =
-            list.iter().map(|item| py_value_to_json(_py, &item)).collect();
+        let items: Vec<serde_json::Value> = list
+            .iter()
+            .map(|item| py_value_to_json(_py, &item))
+            .collect();
         serde_json::Value::Array(items)
     } else if let Ok(dict) = val.cast::<PyDict>() {
         let mut map = serde_json::Map::new();
@@ -152,7 +156,10 @@ impl PythonPluginManager {
                                 }
                             };
 
-                            if let Err(e) = validate_python_plugin(&plugin_content, self.block_suspicious_plugins) {
+                            if let Err(e) = validate_python_plugin(
+                                &plugin_content,
+                                self.block_suspicious_plugins,
+                            ) {
                                 tracing::warn!(
                                     file = %file_path.display(),
                                     error = %e,
@@ -233,10 +240,13 @@ impl PythonPluginManager {
         target: &str,
         config: &serde_json::Value,
     ) -> Result<Vec<serde_json::Value>> {
-        let instance = class_plugin
-            .class
-            .call0(py)
-            .map_err(|e| anyhow::anyhow!("Failed to instantiate plugin '{}': {}", class_plugin.name, e))?;
+        let instance = class_plugin.class.call0(py).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to instantiate plugin '{}': {}",
+                class_plugin.name,
+                e
+            )
+        })?;
 
         let config_dict = PyDict::new(py);
         if let Some(obj) = config.as_object() {
@@ -345,7 +355,12 @@ impl PythonPluginManager {
             .clone()
     }
 
-    pub fn run_check_direct(&self, check_name: &str, target: &str, config: &serde_json::Value) -> Result<Vec<serde_json::Value>> {
+    pub fn run_check_direct(
+        &self,
+        check_name: &str,
+        target: &str,
+        config: &serde_json::Value,
+    ) -> Result<Vec<serde_json::Value>> {
         Python::attach(|py| {
             let mut all_results = Vec::new();
 
@@ -358,17 +373,17 @@ impl PythonPluginManager {
                         if let Ok(result) = run_func.call1(args) {
                             if let Ok(list) = result.cast::<PyList>() {
                                 for item in list.iter() {
-                                        if let Ok(json_str) = item.extract::<String>() {
-                                            if json_str.len() > MAX_JSON_SIZE_BYTES {
-                                                tracing::warn!(
-                                                    "JSON result exceeds max size, truncating"
-                                                );
-                                                continue;
-                                            }
-                                            if let Ok(value) = serde_json::from_str(&json_str) {
-                                                all_results.push(value);
-                                            }
+                                    if let Ok(json_str) = item.extract::<String>() {
+                                        if json_str.len() > MAX_JSON_SIZE_BYTES {
+                                            tracing::warn!(
+                                                "JSON result exceeds max size, truncating"
+                                            );
+                                            continue;
                                         }
+                                        if let Ok(value) = serde_json::from_str(&json_str) {
+                                            all_results.push(value);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -411,7 +426,11 @@ impl PythonPluginManager {
         let mut errors = Vec::new();
 
         let config_json = serde_json::Value::Object(
-            config.config.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            config
+                .config
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
         );
 
         for check in &checks {
@@ -484,7 +503,8 @@ fn json_value_to_py(py: Python<'_>, v: &serde_json::Value) -> PyResult<Py<PyAny>
         serde_json::Value::Bool(b) => (*b).into_bound_py_any(py)?,
         serde_json::Value::Null => py.None().into_bound_py_any(py)?,
         serde_json::Value::Array(arr) => {
-            let items: Vec<Py<PyAny>> = arr.iter()
+            let items: Vec<Py<PyAny>> = arr
+                .iter()
                 .map(|item| json_value_to_py(py, item))
                 .collect::<Result<Vec<_>, _>>()?;
             let list = PyList::new(py, &items)?;
@@ -511,7 +531,11 @@ impl Plugin for PythonPluginManager {
 
     async fn run_check(&self, check_name: &str, target: &str) -> Result<PluginResult> {
         let start = Instant::now();
-        let json_results = self.run_check_direct(check_name, target, &serde_json::Value::Object(serde_json::Map::new()))?;
+        let json_results = self.run_check_direct(
+            check_name,
+            target,
+            &serde_json::Value::Object(serde_json::Map::new()),
+        )?;
         let execution_time_ms = start.elapsed().as_millis() as u64;
 
         let findings = json_results
@@ -567,9 +591,7 @@ impl Plugin for PythonPluginManager {
     async fn run(&self, target: &str, config: &PluginConfig) -> Result<PluginResult> {
         let timeout_duration = Duration::from_secs(config.timeout_secs);
 
-        let result = timeout(timeout_duration, async {
-            self.run_impl(target, config)
-        }).await;
+        let result = timeout(timeout_duration, async { self.run_impl(target, config) }).await;
 
         match result {
             Ok(inner_result) => inner_result,

@@ -1,10 +1,10 @@
+use crate::tc;
 use ratatui::{
     layout::Rect,
     style::Style,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use crate::tc;
 
 #[derive(Clone, Debug)]
 pub struct ValidationResult {
@@ -84,6 +84,17 @@ impl InputField {
         }
     }
 
+    pub fn paste(&mut self, text: &str) {
+        if self.focused {
+            for c in text.chars() {
+                if c != '\n' && c != '\r' {
+                    self.value.insert(self.cursor_pos, c);
+                    self.cursor_pos += c.len_utf8();
+                }
+            }
+        }
+    }
+
     pub fn backspace(&mut self) {
         if self.focused && self.cursor_pos > 0 {
             if let Some(prev) = self.value[..self.cursor_pos].chars().next_back() {
@@ -133,6 +144,49 @@ impl InputField {
         self.cursor_pos = self.value.len(); // byte index at end
     }
 
+    pub fn move_word_forward(&mut self) {
+        if self.cursor_pos < self.value.len() {
+            let mut found_non_word = false;
+            let mut new_pos = self.cursor_pos;
+
+            for (i, c) in self.value[self.cursor_pos..].char_indices() {
+                if i == 0 {
+                    continue;
+                }
+                if c.is_whitespace() || c == '/' || c == '.' || c == '-' || c == '_' || c == ':' {
+                    found_non_word = true;
+                } else if found_non_word {
+                    new_pos = self.cursor_pos + i;
+                    break;
+                }
+            }
+
+            if new_pos == self.cursor_pos {
+                self.move_end();
+            } else {
+                self.cursor_pos = new_pos;
+            }
+        }
+    }
+
+    pub fn move_word_backward(&mut self) {
+        if self.cursor_pos > 0 {
+            let mut found_word = false;
+            let mut new_pos = 0;
+
+            for (i, c) in self.value[..self.cursor_pos].char_indices().rev() {
+                if !c.is_whitespace() && c != '/' && c != '.' && c != '-' && c != '_' && c != ':' {
+                    found_word = true;
+                } else if found_word {
+                    new_pos = i + c.len_utf8();
+                    break;
+                }
+            }
+
+            self.cursor_pos = new_pos;
+        }
+    }
+
     /// Convert byte offset to character position
     fn byte_to_char_pos(&self) -> usize {
         self.value
@@ -144,6 +198,18 @@ impl InputField {
     pub fn clear(&mut self) {
         self.value.clear();
         self.cursor_pos = 0;
+    }
+
+    pub fn is_at_left_edge(&self) -> bool {
+        self.cursor_pos == 0
+    }
+
+    pub fn is_at_right_edge(&self) -> bool {
+        self.cursor_pos >= self.value.len()
+    }
+
+    pub fn get_value(&self) -> String {
+        self.value.clone()
     }
 
     pub fn validate_url(&self) -> ValidationResult {
@@ -303,17 +369,32 @@ impl InputField {
     pub fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let (border_style, title_style) = if self.focused {
             (
-                Style::default().fg(tc!(focus_input)).add_modifier(ratatui::style::Modifier::BOLD),
-                Style::default().fg(tc!(focus_input)).add_modifier(ratatui::style::Modifier::BOLD)
+                Style::default()
+                    .fg(tc!(focus_input))
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+                Style::default()
+                    .fg(tc!(focus_input))
+                    .add_modifier(ratatui::style::Modifier::BOLD),
             )
         } else if let Some(ref validation) = self.validation {
             if validation.valid {
-                (Style::default().fg(tc!(success)), Style::default().fg(tc!(text_dim)))
+                (
+                    Style::default().fg(tc!(success)),
+                    Style::default().fg(tc!(text_dim)),
+                )
             } else {
-                (Style::default().fg(tc!(error)), Style::default().fg(tc!(error)).add_modifier(ratatui::style::Modifier::BOLD))
+                (
+                    Style::default().fg(tc!(error)),
+                    Style::default()
+                        .fg(tc!(error))
+                        .add_modifier(ratatui::style::Modifier::BOLD),
+                )
             }
         } else {
-            (Style::default().fg(tc!(border)), Style::default().fg(tc!(text_dim)))
+            (
+                Style::default().fg(tc!(border)),
+                Style::default().fg(tc!(text_dim)),
+            )
         };
 
         let title = if self.focused {
@@ -468,6 +549,12 @@ impl InputGroup {
         }
     }
 
+    pub fn paste(&mut self, text: &str) {
+        if let Some(idx) = self.focused {
+            self.fields[idx].paste(text);
+        }
+    }
+
     pub fn backspace(&mut self) {
         if let Some(idx) = self.focused {
             self.fields[idx].backspace();
@@ -507,8 +594,52 @@ impl InputGroup {
         }
     }
 
+    pub fn move_word_forward(&mut self) {
+        if let Some(idx) = self.focused {
+            self.fields[idx].move_word_forward();
+        }
+    }
+
+    pub fn move_word_backward(&mut self) {
+        if let Some(idx) = self.focused {
+            self.fields[idx].move_word_backward();
+        }
+    }
+
+    pub fn move_home(&mut self) {
+        if let Some(idx) = self.focused {
+            self.fields[idx].move_home();
+        }
+    }
+
+    pub fn move_end(&mut self) {
+        if let Some(idx) = self.focused {
+            self.fields[idx].move_end();
+        }
+    }
+
+    pub fn get_focused_value(&self) -> Option<String> {
+        self.focused.map(|idx| self.fields[idx].get_value())
+    }
+
     pub fn is_focused(&self) -> bool {
         self.focused.is_some()
+    }
+
+    pub fn is_at_left_edge(&self) -> bool {
+        if let Some(idx) = self.focused {
+            self.fields[idx].is_at_left_edge()
+        } else {
+            true
+        }
+    }
+
+    pub fn is_at_right_edge(&self) -> bool {
+        if let Some(idx) = self.focused {
+            self.fields[idx].is_at_right_edge()
+        } else {
+            true
+        }
     }
 
     pub fn can_move_left(&self) -> bool {
@@ -551,8 +682,8 @@ mod tests {
     fn test_insert_in_middle_of_multibyte() {
         let mut field = InputField::new("Test").with_value("éx");
         field.focused = true; // Need to focus for insert/backspace to work
-        // cursor is at end (byte 3)
-        // move left to be between é and x (byte 2)
+                              // cursor is at end (byte 3)
+                              // move left to be between é and x (byte 2)
         field.move_left();
         assert_eq!(field.cursor_pos, 2); // between é (bytes 0-1) and x (byte 2)
 
@@ -566,7 +697,7 @@ mod tests {
     fn test_backspace_deletes_character_not_byte() {
         let mut field = InputField::new("Test").with_value("éx");
         field.focused = true; // Need to focus for insert/backspace to work
-        // cursor at end (byte 3)
+                              // cursor at end (byte 3)
         field.backspace();
         // Should delete 'x' (1 byte), not just one byte of 'é'
         assert_eq!(field.value, "é");

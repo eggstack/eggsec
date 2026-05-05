@@ -17,6 +17,7 @@ pub struct PluginTab {
     pub focus_area: PluginFocusArea,
     pub plugins_loaded: bool,
     pub plugin_list: Vec<PluginInfo>,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -63,6 +64,7 @@ impl PluginTab {
             focus_area: PluginFocusArea::Inputs,
             plugins_loaded: false,
             plugin_list: Vec::new(),
+            error_message: None,
         }
     }
 
@@ -193,19 +195,30 @@ impl TabState for PluginTab {
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
+        self.error_message = None;
     }
 
     fn set_error(&mut self, msg: String) {
         self.state = AppState::Error(msg.clone());
-        self.results_view.add_line(Line::from(Span::styled(
-            format!("Error: {}", msg),
-            Style::default().fg(tc!(error)),
-        )));
+        self.error_message = Some(msg);
     }
 }
 
 impl TabRender for PluginTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        if let Some(ref err_msg) = self.error_message {
+            use ratatui::widgets::Paragraph;
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Plugin - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, area);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -294,6 +307,49 @@ impl TabInput for PluginTab {
         }
     }
 
+    fn handle_paste(&mut self, text: &str) {
+        if self.focus_area == PluginFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == PluginFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == PluginFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == PluginFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == PluginFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == PluginFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == PluginFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = PluginFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = PluginFocusArea::Results;
+    }
+
     fn handle_enter(&mut self) {
         match self.focus_area {
             PluginFocusArea::Inputs => {
@@ -359,7 +415,7 @@ impl TabInput for PluginTab {
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            PluginFocusArea::Inputs => !self.inputs.can_move_left(),
+            PluginFocusArea::Inputs => self.inputs.is_at_left_edge(),
             PluginFocusArea::PluginSelector => self.plugin_selector.selected == 0,
             _ => true,
         }
@@ -367,7 +423,7 @@ impl TabInput for PluginTab {
 
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
-            PluginFocusArea::Inputs => !self.inputs.can_move_right(),
+            PluginFocusArea::Inputs => self.inputs.is_at_right_edge(),
             PluginFocusArea::PluginSelector => {
                 self.plugin_selector.selected >= self.plugin_selector.items.len().saturating_sub(1)
             }

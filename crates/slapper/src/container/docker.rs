@@ -64,9 +64,19 @@ impl DockerScanner {
         };
 
         if let Ok(metadata) = self.inspect_image(image_name).await {
-            result.base_image = metadata.get("base_image").and_then(|v| v.as_str()).map(|s| s.to_string());
-            result.running_as_root = metadata.get("user").and_then(|v| v.as_str()).map(|u| u.is_empty() || u == "root").unwrap_or(true);
-            result.has_healthcheck = metadata.get("healthcheck").and_then(|v| v.as_bool()).unwrap_or(false);
+            result.base_image = metadata
+                .get("base_image")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            result.running_as_root = metadata
+                .get("user")
+                .and_then(|v| v.as_str())
+                .map(|u| u.is_empty() || u == "root")
+                .unwrap_or(true);
+            result.has_healthcheck = metadata
+                .get("healthcheck")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             if let Some(ports) = metadata.get("exposed_ports").and_then(|v| v.as_array()) {
                 for p in ports {
@@ -84,7 +94,10 @@ impl DockerScanner {
         Ok(result)
     }
 
-    pub async fn scan_dockerfile(&self, dockerfile_path: &str) -> Result<Vec<DockerMisconfiguration>> {
+    pub async fn scan_dockerfile(
+        &self,
+        dockerfile_path: &str,
+    ) -> Result<Vec<DockerMisconfiguration>> {
         let content = std::fs::read_to_string(dockerfile_path)?;
         Ok(self.analyze_dockerfile(&content))
     }
@@ -98,7 +111,9 @@ impl DockerScanner {
                 continue;
             }
 
-            if trimmed.starts_with("FROM ") && (trimmed.contains("latest") || trimmed.split(':').count() == 1) {
+            if trimmed.starts_with("FROM ")
+                && (trimmed.contains("latest") || trimmed.split(':').count() == 1)
+            {
                 issues.push(DockerMisconfiguration {
                     check: "No specific image tag".to_string(),
                     severity: Severity::Medium,
@@ -117,15 +132,22 @@ impl DockerScanner {
             }
 
             if trimmed.starts_with("EXPOSE ") {
-                let ports: Vec<&str> = trimmed.trim_start_matches("EXPOSE ").split_whitespace().collect();
+                let ports: Vec<&str> = trimmed
+                    .trim_start_matches("EXPOSE ")
+                    .split_whitespace()
+                    .collect();
                 for port_str in ports {
                     if let Ok(port) = port_str.parse::<u16>() {
                         if port == 22 || port == 23 || port == 3389 {
                             issues.push(DockerMisconfiguration {
                                 check: format!("Dangerous port {} exposed", port),
                                 severity: Severity::High,
-                                description: format!("Port {} (SSH/Telnet/RDP) exposed in container", port),
-                                recommendation: "Avoid exposing management ports in containers".to_string(),
+                                description: format!(
+                                    "Port {} (SSH/Telnet/RDP) exposed in container",
+                                    port
+                                ),
+                                recommendation: "Avoid exposing management ports in containers"
+                                    .to_string(),
                             });
                         }
                     }
@@ -134,12 +156,17 @@ impl DockerScanner {
 
             if trimmed.starts_with("ENV ") {
                 let env_part = trimmed.trim_start_matches("ENV ");
-                if env_part.contains("PASSWORD") || env_part.contains("SECRET") || env_part.contains("API_KEY") || env_part.contains("TOKEN") {
+                if env_part.contains("PASSWORD")
+                    || env_part.contains("SECRET")
+                    || env_part.contains("API_KEY")
+                    || env_part.contains("TOKEN")
+                {
                     issues.push(DockerMisconfiguration {
                         check: "Secret in environment variable".to_string(),
                         severity: Severity::Critical,
                         description: "Potential secret stored in environment variable".to_string(),
-                        recommendation: "Use Docker secrets or external secret management".to_string(),
+                        recommendation: "Use Docker secrets or external secret management"
+                            .to_string(),
                     });
                 }
             }
@@ -149,7 +176,8 @@ impl DockerScanner {
                     check: "ADD instead of COPY".to_string(),
                     severity: Severity::Low,
                     description: "ADD used for local files instead of COPY".to_string(),
-                    recommendation: "Use COPY for local files, ADD only for URLs/tar extraction".to_string(),
+                    recommendation: "Use COPY for local files, ADD only for URLs/tar extraction"
+                        .to_string(),
                 });
             }
         }
@@ -158,7 +186,8 @@ impl DockerScanner {
             issues.push(DockerMisconfiguration {
                 check: "No USER instruction".to_string(),
                 severity: Severity::Medium,
-                description: "No USER instruction found - container runs as root by default".to_string(),
+                description: "No USER instruction found - container runs as root by default"
+                    .to_string(),
                 recommendation: "Add USER instruction to run as non-root".to_string(),
             });
         }
@@ -192,7 +221,8 @@ impl DockerScanner {
                             metadata.insert("user".to_string(), user.clone());
                         }
                         if let Some(_healthcheck) = config.get("Healthcheck") {
-                            metadata.insert("healthcheck".to_string(), serde_json::Value::Bool(true));
+                            metadata
+                                .insert("healthcheck".to_string(), serde_json::Value::Bool(true));
                         }
                         if let Some(image) = config.get("Image") {
                             metadata.insert("base_image".to_string(), image.clone());
@@ -214,7 +244,10 @@ impl DockerScanner {
         }
     }
 
-    async fn check_misconfigurations(&self, result: &DockerScanResult) -> Vec<DockerMisconfiguration> {
+    async fn check_misconfigurations(
+        &self,
+        result: &DockerScanResult,
+    ) -> Vec<DockerMisconfiguration> {
         let mut issues = Vec::new();
 
         if result.running_as_root {

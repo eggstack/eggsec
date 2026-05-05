@@ -35,7 +35,7 @@ pub fn register_upnp_library(lua: &Lua) -> LuaResult<()> {
         match TcpStream::connect_timeout(
             &format!("{}:{}", SSDP_ADDR, SSDP_PORT)
                 .parse()
-                .unwrap_or_else(|_| std::net::SocketAddr::from(([239,255,255,250], 1900))),
+                .unwrap_or_else(|_| std::net::SocketAddr::from(([239, 255, 255, 250], 1900))),
             Duration::from_secs(3),
         ) {
             Ok(mut stream) => {
@@ -135,8 +135,8 @@ pub fn register_upnp_library(lua: &Lua) -> LuaResult<()> {
         };
 
         match reqwest::blocking::get(&url) {
-            Ok(resp) => {
-                match resp.text() { Ok(body) => {
+            Ok(resp) => match resp.text() {
+                Ok(body) => {
                     let devices = lua.create_table()?;
                     let mut i = 1;
 
@@ -152,11 +152,12 @@ pub fn register_upnp_library(lua: &Lua) -> LuaResult<()> {
 
                     result.set("success", true)?;
                     result.set("devices", devices)?;
-                } _ => {
+                }
+                _ => {
                     result.set("success", false)?;
                     result.set("error", "Failed to parse response")?;
-                }}
-            }
+                }
+            },
             Err(e) => {
                 result.set("success", false)?;
                 result.set("error", format!("Request failed: {}", e))?;

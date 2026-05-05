@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use std::time::Duration;
 use crate::ai::cache::AiCache;
 use crate::ai::client::AiClient;
 use crate::ai::errors::{AiError, Result};
+use std::sync::Arc;
+use std::time::Duration;
 
 pub struct AiPayloadGenerator {
     client: AiClient,
@@ -17,11 +17,7 @@ impl AiPayloadGenerator {
         }
     }
 
-    pub async fn generate_payloads(
-        &self,
-        vuln_type: &str,
-        context: &str,
-    ) -> Result<Vec<String>> {
+    pub async fn generate_payloads(&self, vuln_type: &str, context: &str) -> Result<Vec<String>> {
         if vuln_type.is_empty() {
             return Err(AiError::invalid_config("vuln_type cannot be empty"));
         }
@@ -34,7 +30,9 @@ impl AiPayloadGenerator {
 
         let payloads = self.client.suggest_payloads(vuln_type, context).await?;
         let payload_str = payloads.join("\n");
-        self.cache.set(&cache_key, &payload_str, Some(Duration::from_secs(3600))).await;
+        self.cache
+            .set(&cache_key, &payload_str, Some(Duration::from_secs(3600)))
+            .await;
 
         Ok(payloads)
     }

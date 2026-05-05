@@ -1,16 +1,21 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
-use crate::agent::{Agent, AgentConfig, Priority, TargetConfig, TargetPortfolio};
 #[cfg(feature = "ai-integration")]
 use crate::agent::SkillLoader;
+use crate::agent::{Agent, AgentConfig, Priority, TargetConfig, TargetPortfolio};
 use crate::cli::agent::{AgentArgs, AgentCommand};
 use crate::commands::handlers::CommandContext;
 
 fn resolve_portfolio_path(portfolio_path: Option<&str>) -> PathBuf {
     portfolio_path.map(|p| expand_path(p)).unwrap_or_else(|| {
         std::env::var("HOME")
-            .map(|h| PathBuf::from(h).join(".config").join("slapper").join("portfolio.json"))
+            .map(|h| {
+                PathBuf::from(h)
+                    .join(".config")
+                    .join("slapper")
+                    .join("portfolio.json")
+            })
             .unwrap_or_else(|_| PathBuf::from("portfolio.json"))
     })
 }
@@ -26,7 +31,7 @@ pub async fn handle_agent(_ctx: &CommandContext, args: AgentArgs) -> Result<()> 
     let portfolio_path = args.portfolio.clone();
     let memory_dir = expand_path(&args.memory_dir);
     let poll_interval = args.poll_interval;
-    
+
     match args.command {
         None => {
             println!("Agent commands:");
@@ -37,21 +42,33 @@ pub async fn handle_agent(_ctx: &CommandContext, args: AgentArgs) -> Result<()> 
             Ok(())
         }
         Some(AgentCommand::Run(run_args)) => {
-            handle_agent_run_impl(use_ai, ai_config_path, portfolio_path, memory_dir, poll_interval, run_args).await
+            handle_agent_run_impl(
+                use_ai,
+                ai_config_path,
+                portfolio_path,
+                memory_dir,
+                poll_interval,
+                run_args,
+            )
+            .await
         }
-        Some(AgentCommand::Targets(targets_args)) => handle_targets(targets_args, portfolio_path).await,
+        Some(AgentCommand::Targets(targets_args)) => {
+            handle_targets(targets_args, portfolio_path).await
+        }
         Some(AgentCommand::Skills(skills_args)) => handle_skills(skills_args).await,
-        Some(AgentCommand::Status) => handle_status_impl(use_ai, ai_config_path, portfolio_path).await,
+        Some(AgentCommand::Status) => {
+            handle_status_impl(use_ai, ai_config_path, portfolio_path).await
+        }
     }
 }
 
 async fn handle_agent_run_impl(
-    use_ai: bool, 
-    ai_config_path: Option<String>, 
+    use_ai: bool,
+    ai_config_path: Option<String>,
     portfolio_path: Option<String>,
     memory_dir: PathBuf,
     poll_interval: u64,
-    run_args: crate::cli::agent::RunArgs
+    run_args: crate::cli::agent::RunArgs,
 ) -> Result<()> {
     let mut config = AgentConfig {
         portfolio_path: portfolio_path.map(|p| expand_path(&p)),
@@ -114,7 +131,11 @@ async fn handle_agent_run_impl(
     Ok(())
 }
 
-async fn handle_status_impl(_use_ai: bool, _ai_config_path: Option<String>, portfolio_path: Option<String>) -> Result<()> {
+async fn handle_status_impl(
+    _use_ai: bool,
+    _ai_config_path: Option<String>,
+    portfolio_path: Option<String>,
+) -> Result<()> {
     println!("Agent Status");
     println!("{}", "=".repeat(50));
 
@@ -137,9 +158,16 @@ async fn handle_status_impl(_use_ai: bool, _ai_config_path: Option<String>, port
         println!("\nTarget Details:");
         println!("{}", "-".repeat(50));
         for (id, config) in &targets {
-            let status = if config.enabled { "enabled" } else { "disabled" };
+            let status = if config.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            };
             let schedule = config.schedule.as_deref().unwrap_or("none");
-            let last_scan = config.last_scan.map(|t| t.to_rfc3339()).unwrap_or_else(|| "never".to_string());
+            let last_scan = config
+                .last_scan
+                .map(|t| t.to_rfc3339())
+                .unwrap_or_else(|| "never".to_string());
             let scan_count = config.scan_history.len();
 
             println!("  {} [{}]", id, status);
@@ -171,14 +199,20 @@ fn expand_path(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
-async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Option<String>) -> Result<()> {
+async fn handle_targets(
+    args: crate::cli::agent::TargetsArgs,
+    portfolio_path: Option<String>,
+) -> Result<()> {
     let portfolio_path_str = portfolio_path.as_deref();
     match args.command {
         crate::cli::agent::TargetsCommand::List => {
             let portfolio = load_portfolio_for_cli(portfolio_path_str);
             println!("Targets:");
             for (id, config) in portfolio.get_all_targets() {
-                println!("  {} -> {} (enabled: {})", id, config.target, config.enabled);
+                println!(
+                    "  {} -> {} (enabled: {})",
+                    id, config.target, config.enabled
+                );
             }
             Ok(())
         }
@@ -214,7 +248,8 @@ async fn handle_targets(args: crate::cli::agent::TargetsArgs, portfolio_path: Op
         }
         crate::cli::agent::TargetsCommand::Update(update_args) => {
             let path = resolve_portfolio_path(portfolio_path_str);
-            let portfolio = TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new());
+            let portfolio =
+                TargetPortfolio::load_from_file(&path).unwrap_or_else(|_| TargetPortfolio::new());
             if portfolio.update_target(&update_args.id, |target| {
                 if let Some(new_target) = update_args.target {
                     target.target = new_target;
@@ -287,9 +322,7 @@ async fn handle_skills(args: crate::cli::agent::SkillsArgs) -> Result<()> {
     {
         match args.command {
             crate::cli::agent::SkillsCommand::List => {
-                let default_dirs = vec![
-                    expand_path("~/.config/slapper/skills"),
-                ];
+                let default_dirs = vec![expand_path("~/.config/slapper/skills")];
                 let loader = SkillLoader::new(default_dirs);
                 let skills = loader.load_skills()?;
                 println!("Available skills:");
@@ -306,16 +339,19 @@ async fn handle_skills(args: crate::cli::agent::SkillsArgs) -> Result<()> {
                 Ok(())
             }
             crate::cli::agent::SkillsCommand::Show { name } => {
-                let default_dirs = vec![
-                    expand_path("~/.config/slapper/skills"),
-                ];
+                let default_dirs = vec![expand_path("~/.config/slapper/skills")];
                 let loader = SkillLoader::new(default_dirs);
                 let skills = loader.load_skills()?;
                 if let Some(skill) = skills.iter().find(|s| s.name == name) {
-                    let tools = skill.metadata.as_ref()
+                    let tools = skill
+                        .metadata
+                        .as_ref()
                         .map(|m| m.tools.join(", "))
                         .unwrap_or_default();
-                    println!("# {}\n\n{}\n\nTools: {}", skill.name, skill.description, tools);
+                    println!(
+                        "# {}\n\n{}\n\nTools: {}",
+                        skill.name, skill.description, tools
+                    );
                 } else {
                     println!("Skill '{}' not found", name);
                 }

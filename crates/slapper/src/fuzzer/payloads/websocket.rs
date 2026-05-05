@@ -79,9 +79,10 @@ impl WebSocketFuzzer {
         ];
 
         for (proto, desc) in common_subprotocols {
-            let is_configured = self.subprotocols.iter().any(|s| {
-                s.eq_ignore_ascii_case(proto) || s.contains(proto)
-            });
+            let is_configured = self
+                .subprotocols
+                .iter()
+                .any(|s| s.eq_ignore_ascii_case(proto) || s.contains(proto));
 
             results.push(WebSocketTestResult {
                 vulnerability: WebSocketVulnerability::AuthBypass,
@@ -361,7 +362,11 @@ mod tests {
     fn test_payloads_are_non_empty_strings() {
         let payloads = get_payloads();
         for p in &payloads {
-            assert!(!p.payload.is_empty(), "Payload is empty: {:?}", p.description);
+            assert!(
+                !p.payload.is_empty(),
+                "Payload is empty: {:?}",
+                p.description
+            );
         }
     }
 
@@ -400,6 +405,8 @@ mod tests {
             .with_subprotocols(vec!["graphql-ws".to_string()]);
 
         let tests = fuzzer.generate_all_tests();
-        assert!(tests.iter().any(|t| t.vulnerability == WebSocketVulnerability::AuthBypass));
+        assert!(tests
+            .iter()
+            .any(|t| t.vulnerability == WebSocketVulnerability::AuthBypass));
     }
 }

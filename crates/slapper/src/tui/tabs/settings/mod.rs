@@ -1,5 +1,5 @@
+pub mod input;
 pub mod main;
 pub mod render;
-pub mod input;
 
-pub use main::{SettingsSection, SettingsTab};
+pub use main::{SettingsFocusArea, SettingsSection, SettingsTab};

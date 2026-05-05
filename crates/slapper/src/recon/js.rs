@@ -9,7 +9,8 @@ use crate::utils::create_http_client_with_options;
 
 static ENDPOINT_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
-        Regex::new(r#"(?:api|endpoint|path|route|url)["']?\s*[:=]\s*["']([^"'<>\s]+)["']"#).unwrap(),
+        Regex::new(r#"(?:api|endpoint|path|route|url)["']?\s*[:=]\s*["']([^"'<>\s]+)["']"#)
+            .unwrap(),
         Regex::new(r#"fetch\s*\(\s*["']([^"'<>\s]+)["']"#).unwrap(),
         Regex::new(r#"axios\.[\w]+\(\s*["']([^"'<>\s]+)["']"#).unwrap(),
         Regex::new(r#"\$\.ajax\s*\(\s*\{[^}]*url\s*:\s*["']([^"'<>\s]+)["']"#).unwrap(),
@@ -20,29 +21,73 @@ static ENDPOINT_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 
 static SECRET_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| {
     vec![
-        (r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#, Regex::new(r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#).unwrap()),
-        (r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#, Regex::new(r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#).unwrap()),
-        (r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#, Regex::new(r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#).unwrap()),
-        (r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#, Regex::new(r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#).unwrap()),
-        (r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#, Regex::new(r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#).unwrap()),
-        (r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#, Regex::new(r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#).unwrap()),
+        (
+            r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#,
+            Regex::new(
+                r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#,
+            )
+            .unwrap(),
+        ),
+        (
+            r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#,
+            Regex::new(
+                r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#,
+            )
+            .unwrap(),
+        ),
+        (
+            r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#,
+            Regex::new(
+                r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#,
+            )
+            .unwrap(),
+        ),
+        (
+            r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#,
+            Regex::new(r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#).unwrap(),
+        ),
+        (
+            r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#,
+            Regex::new(r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#).unwrap(),
+        ),
+        (
+            r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#,
+            Regex::new(r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#).unwrap(),
+        ),
     ]
 });
 
 static API_KEY_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| {
     vec![
-        (r#"(?i)sk-[a-zA-Z0-9]{20,}"#, Regex::new(r#"(?i)sk-[a-zA-Z0-9]{20,}"#).unwrap()),
-        (r#"(?i)AIza[0-9A-Za-z\-_]{35}"#, Regex::new(r#"(?i)AIza[0-9A-Za-z\-_]{35}"#).unwrap()),
-        (r#"(?i)ya29\.[0-9A-Za-z\-_]+"#, Regex::new(r#"(?i)ya29\.[0-9A-Za-z\-_]+"#).unwrap()),
-        (r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#, Regex::new(r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#).unwrap()),
-        (r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#, Regex::new(r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#).unwrap()),
-        (r#"(?i)AKIA[0-9A-Z]{16}"#, Regex::new(r#"(?i)AKIA[0-9A-Z]{16}"#).unwrap()),
+        (
+            r#"(?i)sk-[a-zA-Z0-9]{20,}"#,
+            Regex::new(r#"(?i)sk-[a-zA-Z0-9]{20,}"#).unwrap(),
+        ),
+        (
+            r#"(?i)AIza[0-9A-Za-z\-_]{35}"#,
+            Regex::new(r#"(?i)AIza[0-9A-Za-z\-_]{35}"#).unwrap(),
+        ),
+        (
+            r#"(?i)ya29\.[0-9A-Za-z\-_]+"#,
+            Regex::new(r#"(?i)ya29\.[0-9A-Za-z\-_]+"#).unwrap(),
+        ),
+        (
+            r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#,
+            Regex::new(r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#).unwrap(),
+        ),
+        (
+            r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#,
+            Regex::new(r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#).unwrap(),
+        ),
+        (
+            r#"(?i)AKIA[0-9A-Z]{16}"#,
+            Regex::new(r#"(?i)AKIA[0-9A-Z]{16}"#).unwrap(),
+        ),
     ]
 });
 
-static URL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"https?://[^\s"'<>]+"#).unwrap()
-});
+static URL_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"https?://[^\s"'<>]+"#).unwrap());
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct JsAnalysis {
@@ -100,8 +145,8 @@ impl JsAnalyzer {
         let (javascript_files, inline_scripts) = {
             let document = Html::parse_document(&html);
 
-            let script_selector = Selector::parse("script[src]")
-                .expect("valid CSS selector: script[src]");
+            let script_selector =
+                Selector::parse("script[src]").expect("valid CSS selector: script[src]");
             let mut javascript_files = Vec::new();
             for element in document.select(&script_selector) {
                 if let Some(src) = element.value().attr("src") {
@@ -114,8 +159,7 @@ impl JsAnalyzer {
                 }
             }
 
-            let script_selector = Selector::parse("script")
-                .expect("valid CSS selector: script");
+            let script_selector = Selector::parse("script").expect("valid CSS selector: script");
             let mut inline_scripts = Vec::new();
             for element in document.select(&script_selector) {
                 if let Some(inner_html) = element.text().next() {

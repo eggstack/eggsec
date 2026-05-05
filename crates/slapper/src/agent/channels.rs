@@ -126,25 +126,24 @@ impl SlackTemplate {
     }
 
     pub fn format(&self, alert: &Alert, finding_count: usize) -> SlackFormattedAlert {
-        let title = self.title_format
+        let title = self
+            .title_format
             .replace("{{severity}}", &alert.severity.as_str().to_uppercase())
             .replace("{{title}}", &alert.title);
 
-        let body = self.body_format
+        let body = self
+            .body_format
             .replace("{{target}}", &alert.target)
             .replace("{{message}}", &alert.message)
             .replace("{{finding_count}}", &finding_count.to_string());
 
-        let color = self.color_by_severity
+        let color = self
+            .color_by_severity
             .get(alert.severity.as_str())
             .cloned()
             .unwrap_or_else(|| "#6c757d".to_string());
 
-        SlackFormattedAlert {
-            title,
-            body,
-            color,
-        }
+        SlackFormattedAlert { title, body, color }
     }
 }
 
@@ -190,26 +189,26 @@ impl EmailTemplate {
                 Severity: {{severity}}\n\n\
                 {{message}}\n\n\
                 Recommended Actions:\n\
-                {{actions}}".to_string(),
+                {{actions}}"
+                .to_string(),
         }
     }
 
     pub fn format(&self, alert: &Alert) -> EmailFormattedAlert {
-        let subject = self.subject_format
+        let subject = self
+            .subject_format
             .replace("{{severity}}", &alert.severity.as_str().to_uppercase())
             .replace("{{title}}", &alert.title);
 
-        let body = self.body_format
+        let body = self
+            .body_format
             .replace("{{target}}", &alert.target)
             .replace("{{title}}", &alert.title)
             .replace("{{message}}", &alert.message)
             .replace("{{severity}}", &alert.severity.as_str().to_uppercase())
             .replace("{{actions}}", &alert.recommended_actions.join("\n"));
 
-        EmailFormattedAlert {
-            subject,
-            body,
-        }
+        EmailFormattedAlert { subject, body }
     }
 }
 

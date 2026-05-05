@@ -10,11 +10,7 @@ impl AgentLogger {
     pub fn init(log_dir: PathBuf) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&log_dir)?;
 
-        let file_appender = RollingFileAppender::new(
-            Rotation::DAILY,
-            &log_dir,
-            "agent.log",
-        );
+        let file_appender = RollingFileAppender::new(Rotation::DAILY, &log_dir, "agent.log");
 
         let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 

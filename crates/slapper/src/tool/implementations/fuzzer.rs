@@ -277,7 +277,11 @@ impl SecurityTool for FuzzerTool {
                         "target": "https://example.com/fetch?url=test"
                     }),
                 }],
-                attack_surface: vec![AttackSurface::Web, AttackSurface::Api, AttackSurface::Internal],
+                attack_surface: vec![
+                    AttackSurface::Web,
+                    AttackSurface::Api,
+                    AttackSurface::Internal,
+                ],
                 severity_potential: vec![AgentSeverity::Critical, AgentSeverity::High],
                 prerequisites: vec!["recon".to_string()],
                 estimated_duration_ms: 30000,

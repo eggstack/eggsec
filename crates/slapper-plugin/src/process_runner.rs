@@ -107,10 +107,7 @@ mod tests {
 
     #[test]
     fn test_process_plugin_runner_creation() {
-        let runner = ProcessPluginRunner::new(
-            Duration::from_secs(30),
-            IsolationLevel::Process,
-        );
+        let runner = ProcessPluginRunner::new(Duration::from_secs(30), IsolationLevel::Process);
         assert_eq!(runner.timeout, Duration::from_secs(30));
     }
 

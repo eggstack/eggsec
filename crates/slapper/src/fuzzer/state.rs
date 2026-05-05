@@ -1,7 +1,6 @@
-
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, SET_COOKIE};
-use serde::{Deserialize, Serialize};
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -20,9 +19,7 @@ impl SerializableHeaderMap {
     pub fn from_header_map(map: &HeaderMap) -> Self {
         Self(
             map.iter()
-                .filter_map(|(k, v)| {
-                    Some((k.to_string(), v.to_str().ok()?.to_string()))
-                })
+                .filter_map(|(k, v)| Some((k.to_string(), v.to_str().ok()?.to_string())))
                 .collect(),
         )
     }

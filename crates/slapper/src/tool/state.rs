@@ -163,33 +163,33 @@ impl SessionManager {
         if !self.storage_path.exists() {
             fs::create_dir_all(self.storage_path.as_path())?;
         }
-        
+
         self.load_from_disk().await?;
         self.cleanup_expired().await?;
-        
+
         Ok(())
     }
 
     async fn load_from_disk(&self) -> Result<()> {
         let storage_path = self.storage_path.clone();
         let entries = fs::read_dir(storage_path.as_path())?;
-        
+
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "json") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(session) = serde_json::from_str::<AgentSession>(&content) {
                         if !session.is_expired(self.default_ttl_seconds) {
-                            self.sessions.write().await.insert(
-                                session.session_id.clone(),
-                                session,
-                            );
+                            self.sessions
+                                .write()
+                                .await
+                                .insert(session.session_id.clone(), session);
                         }
                     }
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -221,10 +221,10 @@ impl SessionManager {
 
     pub async fn create_session(&self) -> Result<AgentSession> {
         let mut sessions = self.sessions.write().await;
-        
+
         if sessions.len() >= self.max_sessions {
             self.cleanup_expired().await?;
-            
+
             if sessions.len() >= self.max_sessions {
                 anyhow::bail!("Maximum session limit reached");
             }
@@ -233,10 +233,10 @@ impl SessionManager {
         let session = AgentSession::new();
         let session_clone = session.clone();
         sessions.insert(session.session_id.clone(), session.clone());
-        
+
         drop(sessions);
         self.save_to_disk(&session_clone).await?;
-        
+
         Ok(session_clone)
     }
 
@@ -256,12 +256,12 @@ impl SessionManager {
         let storage_path = self.storage_path.clone();
         let mut sessions = self.sessions.write().await;
         sessions.remove(session_id);
-        
+
         let path = storage_path.join(format!("{}.json", session_id));
         if path.exists() {
             fs::remove_file(path)?;
         }
-        
+
         Ok(())
     }
 
@@ -289,7 +289,7 @@ mod tests {
     async fn test_session_creation() {
         let dir = tempdir().unwrap();
         let manager = SessionManager::new(dir.path().to_path_buf());
-        
+
         let session = manager.create_session().await.unwrap();
         assert!(!session.session_id.is_empty());
         assert!(matches!(session.status, SessionStatus::Active));
@@ -300,10 +300,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let manager = SessionManager::new(dir.path().to_path_buf());
         manager.init().await.unwrap();
-        
+
         let session = manager.create_session().await.unwrap();
         let session_id = session.session_id.clone();
-        
+
         let loaded = manager.get_session(&session_id).await.unwrap();
         assert_eq!(loaded.session_id, session_id);
     }
@@ -313,14 +313,17 @@ mod tests {
         let dir = tempdir().unwrap();
         let manager = SessionManager::new(dir.path().to_path_buf());
         manager.init().await.unwrap();
-        
+
         let mut session = manager.create_session().await.unwrap();
         session.context.target = Some("https://example.com".to_string());
-        
+
         manager.update_session(&session).await.unwrap();
-        
+
         let loaded = manager.get_session(&session.session_id).await.unwrap();
-        assert_eq!(loaded.context.target, Some("https://example.com".to_string()));
+        assert_eq!(
+            loaded.context.target,
+            Some("https://example.com".to_string())
+        );
     }
 
     #[tokio::test]
@@ -328,12 +331,12 @@ mod tests {
         let dir = tempdir().unwrap();
         let manager = SessionManager::new(dir.path().to_path_buf());
         manager.init().await.unwrap();
-        
+
         let session = manager.create_session().await.unwrap();
         let session_id = session.session_id.clone();
-        
+
         manager.delete_session(&session_id).await.unwrap();
-        
+
         let loaded = manager.get_session(&session_id).await;
         assert!(loaded.is_none());
     }

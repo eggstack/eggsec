@@ -1,5 +1,5 @@
-use crate::error::Result;
 use crate::constants::waf;
+use crate::error::Result;
 
 use super::WafDetector;
 

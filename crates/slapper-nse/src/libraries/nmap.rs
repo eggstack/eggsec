@@ -3,10 +3,10 @@
 //! Provides access to Nmap internals like host info, ports, and socket operations.
 
 use mlua::{Lua, Result as LuaResult, Table};
-use std::sync::LazyLock;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::LazyLock;
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -57,12 +57,13 @@ pub fn add_connection(host: &str, port: u16, stream: TcpStream) -> Result<(), St
         .map_err(|e| e.to_string())?
         .as_secs();
 
-    match CONNECTION_REGISTRY.write() { Ok(mut reg) => {
-        reg.insert(key, ConnectionEntry { stream, created_at });
-        Ok(())
-    } _ => {
-        Err("Failed to acquire write lock".to_string())
-    }}
+    match CONNECTION_REGISTRY.write() {
+        Ok(mut reg) => {
+            reg.insert(key, ConnectionEntry { stream, created_at });
+            Ok(())
+        }
+        _ => Err("Failed to acquire write lock".to_string()),
+    }
 }
 
 pub fn get_connection(host: &str, port: u16) -> Option<TcpStream> {
@@ -419,24 +420,27 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
 
             // Reconnect if needed
             if should_reconnect {
-                match reconnect_stream(&host, port, timeout) { Some(new_stream) => {
-                    if let Ok(mut reg) = CONNECTION_REGISTRY.write() {
-                        reg.insert(
-                            conn_key.clone(),
-                            ConnectionEntry {
-                                stream: new_stream,
-                                created_at: std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap_or_default()
-                                    .as_secs(),
-                            },
-                        );
+                match reconnect_stream(&host, port, timeout) {
+                    Some(new_stream) => {
+                        if let Ok(mut reg) = CONNECTION_REGISTRY.write() {
+                            reg.insert(
+                                conn_key.clone(),
+                                ConnectionEntry {
+                                    stream: new_stream,
+                                    created_at: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                },
+                            );
+                        }
                     }
-                } _ => {
-                    result.set("status", "error")?;
-                    result.set("error", "failed to reconnect")?;
-                    return Ok(result);
-                }}
+                    _ => {
+                        result.set("status", "error")?;
+                        result.set("error", "failed to reconnect")?;
+                        return Ok(result);
+                    }
+                }
             }
 
             // Try to send data
@@ -551,24 +555,27 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
 
             // Attempt reconnect if needed
             if should_reconnect {
-                match reconnect_stream(&host, port, timeout) { Some(new_stream) => {
-                    if let Ok(mut reg) = CONNECTION_REGISTRY.write() {
-                        reg.insert(
-                            conn_key.clone(),
-                            ConnectionEntry {
-                                stream: new_stream,
-                                created_at: std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap_or_default()
-                                    .as_secs(),
-                            },
-                        );
+                match reconnect_stream(&host, port, timeout) {
+                    Some(new_stream) => {
+                        if let Ok(mut reg) = CONNECTION_REGISTRY.write() {
+                            reg.insert(
+                                conn_key.clone(),
+                                ConnectionEntry {
+                                    stream: new_stream,
+                                    created_at: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                },
+                            );
+                        }
                     }
-                } _ => {
-                    result.set("status", "error")?;
-                    result.set("error", "failed to reconnect")?;
-                    return Ok(result);
-                }}
+                    _ => {
+                        result.set("status", "error")?;
+                        result.set("error", "failed to reconnect")?;
+                        return Ok(result);
+                    }
+                }
             }
 
             // Try to receive data
@@ -1510,7 +1517,10 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
             let iface = _lua.create_table()?;
 
             if let Some(iface_name) = name {
-                if !iface_name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                if !iface_name
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+                {
                     return Err(mlua::Error::RuntimeError(
                         "Invalid interface name".to_string(),
                     ));

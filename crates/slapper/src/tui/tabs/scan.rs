@@ -25,6 +25,7 @@ pub struct ScanTab {
     pub progress: ProgressGauge,
     pub state: AppState,
     pub focus_area: ScanFocusArea,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,6 +83,7 @@ impl ScanTab {
             progress: ProgressGauge::new("Pipeline Progress"),
             state: AppState::Idle,
             focus_area: ScanFocusArea::Inputs,
+            error_message: None,
         }
     }
 
@@ -258,6 +260,7 @@ impl TabState for ScanTab {
         self.report = None;
         self.progress.current = 0;
         self.reset_stages();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -265,6 +268,12 @@ impl TabState for ScanTab {
         self.inputs.fields[1].cursor_pos = 11;
         self.profile_selector.select(0);
         self.output_selector.select(0);
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+        self.progress.current = 0;
     }
 }
 
@@ -348,7 +357,12 @@ impl TabRender for ScanTab {
             .block(Block::default().borders(Borders::ALL).title(progress_text));
         f.render_widget(stages_block, stages_area);
 
-        if !self.current_stage_output.is_empty() {
+        if let Some(ref err_msg) = self.error_message {
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(Block::default().borders(Borders::ALL).title("Scan - Error"))
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, output_area);
+        } else if !self.current_stage_output.is_empty() {
             self.current_stage_output.render(f, output_area, None);
         } else {
             let placeholder =
@@ -400,23 +414,23 @@ impl TabInput for ScanTab {
                 ScanFocusArea::ProfileSelector
             }
             ScanFocusArea::ProfileSelector => ScanFocusArea::OutputSelector,
-            ScanFocusArea::OutputSelector => {
+            ScanFocusArea::OutputSelector => ScanFocusArea::Results,
+            ScanFocusArea::Results => {
                 self.inputs.focus(0);
                 ScanFocusArea::Inputs
             }
-            ScanFocusArea::Results => ScanFocusArea::Inputs,
         };
     }
 
     fn handle_focus_prev(&mut self) {
         self.focus_area = match self.focus_area {
-            ScanFocusArea::Inputs => ScanFocusArea::OutputSelector,
+            ScanFocusArea::Inputs => ScanFocusArea::Results,
             ScanFocusArea::ProfileSelector => {
                 self.inputs.focus(0);
                 ScanFocusArea::Inputs
             }
             ScanFocusArea::OutputSelector => ScanFocusArea::ProfileSelector,
-            ScanFocusArea::Results => ScanFocusArea::Inputs,
+            ScanFocusArea::Results => ScanFocusArea::OutputSelector,
         };
     }
 
@@ -430,6 +444,58 @@ impl TabInput for ScanTab {
         if !self.is_running() && self.focus_area == ScanFocusArea::Inputs {
             self.inputs.backspace();
         }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == ScanFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == ScanFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else {
+            Some(self.current_stage_output.get_content())
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == ScanFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == ScanFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == ScanFocusArea::Inputs {
+            self.inputs.move_home();
+        } else {
+            self.current_stage_output.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == ScanFocusArea::Inputs {
+            self.inputs.move_end();
+        } else {
+            self.current_stage_output.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = ScanFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = ScanFocusArea::Inputs;
+        self.inputs.blur();
     }
 
     fn handle_enter(&mut self) {
@@ -502,6 +568,7 @@ impl TabInput for ScanTab {
         if self.focus_area == ScanFocusArea::Inputs {
             self.inputs.move_left()
         } else {
+            self.current_stage_output.scroll_left(5);
             true
         }
     }
@@ -510,7 +577,24 @@ impl TabInput for ScanTab {
         if self.focus_area == ScanFocusArea::Inputs {
             self.inputs.move_right()
         } else {
+            self.current_stage_output.scroll_right(5);
             true
+        }
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        if self.focus_area == ScanFocusArea::Inputs {
+            self.inputs.is_at_left_edge()
+        } else {
+            self.current_stage_output.is_at_left_edge()
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        if self.focus_area == ScanFocusArea::Inputs {
+            self.inputs.is_at_right_edge()
+        } else {
+            self.current_stage_output.is_at_right_edge()
         }
     }
 

@@ -1,10 +1,10 @@
+use chrono::{DateTime, Timelike, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Timelike};
 
-use crate::agent::portfolio::OffPeakWindow;
 use crate::agent::alerts::AlertRoutingRules;
+use crate::agent::portfolio::OffPeakWindow;
 use crate::types::Severity;
 
 pub mod checker;
@@ -52,7 +52,7 @@ impl DoNotDoList {
             if t.starts_with('*') {
                 target.contains(&t[1..])
             } else if t.ends_with('*') {
-                target.starts_with(&t[..t.len()-1])
+                target.starts_with(&t[..t.len() - 1])
             } else {
                 target == t || target.starts_with(t)
             }
@@ -147,7 +147,10 @@ impl OffPeakConfig {
         self.windows.iter().any(|w| w.is_in_window(time))
     }
 
-    pub fn get_allowed_depth(&self, requested: crate::agent::portfolio::ScanDepth) -> crate::agent::portfolio::ScanDepth {
+    pub fn get_allowed_depth(
+        &self,
+        requested: crate::agent::portfolio::ScanDepth,
+    ) -> crate::agent::portfolio::ScanDepth {
         if self.allowed_scan_depths.contains(&requested) {
             requested
         } else {
@@ -203,7 +206,9 @@ impl OperationalConstraints {
     }
 
     pub fn requires_approval(&self, action_type: &str) -> bool {
-        self.require_approval_for.iter().any(|a| action_type.contains(a))
+        self.require_approval_for
+            .iter()
+            .any(|a| action_type.contains(a))
     }
 
     pub fn get_off_peak_config(&self) -> &OffPeakConfig {
@@ -247,7 +252,9 @@ mod tests {
     #[test]
     fn test_do_not_do_list_is_action_allowed() {
         let mut list = DoNotDoList::new();
-        list.add_forbidden_action(ForbiddenAction::new("scan", "Not allowed").with_target("*.local"));
+        list.add_forbidden_action(
+            ForbiddenAction::new("scan", "Not allowed").with_target("*.local"),
+        );
         assert!(!list.is_action_allowed("scan", "test.local"));
         assert!(list.is_action_allowed("scan", "example.com"));
     }
@@ -295,24 +302,22 @@ mod tests {
 
     #[test]
     fn test_off_peak_config_with_window() {
-        let config = OffPeakConfig::new()
-            .with_window(OffPeakWindow {
-                start_hour: 0,
-                end_hour: 6,
-                timezone: "UTC".to_string(),
-            });
+        let config = OffPeakConfig::new().with_window(OffPeakWindow {
+            start_hour: 0,
+            end_hour: 6,
+            timezone: "UTC".to_string(),
+        });
 
         assert_eq!(config.windows.len(), 1);
     }
 
     #[test]
     fn test_off_peak_config_get_allowed_depth() {
-        let config = OffPeakConfig::new()
-            .with_window(OffPeakWindow {
-                start_hour: 0,
-                end_hour: 6,
-                timezone: "UTC".to_string(),
-            });
+        let config = OffPeakConfig::new().with_window(OffPeakWindow {
+            start_hour: 0,
+            end_hour: 6,
+            timezone: "UTC".to_string(),
+        });
 
         let allowed = config.get_allowed_depth(crate::agent::portfolio::ScanDepth::Shallow);
         assert_eq!(allowed, crate::agent::portfolio::ScanDepth::Shallow);
@@ -331,9 +336,9 @@ mod tests {
     #[test]
     fn test_operational_constraints_is_action_allowed() {
         let mut constraints = OperationalConstraints::new();
-        constraints.do_not_do_list.add_forbidden_action(
-            ForbiddenAction::new("destructive", "Too dangerous")
-        );
+        constraints
+            .do_not_do_list
+            .add_forbidden_action(ForbiddenAction::new("destructive", "Too dangerous"));
 
         assert!(!constraints.is_action_allowed("destructive", "test.com"));
         assert!(constraints.is_action_allowed("scan", "test.com"));

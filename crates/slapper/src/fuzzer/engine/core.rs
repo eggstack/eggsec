@@ -203,9 +203,9 @@ impl FuzzEngine {
             }
         }
 
-        client_builder.build().map_err(|e| {
-            crate::error::SlapperError::from(e).with_timeout(args.timeout * 1000)
-        })
+        client_builder
+            .build()
+            .map_err(|e| crate::error::SlapperError::from(e).with_timeout(args.timeout * 1000))
     }
 
     pub fn new_from_waf_args(args: WafStressArgs) -> Result<Self> {
@@ -233,7 +233,10 @@ impl FuzzEngine {
     /// Returns an error if HTTP requests fail or results cannot be serialized.
     pub async fn run(&mut self) -> Result<()> {
         if self.args.verbose {
-            eprintln!("Starting fuzz against {}", sanitize_for_logging(&self.args.url));
+            eprintln!(
+                "Starting fuzz against {}",
+                sanitize_for_logging(&self.args.url)
+            );
         }
 
         let session = self.run_return_session().await?;
@@ -275,12 +278,14 @@ impl FuzzEngine {
                 let grammar_payloads =
                     grammar_fuzzer.generate_batch(self.args.mutation_count.max(10));
                 let payload_type = grammar_fuzzer.kind().payload_type();
-                payloads.extend(grammar_payloads.into_iter().map(|p| super::super::payloads::Payload {
-                    payload_type,
-                    payload: p,
-                    description: "Grammar-generated payload".to_string(),
-                    severity: grammar_fuzzer.kind().severity(),
-                    tags: vec!["grammar".to_string()],
+                payloads.extend(grammar_payloads.into_iter().map(|p| {
+                    super::super::payloads::Payload {
+                        payload_type,
+                        payload: p,
+                        description: "Grammar-generated payload".to_string(),
+                        severity: grammar_fuzzer.kind().severity(),
+                        tags: vec!["grammar".to_string()],
+                    }
                 }));
             }
         }
@@ -290,15 +295,23 @@ impl FuzzEngine {
             let vuln_type = format!("{:?}", pt);
             let context = format!("target={}", self.args.url);
             if let Ok(ai_payloads) = ai_gen.generate_payloads(&vuln_type, &context).await {
-                payloads.extend(ai_payloads.into_iter().map(|p| super::super::payloads::Payload {
-                    payload_type: pt,
-                    payload: p,
-                    description: "AI-generated payload".to_string(),
-                    severity: Severity::Medium,
-                    tags: vec!["ai-generated".to_string()],
-                }));
+                payloads.extend(
+                    ai_payloads
+                        .into_iter()
+                        .map(|p| super::super::payloads::Payload {
+                            payload_type: pt,
+                            payload: p,
+                            description: "AI-generated payload".to_string(),
+                            severity: Severity::Medium,
+                            tags: vec!["ai-generated".to_string()],
+                        }),
+                );
             } else {
-                tracing::warn!("AI payload generation failed for {} (context: {})", vuln_type, context);
+                tracing::warn!(
+                    "AI payload generation failed for {} (context: {})",
+                    vuln_type,
+                    context
+                );
             }
         }
 
@@ -368,7 +381,10 @@ impl FuzzEngine {
             all_results.retain(|r| !self.filter_chain.should_filter(r));
             let after = all_results.len();
             if !self.tui_mode && before != after {
-                eprintln!("Filtered out {} responses matching filter criteria", before - after);
+                eprintln!(
+                    "Filtered out {} responses matching filter criteria",
+                    before - after
+                );
             }
         }
 

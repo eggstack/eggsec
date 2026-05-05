@@ -294,8 +294,15 @@ impl TaskRunner {
                 concurrency,
                 timeout,
             } => {
-                super::scanner::run_port_scan(target, ports, concurrency, timeout, progress_tx, result_tx)
-                    .await
+                super::scanner::run_port_scan(
+                    target,
+                    ports,
+                    concurrency,
+                    timeout,
+                    progress_tx,
+                    result_tx,
+                )
+                .await
             }
             TaskConfig::EndpointScan {
                 target,
@@ -317,7 +324,10 @@ impl TaskRunner {
                 target,
                 ports,
                 timeout,
-            } => super::scanner::run_fingerprint(target, ports, timeout, progress_tx, result_tx).await,
+            } => {
+                super::scanner::run_fingerprint(target, ports, timeout, progress_tx, result_tx)
+                    .await
+            }
             TaskConfig::Fuzz {
                 target,
                 payload_type,
@@ -362,20 +372,17 @@ impl TaskRunner {
                 target,
                 bypass_mode,
                 techniques,
-            } => super::fuzzer::run_waf(target, bypass_mode, techniques, progress_tx, result_tx).await,
+            } => {
+                super::fuzzer::run_waf(target, bypass_mode, techniques, progress_tx, result_tx)
+                    .await
+            }
             TaskConfig::WafStress {
                 target,
                 concurrency,
                 timeout,
             } => {
-                super::fuzzer::run_waf_stress(
-                    target,
-                    concurrency,
-                    timeout,
-                    progress_tx,
-                    result_tx,
-                )
-                .await
+                super::fuzzer::run_waf_stress(target, concurrency, timeout, progress_tx, result_tx)
+                    .await
             }
             TaskConfig::Pipeline {
                 target,
@@ -397,7 +404,9 @@ impl TaskRunner {
                 target,
                 concurrency,
                 options,
-            } => super::recon::run_recon(target, concurrency, options, progress_tx, result_tx).await,
+            } => {
+                super::recon::run_recon(target, concurrency, options, progress_tx, result_tx).await
+            }
             TaskConfig::PacketCapture {
                 interface,
                 filter,
@@ -415,7 +424,8 @@ impl TaskRunner {
                 .await
             }
             TaskConfig::PacketTraceroute { target, max_hops } => {
-                super::network::run_packet_traceroute(target, max_hops, progress_tx, result_tx).await
+                super::network::run_packet_traceroute(target, max_hops, progress_tx, result_tx)
+                    .await
             }
             TaskConfig::PacketSend {
                 target,
@@ -423,8 +433,15 @@ impl TaskRunner {
                 count,
                 packet_size,
             } => {
-                super::network::run_packet_send(target, port, count, packet_size, progress_tx, result_tx)
-                    .await
+                super::network::run_packet_send(
+                    target,
+                    port,
+                    count,
+                    packet_size,
+                    progress_tx,
+                    result_tx,
+                )
+                .await
             }
             TaskConfig::GraphQl {
                 url,
@@ -501,24 +518,70 @@ impl TaskRunner {
             }
             #[cfg(feature = "compliance")]
             TaskConfig::Compliance { target, framework } => {
-                super::security::run_compliance_task(target, framework, progress_tx, result_tx).await
+                super::security::run_compliance_task(target, framework, progress_tx, result_tx)
+                    .await
             }
             #[cfg(feature = "database")]
-            TaskConfig::Storage { config, mode, scan_id, cve_id, severity_filter } => {
-                super::security::run_storage_task(config, mode, scan_id, cve_id, severity_filter, progress_tx, result_tx).await
+            TaskConfig::Storage {
+                config,
+                mode,
+                scan_id,
+                cve_id,
+                severity_filter,
+            } => {
+                super::security::run_storage_task(
+                    config,
+                    mode,
+                    scan_id,
+                    cve_id,
+                    severity_filter,
+                    progress_tx,
+                    result_tx,
+                )
+                .await
             }
             #[cfg(feature = "external-integrations")]
-            TaskConfig::Integrations { config, mode, title, description, labels, assignees } => {
-                super::security::run_integrations_task(config, mode, title, description, labels, assignees, progress_tx, result_tx).await
+            TaskConfig::Integrations {
+                config,
+                mode,
+                title,
+                description,
+                labels,
+                assignees,
+            } => {
+                super::security::run_integrations_task(
+                    config,
+                    mode,
+                    title,
+                    description,
+                    labels,
+                    assignees,
+                    progress_tx,
+                    result_tx,
+                )
+                .await
             }
             #[cfg(feature = "finding-workflow")]
-            TaskConfig::Workflow { mode, target, finding_ids } => {
-                super::security::run_workflow_task(mode, target, finding_ids, progress_tx, result_tx).await
+            TaskConfig::Workflow {
+                mode,
+                target,
+                finding_ids,
+            } => {
+                super::security::run_workflow_task(
+                    mode,
+                    target,
+                    finding_ids,
+                    progress_tx,
+                    result_tx,
+                )
+                .await
             }
             #[cfg(feature = "vuln-management")]
-            TaskConfig::Vuln { mode, target, cve_id } => {
-                super::security::run_vuln_task(mode, target, cve_id, progress_tx, result_tx).await
-            }
+            TaskConfig::Vuln {
+                mode,
+                target,
+                cve_id,
+            } => super::security::run_vuln_task(mode, target, cve_id, progress_tx, result_tx).await,
         };
         result
     }

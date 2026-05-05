@@ -1,7 +1,7 @@
-use reqwest::Client;
-use crate::config::AiConfig;
 use crate::ai::errors::{AiError, Result};
+use crate::config::AiConfig;
 use crate::utils::circuit_breaker::{CircuitBreaker, CircuitState};
+use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,7 +33,10 @@ impl Provider {
     }
 
     pub fn supports_bearer_auth(&self) -> bool {
-        matches!(self, Provider::OpenAI | Provider::OpenAICompatible | Provider::Anthropic)
+        matches!(
+            self,
+            Provider::OpenAI | Provider::OpenAICompatible | Provider::Anthropic
+        )
     }
 
     pub fn supports_azure_auth(&self) -> bool {
@@ -87,17 +90,18 @@ impl AiClient {
     }
 
     pub fn model(&self) -> &str {
-        self.config.model.as_deref().unwrap_or(self.provider.default_model())
+        self.config
+            .model
+            .as_deref()
+            .unwrap_or(self.provider.default_model())
     }
 
     pub fn apply_auth(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         if let Some(key) = &self.config.api_key {
             match self.provider {
-                Provider::Azure => {
-                    request
-                        .header("api-key", key.expose_secret().to_string())
-                        .header("Content-Type", "application/json")
-                }
+                Provider::Azure => request
+                    .header("api-key", key.expose_secret().to_string())
+                    .header("Content-Type", "application/json"),
                 _ if self.provider.supports_bearer_auth() => {
                     request.bearer_auth(key.expose_secret().to_string())
                 }
@@ -108,7 +112,12 @@ impl AiClient {
         }
     }
 
-    async fn chat_completion(&self, prompt: &str, max_tokens: Option<u32>, temperature: f64) -> Result<serde_json::Value> {
+    async fn chat_completion(
+        &self,
+        prompt: &str,
+        max_tokens: Option<u32>,
+        temperature: f64,
+    ) -> Result<serde_json::Value> {
         if !self.circuit_breaker.is_available() {
             return Err(AiError::CircuitBreakerOpen {});
         }
@@ -130,12 +139,18 @@ impl AiClient {
                 }
                 if response.status().is_server_error() {
                     self.circuit_breaker.record_failure();
-                    return Err(AiError::ApiError(format!("Server error: {}", response.status())));
+                    return Err(AiError::ApiError(format!(
+                        "Server error: {}",
+                        response.status()
+                    )));
                 }
                 self.circuit_breaker.record_success();
                 let result: serde_json::Value = response.json().await?;
                 if let Some(error) = result.get("error") {
-                    let message = error.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
+                    let message = error
+                        .get("message")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("Unknown error");
                     return Err(AiError::ApiError(message.to_string()));
                 }
                 Ok(result)
@@ -147,7 +162,10 @@ impl AiClient {
         }
     }
 
-    pub async fn chat_completion_from_messages(&self, body: &serde_json::Value) -> Result<serde_json::Value> {
+    pub async fn chat_completion_from_messages(
+        &self,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value> {
         if !self.circuit_breaker.is_available() {
             return Err(AiError::CircuitBreakerOpen {});
         }
@@ -175,12 +193,18 @@ impl AiClient {
                 }
                 if response.status().is_server_error() {
                     self.circuit_breaker.record_failure();
-                    return Err(AiError::ApiError(format!("Server error: {}", response.status())));
+                    return Err(AiError::ApiError(format!(
+                        "Server error: {}",
+                        response.status()
+                    )));
                 }
                 self.circuit_breaker.record_success();
                 let result: serde_json::Value = response.json().await?;
                 if let Some(error) = result.get("error") {
-                    let message = error.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
+                    let message = error
+                        .get("message")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("Unknown error");
                     return Err(AiError::ApiError(message.to_string()));
                 }
                 Ok(result)
@@ -193,15 +217,18 @@ impl AiClient {
     }
 
     fn transform_to_anthropic_format(&self, body: &serde_json::Value) -> Result<serde_json::Value> {
-        let model = body.get("model")
+        let model = body
+            .get("model")
             .and_then(|v| v.as_str())
             .unwrap_or(self.model());
 
-        let max_tokens = body.get("max_tokens")
+        let max_tokens = body
+            .get("max_tokens")
             .and_then(|v| v.as_i64())
             .unwrap_or(2048) as u64;
 
-        let messages = body.get("messages")
+        let messages = body
+            .get("messages")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
@@ -238,7 +265,11 @@ impl AiClient {
         }))
     }
 
-    fn extract_content(&self, result: &serde_json::Value, filter_fn: fn(&str) -> bool) -> Vec<String> {
+    fn extract_content(
+        &self,
+        result: &serde_json::Value,
+        filter_fn: fn(&str) -> bool,
+    ) -> Vec<String> {
         if let Some(choices) = result.get("choices") {
             if let Some(choice) = choices.get(0) {
                 if let Some(content) = choice
@@ -263,10 +294,16 @@ impl AiClient {
     ) -> Result<serde_json::Value> {
         let prompt = format!(
             "Analyze these security findings:\n{}",
-            serde_json::to_string_pretty(findings).map_err(|e| AiError::ParseError(e.to_string()))?
+            serde_json::to_string_pretty(findings)
+                .map_err(|e| AiError::ParseError(e.to_string()))?
         );
 
-        self.chat_completion(&prompt, self.config.max_tokens.map(|v| v as u32), self.config.temperature.unwrap_or(0.7)).await
+        self.chat_completion(
+            &prompt,
+            self.config.max_tokens.map(|v| v as u32),
+            self.config.temperature.unwrap_or(0.7),
+        )
+        .await
     }
 
     pub async fn analyze_findings_typed(
@@ -275,11 +312,18 @@ impl AiClient {
     ) -> Result<crate::ai::types::AiAnalysisResult> {
         let prompt = format!(
             "Analyze these security findings:\n{}",
-            serde_json::to_string_pretty(findings).map_err(|e| AiError::ParseError(e.to_string()))?
+            serde_json::to_string_pretty(findings)
+                .map_err(|e| AiError::ParseError(e.to_string()))?
         );
 
-        let result = self.chat_completion(&prompt, self.config.max_tokens.map(|v| v as u32), self.config.temperature.unwrap_or(0.7)).await?;
-        
+        let result = self
+            .chat_completion(
+                &prompt,
+                self.config.max_tokens.map(|v| v as u32),
+                self.config.temperature.unwrap_or(0.7),
+            )
+            .await?;
+
         if let Some(choices) = result.get("choices") {
             if let Some(choice) = choices.get(0) {
                 if let Some(content) = choice
@@ -287,7 +331,9 @@ impl AiClient {
                     .and_then(|m| m.get("content"))
                     .and_then(|c| c.as_str())
                 {
-                    if let Ok(parsed) = serde_json::from_str::<crate::ai::types::AiAnalysisResult>(content) {
+                    if let Ok(parsed) =
+                        serde_json::from_str::<crate::ai::types::AiAnalysisResult>(content)
+                    {
                         return Ok(parsed);
                     }
                     return Ok(crate::ai::types::AiAnalysisResult {
@@ -300,15 +346,11 @@ impl AiClient {
                 }
             }
         }
-        
+
         Err(AiError::InvalidResponse)
     }
 
-    pub async fn suggest_payloads(
-        &self,
-        vuln_type: &str,
-        context: &str,
-    ) -> Result<Vec<String>> {
+    pub async fn suggest_payloads(&self, vuln_type: &str, context: &str) -> Result<Vec<String>> {
         if vuln_type.is_empty() {
             return Err(AiError::invalid_config("vuln_type cannot be empty"));
         }
@@ -357,7 +399,10 @@ mod tests {
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     fn next_test_provider() -> String {
-        format!("test-provider-{}", TEST_COUNTER.fetch_add(1, Ordering::Relaxed))
+        format!(
+            "test-provider-{}",
+            TEST_COUNTER.fetch_add(1, Ordering::Relaxed)
+        )
     }
 
     fn create_test_config() -> AiConfig {
@@ -396,13 +441,19 @@ mod tests {
             max_bypasses: 10,
         };
         let client = AiClient::new(config);
-        assert_eq!(client.api_url(), "https://api.openai.com/v1/chat/completions");
+        assert_eq!(
+            client.api_url(),
+            "https://api.openai.com/v1/chat/completions"
+        );
     }
 
     #[test]
     fn test_api_url_custom() {
         let client = create_client_without_key();
-        assert_eq!(client.api_url(), "https://api.openai.com/v1/chat/completions");
+        assert_eq!(
+            client.api_url(),
+            "https://api.openai.com/v1/chat/completions"
+        );
     }
 
     #[test]
@@ -555,7 +606,10 @@ mod tests {
     fn test_provider_default_model() {
         assert_eq!(Provider::OpenAI.default_model(), "gpt-4");
         assert_eq!(Provider::Azure.default_model(), "gpt-4");
-        assert_eq!(Provider::Anthropic.default_model(), "claude-3-sonnet-20240229");
+        assert_eq!(
+            Provider::Anthropic.default_model(),
+            "claude-3-sonnet-20240229"
+        );
         assert_eq!(Provider::OpenAICompatible.default_model(), "gpt-4");
     }
 
@@ -657,7 +711,8 @@ mod tests {
     fn test_mock_error_response_structure() {
         let response = create_mock_error_response("Rate limit exceeded");
         assert!(response.get("error").is_some());
-        let error_msg = response.get("error")
+        let error_msg = response
+            .get("error")
             .and_then(|e| e.get("message"))
             .and_then(|m| m.as_str());
         assert_eq!(error_msg, Some("Rate limit exceeded"));

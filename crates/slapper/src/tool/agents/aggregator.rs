@@ -1,8 +1,8 @@
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
 pub struct AggregatedResult {
@@ -136,15 +136,16 @@ impl ResultAggregator {
                 stage.duration_ms += duration_ms;
             }
 
-            let tool_entry = exec.tool_results.entry(tool_id.to_string()).or_insert_with(|| {
-                ToolResultAccumulator {
+            let tool_entry = exec
+                .tool_results
+                .entry(tool_id.to_string())
+                .or_insert_with(|| ToolResultAccumulator {
                     tool_id: tool_id.to_string(),
                     tool_name: tool_id.to_string(),
                     success_count: 0,
                     failure_count: 0,
                     durations_ms: Vec::new(),
-                }
-            });
+                });
 
             if success {
                 tool_entry.success_count += 1;
@@ -155,16 +156,15 @@ impl ResultAggregator {
         }
     }
 
-    pub async fn record_error(
-        &self,
-        execution_id: Uuid,
-        tool_id: &str,
-        error_message: &str,
-    ) {
+    pub async fn record_error(&self, execution_id: Uuid, tool_id: &str, error_message: &str) {
         let mut in_progress = self.in_progress.write().await;
         if let Some(exec) = in_progress.get_mut(&execution_id) {
             let now = Utc::now();
-            if let Some(existing) = exec.errors.iter_mut().find(|e| e.tool_id == tool_id && e.error_message == error_message) {
+            if let Some(existing) = exec
+                .errors
+                .iter_mut()
+                .find(|e| e.tool_id == tool_id && e.error_message == error_message)
+            {
                 existing.count += 1;
                 existing.last_seen = now;
             } else {
@@ -198,7 +198,11 @@ impl ResultAggregator {
                         successful_tools: successful,
                         failed_tools: total - successful,
                         duration_ms: s.duration_ms,
-                        success_rate: if total > 0 { successful as f32 / total as f32 } else { 0.0 },
+                        success_rate: if total > 0 {
+                            successful as f32 / total as f32
+                        } else {
+                            0.0
+                        },
                     }
                 })
                 .collect();
@@ -237,7 +241,8 @@ impl ResultAggregator {
                 .collect();
 
             let total_tasks: usize = tool_summaries.iter().map(|t| t.total_executions).sum();
-            let successful_tasks: usize = tool_summaries.iter().map(|t| t.successful_executions).sum();
+            let successful_tasks: usize =
+                tool_summaries.iter().map(|t| t.successful_executions).sum();
             let failed_tasks: usize = tool_summaries.iter().map(|t| t.failed_executions).sum();
             let total_duration_ms: u64 = tool_summaries.iter().map(|t| t.total_duration_ms).sum();
 

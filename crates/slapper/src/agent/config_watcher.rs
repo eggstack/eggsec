@@ -41,7 +41,9 @@ impl ConfigWatcher {
             } else if let Some(parent) = path.parent() {
                 // Watch parent directory for files that don't exist yet
                 if parent.exists() {
-                    watcher.watcher().watch(parent, RecursiveMode::NonRecursive)?;
+                    watcher
+                        .watcher()
+                        .watch(parent, RecursiveMode::NonRecursive)?;
                     tracing::debug!("Watching parent directory for future file: {:?}", path);
                 }
             }
@@ -53,7 +55,8 @@ impl ConfigWatcher {
                 match result {
                     Ok(events) => {
                         for event in events {
-                            if matches!(event.kind, notify_debouncer_mini::DebouncedEventKind::Any) {
+                            if matches!(event.kind, notify_debouncer_mini::DebouncedEventKind::Any)
+                            {
                                 tracing::info!("Config file changed: {:?}", event.path);
                                 if let Err(e) = reloader_clone.reload(&event.path) {
                                     tracing::error!("Failed to reload config: {}", e);
@@ -162,8 +165,8 @@ impl SlapperConfigReloader {
 mod tests {
     use super::*;
     use crate::agent::portfolio::TargetPortfolio;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     #[test]
     fn test_slapper_config_reloader_new_signature() {
@@ -206,7 +209,11 @@ mod tests {
                 }
             }
         });
-        fs::write(&portfolio_path, serde_json::to_string_pretty(&portfolio_data).unwrap()).unwrap();
+        fs::write(
+            &portfolio_path,
+            serde_json::to_string_pretty(&portfolio_data).unwrap(),
+        )
+        .unwrap();
 
         // Create portfolio with testing helper (bypasses path validation)
         let portfolio = TargetPortfolio::new_for_testing(portfolio_path.clone());
@@ -215,14 +222,12 @@ mod tests {
         assert_eq!(portfolio.targets_count(), 1);
 
         // Create reloader with this portfolio
-        let reloader = SlapperConfigReloader::new(
-            Some(portfolio.clone()),
-            Some(portfolio_path.clone()),
-            None,
-        );
+        let reloader =
+            SlapperConfigReloader::new(Some(portfolio.clone()), Some(portfolio_path.clone()), None);
 
         // Add a new target to the portfolio file
-        let mut data: serde_json::Value = serde_json::from_str(&fs::read_to_string(&portfolio_path).unwrap()).unwrap();
+        let mut data: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&portfolio_path).unwrap()).unwrap();
         data["targets"]["test.com"] = serde_json::json!({
             "target": "https://test.com",
             "target_type": "url",
@@ -237,7 +242,11 @@ mod tests {
             "off_peak_window": null,
             "scope": null
         });
-        fs::write(&portfolio_path, serde_json::to_string_pretty(&data).unwrap()).unwrap();
+        fs::write(
+            &portfolio_path,
+            serde_json::to_string_pretty(&data).unwrap(),
+        )
+        .unwrap();
 
         // Reload should pick up the new target
         let result = reloader.reload(&portfolio_path);
@@ -270,7 +279,11 @@ mod tests {
                 }
             }
         });
-        fs::write(&portfolio_path, serde_json::to_string_pretty(&portfolio_data).unwrap()).unwrap();
+        fs::write(
+            &portfolio_path,
+            serde_json::to_string_pretty(&portfolio_data).unwrap(),
+        )
+        .unwrap();
 
         // Create portfolio with testing helper
         let portfolio = TargetPortfolio::new_for_testing(portfolio_path.clone());
@@ -278,11 +291,8 @@ mod tests {
         assert_eq!(portfolio.targets_count(), 1);
 
         // Create reloader
-        let reloader = SlapperConfigReloader::new(
-            Some(portfolio.clone()),
-            Some(portfolio_path.clone()),
-            None,
-        );
+        let reloader =
+            SlapperConfigReloader::new(Some(portfolio.clone()), Some(portfolio_path.clone()), None);
 
         // Write invalid JSON to the portfolio file
         fs::write(&portfolio_path, "invalid json{").unwrap();
@@ -302,17 +312,14 @@ mod tests {
 
         // Don't create the file yet - simulate missing file at startup
         let portfolio = TargetPortfolio::new_for_testing(portfolio_path.clone());
-        
+
         // Initially, reload should fail because file doesn't exist
         let result = portfolio.reload_from_file();
         assert!(result.is_err());
 
         // Create reloader
-        let reloader = SlapperConfigReloader::new(
-            Some(portfolio.clone()),
-            Some(portfolio_path.clone()),
-            None,
-        );
+        let reloader =
+            SlapperConfigReloader::new(Some(portfolio.clone()), Some(portfolio_path.clone()), None);
 
         // Now create the portfolio file
         let portfolio_data = serde_json::json!({
@@ -334,7 +341,11 @@ mod tests {
                 }
             }
         });
-        fs::write(&portfolio_path, serde_json::to_string_pretty(&portfolio_data).unwrap()).unwrap();
+        fs::write(
+            &portfolio_path,
+            serde_json::to_string_pretty(&portfolio_data).unwrap(),
+        )
+        .unwrap();
 
         // Now reload should succeed
         let result = reloader.reload(&portfolio_path);

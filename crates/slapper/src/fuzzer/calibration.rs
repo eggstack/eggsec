@@ -6,8 +6,8 @@
 
 use crate::cli::FuzzArgs;
 use crate::error::Result;
-use crate::fuzzer::filters::FilterChain;
 use crate::fuzzer::engine::FuzzResult;
+use crate::fuzzer::filters::FilterChain;
 use reqwest::Client;
 use std::time::{Duration, Instant};
 
@@ -140,10 +140,26 @@ impl Calibrator {
                     };
 
                     self.samples.push(result.clone());
-                    stats.avg_size = if i == 0 { size } else { (stats.avg_size * i as u64 + size) / (i + 1) as u64 };
-                    stats.avg_words = if i == 0 { words } else { (stats.avg_words * i as u64 + words) / (i + 1) as u64 };
-                    stats.avg_lines = if i == 0 { lines } else { (stats.avg_lines * i as u64 + lines) / (i + 1) as u64 };
-                    stats.avg_time_ms = if i == 0 { time_ms } else { (stats.avg_time_ms * i as u64 + time_ms) / (i + 1) as u64 };
+                    stats.avg_size = if i == 0 {
+                        size
+                    } else {
+                        (stats.avg_size * i as u64 + size) / (i + 1) as u64
+                    };
+                    stats.avg_words = if i == 0 {
+                        words
+                    } else {
+                        (stats.avg_words * i as u64 + words) / (i + 1) as u64
+                    };
+                    stats.avg_lines = if i == 0 {
+                        lines
+                    } else {
+                        (stats.avg_lines * i as u64 + lines) / (i + 1) as u64
+                    };
+                    stats.avg_time_ms = if i == 0 {
+                        time_ms
+                    } else {
+                        (stats.avg_time_ms * i as u64 + time_ms) / (i + 1) as u64
+                    };
                 }
                 Err(e) => {
                     eprintln!("Calibration sample {} failed: {}", i, e);
@@ -185,7 +201,11 @@ impl Calibrator {
 
     /// Send HTTP request and return response
     async fn send_request(&self, url: &str) -> Result<reqwest::Response> {
-        let method = self.args.method.parse::<reqwest::Method>().unwrap_or(reqwest::Method::GET);
+        let method = self
+            .args
+            .method
+            .parse::<reqwest::Method>()
+            .unwrap_or(reqwest::Method::GET);
         let request = self.client.request(method, url);
         Ok(request.send().await?)
     }

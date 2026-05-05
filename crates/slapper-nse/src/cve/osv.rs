@@ -42,17 +42,24 @@ impl CveClient for OsvClient {
             page: None,
         };
 
-        let response = self.client.post(&url)
+        let response = self
+            .client
+            .post(&url)
             .json(&query)
             .send()
             .await
             .map_err(|e| CveError::NetworkError(e.to_string()))?;
 
         if !response.status().is_success() {
-            return Err(CveError::ApiError(format!("OSV API error: {}", response.status())));
+            return Err(CveError::ApiError(format!(
+                "OSV API error: {}",
+                response.status()
+            )));
         }
 
-        let result: OsvResponse = response.json().await
+        let result: OsvResponse = response
+            .json()
+            .await
             .map_err(|e| CveError::ParseError(e.to_string()))?;
 
         if let Some(vulns) = result.vulns {
@@ -79,20 +86,28 @@ impl CveClient for OsvClient {
             page: None,
         };
 
-        let response = self.client.post(&url)
+        let response = self
+            .client
+            .post(&url)
             .json(&search_query)
             .send()
             .await
             .map_err(|e| CveError::NetworkError(e.to_string()))?;
 
         if !response.status().is_success() {
-            return Err(CveError::ApiError(format!("OSV API error: {}", response.status())));
+            return Err(CveError::ApiError(format!(
+                "OSV API error: {}",
+                response.status()
+            )));
         }
 
-        let result: OsvResponse = response.json().await
+        let result: OsvResponse = response
+            .json()
+            .await
             .map_err(|e| CveError::ParseError(e.to_string()))?;
 
-        let records = result.vulns
+        let records = result
+            .vulns
             .unwrap_or_default()
             .into_iter()
             .map(convert_osv_vuln)
@@ -101,7 +116,11 @@ impl CveClient for OsvClient {
         Ok(records)
     }
 
-    async fn get_for_product(&self, package: &str, ecosystem: &str) -> Result<Vec<CveRecord>, CveError> {
+    async fn get_for_product(
+        &self,
+        package: &str,
+        ecosystem: &str,
+    ) -> Result<Vec<CveRecord>, CveError> {
         let url = format!("{}/query", self.base_url);
 
         let query = OsvQuery {
@@ -115,20 +134,28 @@ impl CveClient for OsvClient {
             page: None,
         };
 
-        let response = self.client.post(&url)
+        let response = self
+            .client
+            .post(&url)
             .json(&query)
             .send()
             .await
             .map_err(|e| CveError::NetworkError(e.to_string()))?;
 
         if !response.status().is_success() {
-            return Err(CveError::ApiError(format!("OSV API error: {}", response.status())));
+            return Err(CveError::ApiError(format!(
+                "OSV API error: {}",
+                response.status()
+            )));
         }
 
-        let result: OsvResponse = response.json().await
+        let result: OsvResponse = response
+            .json()
+            .await
             .map_err(|e| CveError::ParseError(e.to_string()))?;
 
-        let records = result.vulns
+        let records = result
+            .vulns
             .unwrap_or_default()
             .into_iter()
             .map(convert_osv_vuln)
@@ -231,13 +258,15 @@ struct OsvReference {
 fn convert_osv_vuln(vuln: OsvVuln) -> CveRecord {
     let description = vuln.summary.or(vuln.details).unwrap_or_default();
 
-    let severity = vuln.severity
+    let severity = vuln
+        .severity
         .as_ref()
         .and_then(|s| s.first())
         .and_then(|s| s.score.as_ref())
         .and_then(|s| s.parse::<f32>().ok());
 
-    let severity_type = vuln.severity
+    let severity_type = vuln
+        .severity
         .as_ref()
         .and_then(|s| s.first())
         .and_then(|s| s.severity_type.as_ref())
@@ -255,7 +284,8 @@ fn convert_osv_vuln(vuln: OsvVuln) -> CveRecord {
         severity_type,
         published: vuln.published,
         modified: vuln.modified,
-        references: vuln.references
+        references: vuln
+            .references
             .map(|r| r.into_iter().map(|r| r.url).collect())
             .unwrap_or_default(),
         weaknesses: Vec::new(),

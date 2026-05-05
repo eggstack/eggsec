@@ -103,7 +103,10 @@ impl McpError {
     pub fn rate_limited(msg: &str) -> Self {
         Self {
             code: -32002,
-            message: format!("Rate limit exceeded: {}", crate::utils::error::sanitize_error_message(msg)),
+            message: format!(
+                "Rate limit exceeded: {}",
+                crate::utils::error::sanitize_error_message(msg)
+            ),
             data: None,
         }
     }

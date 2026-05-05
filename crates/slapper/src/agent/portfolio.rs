@@ -11,7 +11,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use anyhow::Result;
-use chrono::{DateTime, Utc, Timelike};
+use chrono::{DateTime, Timelike, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
@@ -156,7 +156,10 @@ impl TargetConfig {
             "cidr" => crate::tool::request::TargetType::Cidr,
             "file" => crate::tool::request::TargetType::File,
             _ => {
-                tracing::warn!("Unknown target type: {}, defaulting to Url", self.target_type);
+                tracing::warn!(
+                    "Unknown target type: {}, defaulting to Url",
+                    self.target_type
+                );
                 crate::tool::request::TargetType::Url
             }
         }
@@ -327,7 +330,12 @@ impl TargetPortfolio {
     }
 
     pub fn enabled_count(&self) -> usize {
-        self.data.read().targets.values().filter(|t| t.enabled).count()
+        self.data
+            .read()
+            .targets
+            .values()
+            .filter(|t| t.enabled)
+            .count()
     }
 
     /// Reload portfolio data from the file path (if set).
@@ -510,21 +518,30 @@ mod tests {
     fn test_target_portfolio_get_all_targets() {
         let portfolio = TargetPortfolio::new();
 
-        portfolio.add_target("example1.com".to_string(), TargetConfig {
-            target: "https://example1.com".to_string(),
-            enabled: true,
-            ..Default::default()
-        });
-        portfolio.add_target("example2.com".to_string(), TargetConfig {
-            target: "https://example2.com".to_string(),
-            enabled: false,
-            ..Default::default()
-        });
-        portfolio.add_target("example3.com".to_string(), TargetConfig {
-            target: "https://example3.com".to_string(),
-            enabled: true,
-            ..Default::default()
-        });
+        portfolio.add_target(
+            "example1.com".to_string(),
+            TargetConfig {
+                target: "https://example1.com".to_string(),
+                enabled: true,
+                ..Default::default()
+            },
+        );
+        portfolio.add_target(
+            "example2.com".to_string(),
+            TargetConfig {
+                target: "https://example2.com".to_string(),
+                enabled: false,
+                ..Default::default()
+            },
+        );
+        portfolio.add_target(
+            "example3.com".to_string(),
+            TargetConfig {
+                target: "https://example3.com".to_string(),
+                enabled: true,
+                ..Default::default()
+            },
+        );
 
         let targets = portfolio.get_all_targets();
         assert_eq!(targets.len(), 2);
@@ -620,7 +637,10 @@ mod tests {
         assert!(portfolio.file_path().is_some());
 
         // Add target and save - should create file
-        portfolio.add_target("example.com".to_string(), TargetConfig::new("https://example.com"));
+        portfolio.add_target(
+            "example.com".to_string(),
+            TargetConfig::new("https://example.com"),
+        );
         portfolio.save().unwrap();
         assert!(portfolio_path.exists());
     }
@@ -635,7 +655,10 @@ mod tests {
 
         // Use load_for_testing to set the path, then add target and save
         let portfolio = TargetPortfolio::load_for_testing(&portfolio_path).unwrap();
-        portfolio.add_target("example.com".to_string(), TargetConfig::new("https://example.com"));
+        portfolio.add_target(
+            "example.com".to_string(),
+            TargetConfig::new("https://example.com"),
+        );
         portfolio.save().unwrap();
 
         // Load existing file
@@ -657,7 +680,10 @@ mod tests {
 
         // Use load_for_testing to set the path, then add target and save
         let portfolio = TargetPortfolio::load_for_testing(&portfolio_path).unwrap();
-        portfolio.add_target("example.com".to_string(), TargetConfig::new("https://example.com"));
+        portfolio.add_target(
+            "example.com".to_string(),
+            TargetConfig::new("https://example.com"),
+        );
         portfolio.save().unwrap();
 
         // Verify file contains valid JSON

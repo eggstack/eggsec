@@ -32,7 +32,7 @@ pub fn register_nrpc_library(lua: &Lua) -> LuaResult<()> {
             match TcpStream::connect_timeout(
                 &addr
                     .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 1352))),
+                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 1352))),
                 Duration::from_secs(5),
             ) {
                 Ok(_stream) => {

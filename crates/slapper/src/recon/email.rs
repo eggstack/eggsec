@@ -6,9 +6,8 @@ use std::sync::LazyLock;
 
 use crate::utils::create_http_client;
 
-static EMAIL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap()
-});
+static EMAIL_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
 
 static PHONE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
@@ -20,15 +19,39 @@ static PHONE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 
 static SOCIAL_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| {
     vec![
-        ("Facebook", Regex::new(r"facebook\.com/([a-zA-Z0-9._-]+)").unwrap()),
-        ("Twitter", Regex::new(r"twitter\.com/([a-zA-Z0-9._-]+)").unwrap()),
+        (
+            "Facebook",
+            Regex::new(r"facebook\.com/([a-zA-Z0-9._-]+)").unwrap(),
+        ),
+        (
+            "Twitter",
+            Regex::new(r"twitter\.com/([a-zA-Z0-9._-]+)").unwrap(),
+        ),
         ("X", Regex::new(r"x\.com/([a-zA-Z0-9._-]+)").unwrap()),
-        ("Instagram", Regex::new(r"instagram\.com/([a-zA-Z0-9._-]+)").unwrap()),
-        ("LinkedIn", Regex::new(r"linkedin\.com/in/([a-zA-Z0-9._-]+)").unwrap()),
-        ("LinkedIn", Regex::new(r"linkedin\.com/company/([a-zA-Z0-9._-]+)").unwrap()),
-        ("GitHub", Regex::new(r"github\.com/([a-zA-Z0-9._-]+)").unwrap()),
-        ("YouTube", Regex::new(r"youtube\.com/@([a-zA-Z0-9._-]+)").unwrap()),
-        ("TikTok", Regex::new(r"tiktok\.com/@([a-zA-Z0-9._-]+)").unwrap()),
+        (
+            "Instagram",
+            Regex::new(r"instagram\.com/([a-zA-Z0-9._-]+)").unwrap(),
+        ),
+        (
+            "LinkedIn",
+            Regex::new(r"linkedin\.com/in/([a-zA-Z0-9._-]+)").unwrap(),
+        ),
+        (
+            "LinkedIn",
+            Regex::new(r"linkedin\.com/company/([a-zA-Z0-9._-]+)").unwrap(),
+        ),
+        (
+            "GitHub",
+            Regex::new(r"github\.com/([a-zA-Z0-9._-]+)").unwrap(),
+        ),
+        (
+            "YouTube",
+            Regex::new(r"youtube\.com/@([a-zA-Z0-9._-]+)").unwrap(),
+        ),
+        (
+            "TikTok",
+            Regex::new(r"tiktok\.com/@([a-zA-Z0-9._-]+)").unwrap(),
+        ),
     ]
 });
 
@@ -209,7 +232,10 @@ mod tests {
         let client = EmailDiscoveryClient::new().unwrap();
         let content = "Email: user@example.com and test@test.com";
         let emails = client.extract_emails(content);
-        assert!(emails.is_empty(), "Should filter out example.com and test.com");
+        assert!(
+            emails.is_empty(),
+            "Should filter out example.com and test.com"
+        );
     }
 
     #[test]
@@ -241,6 +267,8 @@ mod tests {
         let client = EmailDiscoveryClient::new().unwrap();
         let content = r#"<a href="https://twitter.com/slapper_sec">Twitter</a>"#;
         let socials = client.extract_social_media(content);
-        assert!(socials.iter().any(|s| s.platform == "Twitter" || s.platform == "X"));
+        assert!(socials
+            .iter()
+            .any(|s| s.platform == "Twitter" || s.platform == "X"));
     }
 }

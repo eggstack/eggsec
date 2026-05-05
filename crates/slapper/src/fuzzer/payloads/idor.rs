@@ -266,7 +266,11 @@ mod tests {
     fn test_payloads_are_non_empty_strings() {
         let payloads = get_payloads();
         for p in &payloads {
-            assert!(!p.payload.is_empty(), "Payload is empty: {:?}", p.description);
+            assert!(
+                !p.payload.is_empty(),
+                "Payload is empty: {:?}",
+                p.description
+            );
         }
     }
 

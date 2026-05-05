@@ -22,7 +22,12 @@ impl NpmScanner {
 
         if let Some(deps) = json.get("dependencies").and_then(|v| v.as_object()) {
             for (name, version) in deps {
-                let version_str = version.as_str().unwrap_or("*").trim_start_matches('^').trim_start_matches('~').to_string();
+                let version_str = version
+                    .as_str()
+                    .unwrap_or("*")
+                    .trim_start_matches('^')
+                    .trim_start_matches('~')
+                    .to_string();
                 dependencies.push(DependencyInfo {
                     name: name.clone(),
                     version: version_str,
@@ -33,7 +38,12 @@ impl NpmScanner {
 
         if let Some(deps) = json.get("devDependencies").and_then(|v| v.as_object()) {
             for (name, version) in deps {
-                let version_str = version.as_str().unwrap_or("*").trim_start_matches('^').trim_start_matches('~').to_string();
+                let version_str = version
+                    .as_str()
+                    .unwrap_or("*")
+                    .trim_start_matches('^')
+                    .trim_start_matches('~')
+                    .to_string();
                 dependencies.push(DependencyInfo {
                     name: name.clone(),
                     version: version_str,
@@ -44,7 +54,12 @@ impl NpmScanner {
 
         if let Some(deps) = json.get("peerDependencies").and_then(|v| v.as_object()) {
             for (name, version) in deps {
-                let version_str = version.as_str().unwrap_or("*").trim_start_matches('^').trim_start_matches('~').to_string();
+                let version_str = version
+                    .as_str()
+                    .unwrap_or("*")
+                    .trim_start_matches('^')
+                    .trim_start_matches('~')
+                    .to_string();
                 dependencies.push(DependencyInfo {
                     name: name.clone(),
                     version: version_str,

@@ -152,10 +152,7 @@ pub fn register_lpeg_library(lua: &Lua) -> LuaResult<()> {
     let match_fn = lua.create_function(|lua, (pattern, text): (Table, String)| {
         let pat = pattern.get::<String>("pattern").unwrap_or_default();
 
-        match RegexBuilder::new(&pat)
-            .size_limit(50_000)
-            .build()
-        {
+        match RegexBuilder::new(&pat).size_limit(50_000).build() {
             Ok(re) => {
                 if let Some(m) = re.find(&text) {
                     let result = lua.create_table()?;
@@ -179,10 +176,7 @@ pub fn register_lpeg_library(lua: &Lua) -> LuaResult<()> {
             let start = init.unwrap_or(1).saturating_sub(1);
 
             if start < text.len() {
-                match RegexBuilder::new(&pat)
-                    .size_limit(50_000)
-                    .build()
-                {
+                match RegexBuilder::new(&pat).size_limit(50_000).build() {
                     Ok(re) => {
                         let search_text = &text[start..];
                         if let Some(m) = re.find(search_text) {
@@ -205,9 +199,11 @@ pub fn register_lpeg_library(lua: &Lua) -> LuaResult<()> {
 
     // lpeg.gsub(pattern, text, replacement) - Global substitution
     let gsub_fn = lua.create_function(
-        |_lua, (pattern, text, replacement): (String, String, String)| match RegexBuilder::new(&pattern)
-            .size_limit(50_000)
-            .build()
+        |_lua, (pattern, text, replacement): (String, String, String)| match RegexBuilder::new(
+            &pattern,
+        )
+        .size_limit(50_000)
+        .build()
         {
             Ok(re) => {
                 let new_str = re.replace_all(&text, replacement.as_str());
@@ -236,15 +232,13 @@ pub fn register_lpeg_library(lua: &Lua) -> LuaResult<()> {
 
     // lpeg.type(value) - Get the type of a pattern
     let type_fn = lua.create_function(|_lua, value: Value| match value {
-        Value::Table(t) => {
-            match t.get::<String>("type") { Ok(t) => {
-                Ok(t)
-            } _ => { match t.get::<String>("pattern") { Ok(_) => {
-                Ok("pattern".to_string())
-            } _ => {
-                Ok("table".to_string())
-            }}}}
-        }
+        Value::Table(t) => match t.get::<String>("type") {
+            Ok(t) => Ok(t),
+            _ => match t.get::<String>("pattern") {
+                Ok(_) => Ok("pattern".to_string()),
+                _ => Ok("table".to_string()),
+            },
+        },
         _ => Ok("unknown".to_string()),
     })?;
     lpeg.set("type", type_fn)?;

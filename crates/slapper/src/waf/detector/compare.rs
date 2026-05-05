@@ -1,8 +1,8 @@
 use crate::error::Result;
 use crate::utils::create_insecure_client_with_options;
 
-use super::WafDetector;
 use super::types::ResponseDiff;
+use super::WafDetector;
 
 impl WafDetector {
     pub async fn compare_responses(

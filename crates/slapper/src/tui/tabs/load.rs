@@ -1,6 +1,8 @@
 use crate::loadtest::metrics::LoadTestResults;
 use crate::tc;
-use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText, Selector};
+use crate::tui::components::{
+    empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText, Selector,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -392,12 +394,12 @@ impl TabRender for LoadTab {
         } else {
             0
         };
-        
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(6),  // Selector
-                Constraint::Length(input_height),  // Inputs
+                Constraint::Length(6),            // Selector
+                Constraint::Length(input_height), // Inputs
                 Constraint::Min(results_height),  // Results
             ])
             .split(area);
@@ -446,7 +448,8 @@ impl TabRender for LoadTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder = empty_state_paragraph("Results", "Results will appear here after running");
+            let placeholder =
+                empty_state_paragraph("Results", "Results will appear here after running");
             f.render_widget(placeholder, results_area);
         }
     }
@@ -506,6 +509,51 @@ impl TabInput for LoadTab {
                 self.inputs.backspace();
             }
         }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() {
+            if !self.test_type_selector.is_focused() {
+                self.inputs.paste(text);
+            }
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == LoadFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == LoadFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == LoadFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == LoadFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == LoadFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == LoadFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = LoadFocusArea::Selector;
+        self.test_type_selector.focus();
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = LoadFocusArea::Results;
     }
 
     fn handle_enter(&mut self) {
@@ -573,5 +621,26 @@ impl TabInput for LoadTab {
 
     fn is_input_focused(&self) -> bool {
         self.test_type_selector.is_focused() || self.inputs.is_focused()
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        if self.test_type_selector.is_focused() {
+            self.test_type_selector.selected == 0
+        } else if self.inputs.is_focused() {
+            self.inputs.is_at_left_edge()
+        } else {
+            true
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        if self.test_type_selector.is_focused() {
+            self.test_type_selector.selected
+                >= self.test_type_selector.items.len().saturating_sub(1)
+        } else if self.inputs.is_focused() {
+            self.inputs.is_at_right_edge()
+        } else {
+            true
+        }
     }
 }

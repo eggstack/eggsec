@@ -62,7 +62,10 @@ mod tests {
     #[test]
     fn payloads_non_empty() {
         let payloads = get_payloads();
-        assert!(!payloads.is_empty(), "Prototype pollution payloads must not be empty");
+        assert!(
+            !payloads.is_empty(),
+            "Prototype pollution payloads must not be empty"
+        );
     }
 
     #[test]
@@ -89,18 +92,18 @@ mod tests {
     #[test]
     fn contains_json_pollution() {
         let payloads = get_payloads();
-        let has_json = payloads.iter().any(|p| {
-            p.payload.contains("JSON.parse") || p.payload.contains("Object.assign")
-        });
+        let has_json = payloads
+            .iter()
+            .any(|p| p.payload.contains("JSON.parse") || p.payload.contains("Object.assign"));
         assert!(has_json, "Must contain JSON-based pollution");
     }
 
     #[test]
     fn contains_node_specific() {
         let payloads = get_payloads();
-        let has_node = payloads.iter().any(|p| {
-            p.payload.contains("process") || p.payload.contains("require(")
-        });
+        let has_node = payloads
+            .iter()
+            .any(|p| p.payload.contains("process") || p.payload.contains("require("));
         assert!(has_node, "Must contain Node.js-specific payloads");
     }
 

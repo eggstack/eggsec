@@ -1,17 +1,17 @@
-use anyhow::Result;
 use crate::cli::plan::PlanArgs;
 use crate::commands::handlers::CommandContext;
+use anyhow::Result;
 
 pub async fn handle_plan(_ctx: &CommandContext, args: PlanArgs) -> Result<()> {
     let target = args.target.as_deref().unwrap_or("no target specified");
-    
+
     let stages = match args.profile.as_str() {
         "quick" => vec!["recon", "ports"],
         "default" => vec!["recon", "ports", "endpoints", "fingerprint", "fuzz"],
         "thorough" => vec!["recon", "ports", "endpoints", "fingerprint", "fuzz", "waf"],
         _ => vec!["recon", "ports", "endpoints", "fingerprint", "fuzz"],
     };
-    
+
     match args.format.as_str() {
         "json" => {
             let plan = serde_json::json!({
@@ -34,6 +34,6 @@ pub async fn handle_plan(_ctx: &CommandContext, args: PlanArgs) -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }

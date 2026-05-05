@@ -3,11 +3,11 @@
 //! Provides HTTP client functionality compatible with NSE scripts.
 
 use mlua::{Lua, Result as LuaResult, Table};
-use std::sync::LazyLock;
 use reqwest::blocking::Client;
 use reqwest::Client as AsyncClient;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::LazyLock;
 use std::time::Duration;
 
 static ACCEPT_INVALID_CERTS: AtomicBool = AtomicBool::new(true);
@@ -285,11 +285,10 @@ pub fn register_http_library(lua: &Lua) -> LuaResult<()> {
                 let url = build_url(&host, port, &path);
 
                 let client = if let Some(opts) = options.as_ref() {
-                    match opts.get::<u64>("timeout") { Ok(timeout) => {
-                        make_client_with_tls(timeout, None, None)
-                    } _ => {
-                        get_client(&url).clone()
-                    }}
+                    match opts.get::<u64>("timeout") {
+                        Ok(timeout) => make_client_with_tls(timeout, None, None),
+                        _ => get_client(&url).clone(),
+                    }
                 } else {
                     get_client(&url).clone()
                 };

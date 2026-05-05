@@ -43,7 +43,9 @@ impl CveClient for NvdClient {
         let mut builder = self.build_request(&url);
         builder = builder.header("Accept", "application/json");
 
-        let response = builder.send().await
+        let response = builder
+            .send()
+            .await
             .map_err(|e| CveError::NetworkError(e.to_string()))?;
 
         if response.status() == 404 {
@@ -51,14 +53,21 @@ impl CveClient for NvdClient {
         }
 
         if response.status() == 403 || response.status() == 429 {
-            return Err(CveError::RateLimited("NVD API rate limit exceeded".to_string()));
+            return Err(CveError::RateLimited(
+                "NVD API rate limit exceeded".to_string(),
+            ));
         }
 
         if !response.status().is_success() {
-            return Err(CveError::ApiError(format!("NVD API error: {}", response.status())));
+            return Err(CveError::ApiError(format!(
+                "NVD API error: {}",
+                response.status()
+            )));
         }
 
-        let data: NvdResponse = response.json().await
+        let data: NvdResponse = response
+            .json()
+            .await
             .map_err(|e| CveError::ParseError(e.to_string()))?;
 
         if let Some(item) = data.vulnerabilities.into_iter().next() {
@@ -69,23 +78,36 @@ impl CveClient for NvdClient {
     }
 
     async fn search(&self, query: &str) -> Result<Vec<CveRecord>, CveError> {
-        let url = format!("{}?keywordSearch={}", self.base_url, urlencoding::encode(query));
+        let url = format!(
+            "{}?keywordSearch={}",
+            self.base_url,
+            urlencoding::encode(query)
+        );
 
         let mut builder = self.build_request(&url);
         builder = builder.header("Accept", "application/json");
 
-        let response = builder.send().await
+        let response = builder
+            .send()
+            .await
             .map_err(|e| CveError::NetworkError(e.to_string()))?;
 
         if response.status() == 403 || response.status() == 429 {
-            return Err(CveError::RateLimited("NVD API rate limit exceeded".to_string()));
+            return Err(CveError::RateLimited(
+                "NVD API rate limit exceeded".to_string(),
+            ));
         }
 
         if !response.status().is_success() {
-            return Err(CveError::ApiError(format!("NVD API error: {}", response.status())));
+            return Err(CveError::ApiError(format!(
+                "NVD API error: {}",
+                response.status()
+            )));
         }
 
-        let data: NvdResponse = response.json().await
+        let data: NvdResponse = response
+            .json()
+            .await
             .map_err(|e| CveError::ParseError(e.to_string()))?;
 
         let mut results = Vec::new();
@@ -96,7 +118,11 @@ impl CveClient for NvdClient {
         Ok(results)
     }
 
-    async fn get_for_product(&self, product: &str, _ecosystem: &str) -> Result<Vec<CveRecord>, CveError> {
+    async fn get_for_product(
+        &self,
+        product: &str,
+        _ecosystem: &str,
+    ) -> Result<Vec<CveRecord>, CveError> {
         // Use CPE (Common Platform Enumeration) search
         // NVD uses cpeName for product matching
         let cpe_query = format!("cpeName:*:*:*:*:{}:*", urlencoding::encode(product));
@@ -105,18 +131,27 @@ impl CveClient for NvdClient {
         let mut builder = self.build_request(&url);
         builder = builder.header("Accept", "application/json");
 
-        let response = builder.send().await
+        let response = builder
+            .send()
+            .await
             .map_err(|e| CveError::NetworkError(e.to_string()))?;
 
         if response.status() == 403 || response.status() == 429 {
-            return Err(CveError::RateLimited("NVD API rate limit exceeded".to_string()));
+            return Err(CveError::RateLimited(
+                "NVD API rate limit exceeded".to_string(),
+            ));
         }
 
         if !response.status().is_success() {
-            return Err(CveError::ApiError(format!("NVD API error: {}", response.status())));
+            return Err(CveError::ApiError(format!(
+                "NVD API error: {}",
+                response.status()
+            )));
         }
 
-        let data: NvdResponse = response.json().await
+        let data: NvdResponse = response
+            .json()
+            .await
             .map_err(|e| CveError::ParseError(e.to_string()))?;
 
         let mut results = Vec::new();
@@ -219,7 +254,8 @@ struct NvdWeakness {
 }
 
 fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
-    let description = cve.descriptions
+    let description = cve
+        .descriptions
         .iter()
         .find(|d| d.lang == "en")
         .map(|d| d.value.clone())
@@ -236,14 +272,20 @@ fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
                     severity_type: SeverityType::CvssV31,
                     published: cve.published,
                     modified: cve.last_modified,
-                    references: cve.references.map(|r| r.into_iter().map(|r| r.url).collect()).unwrap_or_default(),
-                    weaknesses: cve.weaknesses.map(|w| {
-                        w.into_iter()
-                            .flat_map(|w| w.description)
-                            .filter(|d| d.lang == "en")
-                            .map(|d| d.value)
-                            .collect()
-                    }).unwrap_or_default(),
+                    references: cve
+                        .references
+                        .map(|r| r.into_iter().map(|r| r.url).collect())
+                        .unwrap_or_default(),
+                    weaknesses: cve
+                        .weaknesses
+                        .map(|w| {
+                            w.into_iter()
+                                .flat_map(|w| w.description)
+                                .filter(|d| d.lang == "en")
+                                .map(|d| d.value)
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     configurations: Vec::new(),
                     known_exploited: false,
                     vendor_advisories: Vec::new(),
@@ -261,14 +303,20 @@ fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
                     severity_type: SeverityType::CvssV3,
                     published: cve.published,
                     modified: cve.last_modified,
-                    references: cve.references.map(|r| r.into_iter().map(|r| r.url).collect()).unwrap_or_default(),
-                    weaknesses: cve.weaknesses.map(|w| {
-                        w.into_iter()
-                            .flat_map(|w| w.description)
-                            .filter(|d| d.lang == "en")
-                            .map(|d| d.value)
-                            .collect()
-                    }).unwrap_or_default(),
+                    references: cve
+                        .references
+                        .map(|r| r.into_iter().map(|r| r.url).collect())
+                        .unwrap_or_default(),
+                    weaknesses: cve
+                        .weaknesses
+                        .map(|w| {
+                            w.into_iter()
+                                .flat_map(|w| w.description)
+                                .filter(|d| d.lang == "en")
+                                .map(|d| d.value)
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     configurations: Vec::new(),
                     known_exploited: false,
                     vendor_advisories: Vec::new(),
@@ -286,14 +334,20 @@ fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
                     severity_type: SeverityType::CvssV2,
                     published: cve.published,
                     modified: cve.last_modified,
-                    references: cve.references.map(|r| r.into_iter().map(|r| r.url).collect()).unwrap_or_default(),
-                    weaknesses: cve.weaknesses.map(|w| {
-                        w.into_iter()
-                            .flat_map(|w| w.description)
-                            .filter(|d| d.lang == "en")
-                            .map(|d| d.value)
-                            .collect()
-                    }).unwrap_or_default(),
+                    references: cve
+                        .references
+                        .map(|r| r.into_iter().map(|r| r.url).collect())
+                        .unwrap_or_default(),
+                    weaknesses: cve
+                        .weaknesses
+                        .map(|w| {
+                            w.into_iter()
+                                .flat_map(|w| w.description)
+                                .filter(|d| d.lang == "en")
+                                .map(|d| d.value)
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     configurations: Vec::new(),
                     known_exploited: false,
                     vendor_advisories: Vec::new(),
@@ -313,14 +367,20 @@ fn convert_nvd_cve(cve: NvdCve) -> CveRecord {
         severity_type,
         published: cve.published,
         modified: cve.last_modified,
-        references: cve.references.map(|r| r.into_iter().map(|r| r.url).collect()).unwrap_or_default(),
-        weaknesses: cve.weaknesses.map(|w| {
-            w.into_iter()
-                .flat_map(|w| w.description)
-                .filter(|d| d.lang == "en")
-                .map(|d| d.value)
-                .collect()
-        }).unwrap_or_default(),
+        references: cve
+            .references
+            .map(|r| r.into_iter().map(|r| r.url).collect())
+            .unwrap_or_default(),
+        weaknesses: cve
+            .weaknesses
+            .map(|w| {
+                w.into_iter()
+                    .flat_map(|w| w.description)
+                    .filter(|d| d.lang == "en")
+                    .map(|d| d.value)
+                    .collect()
+            })
+            .unwrap_or_default(),
         configurations: Vec::new(),
         known_exploited: false,
         vendor_advisories: Vec::new(),

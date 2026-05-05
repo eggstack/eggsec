@@ -27,11 +27,13 @@ pub struct SettingsTab {
     pub severity_selector: Selector,
     pub current_section: SettingsSection,
     pub focus_area: SettingsFocusArea,
+    pub detail_focus_index: usize,
     pub config: Option<SlapperConfig>,
     pub config_path: Option<String>,
     pub status_message: String,
     pub dark_mode: Checkbox,
     pub accent_color: Selector,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -127,16 +129,111 @@ impl SettingsTab {
             severity_selector,
             current_section: SettingsSection::Http,
             focus_area: SettingsFocusArea::SectionList,
+            detail_focus_index: 0,
             config: None,
             config_path: Some("slapper.toml".to_string()),
             status_message: String::new(),
             dark_mode: Checkbox::new("Dark Mode").checked(true),
             accent_color,
+            error_message: None,
         }
     }
 
     pub fn set_config_path(&mut self, path: String) {
         self.config_path = Some(path);
+    }
+
+    pub fn max_focus_index(&self) -> usize {
+        match self.current_section {
+            SettingsSection::Http => 4,
+            SettingsSection::Scan => 3,
+            SettingsSection::Proxy => 2,
+            SettingsSection::Scope => 1,
+            SettingsSection::Report => 3,
+            SettingsSection::Schedule => 3,
+            SettingsSection::Notifications => 6,
+            SettingsSection::Theme => 1,
+        }
+    }
+
+    pub fn sync_component_focus(&mut self) {
+        let is_detail = self.focus_area == SettingsFocusArea::SectionDetail;
+        let idx = self.detail_focus_index;
+
+        // Reset all
+        self.http_inputs.blur();
+        self.scan_inputs.blur();
+        self.proxy_inputs.blur();
+        self.scope_inputs.blur();
+        self.report_inputs.blur();
+        self.schedule_inputs.blur();
+        self.notify_inputs.blur();
+        self.follow_redirects.focused = false;
+        self.verify_tls.focused = false;
+        self.stealth_mode.focused = false;
+        self.notify_on_complete.focused = false;
+        self.notify_on_findings.focused = false;
+        self.proxy_rotation_selector.focused = false;
+        self.severity_selector.focused = false;
+        self.dark_mode.focused = false;
+        self.accent_color.focused = false;
+
+        if !is_detail {
+            return;
+        }
+
+        match self.current_section {
+            SettingsSection::Http => {
+                if idx < 3 {
+                    self.http_inputs.focus(idx);
+                } else if idx == 3 {
+                    self.follow_redirects.focused = true;
+                } else {
+                    self.verify_tls.focused = true;
+                }
+            }
+            SettingsSection::Scan => {
+                if idx < 3 {
+                    self.scan_inputs.focus(idx);
+                } else {
+                    self.stealth_mode.focused = true;
+                }
+            }
+            SettingsSection::Proxy => {
+                if idx < 2 {
+                    self.proxy_inputs.focus(idx);
+                } else {
+                    self.proxy_rotation_selector.focused = true;
+                }
+            }
+            SettingsSection::Scope => {
+                self.scope_inputs.focus(idx);
+            }
+            SettingsSection::Report => {
+                self.report_inputs.focus(idx);
+            }
+            SettingsSection::Schedule => {
+                self.schedule_inputs.focus(idx);
+            }
+            SettingsSection::Notifications => {
+                if idx < 4 {
+                    self.notify_inputs.focus(idx);
+                } else if idx == 4 {
+                    self.notify_on_complete.focused = true;
+                } else if idx == 5 {
+                    self.notify_on_findings.focused = true;
+                } else {
+                    self.severity_selector.focused = true;
+                }
+            }
+            SettingsSection::Theme => {
+                if idx == 0 {
+                    self.dark_mode.focused = true;
+                } else {
+                    self.accent_color.focused = true;
+                }
+            }
+        }
     }
 
     pub fn load_config(&mut self, config: &SlapperConfig) {
@@ -246,6 +343,29 @@ impl SettingsTab {
         }
 
         self.config = Some(config);
+    }
+
+    pub fn sync_with_theme(&mut self, theme: &crate::tui::theme::Theme) {
+        self.dark_mode.checked = theme.mode == crate::tui::theme::ThemeMode::Dark;
+        let color_name = match theme.colors.accent {
+            ratatui::style::Color::Cyan => "Cyan",
+            ratatui::style::Color::Blue => "Blue",
+            ratatui::style::Color::Green => "Green",
+            ratatui::style::Color::Yellow => "Yellow",
+            ratatui::style::Color::Red => "Red",
+            ratatui::style::Color::Magenta => "Magenta",
+            ratatui::style::Color::White => "White",
+            ratatui::style::Color::Black => "Black",
+            _ => "Cyan",
+        };
+        if let Some(idx) = self
+            .accent_color
+            .items
+            .iter()
+            .position(|it| it.label == color_name)
+        {
+            self.accent_color.select(idx);
+        }
     }
 
     pub fn reset(&mut self) {
@@ -442,6 +562,11 @@ impl TabState for SettingsTab {
     }
 
     fn reset(&mut self) {
+        self.error_message = None;
         SettingsTab::reset(self);
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.error_message = Some(msg);
     }
 }

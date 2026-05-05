@@ -70,7 +70,11 @@ async fn analyze_findings(
             Ok(result) => {
                 if let Some(choices) = result.get("choices") {
                     if let Some(choice) = choices.get(0) {
-                        if let Some(content) = choice.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_str()) {
+                        if let Some(content) = choice
+                            .get("message")
+                            .and_then(|m| m.get("content"))
+                            .and_then(|c| c.as_str())
+                        {
                             return Ok(Json(AnalyzeResponse {
                                 status: "success".to_string(),
                                 analysis: content.to_string(),
@@ -88,7 +92,11 @@ async fn analyze_findings(
     };
 
     Ok(Json(AnalyzeResponse {
-        status: if state.ai_client.is_some() { "partial".to_string() } else { "placeholder".to_string() },
+        status: if state.ai_client.is_some() {
+            "partial".to_string()
+        } else {
+            "placeholder".to_string()
+        },
         analysis,
         findings_count: req.findings.len(),
     }))
@@ -136,20 +144,36 @@ async fn suggest_payloads(
             Ok(payloads) => payloads,
             Err(_) => vec![
                 format!("' OR 1=1 -- (example {} payload)", req.vuln_type),
-                format!("\"; DROP TABLE users; -- (example {} payload)", req.vuln_type),
-                format!("<script>alert('xss')</script> (example {} payload)", req.vuln_type),
+                format!(
+                    "\"; DROP TABLE users; -- (example {} payload)",
+                    req.vuln_type
+                ),
+                format!(
+                    "<script>alert('xss')</script> (example {} payload)",
+                    req.vuln_type
+                ),
             ],
         }
     } else {
         vec![
             format!("' OR 1=1 -- (example {} payload)", req.vuln_type),
-            format!("\"; DROP TABLE users; -- (example {} payload)", req.vuln_type),
-            format!("<script>alert('xss')</script> (example {} payload)", req.vuln_type),
+            format!(
+                "\"; DROP TABLE users; -- (example {} payload)",
+                req.vuln_type
+            ),
+            format!(
+                "<script>alert('xss')</script> (example {} payload)",
+                req.vuln_type
+            ),
         ]
     };
 
     Ok(Json(SuggestPayloadsResponse {
-        status: if state.ai_client.is_some() { "success".to_string() } else { "placeholder".to_string() },
+        status: if state.ai_client.is_some() {
+            "success".to_string()
+        } else {
+            "placeholder".to_string()
+        },
         payloads,
         vuln_type: req.vuln_type,
     }))
@@ -166,8 +190,14 @@ async fn suggest_payloads(
         status: "placeholder".to_string(),
         payloads: vec![
             format!("' OR 1=1 -- (example {} payload)", req.vuln_type),
-            format!("\"; DROP TABLE users; -- (example {} payload)", req.vuln_type),
-            format!("<script>alert('xss')</script> (example {} payload)", req.vuln_type),
+            format!(
+                "\"; DROP TABLE users; -- (example {} payload)",
+                req.vuln_type
+            ),
+            format!(
+                "<script>alert('xss')</script> (example {} payload)",
+                req.vuln_type
+            ),
         ],
         vuln_type: req.vuln_type,
     }))
@@ -195,7 +225,10 @@ async fn waf_bypass(
     require_auth(&state, &headers)?;
 
     let bypasses = if let Some(ref client) = state.ai_client {
-        match client.suggest_waf_bypass(&req.waf_name, &req.blocked_payload).await {
+        match client
+            .suggest_waf_bypass(&req.waf_name, &req.blocked_payload)
+            .await
+        {
             Ok(bypasses) => bypasses,
             Err(_) => vec![
                 format!("Try encoding payload for {} bypass", req.waf_name),
@@ -212,7 +245,11 @@ async fn waf_bypass(
     };
 
     Ok(Json(WafBypassResponse {
-        status: if state.ai_client.is_some() { "success".to_string() } else { "placeholder".to_string() },
+        status: if state.ai_client.is_some() {
+            "success".to_string()
+        } else {
+            "placeholder".to_string()
+        },
         bypass_suggestions: bypasses,
         waf_name: req.waf_name,
     }))
@@ -281,7 +318,11 @@ async fn scan_strategy(
     };
 
     Ok(Json(ScanStrategyResponse {
-        status: if state.ai_client.is_some() { "success".to_string() } else { "placeholder".to_string() },
+        status: if state.ai_client.is_some() {
+            "success".to_string()
+        } else {
+            "placeholder".to_string()
+        },
         recommended_strategy: strategy.to_string(),
         reasoning,
     }))
@@ -332,9 +373,17 @@ async fn circuit_breaker_status(
     if let Some(ref client) = state.ai_client {
         let cb_state = client.circuit_breaker_state();
         let (state_str, description) = match cb_state {
-            crate::utils::circuit_breaker::CircuitState::Closed => ("closed", "Circuit breaker is closed. Requests are allowed."),
-            crate::utils::circuit_breaker::CircuitState::Open => ("open", "Circuit breaker is open. Requests are being rejected due to failures."),
-            crate::utils::circuit_breaker::CircuitState::HalfOpen => ("half_open", "Circuit breaker is half-open. Testing with limited requests."),
+            crate::utils::circuit_breaker::CircuitState::Closed => {
+                ("closed", "Circuit breaker is closed. Requests are allowed.")
+            }
+            crate::utils::circuit_breaker::CircuitState::Open => (
+                "open",
+                "Circuit breaker is open. Requests are being rejected due to failures.",
+            ),
+            crate::utils::circuit_breaker::CircuitState::HalfOpen => (
+                "half_open",
+                "Circuit breaker is half-open. Testing with limited requests.",
+            ),
         };
         return Ok(Json(CircuitBreakerResponse {
             status: "ok".to_string(),
@@ -346,7 +395,9 @@ async fn circuit_breaker_status(
     Ok(Json(CircuitBreakerResponse {
         status: "ok".to_string(),
         state: "unknown".to_string(),
-        description: "Circuit breaker state requires an active AI client. Configure ai.base_url to enable.".to_string(),
+        description:
+            "Circuit breaker state requires an active AI client. Configure ai.base_url to enable."
+                .to_string(),
     }))
 }
 
@@ -411,7 +462,10 @@ async fn validate_config(
 
 #[cfg(feature = "ai-integration")]
 pub fn router(ai_config: Option<crate::config::AiConfig>) -> Router {
-    let api_key = ai_config.as_ref().and_then(|c| c.api_key.clone()).map(|k| k.expose_secret().to_string());
+    let api_key = ai_config
+        .as_ref()
+        .and_then(|c| c.api_key.clone())
+        .map(|k| k.expose_secret().to_string());
     let mut state = AiState::new(api_key);
 
     if let Some(config) = ai_config {
@@ -450,7 +504,10 @@ mod tests {
     async fn test_analyze_findings_counts() {
         let state = Arc::new(AiState::new(None));
         let req = AnalyzeRequest {
-            findings: vec![serde_json::json!({"sev": "high"}), serde_json::json!({"sev": "low"})],
+            findings: vec![
+                serde_json::json!({"sev": "high"}),
+                serde_json::json!({"sev": "low"}),
+            ],
         };
         let resp = analyze_findings(State(state), HeaderMap::new(), Json(req)).await;
         assert!(resp.is_ok());

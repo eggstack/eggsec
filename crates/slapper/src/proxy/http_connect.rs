@@ -1,4 +1,3 @@
-
 #![allow(dead_code)]
 
 use crate::error::{Result, SlapperError};
@@ -88,7 +87,11 @@ impl HttpConnectProxy {
         );
 
         if let (Some(user), Some(pass)) = (&self.username, &self.password) {
-            let credentials = general_purpose::STANDARD.encode(format!("{}:{}", user.expose_secret(), pass.expose_secret()));
+            let credentials = general_purpose::STANDARD.encode(format!(
+                "{}:{}",
+                user.expose_secret(),
+                pass.expose_secret()
+            ));
             request.push_str(&format!("Proxy-Authorization: Basic {}\r\n", credentials));
         }
 
@@ -105,7 +108,11 @@ impl HttpConnectProxy {
         );
 
         if let (Some(user), Some(pass)) = (&self.username, &self.password) {
-            let credentials = general_purpose::STANDARD.encode(format!("{}:{}", user.expose_secret(), pass.expose_secret()));
+            let credentials = general_purpose::STANDARD.encode(format!(
+                "{}:{}",
+                user.expose_secret(),
+                pass.expose_secret()
+            ));
             request.push_str(&format!("Proxy-Authorization: Basic {}\r\n", credentials));
         }
 
@@ -167,12 +174,15 @@ impl HttpConnectProxy {
 
         let parts: Vec<&str> = first_line.splitn(3, ' ').collect();
         if parts.len() < 2 {
-            return Err(SlapperError::Proxy(format!("Invalid response from proxy: {}", first_line)));
+            return Err(SlapperError::Proxy(format!(
+                "Invalid response from proxy: {}",
+                first_line
+            )));
         }
 
-        let status_code: u16 = parts[1]
-            .parse()
-            .map_err(|e| SlapperError::Proxy(format!("Invalid status code: {}: {}", parts[1], e)))?;
+        let status_code: u16 = parts[1].parse().map_err(|e| {
+            SlapperError::Proxy(format!("Invalid status code: {}: {}", parts[1], e))
+        })?;
 
         if !(200..300).contains(&status_code) {
             return Err(SlapperError::Proxy(format!(

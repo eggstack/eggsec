@@ -1,6 +1,8 @@
 use crate::scanner::endpoints::EndpointScanResults;
 use crate::tc;
-use crate::tui::components::{empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tui::components::{
+    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -153,18 +155,9 @@ impl ScanEndpointsTab {
 
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(vec![
-            Span::styled(
-                format!("{:<40}", "PATH"),
-                Style::default().fg(tc!(accent)),
-            ),
-            Span::styled(
-                format!("{:<8}", "STATUS"),
-                Style::default().fg(tc!(accent)),
-            ),
-            Span::styled(
-                format!("{:<10}", "SIZE"),
-                Style::default().fg(tc!(accent)),
-            ),
+            Span::styled(format!("{:<40}", "PATH"), Style::default().fg(tc!(accent))),
+            Span::styled(format!("{:<8}", "STATUS"), Style::default().fg(tc!(accent))),
+            Span::styled(format!("{:<10}", "SIZE"), Style::default().fg(tc!(accent))),
         ]));
 
         for (path, status_code, content_length, interesting) in endpoint_data {
@@ -305,14 +298,19 @@ impl TabRender for ScanEndpointsTab {
         } else if let Some(ref err_msg) = self.error_message {
             use ratatui::style::Style;
             let error_text = Paragraph::new(format!("Error: {}", err_msg))
-                .block(Block::default().borders(Borders::ALL).title("Endpoint Scan - Error"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Endpoint Scan - Error"),
+                )
                 .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder = empty_state_paragraph("Results", "Results will appear here after running");
+            let placeholder =
+                empty_state_paragraph("Results", "Results will appear here after running");
             f.render_widget(placeholder, results_area);
         }
     }
@@ -337,6 +335,59 @@ impl TabInput for ScanEndpointsTab {
         if !self.is_running() {
             self.inputs.backspace();
         }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else if self.focus_area == ScanEndpointsFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else {
+            None
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == ScanEndpointsFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == ScanEndpointsFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = ScanEndpointsFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = ScanEndpointsFocusArea::Results;
     }
 
     fn handle_enter(&mut self) {
@@ -387,5 +438,21 @@ impl TabInput for ScanEndpointsTab {
 
     fn is_input_focused(&self) -> bool {
         self.inputs.is_focused()
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.inputs.is_at_left_edge()
+        } else {
+            true
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.inputs.is_at_right_edge()
+        } else {
+            true
+        }
     }
 }

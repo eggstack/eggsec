@@ -1,8 +1,6 @@
-
 use crate::error::{Result, SlapperError};
 use crate::types::SensitiveString;
 use crate::utils::create_http_client_with_options;
-use urlencoding;
 use maxminddb::geoip2;
 use maxminddb::Reader;
 use serde::{Deserialize, Serialize};
@@ -10,6 +8,7 @@ use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::sync::LazyLock;
+use urlencoding;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GeoLocation {
@@ -147,7 +146,8 @@ impl GeoLocator {
                 .map(|s| s.account_id.is_some() && s.license_key.is_some())
                 .unwrap_or(false)
             {
-                self.download_maxmind_db(settings.as_ref().expect("settings checked above")).await?;
+                self.download_maxmind_db(settings.as_ref().expect("settings checked above"))
+                    .await?;
             } else {
                 tracing::info!("Downloading free IP66 database...");
                 self.download_ip66_db(&ip66_path).await?;
@@ -424,7 +424,11 @@ impl GeoLocator {
 
     async fn lookup_ipapi(&self, ip: &str) -> Result<GeoLocation> {
         let url = if let Some(ref key) = self.ipapi_key {
-            format!("https://ipapi.co/{}/json/?key={}", ip, urlencoding::encode(key.expose_secret()))
+            format!(
+                "https://ipapi.co/{}/json/?key={}",
+                ip,
+                urlencoding::encode(key.expose_secret())
+            )
         } else {
             format!("https://ipapi.co/{}/json/", ip)
         };
@@ -432,7 +436,9 @@ impl GeoLocator {
         let response = self.client.get(&url).send().await?;
 
         if response.status() == 429 || response.status() == 403 {
-            return Err(SlapperError::RateLimited("Rate limited or forbidden".to_string()));
+            return Err(SlapperError::RateLimited(
+                "Rate limited or forbidden".to_string(),
+            ));
         }
 
         #[derive(Deserialize)]
@@ -608,7 +614,10 @@ impl GeoLocator {
             });
         }
 
-        Err(SlapperError::Network(format!("ip2c lookup failed: {}", text)))
+        Err(SlapperError::Network(format!(
+            "ip2c lookup failed: {}",
+            text
+        )))
     }
 }
 

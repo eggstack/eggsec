@@ -1,6 +1,8 @@
 use crate::browser::{BrowserConfig, BrowserReport};
 use crate::tc;
-use crate::tui::components::{empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tui::components::{
+    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -324,6 +326,60 @@ impl TabInput for BrowserTab {
         if !self.is_running() && self.focus_area == BrowserFocusArea::Inputs {
             self.inputs.backspace();
         }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == BrowserFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == BrowserFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else if self.focus_area == BrowserFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else {
+            None
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == BrowserFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == BrowserFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == BrowserFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == BrowserFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == BrowserFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == BrowserFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = BrowserFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = BrowserFocusArea::Results;
+        self.inputs.blur();
     }
 
     fn handle_enter(&mut self) {

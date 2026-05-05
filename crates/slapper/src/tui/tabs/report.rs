@@ -26,6 +26,7 @@ pub struct ReportTab {
     pub results_view: ScrollableText,
     pub current_view: ReportView,
     pub focus_area: ReportFocusArea,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -80,6 +81,7 @@ impl ReportTab {
             results_view: ScrollableText::new("Report Results"),
             current_view: ReportView::Convert,
             focus_area: ReportFocusArea::ViewSelector,
+            error_message: None,
         }
     }
 
@@ -221,19 +223,30 @@ impl TabState for ReportTab {
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
+        self.error_message = None;
     }
 
     fn set_error(&mut self, msg: String) {
         self.state = AppState::Error(msg.clone());
-        self.results_view.add_line(Line::from(Span::styled(
-            format!("Error: {}", msg),
-            Style::default().fg(tc!(error)),
-        )));
+        self.error_message = Some(msg);
     }
 }
 
 impl TabRender for ReportTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        if let Some(ref err_msg) = self.error_message {
+            use ratatui::widgets::Paragraph;
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Report - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, area);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -373,6 +386,73 @@ impl TabInput for ReportTab {
         }
     }
 
+    fn handle_paste(&mut self, text: &str) {
+        if self.focus_area == ReportFocusArea::Inputs {
+            let current_inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            current_inputs.paste(text);
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == ReportFocusArea::Inputs {
+            let current_inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            current_inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == ReportFocusArea::Inputs {
+            let current_inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            current_inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == ReportFocusArea::Inputs {
+            let current_inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            current_inputs.move_home();
+        } else if self.focus_area == ReportFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == ReportFocusArea::Inputs {
+            let current_inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            current_inputs.move_end();
+        } else if self.focus_area == ReportFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = ReportFocusArea::ViewSelector;
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = ReportFocusArea::Results;
+    }
+
     fn handle_enter(&mut self) {
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
@@ -485,7 +565,7 @@ impl TabInput for ReportTab {
                     ReportView::Trend => &self.trend_inputs,
                     ReportView::Schedule => &self.schedule_inputs,
                 };
-                !current_inputs.can_move_left()
+                current_inputs.is_at_left_edge()
             }
             _ => true,
         }
@@ -502,7 +582,7 @@ impl TabInput for ReportTab {
                     ReportView::Trend => &self.trend_inputs,
                     ReportView::Schedule => &self.schedule_inputs,
                 };
-                !current_inputs.can_move_right()
+                current_inputs.is_at_right_edge()
             }
             _ => true,
         }

@@ -23,7 +23,11 @@ pub fn escape_csv(s: &str) -> String {
         .map(|c| c.is_ascii() && formula_chars.contains(&c))
         .unwrap_or(false);
 
-    if normalized.contains(',') || normalized.contains('"') || normalized.contains('\n') || starts_with_formula {
+    if normalized.contains(',')
+        || normalized.contains('"')
+        || normalized.contains('\n')
+        || starts_with_formula
+    {
         format!("\"{}\"", normalized.replace('"', "\"\""))
     } else {
         normalized

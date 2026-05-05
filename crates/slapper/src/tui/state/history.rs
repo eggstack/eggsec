@@ -1,4 +1,3 @@
-
 use crate::tui::tabs::HistoryTab;
 
 impl HistoryTab {

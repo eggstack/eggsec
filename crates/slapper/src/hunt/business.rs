@@ -29,7 +29,10 @@ pub enum FlawType {
     IntegerOverflow,
 }
 
-pub async fn check_business_logic(target: &str, config: &HuntConfig) -> Result<Vec<BusinessLogicFlaw>> {
+pub async fn check_business_logic(
+    target: &str,
+    config: &HuntConfig,
+) -> Result<Vec<BusinessLogicFlaw>> {
     let mut flaws = Vec::new();
 
     flaws.extend(check_price_manipulation(target, config).await?);
@@ -41,7 +44,10 @@ pub async fn check_business_logic(target: &str, config: &HuntConfig) -> Result<V
     Ok(flaws)
 }
 
-async fn check_price_manipulation(target: &str, _config: &HuntConfig) -> Result<Vec<BusinessLogicFlaw>> {
+async fn check_price_manipulation(
+    target: &str,
+    _config: &HuntConfig,
+) -> Result<Vec<BusinessLogicFlaw>> {
     let mut flaws = Vec::new();
 
     let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -51,15 +57,21 @@ async fn check_price_manipulation(target: &str, _config: &HuntConfig) -> Result<
         severity: Severity::Critical,
         description: "Price parameter manipulation vulnerability detected".to_string(),
         location: format!("{}/checkout", target),
-        evidence: "Price parameter appears to be user-controlled without server-side validation".to_string(),
-        remediation: "Always validate prices server-side; cross-reference with product database prices".to_string(),
+        evidence: "Price parameter appears to be user-controlled without server-side validation"
+            .to_string(),
+        remediation:
+            "Always validate prices server-side; cross-reference with product database prices"
+                .to_string(),
         cvss_score: Some(8.1),
     });
 
     Ok(flaws)
 }
 
-async fn check_privilege_escalation(target: &str, _config: &HuntConfig) -> Result<Vec<BusinessLogicFlaw>> {
+async fn check_privilege_escalation(
+    target: &str,
+    _config: &HuntConfig,
+) -> Result<Vec<BusinessLogicFlaw>> {
     let mut flaws = Vec::new();
 
     let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -69,15 +81,21 @@ async fn check_privilege_escalation(target: &str, _config: &HuntConfig) -> Resul
         severity: Severity::High,
         description: "Client-side role/permission validation detected".to_string(),
         location: format!("{}/api/user/role", target),
-        evidence: "Role parameter appears to be settable by client without server-side verification".to_string(),
-        remediation: "Implement server-side authorization; use session-based role management".to_string(),
+        evidence:
+            "Role parameter appears to be settable by client without server-side verification"
+                .to_string(),
+        remediation: "Implement server-side authorization; use session-based role management"
+            .to_string(),
         cvss_score: Some(7.5),
     });
 
     Ok(flaws)
 }
 
-async fn check_rate_limit_bypass(target: &str, _config: &HuntConfig) -> Result<Vec<BusinessLogicFlaw>> {
+async fn check_rate_limit_bypass(
+    target: &str,
+    _config: &HuntConfig,
+) -> Result<Vec<BusinessLogicFlaw>> {
     let mut flaws = Vec::new();
 
     let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -95,7 +113,10 @@ async fn check_rate_limit_bypass(target: &str, _config: &HuntConfig) -> Result<V
     Ok(flaws)
 }
 
-async fn check_cart_manipulation(target: &str, _config: &HuntConfig) -> Result<Vec<BusinessLogicFlaw>> {
+async fn check_cart_manipulation(
+    target: &str,
+    _config: &HuntConfig,
+) -> Result<Vec<BusinessLogicFlaw>> {
     let mut flaws = Vec::new();
 
     let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -106,14 +127,19 @@ async fn check_cart_manipulation(target: &str, _config: &HuntConfig) -> Result<V
         description: "Quantity parameter accepts negative or extreme values".to_string(),
         location: format!("{}/cart/update", target),
         evidence: "Quantity validation only client-side".to_string(),
-        remediation: "Validate quantity server-side with minimum (1) and maximum (inventory) bounds".to_string(),
+        remediation:
+            "Validate quantity server-side with minimum (1) and maximum (inventory) bounds"
+                .to_string(),
         cvss_score: Some(6.5),
     });
 
     Ok(flaws)
 }
 
-async fn check_workflow_bypass(target: &str, _config: &HuntConfig) -> Result<Vec<BusinessLogicFlaw>> {
+async fn check_workflow_bypass(
+    target: &str,
+    _config: &HuntConfig,
+) -> Result<Vec<BusinessLogicFlaw>> {
     let mut flaws = Vec::new();
 
     let id = format!("bl-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -124,7 +150,8 @@ async fn check_workflow_bypass(target: &str, _config: &HuntConfig) -> Result<Vec
         description: "Multi-step workflow can be bypassed by direct API call".to_string(),
         location: format!("{}/checkout/complete", target),
         evidence: "Checkout step validation relies on client-side state".to_string(),
-        remediation: "Verify all previous workflow steps server-side before allowing completion".to_string(),
+        remediation: "Verify all previous workflow steps server-side before allowing completion"
+            .to_string(),
         cvss_score: Some(5.9),
     });
 
@@ -154,7 +181,9 @@ mod tests {
     #[tokio::test]
     async fn test_check_business_logic() {
         let config = HuntConfig::default();
-        let flaws = check_business_logic("http://example.com", &config).await.unwrap();
+        let flaws = check_business_logic("http://example.com", &config)
+            .await
+            .unwrap();
         assert!(!flaws.is_empty());
     }
 }

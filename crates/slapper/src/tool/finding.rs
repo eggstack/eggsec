@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::fuzzer::FuzzResult;
 use crate::types::Severity;
@@ -182,9 +182,13 @@ impl std::str::FromStr for ResponseSeverity {
         match s {
             s if s.eq_ignore_ascii_case("critical") => Ok(ResponseSeverity::Critical),
             s if s.eq_ignore_ascii_case("high") => Ok(ResponseSeverity::High),
-            s if s.eq_ignore_ascii_case("medium") || s.eq_ignore_ascii_case("moderate") => Ok(ResponseSeverity::Medium),
+            s if s.eq_ignore_ascii_case("medium") || s.eq_ignore_ascii_case("moderate") => {
+                Ok(ResponseSeverity::Medium)
+            }
             s if s.eq_ignore_ascii_case("low") => Ok(ResponseSeverity::Low),
-            s if s.eq_ignore_ascii_case("info") || s.eq_ignore_ascii_case("informational") => Ok(ResponseSeverity::Info),
+            s if s.eq_ignore_ascii_case("info") || s.eq_ignore_ascii_case("informational") => {
+                Ok(ResponseSeverity::Info)
+            }
             _ => Ok(ResponseSeverity::None),
         }
     }

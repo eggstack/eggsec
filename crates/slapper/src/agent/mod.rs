@@ -7,27 +7,26 @@
 //! - Routes alerts to configured channels
 //! - Provides skills to guide AI assistants
 
-pub mod portfolio;
-pub mod memory;
 pub mod alerts;
 pub mod channels;
-pub mod events;
-pub mod logging;
 pub mod config_watcher;
 pub mod constraints;
+pub mod events;
+pub mod logging;
+pub mod memory;
+pub mod portfolio;
 
 #[cfg(feature = "ai-integration")]
 pub mod skills;
 
+use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-
 use anyhow::Result;
-use chrono::{DateTime, Utc, Timelike};
+use chrono::{DateTime, Timelike, Utc};
 use futures::FutureExt;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
@@ -35,8 +34,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::SlapperConfig;
 use crate::output::schedule::CronScheduler;
 use crate::tool::{
-    create_default_registry, ToolDispatcher, ToolRegistry, ToolRequest,
-    ToolResponse,
+    create_default_registry, ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse,
 };
 
 pub use config_watcher::{ConfigReloader, ConfigWatcher, SlapperConfigReloader};
@@ -44,18 +42,18 @@ pub use config_watcher::{ConfigReloader, ConfigWatcher, SlapperConfigReloader};
 #[cfg(feature = "ai-integration")]
 use crate::ai::AiClient;
 
-pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
-pub use memory::LongitudinalMemory;
 pub use alerts::{
-    AggregatedAlert, Alert, AlertChannel, AlertRouter, AlertRoutingRules, AlertTemplate, EmailChannel,
-    EmailFormattedAlert, EmailTemplate, EscalationLevel, PagerDutyChannel, PagerDutyTemplate,
-    ReportSummary, ScanReport, SlackChannel, SlackFormattedAlert, SlackTemplate, TimeBasedRouting, TimeRange,
-    WebhookConfig,
+    AggregatedAlert, Alert, AlertChannel, AlertRouter, AlertRoutingRules, AlertTemplate,
+    EmailChannel, EmailFormattedAlert, EmailTemplate, EscalationLevel, PagerDutyChannel,
+    PagerDutyTemplate, ReportSummary, ScanReport, SlackChannel, SlackFormattedAlert, SlackTemplate,
+    TimeBasedRouting, TimeRange, WebhookConfig,
+};
+pub use constraints::{
+    ConstraintChecker, DoNotDoList, ForbiddenAction, OffPeakConfig, OperationalConstraints,
 };
 pub use events::{EventHandler, SecurityEvent};
-pub use constraints::{
-    ConstraintChecker, OperationalConstraints, ForbiddenAction, DoNotDoList, OffPeakConfig,
-};
+pub use memory::LongitudinalMemory;
+pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
 
 #[cfg(feature = "ai-integration")]
 pub use skills::{Skill, SkillLoader, SkillRegistry};
@@ -65,7 +63,13 @@ trait ScanDispatcherTrait: Send + Sync {
     fn dispatch<'a>(
         &'a self,
         request: ToolRequest,
-    ) -> Pin<Box<dyn Future<Output = std::result::Result<ToolResponse, crate::error::SlapperError>> + Send + 'a>>;
+    ) -> Pin<
+        Box<
+            dyn Future<Output = std::result::Result<ToolResponse, crate::error::SlapperError>>
+                + Send
+                + 'a,
+        >,
+    >;
 }
 
 trait AlertSenderTrait: Send + Sync {
@@ -81,7 +85,13 @@ impl ScanDispatcherTrait for ToolDispatcher {
     fn dispatch<'a>(
         &'a self,
         request: ToolRequest,
-    ) -> Pin<Box<dyn Future<Output = std::result::Result<ToolResponse, crate::error::SlapperError>> + Send + 'a>> {
+    ) -> Pin<
+        Box<
+            dyn Future<Output = std::result::Result<ToolResponse, crate::error::SlapperError>>
+                + Send
+                + 'a,
+        >,
+    > {
         Box::pin(self.dispatch(request))
     }
 }
@@ -92,9 +102,7 @@ impl AlertSenderTrait for AlertRouter {
         alert: Alert,
         channel_names: Option<Vec<String>>,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-        Box::pin(async move {
-            self.send(&alert, channel_names.as_deref()).await
-        })
+        Box::pin(async move { self.send(&alert, channel_names.as_deref()).await })
     }
 }
 
@@ -167,25 +175,33 @@ impl Agent {
                     Ok(slapper_config) => {
                         for (name, channel_config) in slapper_config.alert_channels.channels {
                             let channel: AlertChannel = match channel_config {
-                                crate::config::AlertChannelConfigEntry::Webhook(w) => AlertChannel::Webhook(WebhookConfig {
-                                    url: w.url,
-                                    secret: w.secret,
-                                    headers: w.headers,
-                                }),
-                                crate::config::AlertChannelConfigEntry::Email(e) => AlertChannel::Email(EmailChannel {
-                                    smtp_host: e.smtp_host,
-                                    smtp_port: e.smtp_port,
-                                    from: e.from,
-                                    to: e.to,
-                                }),
-                                crate::config::AlertChannelConfigEntry::Slack(s) => AlertChannel::Slack(SlackChannel {
-                                    webhook_url: s.webhook_url,
-                                    channel: s.channel,
-                                }),
-                                crate::config::AlertChannelConfigEntry::PagerDuty(p) => AlertChannel::PagerDuty(PagerDutyChannel {
-                                    routing_key: p.routing_key,
-                                    severity: p.severity,
-                                }),
+                                crate::config::AlertChannelConfigEntry::Webhook(w) => {
+                                    AlertChannel::Webhook(WebhookConfig {
+                                        url: w.url,
+                                        secret: w.secret,
+                                        headers: w.headers,
+                                    })
+                                }
+                                crate::config::AlertChannelConfigEntry::Email(e) => {
+                                    AlertChannel::Email(EmailChannel {
+                                        smtp_host: e.smtp_host,
+                                        smtp_port: e.smtp_port,
+                                        from: e.from,
+                                        to: e.to,
+                                    })
+                                }
+                                crate::config::AlertChannelConfigEntry::Slack(s) => {
+                                    AlertChannel::Slack(SlackChannel {
+                                        webhook_url: s.webhook_url,
+                                        channel: s.channel,
+                                    })
+                                }
+                                crate::config::AlertChannelConfigEntry::PagerDuty(p) => {
+                                    AlertChannel::PagerDuty(PagerDutyChannel {
+                                        routing_key: p.routing_key,
+                                        severity: p.severity,
+                                    })
+                                }
                             };
                             alert_router.register_channel(name, channel);
                         }
@@ -227,10 +243,10 @@ impl Agent {
             memory,
             alert_router,
             event_handlers: Vec::new(),
-             running: Arc::new(tokio::sync::RwLock::new(false)),
-             shutdown_notify: tokio::sync::Notify::new(),
-             config_watcher,
-             logger: None,
+            running: Arc::new(tokio::sync::RwLock::new(false)),
+            shutdown_notify: tokio::sync::Notify::new(),
+            config_watcher,
+            logger: None,
         })
     }
 
@@ -374,7 +390,9 @@ impl Agent {
 
     async fn process_scheduled_scans(&mut self) -> Result<()> {
         if self.portfolio.file_path().is_none() {
-            tracing::warn!("No portfolio path configured - scheduled scan results will not be persisted");
+            tracing::warn!(
+                "No portfolio path configured - scheduled scan results will not be persisted"
+            );
         }
 
         let now = Utc::now();
@@ -382,13 +400,13 @@ impl Agent {
 
         for (target_id, config) in targets {
             if let Some(ref schedule) = config.schedule {
-                if self.scheduler.should_run_target(schedule, config.last_scan, &now) {
+                if self
+                    .scheduler
+                    .should_run_target(schedule, config.last_scan, &now)
+                {
                     if let Some(ref window) = config.off_peak_window {
                         if !window.is_in_window(&now) {
-                            tracing::debug!(
-                                "Skipping {} - outside off-peak window",
-                                target_id
-                            );
+                            tracing::debug!("Skipping {} - outside off-peak window", target_id);
                             continue;
                         }
                     }
@@ -400,20 +418,38 @@ impl Agent {
                     );
 
                     // Check operational constraints for scheduled scan
-                    if let Err(e) = self.constraint_checker.evaluate_action("scan", &config.target) {
+                    if let Err(e) = self
+                        .constraint_checker
+                        .evaluate_action("scan", &config.target)
+                    {
                         tracing::warn!("Scheduled scan blocked for {}: {:?}", target_id, e);
                         continue;
                     }
                     if let Err(e) = self.constraint_checker.evaluate_target(&config.target) {
-                        tracing::warn!("Scheduled scan target forbidden for {}: {:?}", target_id, e);
+                        tracing::warn!(
+                            "Scheduled scan target forbidden for {}: {:?}",
+                            target_id,
+                            e
+                        );
                         continue;
                     }
-                    if let Err(e) = self.constraint_checker.evaluate_scan_depth(config.scan_depth) {
-                        tracing::warn!("Scheduled scan depth not allowed for {}: {:?}", target_id, e);
+                    if let Err(e) = self
+                        .constraint_checker
+                        .evaluate_scan_depth(config.scan_depth)
+                    {
+                        tracing::warn!(
+                            "Scheduled scan depth not allowed for {}: {:?}",
+                            target_id,
+                            e
+                        );
                         continue;
                     }
                     if let Err(e) = self.constraint_checker.evaluate_rate_limit(&config.target) {
-                        tracing::warn!("Scheduled scan rate limit exceeded for {}: {:?}", target_id, e);
+                        tracing::warn!(
+                            "Scheduled scan rate limit exceeded for {}: {:?}",
+                            target_id,
+                            e
+                        );
                         continue;
                     }
 
@@ -454,23 +490,36 @@ impl Agent {
 
                         self.portfolio.update_last_scan(&target_id, &now);
 
-                        if let Err(e) = self.memory.store_scan_results(&config.target, response).await {
+                        if let Err(e) = self
+                            .memory
+                            .store_scan_results(&config.target, response)
+                            .await
+                        {
                             tracing::warn!("Failed to store scan results: {}", e);
                         }
 
                         if !findings.is_empty() {
-                            let baseline_comparison = self.memory.compare_with_baseline(&config.target, &findings).await?;
+                            let baseline_comparison = self
+                                .memory
+                                .compare_with_baseline(&config.target, &findings)
+                                .await?;
                             let new_findings = baseline_comparison.new_findings;
 
                             if !new_findings.is_empty() {
-                                let (to_alert, deduplicated) = self.memory.deduplicate_findings(new_findings).await?;
+                                let (to_alert, deduplicated) =
+                                    self.memory.deduplicate_findings(new_findings).await?;
                                 if !to_alert.is_empty() {
                                     tracing::debug!(
                                         "Alerting on {} new findings ({} deduplicated from previous scans)",
                                         to_alert.len(),
                                         deduplicated.len()
                                     );
-                                    self.handle_findings(&config.target, to_alert, &config.alert_channels).await?;
+                                    self.handle_findings(
+                                        &config.target,
+                                        to_alert,
+                                        &config.alert_channels,
+                                    )
+                                    .await?;
                                 } else {
                                     tracing::debug!(
                                         "Skipped alerting on {} findings - already alerted in previous scans",
@@ -495,11 +544,7 @@ impl Agent {
         Ok(())
     }
 
-    pub async fn execute_scan(
-        &self,
-        target: &str,
-        scan_type: &str,
-    ) -> Result<ToolResponse> {
+    pub async fn execute_scan(&self, target: &str, scan_type: &str) -> Result<ToolResponse> {
         // Look up target in portfolio to get target_type and scope
         let (target_type, scope) = if let Some(config) = self.portfolio.get_target(target) {
             let scope = config.scope.as_ref().map(|s| convert_scope(s));
@@ -529,13 +574,17 @@ impl Agent {
         scope: Option<crate::tool::request::Scope>,
     ) -> Result<ToolResponse> {
         // Check operational constraints before dispatch
-        self.constraint_checker.evaluate_action("scan", target)
+        self.constraint_checker
+            .evaluate_action("scan", target)
             .map_err(|e| anyhow::anyhow!("Action forbidden: {:?}", e))?;
-        self.constraint_checker.evaluate_target(target)
+        self.constraint_checker
+            .evaluate_target(target)
             .map_err(|e| anyhow::anyhow!("Target forbidden: {:?}", e))?;
-        self.constraint_checker.evaluate_scan_depth(depth)
+        self.constraint_checker
+            .evaluate_scan_depth(depth)
             .map_err(|e| anyhow::anyhow!("Scan depth not allowed: {:?}", e))?;
-        self.constraint_checker.evaluate_rate_limit(target)
+        self.constraint_checker
+            .evaluate_rate_limit(target)
             .map_err(|e| anyhow::anyhow!("Rate limit exceeded: {:?}", e))?;
 
         let params = match depth {
@@ -590,7 +639,12 @@ impl Agent {
         response.findings.clone()
     }
 
-    async fn handle_findings(&mut self, target: &str, findings: Vec<crate::tool::response::Finding>, alert_channels: &[String]) -> Result<()> {
+    async fn handle_findings(
+        &mut self,
+        target: &str,
+        findings: Vec<crate::tool::response::Finding>,
+        alert_channels: &[String],
+    ) -> Result<()> {
         #[cfg(feature = "ai-integration")]
         if let Some(ref client) = self.ai_client {
             let finding_values: Vec<serde_json::Value> = findings
@@ -608,7 +662,8 @@ impl Agent {
             }
         }
 
-        self.process_findings_by_severity(target, &findings, alert_channels).await
+        self.process_findings_by_severity(target, &findings, alert_channels)
+            .await
     }
 
     async fn process_findings_by_severity(
@@ -619,23 +674,28 @@ impl Agent {
     ) -> Result<()> {
         use crate::tool::response::ResponseSeverity;
 
-        let critical_findings: Vec<_> = findings.iter()
+        let critical_findings: Vec<_> = findings
+            .iter()
             .filter(|f| matches!(f.severity, ResponseSeverity::Critical))
             .collect();
 
-        let high_findings: Vec<_> = findings.iter()
+        let high_findings: Vec<_> = findings
+            .iter()
             .filter(|f| matches!(f.severity, ResponseSeverity::High))
             .collect();
 
-        let medium_findings: Vec<_> = findings.iter()
+        let medium_findings: Vec<_> = findings
+            .iter()
             .filter(|f| matches!(f.severity, ResponseSeverity::Medium))
             .collect();
 
-        let low_findings: Vec<_> = findings.iter()
+        let low_findings: Vec<_> = findings
+            .iter()
             .filter(|f| matches!(f.severity, ResponseSeverity::Low))
             .collect();
 
-        let info_findings: Vec<_> = findings.iter()
+        let info_findings: Vec<_> = findings
+            .iter()
             .filter(|f| matches!(f.severity, ResponseSeverity::Info))
             .collect();
 
@@ -652,7 +712,10 @@ impl Agent {
             let alert = Alert {
                 severity: alert_severity,
                 title: format!("{} critical findings on {}", count, target),
-                message: format!("Detected {} critical severity findings during scan of {}", count, target),
+                message: format!(
+                    "Detected {} critical severity findings during scan of {}",
+                    count, target
+                ),
                 target: target.to_string(),
                 finding_ids: critical_findings.iter().map(|f| f.id.clone()).collect(),
                 recommended_actions: vec![
@@ -660,7 +723,9 @@ impl Agent {
                     "Consider emergency response".to_string(),
                 ],
             };
-            self.alert_router.send(alert, channel_filter.clone()).await?;
+            self.alert_router
+                .send(alert, channel_filter.clone())
+                .await?;
         }
 
         if !high_findings.is_empty() {
@@ -668,12 +733,17 @@ impl Agent {
             let alert = Alert {
                 severity: crate::types::Severity::High,
                 title: format!("{} high-severity findings on {}", count, target),
-                message: format!("Detected {} high-severity findings during scan of {}", count, target),
+                message: format!(
+                    "Detected {} high-severity findings during scan of {}",
+                    count, target
+                ),
                 target: target.to_string(),
                 finding_ids: high_findings.iter().map(|f| f.id.clone()).collect(),
                 recommended_actions: vec!["Review within 24 hours".to_string()],
             };
-            self.alert_router.send(alert, channel_filter.clone()).await?;
+            self.alert_router
+                .send(alert, channel_filter.clone())
+                .await?;
         }
 
         if !medium_findings.is_empty() {
@@ -681,12 +751,17 @@ impl Agent {
             let alert = Alert {
                 severity: crate::types::Severity::Medium,
                 title: format!("{} medium-severity findings on {}", count, target),
-                message: format!("Detected {} medium-severity findings during scan of {}", count, target),
+                message: format!(
+                    "Detected {} medium-severity findings during scan of {}",
+                    count, target
+                ),
                 target: target.to_string(),
                 finding_ids: medium_findings.iter().map(|f| f.id.clone()).collect(),
                 recommended_actions: vec!["Review in weekly triage".to_string()],
             };
-            self.alert_router.send(alert, channel_filter.clone()).await?;
+            self.alert_router
+                .send(alert, channel_filter.clone())
+                .await?;
         }
 
         if !low_findings.is_empty() {
@@ -694,7 +769,10 @@ impl Agent {
             let alert = Alert {
                 severity: crate::types::Severity::Low,
                 title: format!("{} low-severity findings on {}", count, target),
-                message: format!("Detected {} low-severity findings during scan of {}", count, target),
+                message: format!(
+                    "Detected {} low-severity findings during scan of {}",
+                    count, target
+                ),
                 target: target.to_string(),
                 finding_ids: low_findings.iter().map(|f| f.id.clone()).collect(),
                 recommended_actions: vec!["Add to remediation backlog".to_string()],
@@ -704,14 +782,22 @@ impl Agent {
 
         if !info_findings.is_empty() {
             let count = info_findings.len();
-            tracing::info!("{} info-level findings on {} - no alert triggered", count, target);
+            tracing::info!(
+                "{} info-level findings on {} - no alert triggered",
+                count,
+                target
+            );
         }
 
         Ok(())
     }
 
     pub async fn trigger_scan(&mut self, target: &str, scan_type: &str) -> Result<ToolResponse> {
-        tracing::info!("Manually triggered scan for {} (type: {})", target, scan_type);
+        tracing::info!(
+            "Manually triggered scan for {} (type: {})",
+            target,
+            scan_type
+        );
 
         let result = self.execute_scan(target, scan_type).await?;
 
@@ -752,9 +838,17 @@ impl Agent {
 /// Convert config::Scope to tool::request::Scope
 fn convert_scope(config_scope: &crate::config::Scope) -> crate::tool::request::Scope {
     crate::tool::request::Scope {
-        allowed_patterns: config_scope.allowed_targets.iter().map(|rule| rule.pattern.clone()).collect(),
-        excluded_patterns: config_scope.excluded_targets.iter().map(|rule| rule.pattern.clone()).collect(),
-        allowed_ips: vec![], // config::Scope doesn't have allowed_ips directly
+        allowed_patterns: config_scope
+            .allowed_targets
+            .iter()
+            .map(|rule| rule.pattern.clone())
+            .collect(),
+        excluded_patterns: config_scope
+            .excluded_targets
+            .iter()
+            .map(|rule| rule.pattern.clone())
+            .collect(),
+        allowed_ips: vec![],    // config::Scope doesn't have allowed_ips directly
         allow_subdomains: true, // default
     }
 }
@@ -786,7 +880,10 @@ impl CronScheduler {
         };
 
         // If last scan is in the same minute as now, don't run again (cron triggers at minute granularity)
-        if last.minute() == now.minute() && last.hour() == now.hour() && last.date_naive() == now.date_naive() {
+        if last.minute() == now.minute()
+            && last.hour() == now.hour()
+            && last.date_naive() == now.date_naive()
+        {
             return false;
         }
 
@@ -796,11 +893,11 @@ impl CronScheduler {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::agent::constraints::{OperationalConstraints, ForbiddenAction};
     use super::events::ScanCompleteEvent;
-    use std::pin::Pin;
+    use super::*;
+    use crate::agent::constraints::{ForbiddenAction, OperationalConstraints};
     use std::future::Future;
+    use std::pin::Pin;
 
     #[tokio::test]
     async fn test_agent_creation() {
@@ -857,7 +954,9 @@ mod tests {
             schedule: Some("0 0 * * *".to_string()),
             ..Default::default()
         };
-        agent.portfolio.add_target("example.com".to_string(), config);
+        agent
+            .portfolio
+            .add_target("example.com".to_string(), config);
 
         let targets = agent.portfolio.get_all_targets();
         assert_eq!(targets.len(), 1);
@@ -893,7 +992,11 @@ mod tests {
         });
         agent.trigger_event(event).await.unwrap();
 
-        assert_eq!(agent.event_handlers.len(), initial_count, "Handlers should be restored after successful event");
+        assert_eq!(
+            agent.event_handlers.len(),
+            initial_count,
+            "Handlers should be restored after successful event"
+        );
     }
 
     #[tokio::test]
@@ -927,7 +1030,11 @@ mod tests {
         let result = agent.trigger_event(event).await;
 
         assert!(result.is_err(), "Handler error should propagate");
-        assert_eq!(agent.event_handlers.len(), initial_count, "Handlers should be restored even after handler error");
+        assert_eq!(
+            agent.event_handlers.len(),
+            initial_count,
+            "Handlers should be restored even after handler error"
+        );
     }
 
     #[tokio::test]
@@ -964,8 +1071,16 @@ mod tests {
 
         assert!(result.is_err(), "Panicking handler should return error");
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("panicked"), "Error should contain 'panicked': {}", err_msg);
-        assert_eq!(agent.event_handlers.len(), initial_count, "Handlers should be restored after panic");
+        assert!(
+            err_msg.contains("panicked"),
+            "Error should contain 'panicked': {}",
+            err_msg
+        );
+        assert_eq!(
+            agent.event_handlers.len(),
+            initial_count,
+            "Handlers should be restored after panic"
+        );
 
         let event2 = SecurityEvent::ScanComplete(ScanCompleteEvent {
             scan_id: "test-4".to_string(),
@@ -976,8 +1091,15 @@ mod tests {
             severity_counts: std::collections::HashMap::new(),
         });
         let result2 = agent.trigger_event(event2).await;
-        assert!(result2.is_ok() || result2.is_err(), "Subsequent trigger should not crash");
-        assert_eq!(agent.event_handlers.len(), initial_count, "Handlers should persist after subsequent trigger");
+        assert!(
+            result2.is_ok() || result2.is_err(),
+            "Subsequent trigger should not crash"
+        );
+        assert_eq!(
+            agent.event_handlers.len(),
+            initial_count,
+            "Handlers should persist after subsequent trigger"
+        );
     }
 
     #[test]
@@ -988,7 +1110,10 @@ mod tests {
             .and_hms_opt(12, 0, 0)
             .unwrap()
             .and_utc();
-        assert!(scheduler.should_run_for("0 * * * *", &test_time), "At minute 0 should match");
+        assert!(
+            scheduler.should_run_for("0 * * * *", &test_time),
+            "At minute 0 should match"
+        );
     }
 
     #[test]
@@ -1015,10 +1140,17 @@ mod tests {
         fn dispatch<'a>(
             &'a self,
             _request: ToolRequest,
-        ) -> Pin<Box<dyn Future<Output = std::result::Result<ToolResponse, crate::error::SlapperError>> + Send + 'a>> {
+        ) -> Pin<
+            Box<
+                dyn Future<Output = std::result::Result<ToolResponse, crate::error::SlapperError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
             let response = self.response.lock().unwrap().clone();
             Box::pin(async move {
-                response.ok_or_else(|| crate::error::SlapperError::Network("Mock no response".into()))
+                response
+                    .ok_or_else(|| crate::error::SlapperError::Network("Mock no response".into()))
             })
         }
     }
@@ -1033,7 +1165,10 @@ mod tests {
             alert: Alert,
             channel_names: Option<Vec<String>>,
         ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
-            self.sent_alerts.lock().unwrap().push((alert, channel_names));
+            self.sent_alerts
+                .lock()
+                .unwrap()
+                .push((alert, channel_names));
             Box::pin(async { Ok(()) })
         }
     }
@@ -1067,11 +1202,9 @@ mod tests {
             sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Verify agent was created with test doubles (no network calls)
         assert_eq!(agent.event_handlers.len(), 0);
@@ -1091,11 +1224,9 @@ mod tests {
             sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Attempt to execute scan, should fail with mock error
         let result = agent.execute_scan("https://example.com", "recon").await;
@@ -1112,7 +1243,10 @@ mod tests {
 
         // Add forbidden target to constraints
         let mut constraints = OperationalConstraints::default();
-        constraints.do_not_do_list.forbidden_targets.push("https://forbidden.com".to_string());
+        constraints
+            .do_not_do_list
+            .forbidden_targets
+            .push("https://forbidden.com".to_string());
         config.operational_constraints = Some(constraints);
 
         let dispatcher = MockDispatcher {
@@ -1122,11 +1256,9 @@ mod tests {
             sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Attempt to scan forbidden target, should be blocked
         let result = agent.execute_scan("https://forbidden.com", "recon").await;
@@ -1145,7 +1277,10 @@ mod tests {
 
         // Forbid "scan" action
         let mut constraints = OperationalConstraints::default();
-        constraints.do_not_do_list.forbidden_actions.push(ForbiddenAction::new("scan", "Testing"));
+        constraints
+            .do_not_do_list
+            .forbidden_actions
+            .push(ForbiddenAction::new("scan", "Testing"));
         config.operational_constraints = Some(constraints);
 
         let dispatcher = MockDispatcher {
@@ -1155,11 +1290,9 @@ mod tests {
             sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         let result = agent.execute_scan("https://example.com", "recon").await;
         assert!(result.is_err());
@@ -1212,9 +1345,9 @@ mod tests {
     // The should_run_target tests above verify the idempotent logic
     #[tokio::test]
     async fn test_scheduled_scan_idempotent() {
-        use tempfile::TempDir;
         use crate::tool::response::ToolResponse;
         use directories::ProjectDirs;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1237,19 +1370,19 @@ mod tests {
         portfolio.save().unwrap();
 
         let dispatcher = MockDispatcher {
-            response: std::sync::Arc::new(std::sync::Mutex::new(
-                Some(ToolResponse::success("req-1", "pipeline", serde_json::json!({"status": "success"})))
-            )),
+            response: std::sync::Arc::new(std::sync::Mutex::new(Some(ToolResponse::success(
+                "req-1",
+                "pipeline",
+                serde_json::json!({"status": "success"}),
+            )))),
         };
         let alert_sender = MockAlertSender {
             sent_alerts: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Run scheduled scans - this tests that the machinery works
         // We can't guarantee the cron will match with real Utc::now(), so we just verify no panic
@@ -1259,10 +1392,10 @@ mod tests {
     // Phase 8: Alert routing tests
     #[tokio::test]
     async fn test_critical_alert_only_critical_finding_ids() {
-        use tempfile::TempDir;
         use crate::tool::finding::{Finding, FindingType, ResponseSeverity};
-        use std::sync::Arc as StdArc;
         use std::collections::HashMap;
+        use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1276,11 +1409,9 @@ mod tests {
             sent_alerts: sent_alerts.clone(),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Create findings with different severities
         let findings = vec![
@@ -1313,32 +1444,46 @@ mod tests {
         ];
 
         // Call process_findings_by_severity directly
-        let result = agent.process_findings_by_severity(
-            "https://example.com",
-            &findings,
-            &[],  // no alert_channels = send to all
-        ).await;
+        let result = agent
+            .process_findings_by_severity(
+                "https://example.com",
+                &findings,
+                &[], // no alert_channels = send to all
+            )
+            .await;
 
         assert!(result.is_ok());
 
         // Check that critical alert only has critical finding IDs
         let sent = sent_alerts.lock().unwrap();
-        let critical_alerts: Vec<_> = sent.iter()
+        let critical_alerts: Vec<_> = sent
+            .iter()
             .filter(|(alert, _)| alert.severity == crate::types::Severity::Critical)
             .collect();
 
-        assert_eq!(critical_alerts.len(), 1, "Should have exactly 1 critical alert");
+        assert_eq!(
+            critical_alerts.len(),
+            1,
+            "Should have exactly 1 critical alert"
+        );
         let (critical_alert, _) = critical_alerts[0];
-        assert_eq!(critical_alert.finding_ids.len(), 1, "Critical alert should have exactly 1 finding ID");
-        assert_eq!(critical_alert.finding_ids[0], "crit-1", "Critical alert should only have critical finding ID");
+        assert_eq!(
+            critical_alert.finding_ids.len(),
+            1,
+            "Critical alert should have exactly 1 finding ID"
+        );
+        assert_eq!(
+            critical_alert.finding_ids[0], "crit-1",
+            "Critical alert should only have critical finding ID"
+        );
     }
 
     #[tokio::test]
     async fn test_high_alert_only_high_finding_ids() {
-        use tempfile::TempDir;
         use crate::tool::finding::{Finding, FindingType, ResponseSeverity};
-        use std::sync::Arc as StdArc;
         use std::collections::HashMap;
+        use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1352,11 +1497,9 @@ mod tests {
             sent_alerts: sent_alerts.clone(),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Create findings with different severities
         let findings = vec![
@@ -1401,18 +1544,17 @@ mod tests {
             },
         ];
 
-        let result = agent.process_findings_by_severity(
-            "https://example.com",
-            &findings,
-            &[],
-        ).await;
+        let result = agent
+            .process_findings_by_severity("https://example.com", &findings, &[])
+            .await;
 
         assert!(result.is_ok());
 
         let sent = sent_alerts.lock().unwrap();
 
         // Check high alert
-        let high_alerts: Vec<_> = sent.iter()
+        let high_alerts: Vec<_> = sent
+            .iter()
             .filter(|(alert, _)| alert.severity == crate::types::Severity::High)
             .collect();
         assert_eq!(high_alerts.len(), 1);
@@ -1423,8 +1565,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_target_with_selected_channel_sends_to_that_channel_only() {
-        use tempfile::TempDir;
         use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1438,20 +1580,16 @@ mod tests {
             sent_alerts: sent_alerts.clone(),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Specify a channel name
         let channel_names = vec!["slack".to_string()];
 
-        let result = agent.process_findings_by_severity(
-            "https://example.com",
-            &[],
-            &channel_names,
-        ).await;
+        let result = agent
+            .process_findings_by_severity("https://example.com", &[], &channel_names)
+            .await;
 
         assert!(result.is_ok());
 
@@ -1465,15 +1603,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_integration_manual_scan_success() {
-        use tempfile::TempDir;
         use crate::tool::response::ToolResponse;
         use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
         config.memory_dir = temp_dir.path().to_path_buf();
 
-        let mock_response = ToolResponse::success("req-1", "recon", serde_json::json!({"status": "ok"}));
+        let mock_response =
+            ToolResponse::success("req-1", "recon", serde_json::json!({"status": "ok"}));
         let dispatcher = MockDispatcher {
             response: StdArc::new(std::sync::Mutex::new(Some(mock_response))),
         };
@@ -1482,26 +1621,28 @@ mod tests {
             sent_alerts: sent_alerts.clone(),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Verify constraints pass (no forbidden targets/actions)
         let result = agent.trigger_scan("https://example.com", "recon").await;
         assert!(result.is_ok());
 
         // Verify memory was stored
-        let history = agent.memory.get_target_history("https://example.com").await.unwrap();
+        let history = agent
+            .memory
+            .get_target_history("https://example.com")
+            .await
+            .unwrap();
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].scan_id, "req-1");
     }
 
     #[tokio::test]
     async fn test_integration_manual_scan_blocked() {
-        use tempfile::TempDir;
         use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1510,7 +1651,7 @@ mod tests {
         // Add forbidden action to block scans
         let mut constraints = OperationalConstraints::default();
         constraints.do_not_do_list.forbidden_actions.push(
-            crate::agent::constraints::ForbiddenAction::new("scan", "test")
+            crate::agent::constraints::ForbiddenAction::new("scan", "test"),
         );
         config.operational_constraints = Some(constraints);
 
@@ -1521,11 +1662,9 @@ mod tests {
             sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Scan should be blocked by constraints
         let result = agent.trigger_scan("https://example.com", "recon").await;
@@ -1535,11 +1674,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_integration_scheduled_scan_success() {
-        use tempfile::TempDir;
-        use crate::tool::response::ToolResponse;
         use crate::agent::portfolio::TargetConfig;
+        use crate::tool::response::ToolResponse;
         use directories::ProjectDirs;
         use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1559,7 +1698,8 @@ mod tests {
         portfolio.add_target("https://example.com".to_string(), target_config);
         portfolio.save().unwrap();
 
-        let mock_response = ToolResponse::success("req-1", "pipeline", serde_json::json!({"status": "ok"}));
+        let mock_response =
+            ToolResponse::success("req-1", "pipeline", serde_json::json!({"status": "ok"}));
         let dispatcher = MockDispatcher {
             response: StdArc::new(std::sync::Mutex::new(Some(mock_response))),
         };
@@ -1568,16 +1708,16 @@ mod tests {
             sent_alerts: sent_alerts.clone(),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Manually set last_scan to force a run (simulate time passing)
-        agent.portfolio.update_target("https://example.com", |target| {
-            target.last_scan = Some(chrono::Utc::now() - chrono::Duration::minutes(2));
-        });
+        agent
+            .portfolio
+            .update_target("https://example.com", |target| {
+                target.last_scan = Some(chrono::Utc::now() - chrono::Duration::minutes(2));
+            });
 
         // Process scheduled scans
         let result = agent.process_scheduled_scans().await;
@@ -1590,10 +1730,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_integration_scheduled_scan_failure() {
-        use tempfile::TempDir;
         use crate::agent::portfolio::TargetConfig;
         use directories::ProjectDirs;
         use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1622,17 +1762,17 @@ mod tests {
             sent_alerts: sent_alerts.clone(),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Manually set last_scan
         let original_last_scan = Some(chrono::Utc::now() - chrono::Duration::minutes(2));
-        agent.portfolio.update_target("https://example.com", |target| {
-            target.last_scan = original_last_scan;
-        });
+        agent
+            .portfolio
+            .update_target("https://example.com", |target| {
+                target.last_scan = original_last_scan;
+            });
 
         // Process scheduled scans (dispatch will fail)
         let _ = agent.process_scheduled_scans().await;
@@ -1644,11 +1784,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_integration_findings_and_baseline() {
-        use tempfile::TempDir;
-        use crate::tool::response::{ToolResponse, Finding, FindingType, ResponseSeverity};
         use crate::tool::finding::Finding as ToolFinding;
-        use std::sync::Arc as StdArc;
+        use crate::tool::response::{Finding, FindingType, ResponseSeverity, ToolResponse};
         use std::collections::HashMap;
+        use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1662,11 +1802,9 @@ mod tests {
             sent_alerts: sent_alerts.clone(),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         // Create findings
         let baseline_finding = ToolFinding {
@@ -1698,33 +1836,49 @@ mod tests {
         };
 
         // Set baseline with baseline_finding
-        agent.memory.set_baseline("https://example.com", vec!["baseline-1".to_string()]).await.unwrap();
+        agent
+            .memory
+            .set_baseline("https://example.com", vec!["baseline-1".to_string()])
+            .await
+            .unwrap();
 
         // Compare findings - baseline finding should not be in new_findings
-        let comparison = agent.memory.compare_with_baseline(
-            "https://example.com",
-            &[baseline_finding.clone(), new_finding.clone()]
-        ).await.unwrap();
+        let comparison = agent
+            .memory
+            .compare_with_baseline(
+                "https://example.com",
+                &[baseline_finding.clone(), new_finding.clone()],
+            )
+            .await
+            .unwrap();
 
         assert_eq!(comparison.new_findings.len(), 1);
         assert_eq!(comparison.new_findings[0].id, "new-1");
         assert_eq!(comparison.resolved_findings.len(), 0);
 
         // Now test deduplication - new finding should alert once
-        let (to_alert, deduplicated) = agent.memory.deduplicate_findings(vec![new_finding.clone()]).await.unwrap();
+        let (to_alert, deduplicated) = agent
+            .memory
+            .deduplicate_findings(vec![new_finding.clone()])
+            .await
+            .unwrap();
         assert_eq!(to_alert.len(), 1);
         assert_eq!(deduplicated.len(), 0);
 
         // Call again - should be deduplicated
-        let (to_alert2, deduplicated2) = agent.memory.deduplicate_findings(vec![new_finding.clone()]).await.unwrap();
+        let (to_alert2, deduplicated2) = agent
+            .memory
+            .deduplicate_findings(vec![new_finding.clone()])
+            .await
+            .unwrap();
         assert_eq!(to_alert2.len(), 0);
         assert_eq!(deduplicated2.len(), 1);
     }
 
     #[tokio::test]
     async fn test_run_once_can_be_called_twice() {
-        use tempfile::TempDir;
         use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1737,30 +1891,32 @@ mod tests {
             sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         let result1 = agent.run_once().await;
         assert!(result1.is_ok());
 
         let result2 = agent.run_once().await;
-        assert!(result2.is_ok(), "run_once should work after a previous run_once completed");
+        assert!(
+            result2.is_ok(),
+            "run_once should work after a previous run_once completed"
+        );
     }
 
     #[tokio::test]
     async fn test_run_once_resets_running_after_success() {
-        use tempfile::TempDir;
         use crate::tool::response::ToolResponse;
         use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
         config.memory_dir = temp_dir.path().to_path_buf();
 
-        let mock_response = ToolResponse::success("req-1", "pipeline", serde_json::json!({"status": "ok"}));
+        let mock_response =
+            ToolResponse::success("req-1", "pipeline", serde_json::json!({"status": "ok"}));
         let dispatcher = MockDispatcher {
             response: StdArc::new(std::sync::Mutex::new(Some(mock_response))),
         };
@@ -1768,22 +1924,23 @@ mod tests {
             sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         agent.run_once().await.unwrap();
 
         let running = agent.running.read().await;
-        assert!(!*running, "running should be reset after successful run_once");
+        assert!(
+            !*running,
+            "running should be reset after successful run_once"
+        );
     }
 
     #[tokio::test]
     async fn test_run_once_resets_running_after_error() {
-        use tempfile::TempDir;
         use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let mut config = AgentConfig::default();
@@ -1796,16 +1953,20 @@ mod tests {
             sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
         };
 
-        let mut agent = Agent::new_for_test(
-            config,
-            Box::new(dispatcher),
-            Box::new(alert_sender),
-        ).await.unwrap();
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
 
         let result = agent.run_once().await;
-        assert!(result.is_ok(), "run_once should complete even if dispatch returns None");
+        assert!(
+            result.is_ok(),
+            "run_once should complete even if dispatch returns None"
+        );
 
         let running = agent.running.read().await;
-        assert!(!*running, "running should be reset even when run_once completes");
+        assert!(
+            !*running,
+            "running should be reset even when run_once completes"
+        );
     }
 }

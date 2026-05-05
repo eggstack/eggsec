@@ -40,7 +40,9 @@ impl SessionTester {
             if let (Some(c1), Some(c2)) = (set_cookie1, set_cookie2) {
                 if c1 == c2 {
                     result.session_fixation_possible = true;
-                    result.findings.push("Session tokens reused across requests".to_string());
+                    result
+                        .findings
+                        .push("Session tokens reused across requests".to_string());
                 }
             }
 
@@ -57,10 +59,9 @@ impl SessionTester {
                         issues.push("SameSite not set".to_string());
                     }
                     if !issues.is_empty() {
-                        result.session_cookie_issues.push(format!(
-                            "Session cookie: {}",
-                            issues.join(", ")
-                        ));
+                        result
+                            .session_cookie_issues
+                            .push(format!("Session cookie: {}", issues.join(", ")));
                     }
                 }
             }

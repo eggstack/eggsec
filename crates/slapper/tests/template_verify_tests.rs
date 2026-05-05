@@ -1,5 +1,7 @@
-use slapper::scanner::templates::verify::{SignedTemplate, SignerInfo, TemplateSigner, TemplateVerifier};
 use slapper::scanner::templates::models::VulnerabilityTemplate;
+use slapper::scanner::templates::verify::{
+    SignedTemplate, SignerInfo, TemplateSigner, TemplateVerifier,
+};
 
 fn create_test_template() -> VulnerabilityTemplate {
     VulnerabilityTemplate {
@@ -87,7 +89,9 @@ fn test_sign_and_verify_raw() {
     let signed = signer.sign(&template).unwrap();
 
     let verifier = TemplateVerifier::with_public_key(&signed.public_key).unwrap();
-    let is_valid = verifier.verify_raw(&signed.template, &signed.signature).unwrap();
+    let is_valid = verifier
+        .verify_raw(&signed.template, &signed.signature)
+        .unwrap();
     assert!(is_valid);
 }
 
@@ -134,7 +138,7 @@ fn test_invalid_signature_base64() {
 
     let signed = signer.sign(&template).unwrap();
     let verifier = TemplateVerifier::with_public_key(&signed.public_key).unwrap();
-    
+
     let mut tampered = signed.clone();
     tampered.signature = "invalid-base64!!!".to_string();
     let result = verifier.verify(&tampered);
@@ -146,7 +150,7 @@ fn test_signer_from_keypair() {
     let signer_info = create_test_signer_info();
     let signer = TemplateSigner::new(signer_info.clone()).unwrap();
     let keypair_bytes = signer.public_key_bytes();
-    
+
     let signer2 = TemplateSigner::from_keypair(&keypair_bytes, signer_info).unwrap();
     assert!(!signer2.public_key_string().is_empty());
 }

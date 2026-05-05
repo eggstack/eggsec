@@ -1,4 +1,3 @@
-
 pub fn get_detection_patterns() -> Vec<(&'static str, &'static str)> {
     vec![
         (

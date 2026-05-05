@@ -1,12 +1,15 @@
 use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
 use crate::error::Result;
-use crate::recon::{cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, ssl, subdomain, takeover, techdetect, threatintel, wayback, whois, FullReconResult};
+use crate::recon::{
+    cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, ssl, subdomain,
+    takeover, techdetect, threatintel, wayback, whois, FullReconResult,
+};
 use crate::types::SensitiveString;
 use crate::utils::sanitize_for_logging;
 use crate::utils::target::strip_url_protocol;
-use std::sync::Arc;
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 /// Resolves the target domain to an IP address.
 ///
@@ -100,7 +103,9 @@ async fn run_threat_intel(
     }
     let ip = ip?;
     let is_ip = ip.parse::<std::net::IpAddr>().is_ok();
-    match threatintel::check_threat_intel(ip, is_ip, virustotal_key, alienvault_key, shodan_key).await {
+    match threatintel::check_threat_intel(ip, is_ip, virustotal_key, alienvault_key, shodan_key)
+        .await
+    {
         Ok(v) => Some(v),
         Err(e) => {
             tracing::warn!("threat intel lookup failed: {}", e);
@@ -112,11 +117,7 @@ async fn run_threat_intel(
 /// Performs SSL/TLS certificate analysis.
 ///
 /// Returns `None` if `no_ssl` is true, no host is provided, or the analysis fails.
-async fn run_ssl_recon(
-    host: Option<&String>,
-    url: &str,
-    no_ssl: bool,
-) -> Option<ssl::SslAnalysis> {
+async fn run_ssl_recon(host: Option<&String>, url: &str, no_ssl: bool) -> Option<ssl::SslAnalysis> {
     if no_ssl {
         return None;
     }
@@ -134,10 +135,7 @@ async fn run_ssl_recon(
 /// Performs WHOIS lookup for a domain.
 ///
 /// Returns `None` if `no_whois` is true, no domain is provided, or the lookup fails.
-async fn run_whois_lookup(
-    domain: Option<&String>,
-    no_whois: bool,
-) -> Option<whois::WhoisResult> {
+async fn run_whois_lookup(domain: Option<&String>, no_whois: bool) -> Option<whois::WhoisResult> {
     if no_whois {
         return None;
     }
@@ -195,10 +193,7 @@ async fn run_dns_records(
 /// Detects the technology stack used by a web application.
 ///
 /// Returns `None` if `no_tech` is true or detection fails.
-async fn run_tech_detection(
-    url: &str,
-    no_tech: bool,
-) -> Option<techdetect::TechDetectionResult> {
+async fn run_tech_detection(url: &str, no_tech: bool) -> Option<techdetect::TechDetectionResult> {
     if no_tech {
         return None;
     }
@@ -214,10 +209,7 @@ async fn run_tech_detection(
 /// Analyzes JavaScript files for endpoints and secrets.
 ///
 /// Returns `None` if `no_js` is true or analysis fails.
-async fn run_js_analysis(
-    url: &str,
-    no_js: bool,
-) -> Option<js::JsAnalysis> {
+async fn run_js_analysis(url: &str, no_js: bool) -> Option<js::JsAnalysis> {
     if no_js {
         return None;
     }
@@ -295,10 +287,7 @@ async fn run_content_analysis(
 /// Analyzes CORS configuration for misconfigurations.
 ///
 /// Returns `None` if `no_cors` is true or the analysis fails.
-async fn run_cors_check(
-    url: &str,
-    no_cors: bool,
-) -> Option<cors::CorsAnalysis> {
+async fn run_cors_check(url: &str, no_cors: bool) -> Option<cors::CorsAnalysis> {
     if no_cors {
         return None;
     }
@@ -314,10 +303,7 @@ async fn run_cors_check(
 /// Discovers email addresses associated with a target.
 ///
 /// Returns `None` if `no_email` is true or discovery fails.
-async fn run_email_security(
-    url: &str,
-    no_email: bool,
-) -> Option<email::EmailDiscovery> {
+async fn run_email_security(url: &str, no_email: bool) -> Option<email::EmailDiscovery> {
     if no_email {
         return None;
     }
@@ -452,8 +438,19 @@ pub async fn run_full_recon(
         email_result,
     ) = tokio::join!(
         run_reverse_dns(resolved_ip.as_ref(), args.no_dns),
-        run_geo_lookup(resolved_ip.as_ref(), args.no_geo, ipapi_key, maxmind_settings),
-        run_threat_intel(resolved_ip.as_ref(), args.no_threat, virustotal_key, alienvault_key, shodan_key),
+        run_geo_lookup(
+            resolved_ip.as_ref(),
+            args.no_geo,
+            ipapi_key,
+            maxmind_settings
+        ),
+        run_threat_intel(
+            resolved_ip.as_ref(),
+            args.no_threat,
+            virustotal_key,
+            alienvault_key,
+            shodan_key
+        ),
         run_ssl_recon(resolved_ip.as_ref(), &url, args.no_ssl),
         run_whois_lookup(domain.as_ref(), args.no_whois),
         run_subdomain_enum(domain.as_ref(), concurrency, args.no_subdomains),
@@ -764,22 +761,20 @@ mod tests {
 
     #[test]
     fn test_full_recon_result_with_subdomains() {
-        use crate::recon::FullReconResult;
         use crate::recon::subdomain::{SubdomainInfo, SubdomainResult};
+        use crate::recon::FullReconResult;
         let result = FullReconResult {
             target: "example.com".to_string(),
             domain: Some("example.com".to_string()),
             subdomains: Some(SubdomainResult {
                 domain: "example.com".to_string(),
-                subdomains: vec![
-                    SubdomainInfo {
-                        subdomain: "www".to_string(),
-                        ip_addresses: vec!["93.184.216.34".to_string()],
-                        has_mx: false,
-                        has_cname: false,
-                        has_txt: false,
-                    },
-                ],
+                subdomains: vec![SubdomainInfo {
+                    subdomain: "www".to_string(),
+                    ip_addresses: vec!["93.184.216.34".to_string()],
+                    has_mx: false,
+                    has_cname: false,
+                    has_txt: false,
+                }],
                 sources: vec!["crt.sh".to_string()],
             }),
             ..Default::default()

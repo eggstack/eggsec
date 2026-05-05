@@ -6,8 +6,8 @@
 use crate::error::{Result, SlapperError};
 use std::time::Duration;
 
-use crate::scanner::spoof::SpoofConfig;
 use super::PortScanResults;
+use crate::scanner::spoof::SpoofConfig;
 
 #[cfg(all(feature = "stress-testing", unix))]
 fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
@@ -22,7 +22,12 @@ fn parse_tcp_response(packet: &[u8]) -> Option<(u32, u16, String)> {
 
     let src_ip_bytes = &packet[12..16];
     let _dst_ip_bytes = &packet[16..20];
-    let src_ip = u32::from_be_bytes([src_ip_bytes[0], src_ip_bytes[1], src_ip_bytes[2], src_ip_bytes[3]]);
+    let src_ip = u32::from_be_bytes([
+        src_ip_bytes[0],
+        src_ip_bytes[1],
+        src_ip_bytes[2],
+        src_ip_bytes[3],
+    ]);
 
     let tcp_data = &packet[ip_header_len..];
     if tcp_data.len() < 20 {
@@ -52,16 +57,16 @@ static PACKET_TRACE_FILE: std::sync::OnceLock<parking_lot::Mutex<std::fs::File>>
 fn log_packet_trace(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16, scan_type: &str) {
     if let Some(file) = PACKET_TRACE_FILE.get() {
         let mut guard = file.lock();
-            use std::io::Write;
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos();
-            let _ = writeln!(
-                guard,
-                "{},{},{},{},{},{}",
-                timestamp, src_ip, src_port, dst_ip, dst_port, scan_type
-            );
+        use std::io::Write;
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let _ = writeln!(
+            guard,
+            "{},{},{},{},{},{}",
+            timestamp, src_ip, src_port, dst_ip, dst_port, scan_type
+        );
     }
 }
 
@@ -81,7 +86,8 @@ pub fn init_packet_trace(path: &str) -> Result<()> {
         let _ = writeln!(f, "timestamp,src_ip,src_port,dst_ip,dst_port,scan_type");
     }
 
-    PACKET_TRACE_FILE.set(parking_lot::Mutex::new(file))
+    PACKET_TRACE_FILE
+        .set(parking_lot::Mutex::new(file))
         .map_err(|_| SlapperError::Runtime("Packet trace file already initialized".to_string()))?;
     Ok(())
 }
@@ -97,8 +103,8 @@ pub(crate) async fn scan_ports_spoofed(
     progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
 ) -> Result<PortScanResults> {
     use crate::scanner::spoof::{
-        build_fragmented_packets, build_tcp_packet, get_local_ip,
-        get_network_interface, random_ip_from_cidr,
+        build_fragmented_packets, build_tcp_packet, get_local_ip, get_network_interface,
+        random_ip_from_cidr,
     };
     use crate::utils::parsing::resolve_host;
     use dashmap::DashMap;
@@ -116,7 +122,11 @@ pub(crate) async fn scan_ports_spoofed(
     let target_ip = resolve_host(host)?;
     let target_ipv4 = match target_ip {
         std::net::IpAddr::V4(ip) => ip,
-        std::net::IpAddr::V6(_) => return Err(SlapperError::Runtime("IPv6 not supported for spoofed scanning".to_string())),
+        std::net::IpAddr::V6(_) => {
+            return Err(SlapperError::Runtime(
+                "IPv6 not supported for spoofed scanning".to_string(),
+            ))
+        }
     };
 
     let interface = get_network_interface()?;
@@ -126,8 +136,17 @@ pub(crate) async fn scan_ports_spoofed(
 
     let (tx, rx) = match pnet::datalink::channel(&interface, Config::default()) {
         Ok(pnet::datalink::Channel::Ethernet(tx, rx)) => (tx, rx),
-        Ok(_) => return Err(SlapperError::Runtime("Unsupported channel type".to_string())),
-        Err(e) => return Err(SlapperError::Runtime(format!("Failed to create datalink channel: {}", e))),
+        Ok(_) => {
+            return Err(SlapperError::Runtime(
+                "Unsupported channel type".to_string(),
+            ))
+        }
+        Err(e) => {
+            return Err(SlapperError::Runtime(format!(
+                "Failed to create datalink channel: {}",
+                e
+            )))
+        }
     };
 
     let target_ip_u32: u32 = u32::from(target_ipv4);
@@ -171,30 +190,28 @@ pub(crate) async fn scan_ports_spoofed(
         let stop_receiver = stop_receiver.clone();
         let target_ip_u32 = target_ip_u32;
         let local_ip_u32 = local_ip_u32;
-        
-        move || {
-            loop {
-                if stop_receiver.load(Ordering::Relaxed) {
-                    break;
-                }
-                
-                let packet = {
-                    let mut rx_guard = rx.lock();
-                    match rx_guard.next() {
-                        Ok(p) => p.to_vec(),
-                        Err(_) => {
-                            std::thread::sleep(std::time::Duration::from_millis(10));
-                            continue;
-                        }
+
+        move || loop {
+            if stop_receiver.load(Ordering::Relaxed) {
+                break;
+            }
+
+            let packet = {
+                let mut rx_guard = rx.lock();
+                match rx_guard.next() {
+                    Ok(p) => p.to_vec(),
+                    Err(_) => {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                        continue;
                     }
-                };
-                
-                if let Some((src_ip, dst_port, status)) = parse_tcp_response(&packet) {
-                    if src_ip == target_ip_u32 || src_ip == local_ip_u32 {
-                        if sent_packets.contains_key(&dst_port) {
-                            if !responses.contains_key(&dst_port) {
-                                responses.insert(dst_port, status.clone());
-                            }
+                }
+            };
+
+            if let Some((src_ip, dst_port, status)) = parse_tcp_response(&packet) {
+                if src_ip == target_ip_u32 || src_ip == local_ip_u32 {
+                    if sent_packets.contains_key(&dst_port) {
+                        if !responses.contains_key(&dst_port) {
+                            responses.insert(dst_port, status.clone());
                         }
                     }
                 }
@@ -215,8 +232,9 @@ pub(crate) async fn scan_ports_spoofed(
         let src_ip: Ipv4Addr = if let Some(ref ip) = spoof_config.source_ip {
             *ip
         } else if let Some(ref range) = spoof_config.ip_range {
-            random_ip_from_cidr(range)
-                .map_err(|e| SlapperError::Parse(format!("Invalid spoof range '{}': {}", range, e)))?
+            random_ip_from_cidr(range).map_err(|e| {
+                SlapperError::Parse(format!("Invalid spoof range '{}': {}", range, e))
+            })?
         } else {
             local_ip
         };
@@ -387,7 +405,7 @@ pub(crate) async fn scan_ports_spoofed(
                 let mut status = "filtered".to_string();
                 let mut backoff_ms = 1u64;
                 let max_backoff_ms = 50u64;
-                
+
                 while (wait_start.elapsed().as_millis() as u64) < timeout_ms {
                     tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
 
@@ -395,11 +413,11 @@ pub(crate) async fn scan_ports_spoofed(
                         status = resp.clone();
                         break;
                     }
-                    
+
                     // Exponential backoff: double the delay each time
                     backoff_ms = std::cmp::min(backoff_ms * 2, max_backoff_ms);
                 }
-                
+
                 status
             };
 
@@ -413,11 +431,14 @@ pub(crate) async fn scan_ports_spoofed(
                 );
             }
 
-            results.insert(port, PortResult {
+            results.insert(
                 port,
-                status: status.to_string(),
-                service: get_service_name(port).to_string(),
-            });
+                PortResult {
+                    port,
+                    status: status.to_string(),
+                    service: get_service_name(port).to_string(),
+                },
+            );
 
             if let Some(ref pb) = progress {
                 pb.inc(1);
@@ -443,9 +464,9 @@ pub(crate) async fn scan_ports_spoofed(
     }
 
     join_all(handles).await;
-    
+
     stop_receiver.store(true, Ordering::Relaxed);
-    
+
     if let Some(ref pb) = progress {
         pb.finish_and_clear();
     }
@@ -493,7 +514,9 @@ pub(crate) async fn scan_ports_spoofed(
     _spoof_config: SpoofConfig,
     _progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
 ) -> Result<PortScanResults> {
-    Err(SlapperError::Runtime("IP spoofing requires 'stress-testing' feature and Unix system".to_string()))
+    Err(SlapperError::Runtime(
+        "IP spoofing requires 'stress-testing' feature and Unix system".to_string(),
+    ))
 }
 
 #[cfg(test)]

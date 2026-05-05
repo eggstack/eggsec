@@ -122,11 +122,11 @@ impl SessionManager {
     }
 
     pub fn restore_session(&self, app: &mut App, state: &SessionState) {
-        let tab_to_restore = state.current_tab_id.as_ref()
+        let tab_to_restore = state
+            .current_tab_id
+            .as_ref()
             .and_then(|id| Tab::from_stable_id(id))
-            .or_else(|| {
-                state.legacy_current_tab.and_then(Tab::from_index)
-            })
+            .or_else(|| state.legacy_current_tab.and_then(Tab::from_index))
             .unwrap_or(Tab::Recon);
         let _ = app.set_current_tab_if_available(tab_to_restore);
 
@@ -152,9 +152,11 @@ impl SessionManager {
             bookmarks: app.get_bookmarked_tab_ids(),
             theme_name: "dark".to_string(),
             legacy_current_tab: current_tab_visible,
-            legacy_bookmarks: app.get_bookmarked_tab_ids().iter().filter_map(|id| {
-                Tab::from_stable_id(id).and_then(|t| t.visible_index())
-            }).collect(),
+            legacy_bookmarks: app
+                .get_bookmarked_tab_ids()
+                .iter()
+                .filter_map(|id| Tab::from_stable_id(id).and_then(|t| t.visible_index()))
+                .collect(),
         }
     }
 
@@ -266,11 +268,7 @@ mod tests {
 
         let state = SessionState {
             current_tab_id: Some("dashboard".to_string()),
-            bookmarks: vec![
-                "recon".to_string(),
-                "fuzz".to_string(),
-                "waf".to_string(),
-            ],
+            bookmarks: vec!["recon".to_string(), "fuzz".to_string(), "waf".to_string()],
             theme_name: "dark".to_string(),
             legacy_current_tab: None,
             legacy_bookmarks: vec![],
@@ -305,8 +303,14 @@ mod tests {
 
         assert!(app.bookmarks.contains("recon"));
         assert!(app.bookmarks.contains("fuzz"));
-        assert!(!app.bookmarks.contains("nse"), "nse should be dropped when feature is off");
-        assert!(!app.bookmarks.contains("plugin"), "plugin should be dropped when feature is off");
+        assert!(
+            !app.bookmarks.contains("nse"),
+            "nse should be dropped when feature is off"
+        );
+        assert!(
+            !app.bookmarks.contains("plugin"),
+            "plugin should be dropped when feature is off"
+        );
     }
 
     #[test]

@@ -74,11 +74,7 @@ pub struct AuthEngine {
 }
 
 impl AuthEngine {
-    pub fn new(
-        max_attempts: usize,
-        concurrency: usize,
-        timeout_secs: u64,
-    ) -> Result<Self> {
+    pub fn new(max_attempts: usize, concurrency: usize, timeout_secs: u64) -> Result<Self> {
         Ok(Self {
             max_attempts,
             stop_on_lockout: true,
@@ -220,7 +216,10 @@ mod tests {
     #[test]
     fn test_auth_test_type_variants() {
         assert_eq!(AuthTestType::BruteForce, AuthTestType::BruteForce);
-        assert_eq!(AuthTestType::CredentialStuffing, AuthTestType::CredentialStuffing);
+        assert_eq!(
+            AuthTestType::CredentialStuffing,
+            AuthTestType::CredentialStuffing
+        );
         assert_eq!(AuthTestType::AccountLockout, AuthTestType::AccountLockout);
         assert_eq!(AuthTestType::RateLimitBypass, AuthTestType::RateLimitBypass);
         assert_eq!(AuthTestType::MfaBypass, AuthTestType::MfaBypass);

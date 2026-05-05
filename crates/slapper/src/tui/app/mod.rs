@@ -13,6 +13,7 @@ pub(crate) mod runner;
 pub(crate) mod state_update;
 pub(crate) mod task_management;
 
+pub use crate::tui::state::create_shared_history;
 pub use bookmarks::{get_bookmarked_tab_ids, is_bookmarked, toggle_bookmark};
 pub use confirmation::PendingAction;
 pub use input::InputMode;
@@ -20,21 +21,20 @@ pub use key_handler::KeyHandler;
 pub use notifications::{Notification, NotificationSeverity};
 pub use options::GlobalHttpOptions;
 pub use runner::run;
-pub use crate::tui::state::create_shared_history;
 
 pub(crate) mod notifications;
 
-use crossterm::event::KeyCode;
 use super::error::make_friendly_error;
-use crate::tui::help::{HelpManager, HelpOverlay, CommandPalette, HelpContext};
-use crate::tui::session::{SessionManager, SessionConfig};
+use crate::tui::help::{CommandPalette, HelpContext, HelpManager, HelpOverlay};
+use crate::tui::session::{SessionConfig, SessionManager};
 use crate::tui::state::SharedHistory;
 use crate::tui::tabs;
 use crate::tui::tabs::{Tab, TabInput};
 use crate::tui::theme::ThemeManager;
-use dispatch::TabDispatcher;
 use crate::tui::workers;
 use crate::types::OutputFormat;
+use crossterm::event::KeyCode;
+use dispatch::TabDispatcher;
 use task_management::TaskBuilder;
 
 pub struct App {
@@ -132,34 +132,41 @@ impl App {
             None
         };
 
-        let restored_bookmarks: std::collections::HashSet<String> = if let Some(ref state) = restored_state {
-            let mut bookmarks = std::collections::HashSet::new();
-            for bookmark_id in &state.bookmarks {
-                if let Some(tab) = Tab::from_stable_id(bookmark_id) {
-                    bookmarks.insert(tab.stable_id().to_string());
-                }
-            }
-            for &idx in &state.legacy_bookmarks {
-                if let Some(tab) = Tab::from_index(idx) {
-                    if tab.visible_index().is_some() {
+        let restored_bookmarks: std::collections::HashSet<String> =
+            if let Some(ref state) = restored_state {
+                let mut bookmarks = std::collections::HashSet::new();
+                for bookmark_id in &state.bookmarks {
+                    if let Some(tab) = Tab::from_stable_id(bookmark_id) {
                         bookmarks.insert(tab.stable_id().to_string());
                     }
                 }
-            }
-            bookmarks
-        } else {
-            std::collections::HashSet::new()
-        };
+                for &idx in &state.legacy_bookmarks {
+                    if let Some(tab) = Tab::from_index(idx) {
+                        if tab.visible_index().is_some() {
+                            bookmarks.insert(tab.stable_id().to_string());
+                        }
+                    }
+                }
+                bookmarks
+            } else {
+                std::collections::HashSet::new()
+            };
 
-        let restored_current_tab = restored_state.as_ref()
-            .and_then(|s| s.current_tab_id.as_ref().and_then(|id| Tab::from_stable_id(id)))
+        let restored_current_tab = restored_state
+            .as_ref()
+            .and_then(|s| {
+                s.current_tab_id
+                    .as_ref()
+                    .and_then(|id| Tab::from_stable_id(id))
+            })
             .or_else(|| {
-                restored_state.as_ref()
+                restored_state
+                    .as_ref()
                     .and_then(|s| s.legacy_current_tab)
                     .and_then(Tab::from_index)
             });
 
-        Self {
+        let mut app = Self {
             current_tab: restored_current_tab.unwrap_or(Tab::Recon),
             should_quit: false,
             mode: InputMode::Normal,
@@ -234,7 +241,13 @@ impl App {
             show_quick_switch: false,
             quick_switch_query: String::new(),
             quick_switch_selected: 0,
-        }
+        };
+
+        // Sync settings with current theme
+        let theme = app.theme_manager.current().clone();
+        app.settings.sync_with_theme(&theme);
+
+        app
     }
 
     pub fn cycle_export_format(&mut self) {
@@ -268,7 +281,9 @@ impl App {
             Tab::Recon => tabs::TabState::state(&self.recon) == tabs::AppState::Running,
             Tab::Load => tabs::TabState::state(&self.load) == tabs::AppState::Running,
             Tab::ScanPorts => tabs::TabState::state(&self.scan_ports) == tabs::AppState::Running,
-            Tab::ScanEndpoints => tabs::TabState::state(&self.scan_endpoints) == tabs::AppState::Running,
+            Tab::ScanEndpoints => {
+                tabs::TabState::state(&self.scan_endpoints) == tabs::AppState::Running
+            }
             Tab::Fingerprint => tabs::TabState::state(&self.fingerprint) == tabs::AppState::Running,
             Tab::Fuzz => tabs::TabState::state(&self.fuzz) == tabs::AppState::Running,
             Tab::Waf => tabs::TabState::state(&self.waf) == tabs::AppState::Running,
@@ -308,7 +323,9 @@ impl App {
             #[cfg(not(feature = "database"))]
             Tab::Storage => false,
             #[cfg(feature = "external-integrations")]
-            Tab::Integrations => tabs::TabState::state(&self.integrations) == tabs::AppState::Running,
+            Tab::Integrations => {
+                tabs::TabState::state(&self.integrations) == tabs::AppState::Running
+            }
             #[cfg(not(feature = "external-integrations"))]
             Tab::Integrations => false,
             #[cfg(feature = "finding-workflow")]
@@ -512,6 +529,7 @@ impl App {
             return;
         }
         if self.mode == InputMode::Normal && self.dispatcher_mut().is_at_left_edge() {
+            self.prev_tab();
             return;
         }
         let _ = self.dispatcher_mut().handle_left();
@@ -522,6 +540,7 @@ impl App {
             return;
         }
         if self.mode == InputMode::Normal && self.dispatcher_mut().is_at_right_edge() {
+            self.next_tab();
             return;
         }
         let _ = self.dispatcher_mut().handle_right();
@@ -635,32 +654,44 @@ impl App {
     }
 
     pub fn handle_word_forward(&mut self) {
-        if self.show_help { return; }
+        if self.show_help {
+            return;
+        }
         self.dispatcher_mut().handle_word_forward();
     }
 
     pub fn handle_word_backward(&mut self) {
-        if self.show_help { return; }
+        if self.show_help {
+            return;
+        }
         self.dispatcher_mut().handle_word_backward();
     }
 
     pub fn handle_home(&mut self) {
-        if self.show_help { return; }
+        if self.show_help {
+            return;
+        }
         self.dispatcher_mut().handle_home();
     }
 
     pub fn handle_end(&mut self) {
-        if self.show_help { return; }
+        if self.show_help {
+            return;
+        }
         self.dispatcher_mut().handle_end();
     }
 
     pub fn handle_top(&mut self) {
-        if self.show_help { return; }
+        if self.show_help {
+            return;
+        }
         self.dispatcher_mut().handle_top();
     }
 
     pub fn handle_bottom(&mut self) {
-        if self.show_help { return; }
+        if self.show_help {
+            return;
+        }
         self.dispatcher_mut().handle_bottom();
     }
 
@@ -708,7 +739,7 @@ impl App {
     }
 
     pub fn set_dark_mode(&mut self, enabled: bool) {
-        let target_mode = if enabled { "light" } else { "dark" };
+        let target_mode = if enabled { "dark" } else { "light" };
         if self.theme_manager.set_theme(target_mode) {
             self.needs_redraw = true;
         }
@@ -746,12 +777,13 @@ impl App {
         }
 
         use crate::tui::utils::fuzzy::fuzzy_score;
-        let mut scored: Vec<(u32, &'static Tab)> = Tab::all().iter()
+        let mut scored: Vec<(u32, &'static Tab)> = Tab::all()
+            .iter()
             .filter_map(|tab| {
                 let score = fuzzy_score(&tab.title().to_lowercase(), &query)
                     .max(fuzzy_score(&tab.stable_id().to_lowercase(), &query))
                     .max(fuzzy_score(&tab.description().to_lowercase(), &query));
-                
+
                 if score > 0 {
                     Some((score, tab))
                 } else {
@@ -759,7 +791,7 @@ impl App {
                 }
             })
             .collect();
-        
+
         scored.sort_by(|a, b| b.0.cmp(&a.0));
         scored.into_iter().map(|(_, tab)| tab).collect()
     }
@@ -882,10 +914,7 @@ mod tests {
 
     #[test]
     fn test_pending_action_message() {
-        assert_eq!(
-            PendingAction::ResetTab.message().0,
-            "Confirm Reset"
-        );
+        assert_eq!(PendingAction::ResetTab.message().0, "Confirm Reset");
         assert_eq!(
             PendingAction::SaveSettings.message().0,
             "Confirm Save Settings"

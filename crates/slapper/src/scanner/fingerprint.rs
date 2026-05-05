@@ -1,11 +1,11 @@
-
+use crate::error::Result;
 use crate::utils::parsing::parse_ports;
 use crate::utils::strip_controls;
-use smallvec::SmallVec;
-use crate::error::Result;
+use dashmap::DashMap;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -13,7 +13,6 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-use dashmap::DashMap;
 
 use super::udp_fingerprint::{fingerprint_udp_services, get_default_udp_ports};
 use crate::cli::FingerprintArgs;
@@ -157,9 +156,16 @@ pub async fn run_cli(args: FingerprintArgs, config: &SlapperConfig) -> Result<()
         }
     } else {
         let ports = parse_ports(&args.ports)?;
-        let results =
-            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency, None, None)
-                .await?;
+        let results = fingerprint_services(
+            &args.host,
+            ports,
+            Duration::from_secs(timeout_secs),
+            false,
+            args.concurrency,
+            None,
+            None,
+        )
+        .await?;
 
         if args.json {
             println!("{}", serde_json::to_string_pretty(&results)?);
@@ -172,7 +178,11 @@ pub async fn run_cli(args: FingerprintArgs, config: &SlapperConfig) -> Result<()
 }
 
 #[cfg(feature = "tool-api")]
-pub async fn run_cli_with_callback<F>(args: FingerprintArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+pub async fn run_cli_with_callback<F>(
+    args: FingerprintArgs,
+    config: &SlapperConfig,
+    mut callback: F,
+) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {
@@ -203,9 +213,16 @@ where
         }
     } else {
         let ports = parse_ports(&args.ports)?;
-        let results =
-            fingerprint_services(&args.host, ports, Duration::from_secs(timeout_secs), false, args.concurrency, None, None)
-                .await?;
+        let results = fingerprint_services(
+            &args.host,
+            ports,
+            Duration::from_secs(timeout_secs),
+            false,
+            args.concurrency,
+            None,
+            None,
+        )
+        .await?;
 
         for fp in &results.results {
             callback(crate::tool::response::Finding::from(fp.clone()));
@@ -266,10 +283,10 @@ pub async fn fingerprint_services(
         let handle = tokio::spawn(async move {
             if let Some(fp) = fingerprint_port(&host, port, timeout_dur).await {
                 let should_insert = match max_results {
-Some(limit) => {
-                let old = results_count.fetch_add(1, Ordering::Relaxed);
-                old < limit as u64
-            }
+                    Some(limit) => {
+                        let old = results_count.fetch_add(1, Ordering::Relaxed);
+                        old < limit as u64
+                    }
                     None => true,
                 };
                 if should_insert {
@@ -376,7 +393,12 @@ async fn fingerprint_port(
     };
 
     for (probe_name, probe_data, match_pattern) in probes_to_try {
-        let stream = match crate::utils::network::connect_with_nodelay_timeout(&addr, timeout_duration).await {
+        let stream = match crate::utils::network::connect_with_nodelay_timeout(
+            &addr,
+            timeout_duration,
+        )
+        .await
+        {
             Ok(s) => s,
             Err(_) => continue,
         };

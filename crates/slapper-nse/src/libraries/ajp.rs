@@ -70,7 +70,7 @@ pub fn register_ajp_library(lua: &Lua) -> LuaResult<()> {
         match TcpStream::connect_timeout(
             &addr
                 .parse()
-                .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 8009))),
+                .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 8009))),
             Duration::from_secs(5),
         ) {
             Ok(mut stream) => {
@@ -148,7 +148,7 @@ pub fn register_ajp_library(lua: &Lua) -> LuaResult<()> {
             match TcpStream::connect_timeout(
                 &addr
                     .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 8009))),
+                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 8009))),
                 Duration::from_secs(5),
             ) {
                 Ok(mut stream) => {

@@ -69,7 +69,9 @@ pub fn mock_aws_waf_response(path: &str) -> Mock {
 pub fn mock_slow_response(path: &str, delay_ms: u64) -> Mock {
     Mock::given(method("GET"))
         .and(path_matcher(path))
-        .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_millis(delay_ms)))
+        .respond_with(
+            ResponseTemplate::new(200).set_delay(std::time::Duration::from_millis(delay_ms)),
+        )
 }
 
 /// Create a mock that returns JSON.
@@ -102,10 +104,9 @@ pub fn mock_post_ok(path: &str) -> Mock {
 pub fn mock_sqli_vulnerable(path: &str) -> Mock {
     Mock::given(method("GET"))
         .and(path_matcher(path))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string(r#"{"error": "You have an error in your SQL syntax near '1' at line 1"}"#),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"error": "You have an error in your SQL syntax near '1' at line 1"}"#,
+        ))
 }
 
 /// Create a mock that simulates XSS vulnerability (reflects input).
@@ -122,10 +123,7 @@ pub fn mock_xss_vulnerable(path: &str) -> Mock {
 pub fn mock_traversal_vulnerable(path: &str) -> Mock {
     Mock::given(method("GET"))
         .and(path_matcher(path))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string("root:x:0:0:root:/root:/bin/bash"),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_string("root:x:0:0:root:/root:/bin/bash"))
 }
 
 /// Create a mock that simulates SSRF vulnerability.
@@ -143,8 +141,7 @@ pub fn mock_ssti_vulnerable(path: &str) -> Mock {
     Mock::given(method("GET"))
         .and(path_matcher(path))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string(r#"Hello 49"#),  // 7*7 = 49
+            ResponseTemplate::new(200).set_body_string(r#"Hello 49"#), // 7*7 = 49
         )
 }
 

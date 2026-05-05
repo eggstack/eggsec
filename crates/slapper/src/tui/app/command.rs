@@ -74,7 +74,8 @@ impl super::App {
                 palette.scroll_offset = 0;
             }
         } else {
-            let mut palette = CommandPalette::new(self.help_manager.get_command_palette_entries().clone());
+            let mut palette =
+                CommandPalette::new(self.help_manager.get_command_palette_entries().clone());
             palette.visible = true;
             self.command_palette = Some(palette);
         }
@@ -83,9 +84,9 @@ impl super::App {
     pub(super) fn update_command_palette_query(&mut self, query: &str) {
         if let Some(ref mut palette) = self.command_palette {
             palette.query = query.to_string();
-                palette.results = Arc::new(self.help_manager.search_commands(query));
-                filter_commands_by_availability(&mut palette.results);
-                palette.selected_index = 0;
+            palette.results = Arc::new(self.help_manager.search_commands(query));
+            filter_commands_by_availability(&mut palette.results);
+            palette.selected_index = 0;
             palette.scroll_offset = 0;
         }
     }

@@ -69,7 +69,11 @@ impl SchemaDiscovery {
         Ok(results)
     }
 
-    pub async fn discover_single(&self, base_url: &str, path: &str) -> Result<SchemaDiscoveryResult> {
+    pub async fn discover_single(
+        &self,
+        base_url: &str,
+        path: &str,
+    ) -> Result<SchemaDiscoveryResult> {
         let base = base_url.trim_end_matches('/');
         let url = format!("{}{}", base, path.trim_start_matches('/'));
         self.check_endpoint(&url).await
@@ -123,7 +127,10 @@ impl SchemaDiscovery {
     }
 
     fn detect_schema_type(body: &str, content_type: &str) -> SchemaType {
-        if content_type.contains("graphql") || body.contains("\"__schema\"") || body.contains("IntrospectionQuery") {
+        if content_type.contains("graphql")
+            || body.contains("\"__schema\"")
+            || body.contains("IntrospectionQuery")
+        {
             return SchemaType::GraphQL;
         }
 
@@ -145,10 +152,20 @@ impl SchemaDiscovery {
 
         if content_type.contains("json") {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
-                if json.get("openapi").and_then(|v| v.as_str()).map(|s| s.starts_with('3')).unwrap_or(false) {
+                if json
+                    .get("openapi")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.starts_with('3'))
+                    .unwrap_or(false)
+                {
                     return SchemaType::OpenApi3;
                 }
-                if json.get("swagger").and_then(|v| v.as_str()).map(|s| s.starts_with('2')).unwrap_or(false) {
+                if json
+                    .get("swagger")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.starts_with('2'))
+                    .unwrap_or(false)
+                {
                     return SchemaType::Swagger2;
                 }
             }
@@ -181,7 +198,10 @@ impl SchemaDiscovery {
     }
 }
 
-pub async fn discover_schema(base_url: &str, timeout_secs: u64) -> Result<Vec<SchemaDiscoveryResult>> {
+pub async fn discover_schema(
+    base_url: &str,
+    timeout_secs: u64,
+) -> Result<Vec<SchemaDiscoveryResult>> {
     let discovery = SchemaDiscovery::new(timeout_secs)?;
     discovery.discover(base_url).await
 }

@@ -6,13 +6,13 @@ use async_trait::async_trait;
 use chrono::Utc;
 
 use crate::error::SlapperError;
-use slapper_nse::NseExecutor;
+use crate::output::AgentSeverity;
 use crate::tool::traits::{
     AttackSurface, CapabilityExample, ParameterDef, ParameterType, SecurityTool, ToolCapability,
     ToolCategory,
 };
-use crate::output::AgentSeverity;
 use crate::tool::{ToolRequest, ToolResponse, ToolResult};
+use slapper_nse::NseExecutor;
 
 #[derive(Clone)]
 pub struct NseTool {
@@ -91,11 +91,10 @@ impl SecurityTool for NseTool {
 
             let _ = executor.set_script_args(&script_args);
 
-            let script_content = match executor.load_script(&script_for_executor) { Ok(content) => {
-                content
-            } _ => {
-                get_builtin_script(&script_for_executor)
-            }};
+            let script_content = match executor.load_script(&script_for_executor) {
+                Ok(content) => content,
+                _ => get_builtin_script(&script_for_executor),
+            };
 
             match executor.run_script(&script_content) {
                 Ok(r) => Ok(r),

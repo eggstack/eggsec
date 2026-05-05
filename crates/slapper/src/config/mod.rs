@@ -56,9 +56,9 @@ pub use scan::{
 };
 pub use scope::{Scope, ScopeError, ScopeRule, TargetScope};
 pub use settings::{
-    AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig, ConfigError,
-    EmailConfigEntry, PagerDutyConfigEntry, PathsConfig, ProxyConfigEntry, ReconConfig,
-    RemoteConfig, ScheduledScan, SlackConfigEntry, SlapperConfig, WebhookConfigEntry,
+    AiConfig, AlertChannelConfigEntry, AlertChannelsConfig, AllowedWorker, CacheConfig,
+    ConfigError, EmailConfigEntry, PagerDutyConfigEntry, PathsConfig, ProxyConfigEntry,
+    ReconConfig, RemoteConfig, ScheduledScan, SlackConfigEntry, SlapperConfig, WebhookConfigEntry,
 };
 
 pub const ENV_PREFIX: &str = "SLAPPER_";

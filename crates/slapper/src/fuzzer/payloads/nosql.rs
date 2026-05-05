@@ -70,10 +70,14 @@ pub fn get_payloads() -> Vec<Payload> {
     );
 
     for p in &mut payloads {
-        if !p.tags.contains(&"mongodb".to_string()) && !p.tags.contains(&"nosql".to_string())
-            && (p.payload.contains("redis") || p.payload.contains("couch") || p.payload.contains("elastic")) {
-                p.tags.push("nosql".to_string());
-            }
+        if !p.tags.contains(&"mongodb".to_string())
+            && !p.tags.contains(&"nosql".to_string())
+            && (p.payload.contains("redis")
+                || p.payload.contains("couch")
+                || p.payload.contains("elastic"))
+        {
+            p.tags.push("nosql".to_string());
+        }
     }
 
     payloads
@@ -111,7 +115,9 @@ mod tests {
     fn contains_redis_commands() {
         let payloads = get_payloads();
         let has_redis = payloads.iter().any(|p| {
-            p.payload.contains("GET") || p.payload.contains("KEYS") || p.payload.contains("FLUSHALL")
+            p.payload.contains("GET")
+                || p.payload.contains("KEYS")
+                || p.payload.contains("FLUSHALL")
         });
         assert!(has_redis, "Must contain Redis commands");
     }

@@ -1,4 +1,3 @@
-
 #![allow(dead_code)]
 
 use crate::error::{Result, SlapperError};
@@ -60,9 +59,9 @@ impl SocksProxy {
         match self.version {
             SocksVersion::V4a => self.connect_socks4a(domain, port).await,
             SocksVersion::V5 => self.connect_socks5_domain(domain, port).await,
-            SocksVersion::V4 => {
-                Err(SlapperError::Proxy("SOCKS4 requires IP address, use SOCKS4a for domain support".to_string()))
-            }
+            SocksVersion::V4 => Err(SlapperError::Proxy(
+                "SOCKS4 requires IP address, use SOCKS4a for domain support".to_string(),
+            )),
         }
     }
 
@@ -73,7 +72,11 @@ impl SocksProxy {
 
         let ip = match target.ip() {
             IpAddr::V4(ip) => ip,
-            IpAddr::V6(_) => return Err(SlapperError::Proxy("SOCKS4 does not support IPv6".to_string())),
+            IpAddr::V6(_) => {
+                return Err(SlapperError::Proxy(
+                    "SOCKS4 does not support IPv6".to_string(),
+                ))
+            }
         };
 
         let mut request = vec![
@@ -182,10 +185,15 @@ impl SocksProxy {
                 self.socks5_auth(stream).await?;
             }
             0xFF => {
-                return Err(SlapperError::Proxy("SOCKS5 proxy: no acceptable authentication method".to_string()));
+                return Err(SlapperError::Proxy(
+                    "SOCKS5 proxy: no acceptable authentication method".to_string(),
+                ));
             }
             method => {
-                return Err(SlapperError::Proxy(format!("SOCKS5 proxy: unsupported auth method 0x{:02X}", method)));
+                return Err(SlapperError::Proxy(format!(
+                    "SOCKS5 proxy: unsupported auth method 0x{:02X}",
+                    method
+                )));
             }
         }
 
@@ -203,7 +211,9 @@ impl SocksProxy {
             .ok_or_else(|| SlapperError::Proxy("Password required".to_string()))?;
 
         if username.len() > 255 || password.len() > 255 {
-            return Err(SlapperError::Proxy("Username or password too long".to_string()));
+            return Err(SlapperError::Proxy(
+                "Username or password too long".to_string(),
+            ));
         }
 
         let mut request = vec![0x01, username.len() as u8];
@@ -217,7 +227,9 @@ impl SocksProxy {
         stream.read_exact(&mut response).await?;
 
         if response[1] != 0x00 {
-            return Err(SlapperError::Proxy("SOCKS5 authentication failed".to_string()));
+            return Err(SlapperError::Proxy(
+                "SOCKS5 authentication failed".to_string(),
+            ));
         }
 
         Ok(())
@@ -257,7 +269,11 @@ impl SocksProxy {
                 stream.read_exact(&mut len).await?;
                 len[0] as usize + 1
             }
-            _ => return Err(SlapperError::Proxy("Invalid address type in SOCKS5 response".to_string())),
+            _ => {
+                return Err(SlapperError::Proxy(
+                    "Invalid address type in SOCKS5 response".to_string(),
+                ))
+            }
         };
 
         let mut remaining = vec![0u8; bind_addr_len + 2];
@@ -299,7 +315,11 @@ impl SocksProxy {
                 stream.read_exact(&mut len).await?;
                 len[0] as usize + 1
             }
-            _ => return Err(SlapperError::Proxy("Invalid address type in SOCKS5 response".to_string())),
+            _ => {
+                return Err(SlapperError::Proxy(
+                    "Invalid address type in SOCKS5 response".to_string(),
+                ))
+            }
         };
 
         let mut remaining = vec![0u8; bind_addr_len + 2];
@@ -427,7 +447,7 @@ mod tests {
         assert_eq!(proxy.timeout, Duration::from_secs(30));
     }
 
-#[test]
+    #[test]
     fn test_socks_proxy_with_auth() {
         let addr: SocketAddr = "127.0.0.1:1080".parse().unwrap();
         let proxy = SocksProxy::new(SocksVersion::V5, addr)
@@ -449,8 +469,7 @@ mod tests {
     #[test]
     fn test_socks_proxy_with_timeout() {
         let addr: SocketAddr = "127.0.0.1:1080".parse().unwrap();
-        let proxy = SocksProxy::new(SocksVersion::V5, addr)
-            .with_timeout(Duration::from_secs(10));
+        let proxy = SocksProxy::new(SocksVersion::V5, addr).with_timeout(Duration::from_secs(10));
         assert_eq!(proxy.timeout, Duration::from_secs(10));
     }
 

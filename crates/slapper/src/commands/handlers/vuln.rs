@@ -54,7 +54,7 @@ async fn handle_vuln_prioritize(args: crate::cli::vuln::VulnPrioritizeArgs) -> R
     if let Some(exp) = args.exploitability {
         println!("  Exploitability: {}", exp);
     }
-    
+
     let risk = RiskScore::new(
         args.cvss.unwrap_or(0.0),
         args.asset_criticality.unwrap_or(0.0),
@@ -85,7 +85,7 @@ async fn handle_vuln_remediate(args: crate::cli::vuln::VulnRemediateArgs) -> Res
         println!("  ID: {}", id);
     }
     println!("  Severity: {}", args.severity);
-    
+
     let remediation = Remediation::for_finding(
         args.id.as_deref().unwrap_or("default"),
         &args.title,

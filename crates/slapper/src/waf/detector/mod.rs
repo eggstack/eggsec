@@ -1,12 +1,12 @@
-pub mod types;
-pub mod detect;
 pub mod block_check;
 pub mod compare;
+pub mod detect;
+pub mod types;
 
 #[cfg(test)]
 mod tests;
 
-pub use types::{WafDetectionResult, ResponseDiff};
+pub use types::{ResponseDiff, WafDetectionResult};
 
 use crate::error::Result;
 use crate::utils::create_insecure_client_with_options;

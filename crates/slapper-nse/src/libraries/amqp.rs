@@ -40,7 +40,7 @@ pub fn register_amqp_library(lua: &Lua) -> LuaResult<()> {
                 match TcpStream::connect_timeout(
                     &addr
                         .parse()
-                        .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 5672))),
+                        .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 5672))),
                     Duration::from_secs(5),
                 ) {
                     Ok(_stream) => {

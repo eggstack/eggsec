@@ -62,7 +62,10 @@ impl FuzzEngine {
         self.run_concurrent_inner(payloads, mode_name, false).await
     }
 
-    pub(crate) async fn run_burst_with_session(&mut self, payloads: Vec<Payload>) -> Result<Vec<FuzzResult>> {
+    pub(crate) async fn run_burst_with_session(
+        &mut self,
+        payloads: Vec<Payload>,
+    ) -> Result<Vec<FuzzResult>> {
         let results = self.run_concurrent_inner(payloads, "burst", true).await?;
 
         if self.args.session {
@@ -127,8 +130,12 @@ impl FuzzEngine {
                 .await;
 
                 match result {
-                    Ok(r) => { results.insert(counter.fetch_add(1, Ordering::Relaxed), r); }
-                    Err(e) => { tracing::warn!("Fuzz request failed: {:?}", e); }
+                    Ok(r) => {
+                        results.insert(counter.fetch_add(1, Ordering::Relaxed), r);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Fuzz request failed: {:?}", e);
+                    }
                 }
 
                 if let Some(ref pb) = progress {
@@ -189,11 +196,8 @@ impl FuzzEngine {
     ) -> Result<Vec<FuzzResult>> {
         use super::super::rate_limit::AdaptiveRateLimiter;
 
-        let limiter = AdaptiveRateLimiter::new(
-            self.args.concurrency as u64,
-            1,
-            self.args.timeout * 1000,
-        );
+        let limiter =
+            AdaptiveRateLimiter::new(self.args.concurrency as u64, 1, self.args.timeout * 1000);
 
         let mut results = Vec::with_capacity(payloads.len());
 
@@ -234,7 +238,11 @@ impl FuzzEngine {
         Ok(results)
     }
 
-    pub(crate) async fn send_fuzz_request(&self, payload: &Payload, method: Method) -> Result<FuzzResult> {
+    pub(crate) async fn send_fuzz_request(
+        &self,
+        payload: &Payload,
+        method: Method,
+    ) -> Result<FuzzResult> {
         let url = self.build_fuzz_url(&payload.payload);
 
         let start = Instant::now();

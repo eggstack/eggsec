@@ -14,9 +14,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::SlapperError;
-use crate::tool::traits::{
-    SecurityTool, ToolCapability, ToolCategory,
-};
+use crate::tool::traits::{SecurityTool, ToolCapability, ToolCategory};
 use crate::tool::{ToolRequest, ToolResponse, ToolResult};
 
 const INTERACTSH_URL: &str = "https://interactsh.com";
@@ -80,7 +78,10 @@ impl OastTool {
         Ok(body.trim().to_string())
     }
 
-    pub async fn poll_interactions(&self, session_id: &str) -> Result<Vec<Interaction>, SlapperError> {
+    pub async fn poll_interactions(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<Interaction>, SlapperError> {
         let response = self
             .client
             .get(&format!(
@@ -100,17 +101,28 @@ impl OastTool {
             return Ok(Vec::new());
         }
 
-        let interactions: Vec<InteractshInteraction> = serde_json::from_str(&body)
-            .map_err(|e| SlapperError::Parse(e.to_string()))?;
+        let interactions: Vec<InteractshInteraction> =
+            serde_json::from_str(&body).map_err(|e| SlapperError::Parse(e.to_string()))?;
 
         let parsed: Vec<Interaction> = interactions
             .into_iter()
             .map(|i| Interaction {
                 id: Uuid::new_v4().to_string(),
                 timestamp: chrono::Utc::now(),
-                interaction_type: i.interactions.first().map(|x| x.type_field.clone()).unwrap_or_default(),
-                full_url: i.interactions.first().map(|x| x.full_url.clone()).unwrap_or_default(),
-                remote_address: i.interactions.first().and_then(|x| x.remote_address.clone()),
+                interaction_type: i
+                    .interactions
+                    .first()
+                    .map(|x| x.type_field.clone())
+                    .unwrap_or_default(),
+                full_url: i
+                    .interactions
+                    .first()
+                    .map(|x| x.full_url.clone())
+                    .unwrap_or_default(),
+                remote_address: i
+                    .interactions
+                    .first()
+                    .and_then(|x| x.remote_address.clone()),
                 raw_request: i.interactions.first().and_then(|x| x.raw_request.clone()),
                 payload: None,
             })
@@ -131,17 +143,10 @@ impl OastTool {
     }
 
     pub fn generate_oast_url(&self, session_id: &str, interaction_id: &str) -> String {
-        format!(
-            "{}/{}",
-            session_id.replace("-", ""),
-            interaction_id
-        )
+        format!("{}/{}", session_id.replace("-", ""), interaction_id)
     }
 
-    pub async fn correlate_interactions(
-        &self,
-        payloads: &[String],
-    ) -> Vec<(String, Interaction)> {
+    pub async fn correlate_interactions(&self, payloads: &[String]) -> Vec<(String, Interaction)> {
         let interactions = self.interactions.read().await;
         let mut correlations = Vec::new();
 
@@ -287,8 +292,14 @@ impl SecurityTool for OastTool {
                         for payload in &payloads {
                             if interaction.full_url.contains(payload) {
                                 let mut metadata = HashMap::new();
-                                metadata.insert("interaction".to_string(), serde_json::json!(interaction.full_url));
-                                metadata.insert("triggered_payload".to_string(), serde_json::json!(payload));
+                                metadata.insert(
+                                    "interaction".to_string(),
+                                    serde_json::json!(interaction.full_url),
+                                );
+                                metadata.insert(
+                                    "triggered_payload".to_string(),
+                                    serde_json::json!(payload),
+                                );
                                 findings.push(crate::tool::response::Finding {
                                     id: Uuid::new_v4().to_string(),
                                     finding_type: crate::tool::response::FindingType::Vulnerability,

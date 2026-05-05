@@ -1,6 +1,6 @@
+use crate::tui::tabs::HistoryTab;
 use crate::tui::tabs::{AppState, TabInput, TabState};
 use parking_lot::MutexGuard;
-use crate::tui::tabs::HistoryTab;
 
 pub enum TabDispatcher<'a> {
     Standard(&'a mut dyn TabInput),
@@ -128,6 +128,20 @@ impl<'a> TabDispatcher<'a> {
         }
     }
 
+    pub fn handle_paste(&mut self, text: &str) {
+        match self {
+            Self::Standard(t) => t.handle_paste(text),
+            Self::LockedHistory(h) => h.handle_paste(text),
+        }
+    }
+
+    pub fn handle_copy(&mut self) -> Option<String> {
+        match self {
+            Self::Standard(t) => t.handle_copy(),
+            Self::LockedHistory(h) => h.handle_copy(),
+        }
+    }
+
     pub fn handle_autocomplete(&mut self) -> bool {
         match self {
             Self::Standard(t) => t.handle_autocomplete(),
@@ -174,13 +188,6 @@ impl<'a> TabDispatcher<'a> {
         match self {
             Self::Standard(t) => t.page_down(page_size),
             Self::LockedHistory(h) => h.page_down(page_size),
-        }
-    }
-
-    pub fn handle_paste(&mut self, text: &str) {
-        match self {
-            Self::Standard(t) => t.handle_paste(text),
-            Self::LockedHistory(h) => h.handle_paste(text),
         }
     }
 

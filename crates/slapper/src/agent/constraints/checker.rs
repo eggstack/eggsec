@@ -53,8 +53,15 @@ impl ConstraintViolation {
 
     pub fn message(&self) -> String {
         match self {
-            ConstraintViolation::ActionForbidden { action, target, reason } => {
-                format!("Action '{}' on '{}' is forbidden: {}", action, target, reason)
+            ConstraintViolation::ActionForbidden {
+                action,
+                target,
+                reason,
+            } => {
+                format!(
+                    "Action '{}' on '{}' is forbidden: {}",
+                    action, target, reason
+                )
             }
             ConstraintViolation::TargetForbidden { target, reason } => {
                 format!("Target '{}' is forbidden: {}", target, reason)
@@ -62,7 +69,10 @@ impl ConstraintViolation {
             ConstraintViolation::PayloadForbidden { payload, reason } => {
                 format!("Payload '{}' is forbidden: {}", payload, reason)
             }
-            ConstraintViolation::OutsideOffPeakWindow { current_hour, allowed_windows } => {
+            ConstraintViolation::OutsideOffPeakWindow {
+                current_hour,
+                allowed_windows,
+            } => {
                 format!(
                     "Current hour {} is outside allowed off-peak windows: {}",
                     current_hour, allowed_windows
@@ -75,7 +85,10 @@ impl ConstraintViolation {
                 )
             }
             ConstraintViolation::RateLimitExceeded { current, limit } => {
-                format!("Rate limit exceeded: {} requests vs limit of {}", current, limit)
+                format!(
+                    "Rate limit exceeded: {} requests vs limit of {}",
+                    current, limit
+                )
             }
             ConstraintViolation::ApprovalRequired { action } => {
                 format!("Action '{}' requires approval before execution", action)
@@ -90,18 +103,22 @@ pub struct ConstraintChecker {
 }
 
 impl ConstraintChecker {
-pub fn new(constraints: OperationalConstraints) -> Self {
-    Self {
-        constraints,
-        request_counts: Arc::new(Mutex::new(std::collections::HashMap::new())),
+    pub fn new(constraints: OperationalConstraints) -> Self {
+        Self {
+            constraints,
+            request_counts: Arc::new(Mutex::new(std::collections::HashMap::new())),
+        }
     }
-}
 
     pub fn with_constraints(constraints: OperationalConstraints) -> Self {
         Self::new(constraints)
     }
 
-    pub fn evaluate_action(&self, action_type: &str, target: &str) -> Result<(), ConstraintViolation> {
+    pub fn evaluate_action(
+        &self,
+        action_type: &str,
+        target: &str,
+    ) -> Result<(), ConstraintViolation> {
         if !self.constraints.is_action_allowed(action_type, target) {
             let reason = self
                 .constraints
@@ -175,7 +192,10 @@ pub fn new(constraints: OperationalConstraints) -> Self {
         Ok(())
     }
 
-    pub fn evaluate_scan_depth(&self, requested: ScanDepth) -> Result<ScanDepth, ConstraintViolation> {
+    pub fn evaluate_scan_depth(
+        &self,
+        requested: ScanDepth,
+    ) -> Result<ScanDepth, ConstraintViolation> {
         let off_peak = &self.constraints.off_peak_config;
 
         if off_peak.allowed_scan_depths.contains(&requested) {
@@ -215,7 +235,12 @@ pub fn new(constraints: OperationalConstraints) -> Self {
         Ok(())
     }
 
-    pub fn evaluate_all(&self, action_type: &str, target: &str, payload: Option<&str>) -> Vec<ConstraintViolation> {
+    pub fn evaluate_all(
+        &self,
+        action_type: &str,
+        target: &str,
+        payload: Option<&str>,
+    ) -> Vec<ConstraintViolation> {
         let mut violations = Vec::new();
 
         if let Err(v) = self.evaluate_action(action_type, target) {
@@ -251,7 +276,10 @@ pub fn new(constraints: OperationalConstraints) -> Self {
             if !window.is_in_window(&now) {
                 violations.push(ConstraintViolation::OutsideOffPeakWindow {
                     current_hour: now.hour() as i32,
-                    allowed_windows: format!("{:02}:00-{:02}:00", window.start_hour, window.end_hour),
+                    allowed_windows: format!(
+                        "{:02}:00-{:02}:00",
+                        window.start_hour, window.end_hour
+                    ),
                 });
             }
         }
@@ -278,14 +306,16 @@ impl Default for ConstraintChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::constraints::{DoNotDoList, ForbiddenAction, OffPeakConfig, OperationalConstraints};
+    use crate::agent::constraints::{
+        DoNotDoList, ForbiddenAction, OffPeakConfig, OperationalConstraints,
+    };
     use crate::agent::portfolio::{OffPeakWindow, ScanDepth};
 
     fn create_test_constraints() -> OperationalConstraints {
         let mut do_not_do = DoNotDoList::new();
         do_not_do.add_forbidden_action(
             ForbiddenAction::new("destructive", "Cannot run destructive scans")
-                .with_severity(Severity::Critical)
+                .with_severity(Severity::Critical),
         );
         do_not_do.add_forbidden_target("192.168.*");
         do_not_do.add_forbidden_payload("rm -rf");
@@ -318,7 +348,10 @@ mod tests {
         let checker = ConstraintChecker::new(create_test_constraints());
         let result = checker.evaluate_action("destructive", "https://example.com");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ConstraintViolation::ActionForbidden { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConstraintViolation::ActionForbidden { .. }
+        ));
     }
 
     #[test]
@@ -326,7 +359,10 @@ mod tests {
         let checker = ConstraintChecker::new(create_test_constraints());
         let result = checker.evaluate_target("192.168.1.1");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ConstraintViolation::TargetForbidden { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConstraintViolation::TargetForbidden { .. }
+        ));
     }
 
     #[test]
@@ -341,7 +377,10 @@ mod tests {
         let checker = ConstraintChecker::new(create_test_constraints());
         let result = checker.evaluate_payload("rm -rf /");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ConstraintViolation::PayloadForbidden { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConstraintViolation::PayloadForbidden { .. }
+        ));
     }
 
     #[test]
@@ -363,7 +402,10 @@ mod tests {
         let checker = ConstraintChecker::new(create_test_constraints());
         let result = checker.evaluate_off_peak(12);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ConstraintViolation::OutsideOffPeakWindow { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConstraintViolation::OutsideOffPeakWindow { .. }
+        ));
     }
 
     #[test]
@@ -378,7 +420,10 @@ mod tests {
         let checker = ConstraintChecker::new(create_test_constraints());
         let result = checker.evaluate_scan_depth(ScanDepth::Deep);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ConstraintViolation::ScanDepthNotAllowed { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConstraintViolation::ScanDepthNotAllowed { .. }
+        ));
     }
 
     #[test]
@@ -396,7 +441,10 @@ mod tests {
         }
         let result = checker.evaluate_rate_limit("test_target");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ConstraintViolation::RateLimitExceeded { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConstraintViolation::RateLimitExceeded { .. }
+        ));
     }
 
     #[test]
@@ -404,7 +452,10 @@ mod tests {
         let checker = ConstraintChecker::new(create_test_constraints());
         let result = checker.evaluate_approval("run_exploit");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ConstraintViolation::ApprovalRequired { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            ConstraintViolation::ApprovalRequired { .. }
+        ));
     }
 
     #[test]
@@ -473,7 +524,13 @@ mod tests {
         let constraints = create_test_constraints();
         let checker = ConstraintChecker::new(constraints.clone());
         let checker_constraints = checker.get_constraints();
-        assert_eq!(checker_constraints.rate_limit_budget, constraints.rate_limit_budget);
-        assert_eq!(checker_constraints.require_approval_for, constraints.require_approval_for);
+        assert_eq!(
+            checker_constraints.rate_limit_budget,
+            constraints.rate_limit_budget
+        );
+        assert_eq!(
+            checker_constraints.require_approval_for,
+            constraints.require_approval_for
+        );
     }
 }

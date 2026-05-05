@@ -1,49 +1,49 @@
+pub mod auth_test;
 pub mod ci;
-pub mod scan;
+pub mod cluster;
+pub mod config;
 pub mod fuzz;
 pub mod load;
-pub mod cluster;
-pub mod recon;
 pub mod network;
+pub mod notify;
 pub mod plan;
 pub mod plugin;
+pub mod recon;
 pub mod report;
-pub mod stress;
-pub mod notify;
-pub mod auth_test;
-pub mod vuln;
+pub mod scan;
 pub mod storage;
-pub mod config;
+pub mod stress;
+pub mod vuln;
 pub use config::*;
-#[cfg(feature = "sbom")]
-pub mod sbom;
 #[cfg(feature = "rest-api")]
 pub mod agent;
 #[cfg(feature = "grpc-api")]
 pub mod grpc;
+#[cfg(feature = "sbom")]
+pub mod sbom;
 
 pub use ci::*;
-pub use scan::*;
+pub use cluster::*;
 pub use fuzz::*;
 pub use load::*;
-pub use cluster::*;
-pub use recon::*;
 pub use network::*;
 pub use plan::*;
+pub use recon::*;
+pub use scan::*;
 
+#[cfg(feature = "rest-api")]
+pub use agent::*;
+pub use auth_test::*;
+pub use notify::*;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub use plugin::*;
 pub use report::*;
-#[cfg(feature = "stress-testing")]
-pub use stress::*;
-pub use notify::*;
 #[cfg(feature = "sbom")]
 pub use sbom::*;
-pub use auth_test::*;
-pub use vuln::*;
 pub use storage::*;
-#[cfg(feature = "rest-api")]
-pub use agent::*;
+#[cfg(feature = "stress-testing")]
+pub use stress::*;
+pub use vuln::*;
 
 #[cfg(feature = "grpc-api")]
 pub use grpc::*;
@@ -54,11 +54,11 @@ pub mod ai_analyze;
 #[cfg(feature = "ai-integration")]
 pub use ai_analyze::*;
 
-use anyhow::Result;
 use crate::cli::Cli;
 use crate::cli::Commands;
-use crate::config::{SlapperConfig, Scope};
+use crate::config::{Scope, SlapperConfig};
 use crate::error::Result as ErrorResult;
+use anyhow::Result;
 
 pub struct CommandContext {
     pub config: SlapperConfig,
@@ -128,7 +128,9 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
         Some(Commands::Plugin(args)) => handle_plugin(ctx, args).await,
         #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-        Some(Commands::Plugin(_)) => anyhow::bail!("Plugin support requires the 'python-plugins' or 'ruby-plugins' feature"),
+        Some(Commands::Plugin(_)) => {
+            anyhow::bail!("Plugin support requires the 'python-plugins' or 'ruby-plugins' feature")
+        }
         Some(Commands::Report(args)) => handle_report(ctx, args).await,
         #[cfg(feature = "stress-testing")]
         Some(Commands::Stress(args)) => handle_stress(ctx, args).await,

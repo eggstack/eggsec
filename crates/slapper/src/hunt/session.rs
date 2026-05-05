@@ -26,7 +26,10 @@ pub enum SessionIssueType {
     ConcurrentSessions,
 }
 
-pub async fn check_session_security(target: &str, config: &HuntConfig) -> Result<Vec<SessionIssue>> {
+pub async fn check_session_security(
+    target: &str,
+    config: &HuntConfig,
+) -> Result<Vec<SessionIssue>> {
     let mut issues = Vec::new();
 
     issues.extend(check_session_fixation(target, config).await?);
@@ -46,7 +49,8 @@ async fn check_session_fixation(_target: &str, _config: &HuntConfig) -> Result<V
         id: id.clone(),
         issue_type: SessionIssueType::SessionFixation,
         severity: Severity::High,
-        description: "Session fixation vulnerability - session ID can be set before authentication".to_string(),
+        description: "Session fixation vulnerability - session ID can be set before authentication"
+            .to_string(),
         evidence: "Session ID is not regenerated after login".to_string(),
         remediation: "Regenerate session ID after successful authentication".to_string(),
         cvss_score: Some(7.5),
@@ -82,7 +86,8 @@ async fn check_token_prediction(_target: &str, _config: &HuntConfig) -> Result<V
         severity: Severity::Critical,
         description: "Session token appears to use weak entropy".to_string(),
         evidence: "Token format suggests sequential or time-based generation".to_string(),
-        remediation: "Use cryptographically secure random number generator for session tokens".to_string(),
+        remediation: "Use cryptographically secure random number generator for session tokens"
+            .to_string(),
         cvss_score: Some(8.8),
     });
 
@@ -141,13 +146,18 @@ mod tests {
     #[tokio::test]
     async fn test_check_session_security() {
         let config = HuntConfig::default();
-        let issues = check_session_security("http://example.com", &config).await.unwrap();
+        let issues = check_session_security("http://example.com", &config)
+            .await
+            .unwrap();
         assert!(!issues.is_empty());
     }
 
     #[test]
     fn test_session_issue_types() {
-        assert_eq!(SessionIssueType::SessionFixation, SessionIssueType::SessionFixation);
+        assert_eq!(
+            SessionIssueType::SessionFixation,
+            SessionIssueType::SessionFixation
+        );
         assert_eq!(SessionIssueType::Csrf, SessionIssueType::Csrf);
     }
 }

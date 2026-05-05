@@ -69,9 +69,7 @@ pub struct WirelessScanner {
 
 impl WirelessScanner {
     pub fn new() -> Result<Self> {
-        Ok(Self {
-            interface: None,
-        })
+        Ok(Self { interface: None })
     }
 
     pub fn with_interface(mut self, interface: String) -> Self {
@@ -83,7 +81,9 @@ impl WirelessScanner {
     pub async fn scan(&self, duration_secs: u64) -> Result<WirelessScanResult> {
         use tokio::process::Command;
 
-        let interface = self.interface.as_ref()
+        let interface = self
+            .interface
+            .as_ref()
             .ok_or_else(|| SlapperError::Config("No wireless interface specified".to_string()))?;
 
         let output = Command::new("iwlist")
@@ -136,15 +136,33 @@ impl WirelessScanner {
             }
 
             if line.contains("Address:") {
-                current_bssid = Some(line.split("Address:").nth(1).unwrap_or("").trim().to_string());
+                current_bssid = Some(
+                    line.split("Address:")
+                        .nth(1)
+                        .unwrap_or("")
+                        .trim()
+                        .to_string(),
+                );
             }
 
             if line.starts_with("ESSID:") {
-                current_ssid = Some(line.split("ESSID:\"").nth(1).unwrap_or("").trim_matches('"').to_string());
+                current_ssid = Some(
+                    line.split("ESSID:\"")
+                        .nth(1)
+                        .unwrap_or("")
+                        .trim_matches('"')
+                        .to_string(),
+                );
             }
 
             if line.contains("Channel:") {
-                current_channel = line.split("Channel:").nth(1).unwrap_or("1").trim().parse().unwrap_or(1);
+                current_channel = line
+                    .split("Channel:")
+                    .nth(1)
+                    .unwrap_or("1")
+                    .trim()
+                    .parse()
+                    .unwrap_or(1);
             }
 
             if line.contains("Signal level") {

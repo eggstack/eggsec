@@ -58,7 +58,11 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     let _requests_per_second = config.rate_pps;
 
     for _ in 0..total_requests {
-        let permit = semaphore.clone().acquire_owned().await.map_err(|e| SlapperError::Runtime(e.to_string()))?;
+        let permit = semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|e| SlapperError::Runtime(e.to_string()))?;
         let client = if clients.is_empty() {
             None
         } else {
@@ -74,7 +78,10 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
         let handle = tokio::spawn(async move {
             let _request_start = Instant::now();
 
-            let result: std::result::Result<reqwest::Response, Box<dyn std::error::Error + Send + Sync>> = if let Some(client) = client {
+            let result: std::result::Result<
+                reqwest::Response,
+                Box<dyn std::error::Error + Send + Sync>,
+            > = if let Some(client) = client {
                 client
                     .get(&url)
                     .header("User-Agent", random_user_agent())

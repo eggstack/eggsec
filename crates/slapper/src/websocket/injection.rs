@@ -26,8 +26,8 @@ impl InjectionTester {
 
     #[cfg(feature = "websocket")]
     pub async fn test_injections(&self, url: &str) -> Result<Vec<InjectionTestResult>> {
-        use tokio_tungstenite::connect_async;
         use futures::{SinkExt, StreamExt};
+        use tokio_tungstenite::connect_async;
         use tokio_tungstenite::tungstenite::Message;
 
         let payloads = vec![
@@ -67,18 +67,26 @@ impl InjectionTester {
 
                         if let Ok(Some(msg)) = tokio::time::timeout(
                             std::time::Duration::from_secs(5),
-                            ws_stream.next()
-                        ).await {
+                            ws_stream.next(),
+                        )
+                        .await
+                        {
                             if let Ok(msg) = msg {
                                 result.received_response = true;
                                 if let Message::Text(text) = msg {
                                     result.response_content = Some(text.to_string());
                                     let lower = text.to_lowercase();
-                                    if lower.contains("error") || lower.contains("exception")
-                                        || lower.contains("syntax") || lower.contains("unexpected")
-                                        || lower.contains("stack trace") {
+                                    if lower.contains("error")
+                                        || lower.contains("exception")
+                                        || lower.contains("syntax")
+                                        || lower.contains("unexpected")
+                                        || lower.contains("stack trace")
+                                    {
                                         result.vulnerability_detected = true;
-                                        result.details = format!("{}: Server returned error response", test_type);
+                                        result.details = format!(
+                                            "{}: Server returned error response",
+                                            test_type
+                                        );
                                     }
                                 }
                             }
@@ -105,7 +113,10 @@ impl InjectionTester {
             received_response: false,
             response_content: None,
             vulnerability_detected: false,
-            details: format!("WebSocket feature not enabled. Cannot test {}. Build with --features websocket", url),
+            details: format!(
+                "WebSocket feature not enabled. Cannot test {}. Build with --features websocket",
+                url
+            ),
         }])
     }
 }

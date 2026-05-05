@@ -1,5 +1,5 @@
 use crate::error::{Result, SlapperError};
-use crate::notify::{WebhookNotifier, NotificationPayload, WebhookConfig, WebhookEvent};
+use crate::notify::{NotificationPayload, WebhookConfig, WebhookEvent, WebhookNotifier};
 use crate::types::SensitiveString;
 
 pub struct WebhookTestConfig {
@@ -72,12 +72,18 @@ pub async fn send_webhook_notifications(
     if errors.is_empty() {
         Ok(())
     } else {
-        Err(SlapperError::Config(format!("Failed to send notifications to: {}", errors.join(", "))))
+        Err(SlapperError::Config(format!(
+            "Failed to send notifications to: {}",
+            errors.join(", ")
+        )))
     }
 }
 
 pub fn has_any_webhook(config: &WebhookTestConfig) -> bool {
-    config.slack.is_some() || config.discord.is_some() || config.teams.is_some() || config.webhook.is_some()
+    config.slack.is_some()
+        || config.discord.is_some()
+        || config.teams.is_some()
+        || config.webhook.is_some()
 }
 
 pub fn print_webhook_usage() {

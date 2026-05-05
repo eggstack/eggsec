@@ -17,8 +17,8 @@ pub mod validation;
 #[cfg(feature = "python-plugins")]
 pub use python::PythonPluginManager;
 
-use futures::future::join_all;
 use crate::security::validate_python_plugin;
+use futures::future::join_all;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
@@ -76,8 +76,17 @@ impl Default for PluginConfig {
 impl PluginConfig {
     pub fn filtered_config(&self) -> HashMap<String, serde_json::Value> {
         let sensitive_keys = [
-            "api_key", "apikey", "api-key", "password", "passwd", "secret",
-            "token", "auth", "credential", "private_key", "private-key",
+            "api_key",
+            "apikey",
+            "api-key",
+            "password",
+            "passwd",
+            "secret",
+            "token",
+            "auth",
+            "credential",
+            "private_key",
+            "private-key",
         ];
         self.config
             .iter()
@@ -231,14 +240,12 @@ impl PluginRegistry {
         for plugin in &self.plugins {
             let result = async_timeout(timeout_duration, plugin.run(target, config)).await;
             match result {
-                Ok(inner_result) => {
-                    match inner_result {
-                        Ok(r) => successful.push(r),
-                        Err(e) => {
-                            tracing::warn!(plugin = %plugin.info().name, error = %e, "Plugin execution failed");
-                        }
+                Ok(inner_result) => match inner_result {
+                    Ok(r) => successful.push(r),
+                    Err(e) => {
+                        tracing::warn!(plugin = %plugin.info().name, error = %e, "Plugin execution failed");
                     }
-                }
+                },
                 Err(_) => {
                     tracing::warn!(plugin = %plugin.info().name, timeout = config.timeout_secs, "Plugin execution timed out");
                 }
@@ -249,7 +256,11 @@ impl PluginRegistry {
 
     #[cfg(not(feature = "python-plugins"))]
     pub async fn run_all(&self, target: &str, config: &PluginConfig) -> Result<Vec<PluginResult>> {
-        let futures: Vec<_> = self.plugins.iter().map(|plugin| plugin.run(target, config)).collect();
+        let futures: Vec<_> = self
+            .plugins
+            .iter()
+            .map(|plugin| plugin.run(target, config))
+            .collect();
         let results = join_all(futures).await;
         let mut successful = Vec::new();
         for result in results {
@@ -348,7 +359,7 @@ impl PluginManager {
 
     pub fn discover_plugins(&mut self) -> Vec<PluginInfo> {
         use crate::validation::validate_plugin_path;
-        
+
         let mut discovered = Vec::new();
 
         for dir in &self.plugin_dirs {
@@ -616,7 +627,9 @@ mod tests {
     fn test_plugin_config_with_values() {
         let mut config = PluginConfig::default();
         config.enabled = false;
-        config.config.insert("timeout".to_string(), serde_json::json!(60));
+        config
+            .config
+            .insert("timeout".to_string(), serde_json::json!(60));
 
         assert!(!config.enabled);
         assert_eq!(config.config.get("timeout").unwrap().as_i64(), Some(60));
@@ -735,7 +748,8 @@ mod tests {
         let mut registry = PluginRegistry::new();
         registry.register(Arc::new(MockPlugin::new("TestPlugin", vec![])));
 
-        let results = futures::executor::block_on(registry.run_check("nonexistent", "http://test.com"));
+        let results =
+            futures::executor::block_on(registry.run_check("nonexistent", "http://test.com"));
         assert!(results.is_ok());
         assert!(results.unwrap().is_empty());
     }
@@ -804,7 +818,10 @@ mod tests {
     #[test]
     fn test_plugin_manager_discover_plugins_empty_dir() {
         let mut manager = PluginManager::new();
-        let temp_dir = std::env::temp_dir().join("slapper_test_empty_").to_string_lossy().to_string();
+        let temp_dir = std::env::temp_dir()
+            .join("slapper_test_empty_")
+            .to_string_lossy()
+            .to_string();
         std::fs::create_dir_all(&temp_dir).unwrap();
         manager.add_plugin_dir(PathBuf::from(&temp_dir));
 
@@ -817,7 +834,10 @@ mod tests {
     #[test]
     fn test_plugin_manager_load_python_plugin_parses_info() {
         let manager = PluginManager::new();
-        let temp_file = std::env::temp_dir().join("test_plugin_").to_string_lossy().to_string();
+        let temp_file = std::env::temp_dir()
+            .join("test_plugin_")
+            .to_string_lossy()
+            .to_string();
 
         let content = r#"# Name: TestSqlInjection
 # Version: 1.5.0
@@ -844,7 +864,10 @@ def register_checks():
     #[test]
     fn test_plugin_manager_load_python_plugin_fallback_name() {
         let manager = PluginManager::new();
-        let temp_file = std::env::temp_dir().join("my_ruby_check_plugin").to_string_lossy().to_string();
+        let temp_file = std::env::temp_dir()
+            .join("my_ruby_check_plugin")
+            .to_string_lossy()
+            .to_string();
 
         let content = r#"# No name here
 # Version: 2.0.0
@@ -873,7 +896,10 @@ def register_checks():
     #[test]
     fn test_plugin_manager_load_python_plugin_partial_metadata() {
         let manager = PluginManager::new();
-        let temp_file = std::env::temp_dir().join("partial_meta_").to_string_lossy().to_string();
+        let temp_file = std::env::temp_dir()
+            .join("partial_meta_")
+            .to_string_lossy()
+            .to_string();
 
         let content = r#"# Name: PartialPlugin
 # Just name provided

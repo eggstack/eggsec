@@ -45,7 +45,8 @@ impl KubernetesScanner {
     }
 
     pub fn from_in_cluster_config(timeout_secs: u64) -> Result<Self> {
-        let token = std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/token").ok();
+        let token =
+            std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/token").ok();
         let api_server = std::env::var("KUBERNETES_SERVICE_HOST")
             .map(|h| format!("https://{}", h))
             .unwrap_or_else(|_| "https://kubernetes.default.svc".to_string());
@@ -80,7 +81,10 @@ impl KubernetesScanner {
         let version_json: serde_json::Value = resp.json().await?;
 
         Ok(ClusterInfo {
-            server_version: version_json.get("gitVersion").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            server_version: version_json
+                .get("gitVersion")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
             node_count: None,
             namespace_count: None,
         })
@@ -89,7 +93,10 @@ impl KubernetesScanner {
     async fn check_rbac(&self) -> Vec<K8sFinding> {
         let mut findings = Vec::new();
 
-        let cluster_role_url = format!("{}/apis/rbac.authorization.k8s.io/v1/clusterroles", self.api_server);
+        let cluster_role_url = format!(
+            "{}/apis/rbac.authorization.k8s.io/v1/clusterroles",
+            self.api_server
+        );
         let mut req = self.client.get(&cluster_role_url);
         if let Some(ref token) = self.token {
             req = req.bearer_auth(token);
@@ -97,13 +104,30 @@ impl KubernetesScanner {
         if let Ok(resp) = req.send().await {
             if resp.status().is_success() {
                 if let Ok(json) = resp.json::<serde_json::Value>().await {
-                    if let Some(items) = json.get("items").and_then(|v: &serde_json::Value| v.as_array()) {
+                    if let Some(items) = json
+                        .get("items")
+                        .and_then(|v: &serde_json::Value| v.as_array())
+                    {
                         for item in items {
-                            if let Some(name) = item.get("metadata").and_then(|m: &serde_json::Value| m.get("name")).and_then(|n: &serde_json::Value| n.as_str()) {
+                            if let Some(name) = item
+                                .get("metadata")
+                                .and_then(|m: &serde_json::Value| m.get("name"))
+                                .and_then(|n: &serde_json::Value| n.as_str())
+                            {
                                 if name == "cluster-admin" {
-                                    if let Some(rules) = item.get("rules").and_then(|r: &serde_json::Value| r.as_array()) {
+                                    if let Some(rules) = item
+                                        .get("rules")
+                                        .and_then(|r: &serde_json::Value| r.as_array())
+                                    {
                                         for rule in rules {
-                                            if rule.get("resources").and_then(|r: &serde_json::Value| r.as_array()).map(|a: &Vec<serde_json::Value>| a.iter().any(|v| v.as_str() == Some("*"))).unwrap_or(false) {
+                                            if rule
+                                                .get("resources")
+                                                .and_then(|r: &serde_json::Value| r.as_array())
+                                                .map(|a: &Vec<serde_json::Value>| {
+                                                    a.iter().any(|v| v.as_str() == Some("*"))
+                                                })
+                                                .unwrap_or(false)
+                                            {
                                                 findings.push(K8sFinding {
                                                     resource_type: "ClusterRole".to_string(),
                                                     resource_name: name.to_string(),
@@ -128,7 +152,10 @@ impl KubernetesScanner {
     async fn check_network_policies(&self) -> Vec<K8sFinding> {
         let mut findings = Vec::new();
 
-        let np_url = format!("{}/apis/networking.k8s.io/v1/networkpolicies", self.api_server);
+        let np_url = format!(
+            "{}/apis/networking.k8s.io/v1/networkpolicies",
+            self.api_server
+        );
         let mut req = self.client.get(&np_url);
         if let Some(ref token) = self.token {
             req = req.bearer_auth(token);
@@ -136,7 +163,11 @@ impl KubernetesScanner {
         if let Ok(resp) = req.send().await {
             if resp.status().is_success() {
                 if let Ok(json) = resp.json::<serde_json::Value>().await {
-                    let count = json.get("items").and_then(|v: &serde_json::Value| v.as_array()).map(|a: &Vec<serde_json::Value>| a.len()).unwrap_or(0);
+                    let count = json
+                        .get("items")
+                        .and_then(|v: &serde_json::Value| v.as_array())
+                        .map(|a: &Vec<serde_json::Value>| a.len())
+                        .unwrap_or(0);
                     if count == 0 {
                         findings.push(K8sFinding {
                             resource_type: "NetworkPolicy".to_string(),
@@ -164,20 +195,38 @@ impl KubernetesScanner {
         if let Ok(resp) = req.send().await {
             if resp.status().is_success() {
                 if let Ok(json) = resp.json::<serde_json::Value>().await {
-                    if let Some(items) = json.get("items").and_then(|v: &serde_json::Value| v.as_array()) {
+                    if let Some(items) = json
+                        .get("items")
+                        .and_then(|v: &serde_json::Value| v.as_array())
+                    {
                         for item in items {
-                            if let Some(name) = item.get("metadata").and_then(|m: &serde_json::Value| m.get("name")).and_then(|n: &serde_json::Value| n.as_str()) {
+                            if let Some(name) = item
+                                .get("metadata")
+                                .and_then(|m: &serde_json::Value| m.get("name"))
+                                .and_then(|n: &serde_json::Value| n.as_str())
+                            {
                                 if let Some(spec) = item.get("spec") {
-                                    if let Some(containers) = spec.get("containers").and_then(|c: &serde_json::Value| c.as_array()) {
+                                    if let Some(containers) = spec
+                                        .get("containers")
+                                        .and_then(|c: &serde_json::Value| c.as_array())
+                                    {
                                         for container in containers {
                                             if let Some(sec) = container.get("securityContext") {
-                                                if sec.get("privileged").and_then(|v: &serde_json::Value| v.as_bool()).unwrap_or(false) {
+                                                if sec
+                                                    .get("privileged")
+                                                    .and_then(|v: &serde_json::Value| v.as_bool())
+                                                    .unwrap_or(false)
+                                                {
                                                     findings.push(K8sFinding {
                                                         resource_type: "Pod".to_string(),
                                                         resource_name: name.to_string(),
                                                         severity: Severity::Critical,
-                                                        description: "Container running in privileged mode".to_string(),
-                                                        recommendation: "Disable privileged mode for containers".to_string(),
+                                                        description:
+                                                            "Container running in privileged mode"
+                                                                .to_string(),
+                                                        recommendation:
+                                                            "Disable privileged mode for containers"
+                                                                .to_string(),
                                                     });
                                                 }
                                             }
@@ -205,17 +254,30 @@ impl KubernetesScanner {
         if let Ok(resp) = req.send().await {
             if resp.status().is_success() {
                 if let Ok(json) = resp.json::<serde_json::Value>().await {
-                    if let Some(items) = json.get("items").and_then(|v: &serde_json::Value| v.as_array()) {
+                    if let Some(items) = json
+                        .get("items")
+                        .and_then(|v: &serde_json::Value| v.as_array())
+                    {
                         for item in items {
-                            if let Some(name) = item.get("metadata").and_then(|m: &serde_json::Value| m.get("name")).and_then(|n: &serde_json::Value| n.as_str()) {
-                                if let Some(secret_type) = item.get("type").and_then(|t: &serde_json::Value| t.as_str()) {
+                            if let Some(name) = item
+                                .get("metadata")
+                                .and_then(|m: &serde_json::Value| m.get("name"))
+                                .and_then(|n: &serde_json::Value| n.as_str())
+                            {
+                                if let Some(secret_type) = item
+                                    .get("type")
+                                    .and_then(|t: &serde_json::Value| t.as_str())
+                                {
                                     if secret_type == "Opaque" {
                                         findings.push(K8sFinding {
                                             resource_type: "Secret".to_string(),
                                             resource_name: name.to_string(),
                                             severity: Severity::Medium,
-                                            description: "Opaque secret found - verify encryption at rest".to_string(),
-                                            recommendation: "Enable encryption at rest for secrets".to_string(),
+                                            description:
+                                                "Opaque secret found - verify encryption at rest"
+                                                    .to_string(),
+                                            recommendation: "Enable encryption at rest for secrets"
+                                                .to_string(),
                                         });
                                     }
                                 }

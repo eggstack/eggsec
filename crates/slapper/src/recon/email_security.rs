@@ -157,7 +157,9 @@ impl EmailSecurityAnalyzer {
                     category: "SPF".to_string(),
                     severity: Severity::High,
                     description: "SPF record uses '+all' which allows all senders".to_string(),
-                    recommendation: "Change SPF mechanism to '-all' (hard fail) or '~all' (soft fail)".to_string(),
+                    recommendation:
+                        "Change SPF mechanism to '-all' (hard fail) or '~all' (soft fail)"
+                            .to_string(),
                 });
                 score = score.saturating_sub(15);
             } else if all == "~all" {
@@ -165,7 +167,8 @@ impl EmailSecurityAnalyzer {
                     category: "SPF".to_string(),
                     severity: Severity::Low,
                     description: "SPF record uses '~all' (soft fail)".to_string(),
-                    recommendation: "Consider using '-all' (hard fail) for stricter enforcement".to_string(),
+                    recommendation: "Consider using '-all' (hard fail) for stricter enforcement"
+                        .to_string(),
                 });
                 score = score.saturating_sub(5);
             }
@@ -205,7 +208,8 @@ impl EmailSecurityAnalyzer {
                     category: "DMARC".to_string(),
                     severity: Severity::Medium,
                     description: "DMARC policy is set to 'none' (monitoring only)".to_string(),
-                    recommendation: "Consider upgrading DMARC policy to 'quarantine' or 'reject'".to_string(),
+                    recommendation: "Consider upgrading DMARC policy to 'quarantine' or 'reject'"
+                        .to_string(),
                 });
                 score = score.saturating_sub(5);
             }
@@ -214,7 +218,8 @@ impl EmailSecurityAnalyzer {
                     category: "DMARC".to_string(),
                     severity: Severity::Low,
                     description: "No aggregate report URI configured in DMARC".to_string(),
-                    recommendation: "Add 'rua=mailto:...' to DMARC record for reporting".to_string(),
+                    recommendation: "Add 'rua=mailto:...' to DMARC record for reporting"
+                        .to_string(),
                 });
                 score = score.saturating_sub(5);
             }
@@ -342,8 +347,16 @@ impl EmailSecurityAnalyzer {
 
     async fn check_dkim(&self, domain: &str) -> DkimResult {
         let common_selectors = vec![
-            "default", "google", "selector1", "selector2", "mail",
-            "dkim", "s1", "s2", "k1", "k2",
+            "default",
+            "google",
+            "selector1",
+            "selector2",
+            "mail",
+            "dkim",
+            "s1",
+            "s2",
+            "k1",
+            "k2",
         ];
 
         let mut selectors_found = Vec::new();
@@ -358,14 +371,16 @@ impl EmailSecurityAnalyzer {
                     if txt_str.contains("v=DKIM1") || txt_str.contains("p=") {
                         selectors_found.push(selector.to_string());
 
-                        if let Some(k_len) = txt_str.split(';').find(|p| p.trim().starts_with("k=")) {
+                        if let Some(k_len) = txt_str.split(';').find(|p| p.trim().starts_with("k="))
+                        {
                             let k_val = k_len.trim().trim_start_matches("k=").trim();
                             if k_val == "rsa" {
                                 key_length = Some(1024);
                             }
                         }
 
-                        if let Some(p_val) = txt_str.split(';').find(|p| p.trim().starts_with("p=")) {
+                        if let Some(p_val) = txt_str.split(';').find(|p| p.trim().starts_with("p="))
+                        {
                             let p_content = p_val.trim().trim_start_matches("p=").trim();
                             if !p_content.is_empty() {
                                 let base64_len = p_content.len();
@@ -386,7 +401,10 @@ impl EmailSecurityAnalyzer {
 
         if let Some(len) = key_length {
             if len < 2048 {
-                issues.push(format!("DKIM key length ({}) is below recommended 2048 bits", len));
+                issues.push(format!(
+                    "DKIM key length ({}) is below recommended 2048 bits",
+                    len
+                ));
             }
         }
 
@@ -433,7 +451,13 @@ impl EmailSecurityAnalyzer {
             let pct = rec
                 .split(';')
                 .find(|p| p.trim().starts_with("pct="))
-                .and_then(|p| p.trim().trim_start_matches("pct=").trim().parse::<u8>().ok());
+                .and_then(|p| {
+                    p.trim()
+                        .trim_start_matches("pct=")
+                        .trim()
+                        .parse::<u8>()
+                        .ok()
+                });
 
             let rua_aggregate: Vec<String> = rec
                 .split(';')
@@ -599,7 +623,9 @@ impl EmailSecurityAnalyzer {
             Severity::Info
         };
 
-        let supports_smtps = tested_servers.iter().any(|s| s.supports_starttls && s.port == 465);
+        let supports_smtps = tested_servers
+            .iter()
+            .any(|s| s.supports_starttls && s.port == 465);
 
         StartTlsResult {
             tested_servers,
@@ -615,7 +641,10 @@ impl EmailSecurityAnalyzer {
         use tokio::net::TcpStream;
 
         let timeout = Duration::from_secs(5);
-        let supports_starttls = matches!(tokio::time::timeout(timeout, TcpStream::connect((hostname, port))).await, Ok(Ok(_stream)));
+        let supports_starttls = matches!(
+            tokio::time::timeout(timeout, TcpStream::connect((hostname, port))).await,
+            Ok(Ok(_stream))
+        );
 
         StartTlsServerResult {
             hostname: hostname.to_string(),

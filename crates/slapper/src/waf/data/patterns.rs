@@ -535,10 +535,7 @@ static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new
                 "malware".to_string(),
                 "blocked by palo alto".to_string(),
             ],
-            ip_ranges: vec![
-                "198.92.0.0/15".to_string(),
-                "199.92.0.0/15".to_string(),
-            ],
+            ip_ranges: vec!["198.92.0.0/15".to_string(), "199.92.0.0/15".to_string()],
         },
     );
 
@@ -546,15 +543,9 @@ static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new
         "qrator".to_string(),
         WafSignature {
             name: "Qrator".to_string(),
-            headers: vec![
-                "x-qrator".to_string(),
-                "qrator".to_string(),
-            ],
+            headers: vec!["x-qrator".to_string(), "qrator".to_string()],
             cookies: vec!["qr".to_string()],
-            body_patterns: vec![
-                "qrator".to_string(),
-                "blocked by qrator".to_string(),
-            ],
+            body_patterns: vec!["qrator".to_string(), "blocked by qrator".to_string()],
             ip_ranges: vec![
                 "185.71.64.0/22".to_string(),
                 "185.71.68.0/22".to_string(),
@@ -567,10 +558,7 @@ static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new
         "imunify360".to_string(),
         WafSignature {
             name: "Imunify360".to_string(),
-            headers: vec![
-                "imunify".to_string(),
-                "x-imunify".to_string(),
-            ],
+            headers: vec!["imunify".to_string(), "x-imunify".to_string()],
             cookies: vec![],
             body_patterns: vec![
                 "imunify".to_string(),
@@ -587,15 +575,9 @@ static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new
         "siteguard".to_string(),
         WafSignature {
             name: "SiteGuard".to_string(),
-            headers: vec![
-                "siteguard".to_string(),
-                "x-siteguard".to_string(),
-            ],
+            headers: vec!["siteguard".to_string(), "x-siteguard".to_string()],
             cookies: vec![],
-            body_patterns: vec![
-                "siteguard".to_string(),
-                "powered by".to_string(),
-            ],
+            body_patterns: vec!["siteguard".to_string(), "powered by".to_string()],
             ip_ranges: vec![],
         },
     );
@@ -611,10 +593,7 @@ static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new
                 "x-sh".to_string(),
             ],
             cookies: vec![],
-            body_patterns: vec![
-                "stackpath".to_string(),
-                "edge".to_string(),
-            ],
+            body_patterns: vec!["stackpath".to_string(), "edge".to_string()],
             ip_ranges: vec![
                 "151.236.0.0/18".to_string(),
                 "178.255.0.0/18".to_string(),
@@ -627,20 +606,14 @@ static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new
         "humanity".to_string(),
         WafSignature {
             name: "Humanity".to_string(),
-            headers: vec![
-                "x-hpx".to_string(),
-                "x-hx".to_string(),
-            ],
+            headers: vec!["x-hpx".to_string(), "x-hx".to_string()],
             cookies: vec!["px".to_string(), "_px".to_string()],
             body_patterns: vec![
                 "humanity".to_string(),
                 "blocked by security".to_string(),
                 "human verification".to_string(),
             ],
-            ip_ranges: vec![
-                "23.14.0.0/15".to_string(),
-                "34.100.0.0/15".to_string(),
-            ],
+            ip_ranges: vec!["23.14.0.0/15".to_string(), "34.100.0.0/15".to_string()],
         },
     );
 
@@ -648,18 +621,10 @@ static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new
         "datadog".to_string(),
         WafSignature {
             name: "Datadog".to_string(),
-            headers: vec![
-                "x-datadog".to_string(),
-                "datadog".to_string(),
-            ],
+            headers: vec!["x-datadog".to_string(), "datadog".to_string()],
             cookies: vec![],
-            body_patterns: vec![
-                "datadog".to_string(),
-                "security policy".to_string(),
-            ],
-            ip_ranges: vec![
-                "3.0.0.0/8".to_string(),
-            ],
+            body_patterns: vec!["datadog".to_string(), "security policy".to_string()],
+            ip_ranges: vec!["3.0.0.0/8".to_string()],
         },
     );
 

@@ -90,7 +90,7 @@ use slapper::tool::protocol::mcp::auth::validate_auth_internal;
 
 #[tokio::test]
 async fn test_rate_limit_concurrent_requests() {
-    use slapper::tool::{RateLimiter, RateLimitConfig};
+    use slapper::tool::{RateLimitConfig, RateLimiter};
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -101,20 +101,20 @@ async fn test_rate_limit_concurrent_requests() {
         burst_size: 3,
     };
     let rate_limiter = RateLimiter::new(config);
-    
+
     let client_id = "test-client";
-    
+
     for _ in 0..5 {
         assert!(rate_limiter.check_rate_limit(client_id).is_ok());
     }
-    
+
     let result = rate_limiter.check_rate_limit(client_id);
     if result.is_err() {
         assert!(matches!(result, Err(_)));
     }
 }
 
-use slapper::tool::{RateLimiter, RateLimitConfig, RateLimitStatus};
+use slapper::tool::{RateLimitConfig, RateLimitStatus, RateLimiter};
 
 #[test]
 fn test_rate_limiter_initialization() {
@@ -125,7 +125,7 @@ fn test_rate_limiter_initialization() {
         burst_size: 5,
     };
     let rate_limiter = RateLimiter::new(config);
-    
+
     let status = rate_limiter.get_status("test");
     assert_eq!(status.requests_per_minute, 60);
 }

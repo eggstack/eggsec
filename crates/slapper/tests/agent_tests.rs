@@ -139,7 +139,10 @@ mod tests {
             },
         );
 
-        portfolio.set_baseline("example.com", vec!["finding-1".to_string(), "finding-2".to_string()]);
+        portfolio.set_baseline(
+            "example.com",
+            vec!["finding-1".to_string(), "finding-2".to_string()],
+        );
 
         let target = portfolio.get_target("example.com").unwrap();
         assert_eq!(target.baseline_findings.len(), 2);
@@ -182,7 +185,10 @@ mod tests {
 
         {
             let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
-            portfolio.add_target("first.com".to_string(), TargetConfig::new("https://first.com"));
+            portfolio.add_target(
+                "first.com".to_string(),
+                TargetConfig::new("https://first.com"),
+            );
             portfolio.save().unwrap();
         }
 
@@ -193,7 +199,10 @@ mod tests {
 
         {
             let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
-            portfolio.add_target("second.com".to_string(), TargetConfig::new("https://second.com"));
+            portfolio.add_target(
+                "second.com".to_string(),
+                TargetConfig::new("https://second.com"),
+            );
             portfolio.save().unwrap();
         }
 
@@ -253,7 +262,10 @@ mod tests {
 
         {
             let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
-            portfolio.add_target("example.com".to_string(), TargetConfig::new("https://example.com"));
+            portfolio.add_target(
+                "example.com".to_string(),
+                TargetConfig::new("https://example.com"),
+            );
             portfolio.save().unwrap();
         }
 
@@ -287,7 +299,10 @@ mod tests {
 
         {
             let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
-            portfolio.add_target("example.com".to_string(), TargetConfig::new("https://example.com"));
+            portfolio.add_target(
+                "example.com".to_string(),
+                TargetConfig::new("https://example.com"),
+            );
             portfolio.save().unwrap();
         }
 
@@ -321,18 +336,25 @@ mod tests {
 
         {
             let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
-            portfolio.add_target("example.com".to_string(), TargetConfig::new("https://example.com"));
+            portfolio.add_target(
+                "example.com".to_string(),
+                TargetConfig::new("https://example.com"),
+            );
             portfolio.save().unwrap();
         }
 
         {
             let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
-            assert!(portfolio.update_target("example.com", |t| t.target = "https://updated.com".to_string()));
+            assert!(portfolio.update_target("example.com", |t| t.target =
+                "https://updated.com".to_string()));
             portfolio.save().unwrap();
         }
 
         let portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
-        assert_eq!(portfolio.get_target("example.com").unwrap().target, "https://updated.com");
+        assert_eq!(
+            portfolio.get_target("example.com").unwrap().target,
+            "https://updated.com"
+        );
 
         std::fs::remove_file(&portfolio_path).ok();
         std::fs::remove_dir(portfolio_path.parent().unwrap()).ok();
@@ -350,8 +372,14 @@ mod tests {
 
         {
             let mut portfolio = TargetPortfolio::load_from_file(&portfolio_path).unwrap();
-            portfolio.add_target("target1.com".to_string(), TargetConfig::new("https://target1.com"));
-            portfolio.add_target("target2.com".to_string(), TargetConfig::new("https://target2.com"));
+            portfolio.add_target(
+                "target1.com".to_string(),
+                TargetConfig::new("https://target1.com"),
+            );
+            portfolio.add_target(
+                "target2.com".to_string(),
+                TargetConfig::new("https://target2.com"),
+            );
             portfolio.save().unwrap();
         }
 

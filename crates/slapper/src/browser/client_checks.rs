@@ -43,7 +43,10 @@ impl std::fmt::Display for ClientIssueType {
     }
 }
 
-pub async fn check_client_security(target: &str, config: &BrowserConfig) -> Result<Vec<ClientIssue>> {
+pub async fn check_client_security(
+    target: &str,
+    config: &BrowserConfig,
+) -> Result<Vec<ClientIssue>> {
     let browser = Browser::default()?;
     let tab = browser.new_tab()?;
 
@@ -127,7 +130,8 @@ pub async fn check_client_security(target: &str, config: &BrowserConfig) -> Resu
 
     let result = tab.evaluate(js_script, true)?;
 
-    let found_issues: Vec<serde_json::Value> = result.value
+    let found_issues: Vec<serde_json::Value> = result
+        .value
         .as_ref()
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
@@ -135,11 +139,29 @@ pub async fn check_client_security(target: &str, config: &BrowserConfig) -> Resu
     let mut issues = Vec::new();
 
     for item in found_issues {
-        let issue_type_str = item.get("type").and_then(|v| v.as_str()).unwrap_or("Unknown");
-        let location = item.get("location").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let evidence = item.get("evidence").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let severity_str = item.get("severity").and_then(|v| v.as_str()).unwrap_or("Low");
+        let issue_type_str = item
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown");
+        let location = item
+            .get("location")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let description = item
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let evidence = item
+            .get("evidence")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let severity_str = item
+            .get("severity")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Low");
         let cvss = item.get("cvss").and_then(|v| v.as_f64()).unwrap_or(3.0) as f32;
 
         let issue_type = match issue_type_str {
@@ -174,17 +196,12 @@ pub async fn check_client_security(target: &str, config: &BrowserConfig) -> Resu
 fn get_remediation(issue_type: &str) -> String {
     match issue_type {
         "LocalStorageSensitive" => {
-            "Store sensitive data in sessionStorage or httpOnly cookies; encrypt if needed".to_string()
-        },
-        "SourceMapsExposed" => {
-            "Remove source maps from production build".to_string()
-        },
-        "DebugMode" => {
-            "Disable debug mode in production".to_string()
-        },
-        _ => {
-            "Implement proper security controls".to_string()
+            "Store sensitive data in sessionStorage or httpOnly cookies; encrypt if needed"
+                .to_string()
         }
+        "SourceMapsExposed" => "Remove source maps from production build".to_string(),
+        "DebugMode" => "Disable debug mode in production".to_string(),
+        _ => "Implement proper security controls".to_string(),
     }
 }
 
@@ -195,13 +212,18 @@ mod tests {
     #[tokio::test]
     async fn test_check_client_security() {
         let config = BrowserConfig::default();
-        let issues = check_client_security("http://example.com", &config).await.unwrap();
+        let issues = check_client_security("http://example.com", &config)
+            .await
+            .unwrap();
         assert!(!issues.is_empty());
     }
 
     #[test]
     fn test_client_issue_types() {
-        assert_eq!(ClientIssueType::LocalStorageSensitive, ClientIssueType::LocalStorageSensitive);
+        assert_eq!(
+            ClientIssueType::LocalStorageSensitive,
+            ClientIssueType::LocalStorageSensitive
+        );
         assert_eq!(ClientIssueType::CORSWildcard, ClientIssueType::CORSWildcard);
     }
 }

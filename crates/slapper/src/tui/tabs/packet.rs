@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 
 use crate::tc;
-use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
+use crate::tui::components::{
+    empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -30,6 +32,7 @@ pub struct PacketTab {
     pub results_view: ScrollableText,
     pub is_root: bool,
     pub privileges_required: bool,
+    pub error_message: Option<String>,
 }
 
 impl PacketTab {
@@ -64,6 +67,7 @@ impl PacketTab {
             results_view: ScrollableText::new("Results"),
             is_root,
             privileges_required,
+            error_message: None,
         }
     }
 
@@ -521,6 +525,7 @@ impl TabState for PacketTab {
         self.state = AppState::Idle;
         self.results.clear();
         self.results_view.clear();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -528,7 +533,8 @@ impl TabState for PacketTab {
     }
 
     fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg);
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
     }
 }
 
@@ -546,6 +552,19 @@ impl TabRender for PacketTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, _insert_mode: bool) {
+        if let Some(ref err_msg) = self.error_message {
+            use ratatui::widgets::{Block, Borders, Paragraph};
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Packet - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, area);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -652,6 +671,57 @@ impl TabInput for PacketTab {
         }
     }
 
+    fn handle_paste(&mut self, text: &str) {
+        if !self.view_selector.is_focused() {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if !self.view_selector.is_focused() && self.inputs.is_focused() {
+            self.inputs.get_focused_value()
+        } else {
+            Some(self.results_view.get_content())
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.inputs.is_focused() {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.inputs.is_focused() {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.inputs.is_focused() {
+            self.inputs.move_home();
+        } else if !self.results_view.is_empty() {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.inputs.is_focused() {
+            self.inputs.move_end();
+        } else if !self.results_view.is_empty() {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.view_selector.focus();
+    }
+
+    fn handle_bottom(&mut self) {
+        self.view_selector.blur();
+        self.inputs.blur();
+    }
+
     fn handle_enter(&mut self) {
         if self.view_selector.is_focused() {
             self.view_selector.handle_enter();
@@ -725,7 +795,7 @@ impl TabInput for PacketTab {
         if self.view_selector.is_focused() {
             self.view_selector.selected == 0
         } else if self.inputs.is_focused() {
-            !self.inputs.can_move_left()
+            self.inputs.is_at_left_edge()
         } else {
             true
         }
@@ -736,7 +806,7 @@ impl TabInput for PacketTab {
         if self.view_selector.is_focused() {
             self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
         } else if self.inputs.is_focused() {
-            !self.inputs.can_move_right()
+            self.inputs.is_at_right_edge()
         } else {
             true
         }

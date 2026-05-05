@@ -134,8 +134,7 @@ impl MsfClient {
     pub fn persist_session_cache(&self, path: &PathBuf) -> Result<()> {
         let json = serde_json::to_string_pretty(&self.session_cache)
             .context("Failed to serialize session cache")?;
-        std::fs::write(path, json)
-            .context("Failed to write session cache to file")?;
+        std::fs::write(path, json).context("Failed to write session cache to file")?;
         tracing::info!("Session cache persisted to {:?}", path);
         Ok(())
     }
@@ -145,10 +144,9 @@ impl MsfClient {
             tracing::debug!("No session cache file found at {:?}", path);
             return Ok(());
         }
-        let content = std::fs::read_to_string(path)
-            .context("Failed to read session cache file")?;
-        let cache: SessionCache = serde_json::from_str(&content)
-            .context("Failed to parse session cache")?;
+        let content = std::fs::read_to_string(path).context("Failed to read session cache file")?;
+        let cache: SessionCache =
+            serde_json::from_str(&content).context("Failed to parse session cache")?;
         tracing::info!("Loaded {} sessions from cache", cache.sessions.len());
         self.session_cache = cache;
         Ok(())
@@ -258,14 +256,11 @@ impl MsfClient {
 
         self.session_cache.sessions.clear();
         for (id, session) in &response.sessions {
-            self.session_cache.sessions.insert(
-                id.clone(),
-                session.to_info(id),
-            );
+            self.session_cache
+                .sessions
+                .insert(id.clone(), session.to_info(id));
         }
-        self.session_cache.last_updated = Some(
-            chrono::Utc::now().to_rfc3339()
-        );
+        self.session_cache.last_updated = Some(chrono::Utc::now().to_rfc3339());
 
         Ok(response.sessions)
     }

@@ -6,16 +6,16 @@ use axum::{
     Router,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use subtle::ConstantTimeEq;
-use tower_http::cors::{CorsLayer, AllowMethods, AllowHeaders};
-use std::time::{Instant, Duration};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use subtle::ConstantTimeEq;
+use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
 
-use crate::distributed::TlsConfig;
 use crate::config::Scope;
+use crate::distributed::TlsConfig;
 use crate::error::SlapperError;
-use crate::tool::ratelimit::{RateLimiter, RateLimitConfig};
+use crate::tool::ratelimit::{RateLimitConfig, RateLimiter};
 use crate::tool::{ToolDispatcher, ToolRegistry, ToolRequest, ToolResponse};
 
 const MAX_PAYLOAD_SIZE: usize = 10 * 1024 * 1024;
@@ -33,7 +33,12 @@ pub struct RestState {
 }
 
 impl RestState {
-    pub fn new(registry: ToolRegistry, api_key: Option<String>, scope: Option<Scope>, tls_config: Option<TlsConfig>) -> Self {
+    pub fn new(
+        registry: ToolRegistry,
+        api_key: Option<String>,
+        scope: Option<Scope>,
+        tls_config: Option<TlsConfig>,
+    ) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
         let rate_limiter = RateLimiter::new(RateLimitConfig::standard());
         Self {
@@ -61,18 +66,15 @@ impl Metrics {
         if is_error {
             self.error_count.fetch_add(1, Ordering::Relaxed);
         }
-        self.total_latency_ms.fetch_add(latency.as_millis() as u64, Ordering::Relaxed);
+        self.total_latency_ms
+            .fetch_add(latency.as_millis() as u64, Ordering::Relaxed);
     }
 
     pub fn get_metrics(&self) -> serde_json::Value {
         let count = self.request_count.load(Ordering::Relaxed);
         let errors = self.error_count.load(Ordering::Relaxed);
         let total_ms = self.total_latency_ms.load(Ordering::Relaxed);
-        let avg_latency = if count > 0 {
-            total_ms / count
-        } else {
-            0
-        };
+        let avg_latency = if count > 0 { total_ms / count } else { 0 };
 
         serde_json::json!({
             "requests_total": count,
@@ -182,8 +184,18 @@ impl<T> PaginatedResponse<T> {
     }
 }
 
-pub fn create_router(registry: ToolRegistry, api_key: Option<String>, scope: Option<Scope>, tls_config: Option<TlsConfig>) -> Router {
-    let state = Arc::new(RestState::new(registry, api_key.clone(), scope, tls_config.clone()));
+pub fn create_router(
+    registry: ToolRegistry,
+    api_key: Option<String>,
+    scope: Option<Scope>,
+    tls_config: Option<TlsConfig>,
+) -> Router {
+    let state = Arc::new(RestState::new(
+        registry,
+        api_key.clone(),
+        scope,
+        tls_config.clone(),
+    ));
 
     let methods = AllowMethods::list([
         axum::http::Method::GET,
@@ -217,7 +229,10 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>, scope: Opt
 
     #[cfg(feature = "ws-api")]
     {
-        use axum::{extract::ws::{Message, WebSocket, WebSocketUpgrade}, routing::get};
+        use axum::{
+            extract::ws::{Message, WebSocket, WebSocketUpgrade},
+            routing::get,
+        };
         use futures::{SinkExt, StreamExt};
         use tokio::sync::broadcast;
 
@@ -264,7 +279,11 @@ pub fn create_router(registry: ToolRegistry, api_key: Option<String>, scope: Opt
         use crate::tool::agents::{AgentRegistry, TaskScheduler};
         let agent_registry = AgentRegistry::new();
         let scheduler = TaskScheduler::new();
-        router = router.merge(super::agent_routes::router(agent_registry, scheduler, api_key));
+        router = router.merge(super::agent_routes::router(
+            agent_registry,
+            scheduler,
+            api_key,
+        ));
     }
 
     router
@@ -302,11 +321,14 @@ fn validate_target(target: &str) -> Result<(), SlapperError> {
             MAX_URL_LENGTH
         )));
     }
-    if !target.starts_with("http://") && !target.starts_with("https://")
-       && !target.contains('.') && !target.contains(':')
-       && !target.starts_with("http%3A") {
+    if !target.starts_with("http://")
+        && !target.starts_with("https://")
+        && !target.contains('.')
+        && !target.contains(':')
+        && !target.starts_with("http%3A")
+    {
         return Err(SlapperError::Config(
-            "Invalid target format. Expected URL, domain, IP, or CIDR".to_string()
+            "Invalid target format. Expected URL, domain, IP, or CIDR".to_string(),
         ));
     }
     Ok(())
@@ -492,13 +514,10 @@ async fn get_tool(
     }
 
     let tools = state.registry.list();
-    let info = tools
-        .into_iter()
-        .find(|t| t.id == tool_id)
-        .ok_or_else(|| {
-            state.metrics.record_request(start.elapsed(), true);
-            SlapperError::Config(format!("Tool '{}' not found", tool_id))
-        })?;
+    let info = tools.into_iter().find(|t| t.id == tool_id).ok_or_else(|| {
+        state.metrics.record_request(start.elapsed(), true);
+        SlapperError::Config(format!("Tool '{}' not found", tool_id))
+    })?;
 
     state.metrics.record_request(start.elapsed(), false);
 
@@ -570,7 +589,9 @@ async fn execute_tool(
 
     match state.dispatcher.dispatch(request).await {
         Ok(response) => {
-            state.metrics.record_request(start.elapsed(), !response.is_success());
+            state
+                .metrics
+                .record_request(start.elapsed(), !response.is_success());
             Ok(Json(response))
         }
         Err(e) => {
@@ -599,14 +620,20 @@ mod tests {
 
     #[test]
     fn test_pagination_defaults() {
-        let params = PaginationParams { offset: None, limit: None };
+        let params = PaginationParams {
+            offset: None,
+            limit: None,
+        };
         assert_eq!(params.offset(), 0);
         assert_eq!(params.limit(), 50);
     }
 
     #[test]
     fn test_pagination_limit_clamping() {
-        let params = PaginationParams { offset: None, limit: Some(200) };
+        let params = PaginationParams {
+            offset: None,
+            limit: Some(200),
+        };
         assert_eq!(params.limit(), 100);
     }
 
@@ -632,20 +659,35 @@ mod tests {
     async fn test_rate_limiter_blocks_over_limit() {
         let limiter = RateLimiter::new(RateLimitConfig::strict());
         for _ in 0..5 {
-            assert!(limiter.check_rate_limit("client-1").is_ok(), "Should allow up to burst_size");
+            assert!(
+                limiter.check_rate_limit("client-1").is_ok(),
+                "Should allow up to burst_size"
+            );
         }
-        assert!(limiter.check_rate_limit("client-1").is_err(), "Should block when burst exhausted");
+        assert!(
+            limiter.check_rate_limit("client-1").is_err(),
+            "Should block when burst exhausted"
+        );
     }
 
     #[tokio::test]
     async fn test_rate_limiter_separate_keys() {
         let limiter = RateLimiter::new(RateLimitConfig::strict());
         for _ in 0..5 {
-            assert!(limiter.check_rate_limit("client-1").is_ok(), "Should allow up to burst_size");
+            assert!(
+                limiter.check_rate_limit("client-1").is_ok(),
+                "Should allow up to burst_size"
+            );
         }
-        assert!(limiter.check_rate_limit("client-1").is_err(), "Should block client-1");
+        assert!(
+            limiter.check_rate_limit("client-1").is_err(),
+            "Should block client-1"
+        );
         for _ in 0..5 {
-            assert!(limiter.check_rate_limit("client-2").is_ok(), "Separate client should have own limit");
+            assert!(
+                limiter.check_rate_limit("client-2").is_ok(),
+                "Separate client should have own limit"
+            );
         }
     }
 }

@@ -1,4 +1,3 @@
-
 mod config;
 mod health;
 mod http_connect;
@@ -139,12 +138,18 @@ impl ProxyManager {
             .await
             .map(|stream| ProxiedConnection {
                 proxy_chain: vec![proxy],
-                local_addr: stream
-                    .local_addr()
-                    .unwrap_or_else(|_| std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)),
-                target_addr: format!("{}:{}", domain, port)
-                    .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)),
+                local_addr: stream.local_addr().unwrap_or_else(|_| {
+                    std::net::SocketAddr::new(
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+                        0,
+                    )
+                }),
+                target_addr: format!("{}:{}", domain, port).parse().unwrap_or_else(|_| {
+                    std::net::SocketAddr::new(
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+                        0,
+                    )
+                }),
             })
     }
 
@@ -193,7 +198,9 @@ impl ProxyManager {
                     ProxyType::Http | ProxyType::Https => {
                         http_connect::connect_through(proxy.clone(), target_addr).await?
                     }
-                    ProxyType::Tor => socks::connect_through_tor(proxy.clone(), target_addr).await?,
+                    ProxyType::Tor => {
+                        socks::connect_through_tor(proxy.clone(), target_addr).await?
+                    }
                 };
                 all_connections.push(conn);
             }
@@ -286,7 +293,10 @@ async fn resolve_target(target: &str) -> Result<SocketAddr> {
             .next()
             .ok_or_else(|| SlapperError::Proxy(format!("Failed to resolve {}", target)))
     } else {
-        Err(SlapperError::Proxy(format!("Target must include port: {}", target)))
+        Err(SlapperError::Proxy(format!(
+            "Target must include port: {}",
+            target
+        )))
     }
 }
 

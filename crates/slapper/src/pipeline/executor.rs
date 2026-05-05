@@ -300,7 +300,8 @@ impl Pipeline {
             );
         }
 
-        let verify_tls = self.config
+        let verify_tls = self
+            .config
             .as_ref()
             .map(|c| c.http.verify_tls)
             .unwrap_or(true);

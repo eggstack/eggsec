@@ -26,8 +26,16 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         } else {
             "No critical access control issues found".to_string()
         },
-        severity: if has_high { Severity::Critical } else { Severity::Low },
-        status: if has_high { ComplianceStatus::Fail } else { ComplianceStatus::Pass },
+        severity: if has_high {
+            Severity::Critical
+        } else {
+            Severity::Low
+        },
+        status: if has_high {
+            ComplianceStatus::Fail
+        } else {
+            ComplianceStatus::Pass
+        },
         remediation: "Implement proper authorization on all endpoints".to_string(),
     });
 
@@ -38,8 +46,16 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         } else {
             "TLS encryption in use".to_string()
         },
-        severity: if !is_https { Severity::High } else { Severity::Low },
-        status: if !is_https { ComplianceStatus::Fail } else { ComplianceStatus::Pass },
+        severity: if !is_https {
+            Severity::High
+        } else {
+            Severity::Low
+        },
+        status: if !is_https {
+            ComplianceStatus::Fail
+        } else {
+            ComplianceStatus::Pass
+        },
         remediation: "Use TLS 1.3 for all connections; encrypt sensitive data at rest".to_string(),
     });
 
@@ -50,8 +66,16 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         } else {
             "No injection issues detected".to_string()
         },
-        severity: if has_critical { Severity::Critical } else { Severity::Info },
-        status: if has_critical { ComplianceStatus::Fail } else { ComplianceStatus::Pass },
+        severity: if has_critical {
+            Severity::Critical
+        } else {
+            Severity::Info
+        },
+        status: if has_critical {
+            ComplianceStatus::Fail
+        } else {
+            ComplianceStatus::Pass
+        },
         remediation: "Use parameterized queries; validate all inputs".to_string(),
     });
 
@@ -62,8 +86,16 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         } else {
             "Security configuration appears adequate".to_string()
         },
-        severity: if has_medium { Severity::Medium } else { Severity::Low },
-        status: if has_medium { ComplianceStatus::Fail } else { ComplianceStatus::Pass },
+        severity: if has_medium {
+            Severity::Medium
+        } else {
+            Severity::Low
+        },
+        status: if has_medium {
+            ComplianceStatus::Fail
+        } else {
+            ComplianceStatus::Pass
+        },
         remediation: "Review security headers; disable unnecessary features".to_string(),
     });
 
@@ -74,12 +106,24 @@ pub async fn generate_report(target: &str, findings: &[Severity]) -> Result<Comp
         } else {
             "No information disclosure issues found".to_string()
         },
-        severity: if has_low { Severity::Medium } else { Severity::Info },
-        status: if has_low { ComplianceStatus::NeedsReview } else { ComplianceStatus::Pass },
+        severity: if has_low {
+            Severity::Medium
+        } else {
+            Severity::Info
+        },
+        status: if has_low {
+            ComplianceStatus::NeedsReview
+        } else {
+            ComplianceStatus::Pass
+        },
         remediation: "Remove server/version headers; implement proper logging".to_string(),
     });
 
-    let failed_count = report.findings.iter().filter(|f| f.status == ComplianceStatus::Fail).count();
+    let failed_count = report
+        .findings
+        .iter()
+        .filter(|f| f.status == ComplianceStatus::Fail)
+        .count();
     let total = report.findings.len();
     report.total_requirements = total;
     report.passed = total - failed_count;
@@ -100,7 +144,9 @@ mod tests {
     #[tokio::test]
     async fn test_owasp_report_with_findings() {
         let findings = vec![Severity::High, Severity::Critical];
-        let report = generate_report("http://example.com", &findings).await.unwrap();
+        let report = generate_report("http://example.com", &findings)
+            .await
+            .unwrap();
         assert!(!report.findings.is_empty());
         assert!(report.failed > 0);
     }
@@ -108,7 +154,9 @@ mod tests {
     #[tokio::test]
     async fn test_owasp_report_clean() {
         let findings = vec![Severity::Info];
-        let report = generate_report("https://example.com", &findings).await.unwrap();
+        let report = generate_report("https://example.com", &findings)
+            .await
+            .unwrap();
         assert_eq!(report.failed, 0);
     }
 }

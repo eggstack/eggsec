@@ -1,4 +1,11 @@
-#[cfg(any(feature = "advanced-hunting", feature = "compliance", feature = "database", feature = "external-integrations", feature = "finding-workflow", feature = "vuln-management"))]
+#[cfg(any(
+    feature = "advanced-hunting",
+    feature = "compliance",
+    feature = "database",
+    feature = "external-integrations",
+    feature = "finding-workflow",
+    feature = "vuln-management"
+))]
 use crate::tui::workers::TaskResult;
 
 #[cfg(feature = "advanced-hunting")]
@@ -71,7 +78,11 @@ pub async fn run_compliance_task(
         if !headers.contains_key("x-frame-options")
             && !headers
                 .get("content-security-policy")
-                .map(|v| v.to_str().map(|s| s.contains("frame-ancestors")).unwrap_or(false))
+                .map(|v| {
+                    v.to_str()
+                        .map(|s| s.contains("frame-ancestors"))
+                        .unwrap_or(false)
+                })
                 .unwrap_or(false)
         {
             findings.push(Severity::Medium);
@@ -133,9 +144,7 @@ pub async fn run_compliance_task(
         if headers
             .get("server")
             .and_then(|v| v.to_str().ok())
-            .map(|v| {
-                v.contains("Apache") || v.contains("nginx") || v.contains("Microsoft-IIS")
-            })
+            .map(|v| v.contains("Apache") || v.contains("nginx") || v.contains("Microsoft-IIS"))
             .unwrap_or(false)
         {
             findings.push(Severity::Info);
@@ -203,43 +212,49 @@ pub async fn run_storage_task(
             let _ = result_tx.send(TaskResult::Storage).await;
             None
         }
-        "list_scans" => {
-            match db.list_scans(50).await {
-                Ok(scans) => {
-                    let _ = result_tx.send(TaskResult::StorageListScans {
-                        scans,
-                    }).await;
-                    None
-                }
-                Err(e) => {
-                    Some(format!("Failed to list scans: {}", e))
-                }
+        "list_scans" => match db.list_scans(50).await {
+            Ok(scans) => {
+                let _ = result_tx.send(TaskResult::StorageListScans { scans }).await;
+                None
             }
-        }
+            Err(e) => Some(format!("Failed to list scans: {}", e)),
+        },
         "list_findings" => {
             let findings = if let Some(ref scan) = scan_id {
                 db.list_findings(scan).await.unwrap_or_default()
             } else {
                 db.list_findings("all").await.unwrap_or_default()
             };
-            let _ = result_tx.send(TaskResult::StorageListFindings {
-                findings,
-            }).await;
+            let _ = result_tx
+                .send(TaskResult::StorageListFindings { findings })
+                .await;
             None
         }
         "search_cve" => {
             if let Some(ref cve) = cve_id {
-                let finding = StoredFinding::new("cve-search", &format!("CVE search: {}", cve), crate::types::Severity::Medium);
-                let _ = result_tx.send(TaskResult::StorageListFindings {
-                    findings: vec![finding],
-                }).await;
+                let finding = StoredFinding::new(
+                    "cve-search",
+                    &format!("CVE search: {}", cve),
+                    crate::types::Severity::Medium,
+                );
+                let _ = result_tx
+                    .send(TaskResult::StorageListFindings {
+                        findings: vec![finding],
+                    })
+                    .await;
             } else {
-                let _ = result_tx.send(TaskResult::Error("No CVE ID provided for search".to_string())).await;
+                let _ = result_tx
+                    .send(TaskResult::Error(
+                        "No CVE ID provided for search".to_string(),
+                    ))
+                    .await;
             }
             None
         }
         _ => {
-            let _ = result_tx.send(TaskResult::Error(format!("Unknown storage mode: {}", mode))).await;
+            let _ = result_tx
+                .send(TaskResult::Error(format!("Unknown storage mode: {}", mode)))
+                .await;
             None
         }
     };
@@ -281,20 +296,29 @@ pub async fn run_integrations_task(
                     severity: None,
                     assignees: assignees.clone(),
                 };
-                let _ = result_tx.send(TaskResult::IntegrationsCreateIssue {
-                    issue,
-                }).await;
+                let _ = result_tx
+                    .send(TaskResult::IntegrationsCreateIssue { issue })
+                    .await;
             } else {
-                let _ = result_tx.send(TaskResult::Error("Title and description required for creating an issue".to_string())).await;
+                let _ = result_tx
+                    .send(TaskResult::Error(
+                        "Title and description required for creating an issue".to_string(),
+                    ))
+                    .await;
             }
         }
         "search_issues" => {
-            let _ = result_tx.send(TaskResult::IntegrationsSearchIssues {
-                issues: vec![],
-            }).await;
+            let _ = result_tx
+                .send(TaskResult::IntegrationsSearchIssues { issues: vec![] })
+                .await;
         }
         _ => {
-            let _ = result_tx.send(TaskResult::Error(format!("Unknown integrations mode: {}", mode))).await;
+            let _ = result_tx
+                .send(TaskResult::Error(format!(
+                    "Unknown integrations mode: {}",
+                    mode
+                )))
+                .await;
         }
     }
 
@@ -337,7 +361,8 @@ pub async fn run_vuln_task(
     let _ = progress_tx.send((0, 3)).await;
 
     match mode.as_str() {
-        "cvss_calc" | "exploit_check" | "asset_assess" | "prioritize" | "triage" | "remediation" => {
+        "cvss_calc" | "exploit_check" | "asset_assess" | "prioritize" | "triage"
+        | "remediation" => {
             let mut results = vec![format!("Mode: {}", mode)];
             if let Some(ref t) = target {
                 results.push(format!("Target: {}", t));
@@ -355,7 +380,9 @@ pub async fn run_vuln_task(
             let _ = result_tx.send(TaskResult::Vuln(assessment)).await;
         }
         _ => {
-            let _ = result_tx.send(TaskResult::Error(format!("Unknown vuln mode: {}", mode))).await;
+            let _ = result_tx
+                .send(TaskResult::Error(format!("Unknown vuln mode: {}", mode)))
+                .await;
         }
     }
 

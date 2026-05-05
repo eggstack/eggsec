@@ -5,23 +5,23 @@
 
 mod spoofed;
 
-use crate::scanner::spoof::{format_spoof_warning, SpoofConfig, SpoofStats};
-use crate::utils::parsing::{parse_ports, resolve_host};
-use crate::utils::strip_controls;
-use crate::utils::sanitize_for_logging;
-use crate::utils::connect_with_nodelay_timeout;
-use crate::output::escape::escape_xml;
 use crate::error::Result;
+use crate::output::escape::escape_xml;
+use crate::scanner::spoof::{format_spoof_warning, SpoofConfig, SpoofStats};
+use crate::utils::connect_with_nodelay_timeout;
+use crate::utils::parsing::{parse_ports, resolve_host};
+use crate::utils::sanitize_for_logging;
+use crate::utils::strip_controls;
+use dashmap::DashMap;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as FmtWrite;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
-use dashmap::DashMap;
-use rustc_hash::FxHashMap;
 
 use crate::cli::PortScanArgs;
 use crate::config::SlapperConfig;
@@ -158,7 +158,11 @@ impl std::fmt::Display for PortScanResults {
 
 pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
     if args.verbose {
-        eprintln!("Starting port scan on {} ports {}", sanitize_for_logging(&args.host), args.ports);
+        eprintln!(
+            "Starting port scan on {} ports {}",
+            sanitize_for_logging(&args.host),
+            args.ports
+        );
     }
 
     let ports = parse_ports(&args.ports)?;
@@ -321,12 +325,20 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
 pub type PortFindingCallback = Box<dyn FnMut(crate::tool::response::Finding) + Send + 'static>;
 
 #[cfg(feature = "tool-api")]
-pub async fn run_cli_with_callback<F>(args: PortScanArgs, config: &SlapperConfig, mut callback: F) -> Result<()>
+pub async fn run_cli_with_callback<F>(
+    args: PortScanArgs,
+    config: &SlapperConfig,
+    mut callback: F,
+) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {
     if args.verbose {
-        eprintln!("Starting port scan on {} ports {}", sanitize_for_logging(&args.host), args.ports);
+        eprintln!(
+            "Starting port scan on {} ports {}",
+            sanitize_for_logging(&args.host),
+            args.ports
+        );
     }
 
     let ports = parse_ports(&args.ports)?;
@@ -489,10 +501,7 @@ where
     Ok(())
 }
 
-pub async fn scan_ports(
-    host: &str,
-    config: PortScanConfig,
-) -> Result<PortScanResults> {
+pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanResults> {
     if config.spoof_config.enabled && config.spoof_config.use_raw_sockets {
         return spoofed::scan_ports_spoofed(
             host,
@@ -546,34 +555,40 @@ pub async fn scan_ports(
             match result {
                 Ok(_) => {
                     let should_insert = match config.max_results {
-Some(limit) => {
-                    let old = results_count.fetch_add(1, Ordering::Relaxed);
-                    old < limit as u64
-                }
+                        Some(limit) => {
+                            let old = results_count.fetch_add(1, Ordering::Relaxed);
+                            old < limit as u64
+                        }
                         None => true,
                     };
                     if should_insert {
-                        results.insert(port, PortResult {
+                        results.insert(
                             port,
-                            status: "open".to_string(),
-                            service: get_service_name(port).to_string(),
-                        });
+                            PortResult {
+                                port,
+                                status: "open".to_string(),
+                                service: get_service_name(port).to_string(),
+                            },
+                        );
                     }
                 }
                 Err(_) => {
                     let should_insert = match config.max_results {
-Some(limit) => {
-                    let old = results_count.fetch_add(1, Ordering::Relaxed);
-                    old < limit as u64
-                }
+                        Some(limit) => {
+                            let old = results_count.fetch_add(1, Ordering::Relaxed);
+                            old < limit as u64
+                        }
                         None => true,
                     };
                     if should_insert {
-                        results.insert(port, PortResult {
+                        results.insert(
                             port,
-                            status: "closed".to_string(),
-                            service: get_service_name(port).to_string(),
-                        });
+                            PortResult {
+                                port,
+                                status: "closed".to_string(),
+                                service: get_service_name(port).to_string(),
+                            },
+                        );
                     }
                 }
             }
@@ -723,7 +738,11 @@ mod tests {
         let before_len = ports.len();
         ports.sort();
         ports.dedup();
-        assert_eq!(ports.len(), before_len, "COMMON_PORTS contains duplicate port numbers");
+        assert_eq!(
+            ports.len(),
+            before_len,
+            "COMMON_PORTS contains duplicate port numbers"
+        );
     }
 
     #[test]

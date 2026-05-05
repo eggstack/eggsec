@@ -941,33 +941,39 @@ pub fn register_ldap_library(lua: &Lua) -> LuaResult<()> {
             let mut mod_list: Vec<(u8, String, Vec<String>)> = Vec::new();
 
             for i in 1.. {
-                match modifications.get::<Table>(i) { Ok(mod_tbl) => {
-                    let operation = mod_tbl
-                        .get::<String>("operation")
-                        .unwrap_or_else(|_| "add".to_string());
-                    let op_byte = match operation.as_str() {
-                        "delete" => 0,
-                        "replace" => 2,
-                        _ => 1, // add
-                    };
+                match modifications.get::<Table>(i) {
+                    Ok(mod_tbl) => {
+                        let operation = mod_tbl
+                            .get::<String>("operation")
+                            .unwrap_or_else(|_| "add".to_string());
+                        let op_byte = match operation.as_str() {
+                            "delete" => 0,
+                            "replace" => 2,
+                            _ => 1, // add
+                        };
 
-                    let attr_type = mod_tbl.get::<String>("type").unwrap_or_default();
+                        let attr_type = mod_tbl.get::<String>("type").unwrap_or_default();
 
-                    let mut values: Vec<String> = Vec::new();
-                    if let Ok(vals) = mod_tbl.get::<Table>("values") {
-                        for j in 1.. {
-                            match vals.get::<String>(j) { Ok(v) => {
-                                values.push(v);
-                            } _ => {
-                                break;
-                            }}
+                        let mut values: Vec<String> = Vec::new();
+                        if let Ok(vals) = mod_tbl.get::<Table>("values") {
+                            for j in 1.. {
+                                match vals.get::<String>(j) {
+                                    Ok(v) => {
+                                        values.push(v);
+                                    }
+                                    _ => {
+                                        break;
+                                    }
+                                }
+                            }
                         }
-                    }
 
-                    mod_list.push((op_byte, attr_type, values));
-                } _ => {
-                    break;
-                }}
+                        mod_list.push((op_byte, attr_type, values));
+                    }
+                    _ => {
+                        break;
+                    }
+                }
             }
 
             let request = build_modify_request(1, &dn, &mod_list);
@@ -998,33 +1004,39 @@ pub fn register_ldap_library(lua: &Lua) -> LuaResult<()> {
             let mut mod_list: Vec<(u8, String, Vec<String>)> = Vec::new();
 
             for i in 1.. {
-                match modifications.get::<Table>(i) { Ok(mod_tbl) => {
-                    let operation = mod_tbl
-                        .get::<String>("operation")
-                        .unwrap_or_else(|_| "add".to_string());
-                    let op_byte = match operation.as_str() {
-                        "delete" => 0,
-                        "replace" => 2,
-                        _ => 1,
-                    };
+                match modifications.get::<Table>(i) {
+                    Ok(mod_tbl) => {
+                        let operation = mod_tbl
+                            .get::<String>("operation")
+                            .unwrap_or_else(|_| "add".to_string());
+                        let op_byte = match operation.as_str() {
+                            "delete" => 0,
+                            "replace" => 2,
+                            _ => 1,
+                        };
 
-                    let attr_type = mod_tbl.get::<String>("type").unwrap_or_default();
+                        let attr_type = mod_tbl.get::<String>("type").unwrap_or_default();
 
-                    let mut values: Vec<String> = Vec::new();
-                    if let Ok(vals) = mod_tbl.get::<Table>("values") {
-                        for j in 1.. {
-                            match vals.get::<String>(j) { Ok(v) => {
-                                values.push(v);
-                            } _ => {
-                                break;
-                            }}
+                        let mut values: Vec<String> = Vec::new();
+                        if let Ok(vals) = mod_tbl.get::<Table>("values") {
+                            for j in 1.. {
+                                match vals.get::<String>(j) {
+                                    Ok(v) => {
+                                        values.push(v);
+                                    }
+                                    _ => {
+                                        break;
+                                    }
+                                }
+                            }
                         }
-                    }
 
-                    mod_list.push((op_byte, attr_type, values));
-                } _ => {
-                    break;
-                }}
+                        mod_list.push((op_byte, attr_type, values));
+                    }
+                    _ => {
+                        break;
+                    }
+                }
             }
 
             let request = build_modify_request(1, &dn, &mod_list);

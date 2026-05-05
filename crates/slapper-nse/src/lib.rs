@@ -115,7 +115,9 @@ impl SandboxConfig {
         }
 
         let cmd_name = cmd.split_whitespace().next().unwrap_or(cmd);
-        self.allowed_commands.iter().any(|allowed| cmd_name == allowed)
+        self.allowed_commands
+            .iter()
+            .any(|allowed| cmd_name == allowed)
     }
 
     /// Check if a network target IP is allowed under the sandbox.
@@ -135,7 +137,9 @@ impl SandboxConfig {
             return true;
         }
 
-        self.allowed_networks.iter().any(|network| network.contains(ip))
+        self.allowed_networks
+            .iter()
+            .any(|network| network.contains(ip))
     }
 
     /// Check if a network target host is allowed.
@@ -169,14 +173,14 @@ pub mod async_executor;
 #[cfg(feature = "nse")]
 pub mod context;
 #[cfg(feature = "nse")]
+pub mod cve;
+#[cfg(feature = "nse")]
 pub mod executor;
 #[cfg(feature = "nse")]
 pub mod executor_core;
 pub mod output;
 #[cfg(feature = "nse")]
 pub mod public_api;
-#[cfg(feature = "nse")]
-pub mod cve;
 
 #[cfg(feature = "nse")]
 pub mod libraries;

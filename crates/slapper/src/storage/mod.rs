@@ -12,10 +12,7 @@ pub mod models;
 pub mod postgres;
 pub mod queries;
 
-use crate::{
-    error::Result,
-    types::SensitiveString,
-};
+use crate::{error::Result, types::SensitiveString};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 

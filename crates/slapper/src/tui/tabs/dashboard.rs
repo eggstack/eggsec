@@ -1,11 +1,11 @@
 use crate::tc;
 use crate::tui::components::ScrollableText;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
+use chrono::{DateTime, Utc};
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
-use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Deserialize)]
 struct PortfolioSnapshot {
@@ -39,6 +39,7 @@ pub struct DashboardTab {
     pub unique_targets: usize,
     pub critical_findings: usize,
     pub today_scans: usize,
+    pub error_message: Option<String>,
 }
 
 impl DashboardTab {
@@ -56,6 +57,7 @@ impl DashboardTab {
             unique_targets: 0,
             critical_findings: 0,
             today_scans: 0,
+            error_message: None,
         };
         tab.render_welcome();
         tab
@@ -68,7 +70,11 @@ impl DashboardTab {
 
         let min_val = *data.iter().min().unwrap_or(&0);
         let max_val = *data.iter().max().unwrap_or(&0);
-        let range = if max_val > min_val { max_val - min_val } else { 1 };
+        let range = if max_val > min_val {
+            max_val - min_val
+        } else {
+            1
+        };
 
         let blocks = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
         let bucket_count = blocks.len() - 1;
@@ -138,9 +144,8 @@ impl DashboardTab {
         ));
         self.view
             .add_line(Line::from("  GraphQL    - GraphQL security testing"));
-        self.view.add_line(Line::from(
-            "  OAuth      - OAuth/OIDC security testing",
-        ));
+        self.view
+            .add_line(Line::from("  OAuth      - OAuth/OIDC security testing"));
         self.view
             .add_line(Line::from("  Cluster    - Distributed scanning"));
         self.view
@@ -317,15 +322,13 @@ impl DashboardTab {
                 .map(|d| d.config_dir().to_path_buf())
                 .unwrap_or_default()
                 .join("memory")
-                .join("portfolio_snapshot.json")
+                .join("portfolio_snapshot.json"),
         );
 
         if let Some(snap) = snapshot {
             let health_pct = (snap.health_score * 100.0) as usize;
-            self.view.add_line(Line::from(format!(
-                "  Portfolio Health: {}%",
-                health_pct
-            )));
+            self.view
+                .add_line(Line::from(format!("  Portfolio Health: {}%", health_pct)));
             self.view.add_line(Line::from(format!(
                 "  Total Scans:      {}",
                 snap.total_scans
@@ -352,17 +355,24 @@ impl DashboardTab {
             } else {
                 "No data"
             };
-            self.view.add_line(Line::from(format!(
-                "  Status:           {}",
-                health_status
-            )));
+            self.view
+                .add_line(Line::from(format!("  Status:           {}", health_status)));
 
             if !snap.findings_trend.is_empty() {
                 self.view.add_line(Line::from(""));
                 if let Some((_, last_count)) = snap.findings_trend.last() {
-                    if let Some((_, prev_count)) = snap.findings_trend.get(snap.findings_trend.len().saturating_sub(2)) {
+                    if let Some((_, prev_count)) = snap
+                        .findings_trend
+                        .get(snap.findings_trend.len().saturating_sub(2))
+                    {
                         let diff = *last_count as i64 - *prev_count as i64;
-                        let trend_icon = if diff > 0 { "↑" } else if diff < 0 { "↓" } else { "→" };
+                        let trend_icon = if diff > 0 {
+                            "↑"
+                        } else if diff < 0 {
+                            "↓"
+                        } else {
+                            "→"
+                        };
                         self.view.add_line(Line::from(format!(
                             "  Monthly Trend:    {} ({}{})",
                             trend_icon,
@@ -393,11 +403,10 @@ impl DashboardTab {
             } else {
                 "No data"
             };
-            self.view.add_line(Line::from(format!(
-                "  Status:          {}",
-                health_status
-            )));
-            self.view.add_line(Line::from("  (Session-only data - Agent not running)"));
+            self.view
+                .add_line(Line::from(format!("  Status:          {}", health_status)));
+            self.view
+                .add_line(Line::from("  (Session-only data - Agent not running)"));
         }
         self.view.add_line(Line::from(""));
 
@@ -446,6 +455,7 @@ impl TabState for DashboardTab {
     }
     fn reset(&mut self) {
         self.state = AppState::Idle;
+        self.error_message = None;
         self.total_scans = 0;
         self.successful_scans = 0;
         self.failed_scans = 0;
@@ -457,11 +467,29 @@ impl TabState for DashboardTab {
         self.sparkline_data.clear();
         self.render_welcome();
     }
+
+    fn set_error(&mut self, msg: String) {
+        self.state = AppState::Error(msg.clone());
+        self.error_message = Some(msg);
+    }
 }
 
 impl TabRender for DashboardTab {
     fn render(&self, f: &mut Frame, area: ratatui::layout::Rect, _insert_mode: bool) {
-        self.view.render(f, area, None);
+        if let Some(ref err_msg) = self.error_message {
+            use ratatui::style::Style;
+            use ratatui::widgets::{Block, Borders, Paragraph};
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Dashboard - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, area);
+        } else {
+            self.view.render(f, area, None);
+        }
     }
 }
 
@@ -470,42 +498,68 @@ impl TabInput for DashboardTab {
     fn handle_focus_prev(&mut self) {}
     fn handle_char(&mut self, _c: char) {}
     fn handle_backspace(&mut self) {}
-    fn handle_enter(&mut self) {}
-    fn handle_escape(&mut self) {}
-    fn handle_up(&mut self) {
-        self.view.scroll_up(1);
+
+    fn handle_paste(&mut self, _text: &str) {}
+
+    fn handle_copy(&mut self) -> Option<String> {
+        Some(self.view.get_content())
     }
-    fn handle_down(&mut self) {
-        self.view.scroll_down(1);
-    }
-    fn handle_left(&mut self) -> bool {
-        false
-    }
-    fn handle_right(&mut self) -> bool {
-        false
-    }
-    fn handle_home(&mut self) {
-        self.view.scroll_to_top();
-    }
-    fn handle_end(&mut self) {
-        self.view.scroll_to_bottom();
-    }
-    fn handle_top(&mut self) {
-        self.view.scroll_to_top();
-    }
-    fn handle_bottom(&mut self) {
-        self.view.scroll_to_bottom();
-    }
+
     fn handle_word_forward(&mut self) {
         for _ in 0..5 {
             self.view.scroll_right(1);
         }
     }
+
     fn handle_word_backward(&mut self) {
         for _ in 0..5 {
             self.view.scroll_left(1);
         }
     }
+
+    fn handle_home(&mut self) {
+        self.view.scroll_to_top();
+    }
+
+    fn handle_end(&mut self) {
+        self.view.scroll_to_bottom();
+    }
+
+    fn handle_top(&mut self) {
+        self.view.scroll_to_top();
+    }
+
+    fn handle_bottom(&mut self) {
+        self.view.scroll_to_bottom();
+    }
+
+    fn handle_enter(&mut self) {}
+    fn handle_escape(&mut self) {}
+
+    fn handle_up(&mut self) {
+        self.view.scroll_up(1);
+    }
+
+    fn handle_down(&mut self) {
+        self.view.scroll_down(1);
+    }
+
+    fn handle_left(&mut self) -> bool {
+        false
+    }
+
+    fn handle_right(&mut self) -> bool {
+        false
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        self.view.is_at_left_edge()
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        self.view.is_at_right_edge()
+    }
+
     fn is_input_focused(&self) -> bool {
         false
     }
@@ -526,7 +580,12 @@ mod tests {
     use super::*;
     use crate::tui::tabs::history::HistoryEntry;
 
-    fn create_test_entry(timestamp: &str, summary: &str, scan_type: &str, target: &str) -> HistoryEntry {
+    fn create_test_entry(
+        timestamp: &str,
+        summary: &str,
+        scan_type: &str,
+        target: &str,
+    ) -> HistoryEntry {
         static mut NEXT_ID: usize = 0;
         let id = unsafe {
             NEXT_ID += 1;
@@ -560,7 +619,10 @@ mod tests {
         dashboard.update_from_history(&entries);
         let second_count = dashboard.today_scans;
 
-        assert_eq!(first_count, second_count, "today_scans should be idempotent");
+        assert_eq!(
+            first_count, second_count,
+            "today_scans should be idempotent"
+        );
         assert_eq!(second_count, 2, "Should have 2 today scans");
     }
 

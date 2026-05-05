@@ -1,8 +1,8 @@
 mod handlers;
 pub mod types;
 
-use axum::{routing::post, Router};
 use crate::tool::registry::ToolRegistry;
+use axum::{routing::post, Router};
 
 pub fn router(registry: ToolRegistry, api_key: Option<String>) -> Router {
     let state = AppState { registry, api_key };

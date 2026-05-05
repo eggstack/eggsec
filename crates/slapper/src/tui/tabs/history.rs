@@ -38,6 +38,7 @@ pub struct HistoryTab {
     pub focus_area: HistoryFocusArea,
     pub scroll_offset: usize,
     pub visible_rows: usize,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -64,6 +65,7 @@ impl HistoryTab {
             focus_area: HistoryFocusArea::List,
             scroll_offset: 0,
             visible_rows: 20,
+            error_message: None,
         }
     }
 
@@ -284,11 +286,28 @@ impl TabState for HistoryTab {
 
     fn reset(&mut self) {
         self.clear_all();
+        self.error_message = None;
+    }
+
+    fn set_error(&mut self, msg: String) {
+        self.error_message = Some(msg);
     }
 }
 
 impl TabRender for HistoryTab {
     fn render(&self, f: &mut Frame, area: Rect, _insert_mode: bool) {
+        if let Some(ref err_msg) = self.error_message {
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("History - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, area);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -313,14 +332,8 @@ impl TabRender for HistoryTab {
 
         let mut list_lines = vec![
             Line::from(vec![
-                Span::styled(
-                    format!("{:<20}", "TIME"),
-                    Style::default().fg(tc!(accent)),
-                ),
-                Span::styled(
-                    format!("{:<10}", "TYPE"),
-                    Style::default().fg(tc!(accent)),
-                ),
+                Span::styled(format!("{:<20}", "TIME"), Style::default().fg(tc!(accent))),
+                Span::styled(format!("{:<10}", "TYPE"), Style::default().fg(tc!(accent))),
                 Span::styled("TARGET", Style::default().fg(tc!(accent))),
             ]),
             Line::from(Span::styled(
@@ -331,7 +344,13 @@ impl TabRender for HistoryTab {
 
         let visible_rows = self.calc_visible_rows(list_area);
 
-        for (display_idx, entry) in self.entries.iter().enumerate().skip(self.scroll_offset).take(visible_rows) {
+        for (display_idx, entry) in self
+            .entries
+            .iter()
+            .enumerate()
+            .skip(self.scroll_offset)
+            .take(visible_rows)
+        {
             let real_idx = self.scroll_offset + display_idx;
             let is_selected = Some(real_idx) == self.selected;
             let style = if is_selected {
@@ -405,6 +424,76 @@ impl TabInput for HistoryTab {
     fn handle_char(&mut self, _c: char) {}
     fn handle_backspace(&mut self) {}
 
+    fn handle_paste(&mut self, _text: &str) {}
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == HistoryFocusArea::Details {
+            Some(self.details_view.get_content())
+        } else if let Some(idx) = self.selected {
+            if let Some(entry) = self.entries.get(idx) {
+                return Some(format!(
+                    "ID: {}\nTimestamp: {}\nType: {}\nTarget: {}\nSummary: {}\nDetails:\n{}",
+                    entry.id,
+                    entry.timestamp,
+                    entry.scan_type,
+                    entry.target,
+                    entry.summary,
+                    entry.details.join("\n")
+                ));
+            }
+            None
+        } else {
+            None
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == HistoryFocusArea::Details {
+            self.details_view.scroll_right(5);
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == HistoryFocusArea::Details {
+            self.details_view.scroll_left(5);
+        }
+    }
+
+    fn handle_home(&mut self) {
+        match self.focus_area {
+            HistoryFocusArea::List => {
+                if !self.entries.is_empty() {
+                    self.selected = Some(0);
+                    self.scroll_offset = 0;
+                    self.update_details_view();
+                }
+            }
+            HistoryFocusArea::Details => self.details_view.scroll_to_top(),
+        }
+    }
+
+    fn handle_end(&mut self) {
+        match self.focus_area {
+            HistoryFocusArea::List => {
+                if !self.entries.is_empty() {
+                    let last = self.entries.len() - 1;
+                    self.selected = Some(last);
+                    self.scroll_offset = last.saturating_sub(self.visible_rows - 1);
+                    self.update_details_view();
+                }
+            }
+            HistoryFocusArea::Details => self.details_view.scroll_to_bottom(),
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.handle_home();
+    }
+
+    fn handle_bottom(&mut self) {
+        self.handle_end();
+    }
+
     fn handle_enter(&mut self) {}
 
     fn handle_escape(&mut self) {
@@ -443,28 +532,20 @@ impl TabInput for HistoryTab {
         }
     }
 
-    fn handle_home(&mut self) {
+    fn is_at_left_edge(&self) -> bool {
         if self.focus_area == HistoryFocusArea::Details {
-            self.details_view.scroll_to_top();
+            self.details_view.is_at_left_edge()
         } else {
-            self.selected = Some(0);
+            true
         }
     }
 
-    fn handle_end(&mut self) {
+    fn is_at_right_edge(&self) -> bool {
         if self.focus_area == HistoryFocusArea::Details {
-            self.details_view.scroll_to_bottom();
+            self.details_view.is_at_right_edge()
         } else {
-            self.selected = Some(self.entries.len().saturating_sub(1));
+            true
         }
-    }
-
-    fn handle_top(&mut self) {
-        self.selected = Some(0);
-    }
-
-    fn handle_bottom(&mut self) {
-        self.selected = Some(self.entries.len().saturating_sub(1));
     }
 
     fn is_input_focused(&self) -> bool {

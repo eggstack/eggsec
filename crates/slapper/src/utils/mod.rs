@@ -51,15 +51,15 @@ pub mod validation;
 pub mod privilege;
 
 pub use auth::constant_time_eq;
-pub use formatting::{preserve_all, strip_controls};
-pub use logging::sanitize_for_logging;
 pub use circuit_breaker::{CircuitBreaker, CircuitState};
 pub use client_pool::{ClientPool, OptimizedClientPool};
+pub use formatting::{preserve_all, strip_controls};
 pub use http::{
     create_http_client, create_http_client_with_options, create_http_client_with_proxy,
-    create_insecure_client_with_options, create_insecure_http_client,
-    get_shared_http_client, get_shared_insecure_http_client,
+    create_insecure_client_with_options, create_insecure_http_client, get_shared_http_client,
+    get_shared_insecure_http_client,
 };
+pub use logging::sanitize_for_logging;
 pub use network::{connect_with_nodelay, connect_with_nodelay_timeout};
 pub use output::{
     print_error, print_info, print_json, print_json_compact, print_success, print_warning,
@@ -70,7 +70,10 @@ pub use target::{
     extract_domain, extract_host_port, extract_target_from_url, is_ip_address, normalize_url,
     parse_host_port, parse_socket_addr, strip_url_protocol,
 };
-pub use validation::{validate_concurrency, validate_git_repo_path, validate_path, validate_path_string, validate_rate_limit, validate_timeout, validate_url};
+pub use validation::{
+    validate_concurrency, validate_git_repo_path, validate_path, validate_path_string,
+    validate_rate_limit, validate_timeout, validate_url,
+};
 
 #[cfg(any(feature = "stress-testing", feature = "packet-inspection"))]
 pub use privilege::{check_privileged, is_root, require_root};

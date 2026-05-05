@@ -1,7 +1,9 @@
 use crate::scanner::ports::PortScanResults;
 use crate::tc;
 use crate::tui::components::ValidationResult;
-use crate::tui::components::{empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText};
+use crate::tui::components::{
+    empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -169,7 +171,8 @@ impl ScanPortsTab {
             if !validation.valid && !t.contains('.') && !t.contains(':') {
                 self.state =
                     AppState::Error(format!("Invalid target: {} - {}", t, validation.message));
-                self.error_message = Some(format!("Invalid target: {} - {}", t, validation.message));
+                self.error_message =
+                    Some(format!("Invalid target: {} - {}", t, validation.message));
                 return;
             }
         }
@@ -216,7 +219,8 @@ impl ScanPortsTab {
 
     fn update_field_validation(&mut self) {
         if let Some(ref mut target_field) = self.inputs.fields.get_mut(0) {
-            let validation = if target_field.value.contains('.') || target_field.value.contains(':') {
+            let validation = if target_field.value.contains('.') || target_field.value.contains(':')
+            {
                 target_field.validate_ip()
             } else {
                 ValidationResult {
@@ -321,7 +325,8 @@ impl TabRender for ScanPortsTab {
             self.results_view
                 .render(f, results_area, Some(tc!(success)));
         } else {
-            let placeholder = empty_state_paragraph("Results", "Results will appear here after running");
+            let placeholder =
+                empty_state_paragraph("Results", "Results will appear here after running");
             f.render_widget(placeholder, results_area);
         }
     }
@@ -374,6 +379,60 @@ impl TabInput for ScanPortsTab {
         }
     }
 
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() {
+            self.inputs.paste(text);
+            self.update_field_validation();
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == ScanPortsFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else if self.focus_area == ScanPortsFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else {
+            None
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == ScanPortsFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == ScanPortsFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == ScanPortsFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == ScanPortsFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == ScanPortsFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == ScanPortsFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = ScanPortsFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = ScanPortsFocusArea::Results;
+    }
+
     fn handle_enter(&mut self) {
         if self.inputs.is_focused() {
             self.inputs.blur();
@@ -398,5 +457,21 @@ impl TabInput for ScanPortsTab {
 
     fn is_input_focused(&self) -> bool {
         self.inputs.is_focused()
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        if self.focus_area == ScanPortsFocusArea::Inputs {
+            self.inputs.is_at_left_edge()
+        } else {
+            true
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        if self.focus_area == ScanPortsFocusArea::Inputs {
+            self.inputs.is_at_right_edge()
+        } else {
+            true
+        }
     }
 }

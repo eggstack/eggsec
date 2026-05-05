@@ -210,11 +210,7 @@ impl SecurityTool for WafTool {
                 vec![AgentSeverity::Medium, AgentSeverity::Low],
                 120000,
             ),
-            WafMode::Stress => (
-                vec![AttackSurface::Web],
-                vec![AgentSeverity::Info],
-                300000,
-            ),
+            WafMode::Stress => (vec![AttackSurface::Web], vec![AgentSeverity::Info], 300000),
         };
 
         vec![ToolCapability {

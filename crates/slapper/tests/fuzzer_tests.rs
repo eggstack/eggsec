@@ -29,17 +29,32 @@ fn test_fuzzer_redos_executor() {
 fn test_payload_generation_sqli() {
     let payloads = get_payloads(PayloadType::Sqli);
     assert!(!payloads.is_empty(), "SQLi payloads should not be empty");
-    assert!(payloads.len() >= 10, "Should have at least 10 SQLi payloads");
+    assert!(
+        payloads.len() >= 10,
+        "Should have at least 10 SQLi payloads"
+    );
 
     // Verify payload structure
     for payload in &payloads {
-        assert!(!payload.payload.is_empty(), "Payload string should not be empty");
-        assert!(!payload.description.is_empty(), "Description should not be empty");
+        assert!(
+            !payload.payload.is_empty(),
+            "Payload string should not be empty"
+        );
+        assert!(
+            !payload.description.is_empty(),
+            "Description should not be empty"
+        );
     }
 
     // Verify critical payloads exist
-    let critical_count = payloads.iter().filter(|p| p.severity == Severity::Critical).count();
-    assert!(critical_count > 0, "Should have critical severity SQLi payloads");
+    let critical_count = payloads
+        .iter()
+        .filter(|p| p.severity == Severity::Critical)
+        .count();
+    assert!(
+        critical_count > 0,
+        "Should have critical severity SQLi payloads"
+    );
 }
 
 #[test]
@@ -56,7 +71,10 @@ fn test_payload_generation_xss() {
 #[test]
 fn test_payload_generation_traversal() {
     let payloads = get_payloads(PayloadType::Traversal);
-    assert!(!payloads.is_empty(), "Traversal payloads should not be empty");
+    assert!(
+        !payloads.is_empty(),
+        "Traversal payloads should not be empty"
+    );
 
     // Verify directory traversal payloads exist
     let has_traversal = payloads.iter().any(|p| p.payload.contains("../"));
@@ -73,7 +91,9 @@ fn test_payload_generation_ssrf() {
     assert!(!payloads.is_empty(), "SSRF payloads should not be empty");
 
     // Verify localhost/internal payloads exist
-    let has_localhost = payloads.iter().any(|p| p.payload.contains("127.0.0.1") || p.payload.contains("localhost"));
+    let has_localhost = payloads
+        .iter()
+        .any(|p| p.payload.contains("127.0.0.1") || p.payload.contains("localhost"));
     assert!(has_localhost, "Should have localhost SSRF payloads");
 }
 
@@ -88,7 +108,10 @@ fn test_all_payload_types() {
         types_seen.insert(payload.payload_type);
     }
     // There are 21 payload types (WebSocket is not included in get_all_payloads)
-    assert!(types_seen.len() >= 20, "Should have at least 20 payload types");
+    assert!(
+        types_seen.len() >= 20,
+        "Should have at least 20 payload types"
+    );
 }
 
 #[test]
@@ -98,13 +121,23 @@ fn test_payload_severity_ordering() {
     // Verify severity levels are valid
     for payload in &payloads {
         match payload.severity {
-            Severity::Critical | Severity::High | Severity::Medium | Severity::Low | Severity::Info => {},
+            Severity::Critical
+            | Severity::High
+            | Severity::Medium
+            | Severity::Low
+            | Severity::Info => {}
         }
     }
 
     // Critical payloads should exist for dangerous types
-    let critical_sqli = payloads.iter().filter(|p| p.severity == Severity::Critical).count();
-    assert!(critical_sqli > 0, "SQLi should have critical severity payloads");
+    let critical_sqli = payloads
+        .iter()
+        .filter(|p| p.severity == Severity::Critical)
+        .count();
+    assert!(
+        critical_sqli > 0,
+        "SQLi should have critical severity payloads"
+    );
 }
 
 #[test]
@@ -122,9 +155,9 @@ fn test_graphql_payloads() {
     assert!(!payloads.is_empty(), "GraphQL payloads should not be empty");
 
     // Verify introspection-related payloads exist
-    let has_introspection = payloads.iter().any(|p| 
-        p.payload.contains("__schema") || p.payload.contains("__type")
-    );
+    let has_introspection = payloads
+        .iter()
+        .any(|p| p.payload.contains("__schema") || p.payload.contains("__type"));
     assert!(has_introspection, "Should have introspection payloads");
 }
 
@@ -134,9 +167,9 @@ fn test_jwt_payloads() {
     assert!(!payloads.is_empty(), "JWT payloads should not be empty");
 
     // Verify JWT-related payloads exist
-    let has_jwt = payloads.iter().any(|p| 
+    let has_jwt = payloads.iter().any(|p| {
         p.payload.contains("eyJ") || p.payload.contains("alg") || p.payload.contains("none")
-    );
+    });
     assert!(has_jwt, "Should have JWT-related payloads");
 }
 
@@ -146,21 +179,24 @@ fn test_ssti_payloads() {
     assert!(!payloads.is_empty(), "SSTI payloads should not be empty");
 
     // Verify template syntax payloads exist
-    let has_template = payloads.iter().any(|p| 
-        p.payload.contains("{{") || p.payload.contains("${")
-    );
+    let has_template = payloads
+        .iter()
+        .any(|p| p.payload.contains("{{") || p.payload.contains("${"));
     assert!(has_template, "Should have template syntax payloads");
 }
 
 #[test]
 fn test_cmd_injection_payloads() {
     let payloads = get_payloads(PayloadType::Cmd);
-    assert!(!payloads.is_empty(), "Command injection payloads should not be empty");
+    assert!(
+        !payloads.is_empty(),
+        "Command injection payloads should not be empty"
+    );
 
     // Verify OS command payloads exist
-    let has_cmd = payloads.iter().any(|p| 
-        p.payload.contains(";") || p.payload.contains("|") || p.payload.contains("`")
-    );
+    let has_cmd = payloads
+        .iter()
+        .any(|p| p.payload.contains(";") || p.payload.contains("|") || p.payload.contains("`"));
     assert!(has_cmd, "Should have command injection payloads");
 }
 
@@ -170,7 +206,9 @@ fn test_ldap_payloads() {
     assert!(!payloads.is_empty(), "LDAP payloads should not be empty");
 
     // Verify LDAP filter payloads exist
-    let has_filter = payloads.iter().any(|p| p.payload.contains("*") || p.payload.contains("(|"));
+    let has_filter = payloads
+        .iter()
+        .any(|p| p.payload.contains("*") || p.payload.contains("(|"));
     assert!(has_filter, "Should have LDAP filter payloads");
 }
 
@@ -180,7 +218,9 @@ fn test_xxe_payloads() {
     assert!(!payloads.is_empty(), "XXE payloads should not be empty");
 
     // Verify entity payloads exist
-    let has_entity = payloads.iter().any(|p| p.payload.contains("ENTITY") || p.payload.contains("DOCTYPE"));
+    let has_entity = payloads
+        .iter()
+        .any(|p| p.payload.contains("ENTITY") || p.payload.contains("DOCTYPE"));
     assert!(has_entity, "Should have XXE entity payloads");
 }
 
@@ -190,9 +230,9 @@ fn test_idor_payloads() {
     assert!(!payloads.is_empty(), "IDOR payloads should not be empty");
 
     // Verify ID manipulation payloads exist
-    let has_id = payloads.iter().any(|p| 
+    let has_id = payloads.iter().any(|p| {
         p.payload.contains("../") || p.payload.contains("admin") || p.payload.contains("1")
-    );
+    });
     assert!(has_id, "Should have IDOR manipulation payloads");
 }
 
@@ -202,57 +242,69 @@ fn test_redos_payloads() {
     assert!(!payloads.is_empty(), "ReDoS payloads should not be empty");
 
     // Verify regex patterns exist
-    let has_pattern = payloads.iter().any(|p| 
-        p.payload.contains("(a+)+") || p.payload.contains(".*.*")
-    );
+    let has_pattern = payloads
+        .iter()
+        .any(|p| p.payload.contains("(a+)+") || p.payload.contains(".*.*"));
     assert!(has_pattern, "Should have ReDoS pattern payloads");
 }
 
 #[test]
 fn test_compression_payloads() {
     let payloads = get_payloads(PayloadType::Compression);
-    assert!(!payloads.is_empty(), "Compression payloads should not be empty");
+    assert!(
+        !payloads.is_empty(),
+        "Compression payloads should not be empty"
+    );
 
     // Verify compression-related payloads exist
-    let has_compression = payloads.iter().any(|p| 
+    let has_compression = payloads.iter().any(|p| {
         p.payload.contains("gzip") || p.payload.contains("deflate") || p.payload.len() > 50
-    );
+    });
     assert!(has_compression, "Should have compression-related payloads");
 }
 
 #[test]
 fn test_host_header_payloads() {
     let payloads = get_payloads(PayloadType::Host);
-    assert!(!payloads.is_empty(), "Host header payloads should not be empty");
+    assert!(
+        !payloads.is_empty(),
+        "Host header payloads should not be empty"
+    );
 
     // Verify host manipulation payloads exist
-    let has_host = payloads.iter().any(|p| 
-        p.payload.contains("localhost") || p.payload.contains("127.0.0.1")
-    );
+    let has_host = payloads
+        .iter()
+        .any(|p| p.payload.contains("localhost") || p.payload.contains("127.0.0.1"));
     assert!(has_host, "Should have host header manipulation payloads");
 }
 
 #[test]
 fn test_cache_poisoning_payloads() {
     let payloads = get_payloads(PayloadType::Cache);
-    assert!(!payloads.is_empty(), "Cache poisoning payloads should not be empty");
+    assert!(
+        !payloads.is_empty(),
+        "Cache poisoning payloads should not be empty"
+    );
 
     // Verify cache-related payloads exist
-    let has_cache = payloads.iter().any(|p| 
-        p.payload.contains("X-Forwarded-Host") || p.payload.contains("X-Forwarded-Proto")
-    );
+    let has_cache = payloads
+        .iter()
+        .any(|p| p.payload.contains("X-Forwarded-Host") || p.payload.contains("X-Forwarded-Proto"));
     assert!(has_cache, "Should have cache poisoning payloads");
 }
 
 #[test]
 fn test_csv_injection_payloads() {
     let payloads = get_payloads(PayloadType::Csv);
-    assert!(!payloads.is_empty(), "CSV injection payloads should not be empty");
+    assert!(
+        !payloads.is_empty(),
+        "CSV injection payloads should not be empty"
+    );
 
     // Verify formula injection payloads exist
-    let has_formula = payloads.iter().any(|p| 
+    let has_formula = payloads.iter().any(|p| {
         p.payload.starts_with('=') || p.payload.starts_with('+') || p.payload.starts_with('@')
-    );
+    });
     assert!(has_formula, "Should have CSV formula injection payloads");
 }
 
@@ -262,33 +314,39 @@ fn test_soap_payloads() {
     assert!(!payloads.is_empty(), "SOAP payloads should not be empty");
 
     // Verify XML payloads exist
-    let has_xml = payloads.iter().any(|p| 
-        p.payload.contains("<") && p.payload.contains(">")
-    );
+    let has_xml = payloads
+        .iter()
+        .any(|p| p.payload.contains("<") && p.payload.contains(">"));
     assert!(has_xml, "Should have XML/SOAP payloads");
 }
 
 #[test]
 fn test_redirect_payloads() {
     let payloads = get_payloads(PayloadType::Redirect);
-    assert!(!payloads.is_empty(), "Redirect payloads should not be empty");
+    assert!(
+        !payloads.is_empty(),
+        "Redirect payloads should not be empty"
+    );
 
     // Verify redirect payloads exist
-    let has_redirect = payloads.iter().any(|p| 
+    let has_redirect = payloads.iter().any(|p| {
         p.payload.contains("http://") || p.payload.contains("https://") || p.payload.contains("//")
-    );
+    });
     assert!(has_redirect, "Should have redirect payloads");
 }
 
 #[test]
 fn test_header_expansion_payloads() {
     let payloads = get_payloads(PayloadType::Headers);
-    assert!(!payloads.is_empty(), "Header expansion payloads should not be empty");
+    assert!(
+        !payloads.is_empty(),
+        "Header expansion payloads should not be empty"
+    );
 
     // Verify header payloads exist
-    let has_header = payloads.iter().any(|p| 
-        p.payload.contains("X-") || p.payload.contains("Content-")
-    );
+    let has_header = payloads
+        .iter()
+        .any(|p| p.payload.contains("X-") || p.payload.contains("Content-"));
     assert!(has_header, "Should have header expansion payloads");
 }
 
@@ -298,9 +356,11 @@ fn test_oauth_payloads() {
     assert!(!payloads.is_empty(), "OAuth payloads should not be empty");
 
     // Verify OAuth-specific payloads exist
-    let has_oauth = payloads.iter().any(|p| 
-        p.payload.contains("redirect_uri") || p.payload.contains("scope") || p.payload.contains("state")
-    );
+    let has_oauth = payloads.iter().any(|p| {
+        p.payload.contains("redirect_uri")
+            || p.payload.contains("scope")
+            || p.payload.contains("state")
+    });
     assert!(has_oauth, "Should have OAuth payloads");
 }
 
@@ -313,11 +373,14 @@ fn test_grpc_payloads() {
 #[test]
 fn test_deserialization_payloads() {
     let payloads = get_payloads(PayloadType::Deser);
-    assert!(!payloads.is_empty(), "Deserialization payloads should not be empty");
+    assert!(
+        !payloads.is_empty(),
+        "Deserialization payloads should not be empty"
+    );
 
     // Verify serialization payloads exist
-    let has_ser = payloads.iter().any(|p| 
+    let has_ser = payloads.iter().any(|p| {
         p.payload.contains("rO0") || p.payload.contains("aced") || p.payload.contains("<?xml")
-    );
+    });
     assert!(has_ser, "Should have deserialization payloads");
 }

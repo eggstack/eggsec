@@ -57,7 +57,9 @@ pub fn get_payloads() -> Vec<Payload> {
     );
 
     for p in &mut payloads {
-        if p.tags.contains(&"basic-injection".to_string()) && !p.tags.contains(&"classic".to_string()) {
+        if p.tags.contains(&"basic-injection".to_string())
+            && !p.tags.contains(&"classic".to_string())
+        {
             p.tags.push("classic".to_string());
         }
         if p.tags.contains(&"union-based".to_string()) {

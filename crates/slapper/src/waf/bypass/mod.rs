@@ -1,4 +1,3 @@
-
 pub mod evasion;
 pub mod headers;
 pub mod profiles;
@@ -127,7 +126,7 @@ impl BypassEngine {
 }
 
 pub fn is_bypass_successful(status: u16, detection: &WafDetectionResult) -> bool {
-    !crate::constants::waf::BLOCKED_STATUS_CODES.contains(&status) 
-        && status != detection.status_code 
+    !crate::constants::waf::BLOCKED_STATUS_CODES.contains(&status)
+        && status != detection.status_code
         && (200..400).contains(&status)
 }

@@ -8,8 +8,8 @@ use ratatui::{
 
 use crate::tc;
 
-use crate::tui::App;
 use crate::tui::components::centered_rect;
+use crate::tui::App;
 use crate::utils::preserve_all;
 
 #[derive(Debug, Clone)]
@@ -130,13 +130,13 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
         return;
     }
 
-        f.render_widget(
-            Block::default()
-                .title("Search Results")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(tc!(accent))),
-            search_area,
-        );
+    f.render_widget(
+        Block::default()
+            .title("Search Results")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(accent))),
+        search_area,
+    );
 
     let inner = Rect {
         x: search_area.x + 1,
@@ -170,7 +170,9 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
         .enumerate()
         .map(|(i, r)| {
             let style = if start + i == search.selected {
-                Style::default().fg(tc!(warning)).add_modifier(Modifier::REVERSED)
+                Style::default()
+                    .fg(tc!(warning))
+                    .add_modifier(Modifier::REVERSED)
             } else {
                 Style::default().fg(tc!(text))
             };
@@ -189,8 +191,7 @@ pub fn draw_search_results(f: &mut Frame, app: &App) {
         Constraint::Length(10),
         Constraint::Min(third_col_min),
     ];
-    let table = Table::new(rows, widths)
-        .block(Block::default().borders(Borders::NONE));
+    let table = Table::new(rows, widths).block(Block::default().borders(Borders::NONE));
 
     f.render_widget(table, inner);
 }

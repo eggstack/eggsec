@@ -188,11 +188,8 @@ mod tests {
     #[test]
     fn test_check_vulnerability_wildcard_with_credentials() {
         let analyzer = CorsAnalyzer::new().unwrap();
-        let (vulnerable, vuln_type) = analyzer.check_vulnerability(
-            "https://evil.com",
-            &Some("*".to_string()),
-            true,
-        );
+        let (vulnerable, vuln_type) =
+            analyzer.check_vulnerability("https://evil.com", &Some("*".to_string()), true);
         assert!(vulnerable);
         assert_eq!(vuln_type, Some("Wildcard with credentials".to_string()));
     }
@@ -200,11 +197,8 @@ mod tests {
     #[test]
     fn test_check_vulnerability_null_origin_allowed() {
         let analyzer = CorsAnalyzer::new().unwrap();
-        let (vulnerable, vuln_type) = analyzer.check_vulnerability(
-            "https://evil.com",
-            &Some("null".to_string()),
-            false,
-        );
+        let (vulnerable, vuln_type) =
+            analyzer.check_vulnerability("https://evil.com", &Some("null".to_string()), false);
         assert!(vulnerable);
         assert_eq!(vuln_type, Some("Null origin allowed".to_string()));
     }
@@ -212,11 +206,8 @@ mod tests {
     #[test]
     fn test_check_vulnerability_null_reflection() {
         let analyzer = CorsAnalyzer::new().unwrap();
-        let (vulnerable, vuln_type) = analyzer.check_vulnerability(
-            "null",
-            &Some("https://evil.com".to_string()),
-            false,
-        );
+        let (vulnerable, vuln_type) =
+            analyzer.check_vulnerability("null", &Some("https://evil.com".to_string()), false);
         assert!(vulnerable);
         assert_eq!(vuln_type, Some("Null origin reflection".to_string()));
     }
@@ -236,11 +227,8 @@ mod tests {
     #[test]
     fn test_check_vulnerability_no_acao_header() {
         let analyzer = CorsAnalyzer::new().unwrap();
-        let (vulnerable, vuln_type) = analyzer.check_vulnerability(
-            "https://evil.com",
-            &None,
-            false,
-        );
+        let (vulnerable, vuln_type) =
+            analyzer.check_vulnerability("https://evil.com", &None, false);
         assert!(!vulnerable);
         assert!(vuln_type.is_none());
     }

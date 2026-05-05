@@ -39,9 +39,16 @@ pub async fn chat_completions(
 ) -> Result<Response, &'static str> {
     require_auth(&state, &headers)?;
     if req.stream.unwrap_or(false) {
-        Ok(streaming_response(state.registry.clone(), state.scope.clone(), req).await.into_response())
+        Ok(
+            streaming_response(state.registry.clone(), state.scope.clone(), req)
+                .await
+                .into_response(),
+        )
     } else {
-        Ok(Json(non_streaming_response(state.registry.clone(), state.scope.clone(), req).await).into_response())
+        Ok(
+            Json(non_streaming_response(state.registry.clone(), state.scope.clone(), req).await)
+                .into_response(),
+        )
     }
 }
 
@@ -61,10 +68,11 @@ async fn streaming_response(
     let target = extract_target_from_query(&user_query);
     if let Some(ref scope) = scope {
         if !scope.is_target_allowed(&target.value).unwrap_or(false) {
-            let events: Vec<Result<axum::response::sse::Event, Infallible>> = vec![Ok(
-                axum::response::sse::Event::default()
-                    .data(format!(r#"{{"error": "Scope violation: {} not allowed"}}"#, target.value))
-            )];
+            let events: Vec<Result<axum::response::sse::Event, Infallible>> =
+                vec![Ok(axum::response::sse::Event::default().data(format!(
+                    r#"{{"error": "Scope violation: {} not allowed"}}"#,
+                    target.value
+                )))];
             return Sse::new(stream::iter(events));
         }
     }
@@ -82,7 +90,10 @@ async fn streaming_response(
         let chunk = StreamChunk {
             id: id.clone(),
             object: "chat.completion.chunk".to_string(),
-            created: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+            created: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
             model: model.clone(),
             choices: vec![StreamChoice {
                 index: 0,
@@ -96,14 +107,18 @@ async fn streaming_response(
     }
 
     if !matched_tools.is_empty() {
-        let tool_calls: Vec<ToolCall> = matched_tools.iter().map(|t| ToolCall {
-            id: format!("call_{}", uuid::Uuid::new_v4()),
-            tool_type: "function".to_string(),
-            function: FunctionCall {
-                name: t.name.clone(),
-                arguments: serde_json::to_string(&extract_tool_arguments(t, &user_query)).unwrap_or_else(|_| "{}".to_string()),
-            },
-        }).collect();
+        let tool_calls: Vec<ToolCall> = matched_tools
+            .iter()
+            .map(|t| ToolCall {
+                id: format!("call_{}", uuid::Uuid::new_v4()),
+                tool_type: "function".to_string(),
+                function: FunctionCall {
+                    name: t.name.clone(),
+                    arguments: serde_json::to_string(&extract_tool_arguments(t, &user_query))
+                        .unwrap_or_else(|_| "{}".to_string()),
+                },
+            })
+            .collect();
 
         let delta = ChatMessage {
             role: "assistant".to_string(),
@@ -113,7 +128,10 @@ async fn streaming_response(
         let chunk = StreamChunk {
             id: id.clone(),
             object: "chat.completion.chunk".to_string(),
-            created: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+            created: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
             model: model.clone(),
             choices: vec![StreamChoice {
                 index: 0,
@@ -138,7 +156,10 @@ async fn non_streaming_response(
 ) -> ChatCompletionResponse {
     let model = req.model.clone();
     let id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
-    let created = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let created = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 
     let system_prompt = extract_system_prompt(&req.messages);
     let user_query = extract_user_query(&req.messages);
@@ -174,7 +195,6 @@ async fn non_streaming_response(
     }
 
     let content = if !matched_tools.is_empty() && req.tools.is_some() {
-
         let mut results = Vec::with_capacity(matched_tools.len().min(3));
 
         for tool_info in matched_tools.iter().take(3) {
@@ -210,14 +230,19 @@ async fn non_streaming_response(
     };
 
     if !matched_tools.is_empty() && req.tools.is_some() {
-        let calls: Vec<ToolCall> = matched_tools.iter().take(3).map(|t| ToolCall {
-            id: format!("call_{}", uuid::Uuid::new_v4()),
-            tool_type: "function".to_string(),
-            function: FunctionCall {
-                name: t.name.clone(),
-                arguments: serde_json::to_string(&extract_tool_arguments(t, &user_query)).unwrap_or_else(|_| "{}".to_string()),
-            },
-        }).collect();
+        let calls: Vec<ToolCall> = matched_tools
+            .iter()
+            .take(3)
+            .map(|t| ToolCall {
+                id: format!("call_{}", uuid::Uuid::new_v4()),
+                tool_type: "function".to_string(),
+                function: FunctionCall {
+                    name: t.name.clone(),
+                    arguments: serde_json::to_string(&extract_tool_arguments(t, &user_query))
+                        .unwrap_or_else(|_| "{}".to_string()),
+                },
+            })
+            .collect();
         tool_calls = Some(calls);
     }
 
@@ -274,7 +299,9 @@ fn extract_target_from_query(query: &str) -> Target {
                 .find(|c: char| c.is_whitespace())
                 .map(|i| idx + i)
                 .unwrap_or(query.len());
-            let value = query[idx..end].trim_end_matches(|c: char| c.is_ascii_punctuation() && c != '/' && c != ':').to_string();
+            let value = query[idx..end]
+                .trim_end_matches(|c: char| c.is_ascii_punctuation() && c != '/' && c != ':')
+                .to_string();
             if !value.is_empty() {
                 return Target::url(value);
             }
@@ -300,7 +327,10 @@ fn extract_target_from_query(query: &str) -> Target {
 
     for word in &words {
         if word.len() > 3 && !words.iter().take(3).any(|w| *w == *word) {
-            if word.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') {
+            if word
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+            {
                 if !word.starts_with("http") && word.contains('.') {
                     return Target::domain(*word);
                 }
@@ -366,7 +396,9 @@ fn find_matching_tools(
             let name_lower = t.name.to_lowercase();
             let desc_lower = t.description.to_lowercase();
             query_lower.contains(&name_lower)
-                || desc_lower.split_whitespace().any(|w| query_lower.contains(w))
+                || desc_lower
+                    .split_whitespace()
+                    .any(|w| query_lower.contains(w))
                 || t.capabilities.iter().any(|c| {
                     c.name.to_lowercase().contains(&query_lower)
                         || c.description.to_lowercase().contains(&query_lower)
@@ -381,7 +413,6 @@ fn extract_tool_arguments(
     tool: &crate::tool::registry::ToolInfo,
     query: &str,
 ) -> serde_json::Value {
-
     let mut args = serde_json::Map::new();
     let target = extract_target_from_query(query);
 
@@ -399,14 +430,18 @@ fn extract_tool_arguments(
                     }
                 }
                 "concurrency" | "threads" => {
-                    if let Some(val) = extract_number_from_query(query, &["concurrency", "threads", "parallel"]) {
+                    if let Some(val) =
+                        extract_number_from_query(query, &["concurrency", "threads", "parallel"])
+                    {
                         args.insert(param.name.clone(), serde_json::json!(val));
                     } else if let Some(default) = &param.default {
                         args.insert(param.name.clone(), default.clone());
                     }
                 }
                 "timeout" | "duration" => {
-                    if let Some(val) = extract_number_from_query(query, &["timeout", "duration", "seconds"]) {
+                    if let Some(val) =
+                        extract_number_from_query(query, &["timeout", "duration", "seconds"])
+                    {
                         args.insert(param.name.clone(), serde_json::json!(val));
                     } else if let Some(default) = &param.default {
                         args.insert(param.name.clone(), default.clone());
@@ -414,7 +449,9 @@ fn extract_tool_arguments(
                 }
                 "verbose" | "debug" => {
                     let query_lower = query.to_lowercase();
-                    let val = query_lower.contains("verbose") || query_lower.contains("debug") || query_lower.contains("-v");
+                    let val = query_lower.contains("verbose")
+                        || query_lower.contains("debug")
+                        || query_lower.contains("-v");
                     args.insert(param.name.clone(), serde_json::json!(val));
                 }
                 _ => {
@@ -475,8 +512,16 @@ mod tests {
     #[test]
     fn test_extract_user_query_from_messages() {
         let messages = vec![
-            ChatMessage { role: "system".to_string(), content: Some("You are helpful".to_string()), tool_calls: None },
-            ChatMessage { role: "user".to_string(), content: Some("Scan example.com".to_string()), tool_calls: None },
+            ChatMessage {
+                role: "system".to_string(),
+                content: Some("You are helpful".to_string()),
+                tool_calls: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some("Scan example.com".to_string()),
+                tool_calls: None,
+            },
         ];
         let query = extract_user_query(&messages);
         assert_eq!(query, "Scan example.com");
@@ -485,9 +530,21 @@ mod tests {
     #[test]
     fn test_extract_user_query_multiple_user_messages() {
         let messages = vec![
-            ChatMessage { role: "user".to_string(), content: Some("First".to_string()), tool_calls: None },
-            ChatMessage { role: "assistant".to_string(), content: Some("OK".to_string()), tool_calls: None },
-            ChatMessage { role: "user".to_string(), content: Some("Second".to_string()), tool_calls: None },
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some("First".to_string()),
+                tool_calls: None,
+            },
+            ChatMessage {
+                role: "assistant".to_string(),
+                content: Some("OK".to_string()),
+                tool_calls: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some("Second".to_string()),
+                tool_calls: None,
+            },
         ];
         let query = extract_user_query(&messages);
         assert_eq!(query, "First\nSecond");
@@ -495,18 +552,22 @@ mod tests {
 
     #[test]
     fn test_extract_system_prompt_default() {
-        let messages = vec![
-            ChatMessage { role: "user".to_string(), content: Some("Hello".to_string()), tool_calls: None },
-        ];
+        let messages = vec![ChatMessage {
+            role: "user".to_string(),
+            content: Some("Hello".to_string()),
+            tool_calls: None,
+        }];
         let prompt = extract_system_prompt(&messages);
         assert!(prompt.contains("Slapper"));
     }
 
     #[test]
     fn test_extract_system_prompt_custom() {
-        let messages = vec![
-            ChatMessage { role: "system".to_string(), content: Some("Custom prompt".to_string()), tool_calls: None },
-        ];
+        let messages = vec![ChatMessage {
+            role: "system".to_string(),
+            content: Some("Custom prompt".to_string()),
+            tool_calls: None,
+        }];
         let prompt = extract_system_prompt(&messages);
         assert_eq!(prompt, "Custom prompt");
     }
@@ -519,7 +580,8 @@ mod tests {
 
     #[test]
     fn test_extract_target_domain() {
-        let target = extract_target_from_query("Check vulnerabilities on test-server.example.com please");
+        let target =
+            extract_target_from_query("Check vulnerabilities on test-server.example.com please");
         assert_eq!(target.value, "test-server.example.com");
     }
 
@@ -531,16 +593,31 @@ mod tests {
 
     #[test]
     fn test_extract_port_from_query() {
-        assert_eq!(extract_port_from_query("Scan port 8080"), Some("8080".to_string()));
-        assert_eq!(extract_port_from_query("--port=443"), Some("443".to_string()));
+        assert_eq!(
+            extract_port_from_query("Scan port 8080"),
+            Some("8080".to_string())
+        );
+        assert_eq!(
+            extract_port_from_query("--port=443"),
+            Some("443".to_string())
+        );
         assert_eq!(extract_port_from_query("no port mentioned"), None);
     }
 
     #[test]
     fn test_extract_number_from_query() {
-        assert_eq!(extract_number_from_query("use concurrency 10", &["concurrency"]), Some(10));
-        assert_eq!(extract_number_from_query("timeout 30 seconds", &["timeout"]), Some(30));
-        assert_eq!(extract_number_from_query("no numbers here", &["concurrency"]), None);
+        assert_eq!(
+            extract_number_from_query("use concurrency 10", &["concurrency"]),
+            Some(10)
+        );
+        assert_eq!(
+            extract_number_from_query("timeout 30 seconds", &["timeout"]),
+            Some(30)
+        );
+        assert_eq!(
+            extract_number_from_query("no numbers here", &["concurrency"]),
+            None
+        );
     }
 
     #[test]

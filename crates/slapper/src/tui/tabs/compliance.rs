@@ -1,6 +1,8 @@
 use crate::compliance::{ComplianceFramework, ComplianceReport};
 use crate::tc;
-use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem};
+use crate::tui::components::{
+    empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -17,6 +19,7 @@ pub struct ComplianceTab {
     pub state: AppState,
     pub results_view: ScrollableText,
     pub focus_area: ComplianceFocusArea,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,6 +49,7 @@ impl ComplianceTab {
             state: AppState::Idle,
             results_view: ScrollableText::new("Results"),
             focus_area: ComplianceFocusArea::Inputs,
+            error_message: None,
         }
     }
 
@@ -163,6 +167,7 @@ impl TabState for ComplianceTab {
         self.state = AppState::Idle;
         self.report = None;
         self.results_view.clear();
+        self.error_message = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -170,10 +175,7 @@ impl TabState for ComplianceTab {
 
     fn set_error(&mut self, msg: String) {
         self.state = AppState::Error(msg.clone());
-        self.results_view.add_line(Line::from(Span::styled(
-            format!("Error: {}", msg),
-            Style::default().fg(tc!(error)),
-        )));
+        self.error_message = Some(msg);
     }
 }
 
@@ -188,6 +190,19 @@ impl TabRender for ComplianceTab {
     }
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        if let Some(ref err_msg) = self.error_message {
+            use ratatui::widgets::{Block, Borders, Paragraph};
+            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Compliance - Error"),
+                )
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, area);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(9), Constraint::Min(0)])
@@ -282,6 +297,50 @@ impl TabInput for ComplianceTab {
         }
     }
 
+    fn handle_paste(&mut self, text: &str) {
+        if self.focus_area == ComplianceFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == ComplianceFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == ComplianceFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == ComplianceFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == ComplianceFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == ComplianceFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == ComplianceFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = ComplianceFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = ComplianceFocusArea::Results;
+        self.inputs.blur();
+    }
+
     fn handle_enter(&mut self) {
         match self.focus_area {
             ComplianceFocusArea::Inputs => {
@@ -351,7 +410,7 @@ impl TabInput for ComplianceTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.focus_area == ComplianceFocusArea::Inputs {
-            self.inputs.fields[0].cursor_pos == 0
+            self.inputs.is_at_left_edge()
         } else if self.focus_area == ComplianceFocusArea::Framework {
             self.framework_selector.selected == 0
         } else {
@@ -361,8 +420,7 @@ impl TabInput for ComplianceTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == ComplianceFocusArea::Inputs {
-            let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.len()
+            self.inputs.is_at_right_edge()
         } else if self.focus_area == ComplianceFocusArea::Framework {
             self.framework_selector.selected
                 >= self.framework_selector.items.len().saturating_sub(1)

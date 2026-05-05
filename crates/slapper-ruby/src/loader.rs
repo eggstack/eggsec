@@ -103,7 +103,12 @@ impl PluginLoader {
         Ok(plugin)
     }
 
-    pub fn run_plugin(&self, name: &str, target: &str, timeout_secs: u64) -> Result<RubyPluginResult> {
+    pub fn run_plugin(
+        &self,
+        name: &str,
+        target: &str,
+        timeout_secs: u64,
+    ) -> Result<RubyPluginResult> {
         let plugin = self
             .loaded_plugins
             .iter()
@@ -159,7 +164,9 @@ impl Plugin for PluginLoader {
             .find(|p| p.name == check_name)
             .ok_or_else(|| anyhow!("Plugin not found: {}", check_name))?;
 
-        let ruby_result = self.client.run_plugin(plugin, target, self.client.get_timeout())?;
+        let ruby_result = self
+            .client
+            .run_plugin(plugin, target, self.client.get_timeout())?;
 
         for finding in &ruby_result.findings {
             if let Some(ref evidence) = finding.evidence {
@@ -203,7 +210,10 @@ impl Plugin for PluginLoader {
         let mut all_errors = Vec::new();
 
         for plugin in &self.loaded_plugins {
-            match self.client.run_plugin(plugin, target, self.client.get_timeout()) {
+            match self
+                .client
+                .run_plugin(plugin, target, self.client.get_timeout())
+            {
                 Ok(ruby_result) => {
                     for finding in &ruby_result.findings {
                         if let Some(ref evidence) = finding.evidence {
@@ -318,7 +328,9 @@ impl Plugin for RubyPluginAdapter {
             anyhow::bail!("Unknown check: {}", check_name);
         }
 
-        let ruby_result = self.client.run_plugin(&self.plugin, target, self.client.get_timeout())?;
+        let ruby_result =
+            self.client
+                .run_plugin(&self.plugin, target, self.client.get_timeout())?;
 
         for finding in &ruby_result.findings {
             if let Some(ref evidence) = finding.evidence {

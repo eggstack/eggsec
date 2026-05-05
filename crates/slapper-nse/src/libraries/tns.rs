@@ -66,7 +66,7 @@ pub fn register_tns_library(lua: &Lua) -> LuaResult<()> {
             match TcpStream::connect_timeout(
                 &addr
                     .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 1521))),
+                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 1521))),
                 Duration::from_secs(5),
             ) {
                 Ok(mut stream) => {
@@ -124,7 +124,7 @@ pub fn register_tns_library(lua: &Lua) -> LuaResult<()> {
             match TcpStream::connect_timeout(
                 &addr
                     .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 1521))),
+                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 1521))),
                 Duration::from_secs(5),
             ) {
                 Ok(mut stream) => {
@@ -171,7 +171,7 @@ pub fn register_tns_library(lua: &Lua) -> LuaResult<()> {
             match TcpStream::connect_timeout(
                 &addr
                     .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127,0,0,1], 1521))),
+                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 1521))),
                 Duration::from_secs(5),
             ) {
                 Ok(mut stream) => {

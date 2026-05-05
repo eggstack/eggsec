@@ -132,7 +132,10 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
             let tag = format!("A{:04}", 1);
             let escaped_ref = escape_imap_quoted(&ref_name);
             let escaped_mailbox = escape_imap_quoted(&mailbox_name);
-            let cmd = format!("{} LIST \"{}\" \"{}\"\r\n", tag, escaped_ref, escaped_mailbox);
+            let cmd = format!(
+                "{} LIST \"{}\" \"{}\"\r\n",
+                tag, escaped_ref, escaped_mailbox
+            );
 
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {
@@ -256,7 +259,10 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
             let tag = format!("A{:04}", 1);
             let escaped_seq = escape_imap_quoted(&sequence);
             let escaped_flags = escape_imap_quoted(&flags);
-            let cmd = format!("{} STORE {} +FLAGS ({})\r\n", tag, escaped_seq, escaped_flags);
+            let cmd = format!(
+                "{} STORE {} +FLAGS ({})\r\n",
+                tag, escaped_seq, escaped_flags
+            );
 
             match imap_send(&host, port, &cmd) {
                 Ok(response) => {

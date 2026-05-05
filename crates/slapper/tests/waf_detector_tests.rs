@@ -13,11 +13,17 @@ async fn test_waf_detector_cloudflare_header() {
     mock_cloudflare_response("/test").mount(&server).await;
 
     let detector = slapper::waf::detector::WafDetector::new().unwrap();
-    let result = detector.detect(&format!("{}/test", server.uri())).await.unwrap();
+    let result = detector
+        .detect(&format!("{}/test", server.uri()))
+        .await
+        .unwrap();
 
     assert_eq!(result.status_code, 403, "Should get 403 status");
     // Cloudflare mock has cf-ray header and 403 status - detector should flag it
-    assert!(result.waf_name.is_some(), "Should detect some WAF with cf-ray header");
+    assert!(
+        result.waf_name.is_some(),
+        "Should detect some WAF with cf-ray header"
+    );
     assert!(result.confidence > 0, "Should have positive confidence");
 }
 
@@ -27,7 +33,10 @@ async fn test_waf_detector_aws_waf() {
     mock_aws_waf_response("/test").mount(&server).await;
 
     let detector = slapper::waf::detector::WafDetector::new().unwrap();
-    let result = detector.detect(&format!("{}/test", server.uri())).await.unwrap();
+    let result = detector
+        .detect(&format!("{}/test", server.uri()))
+        .await
+        .unwrap();
 
     assert!(result.waf_name.is_some(), "Should detect some WAF");
     assert!(result.confidence > 0, "Confidence should be > 0");
@@ -39,9 +48,15 @@ async fn test_waf_detector_no_waf() {
     mock_ok("/test").mount(&server).await;
 
     let detector = slapper::waf::detector::WafDetector::new().unwrap();
-    let result = detector.detect(&format!("{}/test", server.uri())).await.unwrap();
+    let result = detector
+        .detect(&format!("{}/test", server.uri()))
+        .await
+        .unwrap();
 
-    assert!(result.waf_name.is_none(), "Should not detect WAF on normal response");
+    assert!(
+        result.waf_name.is_none(),
+        "Should not detect WAF on normal response"
+    );
     assert_eq!(result.confidence, 0);
 }
 
@@ -52,7 +67,10 @@ async fn test_waf_detector_status_code_block() {
     mock_status("/test", 403).mount(&server).await;
 
     let detector = slapper::waf::detector::WafDetector::new().unwrap();
-    let result = detector.detect(&format!("{}/test", server.uri())).await.unwrap();
+    let result = detector
+        .detect(&format!("{}/test", server.uri()))
+        .await
+        .unwrap();
 
     // 403 alone doesn't confirm a WAF, but the detector should handle it
     assert_eq!(result.status_code, 403);
@@ -65,7 +83,8 @@ async fn test_waf_detector_unreachable_url() {
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(3),
         detector.detect("http://192.0.2.1:1/test"),
-    ).await;
+    )
+    .await;
 
     // Should either return a result or timeout - both are acceptable
     match result {
@@ -74,7 +93,7 @@ async fn test_waf_detector_unreachable_url() {
             assert_eq!(r.status_code, 0);
         }
         Ok(Err(_)) => {} // Request error is fine
-        Err(_) => {} // Timeout is fine for unreachable hosts
+        Err(_) => {}     // Timeout is fine for unreachable hosts
     }
 }
 
@@ -83,24 +102,42 @@ async fn test_waf_detector_unreachable_url() {
 fn test_waf_signatures_not_empty() {
     let signatures = slapper::waf::waf_patterns::get_waf_signatures();
     assert!(!signatures.is_empty(), "Should have WAF signatures");
-    assert!(signatures.len() >= 10, "Should have at least 10 WAF signatures");
+    assert!(
+        signatures.len() >= 10,
+        "Should have at least 10 WAF signatures"
+    );
 }
 
 #[test]
 fn test_cloudflare_signature_exists() {
     let signatures = slapper::waf::waf_patterns::get_waf_signatures();
-    assert!(signatures.contains_key("cloudflare"), "Should have Cloudflare signature");
-    
+    assert!(
+        signatures.contains_key("cloudflare"),
+        "Should have Cloudflare signature"
+    );
+
     let cf = &signatures["cloudflare"];
-    assert!(!cf.headers.is_empty(), "Cloudflare should have header patterns");
-    assert!(!cf.cookies.is_empty(), "Cloudflare should have cookie patterns");
-    assert!(!cf.body_patterns.is_empty(), "Cloudflare should have body patterns");
+    assert!(
+        !cf.headers.is_empty(),
+        "Cloudflare should have header patterns"
+    );
+    assert!(
+        !cf.cookies.is_empty(),
+        "Cloudflare should have cookie patterns"
+    );
+    assert!(
+        !cf.body_patterns.is_empty(),
+        "Cloudflare should have body patterns"
+    );
 }
 
 #[test]
 fn test_aws_waf_signature_exists() {
     let signatures = slapper::waf::waf_patterns::get_waf_signatures();
-    assert!(signatures.contains_key("aws_waf"), "Should have AWS WAF signature");
+    assert!(
+        signatures.contains_key("aws_waf"),
+        "Should have AWS WAF signature"
+    );
 }
 
 #[test]
@@ -148,7 +185,7 @@ fn test_smuggling_payloads() {
 fn test_waf_profiles() {
     let profiles = slapper::waf::bypass::profiles::get_waf_profiles();
     assert!(!profiles.is_empty(), "Should have WAF profiles");
-    
+
     let cloudflare = slapper::waf::bypass::profiles::get_profile_by_name("cloudflare");
     assert!(cloudflare.is_some(), "Should find Cloudflare profile");
 }

@@ -983,18 +983,18 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
             // Try to connect and get auth methods
             let result = lua.create_table()?;
 
-                            let addr = format!("{}:{}", host, port);
-                let socket_addr = match addr.parse::<std::net::SocketAddr>() {
-                    Ok(a) => a,
-                    Err(e) => {
-                        result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
-                        return Ok(result);
+            let addr = format!("{}:{}", host, port);
+            let socket_addr = match addr.parse::<std::net::SocketAddr>() {
+                Ok(a) => a,
+                Err(e) => {
+                    result.set("error", format!("Invalid address \'{}\': {}", addr, e))?;
+                    return Ok(result);
                 }
-                };
-                match std::net::TcpStream::connect_timeout(
-                    &socket_addr,
-                    std::time::Duration::from_secs(5),
-                ) {
+            };
+            match std::net::TcpStream::connect_timeout(
+                &socket_addr,
+                std::time::Duration::from_secs(5),
+            ) {
                 Ok(_) => {
                     // SSH banner exchange would happen here
                     let methods = lua.create_table()?;

@@ -1,6 +1,6 @@
 use ratatui::style::{Color, Modifier, Style};
-use std::collections::HashMap;
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 thread_local! {
     pub static THEME_MANAGER: RefCell<ThemeManager> = RefCell::new(ThemeManager::new());
@@ -247,6 +247,9 @@ impl ThemeManager {
             _ => return,
         };
         self.current.colors.accent = color;
+        self.current.colors.border_focused = color;
+        self.current.colors.tab_active = color;
+        self.current.colors.selected = color;
     }
 }
 

@@ -5,8 +5,8 @@ use crate::error::SlapperError;
 use crate::output::AgentSeverity;
 use crate::tool::response::Finding;
 use crate::tool::traits::{
-    validate_parameters, AttackSurface, CapabilityExample, ParameterDef, ParameterType, SecurityTool,
-    ToolCapability, ToolCategory,
+    validate_parameters, AttackSurface, CapabilityExample, ParameterDef, ParameterType,
+    SecurityTool, ToolCapability, ToolCategory,
 };
 use crate::tool::{ToolRequest, ToolResponse, ToolResult};
 
@@ -215,7 +215,11 @@ impl SecurityTool for ReconTool {
                         "concurrency": 20
                     }),
                 }],
-                attack_surface: vec![AttackSurface::Web, AttackSurface::Network, AttackSurface::Cloud],
+                attack_surface: vec![
+                    AttackSurface::Web,
+                    AttackSurface::Network,
+                    AttackSurface::Cloud,
+                ],
                 severity_potential: vec![AgentSeverity::Info],
                 prerequisites: vec![],
                 estimated_duration_ms: 180000,

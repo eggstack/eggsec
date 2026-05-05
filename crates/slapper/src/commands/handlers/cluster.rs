@@ -1,16 +1,21 @@
-use anyhow::Result;
 use crate::commands::handlers::CommandContext;
+use anyhow::Result;
 
 pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs) -> Result<()> {
     use crate::cli::ClusterCommand;
-    use crate::distributed::{RemoteListener, RemoteClient};
+    use crate::distributed::{RemoteClient, RemoteListener};
 
     match &args.command {
         ClusterCommand::Worker(worker_args) => {
             let psk = get_psk_from_args_or_config(
                 worker_args.psk.clone(),
-                ctx.config.remote.psk.as_ref().map(|s| s.expose_secret().to_string()),
-                "PSK is required for worker mode. Use --psk <key> or set [remote.psk] in config".to_string()
+                ctx.config
+                    .remote
+                    .psk
+                    .as_ref()
+                    .map(|s| s.expose_secret().to_string()),
+                "PSK is required for worker mode. Use --psk <key> or set [remote.psk] in config"
+                    .to_string(),
             )?;
 
             println!("Starting worker node...");
@@ -19,7 +24,8 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
             let worker_id = worker_args.worker_id.clone().unwrap_or_else(|| {
                 use std::time::{SystemTime, UNIX_EPOCH};
-                let duration = SystemTime::now().duration_since(UNIX_EPOCH)
+                let duration = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
                     .unwrap_or_default();
                 format!("worker-{}", duration.as_millis())
             });
@@ -28,14 +34,19 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
             let client = RemoteClient::new(psk.clone());
 
-            println!("Worker '{}' connecting to coordinator at {}:{}", worker_id, host, port);
+            println!(
+                "Worker '{}' connecting to coordinator at {}:{}",
+                worker_id, host, port
+            );
 
-            let result = client.execute(
-                &host,
-                port,
-                vec!["slapper".to_string(), "--version".to_string()],
-                Some(30)
-            ).await;
+            let result = client
+                .execute(
+                    &host,
+                    port,
+                    vec!["slapper".to_string(), "--version".to_string()],
+                    Some(30),
+                )
+                .await;
 
             match result {
                 Ok(_r) => {
@@ -50,24 +61,41 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
             }
         }
         ClusterCommand::Coordinator(coordinator_args) => {
-            let bind_addr = coordinator_args.bind.clone().unwrap_or_else(|| "0.0.0.0".to_string());
+            let bind_addr = coordinator_args
+                .bind
+                .clone()
+                .unwrap_or_else(|| "0.0.0.0".to_string());
 
-            let psk = coordinator_args.psk.clone().or_else(|| {
-                ctx.config.remote.psk.as_ref().map(|s| s.expose_secret().to_string())
-            }).unwrap_or_else(|| {
-                let key = crate::distributed::generate_psk();
-                println!("No PSK provided. Generated key (add to config for persistence):");
-                println!("  {}", key);
-                key
-            });
+            let psk = coordinator_args
+                .psk
+                .clone()
+                .or_else(|| {
+                    ctx.config
+                        .remote
+                        .psk
+                        .as_ref()
+                        .map(|s| s.expose_secret().to_string())
+                })
+                .unwrap_or_else(|| {
+                    let key = crate::distributed::generate_psk();
+                    println!("No PSK provided. Generated key (add to config for persistence):");
+                    println!("  {}", key);
+                    key
+                });
 
             println!("Starting distributed coordinator...");
             println!("  Bind: {}:{}", bind_addr, coordinator_args.port);
 
             let listener = RemoteListener::new(psk);
 
-            println!("Coordinator started on {}:{}", bind_addr, coordinator_args.port);
-            println!("Workers can connect using: slapper cluster worker --coordinator {}:{} --psk <key>", bind_addr, coordinator_args.port);
+            println!(
+                "Coordinator started on {}:{}",
+                bind_addr, coordinator_args.port
+            );
+            println!(
+                "Workers can connect using: slapper cluster worker --coordinator {}:{} --psk <key>",
+                bind_addr, coordinator_args.port
+            );
 
             tokio::select! {
                 result = listener.start(coordinator_args.port) => {
@@ -87,15 +115,31 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
                 let psk = get_psk_from_args_or_config(
                     None,
-                    ctx.config.remote.psk.as_ref().map(|s| s.expose_secret().to_string()),
-                    "No PSK configured. Set [remote.psk] in config or provide --psk".to_string()
+                    ctx.config
+                        .remote
+                        .psk
+                        .as_ref()
+                        .map(|s| s.expose_secret().to_string()),
+                    "No PSK configured. Set [remote.psk] in config or provide --psk".to_string(),
                 )?;
 
                 let (host, port) = extract_host_and_port(addr);
 
                 let client = RemoteClient::new(psk);
 
-                match client.execute(&host, port, vec!["slapper".to_string(), "cluster".to_string(), "status".to_string()], Some(10)).await {
+                match client
+                    .execute(
+                        &host,
+                        port,
+                        vec![
+                            "slapper".to_string(),
+                            "cluster".to_string(),
+                            "status".to_string(),
+                        ],
+                        Some(10),
+                    )
+                    .await
+                {
                     Ok(r) => {
                         println!("{}", r.output);
                     }
@@ -107,7 +151,9 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
                 println!("Cluster Status:");
                 println!("  No coordinator address provided.");
                 println!("  Start a coordinator with: slapper cluster coordinator --psk <key>");
-                println!("  Then check status with: slapper cluster status --coordinator <address>");
+                println!(
+                    "  Then check status with: slapper cluster status --coordinator <address>"
+                );
             }
         }
     }
@@ -117,7 +163,7 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
 pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -> Result<()> {
     use crate::cli::RemoteCommand;
-    use crate::distributed::{RemoteListener, TlsConfig, generate_psk};
+    use crate::distributed::{generate_psk, RemoteListener, TlsConfig};
 
     match &args.command {
         RemoteCommand::GenerateKey => {
@@ -143,18 +189,29 @@ pub async fn handle_remote(ctx: &CommandContext, args: crate::cli::RemoteArgs) -
             println!("Note: Both certificate and key paths must be provided.");
         }
         RemoteCommand::Start(start_args) => {
-            let psk = start_args.auth.clone()
-                .or_else(|| ctx.config.remote.psk.as_ref().map(|s| s.expose_secret().to_string()))
+            let psk = start_args
+                .auth
+                .clone()
+                .or_else(|| {
+                    ctx.config
+                        .remote
+                        .psk
+                        .as_ref()
+                        .map(|s| s.expose_secret().to_string())
+                })
                 .unwrap_or_else(|| {
-                    println!("No PSK provided. Using generated key (add to config for persistence):");
+                    println!(
+                        "No PSK provided. Using generated key (add to config for persistence):"
+                    );
                     let key = generate_psk();
                     println!("  {}", key);
                     key
                 });
 
             let listener = if let Some(tls_cert) = &start_args.tls_cert {
-                let tls_key = start_args.tls_key.as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("TLS key path required when using --tls-cert"))?;
+                let tls_key = start_args.tls_key.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("TLS key path required when using --tls-cert")
+                })?;
                 let tls_config = TlsConfig {
                     cert_path: tls_cert.clone().into(),
                     key_path: tls_key.clone().into(),
@@ -194,13 +251,18 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
 
     let psk = get_psk_from_args_or_config(
         args.auth.clone(),
-        ctx.config.remote.psk.as_ref().map(|s| s.expose_secret().to_string()),
-        "No PSK provided. Use --auth or set [remote.psk] in config".to_string()
+        ctx.config
+            .remote
+            .psk
+            .as_ref()
+            .map(|s| s.expose_secret().to_string()),
+        "No PSK provided. Use --auth or set [remote.psk] in config".to_string(),
     )?;
 
     let client = if let Some(_tls_cert) = &args.tls_cert {
         let domain = args.tls_domain.as_deref().unwrap_or("localhost");
-        RemoteClient::with_tls(psk, domain).map_err(|e| anyhow::anyhow!("Failed to initialize TLS: {}", e))?
+        RemoteClient::with_tls(psk, domain)
+            .map_err(|e| anyhow::anyhow!("Failed to initialize TLS: {}", e))?
     } else {
         RemoteClient::new(psk)
     };
@@ -210,7 +272,8 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
     }
 
     let targets: Vec<String> = if let Some(targets_file) = &args.targets {
-        tokio::fs::read_to_string(targets_file).await?
+        tokio::fs::read_to_string(targets_file)
+            .await?
             .lines()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty() && !s.starts_with('#'))
@@ -228,7 +291,10 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
 
         println!("Executing on {}:{}...", host, port);
 
-        match client.execute(&host, port, args.command.clone(), Some(args.timeout)).await {
+        match client
+            .execute(&host, port, args.command.clone(), Some(args.timeout))
+            .await
+        {
             Ok(result) => {
                 results.push(result);
             }
@@ -250,7 +316,11 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
             println!("[{}] Success:", result.hostname);
             println!("{}", result.output);
         } else {
-            println!("[{}] Failed: {}", result.hostname, result.error.as_ref().unwrap_or(&String::new()));
+            println!(
+                "[{}] Failed: {}",
+                result.hostname,
+                result.error.as_ref().unwrap_or(&String::new())
+            );
         }
         println!();
     }

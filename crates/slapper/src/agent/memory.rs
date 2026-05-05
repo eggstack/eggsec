@@ -133,14 +133,24 @@ impl LongitudinalMemory {
 
     async fn get_target_lock(&self, target: &str) -> Arc<Mutex<()>> {
         let target_path = self.get_target_path(target);
-        let target_hash = target_path.file_stem().unwrap().to_string_lossy().to_string();
+        let target_hash = target_path
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
 
         let mut locks = self.target_locks.lock().await;
-        locks.entry(target_hash).or_insert_with(|| Arc::new(Mutex::new(()))).clone()
+        locks
+            .entry(target_hash)
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
     }
 
     async fn atomic_write(&self, path: &PathBuf, content: &str) -> Result<()> {
-        let tmp_path = path.with_file_name(format!("{}.tmp", path.file_name().unwrap().to_string_lossy()));
+        let tmp_path = path.with_file_name(format!(
+            "{}.tmp",
+            path.file_name().unwrap().to_string_lossy()
+        ));
         let mut file = fs::File::create(&tmp_path).await?;
         file.write_all(content.as_bytes()).await?;
         file.flush().await?;
@@ -158,7 +168,11 @@ impl LongitudinalMemory {
         }
         let content = fs::read_to_string(&target_path).await?;
         let memory: TargetMemory = serde_json::from_str(&content).map_err(|e| {
-            anyhow::anyhow!("Corrupt target memory file {}: {}", target_path.display(), e)
+            anyhow::anyhow!(
+                "Corrupt target memory file {}: {}",
+                target_path.display(),
+                e
+            )
         })?;
         Ok(memory)
     }
@@ -171,7 +185,9 @@ impl LongitudinalMemory {
         target.hash(&mut hasher);
         let hash = format!("{:016x}", hasher.finish());
 
-        self.storage_dir.join("targets").join(format!("{}.json", hash))
+        self.storage_dir
+            .join("targets")
+            .join(format!("{}.json", hash))
     }
 
     fn get_patterns_path(&self) -> PathBuf {
@@ -532,21 +548,22 @@ impl LongitudinalMemory {
                                     finding.severity.as_str()
                                 );
 
-                                let builder = patterns.entry(pattern_key.clone()).or_insert_with(|| {
-                                    CrossTargetPatternBuilder {
-                                        pattern_type: format!("{:?}", finding.finding_type),
-                                        description: format!(
-                                            "{} with severity {}",
-                                            finding.finding_type,
-                                            finding.severity.as_str()
-                                        ),
-                                        affected_targets: Vec::new(),
-                                        first_seen: scan.timestamp,
-                                        last_seen: scan.timestamp,
-                                        total_occurrences: 0,
-                                        severity: finding.severity.to_agent_severity(),
-                                    }
-                                });
+                                let builder =
+                                    patterns.entry(pattern_key.clone()).or_insert_with(|| {
+                                        CrossTargetPatternBuilder {
+                                            pattern_type: format!("{:?}", finding.finding_type),
+                                            description: format!(
+                                                "{} with severity {}",
+                                                finding.finding_type,
+                                                finding.severity.as_str()
+                                            ),
+                                            affected_targets: Vec::new(),
+                                            first_seen: scan.timestamp,
+                                            last_seen: scan.timestamp,
+                                            total_occurrences: 0,
+                                            severity: finding.severity.to_agent_severity(),
+                                        }
+                                    });
 
                                 if !builder.affected_targets.contains(&memory.target) {
                                     builder.affected_targets.push(memory.target.clone());
@@ -595,12 +612,13 @@ impl LongitudinalMemory {
                 current_day = day.clone();
             }
 
-            let day_severities: HashMap<String, usize> = findings_by_day[&day]
-                .iter()
-                .fold(HashMap::new(), |mut acc, f| {
-                    *acc.entry(f.severity.as_str().to_string()).or_insert(0) += 1;
-                    acc
-                });
+            let day_severities: HashMap<String, usize> =
+                findings_by_day[&day]
+                    .iter()
+                    .fold(HashMap::new(), |mut acc, f| {
+                        *acc.entry(f.severity.as_str().to_string()).or_insert(0) += 1;
+                        acc
+                    });
 
             if day != current_day {
                 severity_trend.push((current_day.clone(), current_counts.clone()));
@@ -800,10 +818,15 @@ mod tests {
             findings: vec![],
         };
 
-        let result = memory.store_scan_results("https://example.com", &tool_response).await;
+        let result = memory
+            .store_scan_results("https://example.com", &tool_response)
+            .await;
         assert!(result.is_ok());
 
-        let history = memory.get_target_history("https://example.com").await.unwrap();
+        let history = memory
+            .get_target_history("https://example.com")
+            .await
+            .unwrap();
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].scan_id, "scan-123");
     }
@@ -814,7 +837,10 @@ mod tests {
         let storage_dir = temp_dir.path().join("memory");
         let memory = LongitudinalMemory::new(storage_dir).await.unwrap();
 
-        let history = memory.get_target_history("https://nonexistent.com").await.unwrap();
+        let history = memory
+            .get_target_history("https://nonexistent.com")
+            .await
+            .unwrap();
         assert!(history.is_empty());
     }
 
@@ -840,10 +866,16 @@ mod tests {
                 errors: vec![],
                 findings: vec![],
             };
-            memory.store_scan_results("https://example.com", &tool_response).await.unwrap();
+            memory
+                .store_scan_results("https://example.com", &tool_response)
+                .await
+                .unwrap();
         }
 
-        let history = memory.get_target_history("https://example.com").await.unwrap();
+        let history = memory
+            .get_target_history("https://example.com")
+            .await
+            .unwrap();
         assert_eq!(history.len(), 3);
     }
 
@@ -854,7 +886,9 @@ mod tests {
         let memory = LongitudinalMemory::new(storage_dir).await.unwrap();
 
         let finding_ids = vec!["finding-1".to_string(), "finding-2".to_string()];
-        let result = memory.set_baseline("https://example.com", finding_ids.clone()).await;
+        let result = memory
+            .set_baseline("https://example.com", finding_ids.clone())
+            .await;
         assert!(result.is_ok());
 
         let tool_response = crate::tool::ToolResponse {
@@ -872,9 +906,15 @@ mod tests {
             errors: vec![],
             findings: vec![],
         };
-        memory.store_scan_results("https://example.com", &tool_response).await.unwrap();
+        memory
+            .store_scan_results("https://example.com", &tool_response)
+            .await
+            .unwrap();
 
-        let history = memory.get_target_history("https://example.com").await.unwrap();
+        let history = memory
+            .get_target_history("https://example.com")
+            .await
+            .unwrap();
         assert!(!history.is_empty());
     }
 
@@ -884,7 +924,10 @@ mod tests {
         let storage_dir = temp_dir.path().join("memory");
         let memory = LongitudinalMemory::new(storage_dir).await.unwrap();
 
-        memory.set_baseline("https://example.com", vec![]).await.unwrap();
+        memory
+            .set_baseline("https://example.com", vec![])
+            .await
+            .unwrap();
 
         let new_finding = Finding {
             id: "new-finding-1".to_string(),
@@ -900,7 +943,10 @@ mod tests {
             metadata: Default::default(),
         };
 
-        let comparison = memory.compare_with_baseline("https://example.com", &[new_finding]).await.unwrap();
+        let comparison = memory
+            .compare_with_baseline("https://example.com", &[new_finding])
+            .await
+            .unwrap();
         assert_eq!(comparison.new_findings.len(), 1);
         assert_eq!(comparison.new_findings[0].id, "new-finding-1");
     }

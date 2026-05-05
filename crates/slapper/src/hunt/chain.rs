@@ -46,7 +46,10 @@ pub async fn detect_attack_chains(target: &str, config: &HuntConfig) -> Result<V
     Ok(chains)
 }
 
-async fn detect_privilege_escalation(target: &str, _config: &HuntConfig) -> Result<Vec<AttackChain>> {
+async fn detect_privilege_escalation(
+    target: &str,
+    _config: &HuntConfig,
+) -> Result<Vec<AttackChain>> {
     let mut chains = Vec::new();
 
     let id = format!("pe-{}", &uuid::Uuid::new_v4().to_string()[..8]);
@@ -108,8 +111,11 @@ async fn detect_data_exfiltration(target: &str, _config: &HuntConfig) -> Result<
             },
         ],
         severity: Severity::Critical,
-        description: "SQL injection combined with lack of rate limiting allows mass data exfiltration".to_string(),
-        remediation: "Use parameterized queries; implement rate limiting and anomaly detection".to_string(),
+        description:
+            "SQL injection combined with lack of rate limiting allows mass data exfiltration"
+                .to_string(),
+        remediation: "Use parameterized queries; implement rate limiting and anomaly detection"
+            .to_string(),
         cvss_score: Some(10.0),
     });
 
@@ -212,16 +218,14 @@ mod tests {
             id: "test-123".to_string(),
             name: "Test Chain".to_string(),
             chain_type: ChainType::PrivilegeEscalation,
-            steps: vec![
-                ChainStep {
-                    step_number: 1,
-                    vulnerability: "IDOR".to_string(),
-                    prerequisite: "Valid user".to_string(),
-                    impact: "Access other user data".to_string(),
-                    evidence: "Evidence here".to_string(),
-                    severity: Severity::High,
-                },
-            ],
+            steps: vec![ChainStep {
+                step_number: 1,
+                vulnerability: "IDOR".to_string(),
+                prerequisite: "Valid user".to_string(),
+                impact: "Access other user data".to_string(),
+                evidence: "Evidence here".to_string(),
+                severity: Severity::High,
+            }],
             severity: Severity::High,
             description: "Test description".to_string(),
             remediation: "Fix it".to_string(),
@@ -235,7 +239,9 @@ mod tests {
     #[tokio::test]
     async fn test_detect_attack_chains() {
         let config = HuntConfig::default();
-        let chains = detect_attack_chains("http://example.com", &config).await.unwrap();
+        let chains = detect_attack_chains("http://example.com", &config)
+            .await
+            .unwrap();
         assert!(!chains.is_empty());
     }
 }

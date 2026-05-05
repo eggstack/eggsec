@@ -122,7 +122,8 @@ pub async fn scan_dom_xss(target: &str, config: &BrowserConfig) -> Result<Vec<Do
 
     let result = tab.evaluate(js_script, true)?;
 
-    let findings_list: Vec<HashMap<String, String>> = result.value
+    let findings_list: Vec<HashMap<String, String>> = result
+        .value
         .as_ref()
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();

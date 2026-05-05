@@ -121,7 +121,9 @@ impl StressTest {
         {
             let stats = match self.config.stress_type {
                 StressType::Syn => syn::run_syn_flood(&self.config, &self.metrics).await?,
-                StressType::Udp => udp::run_udp_flood(&self.config, Arc::new(self.metrics.clone())).await?,
+                StressType::Udp => {
+                    udp::run_udp_flood(&self.config, Arc::new(self.metrics.clone())).await?
+                }
                 StressType::Icmp => icmp::run_icmp_flood(&self.config, &self.metrics).await?,
                 StressType::Http | StressType::Tcp => {
                     http::run_http_flood(&self.config, &self.metrics).await?

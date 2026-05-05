@@ -63,7 +63,10 @@ mod tests {
     #[test]
     fn payloads_non_empty() {
         let payloads = get_payloads();
-        assert!(!payloads.is_empty(), "Race condition payloads must not be empty");
+        assert!(
+            !payloads.is_empty(),
+            "Race condition payloads must not be empty"
+        );
     }
 
     #[test]
@@ -76,18 +79,18 @@ mod tests {
     #[test]
     fn contains_concurrent_patterns() {
         let payloads = get_payloads();
-        let has_concurrent = payloads.iter().any(|p| {
-            p.payload.contains("concurrent") || p.payload.contains("parallel")
-        });
+        let has_concurrent = payloads
+            .iter()
+            .any(|p| p.payload.contains("concurrent") || p.payload.contains("parallel"));
         assert!(has_concurrent, "Must contain concurrent payload patterns");
     }
 
     #[test]
     fn contains_race_indicators() {
         let payloads = get_payloads();
-        let has_race = payloads.iter().any(|p| {
-            p.payload.contains("race") || p.payload.contains("TOCTOU")
-        });
+        let has_race = payloads
+            .iter()
+            .any(|p| p.payload.contains("race") || p.payload.contains("TOCTOU"));
         assert!(has_race, "Must contain race condition indicators");
     }
 

@@ -1,10 +1,10 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
 use crate::ai::client::AiClient;
 use crate::ai::errors::{AiError, Result};
-use crate::tool::planner::{ExecutionPlan, PlanRequest, ChainPlanner};
+use crate::tool::planner::{ChainPlanner, ExecutionPlan, PlanRequest};
+use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct AdaptivePlanSuggestion {
@@ -162,7 +162,11 @@ impl AiPlanner {
         Err(AiError::InvalidResponse)
     }
 
-    fn parse_ai_response(&self, content: &str, request: &PlanRequest) -> crate::ai::errors::Result<ExecutionPlan> {
+    fn parse_ai_response(
+        &self,
+        content: &str,
+        request: &PlanRequest,
+    ) -> crate::ai::errors::Result<ExecutionPlan> {
         if let Ok(plan) = serde_json::from_str::<ExecutionPlan>(content) {
             return Ok(plan);
         }
@@ -204,7 +208,9 @@ impl AiPlanner {
         target: &str,
     ) -> crate::ai::errors::Result<AdaptivePlanSuggestion> {
         if let Some(ref client) = self.client {
-            return self.query_ai_for_adjustments(client, current_plan, findings, target).await;
+            return self
+                .query_ai_for_adjustments(client, current_plan, findings, target)
+                .await;
         }
 
         Ok(AdaptivePlanSuggestion {
@@ -303,12 +309,42 @@ impl AiPlanner {
         let lower = content.to_lowercase();
 
         let action_keywords = [
-            ("add", "adding", ModificationType::AddStage, vec!["stage", "tool", "phase"]),
-            ("remove", "removing", ModificationType::RemoveStage, vec!["stage", "tool"]),
-            ("reorder", "reordering", ModificationType::ReorderStages, vec!["stage", "phase", "step"]),
-            ("modify", "modifying", ModificationType::ModifyStage, vec!["stage", "phase"]),
-            ("increase", "increasing", ModificationType::IncreaseCoverage, vec!["coverage"]),
-            ("reduce", "reducing", ModificationType::ReduceDuration, vec!["duration"]),
+            (
+                "add",
+                "adding",
+                ModificationType::AddStage,
+                vec!["stage", "tool", "phase"],
+            ),
+            (
+                "remove",
+                "removing",
+                ModificationType::RemoveStage,
+                vec!["stage", "tool"],
+            ),
+            (
+                "reorder",
+                "reordering",
+                ModificationType::ReorderStages,
+                vec!["stage", "phase", "step"],
+            ),
+            (
+                "modify",
+                "modifying",
+                ModificationType::ModifyStage,
+                vec!["stage", "phase"],
+            ),
+            (
+                "increase",
+                "increasing",
+                ModificationType::IncreaseCoverage,
+                vec!["coverage"],
+            ),
+            (
+                "reduce",
+                "reducing",
+                ModificationType::ReduceDuration,
+                vec!["duration"],
+            ),
         ];
 
         for (action_base, action_ing, mod_type, targets) in &action_keywords {
@@ -319,7 +355,10 @@ impl AiPlanner {
                             modifications.push(PlanModification {
                                 modification_type: mod_type.clone(),
                                 target_stage: self.extract_stage_reference(content),
-                                description: format!("AI suggested: {}", self.extract_sentence_containing(content, action_base)),
+                                description: format!(
+                                    "AI suggested: {}",
+                                    self.extract_sentence_containing(content, action_base)
+                                ),
                                 rationale: "Extracted from AI response".to_string(),
                             });
                             break;
@@ -341,10 +380,16 @@ impl AiPlanner {
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     for (i, _part) in parts.iter().enumerate() {
                         if lower.contains(kw) && i + 1 < parts.len() {
-                            return Some(parts[i + 1].trim_matches(|c| c == ':' || c == ',').to_string());
+                            return Some(
+                                parts[i + 1]
+                                    .trim_matches(|c| c == ':' || c == ',')
+                                    .to_string(),
+                            );
                         }
                     }
-                    let cleaned = line.trim().trim_end_matches(|c| c == ':' || c == ',' || c == '.');
+                    let cleaned = line
+                        .trim()
+                        .trim_end_matches(|c| c == ':' || c == ',' || c == '.');
                     return Some(cleaned.to_string());
                 }
             }
@@ -362,13 +407,23 @@ impl AiPlanner {
     }
 
     fn extract_estimated_improvement(&self, content: &str) -> Option<String> {
-        let improvement_keywords = ["improve", "improvement", "reduce", "increase", "efficiency", "coverage"];
+        let improvement_keywords = [
+            "improve",
+            "improvement",
+            "reduce",
+            "increase",
+            "efficiency",
+            "coverage",
+        ];
         let lower = content.to_lowercase();
 
         for kw in &improvement_keywords {
             if let Some(pos) = lower.find(kw) {
                 let start = content[..pos].rfind('.').map(|p| p + 1).unwrap_or(0);
-                let end = content[pos..].find('.').map(|p| pos + p).unwrap_or(content.len());
+                let end = content[pos..]
+                    .find('.')
+                    .map(|p| pos + p)
+                    .unwrap_or(content.len());
                 let snippet = content[start..end].trim();
                 if !snippet.is_empty() && snippet.len() > 10 {
                     return Some(snippet.to_string());
@@ -392,15 +447,18 @@ impl AiPlanner {
                 .unwrap()
                 .as_secs();
         } else {
-            cache.insert(key, CachedPlan {
-                plan: plan.clone(),
-                success_rate: if outcome.success { 1.0 } else { 0.0 },
-                use_count: 1,
-                last_used: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            });
+            cache.insert(
+                key,
+                CachedPlan {
+                    plan: plan.clone(),
+                    success_rate: if outcome.success { 1.0 } else { 0.0 },
+                    use_count: 1,
+                    last_used: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                },
+            );
         }
     }
 
@@ -429,11 +487,15 @@ mod tests {
     #[test]
     fn test_parse_modifications_from_text_add_stage() {
         let planner = create_test_planner();
-        let content = "I recommend you add a new stage for SSL analysis after the initial recon phase.";
+        let content =
+            "I recommend you add a new stage for SSL analysis after the initial recon phase.";
         let suggestion = planner.parse_adjustment_response(content);
 
         assert!(!suggestion.suggested_modifications.is_empty());
-        assert!(suggestion.suggested_modifications.iter().any(|m| m.modification_type == ModificationType::AddStage));
+        assert!(suggestion
+            .suggested_modifications
+            .iter()
+            .any(|m| m.modification_type == ModificationType::AddStage));
     }
 
     #[test]
@@ -443,7 +505,10 @@ mod tests {
         let suggestion = planner.parse_adjustment_response(content);
 
         assert!(!suggestion.suggested_modifications.is_empty());
-        assert!(suggestion.suggested_modifications.iter().any(|m| m.modification_type == ModificationType::IncreaseCoverage));
+        assert!(suggestion
+            .suggested_modifications
+            .iter()
+            .any(|m| m.modification_type == ModificationType::IncreaseCoverage));
     }
 
     #[test]
@@ -453,7 +518,10 @@ mod tests {
         let suggestion = planner.parse_adjustment_response(content);
 
         assert!(!suggestion.suggested_modifications.is_empty());
-        assert!(suggestion.suggested_modifications.iter().any(|m| m.modification_type == ModificationType::ReduceDuration));
+        assert!(suggestion
+            .suggested_modifications
+            .iter()
+            .any(|m| m.modification_type == ModificationType::ReduceDuration));
     }
 
     #[test]

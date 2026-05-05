@@ -208,25 +208,16 @@ impl InterAgentChannel {
         subscriptions.remove(&subscriber_id);
     }
 
-    pub async fn get_messages_for_agent(
-        &self,
-        agent_id: &Uuid,
-    ) -> Vec<AgentMessage> {
+    pub async fn get_messages_for_agent(&self, agent_id: &Uuid) -> Vec<AgentMessage> {
         let messages = self.messages.read().await;
         messages
             .iter()
-            .filter(|m| {
-                m.recipient_id.map_or(true, |r| &r == agent_id)
-                    || m.recipient_id.is_none()
-            })
+            .filter(|m| m.recipient_id.map_or(true, |r| &r == agent_id) || m.recipient_id.is_none())
             .cloned()
             .collect()
     }
 
-    pub async fn find_agents_by_capability(
-        &self,
-        capability_name: &str,
-    ) -> Vec<AgentInfo> {
+    pub async fn find_agents_by_capability(&self, capability_name: &str) -> Vec<AgentInfo> {
         let agents = self.registry.list().await;
         agents
             .into_iter()
@@ -234,10 +225,7 @@ impl InterAgentChannel {
             .collect()
     }
 
-    pub async fn find_agents_by_health(
-        &self,
-        min_status: AgentStatus,
-    ) -> Vec<AgentInfo> {
+    pub async fn find_agents_by_health(&self, min_status: AgentStatus) -> Vec<AgentInfo> {
         let agents = self.registry.list().await;
         let status_order = |s: &AgentStatus| match s {
             AgentStatus::Active => 0,
@@ -252,16 +240,11 @@ impl InterAgentChannel {
             .collect()
     }
 
-    pub async fn find_available_agent(
-        &self,
-        capability_name: &str,
-    ) -> Option<AgentInfo> {
+    pub async fn find_available_agent(&self, capability_name: &str) -> Option<AgentInfo> {
         let agents = self.registry.list().await;
         agents
             .into_iter()
-            .filter(|a| {
-                a.status == AgentStatus::Active || a.status == AgentStatus::Idle
-            })
+            .filter(|a| a.status == AgentStatus::Active || a.status == AgentStatus::Idle)
             .filter(|a| a.capabilities.iter().any(|c| c.contains(capability_name)))
             .min_by_key(|a| match a.status {
                 AgentStatus::Idle => 0,
@@ -348,10 +331,13 @@ impl MultiAgentCoordinator {
             ttl_seconds: 600,
         };
 
-        self.channel.broadcast(message).await.map_err(|e| InterAgentError {
-            code: "BROADCAST_FAILED".to_string(),
-            message: e.to_string(),
-        })
+        self.channel
+            .broadcast(message)
+            .await
+            .map_err(|e| InterAgentError {
+                code: "BROADCAST_FAILED".to_string(),
+                message: e.to_string(),
+            })
     }
 
     pub async fn update_health(&self, metrics: HealthMetrics) -> Result<(), InterAgentError> {
@@ -365,20 +351,22 @@ impl MultiAgentCoordinator {
             ttl_seconds: 60,
         };
 
-        self.channel.broadcast(message).await.map_err(|e| InterAgentError {
-            code: "BROADCAST_FAILED".to_string(),
-            message: e.to_string(),
-        })
+        self.channel
+            .broadcast(message)
+            .await
+            .map_err(|e| InterAgentError {
+                code: "BROADCAST_FAILED".to_string(),
+                message: e.to_string(),
+            })
     }
 
     pub async fn get_pending_messages(&self) -> Vec<AgentMessage> {
-        self.channel.get_messages_for_agent(&self.local_agent_id).await
+        self.channel
+            .get_messages_for_agent(&self.local_agent_id)
+            .await
     }
 
-    pub async fn find_agent_for_task(
-        &self,
-        capability_required: &str,
-    ) -> Option<AgentInfo> {
+    pub async fn find_agent_for_task(&self, capability_required: &str) -> Option<AgentInfo> {
         self.channel.find_available_agent(capability_required).await
     }
 }
@@ -418,7 +406,11 @@ mod tests {
         metrics.record_failure();
         metrics.record_failure();
         assert_eq!(metrics.tasks_failed, 2);
-        assert_eq!(metrics.health_status, HealthStatus::Degraded, "11%% failure rate → Degraded");
+        assert_eq!(
+            metrics.health_status,
+            HealthStatus::Degraded,
+            "11%% failure rate → Degraded"
+        );
     }
 
     #[tokio::test]
@@ -446,11 +438,7 @@ mod tests {
         let channel = InterAgentChannel::new(registry);
 
         channel
-            .subscribe(
-                Uuid::new_v4(),
-                vec!["Heartbeat".to_string()],
-                None,
-            )
+            .subscribe(Uuid::new_v4(), vec!["Heartbeat".to_string()], None)
             .await;
     }
 

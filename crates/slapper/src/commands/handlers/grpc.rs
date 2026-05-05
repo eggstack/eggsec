@@ -1,9 +1,9 @@
 use crate::cli::GrpcServerArgs;
 use crate::error::SlapperError;
-use crate::tool::ToolRegistry;
-use crate::tool::protocol::grpc::GrpcService;
 use crate::tool::protocol::grpc::start_grpc_server;
+use crate::tool::protocol::grpc::GrpcService;
 use crate::tool::ToolDispatcher;
+use crate::tool::ToolRegistry;
 use tracing::info;
 
 #[cfg(feature = "grpc-api")]

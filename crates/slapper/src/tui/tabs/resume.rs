@@ -173,6 +173,59 @@ impl TabInput for ResumeTab {
         }
     }
 
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.focus_area == ResumeFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else if self.focus_area == ResumeFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else {
+            None
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if self.focus_area == ResumeFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if self.focus_area == ResumeFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if self.focus_area == ResumeFocusArea::Inputs {
+            self.inputs.move_home();
+        } else if self.focus_area == ResumeFocusArea::Results {
+            self.results_view.scroll_to_top();
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if self.focus_area == ResumeFocusArea::Inputs {
+            self.inputs.move_end();
+        } else if self.focus_area == ResumeFocusArea::Results {
+            self.results_view.scroll_to_bottom();
+        }
+    }
+
+    fn handle_top(&mut self) {
+        self.focus_area = ResumeFocusArea::Inputs;
+        self.inputs.focus(0);
+    }
+
+    fn handle_bottom(&mut self) {
+        self.focus_area = ResumeFocusArea::Results;
+    }
+
     fn handle_enter(&mut self) {
         if self.inputs.is_focused() {
             self.inputs.blur();
@@ -217,5 +270,21 @@ impl TabInput for ResumeTab {
 
     fn is_input_focused(&self) -> bool {
         self.inputs.is_focused()
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        if self.focus_area == ResumeFocusArea::Inputs {
+            self.inputs.is_at_left_edge()
+        } else {
+            true
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        if self.focus_area == ResumeFocusArea::Inputs {
+            self.inputs.is_at_right_edge()
+        } else {
+            true
+        }
     }
 }

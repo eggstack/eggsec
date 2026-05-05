@@ -102,22 +102,40 @@ mod tests {
 
     #[test]
     fn test_extract_strategy_deep() {
-        assert_eq!(AdaptiveScanEngine::extract_strategy_from_ai_response("I recommend a deep scan approach."), "deep");
+        assert_eq!(
+            AdaptiveScanEngine::extract_strategy_from_ai_response(
+                "I recommend a deep scan approach."
+            ),
+            "deep"
+        );
     }
 
     #[test]
     fn test_extract_strategy_quick() {
-        assert_eq!(AdaptiveScanEngine::extract_strategy_from_ai_response("Quick scan should be sufficient."), "quick");
+        assert_eq!(
+            AdaptiveScanEngine::extract_strategy_from_ai_response(
+                "Quick scan should be sufficient."
+            ),
+            "quick"
+        );
     }
 
     #[test]
     fn test_extract_strategy_stealth() {
-        assert_eq!(AdaptiveScanEngine::extract_strategy_from_ai_response("Use stealth mode to avoid detection."), "stealth");
+        assert_eq!(
+            AdaptiveScanEngine::extract_strategy_from_ai_response(
+                "Use stealth mode to avoid detection."
+            ),
+            "stealth"
+        );
     }
 
     #[test]
     fn test_extract_strategy_default() {
-        assert_eq!(AdaptiveScanEngine::extract_strategy_from_ai_response("No specific recommendation."), "standard");
+        assert_eq!(
+            AdaptiveScanEngine::extract_strategy_from_ai_response("No specific recommendation."),
+            "standard"
+        );
     }
 
     #[test]
@@ -134,10 +152,30 @@ mod tests {
     #[test]
     fn test_fallback_strategy_high() {
         let findings = vec![
-            ScanFinding { id: "1".to_string(), title: "High".to_string(), severity: crate::types::Severity::High, description: "Test".to_string() },
-            ScanFinding { id: "2".to_string(), title: "High".to_string(), severity: crate::types::Severity::High, description: "Test".to_string() },
-            ScanFinding { id: "3".to_string(), title: "High".to_string(), severity: crate::types::Severity::High, description: "Test".to_string() },
-            ScanFinding { id: "4".to_string(), title: "High".to_string(), severity: crate::types::Severity::High, description: "Test".to_string() },
+            ScanFinding {
+                id: "1".to_string(),
+                title: "High".to_string(),
+                severity: crate::types::Severity::High,
+                description: "Test".to_string(),
+            },
+            ScanFinding {
+                id: "2".to_string(),
+                title: "High".to_string(),
+                severity: crate::types::Severity::High,
+                description: "Test".to_string(),
+            },
+            ScanFinding {
+                id: "3".to_string(),
+                title: "High".to_string(),
+                severity: crate::types::Severity::High,
+                description: "Test".to_string(),
+            },
+            ScanFinding {
+                id: "4".to_string(),
+                title: "High".to_string(),
+                severity: crate::types::Severity::High,
+                description: "Test".to_string(),
+            },
         ];
         assert_eq!(AdaptiveScanEngine::fallback_strategy(&findings), "thorough");
     }

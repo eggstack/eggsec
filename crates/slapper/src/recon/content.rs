@@ -343,7 +343,10 @@ mod tests {
     #[test]
     fn test_get_file_type() {
         assert_eq!(ContentScanner::get_file_type("/.env"), "Environment File");
-        assert_eq!(ContentScanner::get_file_type("/.git/config"), "Git Repository");
+        assert_eq!(
+            ContentScanner::get_file_type("/.git/config"),
+            "Git Repository"
+        );
         assert_eq!(ContentScanner::get_file_type("/config.json"), "JSON File");
     }
 

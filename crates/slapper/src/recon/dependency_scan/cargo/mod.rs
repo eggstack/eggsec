@@ -93,9 +93,19 @@ impl CargoScanner {
             }
 
             if trimmed.starts_with("name = ") {
-                current_name = Some(trimmed.trim_start_matches("name = ").trim_matches('"').to_string());
+                current_name = Some(
+                    trimmed
+                        .trim_start_matches("name = ")
+                        .trim_matches('"')
+                        .to_string(),
+                );
             } else if trimmed.starts_with("version = ") {
-                current_version = Some(trimmed.trim_start_matches("version = ").trim_matches('"').to_string());
+                current_version = Some(
+                    trimmed
+                        .trim_start_matches("version = ")
+                        .trim_matches('"')
+                        .to_string(),
+                );
             }
         }
 

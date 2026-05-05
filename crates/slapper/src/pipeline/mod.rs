@@ -51,9 +51,9 @@ pub mod stage;
 use crate::error::Result;
 
 use crate::cli::ResumeArgs;
-use crate::utils::sanitize_for_logging;
 use crate::cli::ScanArgs;
 use crate::config::SlapperConfig;
+use crate::utils::sanitize_for_logging;
 
 pub use context::PipelineContext;
 pub use executor::Pipeline;
@@ -74,12 +74,19 @@ pub use stage::{parse_stages, Stage};
 /// - Any stage fails to execute
 /// - Output file cannot be written
 #[cfg(feature = "tool-api")]
-pub async fn run_cli_with_callback<F>(args: ScanArgs, config: &SlapperConfig, _callback: F) -> Result<()>
+pub async fn run_cli_with_callback<F>(
+    args: ScanArgs,
+    config: &SlapperConfig,
+    _callback: F,
+) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
 {
     if args.verbose {
-        eprintln!("Starting pipeline scan on {}", sanitize_for_logging(&args.target));
+        eprintln!(
+            "Starting pipeline scan on {}",
+            sanitize_for_logging(&args.target)
+        );
     }
 
     let pipeline = Pipeline::from_args_with_config(args.clone(), config);
@@ -139,7 +146,10 @@ where
 
 pub async fn run_cli(args: ScanArgs, config: &SlapperConfig) -> Result<()> {
     if args.verbose {
-        eprintln!("Starting pipeline scan on {}", sanitize_for_logging(&args.target));
+        eprintln!(
+            "Starting pipeline scan on {}",
+            sanitize_for_logging(&args.target)
+        );
     }
 
     let pipeline = Pipeline::from_args_with_config(args.clone(), config);

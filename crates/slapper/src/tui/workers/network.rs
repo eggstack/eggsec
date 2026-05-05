@@ -11,13 +11,8 @@ pub async fn run_load_test(
 ) -> anyhow::Result<()> {
     use crate::loadtest::runner::LoadTestRunner;
 
-    let runner = LoadTestRunner::new_with_tui_mode(
-        target.clone(),
-        requests,
-        concurrency,
-        timeout,
-        true,
-    )?;
+    let runner =
+        LoadTestRunner::new_with_tui_mode(target.clone(), requests, concurrency, timeout, true)?;
 
     let results = runner.run().await?;
     let _ = result_tx.send(TaskResult::LoadTest(results)).await;
@@ -125,9 +120,7 @@ pub async fn run_packet_capture(
 
     let mut capture = capture;
     let (pkt_tx, mut pkt_rx) = tokio::sync::mpsc::channel(100);
-    let handle = tokio::spawn(async move {
-        capture.start(pkt_tx).await
-    });
+    let handle = tokio::spawn(async move { capture.start(pkt_tx).await });
 
     let timeout_duration = Duration::from_secs(5);
     loop {

@@ -1,4 +1,3 @@
-
 use std::pin::Pin;
 #[cfg(feature = "insecure-tls")]
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -6,7 +5,9 @@ use std::sync::Arc;
 
 use rustls::pki_types::{CertificateDer, ServerName};
 use rustls::server::ServerConfig;
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader as TokioBufReader};
+use tokio::io::{
+    AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader as TokioBufReader,
+};
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream as ServerTlsStream;
 use tokio_rustls::TlsAcceptor;
@@ -49,7 +50,10 @@ impl StreamWrapper {
     }
 
     pub fn is_tls(&self) -> bool {
-        matches!(self, StreamWrapper::TlsClient(_) | StreamWrapper::TlsServer(_))
+        matches!(
+            self,
+            StreamWrapper::TlsClient(_) | StreamWrapper::TlsServer(_)
+        )
     }
 }
 
@@ -215,7 +219,8 @@ impl TlsClient {
 
     #[cfg(feature = "insecure-tls")]
     pub fn increment_insecure_connection(&self) {
-        self.insecure_connection_count.fetch_add(1, Ordering::Relaxed);
+        self.insecure_connection_count
+            .fetch_add(1, Ordering::Relaxed);
     }
 }
 
