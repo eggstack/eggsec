@@ -42,12 +42,6 @@
 
 ## Deferred Items (Low Priority - Intentionally Deferred)
 
-### SettingsTab/WafTab FormBuilder Refactoring
-- FormBuilder component is available but full refactoring was not performed
-- Existing render() methods continue to use manual layout constraints
-- This refactoring can be done in a future iteration when needed
-- **Status**: Deferred, FormBuilder available for future use
-
 ### Derive Help from Tab State
 - Would require updating `key_hints()` trait method across all tabs
 - Current hardcoded help in `help_config.rs` is functional
@@ -56,6 +50,26 @@
 ### Command Palette Styling
 - Low priority - existing styling is adequate
 - **Status**: Low priority, deferred indefinitely
+
+---
+
+## Phase 15: WAF Tab Checkbox Focus Fix
+
+### Completed Items
+
+#### WAF Tab Checkbox Focus Pattern ✅
+- Add `focused_checkbox_index` to track which checkbox is focused
+- Fix render logic to use `focused_checkbox_index` instead of hardcoded `i == 0`
+- Update `handle_focus_next/prev` to manage `focused_checkbox_index`
+- Update `handle_left/right` to use `focused_checkbox_index`
+- Update `is_at_left_edge/is_at_right_edge` to use `focused_checkbox_index`
+- Update `handle_enter` to toggle checkbox by `focused_checkbox_index`
+- Update `reset` to reset `focused_checkbox_index` to 0
+
+### Settings Tab Status
+- Settings tab already uses proper `InputField::render()` calls
+- Already uses FormBuilder-style layout with proper constraints
+- No refactoring needed
 
 ---
 

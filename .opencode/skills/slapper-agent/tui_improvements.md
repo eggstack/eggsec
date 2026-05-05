@@ -17,7 +17,14 @@ metadata:
 
 ## Overview
 
-This skill documents TUI patterns and recent improvements in Slapper's terminal UI implementation, updated for Phase 11 completion.
+This skill documents TUI patterns and recent improvements in Slapper's terminal UI implementation, updated for Phase 15 completion.
+
+## Phase 15: WAF Tab Checkbox Focus Fix (2026-05-05) ✅
+
+### Completed Items
+
+- **15.1**: WAF Tab Checkbox Focus - Added `focused_checkbox_index` to properly track which checkbox is focused
+- Settings tab already uses proper `InputField::render()` - no changes needed
 
 ## Phase 11 Updates (2026-04-30)
 
