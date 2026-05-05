@@ -466,6 +466,21 @@ pub async fn run_full_recon(
 
     let takeover_result = run_takeover_check(subdomain_result.as_ref(), args.no_takeover).await;
 
+    let reverse_dns_failed = reverse_dns_result.is_none() && !args.no_dns && resolved_ip.is_some();
+    let geo_failed = geolocation_result.is_none() && !args.no_geo && resolved_ip.is_some();
+    let threat_failed = threat_intel_result.is_none() && !args.no_threat && resolved_ip.is_some();
+    let ssl_failed = ssl_result.is_none() && !args.no_ssl && resolved_ip.is_some();
+    let whois_failed = whois_result.is_none() && !args.no_whois && domain.is_some();
+    let subdomains_failed = subdomain_result.is_none() && !args.no_subdomains && domain.is_some();
+    let dns_records_failed = dns_records_result.is_none() && !args.no_dns_records && domain.is_some();
+    let js_failed = js_result.is_none() && !args.no_js;
+    let wayback_failed = wayback_result.is_none() && !args.no_wayback && domain.is_some();
+    let cloud_failed = cloud_result.is_none() && !args.no_cloud && domain.is_some();
+    let content_failed = content_result.is_none() && !args.no_content;
+    let cors_failed = cors_result.is_none() && !args.no_cors;
+    let email_failed = email_result.is_none() && !args.no_email;
+    let takeover_failed = takeover_result.is_none() && !args.no_takeover && subdomain_result.is_some();
+
     recon.reverse_dns = reverse_dns_result;
     recon.geolocation = geolocation_result;
     recon.threat_intel = threat_intel_result;
@@ -481,8 +496,58 @@ pub async fn run_full_recon(
     recon.email_discovery = email_result;
     recon.takeover = takeover_result;
 
+    if reverse_dns_failed {
+        recon.reverse_dns_error = Some("Reverse DNS lookup failed".to_string());
+    }
+    if geo_failed {
+        recon.geoip_error = Some("Geolocation lookup failed".to_string());
+    }
+    if threat_failed {
+        recon.threat_intel_error = Some("Threat intel lookup failed".to_string());
+    }
+    if ssl_failed {
+        recon.ssl_error = Some("SSL analysis failed".to_string());
+    }
+    if whois_failed {
+        recon.whois_error = Some("WHOIS lookup failed".to_string());
+    }
+    if subdomains_failed {
+        recon.subdomains_error = Some("Subdomain enumeration failed".to_string());
+    }
+    if dns_records_failed {
+        recon.dns_records_error = Some("DNS records enumeration failed".to_string());
+    }
+    if js_failed {
+        recon.js_error = Some("JS analysis failed".to_string());
+    }
+    if wayback_failed {
+        recon.wayback_error = Some("Wayback lookup failed".to_string());
+    }
+    if cloud_failed {
+        recon.cloud_error = Some("Cloud scan failed".to_string());
+    }
+    if content_failed {
+        recon.content_error = Some("Content discovery failed".to_string());
+    }
+    if cors_failed {
+        recon.cors_error = Some("CORS analysis failed".to_string());
+    }
+    if email_failed {
+        recon.email_error = Some("Email discovery failed".to_string());
+    }
+    if takeover_failed {
+        recon.takeover_error = Some("Takeover check failed or no vulnerable subdomains".to_string());
+    }
+
     recon.cve_mapping = run_cve_check(techdetect_result.as_ref(), args.no_cve).await;
+    if recon.cve_mapping.is_none() && !args.no_cve && techdetect_result.is_some() {
+        recon.cve_error = Some("CVE mapping failed".to_string());
+    }
+
     recon.tech_stack = techdetect_result.map(|t| t.tech_stack);
+    if recon.tech_stack.is_none() && !args.no_tech {
+        recon.tech_error = Some("Technology detection failed".to_string());
+    }
 
     if verbose {
         eprintln!("Recon complete");
@@ -734,23 +799,7 @@ mod tests {
             target: "example.com".to_string(),
             domain: Some("example.com".to_string()),
             ip_address: Some("93.184.216.34".to_string()),
-            tech_stack: None,
-            reverse_dns: None,
-            geolocation: None,
-            geoip_error: None,
-            whois: None,
-            subdomains: None,
-            ssl_analysis: None,
-            dns_records: None,
-            js_analysis: None,
-            wayback: None,
-            cloud: None,
-            content: None,
-            cors: None,
-            email_discovery: None,
-            threat_intel: None,
-            cve_mapping: None,
-            takeover: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("example.com"));

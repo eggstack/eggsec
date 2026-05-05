@@ -173,6 +173,16 @@ impl ReconTab {
                     tech.languages.join(", ")
                 )));
             }
+        } else if results.tech_error.is_some() {
+            self.results_view.add_line(Line::from(""));
+            self.results_view.add_line(Line::from(Span::styled(
+                "Tech Stack: Failed",
+                ratatui::style::Style::default().fg(tc!(error)),
+            )));
+            if let Some(ref err) = results.tech_error {
+                self.results_view
+                    .add_line(Line::from(format!("  {}", err)));
+            }
         }
 
         if let Some(ref geo) = results.geolocation {
@@ -218,6 +228,16 @@ impl ReconTab {
                     .add_line(Line::from(format!("  Subject: {}", cert.subject)));
                 self.results_view
                     .add_line(Line::from(format!("  Issuer: {}", cert.issuer)));
+            }
+        } else if results.ssl_error.is_some() {
+            self.results_view.add_line(Line::from(""));
+            self.results_view.add_line(Line::from(Span::styled(
+                "SSL/TLS: Failed",
+                ratatui::style::Style::default().fg(tc!(error)),
+            )));
+            if let Some(ref err) = results.ssl_error {
+                self.results_view
+                    .add_line(Line::from(format!("  {}", err)));
             }
         }
 

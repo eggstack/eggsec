@@ -313,7 +313,7 @@ impl super::App {
         }
     }
 
-    fn set_error_for_current_tab(&mut self, error: TabError) {
+    pub(super) fn set_error_for_current_tab(&mut self, error: TabError) {
         use super::tabs::Tab;
         let tab = self.task_tab.unwrap_or(self.current_tab);
         match tab {

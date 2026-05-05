@@ -69,7 +69,7 @@ pub fn get_shared_insecure_http_client() -> Client {
 /// Only use this for testing in isolated environments. For production testing,
 /// ensure proper certificates are installed on target systems.
 pub fn create_insecure_http_client(timeout_secs: u64) -> Result<Client> {
-    tracing::warn!(
+    tracing::debug!(
         "Creating HTTP client with disabled TLS certificate verification. \
          This is insecure and should only be used in isolated testing environments."
     );
@@ -143,7 +143,7 @@ pub fn create_insecure_client_with_options<F>(timeout_secs: u64, builder_fn: F) 
 where
     F: FnOnce(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
 {
-    tracing::warn!(
+    tracing::debug!(
         "Creating HTTP client with custom options and disabled TLS certificate verification. \
          This is insecure and should only be used in isolated testing environments."
     );

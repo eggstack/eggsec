@@ -411,7 +411,28 @@ impl App {
             handle.abort();
         }
         self.task_tab = None;
+        if let Some(rx) = self.progress_rx.take() {
+            drop(rx);
+        }
+        if let Some(rx) = self.result_rx.take() {
+            drop(rx);
+        }
         self.dispatcher_mut().stop();
+    }
+
+    pub fn stop_with_message(&mut self, message: &str) {
+        if let Some(handle) = self.task_handle.take() {
+            handle.abort();
+        }
+        self.task_tab = None;
+        if let Some(rx) = self.progress_rx.take() {
+            drop(rx);
+        }
+        if let Some(rx) = self.result_rx.take() {
+            drop(rx);
+        }
+        self.dispatcher_mut().stop();
+        self.set_error_for_current_tab(crate::tui::app::tab_error::TabError::Target(message.to_string()));
     }
 
     pub fn handle_enter(&mut self) {

@@ -117,10 +117,12 @@ pub async fn run_recon(
             let mut last_stage = stage_rx.borrow().clone();
             let stages = ["resolving", "recon (parallel)", "takeover", "cve", "done"];
             let total_stages = stages.len() as u64;
+            let mut stalled_count = 0u32;
             while stage_rx.changed().await.is_ok() {
                 let current = stage_rx.borrow().clone();
                 if current != last_stage {
                     last_stage.clone_from(&current);
+                    stalled_count = 0;
                     let completed = stages
                         .iter()
                         .take_while(|&&s| {
@@ -129,6 +131,12 @@ pub async fn run_recon(
                         .count() as u64;
                     let pct = (completed.min(total_stages) * 90) / total_stages + 5;
                     let _ = ptx.send((pct, 100)).await;
+                } else {
+                    stalled_count += 1;
+                    if stalled_count > 200 {
+                        let _ = ptx.send((95, 100)).await;
+                        break;
+                    }
                 }
                 if current.is_empty() && !last_stage.is_empty() {
                     break;
@@ -138,6 +146,7 @@ pub async fn run_recon(
 
         let watch_sender = stage_tx.clone();
         let stage_for_thread = stage.clone();
+        let start_time = std::time::Instant::now();
         std::thread::spawn(move || {
             let mut last = String::new();
             loop {
@@ -147,17 +156,24 @@ pub async fn run_recon(
                     last = current.clone();
                     let _ = watch_sender.send(current);
                 }
+                if start_time.elapsed().as_secs() > 120 {
+                    let _ = watch_sender.send("timeout".to_string());
+                    break;
+                }
             }
         });
 
-        match run_full_recon(&args, &config, stage, false).await {
-            Ok(r) => {
+        let timeout_duration = std::time::Duration::from_secs(120);
+        let recon_result = tokio::time::timeout(timeout_duration, run_full_recon(&args, &config, stage, false)).await;
+
+        match recon_result {
+            Ok(Ok(r)) => {
                 progress_handle.abort();
                 let _ = progress_tx.send((100, 100)).await;
                 let _ = result_tx.send(TaskResult::Recon(r)).await;
                 return Ok(());
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 progress_handle.abort();
                 let error_str = e.to_string().to_lowercase();
 
@@ -180,6 +196,11 @@ pub async fn run_recon(
                     tracing::error!("Recon failed after {} attempts: {:?}", max_retries, e);
                     return Err(e.into());
                 }
+            }
+            Err(_) => {
+                progress_handle.abort();
+                tracing::error!("Recon timed out after 120 seconds");
+                return Err(anyhow::anyhow!("Recon timed out after 120 seconds").into());
             }
         }
     }

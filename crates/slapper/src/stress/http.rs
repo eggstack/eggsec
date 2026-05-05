@@ -135,7 +135,7 @@ async fn build_clients(
         }
 
         let mut clients = Vec::with_capacity(healthy_proxies.len());
-        tracing::warn!(
+        tracing::debug!(
             "Creating HTTP clients with disabled TLS certificate verification for proxy health checks. \
              This is insecure and should only be used in isolated testing environments."
         );

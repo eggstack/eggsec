@@ -225,7 +225,7 @@ impl KeyHandler {
 
     fn handle_ctrl_c(&self, app: &mut App) {
         if app.is_running() {
-            app.stop();
+            app.stop_with_message("Interrupted by user");
         } else {
             app.should_quit = true;
         }
