@@ -16,26 +16,25 @@
 - **TabDispatcher Elimination**: Removed TabDispatcher boilerplate; tabs now use direct dynamic dispatch
 - Fixed tab window calculation tests to match actual algorithm behavior
 
+### Phase 7: State Management & Error Handling ✅
+- **Typed Errors**: Migrated all tabs from `error_message: Option<String>` to `error: Option<TabError>`
+- `TabError` enum provides structured error categories: Network, Auth, Config, Resource, Target, Internal, Unknown
+- Error formatting moved to `render()` methods - errors now display via `error.message()`
+- Recoverable error detection via `TabError::is_recoverable()` method
+- 5 tabs updated: workflow, vuln, storage, plugin, nse
+
+### Phase 8: Broader Codebase Modernization ✅
+- **Async TUI Event Loop Integration**: Implemented using `tokio::select!` pattern
+- Combined `crossterm::event::EventStream` for terminal events with Tokio streams
+- Non-blocking event polling with proper timeout handling
+
+### Phase 9: UI Component Library Enhancements ✅
+- **FormBuilder Component**: Added in `tui/components/input.rs`
+- Takes collection of `InputField`s and automatically calculates vertical layout chunks
+- Supports FieldVariant enum for Input, Checkbox, and Selector types
+- SettingsTab and WafTab refactoring planned for future iteration
+
 ## Actionable Tasks (Next Phases)
-
-### Phase 7: State Management & Error Handling
-- [ ] **Typed Errors over Strings**: Upgrade `error_message` across all tabs.
-  - **Context:** The recent standardization added `pub error_message: Option<String>`, but string-based errors strip contextual data that could be used for programmatic recovery.
-  - **Action:** Change `error_message` to hold a structured error type (`Option<anyhow::Error>` or a custom `SlapperError` enum).
-  - **Action:** Move the string formatting into the `render()` method.
-  - **Action:** Explore auto-recovery mechanisms based on error type (e.g., auto-reconnect prompts for broken proxy connections).
-
-### Phase 8: Broader Codebase Modernization
-- [ ] **Async TUI Event Loop Integration**: Execute the async transition (referencing `TOKIO_MIGRATION_PLAN.md`).
-  - **Context:** The TUI likely polls `progress_rx` and `result_rx` synchronously, which can lead to stuttering during heavy I/O.
-  - **Action:** Implement an asynchronous event loop using `tokio::select!`.
-  - **Action:** Combine `crossterm::event::EventStream` for terminal events with Tokio `mpsc::Receiver` streams for background workers.
-
-### Phase 9: UI Component Library Enhancements
-- [ ] **Form & Layout Builders**: Create higher-level compositional wrappers in `crates/slapper/src/tui/components/`.
-  - **Context:** Complex tabs like `SettingsTab` and `WafTab` have massive `render()` methods filled with manual layout constraints and chunk splitting.
-  - **Action:** Implement a `FormBuilder` component that takes a collection of `InputField`s and automatically calculates the vertical layout chunks.
-  - **Action:** Refactor `SettingsTab` and `WafTab` to use these builders, standardizing form layout across the application.
 
 ### Phase 10: Testing Rigor
 - [ ] **Visual Regression Testing**: Enhance `tui::tabs::tests`.
