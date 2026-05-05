@@ -1,10 +1,12 @@
 use crate::tc;
+use crate::tui::components::selector::{Checkbox, Selector};
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
+use std::fmt::{Debug, Formatter};
 
 #[derive(Clone, Debug)]
 pub struct ValidationResult {
@@ -13,6 +15,7 @@ pub struct ValidationResult {
 }
 
 pub struct InputField {
+    #[allow(dead_code)]
     pub label: String,
     pub value: String,
     pub focused: bool,
@@ -20,6 +23,32 @@ pub struct InputField {
     pub width: Option<usize>,
     pub autocomplete: Option<Vec<&'static str>>,
     pub validation: Option<ValidationResult>,
+}
+
+impl Clone for InputField {
+    fn clone(&self) -> Self {
+        InputField {
+            label: self.label.clone(),
+            value: self.value.clone(),
+            focused: self.focused,
+            cursor_pos: self.cursor_pos,
+            width: self.width,
+            autocomplete: self.autocomplete.clone(),
+            validation: self.validation.clone(),
+        }
+    }
+}
+
+impl Debug for InputField {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InputField")
+            .field("label", &self.label)
+            .field("value", &self.value)
+            .field("focused", &self.focused)
+            .field("cursor_pos", &self.cursor_pos)
+            .field("width", &self.width)
+            .finish()
+    }
 }
 
 impl InputField {
@@ -662,6 +691,84 @@ impl InputGroup {
 impl Default for InputGroup {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum FieldVariant {
+    Input(InputField),
+    Checkbox(Checkbox),
+    Selector(Selector),
+}
+
+pub struct FormBuilder {
+    title: String,
+    fields: Vec<FieldVariant>,
+    row_height: u16,
+}
+
+impl FormBuilder {
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            fields: Vec::new(),
+            row_height: 3,
+        }
+    }
+
+    pub fn add_input(mut self, field: InputField) -> Self {
+        self.fields.push(FieldVariant::Input(field));
+        self
+    }
+
+    pub fn add_checkbox(mut self, cb: Checkbox) -> Self {
+        self.fields.push(FieldVariant::Checkbox(cb));
+        self
+    }
+
+    pub fn add_selector(mut self, sel: Selector) -> Self {
+        self.fields.push(FieldVariant::Selector(sel));
+        self
+    }
+
+    pub fn row_height(mut self, height: u16) -> Self {
+        self.row_height = height;
+        self
+    }
+
+    fn calculate_constraints(&self) -> Vec<Constraint> {
+        self.fields
+            .iter()
+            .map(|field| match field {
+                FieldVariant::Input(_) => Constraint::Length(self.row_height),
+                FieldVariant::Checkbox(_) => Constraint::Length(2),
+                FieldVariant::Selector(_) => Constraint::Length(3),
+            })
+            .collect()
+    }
+
+    pub fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        let block = Block::default()
+            .title(self.title.as_str())
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(tc!(border)));
+
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+
+        let constraints = self.calculate_constraints();
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(constraints)
+            .split(inner);
+
+        for (i, field) in self.fields.iter().enumerate() {
+            match field {
+                FieldVariant::Input(input) => input.render(f, chunks[i], insert_mode),
+                FieldVariant::Checkbox(cb) => cb.render(f, chunks[i]),
+                FieldVariant::Selector(sel) => sel.render(f, chunks[i]),
+            }
+        }
     }
 }
 

@@ -1,12 +1,12 @@
 pub mod empty_state;
-mod input;
+pub mod input;
 mod popup;
 mod progress;
 mod scrollable;
-mod selector;
+pub mod selector;
 
 pub use empty_state::empty_state_paragraph;
-pub use input::{InputField, InputGroup, ValidationResult};
+pub use input::{FormBuilder, InputField, InputGroup, ValidationResult};
 pub use popup::{centered_rect, confirm_popup, help_popup_for_tab};
 pub use progress::ProgressGauge;
 pub use scrollable::ScrollableText;
