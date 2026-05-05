@@ -1,5 +1,6 @@
 use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
+use crate::tui::app::tab_error::TabError;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -16,7 +17,7 @@ pub struct NseTab {
     pub state: AppState,
     pub results_view: ScrollableText,
     pub focus_area: NseFocusArea,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -50,7 +51,7 @@ impl NseTab {
             state: AppState::Idle,
             results_view: ScrollableText::new("NSE Results"),
             focus_area: NseFocusArea::Inputs,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -140,19 +141,19 @@ impl TabState for NseTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.progress = 0.0;
-        self.error_message = None;
+        self.error = None;
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 
 impl TabRender for NseTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+        if let Some(ref error) = self.error {
+            let error_text = Paragraph::new(format!("Error: {}", error.message()))
                 .block(Block::default().borders(Borders::ALL).title("NSE - Error"))
                 .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, area);

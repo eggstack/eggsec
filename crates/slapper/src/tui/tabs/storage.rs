@@ -3,6 +3,7 @@ use crate::tc;
 use crate::tui::components::{
     empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
 };
+use crate::tui::app::tab_error::TabError;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -22,7 +23,7 @@ pub struct StorageTab {
     pub findings: Vec<StoredFinding>,
     pub focus_area: StorageFocusArea,
     pub current_mode: StorageMode,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -72,7 +73,7 @@ impl StorageTab {
             findings: Vec::new(),
             focus_area: StorageFocusArea::Config,
             current_mode: StorageMode::Connect,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -246,16 +247,12 @@ impl TabState for StorageTab {
         self.scans.clear();
         self.findings.clear();
         self.results_view.clear();
-        self.error_message = None;
+        self.error = None;
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg.clone());
-        self.results_view.add_line(Line::from(Span::styled(
-            format!("Error: {}", msg),
-            Style::default().fg(tc!(error)),
-        )));
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 

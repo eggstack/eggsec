@@ -1,5 +1,6 @@
 use crate::tc;
 use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
+use crate::tui::app::tab_error::TabError;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -17,7 +18,7 @@ pub struct PluginTab {
     pub focus_area: PluginFocusArea,
     pub plugins_loaded: bool,
     pub plugin_list: Vec<PluginInfo>,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -64,7 +65,7 @@ impl PluginTab {
             focus_area: PluginFocusArea::Inputs,
             plugins_loaded: false,
             plugin_list: Vec::new(),
-            error_message: None,
+            error: None,
         }
     }
 
@@ -195,20 +196,20 @@ impl TabState for PluginTab {
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
-        self.error_message = None;
+        self.error = None;
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg);
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 
 impl TabRender for PluginTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
-        if let Some(ref err_msg) = self.error_message {
+        if let Some(ref error) = self.error {
             use ratatui::widgets::Paragraph;
-            let error_text = Paragraph::new(format!("Error: {}", err_msg))
+            let error_text = Paragraph::new(format!("Error: {}", error.message()))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

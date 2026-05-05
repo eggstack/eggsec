@@ -2,6 +2,7 @@ use crate::tc;
 use crate::tui::components::{
     empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
 };
+use crate::tui::app::tab_error::TabError;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::workflow::finding::Finding;
 use crate::workflow::finding::FindingStatus;
@@ -26,7 +27,7 @@ pub struct WorkflowTab {
     pub mode_selector: Selector,
     pub severity_selector: Selector,
     pub status_selector: Selector,
-    pub error_message: Option<String>,
+    pub error: Option<TabError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -88,7 +89,7 @@ impl WorkflowTab {
             mode_selector,
             severity_selector,
             status_selector,
-            error_message: None,
+            error: None,
         }
     }
 
@@ -255,19 +256,15 @@ impl TabState for WorkflowTab {
         self.findings.clear();
         self.report = None;
         self.results_view.clear();
-        self.error_message = None;
+        self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
         }
     }
 
-    fn set_error(&mut self, msg: String) {
-        self.state = AppState::Error(msg.clone());
-        self.error_message = Some(msg.clone());
-        self.results_view.add_line(Line::from(Span::styled(
-            format!("Error: {}", msg),
-            Style::default().fg(tc!(error)),
-        )));
+    fn set_error(&mut self, error: TabError) {
+        self.state = AppState::Error(error.message());
+        self.error = Some(error);
     }
 }
 
