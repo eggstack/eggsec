@@ -695,4 +695,117 @@ mod render_tests {
             terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
         }
     }
+
+    #[test]
+    fn test_render_recon_tab_has_content() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
+        assert!(has_content, "Recon tab should render some content");
+    }
+
+    #[test]
+    fn test_render_fuzz_tab_has_content() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Fuzz;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
+        assert!(has_content, "Fuzz tab should render some content");
+    }
+
+    #[test]
+    fn test_render_dashboard_tab_has_content() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Dashboard;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
+        assert!(has_content, "Dashboard tab should render some content");
+    }
+
+    #[test]
+    fn test_render_settings_tab_has_content() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
+        assert!(has_content, "Settings tab should render some content");
+    }
+
+    #[test]
+    fn test_render_waf_tab_has_content() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Waf;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
+        assert!(has_content, "WAF tab should render some content");
+    }
+
+    #[test]
+    fn test_render_buffer_not_all_spaces() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Fuzz;
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let space_count = buf
+            .content
+            .iter()
+            .filter(|cell| cell.symbol() == " ")
+            .count();
+        let total = buf.content.len();
+        assert!(
+            space_count < total,
+            "Buffer should have non-space content (spaces: {}, total: {})",
+            space_count,
+            total
+        );
+    }
+
+    #[test]
+    fn test_render_at_large_width_has_content() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Scan;
+        let backend = TestBackend::new(200, 40);
+        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
+        assert!(has_content, "Scan tab at large size should render content");
+    }
+
+    #[test]
+    fn test_render_all_tabs_produce_content() {
+        let all_tabs = Tab::all();
+        for tab in all_tabs {
+            let mut app = create_test_app();
+            app.current_tab = *tab;
+            let backend = TestBackend::new(80, 24);
+            let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
+            terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+            let buf = terminal.backend().buffer();
+            let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
+            assert!(
+                has_content,
+                "Tab {:?} should render some content",
+                tab
+            );
+        }
+    }
 }
