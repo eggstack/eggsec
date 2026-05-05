@@ -24,6 +24,7 @@ pub struct WafTab {
     pub detection_view: ScrollableText,
     pub bypass_view: ScrollableText,
     pub focus_area: WafFocusArea,
+    pub focused_checkbox_index: usize,
     pub error: Option<TabError>,
 }
 
@@ -61,6 +62,7 @@ impl WafTab {
             detection_view: ScrollableText::new("Detection Result"),
             bypass_view: ScrollableText::new("Bypass Results"),
             focus_area: WafFocusArea::Inputs,
+            focused_checkbox_index: 0,
             error: None,
         }
     }
@@ -299,6 +301,7 @@ impl TabState for WafTab {
         self.detection_view.clear();
         self.bypass_view.clear();
         self.error = None;
+        self.focused_checkbox_index = 0;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -367,7 +370,7 @@ impl TabRender for WafTab {
 
         for (i, cb) in self.technique_checkboxes.iter().enumerate() {
             let mut checkbox = cb.clone();
-            checkbox.focused = self.focus_area == WafFocusArea::Techniques && i == 0;
+            checkbox.focused = self.focus_area == WafFocusArea::Techniques && i == self.focused_checkbox_index;
             checkbox.render(f, config_chunks[2 + i]);
         }
 
@@ -408,16 +411,10 @@ impl TabInput for WafTab {
                 WafFocusArea::ModeRadio
             }
             WafFocusArea::ModeRadio => {
-                self.technique_checkboxes
-                    .iter_mut()
-                    .for_each(|cb| cb.focused = false);
-                self.technique_checkboxes[0].focused = true;
+                self.focused_checkbox_index = 0;
                 WafFocusArea::Techniques
             }
             WafFocusArea::Techniques => {
-                self.technique_checkboxes
-                    .iter_mut()
-                    .for_each(|cb| cb.focused = false);
                 WafFocusArea::Results
             }
             WafFocusArea::Results => {
@@ -436,7 +433,7 @@ impl TabInput for WafTab {
             }
             WafFocusArea::Techniques => WafFocusArea::ModeRadio,
             WafFocusArea::Results => {
-                self.technique_checkboxes[0].focused = true;
+                self.focused_checkbox_index = 0;
                 WafFocusArea::Techniques
             }
         };
@@ -526,12 +523,7 @@ impl TabInput for WafTab {
         }
 
         if self.focus_area == WafFocusArea::Techniques {
-            for cb in &mut self.technique_checkboxes {
-                if cb.focused {
-                    cb.toggle();
-                    break;
-                }
-            }
+            self.technique_checkboxes[self.focused_checkbox_index].toggle();
             return;
         }
 
@@ -566,17 +558,12 @@ impl TabInput for WafTab {
         if self.focus_area == WafFocusArea::Inputs {
             self.inputs.move_left()
         } else if self.focus_area == WafFocusArea::Techniques {
-            let focused_idx = self.technique_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx == 0 {
-                    return false;
-                } else {
-                    self.technique_checkboxes[idx].focused = false;
-                    self.technique_checkboxes[idx - 1].focused = true;
-                    return true;
-                }
+            if self.focused_checkbox_index == 0 {
+                false
+            } else {
+                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                true
             }
-            true
         } else {
             true
         }
@@ -586,17 +573,12 @@ impl TabInput for WafTab {
         if self.focus_area == WafFocusArea::Inputs {
             self.inputs.move_right()
         } else if self.focus_area == WafFocusArea::Techniques {
-            let focused_idx = self.technique_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx >= self.technique_checkboxes.len() - 1 {
-                    return false;
-                } else {
-                    self.technique_checkboxes[idx].focused = false;
-                    self.technique_checkboxes[idx + 1].focused = true;
-                    return true;
-                }
+            if self.focused_checkbox_index >= self.technique_checkboxes.len() - 1 {
+                false
+            } else {
+                self.focused_checkbox_index += 1;
+                true
             }
-            true
         } else {
             true
         }
@@ -606,8 +588,7 @@ impl TabInput for WafTab {
         if self.focus_area == WafFocusArea::Inputs {
             self.inputs.is_at_left_edge()
         } else if self.focus_area == WafFocusArea::Techniques {
-            let focused_idx = self.technique_checkboxes.iter().position(|cb| cb.focused);
-            focused_idx == Some(0)
+            self.focused_checkbox_index == 0
         } else {
             true
         }
@@ -617,8 +598,7 @@ impl TabInput for WafTab {
         if self.focus_area == WafFocusArea::Inputs {
             self.inputs.is_at_right_edge()
         } else if self.focus_area == WafFocusArea::Techniques {
-            let focused_idx = self.technique_checkboxes.iter().position(|cb| cb.focused);
-            focused_idx == Some(self.technique_checkboxes.len() - 1)
+            self.focused_checkbox_index == self.technique_checkboxes.len() - 1
         } else {
             true
         }
