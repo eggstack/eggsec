@@ -1,55 +1,60 @@
-# TUI Improvement Plan
+# Slapper Codebase and TUI Improvement Plan
 
-## Status: COMPLETE
+## Status: IN PROGRESS
 
-All major phases completed:
-- **Phase 1**: Architectural refactoring (file splitting, module extraction)
-- **Phase 2**: UX/Usability improvements (focus indicators, mode indicator, quick switch)
-- **Phase 3**: Styling/Theming (theme customization in Settings)
-- **Phase 4**: Error handling (notifications for user-visible errors)
-- **Phase 5**: Help system extraction (help data moved to help_config.rs)
+## Completed Phases
 
-Key files created/modified:
-- `crates/slapper/src/tui/app/mod.rs` - App struct (split into modules)
-- `crates/slapper/src/tui/app/runner.rs` - Event loop (uses KeyHandler)
-- `crates/slapper/src/tui/app/key_handler.rs` - Key handling methods
-- `crates/slapper/src/tui/app/state_update.rs` - Background task handling, result dispatch
-- `crates/slapper/src/tui/app/notifications.rs` - Notification types
-- `crates/slapper/src/tui/app/bookmarks.rs` - Bookmark helpers
-- `crates/slapper/src/tui/app/confirmation.rs` - PendingAction enum
-- `crates/slapper/src/tui/app/help_config.rs` - Static help content (extracted from help.rs)
-- `crates/slapper/src/tui/components/input.rs` - InputField with focus colors
-- `crates/slapper/src/tui/ui.rs` - Main rendering, mode indicator in status bar
-- `crates/slapper/src/tui/theme.rs` - Theming with focus colors
-- `crates/slapper/src/tui/help.rs` - Help manager (data moved to help_config.rs)
+### Phase 1-5: TUI Architecture & Improvements ✅
+- Architectural refactoring (file splitting, module extraction)
+- UX/Usability improvements (focus indicators, mode indicator, quick switch)
+- Styling/Theming (theme customization in Settings)
+- Error handling (notifications for user-visible errors)
+- Help system extraction (help data moved to help_config.rs)
+
+### Phase 6: TUI Architecture & Performance ✅
+- **Lazy Loading Tabs**: Added `tabs: HashMap<Tab, Box<dyn TabInput>>` field to App struct for lazy tab instantiation infrastructure
+- **TabDispatcher Elimination**: Removed TabDispatcher boilerplate; tabs now use direct dynamic dispatch
+- Fixed tab window calculation tests to match actual algorithm behavior
+
+## Actionable Tasks (Next Phases)
+
+### Phase 7: State Management & Error Handling
+- [ ] **Typed Errors over Strings**: Upgrade `error_message` across all tabs.
+  - **Context:** The recent standardization added `pub error_message: Option<String>`, but string-based errors strip contextual data that could be used for programmatic recovery.
+  - **Action:** Change `error_message` to hold a structured error type (`Option<anyhow::Error>` or a custom `SlapperError` enum).
+  - **Action:** Move the string formatting into the `render()` method.
+  - **Action:** Explore auto-recovery mechanisms based on error type (e.g., auto-reconnect prompts for broken proxy connections).
+
+### Phase 8: Broader Codebase Modernization
+- [ ] **Async TUI Event Loop Integration**: Execute the async transition (referencing `TOKIO_MIGRATION_PLAN.md`).
+  - **Context:** The TUI likely polls `progress_rx` and `result_rx` synchronously, which can lead to stuttering during heavy I/O.
+  - **Action:** Implement an asynchronous event loop using `tokio::select!`.
+  - **Action:** Combine `crossterm::event::EventStream` for terminal events with Tokio `mpsc::Receiver` streams for background workers.
+
+### Phase 9: UI Component Library Enhancements
+- [ ] **Form & Layout Builders**: Create higher-level compositional wrappers in `crates/slapper/src/tui/components/`.
+  - **Context:** Complex tabs like `SettingsTab` and `WafTab` have massive `render()` methods filled with manual layout constraints and chunk splitting.
+  - **Action:** Implement a `FormBuilder` component that takes a collection of `InputField`s and automatically calculates the vertical layout chunks.
+  - **Action:** Refactor `SettingsTab` and `WafTab` to use these builders, standardizing form layout across the application.
+
+### Phase 10: Testing Rigor
+- [ ] **Visual Regression Testing**: Enhance `tui::tabs::tests`.
+  - **Context:** Current tests verify logic but cannot detect if layout changes push widgets off-screen.
+  - **Action:** Add integration tests using `ratatui::backend::TestBackend`.
+  - **Action:** Simulate keystrokes and assert against the exact 2D character buffer rendered to the terminal (e.g., verify that `Buffer::cell(x, y)` contains the expected text when an error is triggered).
 
 ---
 
 ## Deferred Items (Low Priority - Intentionally Deferred)
 
-### 4.3 Derive Help from Tab State
+### Derive Help from Tab State
 - Would require updating `key_hints()` trait method across all tabs
 - Current hardcoded help in `help_config.rs` is functional
 - **Status**: Low priority, deferred indefinitely
 
-### 4.4 Command Palette Styling
+### Command Palette Styling
 - Low priority - existing styling is adequate
 - **Status**: Low priority, deferred indefinitely
-
----
-
-## Success Criteria (All Complete)
-
-- app/mod.rs reduced (split into modules) ✅
-- runner.rs uses KeyHandler for organized key handling ✅
-- Focus indicators added to theme and InputField ✅
-- Mode indicator (NORMAL/INSERT) implemented in status bar ✅
-- Quick switch panel (Ctrl+G) implemented ✅
-- Escape behavior unified ✅
-- Theme customization exposed in Settings ✅
-- Error handling shows notifications to users ✅
-- Help content extracted to help_config.rs ✅
-- Direct tab field access maintained (acceptable tradeoff) ✅
 
 ---
 
