@@ -244,13 +244,11 @@ impl super::App {
             TaskResult::Storage => {}
             #[cfg(feature = "database")]
             TaskResult::StorageListScans { scans } => {
-                self.storage.scans = scans.clone();
-                self.storage.state = AppState::Completed;
+                self.storage.set_scans(scans);
             }
             #[cfg(feature = "database")]
             TaskResult::StorageListFindings { findings } => {
-                self.storage.findings = findings.clone();
-                self.storage.state = AppState::Completed;
+                self.storage.set_findings(findings);
             }
             #[cfg(not(feature = "database"))]
             TaskResult::StorageListScans { .. } => {}
