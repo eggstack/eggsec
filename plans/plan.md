@@ -11,6 +11,52 @@
 - Error handling (notifications for user-visible errors)
 - Help system extraction (help data moved to help_config.rs)
 
+### Phase 14: TUI Bug Fixes & Component Standardization ✅
+
+#### 1. WAF Tab Refactoring & Focus Fix ✅
+- Add `focused_checkbox_index` to track which checkbox is focused
+- Fix render logic to use `focused_checkbox_index` instead of hardcoded `i == 0`
+- Update `handle_focus_next/prev` to manage `focused_checkbox_index`
+- Update `handle_left/right` to use `focused_checkbox_index`
+- Update `is_at_left_edge/is_at_right_edge` to use `focused_checkbox_index`
+- Update `handle_enter` to toggle checkbox by `focused_checkbox_index`
+- Update `reset` to reset `focused_checkbox_index` to 0
+
+#### 2. Settings Tab Refactoring ✅
+- Settings tab already uses `InputField::render()` properly
+- Already uses `FormBuilder`-style layout with proper constraints
+
+#### 3. Auth Tab Component Standardization ✅
+- Replace manual text construction with proper `InputField::render()` calls
+- Fix layout constraints to properly accommodate 3 input fields
+- Show error in separate block instead of appending to input text
+
+#### 4. Integrations Tab Navigation & State Fix ✅
+- Fix `handle_focus_next` to route Config/Issue based on `current_mode`
+- Fix `handle_focus_prev` to route Results to Config or Issue based on `current_mode`
+- Implement actual `get_config()` mapping to return active integration settings
+
+#### 5. NSE Tab Redundancy & Logic Fix ✅
+- Remove duplicate methods (handle_word_forward/backward, handle_home/end, etc.)
+- Add `start()` method to NseTab to match WafTab pattern
+- Update `handle_enter` to trigger start/stop based on state
+
+#### 6. Fingerprint Tab Scrolling ✅
+- `handle_up/handle_down` now properly handle Results focus area
+- `handle_focus_next/prev` now properly switch between Inputs and Results focus areas
+
+#### 7. History Tab Keybindings ✅
+- 'd' or 'D' key: delete selected history entry
+- 'c' or 'C' key (in List focus): clear all history entries
+
+#### 8. Storage Tab Edge Detection ✅
+- `is_at_left_edge` uses `config_inputs.is_at_left_edge()` instead of hardcoding field[0]
+- `is_at_right_edge` uses `config_inputs.is_at_right_edge()` instead of hardcoding field[0]
+
+#### 9. TaskResult Integration (Storage & Integrations) ✅
+- Use `storage.set_scans()` instead of direct field assignment
+- Use `storage.set_findings()` instead of direct field assignment
+
 ### Phase 6: TUI Architecture & Performance ✅
 - **Lazy Loading Tabs**: Added `tabs: HashMap<Tab, Box<dyn TabInput>>` field to App struct for lazy tab instantiation infrastructure
 - **TabDispatcher Elimination**: Removed TabDispatcher boilerplate; tabs now use direct dynamic dispatch
