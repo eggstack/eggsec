@@ -342,37 +342,31 @@ impl TabRender for WafTab {
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(17), Constraint::Min(0)])
+            .constraints([Constraint::Length(19), Constraint::Min(0)])
             .split(area);
 
         let config_area = chunks[0];
         let results_area = chunks[1];
 
-        let config_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-            ])
-            .split(config_area);
+        use crate::tui::components::FormBuilder;
+        let mut builder = FormBuilder::new(" WAF Configuration ").row_height(3);
+        
+        // Target URL
+        builder = builder.add_input(self.inputs.fields[0].clone());
 
-        self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
-
+        // Mode
         let mut mode = self.mode_radio.clone();
         mode.focused = self.focus_area == WafFocusArea::ModeRadio;
-        mode.render(f, config_chunks[1]);
+        builder = builder.add_radio(mode);
 
+        // Techniques
         for (i, cb) in self.technique_checkboxes.iter().enumerate() {
             let mut checkbox = cb.clone();
             checkbox.focused = self.focus_area == WafFocusArea::Techniques && i == self.focused_checkbox_index;
-            checkbox.render(f, config_chunks[2 + i]);
+            builder = builder.add_checkbox(checkbox);
         }
+
+        builder.render(f, config_area, insert_mode);
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);

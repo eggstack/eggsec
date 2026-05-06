@@ -72,135 +72,78 @@ impl TabRender for super::SettingsTab {
         let inner = content_block.inner(content_area);
         f.render_widget(content_block, content_area);
 
+        use crate::tui::components::FormBuilder;
+
         match self.current_section {
             SettingsSection::Http => {
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(2),
-                        Constraint::Length(2),
-                    ])
-                    .split(inner);
-
-                for (i, field) in self.http_inputs.fields.iter().enumerate() {
-                    field.render(f, input_chunks[i], insert_mode);
+                let mut builder = FormBuilder::new("HTTP Settings").row_height(3);
+                for field in &self.http_inputs.fields {
+                    builder = builder.add_input(field.clone());
                 }
-
-                self.follow_redirects.render(f, input_chunks[3]);
-                self.verify_tls.render(f, input_chunks[4]);
+                builder = builder.add_checkbox(self.follow_redirects.clone());
+                builder = builder.add_checkbox(self.verify_tls.clone());
+                builder.render(f, inner, insert_mode);
             }
             SettingsSection::Scan => {
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(2),
-                    ])
-                    .split(inner);
-
-                for (i, field) in self.scan_inputs.fields.iter().enumerate() {
-                    field.render(f, input_chunks[i], insert_mode);
+                let mut builder = FormBuilder::new("Scan Settings").row_height(3);
+                for field in &self.scan_inputs.fields {
+                    builder = builder.add_input(field.clone());
                 }
-
-                self.stealth_mode.render(f, input_chunks[3]);
+                builder = builder.add_checkbox(self.stealth_mode.clone());
+                builder.render(f, inner, insert_mode);
             }
             SettingsSection::Proxy => {
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                    ])
-                    .split(inner);
-
-                for (i, field) in self.proxy_inputs.fields.iter().enumerate() {
-                    field.render(f, input_chunks[i], insert_mode);
+                let mut builder = FormBuilder::new("Proxy Settings").row_height(3);
+                for field in &self.proxy_inputs.fields {
+                    builder = builder.add_input(field.clone());
                 }
-
-                self.proxy_rotation_selector.render(f, input_chunks[2]);
+                builder = builder.add_selector(self.proxy_rotation_selector.clone());
+                builder.render(f, inner, insert_mode);
             }
             SettingsSection::Scope => {
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(3), Constraint::Length(3)])
-                    .split(inner);
-
-                for (i, field) in self.scope_inputs.fields.iter().enumerate() {
-                    field.render(f, input_chunks[i], insert_mode);
+                let mut builder = FormBuilder::new("Scope Settings").row_height(3);
+                for field in &self.scope_inputs.fields {
+                    builder = builder.add_input(field.clone());
                 }
+                builder.render(f, inner, insert_mode);
             }
             SettingsSection::Report => {
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                    ])
-                    .split(inner);
-
-                for (i, field) in self.report_inputs.fields.iter().enumerate() {
-                    field.render(f, input_chunks[i], insert_mode);
+                let mut builder = FormBuilder::new("Report Conversion").row_height(3);
+                for field in &self.report_inputs.fields {
+                    builder = builder.add_input(field.clone());
                 }
+                builder.render(f, inner, insert_mode);
             }
             SettingsSection::Schedule => {
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                    ])
-                    .split(inner);
-
-                for (i, field) in self.schedule_inputs.fields.iter().enumerate() {
-                    field.render(f, input_chunks[i], insert_mode);
+                let mut builder = FormBuilder::new("Schedule Management").row_height(3);
+                for field in &self.schedule_inputs.fields {
+                    builder = builder.add_input(field.clone());
                 }
+                builder.render(f, inner, insert_mode);
             }
             SettingsSection::Notifications => {
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(2),
-                        Constraint::Length(2),
-                        Constraint::Length(3),
-                    ])
-                    .split(inner);
-
-                for (i, field) in self.notify_inputs.fields.iter().enumerate() {
-                    field.render(f, input_chunks[i], insert_mode);
+                let mut builder = FormBuilder::new("Notification Settings").row_height(3);
+                for field in &self.notify_inputs.fields {
+                    builder = builder.add_input(field.clone());
                 }
-                self.notify_on_complete.render(f, input_chunks[4]);
-                self.notify_on_findings.render(f, input_chunks[5]);
-                self.severity_selector.render(f, input_chunks[6]);
+                builder = builder.add_checkbox(self.notify_on_complete.clone());
+                builder = builder.add_checkbox(self.notify_on_findings.clone());
+                builder = builder.add_selector(self.severity_selector.clone());
+                builder.render(f, inner, insert_mode);
             }
             SettingsSection::Theme => {
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
-                    ])
-                    .split(inner);
-
-                self.dark_mode.render(f, input_chunks[0]);
-                self.accent_color.render(f, input_chunks[1]);
+                let mut builder = FormBuilder::new("Theme Settings").row_height(3);
+                builder = builder.add_checkbox(self.dark_mode.clone());
+                builder = builder.add_selector(self.accent_color.clone());
+                builder.render(f, inner, insert_mode);
 
                 let theme_hint = Paragraph::new("Use Ctrl+T to toggle theme instantly");
-                f.render_widget(theme_hint, input_chunks[2]);
+                let hint_area = Rect {
+                    y: inner.y + 6,
+                    height: 1,
+                    ..inner
+                };
+                f.render_widget(theme_hint, hint_area);
             }
         }
 

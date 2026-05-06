@@ -309,14 +309,34 @@ impl TabInput for NseTab {
     }
 
     fn handle_enter(&mut self) {
+        let mut should_start = false;
         match self.focus_area {
             NseFocusArea::Inputs => {
-                self.inputs.blur();
+                if self.inputs.is_focused() {
+                    self.inputs.blur();
+                } else {
+                    should_start = true;
+                }
             }
             NseFocusArea::ScriptSelector => {
-                self.script_selector.handle_enter();
+                if self.script_selector.focused {
+                    self.script_selector.handle_enter();
+                } else {
+                    should_start = true;
+                }
             }
-            NseFocusArea::Results => {}
+            NseFocusArea::Results => {
+                should_start = true;
+            }
+        }
+
+        if should_start {
+            if self.is_running() {
+                self.stop();
+            } else {
+                // In a real implementation this would trigger an event/worker
+                self.state = AppState::Running;
+            }
         }
     }
 
@@ -397,43 +417,11 @@ impl NseTab {
         }
     }
 
-    pub fn handle_word_forward(&mut self) {
-        for _ in 0..5 {
-            self.handle_right();
-        }
-    }
-
-    pub fn handle_word_backward(&mut self) {
-        for _ in 0..5 {
-            self.handle_left();
-        }
-    }
-
-    pub fn handle_home(&mut self) {
-        for _ in 0..100 {
-            self.handle_left();
-        }
-    }
-
-    pub fn handle_end(&mut self) {
-        for _ in 0..100 {
-            self.handle_right();
-        }
-    }
-
     pub fn page_up(&mut self, page_size: usize) {
         self.results_view.page_up(page_size);
     }
 
     pub fn page_down(&mut self, page_size: usize) {
         self.results_view.page_down(page_size);
-    }
-
-    pub fn handle_top(&mut self) {
-        self.results_view.scroll_to_top();
-    }
-
-    pub fn handle_bottom(&mut self) {
-        self.results_view.scroll_to_bottom();
     }
 }

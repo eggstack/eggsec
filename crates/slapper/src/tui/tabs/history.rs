@@ -422,7 +422,13 @@ impl TabInput for HistoryTab {
         };
     }
 
-    fn handle_char(&mut self, _c: char) {}
+    fn handle_char(&mut self, c: char) {
+        match c {
+            'd' => self.delete_selected(),
+            'C' => self.clear_all(),
+            _ => {}
+        }
+    }
     fn handle_backspace(&mut self) {}
 
     fn handle_paste(&mut self, _text: &str) {}

@@ -157,11 +157,38 @@ impl IntegrationsTab {
     }
 
     pub fn get_config(&self) -> IntegrationConfig {
-        IntegrationConfig {
-            jira: None,
-            github: None,
-            gitlab: None,
+        use crate::integrations::{github::GitHubConfig, gitlab::GitLabConfig, jira::JiraConfig};
+        use crate::types::SensitiveString;
+
+        let mut config = IntegrationConfig::default();
+
+        match self.tracker_selector.selected_value().unwrap_or("") {
+            "jira" => {
+                config.jira = Some(JiraConfig {
+                    url: self.tracker_url().to_string(),
+                    username: self.tracker_token().to_string(),
+                    api_token: SensitiveString::new(self.tracker_password().to_string()),
+                    project_key: self.tracker_project().to_string(),
+                });
+            }
+            "github" => {
+                config.github = Some(GitHubConfig {
+                    owner: self.tracker_token().to_string(),
+                    repo: self.tracker_project().to_string(),
+                    api_token: SensitiveString::new(self.tracker_password().to_string()),
+                });
+            }
+            "gitlab" => {
+                config.gitlab = Some(GitLabConfig {
+                    url: self.tracker_url().to_string(),
+                    project_id: self.tracker_project().to_string(),
+                    api_token: SensitiveString::new(self.tracker_password().to_string()),
+                });
+            }
+            _ => {}
         }
+
+        config
     }
 
     pub fn build_issue(&self) -> Issue {
@@ -343,7 +370,7 @@ impl TabInput for IntegrationsTab {
                 self.tracker_selector.blur();
                 IntegrationsFocusArea::Config
             }
-            IntegrationsFocusArea::Config => IntegrationsFocusArea::Results,
+            IntegrationsFocusArea::Config => IntegrationsFocusArea::Issue,
             IntegrationsFocusArea::Issue => IntegrationsFocusArea::Results,
             IntegrationsFocusArea::Results => {
                 self.tracker_selector.focus();
@@ -359,11 +386,8 @@ impl TabInput for IntegrationsTab {
                 self.tracker_selector.focus();
                 IntegrationsFocusArea::Tracker
             }
-            IntegrationsFocusArea::Issue => {
-                self.tracker_selector.focus();
-                IntegrationsFocusArea::Tracker
-            }
-            IntegrationsFocusArea::Results => IntegrationsFocusArea::Config,
+            IntegrationsFocusArea::Issue => IntegrationsFocusArea::Config,
+            IntegrationsFocusArea::Results => IntegrationsFocusArea::Issue,
         };
     }
 

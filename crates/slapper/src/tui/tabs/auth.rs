@@ -84,13 +84,21 @@ impl TabRender for AuthTab {
 
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         use ratatui::style::Style;
+        use crate::tui::components::FormBuilder;
+
+        if let Some(ref err) = self.error {
+            let error_text = Paragraph::new(format!("Error: {}", err.message()))
+                .block(Block::default().borders(Borders::ALL).title("Auth - Error"))
+                .style(Style::default().fg(tc!(error)));
+            f.render_widget(error_text, area);
+            return;
+        }
 
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
+                Constraint::Length(11), // 3 inputs * 3 + 2 borders
                 Constraint::Min(0),
             ])
             .split(area);
@@ -100,30 +108,16 @@ impl TabRender for AuthTab {
             .style(Style::default().fg(tc!(info)));
         f.render_widget(title, layout[0]);
 
-        let mut input_text = String::new();
-        for (i, field) in self.inputs.fields.iter().enumerate() {
-            if i > 0 {
-                input_text.push_str("\n");
-            }
-            let label = field.label.clone();
-            let value = field.value.clone();
-            let focus marker = if field.focused { "*" } else { " " };
-            input_text.push_str(&format!("{}{}: {}", focus marker, label, value));
+        let mut builder = FormBuilder::new("Inputs").row_height(3);
+        for field in &self.inputs.fields {
+            builder = builder.add_input(field.clone());
         }
+        builder.render(f, layout[1], insert_mode);
 
-        if let Some(ref err) = self.error {
-            input_text.push_str(&format!("\nError: {}", err.message()));
-        }
-
-        let input_display = Paragraph::new(input_text)
-            .block(Block::default().borders(Borders::ALL).title("Inputs"))
-            .style(Style::default().fg(tc!(text)));
-        f.render_widget(input_display, layout[1]);
-
-        let results = Paragraph::new(&self.results)
+        let results = Paragraph::new(self.results.as_str())
             .block(Block::default().borders(Borders::ALL).title("Results"))
             .style(Style::default().fg(tc!(text)));
-        f.render_widget(results, layout[3]);
+        f.render_widget(results, layout[2]);
     }
 }
 

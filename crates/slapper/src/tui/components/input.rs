@@ -1,5 +1,5 @@
 use crate::tc;
-use crate::tui::components::selector::{Checkbox, Selector};
+use crate::tui::components::selector::{Checkbox, RadioGroup, Selector};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -699,6 +699,7 @@ pub enum FieldVariant {
     Input(InputField),
     Checkbox(Checkbox),
     Selector(Selector),
+    RadioGroup(RadioGroup),
 }
 
 pub struct FormBuilder {
@@ -731,6 +732,11 @@ impl FormBuilder {
         self
     }
 
+    pub fn add_radio(mut self, rg: RadioGroup) -> Self {
+        self.fields.push(FieldVariant::RadioGroup(rg));
+        self
+    }
+
     pub fn row_height(mut self, height: u16) -> Self {
         self.row_height = height;
         self
@@ -743,6 +749,7 @@ impl FormBuilder {
                 FieldVariant::Input(_) => Constraint::Length(self.row_height),
                 FieldVariant::Checkbox(_) => Constraint::Length(2),
                 FieldVariant::Selector(_) => Constraint::Length(3),
+                FieldVariant::RadioGroup(_) => Constraint::Length(2),
             })
             .collect()
     }
@@ -767,6 +774,7 @@ impl FormBuilder {
                 FieldVariant::Input(input) => input.render(f, chunks[i], insert_mode),
                 FieldVariant::Checkbox(cb) => cb.render(f, chunks[i]),
                 FieldVariant::Selector(sel) => sel.render(f, chunks[i]),
+                FieldVariant::RadioGroup(rg) => rg.render(f, chunks[i]),
             }
         }
     }

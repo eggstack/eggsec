@@ -349,22 +349,22 @@ impl TabInput for FingerprintTab {
     }
 
     fn handle_up(&mut self) {
-        if self.focus_area == FingerprintFocusArea::Inputs {
-            if !self.inputs.is_focused() && !self.results_view.is_empty() {
-                self.scroll_results_up();
-            } else {
-                self.inputs.focus_prev();
-            }
+        if self.focus_area == FingerprintFocusArea::Results {
+            self.scroll_results_up();
+        } else if self.inputs.is_focused() {
+            self.inputs.focus_prev();
+        } else if !self.results_view.is_empty() {
+            self.scroll_results_up();
         }
     }
 
     fn handle_down(&mut self) {
-        if self.focus_area == FingerprintFocusArea::Inputs {
-            if !self.inputs.is_focused() && !self.results_view.is_empty() {
-                self.scroll_results_down();
-            } else {
-                self.inputs.focus_next();
-            }
+        if self.focus_area == FingerprintFocusArea::Results {
+            self.scroll_results_down();
+        } else if self.inputs.is_focused() {
+            self.inputs.focus_next();
+        } else if !self.results_view.is_empty() {
+            self.scroll_results_down();
         }
     }
 

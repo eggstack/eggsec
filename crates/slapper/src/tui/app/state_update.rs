@@ -1,5 +1,7 @@
 use super::NotificationSeverity;
 use crate::tui::app::tab_error::TabError;
+#[cfg(any(feature = "database", feature = "external-integrations"))]
+use crate::tui::tabs::AppState;
 use crate::tui::tabs::TabState;
 use crate::tui::workers::TaskResult;
 
@@ -241,22 +243,34 @@ impl super::App {
             }
             #[cfg(not(feature = "compliance"))]
             TaskResult::Compliance(_) => {}
-            TaskResult::Storage => {}
+            TaskResult::Storage => {
+                #[cfg(feature = "database")]
+                {
+                    self.storage.state = AppState::Completed;
+                    self.storage.results_view.add_line(ratatui::text::Line::from("Storage task completed"));
+                }
+            }
             #[cfg(feature = "database")]
             TaskResult::StorageListScans { scans } => {
-                self.storage.scans = scans.clone();
+                self.storage.set_scans(scans.clone());
                 self.storage.state = AppState::Completed;
             }
             #[cfg(feature = "database")]
             TaskResult::StorageListFindings { findings } => {
-                self.storage.findings = findings.clone();
+                self.storage.set_findings(findings.clone());
                 self.storage.state = AppState::Completed;
             }
             #[cfg(not(feature = "database"))]
             TaskResult::StorageListScans { .. } => {}
             #[cfg(not(feature = "database"))]
             TaskResult::StorageListFindings { .. } => {}
-            TaskResult::Integrations => {}
+            TaskResult::Integrations => {
+                #[cfg(feature = "external-integrations")]
+                {
+                    self.integrations.state = AppState::Completed;
+                    self.integrations.results_view.add_line(ratatui::text::Line::from("Integrations task completed"));
+                }
+            }
             #[cfg(feature = "external-integrations")]
             TaskResult::IntegrationsCreateIssue { ref issue } => {
                 self.integrations.state = AppState::Completed;
