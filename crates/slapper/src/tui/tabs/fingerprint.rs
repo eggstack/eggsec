@@ -271,11 +271,23 @@ impl TabRender for FingerprintTab {
 
 impl TabInput for FingerprintTab {
     fn handle_focus_next(&mut self) {
-        self.inputs.focus_next();
+        if self.inputs.is_focused() {
+            self.inputs.focus_next();
+            if !self.inputs.is_focused() {
+                self.focus_area = FingerprintFocusArea::Results;
+            }
+        } else {
+            self.focus_area = FingerprintFocusArea::Results;
+        }
     }
 
     fn handle_focus_prev(&mut self) {
-        self.inputs.focus_prev();
+        if self.focus_area == FingerprintFocusArea::Results {
+            self.inputs.focus(self.inputs.fields.len() - 1);
+            self.focus_area = FingerprintFocusArea::Inputs;
+        } else {
+            self.inputs.focus_prev();
+        }
     }
 
     fn handle_char(&mut self, c: char) {

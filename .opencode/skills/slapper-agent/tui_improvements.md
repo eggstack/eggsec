@@ -322,6 +322,83 @@ Users can still manually toggle with `i` in Normal mode.
 
 Use the `tc!()` macro for all colors - see `tui_theme_system.md` skill for details.
 
+## Phase 14 Updates (2026-05-05)
+
+### Completed Items
+
+#### 1. WAF Tab Checkbox Focus Fix ✅
+- Added `focused_checkbox_index` to track which checkbox is focused
+- Fixed render logic: `checkbox.focused = self.focus_area == WafFocusArea::Techniques && i == self.focused_checkbox_index`
+- Updated navigation methods to manage `focused_checkbox_index` instead of modifying Checkbox.focused directly
+- Pattern: Use dedicated index field when managing multiple checkboxes in a FocusArea
+
+#### 2. Auth Tab Component Standardization ✅
+- Replaced manual text construction with proper `InputField::render()` calls
+- Fixed layout constraints to properly accommodate 3 input fields
+- Error now displays in separate block
+
+#### 3. Integrations Tab Navigation Fix ✅
+- `handle_focus_next` now routes Config/Issue based on `current_mode`
+- `handle_focus_prev` now routes Results to Config or Issue based on `current_mode`
+- `get_config()` now returns actual integration configuration based on selected tracker
+
+#### 4. NSE Tab Redundancy Cleanup ✅
+- Removed duplicate methods (handle_word_forward/backward, handle_home/end, page_up/down, handle_top/bottom)
+- These are properly handled by the TabInput trait implementation
+- Added `start()` method to match WafTab pattern
+- Updated `handle_enter` to trigger start/stop based on state
+
+#### 5. Fingerprint Tab Scrolling Fix ✅
+- `handle_up/handle_down` now properly handle Results focus area
+- `handle_focus_next/prev` now properly switch between Inputs and Results focus areas
+
+#### 6. History Tab Keybindings ✅
+- 'd' or 'D': delete selected history entry
+- 'c' or 'C' (in List focus): clear all history entries
+
+#### 7. Storage Tab Edge Detection Fix ✅
+- `is_at_left_edge/is_at_right_edge` now use `config_inputs.is_at_left_edge()` / `config_inputs.is_at_right_edge()`
+- Previously hardcoded to use field[0] regardless of focused field
+
+#### 8. TaskResult Integration (Storage) ✅
+- `state_update.rs` now uses `storage.set_scans()` and `storage.set_findings()` instead of direct field assignment
+- Ensures proper state management and UI updates
+
+### Checkbox Focus Pattern
+
+When managing multiple checkboxes in a focus area, use a dedicated index field:
+
+```rust
+pub struct WafTab {
+    pub technique_checkboxes: Vec<Checkbox>,
+    pub focused_checkbox_index: usize,
+    // ...
+}
+
+impl TabInput for WafTab {
+    fn handle_focus_next(&mut self) {
+        self.focused_checkbox_index = 0;
+        // ...
+    }
+
+    fn handle_left(&mut self) -> bool {
+        if self.focused_checkbox_index == 0 {
+            false
+        } else {
+            self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+            true
+        }
+    }
+}
+
+// In render:
+for (i, cb) in self.technique_checkboxes.iter().enumerate() {
+    let mut checkbox = cb.clone();
+    checkbox.focused = self.focus_area == WafFocusArea::Techniques && i == self.focused_checkbox_index;
+    checkbox.render(f, config_chunks[2 + i]);
+}
+```
+
 ## Verification Commands
 
 ```bash

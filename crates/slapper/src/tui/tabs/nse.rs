@@ -338,6 +338,12 @@ impl TabInput for NseTab {
                 self.state = AppState::Running;
             }
         }
+
+        if self.is_running() {
+            self.stop();
+        } else {
+            self.start();
+        }
     }
 
     fn handle_escape(&mut self) {
