@@ -128,5 +128,5 @@ impl BypassEngine {
 pub fn is_bypass_successful(status: u16, detection: &WafDetectionResult) -> bool {
     !crate::constants::waf::BLOCKED_STATUS_CODES.contains(&status)
         && status != detection.status_code
-        && (200..400).contains(&status)
+        && (200..300).contains(&status)
 }

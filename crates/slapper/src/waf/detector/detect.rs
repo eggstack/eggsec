@@ -49,10 +49,19 @@ impl WafDetector {
             })
             .collect();
 
-        let cookie_header_lower = headers
-            .get("set-cookie")
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_lowercase());
+        let cookie_header_lower: Option<String> = {
+            let cookies: Vec<String> = headers
+                .get_all("set-cookie")
+                .iter()
+                .filter_map(|v| v.to_str().ok())
+                .map(|s| s.to_lowercase())
+                .collect();
+            if cookies.is_empty() {
+                None
+            } else {
+                Some(cookies.join("; "))
+            }
+        };
 
         for (sig_key, signature) in self.signatures.iter() {
             let sig_lower = &self.signatures_lower[sig_key];
