@@ -36,6 +36,7 @@ pub struct WorkerStats {
 pub struct Worker {
     config: WorkerConfig,
     stats: WorkerStats,
+    sender: Option<mpsc::Sender<Task>>,
     receiver: Option<mpsc::Receiver<Task>>,
     client: reqwest::Client,
     heartbeat_handle: Option<JoinHandle<()>>,
@@ -53,6 +54,7 @@ impl Worker {
                 tasks_in_progress: 0,
                 last_heartbeat_secs: chrono::Utc::now().timestamp(),
             },
+            sender: None,
             receiver: None,
             client: crate::utils::get_shared_http_client(),
             heartbeat_handle: None,
@@ -63,7 +65,8 @@ impl Worker {
     pub async fn start(&mut self) -> Result<()> {
         self.register_with_coordinator().await?;
 
-        let (_tx, rx) = mpsc::channel::<Task>(100);
+        let (tx, rx) = mpsc::channel::<Task>(100);
+        self.sender = Some(tx);
         self.receiver = Some(rx);
 
         self.start_heartbeat_loop().await;

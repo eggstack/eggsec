@@ -11,6 +11,10 @@ pub struct Task {
     pub task_type: crate::distributed::TaskType,
     pub target: String,
     pub payload: std::collections::HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub worker_id: Option<String>,
+    #[serde(default)]
+    pub assigned_at_secs: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,7 +54,7 @@ impl TaskQueue {
         Ok(())
     }
 
-    pub async fn dequeue(&self) -> Option<Task> {
+    pub async fn dequeue(&self, worker_id: &str) -> Option<Task> {
         let mut pending = self.pending.write().await;
         let task = pending.pop_front()?;
 
@@ -58,6 +62,32 @@ impl TaskQueue {
         in_progress.insert(task.id.clone(), task.clone());
 
         Some(task)
+    }
+
+    pub async fn reassign_stale_tasks(&self, timeout_secs: i64) -> Vec<Task> {
+        let mut stale_tasks = Vec::new();
+        let now = chrono::Utc::now().timestamp();
+
+        let mut in_progress = self.in_progress.write().await;
+        in_progress.retain(|id, task| {
+            if let Some(assigned_at) = task.assigned_at_secs {
+                if now - assigned_at > timeout_secs {
+                    stale_tasks.push(task.clone());
+                    return false;
+                }
+            }
+            true
+        });
+
+        let mut pending = self.pending.write().await;
+        for task in stale_tasks.iter() {
+            let mut t = task.clone();
+            t.worker_id = None;
+            t.assigned_at_secs = None;
+            pending.push_back(t);
+        }
+
+        stale_tasks
     }
 
     pub async fn complete(&self, result: TaskResult) {
