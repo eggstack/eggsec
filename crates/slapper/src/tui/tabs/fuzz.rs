@@ -1,3 +1,4 @@
+use crate::tc;
 use crate::fuzzer::engine::FuzzSession;
 use crate::fuzzer::PayloadType;
 use crate::tc;

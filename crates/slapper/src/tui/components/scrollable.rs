@@ -8,6 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
+use crate::tc;
 
 #[derive(Clone)]
 pub struct ScrollableText {
