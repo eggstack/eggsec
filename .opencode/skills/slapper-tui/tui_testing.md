@@ -114,3 +114,73 @@ cargo test --lib -p slapper tui:: -- --nocapture
 - Notification display and expiration
 - Export success/error paths
 - Feature-gated tab availability
+
+### Testing Selector Behavior
+
+```rust
+#[test]
+fn test_selector_open_close_confirm() {
+    let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+    
+    // Closed by default
+    assert!(!selector.is_open());
+    
+    // Open via open()
+    selector.open();
+    assert!(selector.is_open());
+    
+    // confirm() returns item and closes
+    let item = selector.confirm();
+    assert!(item.is_some());
+    assert_eq!(item.unwrap().value, "A"); // Default selection
+    assert!(!selector.is_open());
+}
+
+#[test]
+fn test_selector_up_down_only_work_when_open() {
+    let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+    
+    selector.selected = 2;
+    
+    // Up does nothing when closed
+    selector.handle_up();
+    assert_eq!(selector.selected, 2);
+    
+    // Open it
+    selector.open();
+    
+    // Now up works
+    selector.handle_up();
+    assert_eq!(selector.selected, 1);
+}
+
+#[test]
+fn test_selector_cancel_closes_without_change() {
+    let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+    selector.expand();
+    selector.select(2); // Selected "C"
+    
+    selector.cancel();
+    
+    assert!(!selector.is_open());
+    assert_eq!(selector.selected, 2, "Selection should not change on cancel");
+}
+```
+
+### Testing Tab Navigation via Command Palette
+
+```rust
+#[test]
+fn test_command_to_tab_cluster() {
+    use crate::tui::app::command::command_to_tab;
+    assert_eq!(command_to_tab("cluster"), Some(Tab::Cluster));
+}
+
+#[test]
+fn test_execute_command_navigates_to_cluster() {
+    let mut app = create_test_app();
+    app.current_tab = Tab::Fuzz;
+    app.execute_command("cluster");
+    assert_eq!(app.current_tab, Tab::Cluster);
+}
+```

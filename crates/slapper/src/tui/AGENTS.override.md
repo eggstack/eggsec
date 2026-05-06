@@ -389,3 +389,52 @@ field.cursor_pos >= field.value.len()
 ```
 
 This affects `is_at_right_edge()` implementations in all tabs.
+
+## Selector API (Hardened in recent refactor)
+
+Selector now has explicit interaction methods:
+```rust
+// State queries
+selector.is_open() -> bool
+selector.is_focused() -> bool
+
+// Explicit control
+selector.open()           // opens dropdown
+selector.close()          // closes dropdown  
+selector.confirm() -> Option<&SelectorItem>  // commits selection, returns item, closes
+selector.cancel()         // closes without changing selection
+
+// Navigation
+selector.move_next()      // moves selection down (when open)
+selector.move_prev()      // moves selection up (when open)
+
+// Legacy methods (still work but explicit is preferred)
+selector.expand()         // same as open()
+selector.collapse()       // same as close()
+selector.next()           // same as move_next()
+selector.prev()           // same as move_prev()
+```
+
+Selector contract:
+- Focus does not automatically open (unlike `focus()` which does both)
+- Enter on closed selector opens it
+- Enter on open selector commits and closes
+- Esc closes without committing
+- Up/Down only move selection when open
+
+## ControlEvent Contract
+
+For centralized input handling, use `ControlEvent` and `ControlOutcome`:
+```rust
+pub enum ControlEvent {
+    FocusNext, FocusPrev, Enter, Escape,
+    Up, Down, Left, Right, Home, End,
+    PageUp, PageDown, Char(char), Backspace, Paste(String),
+}
+
+pub enum ControlOutcome {
+    Handled, Ignored, FocusChanged, ActionRequested,
+}
+```
+
+The `ControlHandler` trait is available for components that want to use this contract.

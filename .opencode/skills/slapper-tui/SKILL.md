@@ -230,3 +230,47 @@ terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
 let buf = terminal.backend().buffer();
 // Check buf.content for expected symbols
 ```
+
+## Selector API (Hardened)
+
+Selector provides explicit methods for dropdown interaction:
+```rust
+// State
+selector.is_open() -> bool
+selector.is_focused() -> bool
+
+// Control
+selector.open()           // Opens dropdown
+selector.close()          // Closes dropdown
+selector.confirm() -> Option<&SelectorItem>  // Commits selection, returns item
+selector.cancel()         // Closes without changing
+
+// Navigation
+selector.move_next()      // Moves selection down (when open)
+selector.move_prev()      // Moves selection up (when open)
+```
+
+Key behaviors:
+- `focus()` sets focused=true AND expanded=true (opens dropdown)
+- `open()` only sets expanded=true (no focus change)
+- Enter on closed selector opens it
+- Enter on open selector commits and closes
+- Esc closes without committing
+- Up/Down only move selection when open (no-op when closed)
+
+## ControlEvent Contract
+
+For centralized input handling, components can use:
+```rust
+use crate::tui::components::events::{ControlEvent, ControlOutcome, ControlHandler};
+
+pub enum ControlEvent {
+    FocusNext, FocusPrev, Enter, Escape,
+    Up, Down, Left, Right, Home, End,
+    PageUp, PageDown, Char(char), Backspace, Paste(String),
+}
+
+pub enum ControlOutcome {
+    Handled, Ignored, FocusChanged, ActionRequested,
+}
+```
