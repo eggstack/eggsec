@@ -440,7 +440,7 @@ impl SettingsTab {
             "junit" => crate::output::convert::convert_to_junit(&report),
             "csv" => crate::output::convert::convert_to_csv(&report),
             "html" => crate::output::convert::convert_to_html(&report),
-            "sarif" => crate::output::convert::convert_to_sarif(&report),
+            "sarif" => crate::output::convert::convert_to_sarif(&report).unwrap_or_else(|e| format!("Error: {}", e)),
             "markdown" => crate::output::convert::convert_to_markdown(&report),
             _ => crate::output::convert::convert_to_html(&report),
         };

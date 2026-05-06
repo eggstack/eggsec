@@ -1,9 +1,34 @@
-use crate::distributed::{Heartbeat, Task, TaskResult, TaskType, WorkerRegistration, WorkerStatus};
-use crate::error::Result;
+use crate::distributed::{
+    command::CommandMessage, Heartbeat, RemoteClient, Task, TaskResult, TaskType,
+    WorkerRegistration, WorkerStatus,
+};
+use crate::error::{Result, SlapperError};
 use crate::scanner::endpoints::EndpointScanConfig;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+
+fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
+    let url = url
+        .trim_start_matches("http://")
+        .trim_start_matches("https://")
+        .trim_end_matches('/');
+
+    let parts: Vec<&str> = url.split(':').collect();
+    if parts.len() != 2 {
+        return Err(SlapperError::Config(format!(
+            "Invalid coordinator URL format: {} (expected host:port)",
+            url
+        )));
+    }
+
+    let host = parts[0];
+    let port: u16 = parts[1]
+        .parse()
+        .map_err(|_| SlapperError::Config(format!("Invalid port in coordinator URL: {}", url)))?;
+
+    Ok((host, port))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerConfig {
@@ -76,24 +101,30 @@ impl Worker {
     }
 
     async fn register_with_coordinator(&self) -> Result<()> {
-        let registration = WorkerRegistration {
-            worker_id: self.config.worker_id.clone(),
-            hostname: hostname::get()?.to_string_lossy().to_string(),
-            capabilities: vec![
-                TaskType::PortScan,
-                TaskType::ServiceFingerprint,
-                TaskType::EndpointDiscovery,
-                TaskType::Fuzz,
-                TaskType::WafTest,
-                TaskType::LoadTest,
-                TaskType::Recon,
-            ],
-            max_concurrency: self.config.max_concurrency,
-            status: WorkerStatus::Idle,
-        };
+        let hostname = hostname::get()?.to_string_lossy().to_string();
 
-        let url = format!("{}/api/workers/register", self.config.coordinator_url);
-        self.client.post(&url).json(&registration).send().await?;
+        let (host, port) = parse_coordinator_url(&self.config.coordinator_url)?;
+
+        let psk = "worker-psk"; // TODO: make this configurable
+        let client = RemoteClient::new_plaintext(psk.to_string());
+
+        client
+            .register_worker(
+                host,
+                port,
+                self.config.worker_id.clone(),
+                hostname,
+                vec![
+                    "PortScan".to_string(),
+                    "ServiceFingerprint".to_string(),
+                    "EndpointDiscovery".to_string(),
+                    "Fuzz".to_string(),
+                    "WafTest".to_string(),
+                    "LoadTest".to_string(),
+                    "Recon".to_string(),
+                ],
+            )
+            .await?;
 
         Ok(())
     }

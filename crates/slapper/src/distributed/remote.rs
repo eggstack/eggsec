@@ -420,6 +420,159 @@ impl RemoteClient {
         self.tls.is_some()
     }
 
+    async fn connect_to_coordinator(&self, host: &str, port: u16) -> Result<LineWriter> {
+        let host_port = format!("{}:{}", host, port);
+        let addr = tokio::net::lookup_host(&host_port)
+            .await
+            .map_err(|e| SlapperError::Network(format!("Failed to resolve host: {}", e)))?
+            .next()
+            .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
+
+        let connect_timeout = std::time::Duration::from_secs(5);
+        let stream = connect_with_nodelay_timeout(&addr, connect_timeout)
+            .await
+            .map_err(|e| SlapperError::Network(format!("Failed to connect: {}", e)))?;
+
+        let stream = match &self.tls {
+            Some(tls_client) => {
+                #[cfg(feature = "insecure-tls")]
+                {
+                    let peer_addr = stream.peer_addr().ok();
+                    let local_addr = stream.local_addr().ok();
+                    tls_client.increment_insecure_connection();
+                    tracing::warn!(
+                        local_addr = ?local_addr,
+                        peer_addr = ?peer_addr,
+                        domain = %tls_client.domain(),
+                        "Establishing INSECURE TLS connection (certificate verification disabled)"
+                    );
+                }
+                match StreamWrapper::connect_tls(
+                    tls_client.connector(),
+                    tls_client.domain(),
+                    stream,
+                )
+                .await
+                {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tracing::error!("TLS handshake failed: {}", e);
+                        return Err(SlapperError::Network(format!(
+                            "TLS handshake failed: {}",
+                            e
+                        )));
+                    }
+                }
+            }
+            None => StreamWrapper::plain(stream),
+        };
+
+        let mut line_writer = LineWriter::new(stream);
+
+        let auth = AuthMessage {
+            psk: self.psk.clone(),
+        };
+        line_writer
+            .write_line(&serde_json::to_string(&auth)?)
+            .await?;
+
+        let auth_response: ResponseMessage =
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                let line = line_writer
+                    .read_line()
+                    .await?
+                    .ok_or_else(|| SlapperError::Network("No response".to_string()))?;
+                Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&line)?)
+            })
+            .await
+            .map_err(|_| {
+                SlapperError::Network("Authentication response timed out".to_string())
+            })??;
+
+        if !auth_response.success {
+            return Err(SlapperError::Validation(format!(
+                "Authentication failed: {:?}",
+                auth_response.error
+            )));
+        }
+
+        Ok(line_writer)
+    }
+
+    pub async fn register_worker(
+        &self,
+        host: &str,
+        port: u16,
+        worker_id: String,
+        hostname: String,
+        capabilities: Vec<String>,
+    ) -> Result<()> {
+        let mut line_writer = self.connect_to_coordinator(host, port).await?;
+
+        let cmd = CommandMessage::Register {
+            id: uuid::Uuid::new_v4().to_string(),
+            hostname,
+            capabilities,
+        };
+
+        line_writer
+            .write_line(&serde_json::to_string(&cmd)?)
+            .await?;
+
+        let response: ResponseMessage =
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                let line = line_writer
+                    .read_line()
+                    .await?
+                    .ok_or_else(|| SlapperError::Network("No response".to_string()))?;
+                Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&line)?)
+            })
+            .await
+            .map_err(|_| SlapperError::Network("Registration response timed out".to_string()))??;
+
+        if !response.success {
+            return Err(SlapperError::Validation(format!(
+                "Registration failed: {:?}",
+                response.error
+            )));
+        }
+
+        tracing::info!(worker_id = %worker_id, "Worker registered successfully");
+        Ok(())
+    }
+
+    pub async fn send_heartbeat(
+        &self,
+        host: &str,
+        port: u16,
+        worker_id: String,
+        status: String,
+    ) -> Result<()> {
+        let mut line_writer = self.connect_to_coordinator(host, port).await?;
+
+        let cmd = CommandMessage::Heartbeat {
+            id: uuid::Uuid::new_v4().to_string(),
+            status,
+        };
+
+        line_writer
+            .write_line(&serde_json::to_string(&cmd)?)
+            .await?;
+
+        let _response: ResponseMessage =
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                let line = line_writer
+                    .read_line()
+                    .await?
+                    .ok_or_else(|| SlapperError::Network("No response".to_string()))?;
+                Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&line)?)
+            })
+            .await
+            .map_err(|_| SlapperError::Network("Heartbeat response timed out".to_string()))??;
+
+        Ok(())
+    }
+
     pub async fn execute(
         &self,
         host: &str,

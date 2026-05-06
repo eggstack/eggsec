@@ -8,7 +8,7 @@
 //!
 //! - [`FuzzEngine`] - Main fuzzing engine that orchestrates payload generation and testing
 //! - [`Payload`] - Individual test payload with type, severity, and description
-//! - [`PayloadType`] - Enumeration of all supported payload types (22 types)
+//! - [`PayloadType`] - Enumeration of all supported payload types (30 types)
 //! - [`Severity`] - Vulnerability severity levels (Critical, High, Medium, Low, Info)
 //! - [`FuzzResult`] - Result of a single fuzzing test
 //!

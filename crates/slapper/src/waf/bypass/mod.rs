@@ -125,8 +125,22 @@ impl BypassEngine {
     }
 }
 
-pub fn is_bypass_successful(status: u16, detection: &WafDetectionResult) -> bool {
+pub fn is_bypass_successful(
+    status: u16,
+    detection: &WafDetectionResult,
+    payload: &str,
+    response_body: &str,
+) -> bool {
     !crate::constants::waf::BLOCKED_STATUS_CODES.contains(&status)
         && status != detection.status_code
         && (200..300).contains(&status)
+        && payload_is_reflected(payload, response_body)
+}
+
+fn payload_is_reflected(payload: &str, response_body: &str) -> bool {
+    if payload.is_empty() || response_body.is_empty() {
+        return true;
+    }
+    let encoded_payload = urlencoding::encode(payload);
+    response_body.contains(payload) || response_body.contains(encoded_payload.as_ref())
 }

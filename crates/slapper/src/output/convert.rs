@@ -82,7 +82,7 @@ pub fn convert_to_junit(report: &ScanReportData) -> String {
         .unwrap_or_else(|_| "<error>Failed to generate JUnit XML</error>".to_string())
 }
 
-pub fn convert_to_sarif(report: &ScanReportData) -> String {
+pub fn convert_to_sarif(report: &ScanReportData) -> Result<String, String> {
     use super::sarif::SarifBuilder;
 
     let mut builder = SarifBuilder::new();
@@ -106,10 +106,7 @@ pub fn convert_to_sarif(report: &ScanReportData) -> String {
     }
 
     let sarif_report = builder.build();
-    match sarif_report.to_json() {
-        Ok(json) => json,
-        Err(e) => format!("{{\"error\": \"Failed to generate SARIF: {}\"}}", e),
-    }
+    sarif_report.to_json().map_err(|e| format!("Failed to generate SARIF: {}", e))
 }
 
 pub fn convert_to_html(report: &ScanReportData) -> String {

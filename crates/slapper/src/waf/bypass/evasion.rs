@@ -237,7 +237,8 @@ impl EvasionBypass {
             .await?;
 
         let status = response.status().as_u16();
-        let success = self.is_bypass_successful(status, detection);
+        let body = response.text().await.unwrap_or_default();
+        let success = self.is_bypass_successful(status, detection, payload, &body);
 
         Ok(BypassResult {
             technique,
@@ -248,8 +249,14 @@ impl EvasionBypass {
         })
     }
 
-    fn is_bypass_successful(&self, status: u16, detection: &WafDetectionResult) -> bool {
-        super::is_bypass_successful(status, detection)
+    fn is_bypass_successful(
+        &self,
+        status: u16,
+        detection: &WafDetectionResult,
+        payload: &str,
+        response_body: &str,
+    ) -> bool {
+        super::is_bypass_successful(status, detection, payload, response_body)
     }
 }
 

@@ -3,6 +3,7 @@ use crate::tool::dispatcher::ToolDispatcher;
 use crate::tool::planner::{ExecutionPlan, ToolExecution};
 use crate::tool::request::ToolRequest;
 use crate::tool::response::ToolResponse;
+use futures::future::join_all;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
@@ -193,8 +194,8 @@ impl Orchestrator {
                 })
                 .collect();
 
-            for handle in handles {
-                let (tool, result, duration) = handle.await;
+            let results = join_all(handles).await;
+            for (tool, result, duration) in results {
                 let tool_result = self.process_tool_result(tool, result, duration);
                 tool_results.push(tool_result);
             }

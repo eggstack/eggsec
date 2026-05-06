@@ -256,8 +256,9 @@ impl SmugglingBypass {
 
         let response = request.send().await?;
         let status = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
 
-        let success = self.is_bypass_successful(status, detection);
+        let success = self.is_bypass_successful(status, detection, "", &body);
 
         let technique = match req.smuggling_type {
             SmugglingType::ClTe => BypassTechnique::ContentLengthConflict,
@@ -279,8 +280,14 @@ impl SmugglingBypass {
         })
     }
 
-    fn is_bypass_successful(&self, status: u16, detection: &WafDetectionResult) -> bool {
-        super::is_bypass_successful(status, detection)
+    fn is_bypass_successful(
+        &self,
+        status: u16,
+        detection: &WafDetectionResult,
+        _payload: &str,
+        response_body: &str,
+    ) -> bool {
+        super::is_bypass_successful(status, detection, "", response_body)
     }
 }
 

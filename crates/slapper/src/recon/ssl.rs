@@ -104,20 +104,69 @@ impl SslAnalyzer {
 
     fn extract_certificate_info(
         &self,
-        _cert: &rustls_pki_types::CertificateDer<'_>,
+        cert: &rustls_pki_types::CertificateDer<'_>,
     ) -> Result<CertificateInfo> {
+        let der_bytes = cert.as_ref();
+
+        let mut subject = String::new();
+        let mut issuer = String::new();
+        let mut valid_from = String::new();
+        let mut valid_until = String::new();
+        let mut serial_number = String::new();
+        let mut san = Vec::new();
+
+        if let Ok(pem_data) = pem::parse(der_bytes) {
+            let pem_str = String::from_utf8_lossy(pem_data.contents());
+            for line in pem_str.lines() {
+                let line = line.trim();
+                if line.starts_with("Subject:") {
+                    subject = line.trim_start_matches("Subject:").trim().to_string();
+                } else if line.starts_with("Issuer:") {
+                    issuer = line.trim_start_matches("Issuer:").trim().to_string();
+                } else if line.starts_with("Not Before:") {
+                    valid_from = line.trim_start_matches("Not Before:").trim().to_string();
+                } else if line.starts_with("Not After:") {
+                    valid_until = line.trim_start_matches("Not After:").trim().to_string();
+                } else if line.starts_with("Serial Number:") {
+                    serial_number = line.trim_start_matches("Serial Number:").trim().to_string();
+                } else if line.starts_with("Subject Alternative Name:") {
+                    san.push(line.trim_start_matches("Subject Alternative Name:").trim().to_string());
+                }
+            }
+        }
+
+        let is_expired = if !valid_until.is_empty() {
+            chrono::DateTime::parse_from_rfc3339(&valid_until)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .map(|dt| chrono::Utc::now() > dt)
+                .unwrap_or(false)
+        } else {
+            false
+        };
+
+        let days_until_expiry = if !valid_until.is_empty() {
+            chrono::DateTime::parse_from_rfc3339(&valid_until)
+                .ok()
+                .map(|dt| {
+                    let expiry = dt.with_timezone(&chrono::Utc);
+                    (expiry - chrono::Utc::now()).num_days()
+                })
+        } else {
+            None
+        };
+
         Ok(CertificateInfo {
-            subject: String::new(),
-            issuer: String::new(),
-            valid_from: String::new(),
-            valid_until: String::new(),
-            serial_number: String::new(),
+            subject,
+            issuer,
+            valid_from,
+            valid_until,
+            serial_number,
             signature_algorithm: String::new(),
             public_key_algorithm: String::new(),
             key_size: None,
-            is_expired: false,
-            days_until_expiry: None,
-            subject_alternative_names: Vec::new(),
+            is_expired,
+            days_until_expiry,
+            subject_alternative_names: san,
             certificate_chain: Vec::new(),
         })
     }
