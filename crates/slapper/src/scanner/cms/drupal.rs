@@ -54,10 +54,9 @@ pub async fn enumerate_modules(url: &str) -> Option<Vec<String>> {
 
 pub async fn scan_drupal(target: &CmsTarget, client: &Client) -> Result<CmsScanResult, crate::error::SlapperError> {
     let scanner = CmsScanner::new()?;
-    let mut vulnerabilities = scanner.build_vulnerabilities(&target.version, &DRUPAL_VULNERABILITIES);
-    
     let version = target.version.clone().or_else(|| detect_drupal_version(target, client).await);
-    
+    let mut vulnerabilities = scanner.build_vulnerabilities(&version, &DRUPAL_VULNERABILITIES);
+
     let mut misconfigurations = Vec::new();
     
     let admin_url = format!("{}/user/login", target.url.trim_end_matches('/'));
@@ -73,8 +72,9 @@ pub async fn scan_drupal(target: &CmsTarget, client: &Client) -> Result<CmsScanR
         }
         Err(_) => {}
     }
-    
-    Ok(scanner.build_scan_result(target, CmsType::Drupal, vulnerabilities, misconfigurations))
+    let mut result = scanner.build_scan_result(target, CmsType::Drupal, vulnerabilities, misconfigurations);
+    result.version = version;
+    Ok(result)
 }
 
 async fn detect_drupal_version(target: &CmsTarget, client: &Client) -> Option<String> {

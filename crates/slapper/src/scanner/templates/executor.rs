@@ -4,7 +4,7 @@
 //! request construction, response matching, and result aggregation.
 
 use super::loader::TemplateLoader;
-use super::matcher::{DnsResponse, MatchResult, TemplateMatcher};
+use super::matcher::{DnsResponse, TemplateMatcher};
 use super::models::{TemplateRequest, VulnerabilityTemplate};
 use crate::error::{Result, SlapperError};
 use crate::utils::validation::validate_path;
@@ -147,11 +147,8 @@ impl TemplateExecutor {
             return input.to_string();
         }
 
-        if !self.matcher.interactsh_urls.is_empty() {
-            input.replace(
-                "{{interactsh-url}}",
-                &self.matcher.interactsh_urls[0],
-            )
+        if let Some(url) = self.matcher.first_interactsh_url() {
+            input.replace("{{interactsh-url}}", url)
         } else {
             input.to_string()
         }

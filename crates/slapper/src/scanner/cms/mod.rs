@@ -91,11 +91,11 @@ impl CmsScanner {
         vuln_list: &'a [(&'a str, &'a str, Severity, &'a str, Option<&'a str>)],
     ) -> Vec<CmsVulnerability> {
         let mut vulnerabilities = Vec::new();
-        
+
         if let Some(ref ver) = version {
             for (cve, title, severity, desc, fixed) in vuln_list {
                 if let Some(fix_version) = fixed {
-                    if ver.lt(fix_version) {
+                    if version_lt(ver, fix_version) {
                         vulnerabilities.push(CmsVulnerability {
                             id: (*cve).to_string(),
                             title: (*title).to_string(),
@@ -108,7 +108,7 @@ impl CmsScanner {
                 }
             }
         }
-        
+
         vulnerabilities
     }
 
@@ -282,6 +282,36 @@ impl CmsScanner {
     }
 }
 
+fn version_lt(current: &str, fixed: &str) -> bool {
+    fn parse_parts(v: &str) -> Vec<u32> {
+        v.split('.')
+            .map(|p| {
+                p.chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect::<String>()
+            })
+            .map(|p| p.parse::<u32>().unwrap_or(0))
+            .collect()
+    }
+
+    let current_parts = parse_parts(current);
+    let fixed_parts = parse_parts(fixed);
+    let max_len = current_parts.len().max(fixed_parts.len());
+
+    for idx in 0..max_len {
+        let current_val = *current_parts.get(idx).unwrap_or(&0);
+        let fixed_val = *fixed_parts.get(idx).unwrap_or(&0);
+        if current_val < fixed_val {
+            return true;
+        }
+        if current_val > fixed_val {
+            return false;
+        }
+    }
+
+    false
+}
+
 impl Default for CmsScanner {
     fn default() -> Self {
         Self::new().unwrap()
@@ -334,5 +364,14 @@ mod tests {
     async fn test_cms_scanner_creation() {
         let scanner = CmsScanner::new();
         assert!(scanner.is_ok());
+    }
+
+    #[test]
+    fn test_version_lt_semver_like() {
+        assert!(version_lt("3.9.15", "3.9.16"));
+        assert!(!version_lt("3.9.16", "3.9.16"));
+        assert!(!version_lt("3.9.17", "3.9.16"));
+        assert!(version_lt("8.10", "8.10.1"));
+        assert!(!version_lt("8.10.10", "8.10.2"));
     }
 }

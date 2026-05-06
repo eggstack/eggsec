@@ -4,7 +4,7 @@
 //! and managing community-contributed vulnerability templates.
 
 use crate::error::{Result, SlapperError};
-use crate::scanner::templates::verify::TemplateVerifier;
+use crate::scanner::templates::verify::{SignedTemplate, TemplateVerifier};
 use crate::scanner::templates::{TemplateEngine, TemplateExecutor, TemplateLoader, VulnerabilityTemplate};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -127,44 +127,30 @@ impl TemplateMarketplace {
             .map_err(|e| SlapperError::Network(format!("Failed to read template content: {}", e)))?;
 
         let loader = TemplateLoader::default();
-        
-        let unsigned_template = loader.parse_template(&content)?;
-        
+        let mut final_template = loader.parse_template(&content)?;
+
         if self.verify_downloaded {
             if let Some(verifier) = &self.verifier {
-                let signed = crate::scanner::templates::verify::SignedTemplate {
-                    template: unsigned_template.clone(),
-                    signature: String::new(),
-                    public_key: String::new(),
-                    signer_info: crate::scanner::templates::verify::SignerInfo {
-                        name: String::new(),
-                        email: None,
-                        organization: None,
-                        timestamp: chrono::Utc::now(),
-                    },
-                };
-                
-                match verifier.verify(&signed) {
-                   Ok(result) => {
-                        if !result.valid {
-                            tracing::warn!(
-                                "Template {} failed signature verification",
-                                template_id
-                            );
-                            return Err(SlapperError::Security(format!(
-                                "Template {} has invalid signature",
-                                template_id
-                            )));
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Could not verify template {} signature: {}",
-                            template_id,
-                            e
-                        );
-                    }
+                let signed: SignedTemplate = serde_yaml_neo::from_str(&content)
+                    .or_else(|_| serde_json::from_str(&content))
+                    .map_err(|_| {
+                        SlapperError::Security(format!(
+                            "Template {} is not a signed template envelope",
+                            template_id
+                        ))
+                    })?;
+
+                let verification = verifier.verify(&signed)?;
+                if !verification.valid {
+                    return Err(SlapperError::Security(format!(
+                        "Template {} has invalid signature: {}",
+                        template_id,
+                        verification
+                            .error
+                            .unwrap_or_else(|| "unknown verification error".to_string())
+                    )));
                 }
+                final_template = signed.template;
             } else {
                 tracing::warn!(
                     "Template {} downloaded but no verifier configured - signature not verified",
@@ -175,7 +161,7 @@ impl TemplateMarketplace {
 
         self.save_to_cache(template_id, &content)?;
 
-        Ok(unsigned_template)
+        Ok(final_template)
     }
 
     fn save_to_cache(&self, template_id: &str, content: &str) -> Result<()> {

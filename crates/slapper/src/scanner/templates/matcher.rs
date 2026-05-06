@@ -7,7 +7,6 @@ use super::models::{HttpMatcher, Matcher, SearchPattern, VulnerabilityTemplate};
 use crate::error::Result;
 use crate::types::Severity;
 use reqwest::Response;
-use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone)]
 pub struct MatchResult {
@@ -20,19 +19,21 @@ pub struct MatchResult {
 
 pub struct TemplateMatcher {
     interactsh_urls: Vec<String>,
-    regex_cache: FxHashMap<String, regex::Regex>,
 }
 
 impl TemplateMatcher {
     pub fn new() -> Self {
         Self {
             interactsh_urls: Vec::new(),
-            regex_cache: FxHashMap::default(),
         }
     }
 
     pub fn set_interactsh_urls(&mut self, urls: Vec<String>) {
         self.interactsh_urls = urls;
+    }
+
+    pub fn first_interactsh_url(&self) -> Option<&str> {
+        self.interactsh_urls.first().map(String::as_str)
     }
 
     pub async fn match_template(
@@ -107,19 +108,27 @@ impl TemplateMatcher {
             }
         }
 
+        let status = response.status().as_u16();
+        let needs_body = !matcher.search.is_empty()
+            || matcher
+                .interactsh
+                .as_ref()
+                .map(|i| i.enabled && !self.interactsh_urls.is_empty())
+                .unwrap_or(false);
+        let body = if needs_body {
+            Some(response.text().await?)
+        } else {
+            None
+        };
+
+        if matcher.status_codes.contains(&status) {
+            return Ok(true);
+        }
+
         if !matcher.search.is_empty() {
-            let body = response.text().await?;
-            let status = response.status().as_u16();
-
-            if matcher
-                .status_codes
-                .contains(&status)
-            {
-                return Ok(true);
-            }
-
+            let body = body.as_deref().unwrap_or("");
             for search in &matcher.search {
-                if self.search_pattern(&body, search) {
+                if self.search_pattern(body, search) {
                     return Ok(true);
                 }
             }
@@ -127,7 +136,7 @@ impl TemplateMatcher {
 
         if let Some(ref interactsh) = matcher.interactsh {
             if interactsh.enabled && !self.interactsh_urls.is_empty() {
-                let body = response.text().await?;
+                let body = body.as_deref().unwrap_or("");
                 for url in &self.interactsh_urls {
                     if body.contains(url) {
                         return Ok(true);
@@ -159,15 +168,11 @@ impl TemplateMatcher {
         match search.mode {
             super::models::MatchMode::Word => text.contains(&search.pattern),
             super::models::MatchMode::Regex => {
-                self.regex_cache
-                    .entry(search.pattern.clone())
-                    .or_insert_with(|| {
-                        regex::RegexBuilder::new(&search.pattern)
-                            .size_limit(100_000)
-                            .build()
-                            .unwrap_or_else(|_| regex::Regex::new("").unwrap())
-                    })
-                    .is_match(text)
+                regex::RegexBuilder::new(&search.pattern)
+                    .size_limit(100_000)
+                    .build()
+                    .map(|re| re.is_match(text))
+                    .unwrap_or(false)
             }
             super::models::MatchMode::Binary => {
                 let decoded: Vec<u8> = if search.encoding == "base64" {
@@ -197,6 +202,33 @@ pub struct DnsResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scanner::templates::models::{
+        HttpMatcher, InteractshConfig, MatchMode, SearchPattern, TemplateInfo, VulnerabilityTemplate,
+    };
+    use std::collections::HashMap;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    async fn make_test_response(body: &str) -> reqwest::Response {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let body_owned = body.to_string();
+
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = socket.read(&mut buf).await;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body_owned.len(),
+                body_owned
+            );
+            let _ = socket.write_all(response.as_bytes()).await;
+        });
+
+        let url = format!("http://{}", addr);
+        reqwest::get(url).await.unwrap()
+    }
 
     #[test]
     fn test_word_matching() {
@@ -242,5 +274,49 @@ mod tests {
         };
 
         assert!(matcher.match_dns(&dns, &response).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_match_http_search_and_interactsh_reads_body_once() {
+        let mut matcher = TemplateMatcher::new();
+        matcher.set_interactsh_urls(vec!["callback.example".to_string()]);
+
+        let response = make_test_response("body contains callback.example marker").await;
+
+        let template = VulnerabilityTemplate {
+            id: "test-template".to_string(),
+            info: TemplateInfo {
+                name: "Test".to_string(),
+                author: "tester".to_string(),
+                severity: "medium".to_string(),
+                description: String::new(),
+                tags: vec![],
+                references: vec![],
+                remediation: String::new(),
+            },
+            matchers: vec![Matcher::Http(HttpMatcher {
+                path: Some("/".to_string()),
+                method: Some("GET".to_string()),
+                headers: HashMap::new(),
+                body: None,
+                search: vec![SearchPattern {
+                    pattern: "not-present".to_string(),
+                    mode: MatchMode::Word,
+                    encoding: String::new(),
+                }],
+                status_codes: vec![],
+                interactsh: Some(InteractshConfig {
+                    enabled: true,
+                    authorization: None,
+                }),
+            })],
+            requests: vec![],
+        };
+
+        let result = matcher
+            .match_template(&template, Some(&response), None)
+            .await
+            .unwrap();
+        assert!(result.matched);
     }
 }

@@ -54,10 +54,9 @@ pub async fn enumerate_extensions(url: &str) -> Option<Vec<String>> {
 
 pub async fn scan_joomla(target: &CmsTarget, client: &Client) -> Result<CmsScanResult, crate::error::SlapperError> {
     let scanner = CmsScanner::new()?;
-    let mut vulnerabilities = scanner.build_vulnerabilities(&target.version, &JOOMLA_VULNERABILITIES);
-    
     let version = target.version.clone().or_else(|| detect_joomla_version(target, client).await);
-    
+    let mut vulnerabilities = scanner.build_vulnerabilities(&version, &JOOMLA_VULNERABILITIES);
+
     let mut misconfigurations = Vec::new();
     
     let admin_url = format!("{}/administrator", target.url.trim_end_matches('/'));
@@ -73,8 +72,9 @@ pub async fn scan_joomla(target: &CmsTarget, client: &Client) -> Result<CmsScanR
         }
         Err(_) => {}
     }
-    
-    Ok(scanner.build_scan_result(target, CmsType::Joomla, vulnerabilities, misconfigurations))
+    let mut result = scanner.build_scan_result(target, CmsType::Joomla, vulnerabilities, misconfigurations);
+    result.version = version;
+    Ok(result)
 }
 
 async fn detect_joomla_version(target: &CmsTarget, client: &Client) -> Option<String> {
