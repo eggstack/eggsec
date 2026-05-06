@@ -114,9 +114,20 @@ impl PdfGenerator {
     }
 
     #[cfg(not(feature = "pdf"))]
-    pub fn generate_report(findings: &[AgentFinding], config: &PdfConfig) -> Result<Vec<u8>> {
-        let html = Self::generate_html(findings, config);
-        Ok(html.into_bytes())
+    pub fn generate_report(_findings: &[AgentFinding], _config: &PdfConfig) -> Result<Vec<u8>> {
+        Err(crate::error::SlapperError::Output(
+            "PDF generation is not available. Recompile with the 'pdf' feature enabled.".to_string(),
+        ))
+    }
+
+    #[cfg(not(feature = "pdf"))]
+    pub fn can_generate_pdf() -> Result<bool> {
+        Ok(false)
+    }
+
+    #[cfg(feature = "pdf")]
+    pub fn can_generate_pdf() -> Result<bool> {
+        Ok(true)
     }
 
     fn generate_html(findings: &[AgentFinding], config: &PdfConfig) -> String {

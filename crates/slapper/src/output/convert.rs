@@ -106,7 +106,10 @@ pub fn convert_to_sarif(report: &ScanReportData) -> String {
     }
 
     let sarif_report = builder.build();
-    sarif_report.to_json().unwrap_or_default()
+    match sarif_report.to_json() {
+        Ok(json) => json,
+        Err(e) => format!("{{\"error\": \"Failed to generate SARIF: {}\"}}", e),
+    }
 }
 
 pub fn convert_to_html(report: &ScanReportData) -> String {
@@ -147,6 +150,10 @@ pub fn convert_to_csv(report: &ScanReportData) -> String {
     }
 
     csv
+}
+
+pub fn convert_to_json(report: &ScanReportData) -> Result<String, String> {
+    serde_json::to_string_pretty(report).map_err(|e| format!("Failed to serialize to JSON: {}", e))
 }
 
 impl From<&ScanReportData> for super::markdown::ScanSummary {
