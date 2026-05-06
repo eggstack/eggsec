@@ -143,7 +143,6 @@ mod tests {
 
 ## Resources
 - `crates/slapper/src/tui/AGENTS.override.md` - Detailed TUI patterns
-- `plans/plan.md` - TUI improvement plan (all phases complete)
 - `ARCHITECTURE.md` - Overall design
 
 ## Focus Indicators
@@ -231,7 +230,7 @@ let buf = terminal.backend().buffer();
 // Check buf.content for expected symbols
 ```
 
-## Selector API (Hardened)
+## Selector API
 
 Selector provides explicit methods for dropdown interaction:
 ```rust
@@ -251,26 +250,9 @@ selector.move_prev()      // Moves selection up (when open)
 ```
 
 Key behaviors:
-- `focus()` sets focused=true AND expanded=true (opens dropdown)
-- `open()` only sets expanded=true (no focus change)
-- Enter on closed selector opens it
-- Enter on open selector commits and closes
+- `focus()` sets focused=true only (does NOT open dropdown)
+- `focus_open()` sets focused=true AND opens dropdown
+- `handle_enter()` on closed selector opens it; on open selector commits and closes
 - Esc closes without committing
 - Up/Down only move selection when open (no-op when closed)
-
-## ControlEvent Contract
-
-For centralized input handling, components can use:
-```rust
-use crate::tui::components::events::{ControlEvent, ControlOutcome, ControlHandler};
-
-pub enum ControlEvent {
-    FocusNext, FocusPrev, Enter, Escape,
-    Up, Down, Left, Right, Home, End,
-    PageUp, PageDown, Char(char), Backspace, Paste(String),
-}
-
-pub enum ControlOutcome {
-    Handled, Ignored, FocusChanged, ActionRequested,
-}
-```
+- Left/Right navigation does NOT mutate closed selector selection
