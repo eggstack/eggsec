@@ -350,7 +350,7 @@ impl TabRender for WafTab {
 
         use crate::tui::components::FormBuilder;
         let mut builder = FormBuilder::new(" WAF Configuration ").row_height(3);
-        
+
         // Target URL
         builder = builder.add_input(self.inputs.fields[0].clone());
 
@@ -362,7 +362,8 @@ impl TabRender for WafTab {
         // Techniques
         for (i, cb) in self.technique_checkboxes.iter().enumerate() {
             let mut checkbox = cb.clone();
-            checkbox.focused = self.focus_area == WafFocusArea::Techniques && i == self.focused_checkbox_index;
+            checkbox.focused =
+                self.focus_area == WafFocusArea::Techniques && i == self.focused_checkbox_index;
             builder = builder.add_checkbox(checkbox);
         }
 
@@ -408,9 +409,7 @@ impl TabInput for WafTab {
                 self.focused_checkbox_index = 0;
                 WafFocusArea::Techniques
             }
-            WafFocusArea::Techniques => {
-                WafFocusArea::Results
-            }
+            WafFocusArea::Techniques => WafFocusArea::Results,
             WafFocusArea::Results => {
                 self.inputs.focus(0);
                 WafFocusArea::Inputs

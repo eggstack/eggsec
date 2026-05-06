@@ -611,7 +611,11 @@ mod tests {
                 }
                 app.next_tab();
             }
-            assert!(found, "Tab {:?} should be reachable via next_tab()", target_tab);
+            assert!(
+                found,
+                "Tab {:?} should be reachable via next_tab()",
+                target_tab
+            );
         }
     }
 
@@ -629,7 +633,11 @@ mod tests {
                 }
                 app.prev_tab();
             }
-            assert!(found, "Tab {:?} should be reachable via prev_tab()", target_tab);
+            assert!(
+                found,
+                "Tab {:?} should be reachable via prev_tab()",
+                target_tab
+            );
         }
     }
 
@@ -867,11 +875,7 @@ mod render_tests {
             terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
             let buf = terminal.backend().buffer();
             let has_content = buf.content.iter().any(|cell| !cell.symbol().is_empty());
-            assert!(
-                has_content,
-                "Tab {:?} should render some content",
-                tab
-            );
+            assert!(has_content, "Tab {:?} should render some content", tab);
         }
     }
 }

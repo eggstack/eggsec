@@ -1,8 +1,8 @@
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
 };
-use crate::tui::app::tab_error::TabError;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use crate::workflow::finding::Finding;
 use crate::workflow::finding::FindingStatus;
@@ -360,6 +360,7 @@ impl TabInput for WorkflowTab {
         self.focus_area = match self.focus_area {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.blur();
+                self.inputs.focus(0);
                 WorkflowFocusArea::Inputs
             }
             WorkflowFocusArea::Inputs => WorkflowFocusArea::Results,
@@ -457,9 +458,11 @@ impl TabInput for WorkflowTab {
                     3 => WorkflowMode::AddComment,
                     _ => WorkflowMode::ChangeStatus,
                 };
+                return;
             }
             WorkflowFocusArea::Inputs => {
                 self.inputs.blur();
+                return;
             }
             WorkflowFocusArea::Results => {}
         }
@@ -496,7 +499,7 @@ impl TabInput for WorkflowTab {
         if self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.move_left()
         } else {
-            false
+            true
         }
     }
 
@@ -504,14 +507,14 @@ impl TabInput for WorkflowTab {
         if self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.move_right()
         } else {
-            false
+            true
         }
     }
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             WorkflowFocusArea::Mode => self.mode_selector.selected == 0,
-            WorkflowFocusArea::Inputs => self.inputs.fields[0].cursor_pos == 0,
+            WorkflowFocusArea::Inputs => self.inputs.is_at_left_edge(),
             _ => true,
         }
     }
@@ -522,14 +525,14 @@ impl TabInput for WorkflowTab {
                 self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)
             }
             WorkflowFocusArea::Inputs => {
-                let f = &self.inputs.fields[0];
-                f.cursor_pos >= f.value.len()
+                self.inputs.is_at_right_edge()
             }
             _ => true,
         }
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused()
+        (self.focus_area == WorkflowFocusArea::Mode && self.mode_selector.is_focused())
+            || (self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused())
     }
 }

@@ -302,18 +302,25 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     f.render_widget(query_paragraph, chunks[0]);
 
     let results = app.get_quick_switch_results();
-    let status_text = format!(
-        "{}/{}",
-        results.len().min(app.quick_switch_selected + 1),
-        results.len()
-    );
+    let selected_display = if results.is_empty() {
+        0
+    } else {
+        app.quick_switch_selected.min(results.len() - 1) + 1
+    };
+    let status_text = format!("{}/{}", selected_display, results.len());
     let status_paragraph =
         Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
     f.render_widget(status_paragraph, chunks[1]);
 
+    let visible_rows = chunks[2].height.saturating_sub(2).max(1) as usize;
+    let selected = app.quick_switch_selected.min(results.len().saturating_sub(1));
+    let start = selected.saturating_sub(visible_rows.saturating_sub(1));
+    let end = (start + visible_rows).min(results.len());
+
     let mut items: Vec<ListItem> = Vec::new();
-    for (i, tab) in results.iter().enumerate() {
-        let style = if i == app.quick_switch_selected {
+    for (offset, tab) in results[start..end].iter().enumerate() {
+        let i = start + offset;
+        let style = if i == selected {
             Style::default()
                 .fg(tc!(background))
                 .bg(tc!(highlight))
@@ -559,6 +566,42 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
         }
         #[cfg(not(feature = "vuln-management"))]
         crate::tui::tabs::Tab::Vuln => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::app::{create_shared_history, App};
+    use ratatui::{backend::TestBackend, Terminal};
+
+    fn buffer_to_text(buf: &ratatui::buffer::Buffer) -> String {
+        let mut out = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn quick_switch_renders_selected_tail_item_in_viewport() {
+        let mut app = App::new_for_testing(create_shared_history());
+        app.show_quick_switch = true;
+        app.quick_switch_query.clear();
+        app.quick_switch_selected = app.get_quick_switch_results().len().saturating_sub(1);
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut app)).unwrap();
+
+        let text = buffer_to_text(terminal.backend().buffer());
+        assert!(
+            text.contains("Dashboard - View scan results dashboard"),
+            "Expected selected tail quick-switch item to be visible in rendered popup"
+        );
     }
 }
 

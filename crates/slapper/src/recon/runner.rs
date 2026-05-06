@@ -472,14 +472,16 @@ pub async fn run_full_recon(
     let ssl_failed = ssl_result.is_none() && !args.no_ssl && resolved_ip.is_some();
     let whois_failed = whois_result.is_none() && !args.no_whois && domain.is_some();
     let subdomains_failed = subdomain_result.is_none() && !args.no_subdomains && domain.is_some();
-    let dns_records_failed = dns_records_result.is_none() && !args.no_dns_records && domain.is_some();
+    let dns_records_failed =
+        dns_records_result.is_none() && !args.no_dns_records && domain.is_some();
     let js_failed = js_result.is_none() && !args.no_js;
     let wayback_failed = wayback_result.is_none() && !args.no_wayback && domain.is_some();
     let cloud_failed = cloud_result.is_none() && !args.no_cloud && domain.is_some();
     let content_failed = content_result.is_none() && !args.no_content;
     let cors_failed = cors_result.is_none() && !args.no_cors;
     let email_failed = email_result.is_none() && !args.no_email;
-    let takeover_failed = takeover_result.is_none() && !args.no_takeover && subdomain_result.is_some();
+    let takeover_failed =
+        takeover_result.is_none() && !args.no_takeover && subdomain_result.is_some();
 
     recon.reverse_dns = reverse_dns_result;
     recon.geolocation = geolocation_result;
@@ -536,7 +538,8 @@ pub async fn run_full_recon(
         recon.email_error = Some("Email discovery failed".to_string());
     }
     if takeover_failed {
-        recon.takeover_error = Some("Takeover check failed or no vulnerable subdomains".to_string());
+        recon.takeover_error =
+            Some("Takeover check failed or no vulnerable subdomains".to_string());
     }
 
     recon.cve_mapping = run_cve_check(techdetect_result.as_ref(), args.no_cve).await;

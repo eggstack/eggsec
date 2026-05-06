@@ -569,8 +569,7 @@ impl TabInput for ClusterTab {
         match self.focus_area {
             ClusterFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
-                    self.view_selector.selected
-                        >= self.view_selector.items.len().saturating_sub(1)
+                    self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
                 } else {
                     true
                 }

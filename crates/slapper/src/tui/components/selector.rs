@@ -519,7 +519,10 @@ mod tests {
         selector.handle_enter();
         assert!(selector.expanded, "Enter should open closed selector");
         selector.handle_enter();
-        assert!(!selector.expanded, "Enter should confirm and close open selector");
+        assert!(
+            !selector.expanded,
+            "Enter should confirm and close open selector"
+        );
     }
 
     #[test]
@@ -586,10 +589,7 @@ mod tests {
         selector.expand();
         selector.selected = 0;
         selector.prev();
-        assert_eq!(
-            selector.selected, 2,
-            "Prev should wrap to last item"
-        );
+        assert_eq!(selector.selected, 2, "Prev should wrap to last item");
     }
 
     #[test]
@@ -614,7 +614,10 @@ mod tests {
     fn selector_select_out_of_range_is_ignored() {
         let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
         selector.select(99);
-        assert_eq!(selector.selected, 0, "Out of range selection should be ignored");
+        assert_eq!(
+            selector.selected, 0,
+            "Out of range selection should be ignored"
+        );
     }
 
     #[test]
@@ -668,7 +671,10 @@ mod tests {
         let item = selector.confirm();
         assert!(item.is_some(), "confirm() should return item when open");
         assert_eq!(item.unwrap().value, "B");
-        assert!(!selector.is_open(), "confirm() should close after returning item");
+        assert!(
+            !selector.is_open(),
+            "confirm() should close after returning item"
+        );
     }
 
     #[test]
@@ -721,7 +727,10 @@ mod tests {
         let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
         selector.selected = 0;
         selector.move_next();
-        assert_eq!(selector.selected, 0, "move_next should do nothing when closed");
+        assert_eq!(
+            selector.selected, 0,
+            "move_next should do nothing when closed"
+        );
     }
 
     #[test]
@@ -729,6 +738,9 @@ mod tests {
         let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
         selector.selected = 1;
         selector.move_prev();
-        assert_eq!(selector.selected, 1, "move_prev should do nothing when closed");
+        assert_eq!(
+            selector.selected, 1,
+            "move_prev should do nothing when closed"
+        );
     }
 }

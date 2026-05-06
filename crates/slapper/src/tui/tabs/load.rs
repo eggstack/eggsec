@@ -461,6 +461,7 @@ impl TabInput for LoadTab {
         self.focus_area = match self.focus_area {
             LoadFocusArea::Selector => {
                 self.test_type_selector.blur();
+                self.inputs.focus(0);
                 LoadFocusArea::Inputs
             }
             LoadFocusArea::Inputs => {

@@ -467,7 +467,11 @@ mod tests {
         let mut app = create_test_app();
         app.current_tab = Tab::Dashboard;
         app.execute_command("cluster");
-        assert_eq!(app.current_tab, Tab::Cluster, "execute_command('cluster') should switch to Cluster tab");
+        assert_eq!(
+            app.current_tab,
+            Tab::Cluster,
+            "execute_command('cluster') should switch to Cluster tab"
+        );
     }
 
     #[test]
@@ -492,7 +496,11 @@ mod tests {
                 }
                 current = current.next();
             }
-            assert!(found, "Tab {:?} should be reachable via next_tab()", target_tab);
+            assert!(
+                found,
+                "Tab {:?} should be reachable via next_tab()",
+                target_tab
+            );
         }
     }
 
@@ -510,7 +518,11 @@ mod tests {
                 }
                 current = current.prev();
             }
-            assert!(found, "Tab {:?} should be reachable via prev_tab()", target_tab);
+            assert!(
+                found,
+                "Tab {:?} should be reachable via prev_tab()",
+                target_tab
+            );
         }
     }
 
@@ -524,10 +536,14 @@ mod tests {
         let mut app = create_test_app();
         app.toggle_command_palette();
         let palette = app.get_command_palette().unwrap();
-        let cluster_results: Vec<_> = palette.results
+        let cluster_results: Vec<_> = palette
+            .results
             .iter()
             .filter(|r| r.command == "cluster")
             .collect();
-        assert!(!cluster_results.is_empty(), "Command palette should contain 'cluster' command");
+        assert!(
+            !cluster_results.is_empty(),
+            "Command palette should contain 'cluster' command"
+        );
     }
 }

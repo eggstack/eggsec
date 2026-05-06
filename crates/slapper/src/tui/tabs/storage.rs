@@ -1,9 +1,9 @@
 use crate::storage::{models::StoredFinding, models::StoredScan, StorageConfig};
 use crate::tc;
+use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,
 };
-use crate::tui::app::tab_error::TabError;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},

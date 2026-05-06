@@ -247,7 +247,9 @@ impl super::App {
                 #[cfg(feature = "database")]
                 {
                     self.storage.state = AppState::Completed;
-                    self.storage.results_view.add_line(ratatui::text::Line::from("Storage task completed"));
+                    self.storage
+                        .results_view
+                        .add_line(ratatui::text::Line::from("Storage task completed"));
                 }
             }
             #[cfg(feature = "database")]
@@ -268,7 +270,9 @@ impl super::App {
                 #[cfg(feature = "external-integrations")]
                 {
                     self.integrations.state = AppState::Completed;
-                    self.integrations.results_view.add_line(ratatui::text::Line::from("Integrations task completed"));
+                    self.integrations
+                        .results_view
+                        .add_line(ratatui::text::Line::from("Integrations task completed"));
                 }
             }
             #[cfg(feature = "external-integrations")]

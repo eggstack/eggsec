@@ -44,6 +44,13 @@ impl<'a> TabDispatcher<'a> {
         }
     }
 
+    pub fn handle_delete(&mut self) {
+        match self {
+            Self::Standard(t) => t.handle_delete(),
+            Self::LockedHistory(h) => h.handle_delete(),
+        }
+    }
+
     pub fn handle_enter(&mut self) {
         match self {
             Self::Standard(t) => t.handle_enter(),

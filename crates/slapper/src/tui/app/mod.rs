@@ -434,7 +434,9 @@ impl App {
             drop(rx);
         }
         self.dispatcher_mut().stop();
-        self.set_error_for_current_tab(crate::tui::app::tab_error::TabError::Target(message.to_string()));
+        self.set_error_for_current_tab(crate::tui::app::tab_error::TabError::Target(
+            message.to_string(),
+        ));
     }
 
     pub fn handle_enter(&mut self) {
@@ -450,6 +452,11 @@ impl App {
         }
 
         self.dispatcher_mut().handle_enter();
+        self.mode = if self.dispatcher_mut().is_input_focused() {
+            InputMode::Insert
+        } else {
+            InputMode::Normal
+        };
 
         if self.dispatcher_mut().is_running() {
             if let Some(task_config) = self.build_current_task() {
@@ -527,6 +534,13 @@ impl App {
         self.dispatcher_mut().handle_backspace();
     }
 
+    pub fn handle_delete(&mut self) {
+        if self.show_help {
+            return;
+        }
+        self.dispatcher_mut().handle_delete();
+    }
+
     pub fn handle_autocomplete(&mut self) -> bool {
         if self.show_help || self.mode != InputMode::Insert {
             return false;
@@ -552,19 +566,11 @@ impl App {
         if self.show_help {
             return;
         }
-        if self.mode == InputMode::Normal && self.dispatcher_mut().is_at_left_edge() {
-            self.prev_tab();
-            return;
-        }
         let _ = self.dispatcher_mut().handle_left();
     }
 
     pub fn handle_right(&mut self) {
         if self.show_help {
-            return;
-        }
-        if self.mode == InputMode::Normal && self.dispatcher_mut().is_at_right_edge() {
-            self.next_tab();
             return;
         }
         let _ = self.dispatcher_mut().handle_right();
@@ -1177,5 +1183,32 @@ mod tests {
         // Verify HTTP options is no longer visible
         assert!(!app.is_http_options_visible());
         assert!(app.needs_redraw);
+    }
+
+    #[test]
+    fn test_handle_right_prefers_tab_local_navigation_before_tab_switch() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Settings;
+        app.mode = InputMode::Normal;
+        let initial_focus = app.settings.focus_area;
+        let initial_tab = app.current_tab;
+
+        app.handle_right();
+
+        assert_eq!(app.current_tab, initial_tab);
+        assert_ne!(app.settings.focus_area, initial_focus);
+    }
+
+    #[test]
+    fn test_handle_enter_resyncs_mode_when_input_blurs() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Recon;
+        app.mode = InputMode::Insert;
+        app.recon.inputs.focus(0);
+
+        app.handle_enter();
+
+        assert_eq!(app.mode, InputMode::Normal);
+        assert!(!app.recon.inputs.is_focused());
     }
 }

@@ -1,6 +1,6 @@
-use crate::tc;
 use crate::fuzzer::engine::FuzzSession;
 use crate::fuzzer::PayloadType;
+use crate::tc;
 use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,

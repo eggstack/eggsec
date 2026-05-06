@@ -1,5 +1,5 @@
-use crate::tc;
 use crate::integrations::{IntegrationConfig, Issue};
+use crate::tc;
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
@@ -369,6 +369,7 @@ impl TabInput for IntegrationsTab {
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.blur();
+                self.config_inputs.focus(0);
                 IntegrationsFocusArea::Config
             }
             IntegrationsFocusArea::Config => IntegrationsFocusArea::Issue,
@@ -477,12 +478,15 @@ impl TabInput for IntegrationsTab {
         match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.handle_enter();
+                return;
             }
             IntegrationsFocusArea::Config => {
                 self.config_inputs.blur();
+                return;
             }
             IntegrationsFocusArea::Issue => {
                 self.issue_inputs.blur();
+                return;
             }
             IntegrationsFocusArea::Results => {}
         }
@@ -522,7 +526,7 @@ impl TabInput for IntegrationsTab {
         match self.focus_area {
             IntegrationsFocusArea::Config => self.config_inputs.move_left(),
             IntegrationsFocusArea::Issue => self.issue_inputs.move_left(),
-            _ => false,
+            _ => true,
         }
     }
 
@@ -530,14 +534,14 @@ impl TabInput for IntegrationsTab {
         match self.focus_area {
             IntegrationsFocusArea::Config => self.config_inputs.move_right(),
             IntegrationsFocusArea::Issue => self.issue_inputs.move_right(),
-            _ => false,
+            _ => true,
         }
     }
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             IntegrationsFocusArea::Tracker => self.tracker_selector.selected == 0,
-            IntegrationsFocusArea::Config => self.config_inputs.fields[0].cursor_pos == 0,
+            IntegrationsFocusArea::Config => self.config_inputs.is_at_left_edge(),
             IntegrationsFocusArea::Issue => !self.issue_inputs.can_move_left(),
             _ => true,
         }
@@ -550,8 +554,7 @@ impl TabInput for IntegrationsTab {
                     >= self.tracker_selector.items.len().saturating_sub(1)
             }
             IntegrationsFocusArea::Config => {
-                let f = &self.config_inputs.fields[0];
-                f.cursor_pos >= f.value.len()
+                self.config_inputs.is_at_right_edge()
             }
             IntegrationsFocusArea::Issue => !self.issue_inputs.can_move_right(),
             _ => true,
@@ -559,7 +562,9 @@ impl TabInput for IntegrationsTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        (self.focus_area == IntegrationsFocusArea::Config && self.config_inputs.is_focused())
-            || (self.focus_area == IntegrationsFocusArea::Issue && self.issue_inputs.is_focused())
+        (self.focus_area == IntegrationsFocusArea::Tracker && self.tracker_selector.is_focused())
+            || (self.focus_area == IntegrationsFocusArea::Config && self.config_inputs.is_focused())
+            || (self.focus_area == IntegrationsFocusArea::Issue
+                && self.issue_inputs.is_focused())
     }
 }

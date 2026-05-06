@@ -172,8 +172,10 @@ impl ScanPortsTab {
             if !validation.valid && !t.contains('.') && !t.contains(':') {
                 self.state =
                     AppState::Error(format!("Invalid target: {} - {}", t, validation.message));
-                self.error =
-                    Some(TabError::Target(format!("Invalid target: {} - {}", t, validation.message)));
+                self.error = Some(TabError::Target(format!(
+                    "Invalid target: {} - {}",
+                    t, validation.message
+                )));
                 return;
             }
         }
@@ -182,7 +184,10 @@ impl ScanPortsTab {
         if !port_validation.valid {
             self.state =
                 AppState::Error(format!("Invalid port range: {}", port_validation.message));
-            self.error = Some(TabError::Config(format!("Invalid port range: {}", port_validation.message)));
+            self.error = Some(TabError::Config(format!(
+                "Invalid port range: {}",
+                port_validation.message
+            )));
             return;
         }
 

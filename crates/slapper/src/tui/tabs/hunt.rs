@@ -19,6 +19,7 @@ pub struct HuntTab {
     pub results_view: ScrollableText,
     pub config: HuntConfig,
     pub option_checkboxes: Vec<Checkbox>,
+    pub focused_checkbox_index: usize,
     pub focus_area: HuntFocusArea,
     pub error: Option<TabError>,
 }
@@ -53,6 +54,7 @@ impl HuntTab {
             results_view: ScrollableText::new("Results"),
             config: HuntConfig::default(),
             option_checkboxes,
+            focused_checkbox_index: 0,
             focus_area: HuntFocusArea::Inputs,
             error: None,
         }
@@ -293,13 +295,15 @@ impl TabRender for HuntTab {
 
         for (i, cb) in self.option_checkboxes.iter().enumerate().take(3) {
             let mut checkbox = cb.clone();
-            checkbox.focused = self.focus_area == HuntFocusArea::Options;
+            checkbox.focused =
+                self.focus_area == HuntFocusArea::Options && i == self.focused_checkbox_index;
             checkbox.render(f, left[i]);
         }
 
         for (i, cb) in self.option_checkboxes.iter().enumerate().skip(3) {
             let mut checkbox = cb.clone();
-            checkbox.focused = self.focus_area == HuntFocusArea::Options;
+            checkbox.focused =
+                self.focus_area == HuntFocusArea::Options && i == self.focused_checkbox_index;
             checkbox.render(f, right[i - 3]);
         }
 
@@ -334,10 +338,7 @@ impl TabInput for HuntTab {
         self.focus_area = match self.focus_area {
             HuntFocusArea::Inputs => {
                 self.inputs.blur();
-                self.option_checkboxes
-                    .iter_mut()
-                    .for_each(|cb| cb.focused = false);
-                self.option_checkboxes[0].focused = true;
+                self.focused_checkbox_index = 0;
                 HuntFocusArea::Options
             }
             HuntFocusArea::Options => HuntFocusArea::Results,
@@ -356,10 +357,7 @@ impl TabInput for HuntTab {
                 HuntFocusArea::Inputs
             }
             HuntFocusArea::Results => {
-                self.option_checkboxes
-                    .iter_mut()
-                    .for_each(|cb| cb.focused = false);
-                self.option_checkboxes[0].focused = true;
+                self.focused_checkbox_index = 0;
                 HuntFocusArea::Options
             }
         };
@@ -428,11 +426,8 @@ impl TabInput for HuntTab {
         }
 
         if self.focus_area == HuntFocusArea::Options {
-            for cb in &mut self.option_checkboxes {
-                if cb.focused {
-                    cb.toggle();
-                    break;
-                }
+            if let Some(checkbox) = self.option_checkboxes.get_mut(self.focused_checkbox_index) {
+                checkbox.toggle();
             }
             return;
         }
@@ -450,18 +445,10 @@ impl TabInput for HuntTab {
 
     fn handle_up(&mut self) {
         if self.focus_area == HuntFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx == 0 {
-                    if let Some(last) = self.option_checkboxes.last_mut() {
-                        last.focused = true;
-                    }
-                } else {
-                    self.option_checkboxes[idx - 1].focused = true;
-                }
-                self.option_checkboxes[idx].focused = false;
-            } else if let Some(first) = self.option_checkboxes.first_mut() {
-                first.focused = true;
+            if self.focused_checkbox_index == 0 {
+                self.focused_checkbox_index = self.option_checkboxes.len().saturating_sub(1);
+            } else {
+                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
             }
         } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
             self.results_view.scroll_up(1);
@@ -472,16 +459,10 @@ impl TabInput for HuntTab {
 
     fn handle_down(&mut self) {
         if self.focus_area == HuntFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx == self.option_checkboxes.len() - 1 {
-                    self.option_checkboxes[0].focused = true;
-                } else {
-                    self.option_checkboxes[idx + 1].focused = true;
-                }
-                self.option_checkboxes[idx].focused = false;
+            if self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1) {
+                self.focused_checkbox_index = 0;
             } else {
-                self.option_checkboxes[0].focused = true;
+                self.focused_checkbox_index += 1;
             }
         } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
             self.results_view.scroll_down(1);
@@ -494,17 +475,12 @@ impl TabInput for HuntTab {
         if self.focus_area == HuntFocusArea::Inputs {
             self.inputs.move_left()
         } else if self.focus_area == HuntFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx == 0 {
-                    return false;
-                } else {
-                    self.option_checkboxes[idx].focused = false;
-                    self.option_checkboxes[idx - 1].focused = true;
-                    return true;
-                }
+            if self.focused_checkbox_index == 0 {
+                false
+            } else {
+                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                true
             }
-            true
         } else {
             true
         }
@@ -514,17 +490,12 @@ impl TabInput for HuntTab {
         if self.focus_area == HuntFocusArea::Inputs {
             self.inputs.move_right()
         } else if self.focus_area == HuntFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx >= self.option_checkboxes.len() - 1 {
-                    return false;
-                } else {
-                    self.option_checkboxes[idx].focused = false;
-                    self.option_checkboxes[idx + 1].focused = true;
-                    return true;
-                }
+            if self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1) {
+                false
+            } else {
+                self.focused_checkbox_index += 1;
+                true
             }
-            true
         } else {
             true
         }
@@ -532,9 +503,9 @@ impl TabInput for HuntTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.focus_area == HuntFocusArea::Inputs {
-            self.inputs.fields[0].cursor_pos == 0
+            self.inputs.is_at_left_edge()
         } else if self.focus_area == HuntFocusArea::Options {
-            self.option_checkboxes.iter().position(|cb| cb.focused) == Some(0)
+            self.focused_checkbox_index == 0
         } else {
             true
         }
@@ -542,11 +513,9 @@ impl TabInput for HuntTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == HuntFocusArea::Inputs {
-            let field = &self.inputs.fields[0];
-            field.cursor_pos >= field.value.len()
+            self.inputs.is_at_right_edge()
         } else if self.focus_area == HuntFocusArea::Options {
-            self.option_checkboxes.iter().position(|cb| cb.focused)
-                == Some(self.option_checkboxes.len() - 1)
+            self.focused_checkbox_index == self.option_checkboxes.len().saturating_sub(1)
         } else {
             true
         }

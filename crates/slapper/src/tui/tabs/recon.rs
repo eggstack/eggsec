@@ -1,5 +1,5 @@
-use crate::tc;
 use crate::recon::FullReconResult;
+use crate::tc;
 use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
@@ -185,8 +185,7 @@ impl ReconTab {
                 ratatui::style::Style::default().fg(tc!(error)),
             )));
             if let Some(ref err) = results.tech_error {
-                self.results_view
-                    .add_line(Line::from(format!("  {}", err)));
+                self.results_view.add_line(Line::from(format!("  {}", err)));
             }
         }
 
@@ -241,8 +240,7 @@ impl ReconTab {
                 ratatui::style::Style::default().fg(tc!(error)),
             )));
             if let Some(ref err) = results.ssl_error {
-                self.results_view
-                    .add_line(Line::from(format!("  {}", err)));
+                self.results_view.add_line(Line::from(format!("  {}", err)));
             }
         }
 
@@ -316,9 +314,7 @@ impl ReconTab {
 
         let focused_row = self.focused_checkbox_index % row_count;
         let max_start = row_count - visible_rows;
-        focused_row
-            .saturating_sub(visible_rows - 1)
-            .min(max_start)
+        focused_row.saturating_sub(visible_rows - 1).min(max_start)
     }
 }
 
@@ -486,9 +482,7 @@ impl TabInput for ReconTab {
                 self.focused_checkbox_index = 0;
                 ReconFocusArea::Options
             }
-            ReconFocusArea::Options => {
-                ReconFocusArea::Results
-            }
+            ReconFocusArea::Options => ReconFocusArea::Results,
             ReconFocusArea::Results => {
                 self.inputs.focus(0);
                 ReconFocusArea::Inputs
@@ -522,6 +516,12 @@ impl TabInput for ReconTab {
     fn handle_backspace(&mut self) {
         if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
             self.inputs.backspace();
+        }
+    }
+
+    fn handle_delete(&mut self) {
+        if !self.is_running() && self.focus_area == ReconFocusArea::Inputs {
+            self.inputs.delete();
         }
     }
 
@@ -773,7 +773,10 @@ mod tests {
             );
         }
 
-        assert!(tab.option_checkboxes[0].checked, "Checkbox 0 should still be checked");
+        assert!(
+            tab.option_checkboxes[0].checked,
+            "Checkbox 0 should still be checked"
+        );
     }
 
     #[test]
@@ -795,7 +798,10 @@ mod tests {
             );
         }
 
-        assert!(tab.option_checkboxes[15].checked, "Checkbox 15 should still be checked");
+        assert!(
+            tab.option_checkboxes[15].checked,
+            "Checkbox 15 should still be checked"
+        );
     }
 
     #[test]

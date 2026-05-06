@@ -169,8 +169,11 @@ impl KeyHandler {
                     app.prev_tab();
                 }
             }
-            (KeyModifiers::NONE, KeyCode::Backspace) => {
+            (KeyModifiers::NONE, KeyCode::Backspace) if app.mode == InputMode::Insert => {
                 app.handle_backspace();
+            }
+            (KeyModifiers::NONE, KeyCode::Delete) if app.mode == InputMode::Insert => {
+                app.handle_delete();
             }
             (KeyModifiers::NONE, KeyCode::Char('p')) if app.mode == InputMode::Normal => {
                 app.prev_tab();
@@ -496,12 +499,23 @@ impl KeyHandler {
             }
             (KeyModifiers::NONE, KeyCode::Backspace) => {
                 app.quick_switch_query.pop();
+                self.clamp_quick_switch_selection(app);
             }
             (KeyModifiers::NONE, KeyCode::Char(c)) => {
                 app.quick_switch_query.push(c);
+                self.clamp_quick_switch_selection(app);
             }
             _ => {}
         }
+    }
+
+    fn clamp_quick_switch_selection(&self, app: &mut App) {
+        let len = app.get_quick_switch_results().len();
+        app.quick_switch_selected = if len == 0 {
+            0
+        } else {
+            app.quick_switch_selected.min(len - 1)
+        };
     }
 }
 
@@ -601,5 +615,59 @@ mod tests {
 
         assert_eq!(app.current_tab, initial_tab);
         assert!(app.is_confirm_popup_visible());
+    }
+
+    #[test]
+    fn test_backspace_does_not_edit_in_normal_mode() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+        app.current_tab = Tab::Recon;
+        app.mode = InputMode::Normal;
+        app.recon.inputs.focus(0);
+        app.recon.inputs.fields[0].value = "abc".to_string();
+        app.recon.inputs.fields[0].cursor_pos = app.recon.inputs.fields[0].value.len();
+
+        press(&mut handler, &mut app, KeyCode::Backspace);
+
+        assert_eq!(app.recon.inputs.fields[0].value, "abc");
+    }
+
+    #[test]
+    fn test_delete_edits_only_in_insert_mode() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+        app.current_tab = Tab::Recon;
+        app.recon.inputs.focus(0);
+        app.recon.inputs.fields[0].value = "abc".to_string();
+        app.recon.inputs.fields[0].cursor_pos = 1;
+
+        app.mode = InputMode::Normal;
+        press(&mut handler, &mut app, KeyCode::Delete);
+        assert_eq!(app.recon.inputs.fields[0].value, "abc");
+
+        app.mode = InputMode::Insert;
+        press(&mut handler, &mut app, KeyCode::Delete);
+        assert_eq!(app.recon.inputs.fields[0].value, "ac");
+    }
+
+    #[test]
+    fn test_quick_switch_clamps_selection_after_filter_input() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        press_ctrl(&mut handler, &mut app, 'x');
+        app.quick_switch_selected = app.get_quick_switch_results().len().saturating_sub(1);
+        app.quick_switch_query = "recon".to_string();
+        app.quick_switch_selected = app.get_quick_switch_results().len().saturating_sub(1);
+
+        // Shrink results to a smaller set and ensure selection is clamped
+        press(&mut handler, &mut app, KeyCode::Char('x'));
+
+        let len = app.get_quick_switch_results().len();
+        if len == 0 {
+            assert_eq!(app.quick_switch_selected, 0);
+        } else {
+            assert!(app.quick_switch_selected < len);
+        }
     }
 }

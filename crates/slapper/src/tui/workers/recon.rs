@@ -164,7 +164,11 @@ pub async fn run_recon(
         });
 
         let timeout_duration = std::time::Duration::from_secs(120);
-        let recon_result = tokio::time::timeout(timeout_duration, run_full_recon(&args, &config, stage, false)).await;
+        let recon_result = tokio::time::timeout(
+            timeout_duration,
+            run_full_recon(&args, &config, stage, false),
+        )
+        .await;
 
         match recon_result {
             Ok(Ok(r)) => {
