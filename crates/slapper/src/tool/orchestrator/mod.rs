@@ -3,7 +3,7 @@ use crate::tool::dispatcher::ToolDispatcher;
 use crate::tool::planner::{ExecutionPlan, ToolExecution};
 use crate::tool::request::ToolRequest;
 use crate::tool::response::ToolResponse;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
@@ -59,7 +59,7 @@ impl Orchestrator {
         target: &str,
         progress_tx: Option<mpsc::Sender<StageProgress>>,
     ) -> Result<ExecutionResult, SlapperError> {
-        let execution_order = self.resolve_stage_order(plan);
+        let execution_order = self.resolve_stage_order(plan)?;
         let overall_start = std::time::Instant::now();
 
         for stage in &execution_order {
@@ -78,13 +78,14 @@ impl Orchestrator {
         })
     }
 
-    fn resolve_stage_order(&self, plan: &ExecutionPlan) -> Vec<String> {
+    fn resolve_stage_order(&self, plan: &ExecutionPlan) -> Result<Vec<String>, SlapperError> {
         let mut resolved: Vec<String> = Vec::new();
         let mut available: HashMap<String, bool> = plan
             .stages
             .iter()
             .map(|s| (s.name.clone(), false))
             .collect();
+        let mut visiting: HashSet<String> = HashSet::new();
 
         while available.values().any(|v| !*v) {
             let mut made_progress = false;
@@ -94,14 +95,23 @@ impl Orchestrator {
                     continue;
                 }
 
+                if visiting.contains(&stage.name) {
+                    return Err(SlapperError::Validation(format!(
+                        "Circular dependency detected: stage '{}' depends on a stage in its own dependency chain",
+                        stage.name
+                    )));
+                }
+
                 let deps_resolved = stage
                     .depends_on
                     .iter()
                     .all(|dep| *available.get(dep).unwrap_or(&false));
 
                 if deps_resolved {
+                    visiting.insert(stage.name.clone());
                     resolved.push(stage.name.clone());
                     *available.get_mut(&stage.name).unwrap() = true;
+                    visiting.remove(&stage.name);
                     made_progress = true;
                 }
             }
@@ -117,7 +127,7 @@ impl Orchestrator {
             }
         }
 
-        resolved
+        Ok(resolved)
     }
 
     async fn execute_stage(
@@ -137,15 +147,44 @@ impl Orchestrator {
         let mut tool_results = Vec::new();
 
         if stage.parallel {
-            let handles: Vec<_> = stage
+            let depends_on = stage.depends_on.clone();
+            let mut handles: Vec<_> = stage
                 .tools
                 .iter()
                 .map(|tool| {
                     let dispatcher = self.dispatcher.clone();
                     let tool = tool.clone();
                     let target = target.to_string();
+                    let stage_results = Arc::clone(&self.execution_state);
+                    let depends_on = depends_on.clone();
                     async move {
-                        let request = Self::build_request(&tool, &target);
+                        let previous_output = {
+                            let state = stage_results.read().await;
+                            let deps_results: Vec<_> = depends_on
+                                .iter()
+                                .filter_map(|dep| state.stage_results.get(dep))
+                                .collect();
+                            if deps_results.is_empty() {
+                                serde_json::Value::Null
+                            } else {
+                                serde_json::json!({
+                                    "stages": deps_results.iter().map(|r| {
+                                        serde_json::json!({
+                                            "name": r.stage_name,
+                                            "success": r.success,
+                                            "tools": r.tool_results.iter().map(|t| {
+                                                serde_json::json!({
+                                                    "tool_id": t.tool_id,
+                                                    "success": t.success,
+                                                })
+                                            }).collect::<Vec<_>>()
+                                        })
+                                    }).collect::<Vec<_>>()
+                                })
+                            }
+                        };
+                        let mut request = Self::build_request(&tool, &target);
+                        request.params["results"] = previous_output;
                         let start = std::time::Instant::now();
                         let result = dispatcher.dispatch(request).await;
                         let duration = start.elapsed().as_millis() as u64;
