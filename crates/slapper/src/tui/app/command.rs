@@ -107,6 +107,11 @@ impl super::App {
     }
 
     pub(super) fn execute_command(&mut self, command: &str) {
+        if let Some(tab) = command_to_tab(command) {
+            let _ = self.set_current_tab_if_available(tab);
+            return;
+        }
+
         match command {
             "quit" | "exit" => {
                 if !self.is_running() {
@@ -126,52 +131,13 @@ impl super::App {
                 self.toggle_help();
             }
             "search" => {
-                self.toggle_search(true); // Global search from command palette
+                self.toggle_search(true);
             }
             "palette" => {
                 self.toggle_command_palette();
             }
             "export" => {
                 self.export_results();
-            }
-            "history" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::History);
-            }
-            "settings" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::Settings);
-            }
-            "dashboard" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::Dashboard);
-            }
-            "recon" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::Recon);
-            }
-            "load" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::Load);
-            }
-            "ports" | "port" | "portscan" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::ScanPorts);
-            }
-            "endpoints" | "endpoint" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::ScanEndpoints);
-            }
-            "fingerprint" | "fingerprinting" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::Fingerprint);
-            }
-            "fuzz" | "fuzzing" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::Fuzz);
-            }
-            "waf" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::Waf);
-            }
-            "wafstress" | "waf-stress" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::WafStress);
-            }
-            "pipeline" | "scan" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::Scan);
-            }
-            "resume" | "session" => {
-                let _ = self.set_current_tab_if_available(super::tabs::Tab::Resume);
             }
             "next-tab" | "next" => {
                 self.next_tab();
@@ -497,7 +463,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Known bug: cluster not handled in execute_command despite being in command_to_tab"]
     fn test_execute_command_cluster_via_set_current_tab() {
         let mut app = create_test_app();
         app.current_tab = Tab::Dashboard;
@@ -506,7 +471,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Known bug: cluster not in execute_command match despite being in command_to_tab"]
     fn test_execute_command_navigation_cluster() {
         let mut app = create_test_app();
         app.current_tab = Tab::Fuzz;
