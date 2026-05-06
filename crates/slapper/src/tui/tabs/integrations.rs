@@ -1,3 +1,4 @@
+use crate::tc;
 use crate::integrations::{IntegrationConfig, Issue};
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
