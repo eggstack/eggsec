@@ -19,6 +19,22 @@ Reconnaissance module workflows and patterns for information gathering.
 ### SSL/TLS
 `recon/ssl.rs` uses `rustls_pki_types::CertificateDer` for cert extraction.
 
+**Certificate Info Extraction**: The `extract_certificate_info()` function parses PEM data to extract:
+- `subject` - Certificate subject
+- `issuer` - Certificate issuer
+- `valid_from` / `valid_until` - Validity dates (RFC3339 format)
+- `serial_number` - Serial number
+- `is_expired` - Boolean, computed from validity dates
+- `days_until_expiry` - Computed from `valid_until`
+- `subject_alternative_names` - SAN entries
+
+```rust
+if let Ok(pem_data) = pem::parse(der_bytes) {
+    let pem_str = String::from_utf8_lossy(pem_data.contents());
+    // Parse fields from PEM contents
+}
+```
+
 ## Testing
 
 ### Running Recon Tests

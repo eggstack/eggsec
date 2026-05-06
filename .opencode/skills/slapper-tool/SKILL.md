@@ -40,6 +40,31 @@ Tool abstraction layer workflows and patterns for security tool integration.
 ### Tool Implementations
 `tool/implementations/` - Recon, scanner, fuzzer, waf, search, etc.
 
+### Pipeline Orchestrator
+`tool/orchestrator/mod.rs` handles parallel and sequential tool execution:
+
+**Parallel Execution** (correct pattern):
+```rust
+use futures::future::join_all;
+
+let handles: Vec<_> = stage.tools.iter().map(|tool| {
+    async move { /* dispatch tool */ }
+}).collect();
+
+let results = join_all(handles).await;
+```
+
+**Sequential Execution**:
+```rust
+for tool in &stage.tools {
+    let request = Self::build_request(tool, target);
+    let result = self.dispatcher.dispatch(request).await;
+    // process result
+}
+```
+
+**Result Passing**: Previous stage results are passed via `request.params["results"] = previous_output`.
+
 ## Testing
 
 ### Running Tool Tests
