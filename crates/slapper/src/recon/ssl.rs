@@ -93,14 +93,9 @@ impl SslAnalyzer {
             }
         }
 
-        analysis.supported_versions = vec!["TLSv1.2".to_string(), "TLSv1.3".to_string()];
+        analysis.supported_versions = Vec::new();
 
-        analysis.supported_cipher_suites = vec![
-            "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384".to_string(),
-            "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256".to_string(),
-            "TLS_RSA_WITH_AES_256_GCM_SHA384".to_string(),
-            "TLS_RSA_WITH_AES_128_GCM_SHA256".to_string(),
-        ];
+        analysis.supported_cipher_suites = Vec::new();
 
         self.check_vulnerabilities(&mut analysis);
 
@@ -112,13 +107,13 @@ impl SslAnalyzer {
         _cert: &rustls_pki_types::CertificateDer<'_>,
     ) -> Result<CertificateInfo> {
         Ok(CertificateInfo {
-            subject: "Certificate info not available".to_string(),
-            issuer: "Certificate info not available".to_string(),
-            valid_from: "Unknown".to_string(),
-            valid_until: "Unknown".to_string(),
-            serial_number: "Unknown".to_string(),
-            signature_algorithm: "Unknown".to_string(),
-            public_key_algorithm: "Unknown".to_string(),
+            subject: String::new(),
+            issuer: String::new(),
+            valid_from: String::new(),
+            valid_until: String::new(),
+            serial_number: String::new(),
+            signature_algorithm: String::new(),
+            public_key_algorithm: String::new(),
             key_size: None,
             is_expired: false,
             days_until_expiry: None,

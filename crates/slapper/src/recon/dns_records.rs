@@ -73,6 +73,14 @@ pub async fn enumerate_dns_records(domain: &str) -> Result<DnsRecords> {
         }
     }
 
+    if let Ok(lookup) = resolver.lookup(domain, hickory_resolver::proto::rr::RecordType::CNAME).await {
+        for record in lookup.iter() {
+            if let hickory_resolver::proto::rr::RData::CNAME(cname) = record {
+                records.cname.push(cname.to_string());
+            }
+        }
+    }
+
     Ok(records)
 }
 
