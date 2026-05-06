@@ -27,6 +27,10 @@ impl KeyHandler {
 
         app.needs_redraw = true;
 
+        if self.handle_topmost_overlay(app, key) {
+            return;
+        }
+
         match (key.modifiers, key.code) {
             (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
                 self.handle_ctrl_c(app);
@@ -110,22 +114,6 @@ impl KeyHandler {
             }
             (KeyModifiers::CONTROL, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
                 app.toggle_bookmark(app.current_tab);
-            }
-            _ if app.is_quick_switch_visible() => {
-                self.handle_quick_switch(app, key);
-            }
-            _ if app
-                .get_command_palette()
-                .map(&|cp: &crate::tui::help::CommandPalette| cp.visible)
-                .unwrap_or(false) =>
-            {
-                self.handle_command_palette(app, key);
-            }
-            _ if app.is_search_visible()
-                || app.is_http_options_visible()
-                || app.is_help_visible() =>
-            {
-                self.handle_overlay_input(app, key);
             }
             (KeyModifiers::NONE, KeyCode::Tab) => {
                 app.handle_focus_next();
@@ -223,6 +211,44 @@ impl KeyHandler {
         }
     }
 
+    fn handle_topmost_overlay(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
+        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c') {
+            return false;
+        }
+
+        match app.topmost_overlay() {
+            Some(OverlayType::ConfirmPopup) => {
+                match (key.modifiers, key.code) {
+                    (KeyModifiers::NONE, KeyCode::Enter) => app.confirm_action(),
+                    (KeyModifiers::NONE, KeyCode::Esc) => app.cancel_action(),
+                    _ => {}
+                }
+                true
+            }
+            Some(OverlayType::CommandPalette) => {
+                self.handle_command_palette(app, key);
+                true
+            }
+            Some(OverlayType::QuickSwitch) => {
+                self.handle_quick_switch(app, key);
+                true
+            }
+            Some(OverlayType::Search) => {
+                self.handle_overlay_input(app, key);
+                true
+            }
+            Some(OverlayType::HttpOptions) => {
+                self.handle_overlay_input(app, key);
+                true
+            }
+            Some(OverlayType::Help) => {
+                self.handle_overlay_input(app, key);
+                true
+            }
+            None => false,
+        }
+    }
+
     fn handle_ctrl_c(&self, app: &mut App) {
         if app.is_running() {
             app.stop_with_message("Interrupted by user");
@@ -317,6 +343,9 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Esc) => {
                 app.toggle_command_palette();
             }
+            (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
+                app.toggle_command_palette();
+            }
             (KeyModifiers::NONE, KeyCode::Enter) => {
                 let index = app
                     .command_palette
@@ -393,6 +422,12 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Enter) if app.is_search_visible() => {
                 app.perform_search();
             }
+            (KeyModifiers::NONE, KeyCode::Esc) => {
+                self.handle_escape(app);
+            }
+            (KeyModifiers::CONTROL, KeyCode::Char('f')) if app.is_search_visible() => {
+                app.perform_search();
+            }
             (KeyModifiers::NONE, KeyCode::Backspace) if app.is_search_visible() => {
                 app.search_query.pop();
             }
@@ -402,6 +437,10 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Char(c)) if app.is_search_visible() => {
                 app.search_query.push(c);
             }
+            (KeyModifiers::NONE, KeyCode::Char('h')) if app.is_http_options_visible() => {
+                app.show_http_options = false;
+                app.needs_redraw = true;
+            }
             _ => {}
         }
     }
@@ -409,6 +448,9 @@ impl KeyHandler {
     fn handle_quick_switch(&self, app: &mut App, key: &crossterm::event::KeyEvent) {
         match (key.modifiers, key.code) {
             (KeyModifiers::NONE, KeyCode::Esc) => {
+                app.close_quick_switch();
+            }
+            (KeyModifiers::CONTROL, KeyCode::Char('x')) => {
                 app.close_quick_switch();
             }
             (KeyModifiers::NONE, KeyCode::Enter) => {
@@ -466,5 +508,98 @@ impl KeyHandler {
 impl Default for KeyHandler {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::app::{create_shared_history, App};
+    use crossterm::event::KeyEvent;
+
+    fn create_test_app() -> App {
+        App::new_for_testing(create_shared_history())
+    }
+
+    fn press(handler: &mut KeyHandler, app: &mut App, code: KeyCode) {
+        handler.handle_key_event(app, &KeyEvent::new(code, KeyModifiers::NONE));
+    }
+
+    fn press_ctrl(handler: &mut KeyHandler, app: &mut App, c: char) {
+        handler.handle_key_event(app, &KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL));
+    }
+
+    #[test]
+    fn test_quick_switch_down_is_not_stolen_by_tab_content() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        press_ctrl(&mut handler, &mut app, 'x');
+        assert!(app.is_quick_switch_visible());
+
+        press(&mut handler, &mut app, KeyCode::Down);
+
+        assert_eq!(app.quick_switch_selected, 1);
+    }
+
+    #[test]
+    fn test_quick_switch_paging_and_home_end_are_overlay_local() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        press_ctrl(&mut handler, &mut app, 'x');
+        press(&mut handler, &mut app, KeyCode::End);
+        assert_eq!(
+            app.quick_switch_selected,
+            app.get_quick_switch_results().len().saturating_sub(1)
+        );
+
+        press_ctrl(&mut handler, &mut app, 'u');
+        assert!(app.quick_switch_selected < app.get_quick_switch_results().len());
+
+        press(&mut handler, &mut app, KeyCode::Home);
+        assert_eq!(app.quick_switch_selected, 0);
+    }
+
+    #[test]
+    fn test_command_palette_down_is_not_stolen_by_tab_content() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        press_ctrl(&mut handler, &mut app, 'p');
+        assert!(app.is_command_palette_visible());
+
+        press(&mut handler, &mut app, KeyCode::Down);
+
+        let palette = app.command_palette.as_ref().expect("palette should exist");
+        let expected = if palette.results.len() > 1 { 1 } else { 0 };
+        assert_eq!(palette.selected_index, expected);
+    }
+
+    #[test]
+    fn test_search_ctrl_u_clears_query_instead_of_paging_content() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+
+        app.show_search = true;
+        app.search_query = "needle".to_string();
+
+        press_ctrl(&mut handler, &mut app, 'u');
+
+        assert!(app.search_query.is_empty());
+        assert!(app.show_search);
+    }
+
+    #[test]
+    fn test_confirm_popup_blocks_navigation_keys() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+        let initial_tab = app.current_tab;
+
+        app.request_confirmation(PendingAction::ResetTab);
+        press(&mut handler, &mut app, KeyCode::Right);
+
+        assert_eq!(app.current_tab, initial_tab);
+        assert!(app.is_confirm_popup_visible());
     }
 }
