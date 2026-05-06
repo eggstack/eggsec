@@ -416,25 +416,8 @@ selector.prev()           // same as move_prev()
 ```
 
 Selector contract:
-- Focus does not automatically open (unlike `focus()` which does both)
+- Focus does not automatically open
 - Enter on closed selector opens it
 - Enter on open selector commits and closes
 - Esc closes without committing
 - Up/Down only move selection when open
-
-## ControlEvent Contract
-
-For centralized input handling, use `ControlEvent` and `ControlOutcome`:
-```rust
-pub enum ControlEvent {
-    FocusNext, FocusPrev, Enter, Escape,
-    Up, Down, Left, Right, Home, End,
-    PageUp, PageDown, Char(char), Backspace, Paste(String),
-}
-
-pub enum ControlOutcome {
-    Handled, Ignored, FocusChanged, ActionRequested,
-}
-```
-
-The `ControlHandler` trait is available for components that want to use this contract.

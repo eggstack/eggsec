@@ -432,13 +432,17 @@ impl TabInput for ClusterTab {
     fn handle_enter(&mut self) {
         match self.focus_area {
             ClusterFocusArea::ViewSelector => {
-                self.view_selector.handle_enter();
-                self.current_view = match self.view_selector.selected {
-                    0 => ClusterView::Worker,
-                    1 => ClusterView::Coordinator,
-                    2 => ClusterView::Status,
-                    _ => ClusterView::Worker,
-                };
+                if self.view_selector.is_open() {
+                    let _ = self.view_selector.confirm();
+                    self.current_view = match self.view_selector.selected {
+                        0 => ClusterView::Worker,
+                        1 => ClusterView::Coordinator,
+                        2 => ClusterView::Status,
+                        _ => ClusterView::Worker,
+                    };
+                } else {
+                    self.view_selector.open();
+                }
             }
             ClusterFocusArea::Inputs => {
                 let current_inputs = match self.current_view {
@@ -453,6 +457,10 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.view_selector.is_open() {
+            self.view_selector.cancel();
+            return;
+        }
         self.view_selector.blur();
         let current_inputs = match self.current_view {
             ClusterView::Worker => &mut self.worker_inputs,
@@ -465,7 +473,9 @@ impl TabInput for ClusterTab {
     fn handle_up(&mut self) {
         match self.focus_area {
             ClusterFocusArea::ViewSelector => {
-                self.view_selector.handle_up();
+                if self.view_selector.is_open() {
+                    self.view_selector.move_prev();
+                }
             }
             ClusterFocusArea::Inputs => {
                 let current_inputs = match self.current_view {
@@ -484,7 +494,9 @@ impl TabInput for ClusterTab {
     fn handle_down(&mut self) {
         match self.focus_area {
             ClusterFocusArea::ViewSelector => {
-                self.view_selector.handle_down();
+                if self.view_selector.is_open() {
+                    self.view_selector.move_next();
+                }
             }
             ClusterFocusArea::Inputs => {
                 let current_inputs = match self.current_view {
@@ -534,7 +546,13 @@ impl TabInput for ClusterTab {
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            ClusterFocusArea::ViewSelector => self.view_selector.selected == 0,
+            ClusterFocusArea::ViewSelector => {
+                if self.view_selector.is_open() {
+                    self.view_selector.selected == 0
+                } else {
+                    true
+                }
+            }
             ClusterFocusArea::Inputs => {
                 let current_inputs = match self.current_view {
                     ClusterView::Worker => &self.worker_inputs,
@@ -550,7 +568,12 @@ impl TabInput for ClusterTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             ClusterFocusArea::ViewSelector => {
-                self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+                if self.view_selector.is_open() {
+                    self.view_selector.selected
+                        >= self.view_selector.items.len().saturating_sub(1)
+                } else {
+                    true
+                }
             }
             ClusterFocusArea::Inputs => {
                 let current_inputs = match self.current_view {

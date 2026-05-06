@@ -457,13 +457,17 @@ impl TabInput for ReportTab {
     fn handle_enter(&mut self) {
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
-                self.view_selector.handle_enter();
-                self.current_view = match self.view_selector.selected {
-                    0 => ReportView::Convert,
-                    1 => ReportView::Trend,
-                    2 => ReportView::Schedule,
-                    _ => ReportView::Convert,
-                };
+                if self.view_selector.is_open() {
+                    let _ = self.view_selector.confirm();
+                    self.current_view = match self.view_selector.selected {
+                        0 => ReportView::Convert,
+                        1 => ReportView::Trend,
+                        2 => ReportView::Schedule,
+                        _ => ReportView::Convert,
+                    };
+                } else {
+                    self.view_selector.open();
+                }
             }
             ReportFocusArea::Inputs => {
                 let current_inputs = match self.current_view {
@@ -478,6 +482,10 @@ impl TabInput for ReportTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.view_selector.is_open() {
+            self.view_selector.cancel();
+            return;
+        }
         self.view_selector.blur();
         let current_inputs = match self.current_view {
             ReportView::Convert => &mut self.convert_inputs,
@@ -490,7 +498,9 @@ impl TabInput for ReportTab {
     fn handle_up(&mut self) {
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
-                self.view_selector.handle_up();
+                if self.view_selector.is_open() {
+                    self.view_selector.move_prev();
+                }
             }
             ReportFocusArea::Inputs => {
                 let current_inputs = match self.current_view {
@@ -509,7 +519,9 @@ impl TabInput for ReportTab {
     fn handle_down(&mut self) {
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
-                self.view_selector.handle_down();
+                if self.view_selector.is_open() {
+                    self.view_selector.move_next();
+                }
             }
             ReportFocusArea::Inputs => {
                 let current_inputs = match self.current_view {
@@ -559,7 +571,13 @@ impl TabInput for ReportTab {
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            ReportFocusArea::ViewSelector => self.view_selector.selected == 0,
+            ReportFocusArea::ViewSelector => {
+                if self.view_selector.is_open() {
+                    self.view_selector.selected == 0
+                } else {
+                    true
+                }
+            }
             ReportFocusArea::Inputs => {
                 let current_inputs = match self.current_view {
                     ReportView::Convert => &self.convert_inputs,
@@ -575,7 +593,11 @@ impl TabInput for ReportTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
-                self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+                if self.view_selector.is_open() {
+                    self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+                } else {
+                    true
+                }
             }
             ReportFocusArea::Inputs => {
                 let current_inputs = match self.current_view {

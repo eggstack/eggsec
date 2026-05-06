@@ -696,12 +696,20 @@ impl TabInput for FuzzTab {
         }
 
         if self.focus_area == FuzzFocusArea::PayloadSelector {
-            self.payload_selector.toggle();
+            if self.payload_selector.is_open() {
+                let _ = self.payload_selector.confirm();
+            } else {
+                self.payload_selector.open();
+            }
             return;
         }
 
         if self.focus_area == FuzzFocusArea::ModeSelector {
-            self.mode_selector.toggle();
+            if self.mode_selector.is_open() {
+                let _ = self.mode_selector.confirm();
+            } else {
+                self.mode_selector.open();
+            }
             return;
         }
 
@@ -718,16 +726,24 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.payload_selector.is_open() {
+            self.payload_selector.cancel();
+            return;
+        }
+        if self.mode_selector.is_open() {
+            self.mode_selector.cancel();
+            return;
+        }
         self.inputs.blur();
         self.payload_selector.collapse();
         self.mode_selector.collapse();
     }
 
     fn handle_up(&mut self) {
-        if self.payload_selector.expanded {
-            self.payload_selector.prev();
-        } else if self.mode_selector.expanded {
-            self.mode_selector.prev();
+        if self.payload_selector.is_open() {
+            self.payload_selector.move_prev();
+        } else if self.mode_selector.is_open() {
+            self.mode_selector.move_prev();
         } else if self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.focus_prev();
         } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
@@ -738,10 +754,10 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_down(&mut self) {
-        if self.payload_selector.expanded {
-            self.payload_selector.next();
-        } else if self.mode_selector.expanded {
-            self.mode_selector.next();
+        if self.payload_selector.is_open() {
+            self.payload_selector.move_next();
+        } else if self.mode_selector.is_open() {
+            self.mode_selector.move_next();
         } else if self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.focus_next();
         } else {

@@ -204,7 +204,11 @@ impl Selector {
 
     pub fn focus(&mut self) {
         self.focused = true;
-        self.expanded = true;
+    }
+
+    pub fn focus_open(&mut self) {
+        self.focused = true;
+        self.open();
     }
 
     pub fn blur(&mut self) {
@@ -220,7 +224,11 @@ impl Selector {
     }
 
     pub fn handle_enter(&mut self) {
-        self.expanded = !self.expanded;
+        if self.expanded {
+            let _ = self.confirm();
+        } else {
+            self.open();
+        }
     }
 
     pub fn handle_up(&mut self) {
@@ -236,12 +244,12 @@ impl Selector {
     }
 
     pub fn handle_left(&mut self) {
-        if self.selected > 0 {
+        if self.expanded && self.selected > 0 {
             self.selected -= 1;
         }
     }
     pub fn handle_right(&mut self) {
-        if self.items.len() > 0 && self.selected < self.items.len() - 1 {
+        if self.expanded && !self.items.is_empty() && self.selected < self.items.len() - 1 {
             self.selected += 1;
         }
     }
@@ -483,7 +491,15 @@ mod tests {
             selector.selected, initial_selected,
             "Focus should not change selection"
         );
-        assert!(selector.expanded, "Focus should expand the selector (current behavior)");
+        assert!(!selector.expanded, "Focus should not expand the selector");
+    }
+
+    #[test]
+    fn selector_focus_open_expands() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.focus_open();
+        assert!(selector.expanded, "focus_open should expand the selector");
+        assert!(selector.focused, "focus_open should also focus");
     }
 
     #[test]
@@ -503,7 +519,7 @@ mod tests {
         selector.handle_enter();
         assert!(selector.expanded, "Enter should open closed selector");
         selector.handle_enter();
-        assert!(!selector.expanded, "Enter should close open selector");
+        assert!(!selector.expanded, "Enter should confirm and close open selector");
     }
 
     #[test]
@@ -579,7 +595,7 @@ mod tests {
     #[test]
     fn selector_blur_closes_dropdown() {
         let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
-        selector.focus();
+        selector.focus_open();
         assert!(selector.expanded);
         selector.blur();
         assert!(!selector.expanded, "Blur should close dropdown");
@@ -647,7 +663,7 @@ mod tests {
     #[test]
     fn selector_confirm_returns_item_when_open() {
         let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
-        selector.expand();
+        selector.open();
         selector.selected = 1;
         let item = selector.confirm();
         assert!(item.is_some(), "confirm() should return item when open");
@@ -665,7 +681,7 @@ mod tests {
     #[test]
     fn selector_cancel_closes_without_changing_selection() {
         let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
-        selector.expand();
+        selector.open();
         selector.selected = 2;
         selector.cancel();
         assert!(!selector.is_open(), "cancel() should close");
@@ -675,7 +691,7 @@ mod tests {
     #[test]
     fn selector_move_next_works() {
         let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
-        selector.expand();
+        selector.open();
         selector.selected = 0;
         selector.move_next();
         assert_eq!(selector.selected, 1);
@@ -684,10 +700,20 @@ mod tests {
     #[test]
     fn selector_move_prev_works() {
         let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
-        selector.expand();
+        selector.open();
         selector.selected = 1;
         selector.move_prev();
         assert_eq!(selector.selected, 0);
+    }
+
+    #[test]
+    fn selector_left_right_do_not_mutate_when_closed() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.selected = 1;
+        selector.handle_left();
+        assert_eq!(selector.selected, 1);
+        selector.handle_right();
+        assert_eq!(selector.selected, 1);
     }
 
     #[test]

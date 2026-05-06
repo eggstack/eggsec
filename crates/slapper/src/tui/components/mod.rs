@@ -1,5 +1,4 @@
 pub mod empty_state;
-pub mod events;
 pub mod input;
 mod popup;
 mod progress;

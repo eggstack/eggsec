@@ -580,9 +580,6 @@ impl TabRender for PacketTab {
         let results_area = chunks[2];
 
         self.view_selector.render(f, selector_area);
-        if let Some(dropdown) = self.view_selector.dropdown_info(selector_area) {
-            dropdown.render(f);
-        }
 
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -621,6 +618,21 @@ impl TabRender for PacketTab {
                 "Select a tool, enter parameters, and press Enter to run",
             );
             f.render_widget(placeholder, results_area);
+        }
+    }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(15),
+                Constraint::Min(0),
+            ])
+            .split(area);
+        let selector_area = chunks[0];
+        if let Some(dropdown) = self.view_selector.dropdown_info(selector_area) {
+            dropdown.render(f);
         }
     }
 }
@@ -725,16 +737,20 @@ impl TabInput for PacketTab {
 
     fn handle_enter(&mut self) {
         if self.view_selector.is_focused() {
-            self.view_selector.handle_enter();
-            self.current_view = match self.view_selector.selected {
-                0 => PacketView::Capture,
-                1 => PacketView::Send,
-                2 => PacketView::Dump,
-                3 => PacketView::Icmp,
-                4 => PacketView::Traceroute,
-                5 => PacketView::Interfaces,
-                _ => PacketView::Capture,
-            };
+            if self.view_selector.is_open() {
+                let _ = self.view_selector.confirm();
+                self.current_view = match self.view_selector.selected {
+                    0 => PacketView::Capture,
+                    1 => PacketView::Send,
+                    2 => PacketView::Dump,
+                    3 => PacketView::Icmp,
+                    4 => PacketView::Traceroute,
+                    5 => PacketView::Interfaces,
+                    _ => PacketView::Capture,
+                };
+            } else {
+                self.view_selector.open();
+            }
         } else if self.inputs.is_focused() {
             self.inputs.blur();
         } else {
@@ -743,6 +759,10 @@ impl TabInput for PacketTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.view_selector.is_open() {
+            self.view_selector.cancel();
+            return;
+        }
         if self.view_selector.is_focused() {
             self.view_selector.blur();
         }
@@ -751,7 +771,9 @@ impl TabInput for PacketTab {
 
     fn handle_up(&mut self) {
         if self.view_selector.is_focused() {
-            self.view_selector.handle_up();
+            if self.view_selector.is_open() {
+                self.view_selector.move_prev();
+            }
         } else if !self.inputs.is_focused() {
             self.results_view.scroll_up(1);
         } else {
@@ -761,7 +783,9 @@ impl TabInput for PacketTab {
 
     fn handle_down(&mut self) {
         if self.view_selector.is_focused() {
-            self.view_selector.handle_down();
+            if self.view_selector.is_open() {
+                self.view_selector.move_next();
+            }
         } else if !self.inputs.is_focused() {
             self.results_view.scroll_down(1);
         } else {
@@ -771,8 +795,12 @@ impl TabInput for PacketTab {
 
     fn handle_left(&mut self) -> bool {
         if self.view_selector.is_focused() {
-            self.view_selector.handle_left();
-            true
+            if self.view_selector.is_open() {
+                self.view_selector.move_prev();
+                true
+            } else {
+                false
+            }
         } else {
             self.inputs.move_left()
         }
@@ -780,8 +808,12 @@ impl TabInput for PacketTab {
 
     fn handle_right(&mut self) -> bool {
         if self.view_selector.is_focused() {
-            self.view_selector.handle_right();
-            true
+            if self.view_selector.is_open() {
+                self.view_selector.move_next();
+                true
+            } else {
+                false
+            }
         } else {
             self.inputs.move_right()
         }
@@ -794,7 +826,11 @@ impl TabInput for PacketTab {
     fn is_at_left_edge(&self) -> bool {
         // At left edge if selector is not focused or at first item
         if self.view_selector.is_focused() {
-            self.view_selector.selected == 0
+            if self.view_selector.is_open() {
+                self.view_selector.selected == 0
+            } else {
+                true
+            }
         } else if self.inputs.is_focused() {
             self.inputs.is_at_left_edge()
         } else {
@@ -805,7 +841,11 @@ impl TabInput for PacketTab {
     fn is_at_right_edge(&self) -> bool {
         // At right edge if selector is not focused or at last item
         if self.view_selector.is_focused() {
-            self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+            if self.view_selector.is_open() {
+                self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+            } else {
+                true
+            }
         } else if self.inputs.is_focused() {
             self.inputs.is_at_right_edge()
         } else {

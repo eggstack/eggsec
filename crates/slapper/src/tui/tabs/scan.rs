@@ -506,13 +506,21 @@ impl TabInput for ScanTab {
         }
 
         if self.focus_area == ScanFocusArea::ProfileSelector {
-            self.profile_selector.toggle();
-            self.update_stages_for_profile();
+            if self.profile_selector.is_open() {
+                let _ = self.profile_selector.confirm();
+                self.update_stages_for_profile();
+            } else {
+                self.profile_selector.open();
+            }
             return;
         }
 
         if self.focus_area == ScanFocusArea::OutputSelector {
-            self.output_selector.toggle();
+            if self.output_selector.is_open() {
+                let _ = self.output_selector.confirm();
+            } else {
+                self.output_selector.open();
+            }
             return;
         }
 
@@ -524,17 +532,25 @@ impl TabInput for ScanTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.profile_selector.is_open() {
+            self.profile_selector.cancel();
+            return;
+        }
+        if self.output_selector.is_open() {
+            self.output_selector.cancel();
+            return;
+        }
         self.inputs.blur();
         self.profile_selector.collapse();
         self.output_selector.collapse();
     }
 
     fn handle_up(&mut self) {
-        if self.profile_selector.expanded {
-            self.profile_selector.prev();
+        if self.profile_selector.is_open() {
+            self.profile_selector.move_prev();
             self.update_stages_for_profile();
-        } else if self.output_selector.expanded {
-            self.output_selector.prev();
+        } else if self.output_selector.is_open() {
+            self.output_selector.move_prev();
         } else if !self.inputs.is_focused() && !self.current_stage_output.is_empty() {
             self.scroll_output_up();
         } else if self.focus_area != ScanFocusArea::Inputs {
@@ -546,11 +562,11 @@ impl TabInput for ScanTab {
     }
 
     fn handle_down(&mut self) {
-        if self.profile_selector.expanded {
-            self.profile_selector.next();
+        if self.profile_selector.is_open() {
+            self.profile_selector.move_next();
             self.update_stages_for_profile();
-        } else if self.output_selector.expanded {
-            self.output_selector.next();
+        } else if self.output_selector.is_open() {
+            self.output_selector.move_next();
         } else if !self.inputs.is_focused() && !self.current_stage_output.is_empty() {
             self.scroll_output_down();
         } else if self.focus_area == ScanFocusArea::Inputs && !self.inputs.is_focused() {

@@ -174,7 +174,11 @@ impl TabInput for SettingsTab {
                 if idx < 2 {
                     self.proxy_inputs.blur();
                 } else {
-                    self.proxy_rotation_selector.handle_enter();
+                    if self.proxy_rotation_selector.is_open() {
+                        let _ = self.proxy_rotation_selector.confirm();
+                    } else {
+                        self.proxy_rotation_selector.open();
+                    }
                 }
             }
             SettingsSection::Scope => {
@@ -194,14 +198,22 @@ impl TabInput for SettingsTab {
                 } else if idx == 5 {
                     self.notify_on_findings.toggle();
                 } else {
-                    self.severity_selector.handle_enter();
+                    if self.severity_selector.is_open() {
+                        let _ = self.severity_selector.confirm();
+                    } else {
+                        self.severity_selector.open();
+                    }
                 }
             }
             SettingsSection::Theme => {
                 if idx == 0 {
                     self.dark_mode.toggle();
                 } else {
-                    self.accent_color.handle_enter();
+                    if self.accent_color.is_open() {
+                        let _ = self.accent_color.confirm();
+                    } else {
+                        self.accent_color.open();
+                    }
                 }
             }
         }

@@ -559,7 +559,11 @@ impl TabInput for LoadTab {
 
     fn handle_enter(&mut self) {
         if self.test_type_selector.is_focused() {
-            self.test_type_selector.handle_enter();
+            if self.test_type_selector.is_open() {
+                let _ = self.test_type_selector.confirm();
+            } else {
+                self.test_type_selector.open();
+            }
             return;
         }
         if self.inputs.is_focused() {
@@ -572,6 +576,10 @@ impl TabInput for LoadTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.test_type_selector.is_open() {
+            self.test_type_selector.cancel();
+            return;
+        }
         if self.test_type_selector.is_focused() {
             self.test_type_selector.blur();
         }
@@ -580,7 +588,9 @@ impl TabInput for LoadTab {
 
     fn handle_up(&mut self) {
         if self.focus_area == LoadFocusArea::Selector {
-            self.test_type_selector.handle_up();
+            if self.test_type_selector.is_open() {
+                self.test_type_selector.move_prev();
+            }
         } else if self.focus_area == LoadFocusArea::Inputs {
             if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_results_up();
@@ -592,7 +602,9 @@ impl TabInput for LoadTab {
 
     fn handle_down(&mut self) {
         if self.focus_area == LoadFocusArea::Selector {
-            self.test_type_selector.handle_down();
+            if self.test_type_selector.is_open() {
+                self.test_type_selector.move_next();
+            }
         } else if self.focus_area == LoadFocusArea::Inputs {
             if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_results_down();
@@ -604,8 +616,12 @@ impl TabInput for LoadTab {
 
     fn handle_left(&mut self) -> bool {
         if self.test_type_selector.is_focused() {
-            self.test_type_selector.handle_left();
-            true
+            if self.test_type_selector.is_open() {
+                self.test_type_selector.move_prev();
+                true
+            } else {
+                false
+            }
         } else {
             self.inputs.move_left()
         }
@@ -613,8 +629,12 @@ impl TabInput for LoadTab {
 
     fn handle_right(&mut self) -> bool {
         if self.test_type_selector.is_focused() {
-            self.test_type_selector.handle_right();
-            true
+            if self.test_type_selector.is_open() {
+                self.test_type_selector.move_next();
+                true
+            } else {
+                false
+            }
         } else {
             self.inputs.move_right()
         }
@@ -626,7 +646,11 @@ impl TabInput for LoadTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.test_type_selector.is_focused() {
-            self.test_type_selector.selected == 0
+            if self.test_type_selector.is_open() {
+                self.test_type_selector.selected == 0
+            } else {
+                true
+            }
         } else if self.inputs.is_focused() {
             self.inputs.is_at_left_edge()
         } else {
@@ -636,8 +660,12 @@ impl TabInput for LoadTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.test_type_selector.is_focused() {
-            self.test_type_selector.selected
-                >= self.test_type_selector.items.len().saturating_sub(1)
+            if self.test_type_selector.is_open() {
+                self.test_type_selector.selected
+                    >= self.test_type_selector.items.len().saturating_sub(1)
+            } else {
+                true
+            }
         } else if self.inputs.is_focused() {
             self.inputs.is_at_right_edge()
         } else {
