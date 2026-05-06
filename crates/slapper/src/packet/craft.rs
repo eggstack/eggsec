@@ -1,6 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+fn calculate_ipv4_checksum(header: &[u8; 20]) -> u16 {
+    let mut sum: u32 = 0;
+    for i in (0..20).step_by(2) {
+        let word = ((header[i] as u32) << 8) | (header[i + 1] as u32);
+        sum += word;
+    }
+    while sum > 0xffff {
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+    !sum as u16
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PacketBuilder {
     pub ethernet: Option<EthernetBuilder>,
@@ -165,7 +177,7 @@ pub struct Ipv4Builder {
 }
 
 impl Ipv4Builder {
-    fn to_bytes(&self) -> [u8; 20] {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = [0u8; 20];
         bytes[0] = 0x45;
         bytes[1] = self.flags << 5;
@@ -174,10 +186,11 @@ impl Ipv4Builder {
         bytes[6] = 0;
         bytes[8] = self.ttl;
         bytes[9] = self.protocol;
-        bytes[10..12].copy_from_slice(&0u16.to_be_bytes());
         bytes[12..16].copy_from_slice(&self.src.octets());
         bytes[16..20].copy_from_slice(&self.dst.octets());
-        bytes
+        let checksum = calculate_ipv4_checksum(&bytes);
+        bytes[10..12].copy_from_slice(&checksum.to_be_bytes());
+        bytes.to_vec()
     }
 }
 
