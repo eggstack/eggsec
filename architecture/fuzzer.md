@@ -28,7 +28,7 @@ Algorithms for identifying if a fuzzing attempt was successful.
 - **Error-based**: Looking for specific database errors or stack traces.
 - **Boolean-based**: Comparing responses for "True" vs "False" conditions.
 - **Time-based**: Detecting delays that indicate successful injection.
-- **Diffing (`diff.md`)**: Comparing the response of a fuzzed request against a baseline "clean" request.
+- **Diffing (`diff.rs`)**: Comparing the response of a fuzzed request against a baseline "clean" request.
 
 ### WAF Fingerprinting & Bypass (`waf_fingerprint.rs`)
 

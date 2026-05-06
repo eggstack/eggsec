@@ -367,16 +367,6 @@ mod tests {
         }
     }
 
-    fn make_test_payload() -> Payload {
-        Payload {
-            payload_type: PayloadType::Sqli,
-            payload: "test_payload".to_string(),
-            description: "test".to_string(),
-            severity: Severity::Medium,
-            tags: vec!["test".to_string()],
-        }
-    }
-
     #[test]
     fn test_fuzz_engine_execution_construction() {
         let args = make_fuzz_args("http://example.com");

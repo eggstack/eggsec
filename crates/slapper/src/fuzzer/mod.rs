@@ -1,7 +1,7 @@
-//! Security fuzzing engine with 22+ payload types
+//! Security fuzzing engine with 30 payload types
 //!
 //! This module provides a comprehensive fuzzing engine for discovering security vulnerabilities
-//! in web applications. It supports 22 different payload types including SQL injection, XSS,
+//! in web applications. It supports 30 different payload types including SQL injection, XSS,
 //! SSRF, path traversal, and more.
 //!
 //! ## Key Components
