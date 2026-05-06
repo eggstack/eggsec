@@ -596,6 +596,72 @@ mod tests {
             "Current tab should be visible after adjust_tab_scroll with stored width"
         );
     }
+
+    #[test]
+    fn test_next_tab_cycles_through_all_tabs() {
+        let all_tabs = Tab::all();
+        for target_tab in all_tabs {
+            let mut app = create_test_app();
+            app.current_tab = Tab::Recon;
+            let mut found = false;
+            for _ in 0..all_tabs.len() {
+                if app.current_tab == *target_tab {
+                    found = true;
+                    break;
+                }
+                app.next_tab();
+            }
+            assert!(found, "Tab {:?} should be reachable via next_tab()", target_tab);
+        }
+    }
+
+    #[test]
+    fn test_prev_tab_cycles_through_all_tabs() {
+        let all_tabs = Tab::all();
+        for target_tab in all_tabs {
+            let mut app = create_test_app();
+            app.current_tab = Tab::Dashboard;
+            let mut found = false;
+            for _ in 0..all_tabs.len() {
+                if app.current_tab == *target_tab {
+                    found = true;
+                    break;
+                }
+                app.prev_tab();
+            }
+            assert!(found, "Tab {:?} should be reachable via prev_tab()", target_tab);
+        }
+    }
+
+    #[test]
+    fn test_cluster_reachable_via_next_tab() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Scan;
+        let mut found = false;
+        for _ in 0..20 {
+            if app.current_tab == Tab::Cluster {
+                found = true;
+                break;
+            }
+            app.next_tab();
+        }
+        assert!(found, "Cluster tab should be reachable via next_tab()");
+    }
+
+    #[test]
+    fn test_cluster_reachable_via_prev_tab() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Load;
+        let mut found = false;
+        for _ in 0..20 {
+            if app.current_tab == Tab::Cluster {
+                found = true;
+                break;
+            }
+            app.prev_tab();
+        }
+        assert!(found, "Cluster tab should be reachable via prev_tab()");
+    }
 }
 
 #[cfg(test)]

@@ -425,3 +425,168 @@ impl RadioGroup {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn selector_focus_does_not_change_selection() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        let initial_selected = selector.selected;
+        selector.focus();
+        assert_eq!(
+            selector.selected, initial_selected,
+            "Focus should not change selection"
+        );
+        assert!(selector.expanded, "Focus should expand the selector (current behavior)");
+    }
+
+    #[test]
+    fn selector_toggle_changes_expanded_state() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        assert!(!selector.expanded, "Should start collapsed");
+        selector.toggle();
+        assert!(selector.expanded, "Toggle should expand");
+        selector.toggle();
+        assert!(!selector.expanded, "Toggle should collapse");
+    }
+
+    #[test]
+    fn selector_enter_toggles_expanded() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        assert!(!selector.expanded);
+        selector.handle_enter();
+        assert!(selector.expanded, "Enter should open closed selector");
+        selector.handle_enter();
+        assert!(!selector.expanded, "Enter should close open selector");
+    }
+
+    #[test]
+    fn selector_up_moves_selection_when_expanded() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        selector.selected = 2;
+        selector.handle_up();
+        assert_eq!(selector.selected, 1, "Up should move selection up");
+    }
+
+    #[test]
+    fn selector_down_moves_selection_when_expanded() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        selector.selected = 0;
+        selector.handle_down();
+        assert_eq!(selector.selected, 1, "Down should move selection down");
+    }
+
+    #[test]
+    fn selector_up_does_nothing_when_collapsed() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.selected = 2;
+        selector.handle_up();
+        assert_eq!(
+            selector.selected, 2,
+            "Up should not change selection when collapsed"
+        );
+    }
+
+    #[test]
+    fn selector_down_does_nothing_when_collapsed() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.selected = 0;
+        selector.handle_down();
+        assert_eq!(
+            selector.selected, 0,
+            "Down should not change selection when collapsed"
+        );
+    }
+
+    #[test]
+    fn selector_collapse_resets_dropdown_state() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        assert!(selector.expanded);
+        selector.collapse();
+        assert!(!selector.expanded);
+    }
+
+    #[test]
+    fn selector_next_wraps_around() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        selector.selected = 2;
+        selector.next();
+        assert_eq!(selector.selected, 0, "Next should wrap to first item");
+    }
+
+    #[test]
+    fn selector_prev_wraps_around() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        selector.selected = 0;
+        selector.prev();
+        assert_eq!(
+            selector.selected, 2,
+            "Prev should wrap to last item"
+        );
+    }
+
+    #[test]
+    fn selector_blur_closes_dropdown() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.focus();
+        assert!(selector.expanded);
+        selector.blur();
+        assert!(!selector.expanded, "Blur should close dropdown");
+        assert!(!selector.focused, "Blur should remove focus");
+    }
+
+    #[test]
+    fn selector_select_by_value_works() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.select_by_value("B");
+        assert_eq!(selector.selected, 1);
+        assert_eq!(selector.selected_value(), Some("B"));
+    }
+
+    #[test]
+    fn selector_select_out_of_range_is_ignored() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.select(99);
+        assert_eq!(selector.selected, 0, "Out of range selection should be ignored");
+    }
+
+    #[test]
+    fn selector_selected_item_returns_correct_item() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.select(1);
+        let item = selector.selected_item().unwrap();
+        assert_eq!(item.label, "B");
+        assert_eq!(item.value, "B");
+    }
+
+    #[test]
+    fn selector_empty_items_handles_gracefully() {
+        let mut selector = Selector::new("Test");
+        selector.next();
+        selector.prev();
+        assert_eq!(selector.selected, 0);
+    }
+
+    #[test]
+    fn selector_focus_last_selects_last_item() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.focus_last();
+        assert_eq!(selector.selected, 2, "focus_last should select last item");
+        assert!(selector.focused);
+    }
+
+    #[test]
+    fn selector_is_focused_returns_correct_state() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        assert!(!selector.is_focused());
+        selector.focus();
+        assert!(selector.is_focused());
+    }
+}

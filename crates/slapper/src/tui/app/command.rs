@@ -453,4 +453,117 @@ mod tests {
         assert_eq!(palette.selected_index, 0);
         assert_eq!(palette.scroll_offset, 0);
     }
+
+    #[test]
+    fn test_command_to_tab_cluster() {
+        use super::command_to_tab;
+        assert_eq!(command_to_tab("cluster"), Some(Tab::Cluster));
+    }
+
+    #[test]
+    fn test_command_to_tab_all_tabs_mappable() {
+        use super::command_to_tab;
+        let known_commands = [
+            ("recon", Tab::Recon),
+            ("load", Tab::Load),
+            ("ports", Tab::ScanPorts),
+            ("endpoints", Tab::ScanEndpoints),
+            ("fingerprint", Tab::Fingerprint),
+            ("fuzz", Tab::Fuzz),
+            ("waf", Tab::Waf),
+            ("wafstress", Tab::WafStress),
+            ("scan", Tab::Scan),
+            ("resume", Tab::Resume),
+            ("proxy", Tab::Proxy),
+            ("packet", Tab::Packet),
+            ("graphql", Tab::GraphQl),
+            ("oauth", Tab::OAuth),
+            ("cluster", Tab::Cluster),
+            ("stress", Tab::Stress),
+            ("report", Tab::Report),
+            ("history", Tab::History),
+            ("settings", Tab::Settings),
+            ("dashboard", Tab::Dashboard),
+        ];
+        for (cmd, expected_tab) in known_commands {
+            assert_eq!(
+                command_to_tab(cmd),
+                Some(expected_tab),
+                "command '{}' should map to {:?}",
+                cmd,
+                expected_tab
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "Known bug: cluster not handled in execute_command despite being in command_to_tab"]
+    fn test_execute_command_cluster_via_set_current_tab() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Dashboard;
+        app.execute_command("cluster");
+        assert_eq!(app.current_tab, Tab::Cluster, "execute_command('cluster') should switch to Cluster tab");
+    }
+
+    #[test]
+    #[ignore = "Known bug: cluster not in execute_command match despite being in command_to_tab"]
+    fn test_execute_command_navigation_cluster() {
+        let mut app = create_test_app();
+        app.current_tab = Tab::Fuzz;
+        app.execute_command("cluster");
+        assert_eq!(app.current_tab, Tab::Cluster);
+    }
+
+    #[test]
+    fn test_all_tabs_reachable_via_next_tab() {
+        let all_tabs = Tab::all();
+        for target_tab in all_tabs {
+            let mut app = create_test_app();
+            let mut current = app.current_tab;
+            let mut found = false;
+            for _ in 0..all_tabs.len() {
+                if current == *target_tab {
+                    found = true;
+                    break;
+                }
+                current = current.next();
+            }
+            assert!(found, "Tab {:?} should be reachable via next_tab()", target_tab);
+        }
+    }
+
+    #[test]
+    fn test_all_tabs_reachable_via_prev_tab() {
+        let all_tabs = Tab::all();
+        for target_tab in all_tabs {
+            let mut app = create_test_app();
+            let mut current = app.current_tab;
+            let mut found = false;
+            for _ in 0..all_tabs.len() {
+                if current == *target_tab {
+                    found = true;
+                    break;
+                }
+                current = current.prev();
+            }
+            assert!(found, "Tab {:?} should be reachable via prev_tab()", target_tab);
+        }
+    }
+
+    #[test]
+    fn test_tab_from_stable_id_cluster() {
+        assert_eq!(Tab::from_stable_id("cluster"), Some(Tab::Cluster));
+    }
+
+    #[test]
+    fn test_command_palette_cluster_visibility() {
+        let mut app = create_test_app();
+        app.toggle_command_palette();
+        let palette = app.get_command_palette().unwrap();
+        let cluster_results: Vec<_> = palette.results
+            .iter()
+            .filter(|r| r.command == "cluster")
+            .collect();
+        assert!(!cluster_results.is_empty(), "Command palette should contain 'cluster' command");
+    }
 }
