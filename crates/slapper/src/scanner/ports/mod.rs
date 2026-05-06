@@ -621,10 +621,12 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         results.truncate(MAX_SCAN_RESULTS);
     }
 
+    let open_ports: Vec<PortResult> = results.into_iter().filter(|p| p.status == "open").collect();
+
     Ok(PortScanResults {
         host: host.to_string(),
         ports_scanned: ports_count as u32,
-        open_ports: results,
+        open_ports,
         duration_ms: start.elapsed().as_millis() as u64,
         spoof_stats: None,
     })
