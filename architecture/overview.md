@@ -44,5 +44,70 @@ Slapper is a high-performance, async-first security testing toolkit built in Rus
 - **Security-Focused**: Built-in WAF bypass, payload generation, and threat hunting features.
 - **Standardized**: Support for industry-standard formats like SARIF and SPDX.
 
+## Module Map
+
+| Module | Purpose |
+|--------|---------|
+| `cli/` | Clap-based CLI argument parsing, defines `Commands` enum and per-command arg structs |
+| `commands/` | Command dispatch (`handle_command()`), per-command handlers |
+| `config/` | TOML/YAML config loading, scope enforcement (`SlapperConfig`, `Scope`) |
+| `constants/` | Centralized magic numbers and default values |
+| `scanner/` | TCP port scanning, endpoint discovery, service fingerprinting, UDP fingerprinting |
+| `fuzzer/` | Fuzz engine with 30 payload types, mutation, grammar, diffing, session handling |
+| `waf/` | WAF detection (30+ products), bypass techniques (headers, smuggling, evasion) |
+| `recon/` | Passive recon: DNS, WHOIS, SSL, subdomain enum, tech detection, CVE mapping, CORS, cloud |
+| `loadtest/` | HTTP load testing with HDR histogram metrics |
+| `pipeline/` | Stage-based chained assessment, session resume |
+| `tui/` | Interactive terminal UI (ratatui + crossterm) |
+| `output/` | Report generation: JSON, HTML, CSV, SARIF, JUnit |
+| `distributed/` | Worker/coordinator cluster, task queue, TLS |
+| `proxy/` | SOCKS/HTTP/Tor proxy pool with health checks |
+| `stress/` | SYN/UDP/HTTP/ICMP flood testing (feature-gated) |
+| `packet/` | Packet capture (libpcap), crafting (pnet), hexdump, traceroute |
+| `notify/` | Webhook notifications (Slack, Discord, Teams) |
+| `tool/` | REST API / MCP / gRPC integration layer (feature-gated) |
+| `utils/` | HTTP client creation, URL parsing, stealth, rate limiting, scope checking |
+| `error/` | `SlapperError` with `thiserror`, `From` impls for common error types |
+
+## Command Flow
+
+```
+main.rs
+  → Cli::parse()
+  → load_config()
+  → load_scope()
+  → CommandContext::new()
+  → handle_command()
+    → handler (e.g., handle_fuzz)
+      → scope check
+      → module::run_cli(args, config)
+        → e.g., FuzzEngine::new(args).run()
+```
+
+## Key Design Patterns
+
+1. **Feature-gated compilation** — `#[cfg(feature = "...")]` gates modules, commands, and dependencies
+2. **Consistent command pattern** — Every command: `handler(ctx, args) → module::run_cli(args, config)`
+3. **Async-first** — Tokio runtime throughout, `async_trait` for tool interfaces
+4. **Builder pattern** — `Pipeline::from_args()`, `FuzzEngine::new()`, `SarifBuilder`
+5. **Trait-based tool abstraction** — `SecurityTool` trait enables polymorphic registration for API/MCP
+6. **Scope enforcement** — Configurable `Scope` with allowed/excluded targets, CIDR matching
+7. **Session persistence** — Scans can be saved/resumed via JSON session files
+8. **Centralized constants** — `constants.rs` eliminates magic numbers
+
+## Testing
+
+- **19 integration test files** in `crates/slapper/tests/`
+- **WireMock** for HTTP mock servers (`tests/common/wiremock_helpers.rs`)
+- **Criterion** for benchmarks, **proptest** for property-based tests
+- Inline `#[cfg(test)]` modules for unit tests
+- NSE tests require `feature = "nse"`, stress tests require `feature = "stress-testing"`
+
+## Adding New Components
+
+- **[Adding a New Command](cli_commands.md)** — Add variant to `Commands` enum, create arg struct, add handler
+- **[Adding a New Fuzz Payload Type](fuzzer.md)** — Create payload file, add variant to `PayloadType`, register
+- **[Adding a WAF Signature](waf.md)** — Add signature entry, bypass headers if needed
+
 ---
 *This overview serves as an index for detailed component documentation.*
