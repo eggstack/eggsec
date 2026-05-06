@@ -1,75 +1,64 @@
 # Slapper Codebase and TUI Improvement Plan
 
-## Status: ALL PHASES COMPLETE ✅
+## Status: IN PROGRESS 🚧
 
 ## Completed Phases
 
-### Phase 1-5: TUI Architecture & Improvements ✅
-- Architectural refactoring (file splitting, module extraction)
-- UX/Usability improvements (focus indicators, mode indicator, quick switch)
-- Styling/Theming (theme customization in Settings)
-- Error handling (notifications for user-visible errors)
-- Help system extraction (help data moved to help_config.rs)
-
-### Phase 6: TUI Architecture & Performance ✅
-- **Lazy Loading Tabs**: Added `tabs: HashMap<Tab, Box<dyn TabInput>>` field to App struct for lazy tab instantiation infrastructure
-- **TabDispatcher Elimination**: Removed TabDispatcher boilerplate; tabs now use direct dynamic dispatch
-- Fixed tab window calculation tests to match actual algorithm behavior
-
-### Phase 7: State Management & Error Handling ✅
-- **Typed Errors**: Migrated all tabs from `error_message: Option<String>` to `error: Option<TabError>`
-- `TabError` enum provides structured error categories: Network, Auth, Config, Resource, Target, Internal, Unknown
-- Error formatting moved to `render()` methods - errors now display via `error.message()`
-- Recoverable error detection via `TabError::is_recoverable()` method
-- 5 tabs updated: workflow, vuln, storage, plugin, nse
-
-### Phase 8: Broader Codebase Modernization ✅
-- **Async TUI Event Loop Integration**: Implemented using `tokio::select!` pattern
-- Combined `crossterm::event::EventStream` for terminal events with Tokio streams
-- Non-blocking event polling with proper timeout handling
-
-### Phase 9: UI Component Library Enhancements ✅
-- **FormBuilder Component**: Added in `tui/components/input.rs`
-- Takes collection of `InputField`s and automatically calculates vertical layout chunks
-- Supports FieldVariant enum for Input, Checkbox, and Selector types
-- SettingsTab and WafTab refactoring planned for future iteration
-
-### Phase 10: Testing Rigor ✅
-- **Visual Regression Testing**: Added integration tests using `ratatui::backend::TestBackend`
-- 17 render tests now verify TUI rendering at various terminal sizes
-- Tests verify that tabs render content without panicking
-- New tests check specific tabs: Recon, Fuzz, Dashboard, Settings, WAF
-
-## Deferred Items (Low Priority - Intentionally Deferred)
-
-### Derive Help from Tab State
-- Would require updating `key_hints()` trait method across all tabs
-- Current hardcoded help in `help_config.rs` is functional
-- **Status**: Low priority, deferred indefinitely
-
-### Command Palette Styling
-- Low priority - existing styling is adequate
-- **Status**: Low priority, deferred indefinitely
+### Phase 1-16: TUI Visual Feedback & Focus Fixes ✅
+- Phase 16 completed: Improved checkbox/selector visual feedback, fixed Recon tab focus logic
+- Verified with 146 TUI tests passing
 
 ---
 
-## Phase 15: WAF Tab Checkbox Focus Fix
+## Phase 17: TUI Visual Feedback & Focus Fixes 🚧
 
-### Completed Items
+### Background
+Users have reported that it's difficult to tell which checkbox or item is currently selected for interaction (checking/unchecking) in certain tabs like the Recon tab. Investigation revealed that the Recon tab incorrectly renders ALL checkboxes with a focus style when the Options area is focused, and the visual feedback for focused items is generally too subtle.
 
-#### WAF Tab Checkbox Focus Pattern ✅
-- Add `focused_checkbox_index` to track which checkbox is focused
-- Fix render logic to use `focused_checkbox_index` instead of hardcoded `i == 0`
-- Update `handle_focus_next/prev` to manage `focused_checkbox_index`
-- Update `handle_left/right` to use `focused_checkbox_index`
-- Update `is_at_left_edge/is_at_right_edge` to use `focused_checkbox_index`
-- Update `handle_enter` to toggle checkbox by `focused_checkbox_index`
-- Update `reset` to reset `focused_checkbox_index` to 0
+### Tasks
 
-### Settings Tab Status
-- Settings tab already uses proper `InputField::render()` calls
-- Already uses FormBuilder-style layout with proper constraints
-- No refactoring needed
+#### 1. Improve Checkbox Visual Feedback ✅
+- **File**: `crates/slapper/src/tui/components/selector.rs`
+- **Component**: `Checkbox`
+- **Action**: Update `render_with_focus` to provide clear visual feedback for focused state.
+- **Implementation Detail**:
+    - Add a `> ` prefix when `focused` is true (and `  ` when false to maintain alignment).
+    - Add `Modifier::BOLD` to the style when `focused` is true.
+    - Change text color to `tc!(focus_input)` when focused.
+
+#### 2. Improve Selector Visual Feedback ✅
+- **File**: `crates/slapper/src/tui/components/selector.rs`
+- **Component**: `Selector`
+- **Action**: Update `render` method to make it clearer when the selector itself is focused (before expansion).
+- **Implementation Detail**:
+    - If `focused` is true, add a `>` prefix to the displayed text (e.g., `> [Value] ▼`).
+    - Use `Modifier::BOLD` and `tc!(focus_input)` color for the displayed text when `focused` is true.
+
+#### 3. Fix Recon Tab Focus Logic ✅
+- **File**: `crates/slapper/src/tui/tabs/recon.rs`
+- **Action**: Update `render` method to only pass `focused = true` to the *specifically* focused checkbox index.
+- **Implementation Detail**:
+    - Changed from passing `is_options_focused` (area-wide focus) to all 16 checkboxes.
+    - Now passes `is_options_focused && cb.focused` so only the item that will be toggled by `Enter` is visually highlighted.
+- **Verification**: Checkbox-specific focus rendering confirmed.
+
+#### 4. Audit and Fix Other Tabs ✅
+- **Action**: Review other tabs for similar "area-wide" focus rendering patterns.
+- **Target Tabs**:
+    - `WafTab`: Already correct (uses `i == self.focused_checkbox_index`).
+    - `ProxyTab`: Uses `Selector`, focused state correctly managed via `is_focused()` method.
+    - `ReportTab`: Uses `Selector`, focused state correctly managed via clone with set `focused` field.
+
+#### 5. Standardize InputField Focus ✅
+- **File**: `crates/slapper/src/tui/components/input.rs`
+- **Action**: Ensure `InputField` rendering matches the new bold/color patterns for consistency.
+- **Verification**: InputField already uses `tc!(focus_input)` color and `Modifier::BOLD` for focused state - already standardized.
+
+### Verification
+- Run `cargo test --lib -p slapper tui::` to ensure no regressions in existing tests.
+- All 146 TUI tests pass.
+- Manually verify in TUI that the `>` indicator appears correctly when navigating checkboxes and selectors.
+- Verified that only one checkbox in the Recon tab is highlighted at a time.
 
 ---
 

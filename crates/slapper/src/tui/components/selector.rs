@@ -242,7 +242,7 @@ impl Selector {
     pub fn handle_backspace(&mut self) {}
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
-        let style = if self.focused {
+        let border_style = if self.focused {
             Style::default().fg(tc!(border_focused))
         } else {
             Style::default().fg(tc!(border))
@@ -251,7 +251,7 @@ impl Selector {
         let block = Block::default()
             .title(self.label.as_str())
             .borders(Borders::ALL)
-            .border_style(style);
+            .border_style(border_style);
 
         let selected_text = self
             .items
@@ -259,13 +259,23 @@ impl Selector {
             .map(|i| i.label.as_str())
             .unwrap_or("-");
 
-        let text = if self.expanded {
-            format!("{} ▲", selected_text)
+        let prefix = if self.focused { ">" } else { "" };
+        let arrow = if self.expanded { "▲" } else { "▼" };
+        let text = if self.focused {
+            format!("{} {} {}", prefix, selected_text, arrow)
         } else {
-            format!("{} ▼", selected_text)
+            format!("{} {}", selected_text, arrow)
         };
 
-        let paragraph = Paragraph::new(text).block(block);
+        let text_style = if self.focused {
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .fg(tc!(focus_input))
+        } else {
+            Style::default().fg(tc!(text))
+        };
+
+        let paragraph = Paragraph::new(text).style(text_style).block(block);
         f.render_widget(paragraph, area);
     }
 }
@@ -300,14 +310,17 @@ impl Checkbox {
     }
 
     pub fn render_with_focus(&self, focused: bool, f: &mut Frame, area: Rect) {
+        let check = if self.checked { "[✓]" } else { "[ ]" };
+        let prefix = if focused { "> " } else { "  " };
+        let text = format!("{}{}{}", prefix, check, self.label);
+
         let style = if focused {
-            Style::default().fg(tc!(border_focused))
+            Style::default()
+                .fg(tc!(focus_input))
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(tc!(border))
         };
-
-        let check = if self.checked { "[✓]" } else { "[ ]" };
-        let text = format!("{} {}", check, self.label);
 
         let paragraph = Paragraph::new(text).style(style);
         f.render_widget(paragraph, area);

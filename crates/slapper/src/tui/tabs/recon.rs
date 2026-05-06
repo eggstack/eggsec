@@ -397,11 +397,11 @@ impl TabRender for ReconTab {
 
         let is_options_focused = self.focus_area == ReconFocusArea::Options;
         for (i, cb) in self.option_checkboxes.iter().enumerate().take(8) {
-            cb.render_with_focus(is_options_focused, f, left_options[i]);
+            cb.render_with_focus(is_options_focused && cb.focused, f, left_options[i]);
         }
 
         for (i, cb) in self.option_checkboxes.iter().enumerate().skip(8) {
-            cb.render_with_focus(is_options_focused, f, right_options[i - 8]);
+            cb.render_with_focus(is_options_focused && cb.focused, f, right_options[i - 8]);
         }
 
         if self.state == AppState::Running {
