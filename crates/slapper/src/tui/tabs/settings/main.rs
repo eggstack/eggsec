@@ -160,6 +160,11 @@ impl SettingsTab {
     pub fn sync_component_focus(&mut self) {
         let is_detail = self.focus_area == SettingsFocusArea::SectionDetail;
         let idx = self.detail_focus_index;
+        let keep_proxy_rotation_open =
+            is_detail && self.current_section == SettingsSection::Proxy && idx == 2;
+        let keep_severity_open =
+            is_detail && self.current_section == SettingsSection::Notifications && idx == 6;
+        let keep_accent_open = is_detail && self.current_section == SettingsSection::Theme && idx == 1;
 
         // Reset all
         self.http_inputs.blur();
@@ -178,6 +183,15 @@ impl SettingsTab {
         self.severity_selector.focused = false;
         self.dark_mode.focused = false;
         self.accent_color.focused = false;
+        if !keep_proxy_rotation_open {
+            self.proxy_rotation_selector.close();
+        }
+        if !keep_severity_open {
+            self.severity_selector.close();
+        }
+        if !keep_accent_open {
+            self.accent_color.close();
+        }
 
         if !is_detail {
             return;

@@ -220,6 +220,18 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.proxy_rotation_selector.is_open() {
+            self.proxy_rotation_selector.cancel();
+            return;
+        }
+        if self.severity_selector.is_open() {
+            self.severity_selector.cancel();
+            return;
+        }
+        if self.accent_color.is_open() {
+            self.accent_color.cancel();
+            return;
+        }
         self.focus_area = SettingsFocusArea::SectionList;
         self.sync_component_focus();
     }
@@ -246,6 +258,18 @@ impl TabInput for SettingsTab {
             self.detail_focus_index = 0;
             self.sync_component_focus();
         } else {
+            if self.proxy_rotation_selector.is_open() {
+                self.proxy_rotation_selector.move_prev();
+                return;
+            }
+            if self.severity_selector.is_open() {
+                self.severity_selector.move_prev();
+                return;
+            }
+            if self.accent_color.is_open() {
+                self.accent_color.move_prev();
+                return;
+            }
             // In detail view, up moves between fields
             if self.detail_focus_index > 0 {
                 self.detail_focus_index -= 1;
@@ -278,6 +302,18 @@ impl TabInput for SettingsTab {
             self.detail_focus_index = 0;
             self.sync_component_focus();
         } else {
+            if self.proxy_rotation_selector.is_open() {
+                self.proxy_rotation_selector.move_next();
+                return;
+            }
+            if self.severity_selector.is_open() {
+                self.severity_selector.move_next();
+                return;
+            }
+            if self.accent_color.is_open() {
+                self.accent_color.move_next();
+                return;
+            }
             // In detail view, down moves between fields
             let max = self.max_focus_index();
             if self.detail_focus_index < max {

@@ -888,7 +888,9 @@ pub trait TabInput: TabState {
     fn handle_focus_prev(&mut self);
     fn handle_char(&mut self, c: char);
     fn handle_backspace(&mut self);
-    fn handle_delete(&mut self) {}
+    fn handle_delete(&mut self) {
+        self.handle_backspace();
+    }
     fn handle_enter(&mut self);
     fn handle_escape(&mut self);
     fn handle_up(&mut self);

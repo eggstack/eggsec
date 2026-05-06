@@ -592,7 +592,7 @@ impl TabInput for FuzzTab {
             FuzzFocusArea::TargetSelector => FuzzFocusArea::MutationCheckbox,
             FuzzFocusArea::MutationCheckbox => {
                 // After MutationCheckbox, go to Results (as per plan)
-                self.inputs.focus(0);
+                self.inputs.blur();
                 FuzzFocusArea::Results
             }
             FuzzFocusArea::Results => {
@@ -617,7 +617,7 @@ impl TabInput for FuzzTab {
             FuzzFocusArea::MutationCheckbox => FuzzFocusArea::TargetSelector,
             FuzzFocusArea::Results => {
                 // From Results, go back to MutationCheckbox
-                self.inputs.focus(0);
+                self.inputs.blur();
                 FuzzFocusArea::MutationCheckbox
             }
         };
@@ -713,6 +713,15 @@ impl TabInput for FuzzTab {
             return;
         }
 
+        if self.focus_area == FuzzFocusArea::TargetSelector {
+            if self.target_selector.is_open() {
+                let _ = self.target_selector.confirm();
+            } else {
+                self.target_selector.open();
+            }
+            return;
+        }
+
         if self.focus_area == FuzzFocusArea::MutationCheckbox {
             self.mutation_checkbox.toggle();
             return;
@@ -734,9 +743,14 @@ impl TabInput for FuzzTab {
             self.mode_selector.cancel();
             return;
         }
+        if self.target_selector.is_open() {
+            self.target_selector.cancel();
+            return;
+        }
         self.inputs.blur();
         self.payload_selector.collapse();
         self.mode_selector.collapse();
+        self.target_selector.collapse();
     }
 
     fn handle_up(&mut self) {
@@ -744,6 +758,8 @@ impl TabInput for FuzzTab {
             self.payload_selector.move_prev();
         } else if self.mode_selector.is_open() {
             self.mode_selector.move_prev();
+        } else if self.target_selector.is_open() {
+            self.target_selector.move_prev();
         } else if self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.focus_prev();
         } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
@@ -758,6 +774,8 @@ impl TabInput for FuzzTab {
             self.payload_selector.move_next();
         } else if self.mode_selector.is_open() {
             self.mode_selector.move_next();
+        } else if self.target_selector.is_open() {
+            self.target_selector.move_next();
         } else if self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.focus_next();
         } else {
