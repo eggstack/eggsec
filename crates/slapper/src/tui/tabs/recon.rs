@@ -20,6 +20,7 @@ pub struct ReconTab {
     pub options: ReconOptions,
     pub option_checkboxes: Vec<Checkbox>,
     pub focus_area: ReconFocusArea,
+    pub focused_checkbox_index: usize,
     pub error: Option<TabError>,
 }
 
@@ -84,6 +85,7 @@ impl ReconTab {
             options: ReconOptions::default(),
             option_checkboxes,
             focus_area: ReconFocusArea::Inputs,
+            focused_checkbox_index: 0,
             error: None,
         }
     }
@@ -321,6 +323,8 @@ impl TabState for ReconTab {
         self.progress.current = 0;
         self.results_view.clear();
         self.error = None;
+        self.focus_area = ReconFocusArea::Inputs;
+        self.focused_checkbox_index = 0;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -385,23 +389,27 @@ impl TabRender for ReconTab {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(options_area);
 
+        // Use Min(1) instead of Length(2) to allow rows to shrink when terminal is small
+        // Length(2) requires exactly 2, but Min(1) allows flexible sizing while ensuring
+        // each checkbox row is at least 1 height (visible)
         let left_options = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Length(2); 8])
+            .constraints(vec![Constraint::Min(1); 8])
             .split(option_chunks[0]);
 
         let right_options = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Length(2); 8])
+            .constraints(vec![Constraint::Min(1); 8])
             .split(option_chunks[1]);
 
         let is_options_focused = self.focus_area == ReconFocusArea::Options;
+
         for (i, cb) in self.option_checkboxes.iter().enumerate().take(8) {
-            cb.render_with_focus(is_options_focused && cb.focused, f, left_options[i]);
+            cb.render_with_focus(is_options_focused && i == self.focused_checkbox_index, f, left_options[i]);
         }
 
         for (i, cb) in self.option_checkboxes.iter().enumerate().skip(8) {
-            cb.render_with_focus(is_options_focused && cb.focused, f, right_options[i - 8]);
+            cb.render_with_focus(is_options_focused && i == self.focused_checkbox_index, f, right_options[i - 8]);
         }
 
         if self.state == AppState::Running {
@@ -439,17 +447,10 @@ impl TabInput for ReconTab {
         self.focus_area = match self.focus_area {
             ReconFocusArea::Inputs => {
                 self.inputs.blur();
-                self.option_checkboxes
-                    .iter_mut()
-                    .for_each(|cb| cb.focused = false);
-                self.option_checkboxes[0].focused = true;
+                self.focused_checkbox_index = 0;
                 ReconFocusArea::Options
             }
             ReconFocusArea::Options => {
-                // Clear checkbox focus when leaving Options
-                self.option_checkboxes
-                    .iter_mut()
-                    .for_each(|cb| cb.focused = false);
                 ReconFocusArea::Results
             }
             ReconFocusArea::Results => {
@@ -462,7 +463,6 @@ impl TabInput for ReconTab {
     fn handle_focus_prev(&mut self) {
         self.focus_area = match self.focus_area {
             ReconFocusArea::Inputs => {
-                // Blur inputs when going to Results
                 self.inputs.blur();
                 ReconFocusArea::Results
             }
@@ -471,10 +471,7 @@ impl TabInput for ReconTab {
                 ReconFocusArea::Inputs
             }
             ReconFocusArea::Results => {
-                self.option_checkboxes
-                    .iter_mut()
-                    .for_each(|cb| cb.focused = false);
-                self.option_checkboxes[0].focused = true;
+                self.focused_checkbox_index = 0;
                 ReconFocusArea::Options
             }
         };
@@ -552,12 +549,7 @@ impl TabInput for ReconTab {
         }
 
         if self.focus_area == ReconFocusArea::Options {
-            for cb in &mut self.option_checkboxes {
-                if cb.focused {
-                    cb.toggle();
-                    break;
-                }
-            }
+            self.option_checkboxes[self.focused_checkbox_index].toggle();
             return;
         }
 
@@ -574,18 +566,10 @@ impl TabInput for ReconTab {
 
     fn handle_up(&mut self) {
         if self.focus_area == ReconFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx == 0 {
-                    if let Some(last) = self.option_checkboxes.last_mut() {
-                        last.focused = true;
-                    }
-                } else {
-                    self.option_checkboxes[idx - 1].focused = true;
-                }
-                self.option_checkboxes[idx].focused = false;
-            } else if let Some(first) = self.option_checkboxes.first_mut() {
-                first.focused = true;
+            if self.focused_checkbox_index == 0 {
+                self.focused_checkbox_index = self.option_checkboxes.len() - 1;
+            } else {
+                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
             }
         } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
             self.scroll_results_up();
@@ -596,16 +580,10 @@ impl TabInput for ReconTab {
 
     fn handle_down(&mut self) {
         if self.focus_area == ReconFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx == self.option_checkboxes.len() - 1 {
-                    self.option_checkboxes[0].focused = true;
-                } else {
-                    self.option_checkboxes[idx + 1].focused = true;
-                }
-                self.option_checkboxes[idx].focused = false;
+            if self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
+                self.focused_checkbox_index = 0;
             } else {
-                self.option_checkboxes[0].focused = true;
+                self.focused_checkbox_index += 1;
             }
         } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
             self.scroll_results_down();
@@ -618,17 +596,12 @@ impl TabInput for ReconTab {
         if self.focus_area == ReconFocusArea::Inputs {
             self.inputs.move_left()
         } else if self.focus_area == ReconFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx == 0 {
-                    return false;
-                } else {
-                    self.option_checkboxes[idx].focused = false;
-                    self.option_checkboxes[idx - 1].focused = true;
-                    return true;
-                }
+            if self.focused_checkbox_index == 0 {
+                false
+            } else {
+                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                true
             }
-            true
         } else {
             true
         }
@@ -638,17 +611,12 @@ impl TabInput for ReconTab {
         if self.focus_area == ReconFocusArea::Inputs {
             self.inputs.move_right()
         } else if self.focus_area == ReconFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            if let Some(idx) = focused_idx {
-                if idx >= self.option_checkboxes.len() - 1 {
-                    return false;
-                } else {
-                    self.option_checkboxes[idx].focused = false;
-                    self.option_checkboxes[idx + 1].focused = true;
-                    return true;
-                }
+            if self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
+                false
+            } else {
+                self.focused_checkbox_index += 1;
+                true
             }
-            true
         } else {
             true
         }
@@ -658,8 +626,7 @@ impl TabInput for ReconTab {
         if self.focus_area == ReconFocusArea::Inputs {
             self.inputs.is_at_left_edge()
         } else if self.focus_area == ReconFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            focused_idx == Some(0)
+            self.focused_checkbox_index == 0
         } else if self.focus_area == ReconFocusArea::Results {
             self.results_view.is_at_left_edge()
         } else {
@@ -671,8 +638,7 @@ impl TabInput for ReconTab {
         if self.focus_area == ReconFocusArea::Inputs {
             self.inputs.is_at_right_edge()
         } else if self.focus_area == ReconFocusArea::Options {
-            let focused_idx = self.option_checkboxes.iter().position(|cb| cb.focused);
-            focused_idx == Some(self.option_checkboxes.len() - 1)
+            self.focused_checkbox_index == self.option_checkboxes.len() - 1
         } else if self.focus_area == ReconFocusArea::Results {
             self.results_view.is_at_right_edge()
         } else {
@@ -694,52 +660,110 @@ mod tests {
     }
 
     #[test]
-    fn test_focus_next_clears_checkbox_focus() {
+    fn test_focus_next_sets_checkbox_index() {
         let mut tab = create_test_tab();
-        // Start at Inputs, move to Options
-        tab.focus_area = ReconFocusArea::Inputs;
+        assert_eq!(tab.focus_area, ReconFocusArea::Inputs);
+        assert_eq!(tab.focused_checkbox_index, 0);
+
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, ReconFocusArea::Options);
+        assert_eq!(tab.focused_checkbox_index, 0);
 
-        // Set a checkbox as focused
-        if let Some(cb) = tab.option_checkboxes.get_mut(0) {
-            cb.focused = true;
-        }
-
-        // Move to Results - should clear checkbox focus
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, ReconFocusArea::Results);
-
-        // Verify checkboxes are cleared
-        for cb in &tab.option_checkboxes {
-            assert!(
-                !cb.focused,
-                "Checkbox focus should be cleared when leaving Options"
-            );
-        }
     }
 
     #[test]
-    fn test_focus_prev_from_inputs_blurs_inputs() {
+    fn test_focus_prev_restores_checkbox_index() {
         let mut tab = create_test_tab();
-        // Set focus to Inputs
-        tab.focus_area = ReconFocusArea::Inputs;
-        tab.inputs.focus(0);
-        assert!(tab.inputs.is_focused());
+        tab.focus_area = ReconFocusArea::Results;
+        tab.focused_checkbox_index = 5;
 
-        // Move to Results - should blur inputs
         tab.handle_focus_prev();
-        assert_eq!(tab.focus_area, ReconFocusArea::Results);
-        assert!(
-            !tab.inputs.is_focused(),
-            "Inputs should be blurred when leaving Inputs"
-        );
+        assert_eq!(tab.focus_area, ReconFocusArea::Options);
+        assert_eq!(tab.focused_checkbox_index, 0);
+    }
+
+    #[test]
+    fn test_handle_up_wraps_to_last() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ReconFocusArea::Options;
+        tab.focused_checkbox_index = 0;
+
+        tab.handle_up();
+        assert_eq!(tab.focused_checkbox_index, tab.option_checkboxes.len() - 1);
+    }
+
+    #[test]
+    fn test_handle_down_wraps_to_first() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ReconFocusArea::Options;
+        tab.focused_checkbox_index = tab.option_checkboxes.len() - 1;
+
+        tab.handle_down();
+        assert_eq!(tab.focused_checkbox_index, 0);
+    }
+
+    #[test]
+    fn test_handle_enter_toggles_checkbox() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ReconFocusArea::Options;
+        tab.focused_checkbox_index = 0;
+        assert!(!tab.option_checkboxes[0].checked);
+
+        tab.handle_enter();
+        assert!(tab.option_checkboxes[0].checked);
+
+        tab.handle_enter();
+        assert!(!tab.option_checkboxes[0].checked);
+    }
+
+    #[test]
+    fn test_cycling_with_j_does_not_corrupt_checkbox_state() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ReconFocusArea::Options;
+        tab.focused_checkbox_index = 0;
+        tab.option_checkboxes[0].checked = true;
+
+        for i in 0..20 {
+            tab.handle_down();
+            assert_eq!(
+                tab.focused_checkbox_index,
+                (i + 1) % 16,
+                "After {} downs, focus should be at {} not corrupted",
+                i + 1,
+                (i + 1) % 16
+            );
+        }
+
+        assert!(tab.option_checkboxes[0].checked, "Checkbox 0 should still be checked");
+    }
+
+    #[test]
+    fn test_cycling_with_k_does_not_corrupt_checkbox_state() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ReconFocusArea::Options;
+        tab.focused_checkbox_index = 15;
+        tab.option_checkboxes[15].checked = true;
+
+        for i in 0..20 {
+            tab.handle_up();
+            let expected = (15 + 16 - (i + 1) % 16) % 16;
+            assert_eq!(
+                tab.focused_checkbox_index,
+                expected,
+                "After {} ups, focus should be at {} not corrupted",
+                i + 1,
+                expected
+            );
+        }
+
+        assert!(tab.option_checkboxes[15].checked, "Checkbox 15 should still be checked");
     }
 
     #[test]
     fn test_focus_cycle_completes() {
         let mut tab = create_test_tab();
-        // Follow the focus cycle
         assert_eq!(tab.focus_area, ReconFocusArea::Inputs);
 
         tab.handle_focus_next();
