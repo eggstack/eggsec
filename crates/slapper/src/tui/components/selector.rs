@@ -249,6 +249,50 @@ impl Selector {
     pub fn handle_char(&mut self, _c: char) {}
     pub fn handle_backspace(&mut self) {}
 
+    pub fn is_open(&self) -> bool {
+        self.expanded
+    }
+
+    pub fn open(&mut self) {
+        self.expanded = true;
+    }
+
+    pub fn close(&mut self) {
+        self.expanded = false;
+        *self.dropdown_state.borrow_mut() = None;
+    }
+
+    pub fn confirm(&mut self) -> Option<&SelectorItem> {
+        if self.expanded {
+            self.expanded = false;
+            *self.dropdown_state.borrow_mut() = None;
+            self.items.get(self.selected)
+        } else {
+            None
+        }
+    }
+
+    pub fn cancel(&mut self) {
+        self.expanded = false;
+        *self.dropdown_state.borrow_mut() = None;
+    }
+
+    pub fn move_next(&mut self) {
+        if self.expanded && !self.items.is_empty() {
+            self.selected = (self.selected + 1) % self.items.len();
+        }
+    }
+
+    pub fn move_prev(&mut self) {
+        if self.expanded && !self.items.is_empty() {
+            self.selected = if self.selected == 0 {
+                self.items.len() - 1
+            } else {
+                self.selected - 1
+            };
+        }
+    }
+
     pub fn render(&self, f: &mut Frame, area: Rect) {
         let border_style = if self.focused {
             Style::default().fg(tc!(border_focused))
@@ -588,5 +632,77 @@ mod tests {
         assert!(!selector.is_focused());
         selector.focus();
         assert!(selector.is_focused());
+    }
+
+    #[test]
+    fn selector_is_open_returns_correct_state() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        assert!(!selector.is_open(), "Should start closed");
+        selector.open();
+        assert!(selector.is_open(), "After open() should be open");
+        selector.close();
+        assert!(!selector.is_open(), "After close() should be closed");
+    }
+
+    #[test]
+    fn selector_confirm_returns_item_when_open() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        selector.selected = 1;
+        let item = selector.confirm();
+        assert!(item.is_some(), "confirm() should return item when open");
+        assert_eq!(item.unwrap().value, "B");
+        assert!(!selector.is_open(), "confirm() should close after returning item");
+    }
+
+    #[test]
+    fn selector_confirm_returns_none_when_closed() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        let item = selector.confirm();
+        assert!(item.is_none(), "confirm() should return None when closed");
+    }
+
+    #[test]
+    fn selector_cancel_closes_without_changing_selection() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        selector.selected = 2;
+        selector.cancel();
+        assert!(!selector.is_open(), "cancel() should close");
+        assert_eq!(selector.selected, 2, "cancel() should not change selection");
+    }
+
+    #[test]
+    fn selector_move_next_works() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        selector.selected = 0;
+        selector.move_next();
+        assert_eq!(selector.selected, 1);
+    }
+
+    #[test]
+    fn selector_move_prev_works() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.expand();
+        selector.selected = 1;
+        selector.move_prev();
+        assert_eq!(selector.selected, 0);
+    }
+
+    #[test]
+    fn selector_move_next_does_nothing_when_closed() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.selected = 0;
+        selector.move_next();
+        assert_eq!(selector.selected, 0, "move_next should do nothing when closed");
+    }
+
+    #[test]
+    fn selector_move_prev_does_nothing_when_closed() {
+        let mut selector = Selector::new("Test").simple_items(vec!["A", "B", "C"]);
+        selector.selected = 1;
+        selector.move_prev();
+        assert_eq!(selector.selected, 1, "move_prev should do nothing when closed");
     }
 }
