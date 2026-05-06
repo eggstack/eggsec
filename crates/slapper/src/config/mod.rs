@@ -27,13 +27,6 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 //!
-//! ### Environment Variables
-//!
-//! Configuration can be overridden with environment variables prefixed with `SLAPPER_`:
-//! - `SLAPPER_HTTP_TIMEOUT` - HTTP timeout in seconds
-//! - `SLAPPER_SCAN_CONCURRENCY` - Default concurrency
-//! - `SLAPPER_LOG_LEVEL` - Logging level (trace, debug, info, warn, error)
-//!
 //! ## Configuration File
 //!
 //! The default configuration file is located at:
