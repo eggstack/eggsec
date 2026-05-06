@@ -5,6 +5,7 @@
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -37,7 +38,10 @@ pub struct TemplateSigner {
 
 impl TemplateSigner {
     pub fn new(signer_info: SignerInfo) -> Result<Self> {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let mut rng = OsRng;
+        let mut secret = [0u8; 32];
+        rng.fill_bytes(&mut secret);
+        let signing_key = SigningKey::from_bytes(&secret);
         let public_key = signing_key.verifying_key();
 
         Ok(Self {
@@ -141,7 +145,7 @@ impl TemplateVerifier {
 
     pub fn verify(&self, signed_template: &SignedTemplate) -> Result<VerificationResult> {
         let verifying_key = self.verifying_key.as_ref().ok_or_else(|| {
-            SlapperError::InvalidState("No public key configured for verification".to_string())
+            SlapperError::Validation("No public key configured for verification".to_string())
         })?;
 
         let template_bytes = serde_yaml_neo::to_string(&signed_template.template)
@@ -172,7 +176,7 @@ impl TemplateVerifier {
 
     pub fn verify_raw(&self, template: &VulnerabilityTemplate, signature: &str) -> Result<bool> {
         let verifying_key = self.verifying_key.as_ref().ok_or_else(|| {
-            SlapperError::InvalidState("No public key configured for verification".to_string())
+            SlapperError::Validation("No public key configured for verification".to_string())
         })?;
 
         let template_bytes = serde_yaml_neo::to_string(template)
@@ -183,7 +187,7 @@ impl TemplateVerifier {
 
         let signature = Signature::from_bytes(&signature_bytes.try_into().map_err(|_| {
             SlapperError::Validation("Invalid signature length".to_string())
-        })?;
+        })?);
 
         Ok(verifying_key.verify(template_bytes.as_bytes(), &signature).is_ok())
     }
@@ -211,7 +215,7 @@ impl SignedTemplate {
 
     pub fn save(&self, path: &Path) -> Result<()> {
         let content = serde_yaml_neo::to_string(self)
-            .map_err(|e| SlapperError::Serialize(e.to_string()))?;
+            .map_err(|e| SlapperError::Output(e.to_string()))?;
         fs::write(path, content)?;
         Ok(())
     }

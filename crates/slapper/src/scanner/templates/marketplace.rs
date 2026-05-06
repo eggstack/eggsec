@@ -5,7 +5,7 @@
 
 use crate::error::{Result, SlapperError};
 use crate::scanner::templates::verify::{SignedTemplate, TemplateVerifier};
-use crate::scanner::templates::{TemplateEngine, TemplateExecutor, TemplateLoader, VulnerabilityTemplate};
+use crate::scanner::templates::{TemplateLoader, VulnerabilityTemplate};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -134,7 +134,7 @@ impl TemplateMarketplace {
                 let signed: SignedTemplate = serde_yaml_neo::from_str(&content)
                     .or_else(|_| serde_json::from_str(&content))
                     .map_err(|_| {
-                        SlapperError::Security(format!(
+                        SlapperError::Validation(format!(
                             "Template {} is not a signed template envelope",
                             template_id
                         ))
@@ -142,7 +142,7 @@ impl TemplateMarketplace {
 
                 let verification = verifier.verify(&signed)?;
                 if !verification.valid {
-                    return Err(SlapperError::Security(format!(
+                    return Err(SlapperError::Validation(format!(
                         "Template {} has invalid signature: {}",
                         template_id,
                         verification

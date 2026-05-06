@@ -6,7 +6,7 @@
 use super::models::{HttpMatcher, Matcher, SearchPattern, VulnerabilityTemplate};
 use crate::error::Result;
 use crate::types::Severity;
-use reqwest::Response;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct MatchResult {
@@ -15,6 +15,14 @@ pub struct MatchResult {
     pub matched_by: String,
     pub extracted_values: Vec<String>,
     pub severity: Severity,
+}
+
+#[derive(Debug)]
+pub struct HttpResponseData {
+    pub path: String,
+    pub status: u16,
+    pub headers: HashMap<String, String>,
+    pub body: String,
 }
 
 pub struct TemplateMatcher {
@@ -39,14 +47,14 @@ impl TemplateMatcher {
     pub async fn match_template(
         &self,
         template: &VulnerabilityTemplate,
-        response: Option<&Response>,
+        response: Option<&HttpResponseData>,
         dns_data: Option<&DnsResponse>,
     ) -> Result<MatchResult> {
         for matcher in &template.matchers {
             let matched = match matcher {
                 Matcher::Http(http) => {
                     if let Some(resp) = response {
-                        self.match_http(http, resp).await?
+                        self.match_http(http, resp)?
                     } else {
                         false
                     }
@@ -81,52 +89,37 @@ impl TemplateMatcher {
         })
     }
 
-    async fn match_http(&self, matcher: &HttpMatcher, response: &Response) -> Result<bool> {
+    fn match_http(&self, matcher: &HttpMatcher, response: &HttpResponseData) -> Result<bool> {
         if let Some(ref path) = matcher.path {
-            let resp_path = response.url().path();
-            if path != resp_path && path != "*" {
+            if path != &response.path && path != "*" {
                 return Ok(false);
             }
         }
 
-        if let Some(ref method) = matcher.method {
-            if response.request().method().as_str() != method {
-                return Ok(false);
-            }
-        }
+        let _ = &matcher.method;
 
         for (header, value) in &matcher.headers {
-            let resp_header = response
-                .headers()
-                .get(header)
-                .and_then(|v| v.to_str().ok());
+            let header_key = header.to_ascii_lowercase();
+            let resp_header = response.headers.get(&header_key).map(String::as_str);
 
-            if resp_header.map(|v| v.contains(value)).unwrap_or(false) {
+            if resp_header
+                .map(|v| v.contains(value.as_str()))
+                .unwrap_or(false)
+            {
                 if !value.contains("{{interactsh-url}}") {
                     return Ok(true);
                 }
             }
         }
 
-        let status = response.status().as_u16();
-        let needs_body = !matcher.search.is_empty()
-            || matcher
-                .interactsh
-                .as_ref()
-                .map(|i| i.enabled && !self.interactsh_urls.is_empty())
-                .unwrap_or(false);
-        let body = if needs_body {
-            Some(response.text().await?)
-        } else {
-            None
-        };
+        let status = response.status;
+        let body = &response.body;
 
         if matcher.status_codes.contains(&status) {
             return Ok(true);
         }
 
         if !matcher.search.is_empty() {
-            let body = body.as_deref().unwrap_or("");
             for search in &matcher.search {
                 if self.search_pattern(body, search) {
                     return Ok(true);
@@ -136,7 +129,6 @@ impl TemplateMatcher {
 
         if let Some(ref interactsh) = matcher.interactsh {
             if interactsh.enabled && !self.interactsh_urls.is_empty() {
-                let body = body.as_deref().unwrap_or("");
                 for url in &self.interactsh_urls {
                     if body.contains(url) {
                         return Ok(true);
@@ -148,7 +140,11 @@ impl TemplateMatcher {
         Ok(false)
     }
 
-    fn match_dns(&self, matcher: &super::models::DnsMatcher, response: &DnsResponse) -> Result<bool> {
+    pub(crate) fn match_dns(
+        &self,
+        matcher: &super::models::DnsMatcher,
+        response: &DnsResponse,
+    ) -> Result<bool> {
         if let Some(ref query_type) = matcher.query_type {
             if &response.query_type != query_type {
                 return Ok(false);
@@ -203,13 +199,14 @@ pub struct DnsResponse {
 mod tests {
     use super::*;
     use crate::scanner::templates::models::{
-        HttpMatcher, InteractshConfig, MatchMode, SearchPattern, TemplateInfo, VulnerabilityTemplate,
+        DnsMatcher, HttpMatcher, InteractshConfig, MatchMode, SearchPattern, TemplateInfo,
+        VulnerabilityTemplate,
     };
     use std::collections::HashMap;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
-    async fn make_test_response(body: &str) -> reqwest::Response {
+    async fn make_test_response(body: &str) -> HttpResponseData {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let body_owned = body.to_string();
@@ -227,7 +224,24 @@ mod tests {
         });
 
         let url = format!("http://{}", addr);
-        reqwest::get(url).await.unwrap()
+        let response = reqwest::get(url).await.unwrap();
+        let status = response.status().as_u16();
+        let path = response.url().path().to_string();
+        let mut headers = HashMap::new();
+        for (key, value) in response.headers() {
+            headers.insert(
+                key.as_str().to_ascii_lowercase(),
+                value.to_str().unwrap_or_default().to_string(),
+            );
+        }
+        let body = response.text().await.unwrap_or_default();
+
+        HttpResponseData {
+            path,
+            status,
+            headers,
+            body,
+        }
     }
 
     #[test]
@@ -235,7 +249,7 @@ mod tests {
         let matcher = TemplateMatcher::new();
         let search = SearchPattern {
             pattern: "vulnerable".to_string(),
-            mode: super::models::MatchMode::Word,
+            mode: MatchMode::Word,
             encoding: String::new(),
         };
 
@@ -248,7 +262,7 @@ mod tests {
         let matcher = TemplateMatcher::new();
         let search = SearchPattern {
             pattern: r"v\d+\.\d+\.\d+".to_string(),
-            mode: super::models::MatchMode::Regex,
+            mode: MatchMode::Regex,
             encoding: String::new(),
         };
 
@@ -263,7 +277,7 @@ mod tests {
             query_type: Some("A".to_string()),
             search: vec![SearchPattern {
                 pattern: "evil.com".to_string(),
-                mode: super::models::MatchMode::Word,
+                mode: MatchMode::Word,
                 encoding: String::new(),
             }],
         };

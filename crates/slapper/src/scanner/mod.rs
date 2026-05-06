@@ -83,6 +83,7 @@ pub mod endpoints;
 pub mod fingerprint;
 pub mod ports;
 pub mod spoof;
+pub mod templates;
 pub mod timing;
 pub mod udp_fingerprint;
 

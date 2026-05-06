@@ -4,12 +4,11 @@
 //! request construction, response matching, and result aggregation.
 
 use super::loader::TemplateLoader;
-use super::matcher::{DnsResponse, TemplateMatcher};
+use super::matcher::{DnsResponse, HttpResponseData, TemplateMatcher};
 use super::models::{TemplateRequest, VulnerabilityTemplate};
 use crate::error::{Result, SlapperError};
-use crate::utils::validation::validate_path;
+use crate::types::Severity;
 use reqwest::Client;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -107,7 +106,7 @@ impl TemplateExecutor {
         &self,
         target: &str,
         request: &TemplateRequest,
-    ) -> Result<reqwest::Response> {
+    ) -> Result<HttpResponseData> {
         let url = if target.starts_with("http") {
             format!("{}/{}", target.trim_end_matches('/'), request.path.trim_start_matches('/'))
         } else {
@@ -135,11 +134,32 @@ impl TemplateExecutor {
             req_builder = req_builder.body(processed_body);
         }
 
-        req_builder
+        let response = req_builder
             .timeout(self.timeout)
             .send()
             .await
-            .map_err(|e| SlapperError::Network(format!("Template request failed: {}", e)))
+            .map_err(|e| SlapperError::Network(format!("Template request failed: {}", e)))?;
+
+        let status = response.status().as_u16();
+        let path = response.url().path().to_string();
+        let mut headers = std::collections::HashMap::new();
+        for (key, value) in response.headers() {
+            headers.insert(
+                key.as_str().to_ascii_lowercase(),
+                value.to_str().unwrap_or_default().to_string(),
+            );
+        }
+        let body = response
+            .text()
+            .await
+            .map_err(|e| SlapperError::Network(format!("Failed to read response body: {}", e)))?;
+
+        Ok(HttpResponseData {
+            path,
+            status,
+            headers,
+            body,
+        })
     }
 
     fn process_interactsh_variables(&self, input: &str) -> String {
@@ -166,16 +186,19 @@ impl TemplateExecutor {
             .cloned();
 
         let matched = if let Some(super::models::Matcher::Dns(dns)) = dns_matcher {
-            let resolver = trust_dns_resolver::config::ResolverConfig::default();
-            let mut resolver = trust_dns_resolver::AsyncResolver::tokio(
-                resolver,
-                std::time::Duration::from_secs(5).into(),
-            )
-            .map_err(|e| SlapperError::Config(format!("DNS resolver failed: {}", e)))?;
+            let resolver = hickory_resolver::TokioAsyncResolver::tokio(
+                hickory_resolver::config::ResolverConfig::default(),
+                hickory_resolver::config::ResolverOpts::default(),
+            );
 
             let query_type = dns.query_type.as_deref().unwrap_or("A");
             let response = resolver
-                .lookup(target, query_type.parse().unwrap_or(trust_dns_resolver::proto::rr::RecordType::A))
+                .lookup(
+                    target,
+                    query_type
+                        .parse()
+                        .unwrap_or(hickory_resolver::proto::rr::RecordType::A),
+                )
                 .await
                 .map_err(|e| SlapperError::Network(format!("DNS query failed: {}", e)))?;
 
@@ -207,7 +230,7 @@ impl TemplateExecutor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TemplateExecutionResult {
     pub template_id: String,
     pub template_name: String,
@@ -215,7 +238,7 @@ pub struct TemplateExecutionResult {
     pub matched: bool,
     pub matched_by: String,
     pub target: String,
-    pub responses: Vec<reqwest::Response>,
+    pub responses: Vec<HttpResponseData>,
 }
 
 impl TemplateExecutionResult {
@@ -258,6 +281,7 @@ impl TemplateEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::validation::validate_path;
     use tempfile::TempDir;
 
     fn create_test_template() -> TempDir {
