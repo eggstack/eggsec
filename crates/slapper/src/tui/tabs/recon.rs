@@ -31,6 +31,9 @@ pub enum ReconFocusArea {
     Results,
 }
 
+const CHECKBOX_COLUMNS: usize = 2;
+const CHECKBOX_ROWS_PER_COLUMN: usize = 8;
+
 #[derive(Debug, Clone, Default)]
 pub struct ReconOptions {
     pub no_tech: bool,
@@ -300,6 +303,23 @@ impl ReconTab {
     pub fn page_down(&mut self, page_size: usize) {
         self.results_view.page_down(page_size);
     }
+
+    fn options_row_count(&self) -> usize {
+        self.option_checkboxes.len() / CHECKBOX_COLUMNS
+    }
+
+    fn options_window_start(&self, visible_rows: usize) -> usize {
+        let row_count = self.options_row_count();
+        if visible_rows == 0 || visible_rows >= row_count {
+            return 0;
+        }
+
+        let focused_row = self.focused_checkbox_index % row_count;
+        let max_start = row_count - visible_rows;
+        focused_row
+            .saturating_sub(visible_rows - 1)
+            .min(max_start)
+    }
 }
 
 impl Default for ReconTab {
@@ -389,27 +409,43 @@ impl TabRender for ReconTab {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(options_area);
 
-        // Use Min(1) instead of Length(2) to allow rows to shrink when terminal is small
-        // Length(2) requires exactly 2, but Min(1) allows flexible sizing while ensuring
-        // each checkbox row is at least 1 height (visible)
-        let left_options = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Min(1); 8])
-            .split(option_chunks[0]);
+        let visible_rows = options_area.height.min(CHECKBOX_ROWS_PER_COLUMN as u16) as usize;
+        if visible_rows > 0 {
+            let row_offset = self.options_window_start(visible_rows);
+            let row_constraints = vec![Constraint::Length(1); visible_rows];
+            let left_options = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(row_constraints.clone())
+                .split(option_chunks[0]);
 
-        let right_options = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Min(1); 8])
-            .split(option_chunks[1]);
+            let right_options = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(row_constraints)
+                .split(option_chunks[1]);
 
-        let is_options_focused = self.focus_area == ReconFocusArea::Options;
+            let is_options_focused = self.focus_area == ReconFocusArea::Options;
 
-        for (i, cb) in self.option_checkboxes.iter().enumerate().take(8) {
-            cb.render_with_focus(is_options_focused && i == self.focused_checkbox_index, f, left_options[i]);
-        }
+            for (visible_idx, row_area) in left_options.iter().enumerate() {
+                let checkbox_idx = row_offset + visible_idx;
+                if let Some(cb) = self.option_checkboxes.get(checkbox_idx) {
+                    cb.render_with_focus(
+                        is_options_focused && checkbox_idx == self.focused_checkbox_index,
+                        f,
+                        *row_area,
+                    );
+                }
+            }
 
-        for (i, cb) in self.option_checkboxes.iter().enumerate().skip(8) {
-            cb.render_with_focus(is_options_focused && i == self.focused_checkbox_index, f, right_options[i - 8]);
+            for (visible_idx, row_area) in right_options.iter().enumerate() {
+                let checkbox_idx = row_offset + visible_idx + CHECKBOX_ROWS_PER_COLUMN;
+                if let Some(cb) = self.option_checkboxes.get(checkbox_idx) {
+                    cb.render_with_focus(
+                        is_options_focused && checkbox_idx == self.focused_checkbox_index,
+                        f,
+                        *row_area,
+                    );
+                }
+            }
         }
 
         if self.state == AppState::Running {
@@ -654,6 +690,7 @@ impl TabInput for ReconTab {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 
     fn create_test_tab() -> ReconTab {
         ReconTab::new()
@@ -777,6 +814,48 @@ mod tests {
             tab.focus_area,
             ReconFocusArea::Inputs,
             "Should cycle back to Inputs"
+        );
+    }
+
+    #[test]
+    fn test_options_window_keeps_focused_row_visible() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ReconFocusArea::Options;
+
+        tab.focused_checkbox_index = 0;
+        assert_eq!(tab.options_window_start(3), 0);
+
+        tab.focused_checkbox_index = 2;
+        assert_eq!(tab.options_window_start(3), 0);
+
+        tab.focused_checkbox_index = 6;
+        assert_eq!(tab.options_window_start(3), 4);
+
+        tab.focused_checkbox_index = 7;
+        assert_eq!(tab.options_window_start(3), 5);
+    }
+
+    #[test]
+    fn test_render_keeps_focused_checkbox_visible_in_small_terminal() {
+        let mut tab = create_test_tab();
+        tab.focus_area = ReconFocusArea::Options;
+        tab.focused_checkbox_index = 7;
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+        terminal
+            .draw(|f| {
+                tab.render(f, Rect::new(0, 0, 80, 20), false);
+            })
+            .unwrap();
+
+        let buf = terminal.backend().buffer();
+        let focused_marker = buf
+            .cell((0, 14))
+            .expect("focused checkbox cell should be in bounds");
+        assert_eq!(
+            focused_marker.symbol(),
+            ">",
+            "Focused checkbox marker should remain visible after cycling through a small viewport"
         );
     }
 }
