@@ -82,11 +82,9 @@ impl AiPlanner {
         if self.fallback_enabled {
             self.chain_planner.plan(request)
         } else {
-            ExecutionPlan {
-                stages: vec![],
-                estimated_duration_ms: 0,
-                total_tools: 0,
-            }
+            Err(AiError::InvalidConfig(
+                "Fallback planning is disabled and AI planning is required".to_string(),
+            ))
         }
     }
 
@@ -95,7 +93,13 @@ impl AiPlanner {
         client: &AiClient,
         request: &PlanRequest,
     ) -> Result<ExecutionPlan> {
-        let cache_key = format!("{}:{}", request.goal, request.target);
+        let cache_key = format!(
+            "{}:{}:{}:{}",
+            request.goal,
+            request.target,
+            request.attack_surfaces.len(),
+            request.max_duration_ms
+        );
 
         {
             let cache = self.learning_cache.read();
