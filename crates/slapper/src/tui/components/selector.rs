@@ -8,7 +8,6 @@ use ratatui::{
     Frame,
 };
 use std::cell::RefCell;
-use crate::tc;
 
 #[derive(Clone, Debug)]
 pub struct DropdownInfo {

@@ -1,7 +1,6 @@
 use crate::tc;
 use crate::fuzzer::engine::FuzzSession;
 use crate::fuzzer::PayloadType;
-use crate::tc;
 use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, Checkbox, InputField, InputGroup, ProgressGauge, ScrollableText,
@@ -884,73 +883,62 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_left_from_payload_selector_goes_to_inputs() {
-        let mut tab = FuzzTab::default();
-        tab.focus_area = FuzzFocusArea::PayloadSelector;
-        tab.inputs.fields[0].cursor_pos = 0;
-        
-        let result = tab.handle_left();
-        assert!(result);
-        assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
-    }
-    
-    #[test]
-    fn test_right_from_inputs_to_payload_selector() {
-        let mut tab = FuzzTab::default();
-        tab.focus_area = FuzzFocusArea::Inputs;
-        // Note: Currently, handle_right() when in Inputs calls inputs.move_right()
-        // To move to PayloadSelector, the cursor must be at the right edge
-        // and the implementation needs to check is_at_right_edge() first
-        // For now, just test that handle_right() in Inputs tries to move cursor
-        let result = tab.handle_right();
-        // Result depends on whether cursor is at end of input
-        // Default input is empty, so cursor is at end, move_right() returns false
-        assert!(!result || result);
-    }
-    
-    #[test]
-    fn test_right_from_payload_to_mode_selector() {
-        let mut tab = FuzzTab::default();
-        tab.focus_area = FuzzFocusArea::PayloadSelector;
-        
-        let result = tab.handle_right();
-        assert!(result);
-        assert_eq!(tab.focus_area, FuzzFocusArea::ModeSelector);
-    }
-    
-    #[test]
-    fn test_right_from_mode_to_target_selector() {
-        let mut tab = FuzzTab::default();
-        tab.focus_area = FuzzFocusArea::ModeSelector;
-        
-        let result = tab.handle_right();
-        assert!(result);
-        assert_eq!(tab.focus_area, FuzzFocusArea::TargetSelector);
-    }
-    
-    #[test]
-    fn test_right_from_target_to_mutation_checkbox() {
-        let mut tab = FuzzTab::default();
-        tab.focus_area = FuzzFocusArea::TargetSelector;
-        
-        let result = tab.handle_right();
-        assert!(result);
-        assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
-    }
-    
-    #[test]
-    fn test_right_from_mutation_to_inputs() {
-        let mut tab = FuzzTab::default();
-        tab.focus_area = FuzzFocusArea::MutationCheckbox;
-        
-        let result = tab.handle_right();
-        assert!(result);
-        assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
-        assert_eq!(tab.inputs.fields[0].cursor_pos, 0);
-    }
+#[test]
+fn test_left_from_payload_selector_goes_to_inputs() {
+    let mut tab = FuzzTab::default();
+    tab.focus_area = FuzzFocusArea::PayloadSelector;
+    tab.inputs.fields[0].cursor_pos = 0;
+
+    let result = tab.handle_left();
+    assert!(result);
+    assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
+}
+
+#[test]
+fn test_right_from_inputs_to_payload_selector() {
+    let mut tab = FuzzTab::default();
+    tab.focus_area = FuzzFocusArea::Inputs;
+    let result = tab.handle_right();
+    assert!(!result || result);
+}
+
+#[test]
+fn test_right_from_payload_to_mode_selector() {
+    let mut tab = FuzzTab::default();
+    tab.focus_area = FuzzFocusArea::PayloadSelector;
+
+    let result = tab.handle_right();
+    assert!(result);
+    assert_eq!(tab.focus_area, FuzzFocusArea::ModeSelector);
+}
+
+#[test]
+fn test_right_from_mode_to_target_selector() {
+    let mut tab = FuzzTab::default();
+    tab.focus_area = FuzzFocusArea::ModeSelector;
+
+    let result = tab.handle_right();
+    assert!(result);
+    assert_eq!(tab.focus_area, FuzzFocusArea::TargetSelector);
+}
+
+#[test]
+fn test_right_from_target_to_mutation_checkbox() {
+    let mut tab = FuzzTab::default();
+    tab.focus_area = FuzzFocusArea::TargetSelector;
+
+    let result = tab.handle_right();
+    assert!(result);
+    assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
+}
+
+#[test]
+fn test_right_from_mutation_to_inputs() {
+    let mut tab = FuzzTab::default();
+    tab.focus_area = FuzzFocusArea::MutationCheckbox;
+
+    let result = tab.handle_right();
+    assert!(result);
+    assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
+    assert_eq!(tab.inputs.fields[0].cursor_pos, 0);
 }
