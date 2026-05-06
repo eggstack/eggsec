@@ -45,3 +45,22 @@ Feature-gated behind `tool-api` (enabled by `rest-api`, `grpc-api`, `nse`).
 ## Tool Implementations
 
 `tool/implementations/` - Recon, scanner, fuzzer, waf, search, etc.
+
+## Pipeline Orchestrator
+
+`tool/orchestrator/mod.rs` handles parallel and sequential tool execution:
+- **Parallel execution**: Uses `futures::future::join_all()` for concurrent tool execution
+- **Result passing**: Previous stage results are passed via `request.params["results"]`
+- **Error handling**: Returns `StageToolResult` with success/failure per tool
+
+```rust
+// Parallel execution pattern (correct)
+let handles: Vec<_> = stage.tools.iter().map(|tool| { ... }).collect();
+let results = join_all(handles).await;
+
+// Sequential execution pattern
+for tool in &stage.tools {
+    let result = self.dispatcher.dispatch(request).await;
+    tool_results.push(self.process_tool_result(tool, result, duration));
+}
+```
