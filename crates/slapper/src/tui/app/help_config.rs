@@ -31,13 +31,18 @@ pub fn get_static_help_data() -> StaticHelpData {
         HelpSection {
             title: "Load Testing".to_string(),
             content:
-                "HTTP load testing with configurable concurrency, duration, and request patterns."
+                "HTTP load testing with configurable concurrency, duration, and request patterns. Use Tab to navigate between target input, method selector, and results."
                     .to_string(),
             commands: vec![
                 HelpCommand {
                     key: "Enter".to_string(),
                     description: "Start load test".to_string(),
                     category: "Action".to_string(),
+                },
+                HelpCommand {
+                    key: "Tab".to_string(),
+                    description: "Move focus".to_string(),
+                    category: "Navigation".to_string(),
                 },
                 HelpCommand {
                     key: "Space".to_string(),
@@ -98,11 +103,13 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Fuzz,
         HelpSection {
             title: "Fuzzing".to_string(),
-            content: "Web application fuzzing with multiple payload types: SQLi, XSS, Command Injection, SSTI, XXE, etc.".to_string(),
+            content: "Web application fuzzing with multiple payload types: SQLi, XSS, Command Injection, SSTI, XXE, etc. Tab cycles through target input, method selector, payload selector, and results."
+                .to_string(),
             commands: vec![
                 HelpCommand { key: "Enter".to_string(), description: "Start fuzzing".to_string(), category: "Action".to_string() },
-                HelpCommand { key: "1-9".to_string(), description: "Select payload type".to_string(), category: "Selection".to_string() },
-                HelpCommand { key: "t".to_string(), description: "Configure threads".to_string(), category: "Config".to_string() },
+                HelpCommand { key: "Tab".to_string(), description: "Move focus".to_string(), category: "Navigation".to_string() },
+                HelpCommand { key: "Up/Down".to_string(), description: "Navigate selector".to_string(), category: "Navigation".to_string() },
+                HelpCommand { key: "Esc".to_string(), description: "Close selector".to_string(), category: "Navigation".to_string() },
             ],
         },
     );
@@ -140,7 +147,7 @@ pub fn get_static_help_data() -> StaticHelpData {
         HelpSection {
             title: "Pipeline Scan".to_string(),
             content:
-                "Run multiple scan types in sequence: port scan -> endpoint discovery -> fuzzing."
+                "Run multiple scan types in sequence: port scan -> endpoint discovery -> fuzzing. Tab cycles through profile selector, target input, and results."
                     .to_string(),
             commands: vec![
                 HelpCommand {
@@ -149,9 +156,14 @@ pub fn get_static_help_data() -> StaticHelpData {
                     category: "Action".to_string(),
                 },
                 HelpCommand {
-                    key: "p".to_string(),
-                    description: "Configure pipeline".to_string(),
-                    category: "Config".to_string(),
+                    key: "Tab".to_string(),
+                    description: "Move focus".to_string(),
+                    category: "Navigation".to_string(),
+                },
+                HelpCommand {
+                    key: "Up/Down".to_string(),
+                    description: "Navigate selector".to_string(),
+                    category: "Navigation".to_string(),
                 },
             ],
         },
@@ -250,18 +262,28 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Cluster,
         HelpSection {
             title: "Cluster".to_string(),
-            content: "Manage distributed scanning cluster. Add workers and orchestrate scans."
+            content: "Manage distributed scanning cluster. Worker mode connects to a coordinator; Coordinator mode runs the master node. Use Tab to navigate between Mode selector, Inputs, and Results."
                 .to_string(),
             commands: vec![
                 HelpCommand {
-                    key: "a".to_string(),
-                    description: "Add worker".to_string(),
+                    key: "Tab".to_string(),
+                    description: "Move focus to next area".to_string(),
+                    category: "Navigation".to_string(),
+                },
+                HelpCommand {
+                    key: "Enter".to_string(),
+                    description: "Select/open selector".to_string(),
                     category: "Action".to_string(),
                 },
                 HelpCommand {
-                    key: "r".to_string(),
-                    description: "Remove worker".to_string(),
-                    category: "Action".to_string(),
+                    key: "Esc".to_string(),
+                    description: "Close dropdown".to_string(),
+                    category: "Navigation".to_string(),
+                },
+                HelpCommand {
+                    key: "Up/Down".to_string(),
+                    description: "Navigate selector options".to_string(),
+                    category: "Navigation".to_string(),
                 },
             ],
         },
@@ -286,7 +308,7 @@ pub fn get_static_help_data() -> StaticHelpData {
         Tab::Report,
         HelpSection {
             title: "Reporting".to_string(),
-            content: "Generate reports in various formats: JSON, HTML, Markdown, SARIF, JUnit."
+            content: "Generate reports in various formats: JSON, HTML, Markdown, SARIF, JUnit. Tab cycles through format selector, input fields, and results."
                 .to_string(),
             commands: vec![
                 HelpCommand {
@@ -295,9 +317,14 @@ pub fn get_static_help_data() -> StaticHelpData {
                     category: "Action".to_string(),
                 },
                 HelpCommand {
-                    key: "f".to_string(),
-                    description: "Select format".to_string(),
-                    category: "Config".to_string(),
+                    key: "Tab".to_string(),
+                    description: "Move focus".to_string(),
+                    category: "Navigation".to_string(),
+                },
+                HelpCommand {
+                    key: "Up/Down".to_string(),
+                    description: "Navigate selector".to_string(),
+                    category: "Navigation".to_string(),
                 },
             ],
         },
