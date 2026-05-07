@@ -110,13 +110,20 @@ impl FuzzEngine {
                 let mut updated_result = result.clone();
 
                 let start = Instant::now();
-                if let Ok(resp) = self
-                    .client
-                    .get(&self.args.url)
-                    .header("User-Agent", &self.user_agent)
-                    .send()
-                    .await
-                {
+                let url = build_url(
+                    &self.args.url,
+                    self.args.param.as_deref(),
+                    &updated_result.payload.payload,
+                )?;
+                let method = parse_method(&self.args.method);
+
+                let mut request = self.client.request(method, url);
+                request = request.header("User-Agent", &self.user_agent);
+                if let Some(ref bearer) = self.args.common.bearer {
+                    request = request.bearer_auth(bearer);
+                }
+
+                if let Ok(resp) = request.send().await {
                     let status_code = resp.status().as_u16();
                     let headers = resp.headers().clone();
                     let body = resp.bytes().await.unwrap_or_default();

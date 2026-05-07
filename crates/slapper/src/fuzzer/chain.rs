@@ -107,10 +107,14 @@ impl ChainExecutor {
     }
 
     pub async fn execute(&mut self, actions: Vec<ChainAction>) -> ChainExecutionResult {
-        let total_actions = actions.len();
+        let total_actions = actions
+            .iter()
+            .filter(|a| !matches!(a, ChainAction::Conditional(_)))
+            .count();
         let mut successful = 0;
 
-        let mut action_queue: Vec<ChainAction> = actions.into_iter().collect();
+        // Reverse once so pop() executes in the original declared order.
+        let mut action_queue: Vec<ChainAction> = actions.into_iter().rev().collect();
 
         while let Some(action) = action_queue.pop() {
             match action {
@@ -413,5 +417,16 @@ mod tests {
 
         let result = executor.interpolate_string("${test}_suffix");
         assert_eq!(result, "value_suffix");
+    }
+
+    #[tokio::test]
+    async fn test_execute_preserves_declared_action_order() {
+        let mut executor = ChainExecutor::new(Client::new());
+        let actions = vec![ChainAction::Sleep(1), ChainAction::Sleep(2)];
+
+        let result = executor.execute(actions).await;
+        assert_eq!(result.chain_results.len(), 2);
+        assert_eq!(result.chain_results[0].response_time_ms, 1);
+        assert_eq!(result.chain_results[1].response_time_ms, 2);
     }
 }

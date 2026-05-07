@@ -117,30 +117,7 @@ impl FuzzEngine {
 
     pub(crate) fn parse_payload_types(&self) -> Result<Vec<PayloadType>> {
         if self.args.payload_type == "all" {
-            return Ok(vec![
-                PayloadType::Sqli,
-                PayloadType::Xss,
-                PayloadType::Traversal,
-                PayloadType::Ssrf,
-                PayloadType::Redirect,
-                PayloadType::Redos,
-                PayloadType::Headers,
-                PayloadType::Compression,
-                PayloadType::GraphQL,
-                PayloadType::OAuth,
-                PayloadType::Jwt,
-                PayloadType::Idor,
-                PayloadType::Ssti,
-                PayloadType::Grpc,
-                PayloadType::Xxe,
-                PayloadType::Ldap,
-                PayloadType::Cmd,
-                PayloadType::Deser,
-                PayloadType::Host,
-                PayloadType::Cache,
-                PayloadType::Csv,
-                PayloadType::Soap,
-            ]);
+            return Ok(PayloadType::all_variants().to_vec());
         }
 
         let types: Vec<PayloadType> = self
@@ -250,11 +227,13 @@ mod tests {
     fn test_parse_payload_types_all() {
         let engine = make_engine_with_payload_type("all");
         let types = engine.parse_payload_types().unwrap();
-        assert!(!types.is_empty());
+        assert_eq!(types.len(), PayloadType::all_variants().len());
         assert!(types.contains(&PayloadType::Sqli));
         assert!(types.contains(&PayloadType::Xss));
         assert!(types.contains(&PayloadType::Ssrf));
         assert!(types.contains(&PayloadType::Jwt));
+        assert!(types.contains(&PayloadType::Oast));
+        assert!(types.contains(&PayloadType::Websocket));
     }
 
     #[test]

@@ -3,7 +3,6 @@ use dashmap::DashMap;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Method;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -97,11 +96,10 @@ impl FuzzEngine {
         };
 
         let results: Arc<DashMap<usize, FuzzResult>> = Arc::new(DashMap::new());
-        let counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
         let semaphore = Arc::new(tokio::sync::Semaphore::new(self.args.concurrency));
         let mut handles = Vec::new();
 
-        for payload in payloads {
+        for (idx, payload) in payloads.into_iter().enumerate() {
             let semaphore = semaphore.clone();
             let client = self.client.clone();
             let url = self.args.url.clone();
@@ -113,10 +111,12 @@ impl FuzzEngine {
             let progress = progress.clone();
             let payload_clone = payload.clone();
             let user_agent = self.user_agent.clone();
-            let counter = counter.clone();
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire_owned().await;
+                let Ok(_permit) = semaphore.acquire_owned().await else {
+                    tracing::warn!("Semaphore closed before request dispatch");
+                    return;
+                };
                 let result = send_payload_async(
                     client,
                     &url,
@@ -131,7 +131,8 @@ impl FuzzEngine {
 
                 match result {
                     Ok(r) => {
-                        results.insert(counter.fetch_add(1, Ordering::Relaxed), r);
+                        // Preserve payload order for deterministic output.
+                        results.insert(idx, r);
                     }
                     Err(e) => {
                         tracing::warn!("Fuzz request failed: {:?}", e);
@@ -150,11 +151,12 @@ impl FuzzEngine {
         if let Some(ref pb) = progress {
             pb.finish_and_clear();
         }
-        let final_results: Vec<FuzzResult> = Arc::try_unwrap(results)
+        let mut ordered_results: Vec<(usize, FuzzResult)> = Arc::try_unwrap(results)
             .expect("all workers completed")
             .into_iter()
-            .map(|(_, v)| v)
             .collect();
+        ordered_results.sort_by_key(|(k, _)| *k);
+        let final_results: Vec<FuzzResult> = ordered_results.into_iter().map(|(_, v)| v).collect();
         Ok(final_results)
     }
 
@@ -307,10 +309,7 @@ impl FuzzEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::cli::{CommonHttpArgs, FuzzArgs, FuzzMode};
-    use crate::fuzzer::payloads::{Payload, PayloadType};
-    use crate::waf::types::Severity;
 
     fn make_fuzz_args(url: &str) -> FuzzArgs {
         FuzzArgs {

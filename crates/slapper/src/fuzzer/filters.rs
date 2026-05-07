@@ -132,20 +132,35 @@ impl FilterChain {
                 }
             }
             PayloadFilter::WordCount(counts) => {
-                // Approximate word count from response length
-                let words = result.response_length.unwrap_or(0) / 5; // rough estimate
+                let words = if let Some(ref body) = result.response_body {
+                    body.split_whitespace().count() as u64
+                } else {
+                    result.response_length.unwrap_or(0) / 5
+                };
                 counts.contains(&words)
             }
             PayloadFilter::WordCountRange { min, max } => {
-                let words = result.response_length.unwrap_or(0) / 5;
+                let words = if let Some(ref body) = result.response_body {
+                    body.split_whitespace().count() as u64
+                } else {
+                    result.response_length.unwrap_or(0) / 5
+                };
                 words >= *min && words <= *max
             }
             PayloadFilter::LineCount(counts) => {
-                let lines = result.response_length.unwrap_or(0) / 30; // rough estimate
+                let lines = if let Some(ref body) = result.response_body {
+                    body.lines().count() as u64
+                } else {
+                    result.response_length.unwrap_or(0) / 30
+                };
                 counts.contains(&lines)
             }
             PayloadFilter::LineCountRange { min, max } => {
-                let lines = result.response_length.unwrap_or(0) / 30;
+                let lines = if let Some(ref body) = result.response_body {
+                    body.lines().count() as u64
+                } else {
+                    result.response_length.unwrap_or(0) / 30
+                };
                 lines >= *min && lines <= *max
             }
             PayloadFilter::ResponseTime(time) => result.response_time_ms <= *time,
@@ -237,6 +252,29 @@ mod tests {
         }
     }
 
+    fn make_result_with_body(status: u16, body: &str, time_ms: u64) -> FuzzResult {
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::Sqli,
+                payload: "test".to_string(),
+                description: "test".to_string(),
+                severity: Severity::Info,
+                tags: vec!["test".to_string()],
+            },
+            status_code: status,
+            response_time_ms: time_ms,
+            response_length: Some(body.len() as u64),
+            response_body: Some(body.to_string()),
+            is_waf_blocked: false,
+            is_anomaly: false,
+            is_redos_suspected: false,
+            leaks_found: Vec::new(),
+            error: None,
+            owasp_category: None,
+            detected_severity: Severity::Info,
+        }
+    }
+
     #[test]
     fn test_status_filter() {
         let mut chain = FilterChain::new();
@@ -283,5 +321,21 @@ mod tests {
     fn test_parse_range() {
         let result = parse_range("100-200");
         assert_eq!(result, Some((100, 200)));
+    }
+
+    #[test]
+    fn test_word_filter_uses_response_body_when_available() {
+        let mut chain = FilterChain::new();
+        chain.add_word_filter(vec![4]);
+        let result = make_result_with_body(200, "one two three four", 10);
+        assert!(chain.should_filter(&result));
+    }
+
+    #[test]
+    fn test_line_filter_uses_response_body_when_available() {
+        let mut chain = FilterChain::new();
+        chain.add_line_filter(vec![3]);
+        let result = make_result_with_body(200, "line1\nline2\nline3", 10);
+        assert!(chain.should_filter(&result));
     }
 }

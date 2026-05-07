@@ -158,7 +158,7 @@ impl HttpSession {
     }
 
     pub fn update_from_response(&mut self, headers: &HeaderMap) {
-        if let Some(cookie_headers) = headers.get_all(SET_COOKIE).iter().next() {
+        for cookie_headers in &headers.get_all(SET_COOKIE) {
             if let Ok(cookie_str) = cookie_headers.to_str() {
                 self.parse_set_cookie(cookie_str);
             }
@@ -166,7 +166,8 @@ impl HttpSession {
 
         for (name, value) in headers.iter() {
             if let Ok(_value_str) = value.to_str() {
-                if name.as_str().starts_with("X-") || name.as_str() == "Authorization" {
+                let lower = name.as_str().to_ascii_lowercase();
+                if lower.starts_with("x-") || lower == "authorization" {
                     self.headers.insert(name.clone(), value.clone());
                 }
             }
@@ -463,5 +464,38 @@ mod tests {
         assert_eq!(cookie.value, "abc123");
         assert!(cookie.http_only);
         assert!(cookie.secure);
+    }
+
+    #[test]
+    fn test_update_from_response_collects_multiple_set_cookie_values() {
+        let mut session = HttpSession::new();
+        let mut headers = HeaderMap::new();
+        headers.append(SET_COOKIE, HeaderValue::from_static("sid=one; Path=/"));
+        headers.append(SET_COOKIE, HeaderValue::from_static("csrf=two; Path=/"));
+
+        session.update_from_response(&headers);
+
+        assert_eq!(session.cookies.get("sid").map(|c| c.value.as_str()), Some("one"));
+        assert_eq!(
+            session.cookies.get("csrf").map(|c| c.value.as_str()),
+            Some("two")
+        );
+    }
+
+    #[test]
+    fn test_update_from_response_captures_case_insensitive_x_headers() {
+        let mut session = HttpSession::new();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-trace-id", HeaderValue::from_static("abc123"));
+
+        session.update_from_response(&headers);
+
+        let header_map = session.headers.to_header_map();
+        assert_eq!(
+            header_map
+                .get("x-trace-id")
+                .and_then(|v| v.to_str().ok()),
+            Some("abc123")
+        );
     }
 }
