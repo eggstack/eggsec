@@ -15,6 +15,7 @@ impl WafDetector {
                 return Ok(WafDetectionResult {
                     waf_name: None,
                     confidence: 0,
+                    request_error: Some(e.to_string()),
                     matched_headers: vec![],
                     matched_cookies: vec![],
                     matched_patterns: vec![format!("Request failed: {}", e)],
@@ -147,6 +148,7 @@ impl WafDetector {
         Ok(WafDetectionResult {
             waf_name,
             confidence,
+            request_error: None,
             matched_headers,
             matched_cookies,
             matched_patterns,

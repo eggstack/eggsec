@@ -241,10 +241,12 @@ impl SmugglingBypass {
         req: &SmugglingRequest,
         detection: &WafDetectionResult,
     ) -> Result<BypassResult> {
+        let request_url = self.compose_request_url(url, &req.path);
         let mut request = match req.method.as_str() {
-            "POST" => client.post(url),
-            "PUT" => client.put(url),
-            _ => client.post(url),
+            "GET" => client.get(&request_url),
+            "POST" => client.post(&request_url),
+            "PUT" => client.put(&request_url),
+            _ => client.post(&request_url),
         };
 
         for (key, value) in &req.headers {
@@ -274,10 +276,19 @@ impl SmugglingBypass {
         Ok(BypassResult {
             technique,
             success,
-            description: req.description.clone(),
+            description: format!("{} [probe]", req.description),
             status_code: status,
             response_diff: None,
         })
+    }
+
+    fn compose_request_url(&self, base_url: &str, path: &str) -> String {
+        if let Ok(base) = url::Url::parse(base_url) {
+            if let Ok(joined) = base.join(path) {
+                return joined.to_string();
+            }
+        }
+        base_url.to_string()
     }
 
     fn is_bypass_successful(
@@ -288,6 +299,18 @@ impl SmugglingBypass {
         response_body: &str,
     ) -> bool {
         super::is_bypass_successful(status, detection, "", response_body)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compose_request_url_uses_smuggling_path() {
+        let bypass = SmugglingBypass::new(None);
+        let composed = bypass.compose_request_url("https://example.com/api", "/admin");
+        assert_eq!(composed, "https://example.com/admin");
     }
 }
 

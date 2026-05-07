@@ -144,3 +144,47 @@ fn payload_is_reflected(payload: &str, response_body: &str) -> bool {
     let encoded_payload = urlencoding::encode(payload);
     response_body.contains(payload) || response_body.contains(encoded_payload.as_ref())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn detection_with_status(status_code: u16) -> WafDetectionResult {
+        WafDetectionResult {
+            waf_name: Some("Test WAF".to_string()),
+            confidence: 50,
+            request_error: None,
+            matched_headers: vec![],
+            matched_cookies: vec![],
+            matched_patterns: vec![],
+            server_header: None,
+            status_code,
+        }
+    }
+
+    #[test]
+    fn bypass_fails_for_blocked_status_codes() {
+        let detection = detection_with_status(403);
+        assert!(!is_bypass_successful(429, &detection, "", "ok"));
+        assert!(!is_bypass_successful(503, &detection, "", "ok"));
+    }
+
+    #[test]
+    fn bypass_fails_when_status_matches_baseline() {
+        let detection = detection_with_status(200);
+        assert!(!is_bypass_successful(200, &detection, "", "ok"));
+    }
+
+    #[test]
+    fn bypass_requires_2xx_status() {
+        let detection = detection_with_status(403);
+        assert!(!is_bypass_successful(302, &detection, "", "ok"));
+    }
+
+    #[test]
+    fn bypass_requires_payload_reflection_for_non_empty_payload() {
+        let detection = detection_with_status(403);
+        assert!(!is_bypass_successful(200, &detection, "admin'--", "welcome"));
+        assert!(is_bypass_successful(200, &detection, "admin'--", "admin'-- accepted"));
+    }
+}

@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 pub struct WafDetectionResult {
     pub waf_name: Option<String>,
     pub confidence: u8,
+    #[serde(default)]
+    pub request_error: Option<String>,
     pub matched_headers: Vec<String>,
     pub matched_cookies: Vec<String>,
     pub matched_patterns: Vec<String>,

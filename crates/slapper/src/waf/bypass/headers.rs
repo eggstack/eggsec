@@ -62,7 +62,7 @@ impl HeaderBypass {
         client: &Client,
         url: &str,
         bypass: &ProfileBypass,
-        _detection: &WafDetectionResult,
+        detection: &WafDetectionResult,
     ) -> Result<BypassResult> {
         let mut request = client.get(url);
 
@@ -72,8 +72,9 @@ impl HeaderBypass {
 
         let response = request.send().await?;
         let status = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
 
-        let success = status != 403 && status != 406 && status != 501;
+        let success = self.is_bypass_successful(status, detection, "", &body);
 
         Ok(BypassResult {
             technique: bypass.technique,

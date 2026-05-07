@@ -185,6 +185,7 @@ fn test_waf_detection_result_serialization() {
     let result = WafDetectionResult {
         waf_name: Some("Cloudflare".to_string()),
         confidence: 75,
+        request_error: None,
         matched_headers: vec!["cf-ray: abc123".to_string()],
         matched_cookies: vec!["__cfduid".to_string()],
         matched_patterns: vec![],
