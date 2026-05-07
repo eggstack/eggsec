@@ -313,7 +313,9 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     f.render_widget(status_paragraph, chunks[1]);
 
     let visible_rows = chunks[2].height.saturating_sub(2).max(1) as usize;
-    let selected = app.quick_switch_selected.min(results.len().saturating_sub(1));
+    let selected = app
+        .quick_switch_selected
+        .min(results.len().saturating_sub(1));
     let start = selected.saturating_sub(visible_rows.saturating_sub(1));
     let end = (start + visible_rows).min(results.len());
 

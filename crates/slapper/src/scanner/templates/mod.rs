@@ -66,10 +66,12 @@ pub mod verify;
 
 pub use executor::{TemplateEngine, TemplateExecutionResult, TemplateExecutor};
 pub use loader::TemplateLoader;
-pub use marketplace::{TemplateMarketplace, MarketplaceTemplate, MarketplaceListing};
+pub use marketplace::{MarketplaceListing, MarketplaceTemplate, TemplateMarketplace};
 pub use matcher::{MatchResult, TemplateMatcher};
 pub use models::{Matcher, VulnerabilityTemplate};
-pub use verify::{SignedTemplate, SignerInfo, TemplateSigner, TemplateVerifier, VerificationResult};
+pub use verify::{
+    SignedTemplate, SignerInfo, TemplateSigner, TemplateVerifier, VerificationResult,
+};
 
 use std::path::PathBuf;
 

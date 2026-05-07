@@ -130,7 +130,11 @@ impl SslAnalyzer {
                 } else if line.starts_with("Serial Number:") {
                     serial_number = line.trim_start_matches("Serial Number:").trim().to_string();
                 } else if line.starts_with("Subject Alternative Name:") {
-                    san.push(line.trim_start_matches("Subject Alternative Name:").trim().to_string());
+                    san.push(
+                        line.trim_start_matches("Subject Alternative Name:")
+                            .trim()
+                            .to_string(),
+                    );
                 }
             }
         }

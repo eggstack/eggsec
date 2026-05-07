@@ -163,17 +163,18 @@ impl TemplateMatcher {
     fn search_pattern(&self, text: &str, search: &SearchPattern) -> bool {
         match search.mode {
             super::models::MatchMode::Word => text.contains(&search.pattern),
-            super::models::MatchMode::Regex => {
-                regex::RegexBuilder::new(&search.pattern)
-                    .size_limit(100_000)
-                    .build()
-                    .map(|re| re.is_match(text))
-                    .unwrap_or(false)
-            }
+            super::models::MatchMode::Regex => regex::RegexBuilder::new(&search.pattern)
+                .size_limit(100_000)
+                .build()
+                .map(|re| re.is_match(text))
+                .unwrap_or(false),
             super::models::MatchMode::Binary => {
                 let decoded: Vec<u8> = if search.encoding == "base64" {
-                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &search.pattern)
-                        .unwrap_or_else(|_| search.pattern.as_bytes().to_vec())
+                    base64::Engine::decode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &search.pattern,
+                    )
+                    .unwrap_or_else(|_| search.pattern.as_bytes().to_vec())
                 } else {
                     search.pattern.as_bytes().to_vec()
                 };

@@ -553,9 +553,7 @@ impl TabInput for IntegrationsTab {
                 self.tracker_selector.selected
                     >= self.tracker_selector.items.len().saturating_sub(1)
             }
-            IntegrationsFocusArea::Config => {
-                self.config_inputs.is_at_right_edge()
-            }
+            IntegrationsFocusArea::Config => self.config_inputs.is_at_right_edge(),
             IntegrationsFocusArea::Issue => !self.issue_inputs.can_move_right(),
             _ => true,
         }
@@ -564,7 +562,6 @@ impl TabInput for IntegrationsTab {
     fn is_input_focused(&self) -> bool {
         (self.focus_area == IntegrationsFocusArea::Tracker && self.tracker_selector.is_focused())
             || (self.focus_area == IntegrationsFocusArea::Config && self.config_inputs.is_focused())
-            || (self.focus_area == IntegrationsFocusArea::Issue
-                && self.issue_inputs.is_focused())
+            || (self.focus_area == IntegrationsFocusArea::Issue && self.issue_inputs.is_focused())
     }
 }

@@ -524,9 +524,7 @@ impl TabInput for WorkflowTab {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)
             }
-            WorkflowFocusArea::Inputs => {
-                self.inputs.is_at_right_edge()
-            }
+            WorkflowFocusArea::Inputs => self.inputs.is_at_right_edge(),
             _ => true,
         }
     }

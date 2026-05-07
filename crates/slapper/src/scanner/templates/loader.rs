@@ -14,7 +14,9 @@ pub struct TemplateLoader {
 
 impl TemplateLoader {
     pub fn new(dirs: Vec<PathBuf>) -> Self {
-        Self { template_dirs: dirs }
+        Self {
+            template_dirs: dirs,
+        }
     }
 
     pub fn add_directory(&mut self, dir: PathBuf) {
@@ -22,7 +24,9 @@ impl TemplateLoader {
     }
 
     pub fn load_template(&self, path: &Path) -> Result<VulnerabilityTemplate> {
-        let base = self.template_dirs.first()
+        let base = self
+            .template_dirs
+            .first()
             .map(|d| d.as_path())
             .unwrap_or(path.parent().unwrap_or(path));
         let validated = validate_path(base, path)?;
@@ -43,11 +47,15 @@ impl TemplateLoader {
 
     pub fn validate_template(&self, template: &VulnerabilityTemplate) -> Result<()> {
         if template.id.is_empty() {
-            return Err(SlapperError::Config("Template ID cannot be empty".to_string()));
+            return Err(SlapperError::Config(
+                "Template ID cannot be empty".to_string(),
+            ));
         }
 
         if template.info.name.is_empty() {
-            return Err(SlapperError::Config("Template name cannot be empty".to_string()));
+            return Err(SlapperError::Config(
+                "Template name cannot be empty".to_string(),
+            ));
         }
 
         let valid_severity = ["critical", "high", "medium", "moderate", "low", "info"];
@@ -109,13 +117,18 @@ impl TemplateLoader {
             )));
         }
 
-        let canonical_dir = dir.canonicalize()
-            .map_err(|e| SlapperError::Config(format!("Failed to canonicalize directory: {}", e)))?;
+        let canonical_dir = dir.canonicalize().map_err(|e| {
+            SlapperError::Config(format!("Failed to canonicalize directory: {}", e))
+        })?;
 
-        let valid_dir = self.template_dirs.first()
+        let valid_dir = self
+            .template_dirs
+            .first()
             .map(|d| d.canonicalize())
             .transpose()
-            .map_err(|e| SlapperError::Config(format!("Failed to canonicalize base directory: {}", e)))?;
+            .map_err(|e| {
+                SlapperError::Config(format!("Failed to canonicalize base directory: {}", e))
+            })?;
 
         if let Some(ref valid) = valid_dir {
             if !canonical_dir.starts_with(valid) {
@@ -156,9 +169,7 @@ impl TemplateLoader {
     pub fn load_by_id(&self, id: &str) -> Result<Option<VulnerabilityTemplate>> {
         let all_templates = self.load_all()?;
 
-        Ok(all_templates
-            .into_iter()
-            .find(|t| t.id == id))
+        Ok(all_templates.into_iter().find(|t| t.id == id))
     }
 
     pub fn load_by_tag(&self, tag: &str) -> Result<Vec<VulnerabilityTemplate>> {

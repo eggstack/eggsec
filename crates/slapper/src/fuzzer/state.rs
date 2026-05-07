@@ -475,7 +475,10 @@ mod tests {
 
         session.update_from_response(&headers);
 
-        assert_eq!(session.cookies.get("sid").map(|c| c.value.as_str()), Some("one"));
+        assert_eq!(
+            session.cookies.get("sid").map(|c| c.value.as_str()),
+            Some("one")
+        );
         assert_eq!(
             session.cookies.get("csrf").map(|c| c.value.as_str()),
             Some("two")
@@ -492,9 +495,7 @@ mod tests {
 
         let header_map = session.headers.to_header_map();
         assert_eq!(
-            header_map
-                .get("x-trace-id")
-                .and_then(|v| v.to_str().ok()),
+            header_map.get("x-trace-id").and_then(|v| v.to_str().ok()),
             Some("abc123")
         );
     }
