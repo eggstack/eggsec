@@ -52,6 +52,14 @@ pub use crate::types::Severity;
 pub struct ResultComparator;
 
 impl ResultComparator {
+    fn finding_key(finding: &Finding) -> (String, String, String) {
+        (
+            finding.title.clone(),
+            finding.category.clone(),
+            finding.cve.clone().unwrap_or_default(),
+        )
+    }
+
     pub fn compare(old: &ScanResult, new: &ScanResult) -> ComparisonResult {
         let mut added = Vec::new();
         let mut removed = Vec::new();
@@ -60,12 +68,12 @@ impl ResultComparator {
         let old_findings: HashMap<_, _> = old
             .details
             .iter()
-            .map(|f| (f.title.clone(), f.clone()))
+            .map(|f| (Self::finding_key(f), f.clone()))
             .collect();
         let new_findings: HashMap<_, _> = new
             .details
             .iter()
-            .map(|f| (f.title.clone(), f.clone()))
+            .map(|f| (Self::finding_key(f), f.clone()))
             .collect();
 
         for (title, finding) in &new_findings {
@@ -334,6 +342,36 @@ mod tests {
         let result = ResultComparator::compare(&old, &new);
         assert_eq!(result.removed.len(), 1);
         assert_eq!(result.removed[0].title, "Gone Finding");
+    }
+
+    #[test]
+    fn test_result_comparator_distinguishes_same_title_by_category() {
+        let mut old = make_scan_result("1", "2024-01-01", 1, 2, 3);
+        old.details.push(Finding {
+            severity: Severity::High,
+            category: "XSS".to_string(),
+            title: "Duplicate Title".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: Some("CVE-2024-1111".to_string()),
+        });
+
+        let mut new = make_scan_result("2", "2024-01-02", 1, 2, 3);
+        new.details.push(Finding {
+            severity: Severity::High,
+            category: "SQLi".to_string(),
+            title: "Duplicate Title".to_string(),
+            description: String::new(),
+            evidence: vec![],
+            remediation: None,
+            cve: Some("CVE-2024-1111".to_string()),
+        });
+
+        let result = ResultComparator::compare(&old, &new);
+        assert_eq!(result.added.len(), 1);
+        assert_eq!(result.removed.len(), 1);
+        assert!(result.unchanged.is_empty());
     }
 
     #[test]

@@ -210,6 +210,12 @@ pub struct CronExpression {
     pub day_of_month: u8,
     pub month: u8,
     pub day_of_week: u8,
+    second_matcher: CronFieldMatcher,
+    minute_matcher: CronFieldMatcher,
+    hour_matcher: CronFieldMatcher,
+    day_of_month_matcher: CronFieldMatcher,
+    month_matcher: CronFieldMatcher,
+    day_of_week_matcher: CronFieldMatcher,
 }
 
 impl CronExpression {
@@ -220,28 +226,38 @@ impl CronExpression {
         }
 
         let second: u8;
+        let second_matcher: CronFieldMatcher;
         let minute_idx: usize;
         if parts.len() == 6 {
-            second = parse_field(parts[0], 0, 59)?;
+            let parsed = parse_field(parts[0], 0, 59)?;
+            second = parsed.display_value();
+            second_matcher = parsed;
             minute_idx = 1;
         } else {
             second = 0;
+            second_matcher = CronFieldMatcher::exact(0);
             minute_idx = 0;
         };
 
-        let minute = parse_field(parts[minute_idx], 0, 59)?;
-        let hour = parse_field(parts[minute_idx + 1], 0, 23)?;
-        let day_of_month = parse_field(parts[minute_idx + 2], 1, 31)?;
-        let month = parse_field(parts[minute_idx + 3], 1, 12)?;
-        let day_of_week = parse_field(parts[minute_idx + 4], 0, 6)?;
+        let minute_matcher = parse_field(parts[minute_idx], 0, 59)?;
+        let hour_matcher = parse_field(parts[minute_idx + 1], 0, 23)?;
+        let day_of_month_matcher = parse_field(parts[minute_idx + 2], 1, 31)?;
+        let month_matcher = parse_field(parts[minute_idx + 3], 1, 12)?;
+        let day_of_week_matcher = parse_field(parts[minute_idx + 4], 0, 6)?;
 
         Ok(CronExpression {
             second,
-            minute,
-            hour,
-            day_of_month,
-            month,
-            day_of_week,
+            minute: minute_matcher.display_value(),
+            hour: hour_matcher.display_value(),
+            day_of_month: day_of_month_matcher.display_value(),
+            month: month_matcher.display_value(),
+            day_of_week: day_of_week_matcher.display_value(),
+            second_matcher,
+            minute_matcher,
+            hour_matcher,
+            day_of_month_matcher,
+            month_matcher,
+            day_of_week_matcher,
         })
     }
 
@@ -249,27 +265,56 @@ impl CronExpression {
         let s = t.second() as u8;
         let m = t.minute() as u8;
         let h = t.hour() as u8;
-        let d = t.date().day() as u8;
-        let mo = t.date().month() as u8;
+        let d = t.date_naive().day() as u8;
+        let mo = t.date_naive().month() as u8;
         let dow = t.weekday().num_days_from_sunday() as u8;
 
-        field_matches(self.second, s)
-            && field_matches(self.minute, m)
-            && field_matches(self.hour, h)
-            && field_matches(self.day_of_month, d)
-            && field_matches(self.month, mo)
-            && field_matches(self.day_of_week, dow)
+        self.second_matcher.matches(s)
+            && self.minute_matcher.matches(m)
+            && self.hour_matcher.matches(h)
+            && self.day_of_month_matcher.matches(d)
+            && self.month_matcher.matches(mo)
+            && self.day_of_week_matcher.matches(dow)
     }
 }
 
-fn parse_field(field: &str, min: u8, max: u8) -> Result<u8, String> {
+#[derive(Debug, Clone, Copy)]
+enum CronFieldMatcher {
+    Any,
+    Exact(u8),
+    Step { start: u8, step: u8 },
+}
+
+impl CronFieldMatcher {
+    fn exact(value: u8) -> Self {
+        Self::Exact(value)
+    }
+
+    fn matches(&self, value: u8) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Exact(pattern) => *pattern == value,
+            Self::Step { start, step } => value >= *start && ((value - *start) % *step == 0),
+        }
+    }
+
+    fn display_value(&self) -> u8 {
+        match self {
+            Self::Any => 0,
+            Self::Exact(value) => *value,
+            Self::Step { start, .. } => *start,
+        }
+    }
+}
+
+fn parse_field(field: &str, min: u8, max: u8) -> Result<CronFieldMatcher, String> {
     if field == "*" {
-        return Ok(min);
+        return Ok(CronFieldMatcher::Any);
     }
 
     if let Ok(num) = field.parse::<u8>() {
         if num >= min && num <= max {
-            return Ok(num);
+            return Ok(CronFieldMatcher::Exact(num));
         }
     }
 
@@ -279,18 +324,24 @@ fn parse_field(field: &str, min: u8, max: u8) -> Result<u8, String> {
             let base = if parts[0] == "*" {
                 min
             } else {
-                parts[0].parse::<u8>().unwrap_or(min)
+                parts[0]
+                    .parse::<u8>()
+                    .map_err(|_| format!("Invalid cron field start: {}", field))?
             };
-            let step: u8 = parts[1].parse().unwrap_or(1);
-            return Ok(base + step);
+            let step = parts[1]
+                .parse::<u8>()
+                .map_err(|_| format!("Invalid cron field step: {}", field))?;
+            if base < min || base > max {
+                return Err(format!("Cron field start out of range: {}", field));
+            }
+            if step == 0 {
+                return Err(format!("Cron field step cannot be zero: {}", field));
+            }
+            return Ok(CronFieldMatcher::Step { start: base, step });
         }
     }
 
     Err(format!("Invalid cron field: {}", field))
-}
-
-fn field_matches(pattern: u8, value: u8) -> bool {
-    pattern == 0 || pattern == value
 }
 
 impl CronScheduler {
@@ -314,13 +365,14 @@ impl CronScheduler {
         &self,
         after: &chrono::DateTime<chrono::Utc>,
     ) -> Option<chrono::DateTime<chrono::Utc>> {
-        let mut next = *after + chrono::Duration::hours(1);
+        let mut next = *after + chrono::Duration::seconds(1);
+        let max_lookahead = 7 * 24 * 60 * 60;
 
-        for _ in 0..24 {
+        for _ in 0..max_lookahead {
             if self.should_run(&next) {
                 return Some(next);
             }
-            next += chrono::Duration::hours(1);
+            next += chrono::Duration::seconds(1);
         }
 
         None
@@ -344,6 +396,7 @@ impl FromStr for CronExpression {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     #[test]
     fn test_cron_parse() {
@@ -361,5 +414,48 @@ mod tests {
     #[test]
     fn test_cron_invalid() {
         assert!(CronExpression::parse("invalid").is_err());
+    }
+
+    #[test]
+    fn test_cron_wildcard_matches_any_day_month() {
+        let expr = CronExpression::parse("0 9 * * *").expect("parse should succeed");
+        let t = chrono::Utc
+            .with_ymd_and_hms(2026, 7, 21, 9, 0, 0)
+            .single()
+            .expect("valid datetime");
+        assert!(expr.matches(&t));
+    }
+
+    #[test]
+    fn test_cron_step_expression_matches_expected_values() {
+        let expr = CronExpression::parse("*/15 * * * *").expect("parse should succeed");
+        let t_match = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 10, 30, 0)
+            .single()
+            .expect("valid datetime");
+        let t_no_match = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 10, 31, 0)
+            .single()
+            .expect("valid datetime");
+        assert!(expr.matches(&t_match));
+        assert!(!expr.matches(&t_no_match));
+    }
+
+    #[test]
+    fn test_cron_next_run_respects_minute_precision() {
+        let mut scheduler = CronScheduler::new();
+        scheduler
+            .add_schedule("5 9 * * *")
+            .expect("schedule should parse");
+        let after = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 9, 4, 58)
+            .single()
+            .expect("valid datetime");
+        let next = scheduler.next_run(&after).expect("next run should exist");
+        let expected = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 9, 5, 0)
+            .single()
+            .expect("valid datetime");
+        assert_eq!(next, expected);
     }
 }

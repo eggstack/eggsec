@@ -56,8 +56,8 @@ impl DiffEngine {
                 title: f.title.clone(),
                 severity: f.severity,
                 description: f.description.clone(),
-                first_seen: chrono::Utc::now().to_rfc3339(),
-                last_seen: chrono::Utc::now().to_rfc3339(),
+                first_seen: f.timestamp.to_rfc3339(),
+                last_seen: f.timestamp.to_rfc3339(),
             })
             .collect();
 
@@ -69,8 +69,8 @@ impl DiffEngine {
                 title: f.title.clone(),
                 severity: f.severity,
                 description: f.description.clone(),
-                first_seen: chrono::Utc::now().to_rfc3339(),
-                last_seen: chrono::Utc::now().to_rfc3339(),
+                first_seen: f.timestamp.to_rfc3339(),
+                last_seen: f.timestamp.to_rfc3339(),
             })
             .collect();
 
@@ -87,8 +87,8 @@ impl DiffEngine {
                         title: new_finding.title.clone(),
                         severity: new_finding.severity,
                         description: new_finding.description.clone(),
-                        first_seen: chrono::Utc::now().to_rfc3339(),
-                        last_seen: chrono::Utc::now().to_rfc3339(),
+                        first_seen: old_finding.timestamp.to_rfc3339(),
+                        last_seen: new_finding.timestamp.to_rfc3339(),
                     });
                 } else if severity_change < 0 {
                     deescalated_findings.push(DiffFinding {
@@ -96,8 +96,8 @@ impl DiffEngine {
                         title: new_finding.title.clone(),
                         severity: new_finding.severity,
                         description: new_finding.description.clone(),
-                        first_seen: chrono::Utc::now().to_rfc3339(),
-                        last_seen: chrono::Utc::now().to_rfc3339(),
+                        first_seen: old_finding.timestamp.to_rfc3339(),
+                        last_seen: new_finding.timestamp.to_rfc3339(),
                     });
                 } else {
                     unchanged_findings.push(DiffFinding {
@@ -105,8 +105,8 @@ impl DiffEngine {
                         title: new_finding.title.clone(),
                         severity: new_finding.severity,
                         description: new_finding.description.clone(),
-                        first_seen: chrono::Utc::now().to_rfc3339(),
-                        last_seen: chrono::Utc::now().to_rfc3339(),
+                        first_seen: old_finding.timestamp.to_rfc3339(),
+                        last_seen: new_finding.timestamp.to_rfc3339(),
                     });
                 }
             }
@@ -143,6 +143,7 @@ impl DiffEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     #[test]
     fn test_diff_summary() {
@@ -154,5 +155,34 @@ mod tests {
             net_change: 2,
         };
         assert_eq!(summary.net_change, 2);
+    }
+
+    #[test]
+    fn test_diff_preserves_finding_timestamps() {
+        let old_time = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+            .single()
+            .expect("valid datetime");
+        let new_time = chrono::Utc
+            .with_ymd_and_hms(2026, 1, 2, 0, 0, 0)
+            .single()
+            .expect("valid datetime");
+
+        let old = AgentFinding::new("xss", Severity::Low, "A", "example.com", "/")
+            .with_description("old");
+        let old_id = old.id.clone();
+        let mut old = old;
+        old.timestamp = old_time;
+
+        let new = AgentFinding::new("xss", Severity::High, "A", "example.com", "/")
+            .with_description("new");
+        let mut new = new;
+        new.id = old_id;
+        new.timestamp = new_time;
+
+        let diff = DiffEngine::compare(&[old], &[new]);
+        assert_eq!(diff.escalated_findings.len(), 1);
+        assert_eq!(diff.escalated_findings[0].first_seen, old_time.to_rfc3339());
+        assert_eq!(diff.escalated_findings[0].last_seen, new_time.to_rfc3339());
     }
 }

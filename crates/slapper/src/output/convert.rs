@@ -4,6 +4,10 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 
+fn parse_severity(value: &str) -> crate::types::Severity {
+    crate::types::Severity::parse_or_default(value)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanReportData {
     pub target: String,
@@ -57,7 +61,10 @@ pub fn convert_to_junit(report: &ScanReportData) -> String {
     let mut builder = JUnitBuilder::new("Slapper Security Scan");
 
     for finding in &report.findings {
-        let result = if finding.severity == "high" || finding.severity == "critical" {
+        let result = if matches!(
+            parse_severity(&finding.severity),
+            crate::types::Severity::Critical | crate::types::Severity::High
+        ) {
             JUnitTestResult::Failed {
                 message: finding.description.clone(),
                 failure_type: finding.category.clone(),
@@ -88,9 +95,9 @@ pub fn convert_to_sarif(report: &ScanReportData) -> Result<String, String> {
     let mut builder = SarifBuilder::new();
 
     for finding in &report.findings {
-        let level = match finding.severity.as_str() {
-            "critical" | "high" => "error",
-            "medium" => "warning",
+        let level = match parse_severity(&finding.severity) {
+            crate::types::Severity::Critical | crate::types::Severity::High => "error",
+            crate::types::Severity::Medium => "warning",
             _ => "note",
         };
 
@@ -157,8 +164,13 @@ pub fn convert_to_json(report: &ScanReportData) -> Result<String, String> {
 
 impl From<&ScanReportData> for super::markdown::ScanSummary {
     fn from(report: &ScanReportData) -> Self {
-        let findings_by_severity =
-            |sev: &str| report.findings.iter().filter(|f| f.severity == sev).count() as u32;
+        let findings_by_severity = |sev: crate::types::Severity| {
+            report
+                .findings
+                .iter()
+                .filter(|f| parse_severity(&f.severity) == sev)
+                .count() as u32
+        };
 
         super::markdown::ScanSummary {
             target: report.target.clone(),
@@ -167,11 +179,11 @@ impl From<&ScanReportData> for super::markdown::ScanSummary {
             duration_seconds: report.duration_ms / 1000,
             total_requests: 0,
             findings_count: report.findings.len() as u32,
-            critical_count: findings_by_severity("critical"),
-            high_count: findings_by_severity("high"),
-            medium_count: findings_by_severity("medium"),
-            low_count: findings_by_severity("low"),
-            info_count: findings_by_severity("info"),
+            critical_count: findings_by_severity(crate::types::Severity::Critical),
+            high_count: findings_by_severity(crate::types::Severity::High),
+            medium_count: findings_by_severity(crate::types::Severity::Medium),
+            low_count: findings_by_severity(crate::types::Severity::Low),
+            info_count: findings_by_severity(crate::types::Severity::Info),
         }
     }
 }
@@ -194,14 +206,7 @@ impl From<&FindingData> for super::markdown::Finding {
 
 impl From<&FindingData> for super::AgentFinding {
     fn from(f: &FindingData) -> Self {
-        use crate::types::Severity;
-        let severity = match f.severity.to_lowercase().as_str() {
-            "critical" => Severity::Critical,
-            "high" => Severity::High,
-            "medium" => Severity::Medium,
-            "low" => Severity::Low,
-            _ => Severity::Info,
-        };
+        let severity = parse_severity(&f.severity);
         super::AgentFinding::new(
             f.category.clone(),
             severity,
@@ -229,5 +234,57 @@ impl From<&super::AgentFinding> for FindingData {
             remediation: Some(f.remediation.summary.clone()),
             cve_ids: f.cwe_ids.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_report_with_severity(severity: &str) -> ScanReportData {
+        ScanReportData {
+            target: "example.com".to_string(),
+            scan_type: "full".to_string(),
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
+            findings: vec![FindingData {
+                title: "Test finding".to_string(),
+                severity: severity.to_string(),
+                category: "xss".to_string(),
+                description: "desc".to_string(),
+                location: "/".to_string(),
+                evidence: None,
+                remediation: None,
+                cve_ids: vec![],
+            }],
+            open_ports: vec![],
+            services: vec![],
+            duration_ms: 1000,
+        }
+    }
+
+    #[test]
+    fn junit_treats_mixed_case_high_as_failed() {
+        let report = sample_report_with_severity("High");
+        let xml = convert_to_junit(&report);
+        assert!(xml.contains("<failure"));
+    }
+
+    #[test]
+    fn sarif_treats_mixed_case_medium_as_warning() {
+        let report = sample_report_with_severity("MeDiuM");
+        let json = convert_to_sarif(&report).expect("SARIF conversion should succeed");
+        let sarif: serde_json::Value =
+            serde_json::from_str(&json).expect("SARIF output should be valid JSON");
+        let level = sarif["runs"][0]["results"][0]["level"]
+            .as_str()
+            .expect("result level should be a string");
+        assert_eq!(level, "warning");
+    }
+
+    #[test]
+    fn summary_counts_mixed_case_critical() {
+        let report = sample_report_with_severity("CRITICAL");
+        let summary = crate::output::markdown::ScanSummary::from(&report);
+        assert_eq!(summary.critical_count, 1);
     }
 }
