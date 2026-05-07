@@ -45,13 +45,26 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     let sandbox_enabled = sandbox.enabled;
     let allowed_dir_for_open = sandbox.allowed_dir.clone();
 
+    let resolve_path_for_sandbox = |path: &PathBuf| -> Result<PathBuf, std::io::Error> {
+        if path.exists() {
+            return path.canonicalize();
+        }
+        if let Some(parent) = path.parent() {
+            let canonical_parent = parent.canonicalize()?;
+            if let Some(name) = path.file_name() {
+                return Ok(canonical_parent.join(name));
+            }
+        }
+        path.canonicalize()
+    };
+
     io.set(
         "open",
         lua.create_function(move |lua, (filename, mode): (String, Option<String>)| {
             if sandbox_enabled {
                 let path_buf = PathBuf::from(&filename);
                 if let Some(ref dir) = allowed_dir_for_open {
-                    let canonical = match path_buf.canonicalize() {
+                    let canonical = match resolve_path_for_sandbox(&path_buf) {
                         Ok(c) => c,
                         Err(e) => {
                             IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);

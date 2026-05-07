@@ -79,7 +79,7 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
                 let results = python_mgr
                     .run_check(&run_args.name, &run_args.target)
                     .await?;
-                if !results.findings.is_empty() {
+                if !results.findings.is_empty() || results.success || !results.errors.is_empty() {
                     println!(
                         "Running Python plugin '{}' against target '{}'",
                         run_args.name, run_args.target
@@ -87,6 +87,9 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
                     println!("\nPlugin Results:");
                     for finding in &results.findings {
                         println!("  - {:?}", finding);
+                    }
+                    for error in &results.errors {
+                        println!("  Error: {}", error);
                     }
                     if let Some(output_file) = &run_args.output {
                         tokio::fs::write(output_file, serde_json::to_string_pretty(&results)?)

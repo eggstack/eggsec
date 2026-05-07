@@ -334,15 +334,8 @@ impl TabInput for NseTab {
             if self.is_running() {
                 self.stop();
             } else {
-                // In a real implementation this would trigger an event/worker
-                self.state = AppState::Running;
+                self.start();
             }
-        }
-
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
         }
     }
 
@@ -417,6 +410,13 @@ impl TabInput for NseTab {
 }
 
 impl NseTab {
+    pub fn start(&mut self) {
+        if self.state != AppState::Running {
+            // In a real implementation this would trigger an event/worker
+            self.state = AppState::Running;
+        }
+    }
+
     pub fn stop(&mut self) {
         if self.state == AppState::Running {
             self.state = AppState::Idle;

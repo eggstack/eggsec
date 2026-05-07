@@ -91,9 +91,18 @@ impl SecurityTool for NseTool {
 
             let _ = executor.set_script_args(&script_args);
 
-            let script_content = match executor.load_script(&script_for_executor) {
-                Ok(content) => content,
-                _ => get_builtin_script(&script_for_executor),
+            let script_content = if matches!(
+                script_for_executor.as_str(),
+                "default" | "discovery" | "banner" | "http-headers"
+            ) {
+                match executor.load_script(&script_for_executor) {
+                    Ok(content) => content,
+                    Err(_) => get_builtin_script(&script_for_executor),
+                }
+            } else {
+                executor
+                    .load_script(&script_for_executor)
+                    .map_err(|e| SlapperError::Config(e.to_string()))?
             };
 
             match executor.run_script(&script_content) {

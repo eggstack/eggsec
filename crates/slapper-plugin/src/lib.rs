@@ -376,6 +376,14 @@ impl PluginManager {
                             tracing::warn!(path = %path.display(), error = %e, "Path validation failed");
                             continue;
                         }
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Err(e) =
+                                validate_python_plugin(&content, self.block_suspicious_plugins)
+                            {
+                                tracing::warn!(path = %path.display(), error = %e, "Plugin security validation failed");
+                                continue;
+                            }
+                        }
                         if let Some(info) = self.load_python_plugin(&path) {
                             self.plugins.insert(info.name.clone(), info.clone());
                             discovered.push(info);

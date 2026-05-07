@@ -366,22 +366,50 @@ impl PythonPluginManager {
 
             let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner());
             for plugin in plugins.iter() {
+                let supports_function_check =
+                    if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
+                        if let Ok(register_checks) = module.getattr("register_checks") {
+                            if let Ok(check_values) = register_checks.call0() {
+                                if let Ok(checks) = check_values.cast::<PyList>() {
+                                    checks.iter().any(|item| {
+                                        item.cast::<PyDict>()
+                                            .ok()
+                                            .and_then(|dict| dict.get_item("name").ok().flatten())
+                                            .and_then(|name| name.extract::<String>().ok())
+                                            .map(|name| name == check_name)
+                                            .unwrap_or(false)
+                                    })
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
                 // Try function-based plugins
-                if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
-                    if let Ok(run_func) = module.getattr("run_check") {
-                        let args = (check_name, target);
-                        if let Ok(result) = run_func.call1(args) {
-                            if let Ok(list) = result.cast::<PyList>() {
-                                for item in list.iter() {
-                                    if let Ok(json_str) = item.extract::<String>() {
-                                        if json_str.len() > MAX_JSON_SIZE_BYTES {
-                                            tracing::warn!(
-                                                "JSON result exceeds max size, truncating"
-                                            );
-                                            continue;
-                                        }
-                                        if let Ok(value) = serde_json::from_str(&json_str) {
-                                            all_results.push(value);
+                if supports_function_check {
+                    if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
+                        if let Ok(run_func) = module.getattr("run_check") {
+                            let args = (check_name, target);
+                            if let Ok(result) = run_func.call1(args) {
+                                if let Ok(list) = result.cast::<PyList>() {
+                                    for item in list.iter() {
+                                        if let Ok(json_str) = item.extract::<String>() {
+                                            if json_str.len() > MAX_JSON_SIZE_BYTES {
+                                                tracing::warn!(
+                                                    "JSON result exceeds max size, truncating"
+                                                );
+                                                continue;
+                                            }
+                                            if let Ok(value) = serde_json::from_str(&json_str) {
+                                                all_results.push(value);
+                                            }
                                         }
                                     }
                                 }

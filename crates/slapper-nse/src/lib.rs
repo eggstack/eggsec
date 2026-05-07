@@ -145,7 +145,7 @@ impl SandboxConfig {
     /// Check if a network target host is allowed.
     ///
     /// This resolves the hostname and checks the resulting IP against allowed networks.
-    /// Returns `true` if resolution fails (fail-open for compatibility).
+    /// Returns `false` if resolution fails while an allowlist is configured.
     pub fn is_host_allowed(&self, host: &str) -> bool {
         use std::net::ToSocketAddrs;
 
@@ -157,14 +157,11 @@ impl SandboxConfig {
             return true;
         }
 
-        let addr: std::net::SocketAddr = format!("{}:0", host)
-            .to_socket_addrs()
-            .map(|mut addrs| addrs.next())
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| "0.0.0.0:0".parse().unwrap());
+        let Ok(mut addrs) = format!("{}:0", host).to_socket_addrs() else {
+            return false;
+        };
 
-        self.is_network_allowed(addr.ip())
+        addrs.any(|addr| self.is_network_allowed(addr.ip()))
     }
 }
 

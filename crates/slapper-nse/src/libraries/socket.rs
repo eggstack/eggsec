@@ -21,10 +21,17 @@ struct SocketHandle {
     timeout: Duration,
     socket_type: String,
     udp_connected: bool,
+    sandbox_enabled: bool,
+    log_violations: bool,
+    allowed_networks: Vec<IpNetwork>,
 }
 
 impl SocketHandle {
-    fn new() -> Self {
+    fn new_with_sandbox(
+        sandbox_enabled: bool,
+        log_violations: bool,
+        allowed_networks: Vec<IpNetwork>,
+    ) -> Self {
         Self {
             stream: None,
             host: String::new(),
@@ -32,10 +39,41 @@ impl SocketHandle {
             timeout: Duration::from_secs(10),
             socket_type: "tcp".to_string(),
             udp_connected: false,
+            sandbox_enabled,
+            log_violations,
+            allowed_networks,
         }
     }
 
+    fn is_host_allowed(&self, host: &str) -> bool {
+        if !self.sandbox_enabled || self.allowed_networks.is_empty() {
+            return true;
+        }
+
+        let addr = format!("{}:0", host);
+        let Ok(socket_addrs) = addr.to_socket_addrs() else {
+            return false;
+        };
+
+        socket_addrs.into_iter().any(|sa| {
+            self.allowed_networks
+                .iter()
+                .any(|net| net.contains(sa.ip()))
+        })
+    }
+
     fn connect(&mut self, host: &str, port: u16) -> Result<(), String> {
+        if !self.is_host_allowed(host) {
+            let msg = format!(
+                "[NSE Sandbox] Network violation: {} is not in allowed networks (sandbox enabled)",
+                host
+            );
+            if self.log_violations {
+                tracing::warn!("{}", msg);
+            }
+            return Err(msg);
+        }
+
         let addr = format!("{}:{}", host, port);
         let socket_addr: SocketAddr = addr
             .to_socket_addrs()
@@ -58,6 +96,17 @@ impl SocketHandle {
     }
 
     fn connect_udp(&mut self, host: &str, port: u16) -> Result<(), String> {
+        if !self.is_host_allowed(host) {
+            let msg = format!(
+                "[NSE Sandbox] Network violation: {} is not in allowed networks (sandbox enabled)",
+                host
+            );
+            if self.log_violations {
+                tracing::warn!("{}", msg);
+            }
+            return Err(msg);
+        }
+
         let addr = format!("{}:{}", host, port);
         let socket_addr: SocketAddr = addr
             .to_socket_addrs()
@@ -251,27 +300,48 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
 
     let socket = lua.create_table()?;
 
-    let tcp_fn = lua.create_function(move |lua, _: ()| {
-        let mut sock = SocketHandle::new();
-        sock.socket_type = "tcp".to_string();
-        if sandbox_enabled && log_violations {
-            tracing::info!("[NSE Sandbox] Socket created: TCP (sandbox enabled)");
+    let tcp_fn = lua.create_function({
+        let allowed_networks = allowed_networks.clone();
+        move |lua, _: ()| {
+            let mut sock = SocketHandle::new_with_sandbox(
+                sandbox_enabled,
+                log_violations,
+                allowed_networks.clone(),
+            );
+            sock.socket_type = "tcp".to_string();
+            if sandbox_enabled && log_violations {
+                tracing::info!("[NSE Sandbox] Socket created: TCP (sandbox enabled)");
+            }
+            Ok(lua.create_userdata(sock)?)
         }
-        Ok(lua.create_userdata(sock)?)
     })?;
     socket.set("tcp", tcp_fn)?;
 
-    let udp_fn = lua.create_function(|lua, _: ()| {
-        let mut sock = SocketHandle::new();
-        sock.socket_type = "udp".to_string();
-        Ok(lua.create_userdata(sock)?)
+    let udp_fn = lua.create_function({
+        let allowed_networks = allowed_networks.clone();
+        move |lua, _: ()| {
+            let mut sock = SocketHandle::new_with_sandbox(
+                sandbox_enabled,
+                log_violations,
+                allowed_networks.clone(),
+            );
+            sock.socket_type = "udp".to_string();
+            Ok(lua.create_userdata(sock)?)
+        }
     })?;
     socket.set("udp", udp_fn)?;
 
-    let sctp_fn = lua.create_function(|lua, _: ()| {
-        let mut sock = SocketHandle::new();
-        sock.socket_type = "sctp".to_string();
-        Ok(lua.create_userdata(sock)?)
+    let sctp_fn = lua.create_function({
+        let allowed_networks = allowed_networks.clone();
+        move |lua, _: ()| {
+            let mut sock = SocketHandle::new_with_sandbox(
+                sandbox_enabled,
+                log_violations,
+                allowed_networks.clone(),
+            );
+            sock.socket_type = "sctp".to_string();
+            Ok(lua.create_userdata(sock)?)
+        }
     })?;
     socket.set("sctp", sctp_fn)?;
 
@@ -301,7 +371,8 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
                 }
             }
 
-            let mut sock = SocketHandle::new();
+            let mut sock =
+                SocketHandle::new_with_sandbox(sandbox_enabled, log_violations, allowed_networks.clone());
             sock.connect(&host, port)
                 .map_err(|e| mlua::Error::RuntimeError(e))?;
 
@@ -340,7 +411,8 @@ pub fn register_socket_library(lua: &Lua, sandbox: &crate::SandboxConfig) -> Lua
                 }
             }
 
-            let mut sock = SocketHandle::new();
+            let mut sock =
+                SocketHandle::new_with_sandbox(sandbox_enabled, log_violations, allowed_networks.clone());
             sock.connect(&host, port)
                 .map_err(|e| mlua::Error::RuntimeError(e))?;
 
