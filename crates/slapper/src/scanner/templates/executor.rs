@@ -42,10 +42,7 @@ impl TemplateExecutor {
         self.matcher.set_interactsh_urls(urls);
     }
 
-    pub async fn execute_on_target(
-        &self,
-        target: &str,
-    ) -> Result<Vec<TemplateExecutionResult>> {
+    pub async fn execute_on_target(&self, target: &str) -> Result<Vec<TemplateExecutionResult>> {
         let templates = self.loader.load_all()?;
         let mut results = Vec::new();
 
@@ -77,7 +74,11 @@ impl TemplateExecutor {
         let mut matched_by = String::new();
 
         for resp in &responses {
-            match self.matcher.match_template(template, Some(resp), None).await {
+            match self
+                .matcher
+                .match_template(template, Some(resp), None)
+                .await
+            {
                 Ok(result) => {
                     if result.matched {
                         matched = true;
@@ -108,9 +109,17 @@ impl TemplateExecutor {
         request: &TemplateRequest,
     ) -> Result<HttpResponseData> {
         let url = if target.starts_with("http") {
-            format!("{}/{}", target.trim_end_matches('/'), request.path.trim_start_matches('/'))
+            format!(
+                "{}/{}",
+                target.trim_end_matches('/'),
+                request.path.trim_start_matches('/')
+            )
         } else {
-            format!("https://{}/{}", target, request.path.trim_start_matches('/'))
+            format!(
+                "https://{}/{}",
+                target,
+                request.path.trim_start_matches('/')
+            )
         };
 
         let mut req_builder = match request.method.to_uppercase().as_str() {
@@ -223,7 +232,11 @@ impl TemplateExecutor {
             template_name: template.info.name.clone(),
             severity: template.severity(),
             matched,
-            matched_by: if matched { "dns".to_string() } else { String::new() },
+            matched_by: if matched {
+                "dns".to_string()
+            } else {
+                String::new()
+            },
             target: target.to_string(),
             responses: vec![],
         })

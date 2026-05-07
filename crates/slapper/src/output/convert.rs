@@ -106,7 +106,9 @@ pub fn convert_to_sarif(report: &ScanReportData) -> Result<String, String> {
     }
 
     let sarif_report = builder.build();
-    sarif_report.to_json().map_err(|e| format!("Failed to generate SARIF: {}", e))
+    sarif_report
+        .to_json()
+        .map_err(|e| format!("Failed to generate SARIF: {}", e))
 }
 
 pub fn convert_to_html(report: &ScanReportData) -> String {

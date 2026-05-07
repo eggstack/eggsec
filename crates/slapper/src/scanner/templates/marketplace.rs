@@ -78,13 +78,17 @@ impl TemplateMarketplace {
         per_page: usize,
         tag_filter: Option<&str>,
     ) -> Result<MarketplaceListing> {
-        let mut url = format!("{}/api/v1/templates?page={}&per_page={}", self.base_url, page, per_page);
+        let mut url = format!(
+            "{}/api/v1/templates?page={}&per_page={}",
+            self.base_url, page, per_page
+        );
 
         if let Some(tag) = tag_filter {
             url.push_str(&format!("&tag={}", tag));
         }
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .send()
             .await
@@ -97,22 +101,23 @@ impl TemplateMarketplace {
             )));
         }
 
-        let listing: MarketplaceListing = response
-            .json()
-            .await
-            .map_err(|e| SlapperError::Network(format!("Failed to parse marketplace response: {}", e)))?;
+        let listing: MarketplaceListing = response.json().await.map_err(|e| {
+            SlapperError::Network(format!("Failed to parse marketplace response: {}", e))
+        })?;
 
         Ok(listing)
     }
 
     pub async fn download_template(&self, template_id: &str) -> Result<VulnerabilityTemplate> {
-        let url = format!("{}/api/v1/templates/{}/download", self.base_url, template_id);
+        let url = format!(
+            "{}/api/v1/templates/{}/download",
+            self.base_url, template_id
+        );
 
-        let response = self.http_client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| SlapperError::Network(format!("Failed to download template: {}", e)))?;
+        let response =
+            self.http_client.get(&url).send().await.map_err(|e| {
+                SlapperError::Network(format!("Failed to download template: {}", e))
+            })?;
 
         if !response.status().is_success() {
             return Err(SlapperError::Network(format!(
@@ -121,10 +126,9 @@ impl TemplateMarketplace {
             )));
         }
 
-        let content = response
-            .text()
-            .await
-            .map_err(|e| SlapperError::Network(format!("Failed to read template content: {}", e)))?;
+        let content = response.text().await.map_err(|e| {
+            SlapperError::Network(format!("Failed to read template content: {}", e))
+        })?;
 
         let loader = TemplateLoader::default();
         let mut final_template = loader.parse_template(&content)?;
@@ -165,8 +169,9 @@ impl TemplateMarketplace {
     }
 
     fn save_to_cache(&self, template_id: &str, content: &str) -> Result<()> {
-        std::fs::create_dir_all(&self.local_cache)
-            .map_err(|e| SlapperError::Config(format!("Failed to create cache directory: {}", e)))?;
+        std::fs::create_dir_all(&self.local_cache).map_err(|e| {
+            SlapperError::Config(format!("Failed to create cache directory: {}", e))
+        })?;
 
         let cache_path = self.local_cache.join(format!("{}.yaml", template_id));
 
@@ -234,14 +239,20 @@ impl TemplateMarketplace {
             match self.download_template(&marketplace_template.id).await {
                 Ok(template) => {
                     let path = template_dir.join(format!("{}.yaml", template.id));
-                    let yaml = serde_yaml_neo::to_string(&template)
-                        .map_err(|e| SlapperError::Config(format!("Failed to serialize template: {}", e)))?;
-                    std::fs::write(&path, yaml)
-                        .map_err(|e| SlapperError::Config(format!("Failed to write template: {}", e)))?;
+                    let yaml = serde_yaml_neo::to_string(&template).map_err(|e| {
+                        SlapperError::Config(format!("Failed to serialize template: {}", e))
+                    })?;
+                    std::fs::write(&path, yaml).map_err(|e| {
+                        SlapperError::Config(format!("Failed to write template: {}", e))
+                    })?;
                     synced.push(marketplace_template.id.clone());
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to download template {}: {}", marketplace_template.id, e);
+                    tracing::warn!(
+                        "Failed to download template {}: {}",
+                        marketplace_template.id,
+                        e
+                    );
                 }
             }
         }

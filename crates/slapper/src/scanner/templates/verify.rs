@@ -51,14 +51,11 @@ impl TemplateSigner {
         })
     }
 
-    pub fn from_keypair(
-        signing_key: &[u8],
-        signer_info: SignerInfo,
-    ) -> Result<Self> {
+    pub fn from_keypair(signing_key: &[u8], signer_info: SignerInfo) -> Result<Self> {
         let signing_key = SigningKey::from_bytes(
-            signing_key.try_into().map_err(|_| {
-                SlapperError::Validation("Invalid signing key length".to_string())
-            })?
+            signing_key
+                .try_into()
+                .map_err(|_| SlapperError::Validation("Invalid signing key length".to_string()))?,
         );
         let public_key = signing_key.verifying_key();
 
@@ -70,15 +67,21 @@ impl TemplateSigner {
     }
 
     pub fn sign(&self, template: &VulnerabilityTemplate) -> Result<SignedTemplate> {
-        let template_bytes = serde_yaml_neo::to_string(template)
-            .map_err(|e| SlapperError::Parse(e.to_string()))?;
+        let template_bytes =
+            serde_yaml_neo::to_string(template).map_err(|e| SlapperError::Parse(e.to_string()))?;
 
         let signature = self.signing_key.sign(template_bytes.as_bytes());
 
         Ok(SignedTemplate {
             template: template.clone(),
-            signature: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, signature.to_bytes()),
-            public_key: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.public_key.to_bytes()),
+            signature: base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                signature.to_bytes(),
+            ),
+            public_key: base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                self.public_key.to_bytes(),
+            ),
             signer_info: self.signer_info.clone(),
         })
     }
@@ -88,7 +91,10 @@ impl TemplateSigner {
     }
 
     pub fn public_key_string(&self) -> String {
-        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.public_key.to_bytes())
+        base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            self.public_key.to_bytes(),
+        )
     }
 
     pub fn save_private_key(&self, path: &Path) -> Result<()> {
@@ -111,16 +117,19 @@ pub struct TemplateVerifier {
 
 impl TemplateVerifier {
     pub fn new() -> Self {
-        Self { verifying_key: None }
+        Self {
+            verifying_key: None,
+        }
     }
 
     pub fn with_public_key(public_key: &str) -> Result<Self> {
-        let key_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, public_key)
-            .map_err(|e| SlapperError::Parse(e.to_string()))?;
+        let key_bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, public_key)
+                .map_err(|e| SlapperError::Parse(e.to_string()))?;
 
-        let key_array: [u8; 32] = key_bytes.try_into().map_err(|_| {
-            SlapperError::Validation("Invalid public key length".to_string())
-        })?;
+        let key_array: [u8; 32] = key_bytes
+            .try_into()
+            .map_err(|_| SlapperError::Validation("Invalid public key length".to_string()))?;
 
         let verifying_key = VerifyingKey::from_bytes(&key_array)
             .map_err(|e| SlapperError::Validation(format!("Invalid public key: {}", e)))?;
@@ -131,9 +140,9 @@ impl TemplateVerifier {
     }
 
     pub fn with_public_key_bytes(key_bytes: &[u8]) -> Result<Self> {
-        let key_array: [u8; 32] = key_bytes.try_into().map_err(|_| {
-            SlapperError::Validation("Invalid public key length".to_string())
-        })?;
+        let key_array: [u8; 32] = key_bytes
+            .try_into()
+            .map_err(|_| SlapperError::Validation("Invalid public key length".to_string()))?;
 
         let verifying_key = VerifyingKey::from_bytes(&key_array)
             .map_err(|e| SlapperError::Validation(format!("Invalid public key: {}", e)))?;
@@ -151,12 +160,17 @@ impl TemplateVerifier {
         let template_bytes = serde_yaml_neo::to_string(&signed_template.template)
             .map_err(|e| SlapperError::Parse(e.to_string()))?;
 
-        let signature_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &signed_template.signature)
-            .map_err(|e| SlapperError::Parse(e.to_string()))?;
+        let signature_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &signed_template.signature,
+        )
+        .map_err(|e| SlapperError::Parse(e.to_string()))?;
 
-        let signature = Signature::from_bytes(&signature_bytes.try_into().map_err(|_| {
-            SlapperError::Validation("Invalid signature length".to_string())
-        })?);
+        let signature = Signature::from_bytes(
+            &signature_bytes
+                .try_into()
+                .map_err(|_| SlapperError::Validation("Invalid signature length".to_string()))?,
+        );
 
         match verifying_key.verify(template_bytes.as_bytes(), &signature) {
             Ok(()) => Ok(VerificationResult {
@@ -179,17 +193,22 @@ impl TemplateVerifier {
             SlapperError::Validation("No public key configured for verification".to_string())
         })?;
 
-        let template_bytes = serde_yaml_neo::to_string(template)
-            .map_err(|e| SlapperError::Parse(e.to_string()))?;
+        let template_bytes =
+            serde_yaml_neo::to_string(template).map_err(|e| SlapperError::Parse(e.to_string()))?;
 
-        let signature_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, signature)
-            .map_err(|e| SlapperError::Parse(e.to_string()))?;
+        let signature_bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, signature)
+                .map_err(|e| SlapperError::Parse(e.to_string()))?;
 
-        let signature = Signature::from_bytes(&signature_bytes.try_into().map_err(|_| {
-            SlapperError::Validation("Invalid signature length".to_string())
-        })?);
+        let signature = Signature::from_bytes(
+            &signature_bytes
+                .try_into()
+                .map_err(|_| SlapperError::Validation("Invalid signature length".to_string()))?,
+        );
 
-        Ok(verifying_key.verify(template_bytes.as_bytes(), &signature).is_ok())
+        Ok(verifying_key
+            .verify(template_bytes.as_bytes(), &signature)
+            .is_ok())
     }
 }
 
@@ -214,8 +233,8 @@ impl SignedTemplate {
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
-        let content = serde_yaml_neo::to_string(self)
-            .map_err(|e| SlapperError::Output(e.to_string()))?;
+        let content =
+            serde_yaml_neo::to_string(self).map_err(|e| SlapperError::Output(e.to_string()))?;
         fs::write(path, content)?;
         Ok(())
     }
@@ -228,11 +247,12 @@ pub fn load_public_key(path: &Path) -> Result<String> {
 
 pub fn load_private_key(path: &Path) -> Result<[u8; 32]> {
     let content = fs::read_to_string(path)?;
-    let key_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, content.trim())
-        .map_err(|e| SlapperError::Parse(e.to_string()))?;
-    key_bytes.try_into().map_err(|_| {
-        SlapperError::Validation("Invalid private key length".to_string())
-    })
+    let key_bytes =
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, content.trim())
+            .map_err(|e| SlapperError::Parse(e.to_string()))?;
+    key_bytes
+        .try_into()
+        .map_err(|_| SlapperError::Validation("Invalid private key length".to_string()))
 }
 
 #[cfg(test)]
@@ -325,7 +345,9 @@ mod tests {
         let signed = signer.sign(&template).unwrap();
 
         let verifier = TemplateVerifier::with_public_key(&signed.public_key).unwrap();
-        let is_valid = verifier.verify_raw(&signed.template, &signed.signature).unwrap();
+        let is_valid = verifier
+            .verify_raw(&signed.template, &signed.signature)
+            .unwrap();
         assert!(is_valid);
     }
 

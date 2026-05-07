@@ -116,7 +116,8 @@ impl PdfGenerator {
     #[cfg(not(feature = "pdf"))]
     pub fn generate_report(_findings: &[AgentFinding], _config: &PdfConfig) -> Result<Vec<u8>> {
         Err(crate::error::SlapperError::Output(
-            "PDF generation is not available. Recompile with the 'pdf' feature enabled.".to_string(),
+            "PDF generation is not available. Recompile with the 'pdf' feature enabled."
+                .to_string(),
         ))
     }
 

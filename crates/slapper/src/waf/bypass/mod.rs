@@ -184,7 +184,14 @@ mod tests {
     #[test]
     fn bypass_requires_payload_reflection_for_non_empty_payload() {
         let detection = detection_with_status(403);
-        assert!(!is_bypass_successful(200, &detection, "admin'--", "welcome"));
-        assert!(is_bypass_successful(200, &detection, "admin'--", "admin'-- accepted"));
+        assert!(!is_bypass_successful(
+            200, &detection, "admin'--", "welcome"
+        ));
+        assert!(is_bypass_successful(
+            200,
+            &detection,
+            "admin'--",
+            "admin'-- accepted"
+        ));
     }
 }
