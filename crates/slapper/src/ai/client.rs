@@ -58,6 +58,9 @@ impl AiClient {
             panic!("AiConfig provider cannot be empty");
         }
         let provider = Provider::from_str(&config.provider);
+        if provider == Provider::Azure && config.base_url.is_none() {
+            panic!("AiConfig base_url is required for Azure provider");
+        }
         let circuit_breaker = Arc::new(CircuitBreaker::new(5, 3, Duration::from_secs(60)));
         Self {
             client: Client::builder()
@@ -118,10 +121,6 @@ impl AiClient {
         max_tokens: Option<u32>,
         temperature: f64,
     ) -> Result<serde_json::Value> {
-        if !self.circuit_breaker.is_available() {
-            return Err(AiError::CircuitBreakerOpen {});
-        }
-
         let body = serde_json::json!({
             "model": self.model(),
             "messages": [{"role": "user", "content": prompt}],
@@ -129,37 +128,7 @@ impl AiClient {
             "temperature": temperature,
         });
 
-        let request = self.apply_auth(self.client.post(self.api_url()).json(&body));
-
-        match request.send().await {
-            Ok(response) => {
-                if response.status().as_u16() == 429 {
-                    self.circuit_breaker.record_failure();
-                    return Err(AiError::RateLimited);
-                }
-                if response.status().is_server_error() {
-                    self.circuit_breaker.record_failure();
-                    return Err(AiError::ApiError(format!(
-                        "Server error: {}",
-                        response.status()
-                    )));
-                }
-                self.circuit_breaker.record_success();
-                let result: serde_json::Value = response.json().await?;
-                if let Some(error) = result.get("error") {
-                    let message = error
-                        .get("message")
-                        .and_then(|m| m.as_str())
-                        .unwrap_or("Unknown error");
-                    return Err(AiError::ApiError(message.to_string()));
-                }
-                Ok(result)
-            }
-            Err(e) => {
-                self.circuit_breaker.record_failure();
-                Err(AiError::RequestFailed(e.to_string()))
-            }
-        }
+        self.chat_completion_from_messages(&body).await
     }
 
     pub async fn chat_completion_from_messages(
@@ -207,7 +176,11 @@ impl AiClient {
                         .unwrap_or("Unknown error");
                     return Err(AiError::ApiError(message.to_string()));
                 }
-                Ok(result)
+                if self.provider == Provider::Anthropic {
+                    Ok(self.normalize_anthropic_response(result))
+                } else {
+                    Ok(result)
+                }
             }
             Err(e) => {
                 self.circuit_breaker.record_failure();
@@ -263,6 +236,30 @@ impl AiClient {
             "system": system_message,
             "messages": anthropic_messages
         }))
+    }
+
+    fn normalize_anthropic_response(&self, result: serde_json::Value) -> serde_json::Value {
+        let text = result
+            .get("content")
+            .and_then(|v| v.as_array())
+            .and_then(|content| {
+                content
+                    .iter()
+                    .find(|item| item.get("type").and_then(|t| t.as_str()) == Some("text"))
+            })
+            .and_then(|item| item.get("text"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": text
+                }
+            }],
+            "provider_response": result
+        })
     }
 
     fn extract_content(
@@ -708,6 +705,23 @@ mod tests {
     }
 
     #[test]
+    fn test_normalize_anthropic_response_to_choices_shape() {
+        let client = create_client_without_key();
+        let response = create_mock_anthropic_response("normalized-content");
+        let normalized = client.normalize_anthropic_response(response);
+
+        let content = normalized
+            .get("choices")
+            .and_then(|c| c.get(0))
+            .and_then(|c| c.get("message"))
+            .and_then(|m| m.get("content"))
+            .and_then(|c| c.as_str());
+
+        assert_eq!(content, Some("normalized-content"));
+        assert!(normalized.get("provider_response").is_some());
+    }
+
+    #[test]
     fn test_mock_error_response_structure() {
         let response = create_mock_error_response("Rate limit exceeded");
         assert!(response.get("error").is_some());
@@ -775,5 +789,14 @@ mod tests {
         assert!(!Provider::OpenAI.supports_azure_auth());
         assert!(!Provider::Anthropic.supports_azure_auth());
         assert!(!Provider::OpenAICompatible.supports_azure_auth());
+    }
+
+    #[test]
+    #[should_panic(expected = "AiConfig base_url is required for Azure provider")]
+    fn test_azure_provider_requires_base_url() {
+        let mut config = create_test_config();
+        config.provider = "azure".to_string();
+        config.base_url = None;
+        let _ = AiClient::new(config);
     }
 }

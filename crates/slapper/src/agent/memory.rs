@@ -513,6 +513,7 @@ impl LongitudinalMemory {
         let baseline_ids_set: HashSet<&str> = baseline_ids.iter().map(|s| s.as_str()).collect();
         let resolved_ids: HashSet<&str> =
             baseline_ids_set.difference(&current_ids).cloned().collect();
+        let unchanged_count = current_ids.intersection(&baseline_ids_set).count();
 
         let resolved_findings: Vec<Finding> = all_historical_findings
             .into_iter()
@@ -522,7 +523,7 @@ impl LongitudinalMemory {
         Ok(BaselineComparison {
             new_findings,
             resolved_findings,
-            unchanged_count: findings.len(),
+            unchanged_count,
         })
     }
 
@@ -949,6 +950,57 @@ mod tests {
             .unwrap();
         assert_eq!(comparison.new_findings.len(), 1);
         assert_eq!(comparison.new_findings[0].id, "new-finding-1");
+        assert_eq!(comparison.unchanged_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_longitudinal_memory_compare_with_baseline_unchanged_count() {
+        let temp_dir = TempDir::new().unwrap();
+        let storage_dir = temp_dir.path().join("memory");
+        let memory = LongitudinalMemory::new(storage_dir).await.unwrap();
+
+        memory
+            .set_baseline(
+                "https://example.com",
+                vec!["finding-1".to_string(), "finding-2".to_string()],
+            )
+            .await
+            .unwrap();
+
+        let unchanged_finding = Finding {
+            id: "finding-1".to_string(),
+            finding_type: crate::tool::response::FindingType::Vulnerability,
+            severity: crate::tool::response::ResponseSeverity::Medium,
+            title: "Known issue".to_string(),
+            description: "Still present".to_string(),
+            location: "https://example.com/path".to_string(),
+            evidence: None,
+            cve_ids: vec![],
+            remediation: None,
+            references: vec![],
+            metadata: Default::default(),
+        };
+        let new_finding = Finding {
+            id: "finding-3".to_string(),
+            finding_type: crate::tool::response::FindingType::Vulnerability,
+            severity: crate::tool::response::ResponseSeverity::High,
+            title: "New issue".to_string(),
+            description: "Newly discovered".to_string(),
+            location: "https://example.com/new".to_string(),
+            evidence: None,
+            cve_ids: vec![],
+            remediation: None,
+            references: vec![],
+            metadata: Default::default(),
+        };
+
+        let comparison = memory
+            .compare_with_baseline("https://example.com", &[unchanged_finding, new_finding])
+            .await
+            .unwrap();
+
+        assert_eq!(comparison.new_findings.len(), 1);
+        assert_eq!(comparison.unchanged_count, 1);
     }
 
     #[tokio::test]

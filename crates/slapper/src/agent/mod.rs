@@ -482,13 +482,12 @@ impl Agent {
                             severity_counts,
                         };
                         self.portfolio.add_scan_record(&target_id, scan_record);
+                        self.portfolio.update_last_scan(&target_id, &now);
 
                         if let Err(e) = self.portfolio.save() {
                             tracing::error!(error = %e, "Failed to persist portfolio state after scheduled scan");
                             return Err(anyhow::anyhow!("Portfolio persistence failed: {}", e));
                         }
-
-                        self.portfolio.update_last_scan(&target_id, &now);
 
                         if let Err(e) = self
                             .memory
