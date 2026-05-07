@@ -8,15 +8,16 @@ The Pipeline module allows for the orchestration of complex security assessment 
 
 A `Stage` represents a single discrete task in the pipeline, such as a port scan, a tech detection run, or a targeted fuzzer execution.
 
-- **Configuration**: Each stage can have its own specific configuration that overrides the global settings.
-- **Dependencies**: Stages can be configured to run only if previous stages succeed or find specific results.
+- **Selection**: Stages are selected from a profile (for example `quick`, `web`, `full`) or from an explicit comma-separated list.
+- **Aliases**: User-facing aliases such as `portscan`, `fp`, `endpoint-scan`, `graphql`, `oauth`, and `jwt` are normalized into canonical stages.
 
 ### Executor (`executor.rs`)
 
 The `executor.rs` file is responsible for running the pipeline from start to finish.
 
-- **Sequential & Parallel Execution**: Supports running stages in a linear sequence or in parallel where dependencies allow.
-- **Result Passing**: Output from one stage (e.g., discovered open ports) can be fed as input to a subsequent stage (e.g., fuzzing those ports).
+- **Sequential Execution**: Stages run in linear order (`for stage in &self.stages`).
+- **Result Passing**: Output from one stage (for example open ports and detected HTTP services) is persisted into `PipelineContext` and consumed by later stages.
+- **Failure Recording**: Stage errors are recorded per stage in `StageResult` and surfaced in the report. CLI entrypoints return `ScanFailed` if any stage failed.
 
 ### Pipeline Context (`context.rs`)
 
@@ -24,7 +25,8 @@ Maintains the state of a running pipeline, including intermediate results, share
 
 ### Session (`session.rs`)
 
-Manages the persistence of pipeline runs, allowing them to be paused, resumed, or re-run with different parameters.
+Manages persistence for resumable pipeline runs via JSON snapshots (`PipelineSession`).
+Session checkpoints are written only when output path is explicitly a session-like file name (`*.session` or `*.session.json`) to avoid colliding with report outputs.
 
 ## Benefits
 

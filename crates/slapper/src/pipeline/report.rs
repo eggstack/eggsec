@@ -81,6 +81,16 @@ impl std::fmt::Display for PipelineReport {
     }
 }
 
+impl PipelineReport {
+    pub fn has_failures(&self) -> bool {
+        self.stage_results.iter().any(|r| !r.success)
+    }
+
+    pub fn first_failed_stage(&self) -> Option<&StageResult> {
+        self.stage_results.iter().find(|r| !r.success)
+    }
+}
+
 fn truncate(s: &str, max_len: usize) -> String {
     let cleaned: String = s
         .chars()

@@ -48,7 +48,7 @@ pub mod report;
 pub mod session;
 pub mod stage;
 
-use crate::error::Result;
+use crate::error::{Result, SlapperError};
 
 use crate::cli::ResumeArgs;
 use crate::cli::ScanArgs;
@@ -77,7 +77,7 @@ pub use stage::{parse_stages, Stage};
 pub async fn run_cli_with_callback<F>(
     args: ScanArgs,
     config: &SlapperConfig,
-    _callback: F,
+    mut callback: F,
 ) -> Result<()>
 where
     F: FnMut(crate::tool::response::Finding) + Send + 'static,
@@ -103,6 +103,16 @@ where
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         println!("{}", report);
+    }
+
+    for port in &report.open_ports {
+        callback(port.clone().into());
+    }
+    for service in &report.services {
+        callback(service.clone().into());
+    }
+    for endpoint in &report.endpoints {
+        callback(endpoint.clone().into());
     }
 
     if let Some(output_path) = args.output {
@@ -139,6 +149,16 @@ where
         if args.verbose {
             eprintln!("Results written to {}", output_path);
         }
+    }
+
+    if let Some(failed_stage) = report.first_failed_stage() {
+        return Err(SlapperError::ScanFailed {
+            stage: failed_stage.stage.to_string(),
+            error: failed_stage
+                .error
+                .clone()
+                .unwrap_or_else(|| "unknown pipeline stage failure".to_string()),
+        });
     }
 
     Ok(())
@@ -202,6 +222,16 @@ pub async fn run_cli(args: ScanArgs, config: &SlapperConfig) -> Result<()> {
         if args.verbose {
             eprintln!("Results written to {}", output_path);
         }
+    }
+
+    if let Some(failed_stage) = report.first_failed_stage() {
+        return Err(SlapperError::ScanFailed {
+            stage: failed_stage.stage.to_string(),
+            error: failed_stage
+                .error
+                .clone()
+                .unwrap_or_else(|| "unknown pipeline stage failure".to_string()),
+        });
     }
 
     Ok(())

@@ -68,3 +68,36 @@ fn test_parse_stages() {
     assert_eq!(stages[1], Stage::Fingerprint);
     assert_eq!(stages[2], Stage::EndpointScan);
 }
+
+#[test]
+fn test_pipeline_report_failure_helpers() {
+    use slapper::pipeline::executor::StageResult;
+    use slapper::pipeline::{PipelineReport, Stage};
+
+    let report = PipelineReport {
+        target: "example.com".to_string(),
+        total_duration_ms: 100,
+        stage_results: vec![
+            StageResult {
+                stage: Stage::PortScan,
+                duration_ms: 10,
+                success: true,
+                error: None,
+            },
+            StageResult {
+                stage: Stage::Fuzz,
+                duration_ms: 20,
+                success: false,
+                error: Some("fuzz failed".to_string()),
+            },
+        ],
+        open_ports: vec![],
+        services: vec![],
+        endpoints: vec![],
+    };
+
+    assert!(report.has_failures());
+    let failed = report.first_failed_stage().expect("missing failed stage");
+    assert_eq!(failed.stage, Stage::Fuzz);
+    assert_eq!(failed.error.as_deref(), Some("fuzz failed"));
+}

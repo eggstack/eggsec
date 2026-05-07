@@ -100,6 +100,11 @@ impl Pipeline {
         )
         .unwrap_or_default();
 
+        let session_path = args
+            .output
+            .clone()
+            .filter(|p| p.ends_with(".session.json") || p.ends_with(".session"));
+
         Self {
             target: args.target.clone(),
             stages,
@@ -108,7 +113,7 @@ impl Pipeline {
             common: args.common,
             spoof_config,
             context: Arc::new(Mutex::new(PipelineContext::new(&args.target))),
-            session_path: args.output.clone(),
+            session_path,
             tui_mode,
             config: config.cloned(),
         }
