@@ -806,7 +806,10 @@ mod tests {
         assert!(submitted);
         let final_task = scheduler.get_task(task_id).await;
         assert!(final_task.is_some());
-        assert_eq!(final_task.unwrap().status, TaskStatus::Completed);
+        let final_task = final_task.unwrap();
+        assert_eq!(final_task.status, TaskStatus::Completed);
+        assert_eq!(final_task.assigned_agent_id, None);
+        assert_eq!(final_task.leased_until, None);
     }
 
     #[tokio::test]
@@ -849,6 +852,8 @@ mod tests {
         assert_eq!(failed_task.status, TaskStatus::Pending);
         assert_eq!(failed_task.retry_count, 1);
         assert_eq!(failed_task.error, Some("error".to_string()));
+        assert_eq!(failed_task.assigned_agent_id, None);
+        assert_eq!(failed_task.leased_until, None);
     }
 
     #[test]

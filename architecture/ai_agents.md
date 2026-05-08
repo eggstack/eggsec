@@ -22,11 +22,12 @@ An abstraction layer for interacting with different LLM providers (e.g., OpenAI,
 
 ## Autonomous Agents (`src/agent/`)
 
-Slapper can run as an autonomous agent that can receive high-level goals and plan its own security assessment.
+Slapper can run as an autonomous scanning agent that executes configured schedules, enforces operational constraints, and handles alert routing.
 
-- **Agent Runner (`mod.rs`)**: The core loop of the autonomous agent.
-- **Planner (`planner.rs`)**: Translates high-level goals into a series of Slapper commands and stages.
-- **Memory (`memory.rs`)**: Maintains long-term context about the target and past actions to avoid redundancy and improve strategy.
+- **Agent Runner (`mod.rs`)**: Core polling loop, scheduled scan dispatch, and event handling.
+- **Memory (`memory.rs`)**: Maintains longitudinal context and baseline-aware finding comparisons.
+- **Portfolio (`portfolio.rs`)**: Stores targets, schedules, and scan history metadata.
+- **Constraints (`constraints/`)**: Enforces do-not-do rules, target restrictions, and scan/rate limits.
 - **Skills (`skills.rs`)**: Represents discrete capabilities the agent can employ (e.g., "scan", "fuzz", "recon").
 
 ## MCP Integration

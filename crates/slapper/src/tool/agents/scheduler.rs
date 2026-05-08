@@ -197,16 +197,22 @@ impl TaskScheduler {
                 task.status = TaskStatus::Completed;
                 task.result = result;
                 task.completed_at = Some(now);
+                task.assigned_agent_id = None;
+                task.leased_until = None;
             } else {
                 if task.retry_count < task.max_retries {
                     task.retry_count += 1;
                     task.status = TaskStatus::Pending;
                     task.scheduled_for = Some(now + self.default_retry_delay_ms);
                     task.error = error;
+                    task.assigned_agent_id = None;
+                    task.leased_until = None;
                 } else {
                     task.status = TaskStatus::Failed;
                     task.error = error;
                     task.completed_at = Some(now);
+                    task.assigned_agent_id = None;
+                    task.leased_until = None;
                 }
             }
             task.updated_at = Some(now);

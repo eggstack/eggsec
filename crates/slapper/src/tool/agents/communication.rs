@@ -152,11 +152,8 @@ pub struct InterAgentChannel {
 }
 
 struct MessageSubscription {
-    #[allow(dead_code)]
     subscriber_id: Uuid,
-    #[allow(dead_code)]
     message_types: Vec<String>,
-    #[allow(dead_code)]
     callback_url: Option<String>,
 }
 
@@ -170,8 +167,26 @@ impl InterAgentChannel {
     }
 
     pub async fn send_message(&self, message: AgentMessage) -> Result<(), InterAgentError> {
+        if let Some(recipient_id) = message.recipient_id {
+            let subscriptions = self.subscriptions.read().await;
+            if let Some(agent_subscriptions) = subscriptions.get(&recipient_id) {
+                let message_type = message_type_name(&message.message_type);
+                let should_deliver = agent_subscriptions.iter().any(|sub| {
+                    let _has_callback = sub.callback_url.is_some();
+                    sub.subscriber_id == recipient_id
+                        && sub
+                            .message_types
+                            .iter()
+                            .any(|t| t.eq_ignore_ascii_case(message_type))
+                });
+                if !should_deliver {
+                    return Ok(());
+                }
+            }
+        }
+
         let mut messages = self.messages.write().await;
-        messages.push(message.clone());
+        messages.push(message);
 
         self.cleanup_expired_messages(&mut messages).await;
 
@@ -218,10 +233,15 @@ impl InterAgentChannel {
     }
 
     pub async fn find_agents_by_capability(&self, capability_name: &str) -> Vec<AgentInfo> {
+        let capability_name = capability_name.to_lowercase();
         let agents = self.registry.list().await;
         agents
             .into_iter()
-            .filter(|a| a.capabilities.iter().any(|c| c.contains(capability_name)))
+            .filter(|a| {
+                a.capabilities
+                    .iter()
+                    .any(|c| c.to_lowercase().contains(&capability_name))
+            })
             .collect()
     }
 
@@ -241,11 +261,16 @@ impl InterAgentChannel {
     }
 
     pub async fn find_available_agent(&self, capability_name: &str) -> Option<AgentInfo> {
+        let capability_name = capability_name.to_lowercase();
         let agents = self.registry.list().await;
         agents
             .into_iter()
             .filter(|a| a.status == AgentStatus::Active || a.status == AgentStatus::Idle)
-            .filter(|a| a.capabilities.iter().any(|c| c.contains(capability_name)))
+            .filter(|a| {
+                a.capabilities
+                    .iter()
+                    .any(|c| c.to_lowercase().contains(&capability_name))
+            })
             .min_by_key(|a| match a.status {
                 AgentStatus::Idle => 0,
                 AgentStatus::Active => 1,
@@ -259,6 +284,18 @@ impl InterAgentChannel {
             let age = now - m.timestamp;
             age.num_seconds() < m.ttl_seconds as i64
         });
+    }
+}
+
+fn message_type_name(message_type: &MessageType) -> &'static str {
+    match message_type {
+        MessageType::Delegation(_) => "delegation",
+        MessageType::DelegationResponse(_) => "delegation_response",
+        MessageType::CapabilityAdvertisement(_) => "capability_advertisement",
+        MessageType::HealthUpdate(_) => "health_update",
+        MessageType::TaskStatus(_) => "task_status",
+        MessageType::Heartbeat => "heartbeat",
+        MessageType::Shutdown => "shutdown",
     }
 }
 
@@ -440,6 +477,78 @@ mod tests {
         channel
             .subscribe(Uuid::new_v4(), vec!["Heartbeat".to_string()], None)
             .await;
+    }
+
+    #[tokio::test]
+    async fn test_subscribed_message_type_is_delivered() {
+        let registry = AgentRegistry::new();
+        let channel = InterAgentChannel::new(registry);
+        let recipient = Uuid::new_v4();
+
+        channel
+            .subscribe(recipient, vec!["heartbeat".to_string()], None)
+            .await;
+
+        let message = AgentMessage {
+            id: Uuid::new_v4(),
+            sender_id: Uuid::new_v4(),
+            recipient_id: Some(recipient),
+            message_type: MessageType::Heartbeat,
+            payload: serde_json::json!({}),
+            timestamp: chrono::Utc::now(),
+            ttl_seconds: 60,
+        };
+
+        channel.send_message(message).await.unwrap();
+        let messages = channel.get_messages_for_agent(&recipient).await;
+        assert_eq!(messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_unsubscribed_message_type_is_not_delivered() {
+        let registry = AgentRegistry::new();
+        let channel = InterAgentChannel::new(registry);
+        let recipient = Uuid::new_v4();
+
+        channel
+            .subscribe(recipient, vec!["heartbeat".to_string()], None)
+            .await;
+
+        let message = AgentMessage {
+            id: Uuid::new_v4(),
+            sender_id: Uuid::new_v4(),
+            recipient_id: Some(recipient),
+            message_type: MessageType::Shutdown,
+            payload: serde_json::json!({}),
+            timestamp: chrono::Utc::now(),
+            ttl_seconds: 60,
+        };
+
+        channel.send_message(message).await.unwrap();
+        let messages = channel.get_messages_for_agent(&recipient).await;
+        assert_eq!(messages.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_find_available_agent_case_insensitive_capability_match() {
+        let registry = AgentRegistry::new();
+        let agent = AgentInfo {
+            id: Uuid::new_v4(),
+            name: "agent".to_string(),
+            capabilities: vec!["WebScan".to_string()],
+            status: AgentStatus::Idle,
+            last_heartbeat: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            callback_url: None,
+        };
+        registry.register(agent.clone()).await;
+
+        let channel = InterAgentChannel::new(registry);
+        let found = channel.find_available_agent("webscan").await;
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, agent.id);
     }
 
     #[tokio::test]
