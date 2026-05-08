@@ -1,4 +1,5 @@
 use crate::tui::workers::TaskResult;
+use std::net::SocketAddr;
 use std::time::Duration;
 
 pub async fn run_load_test(
@@ -40,12 +41,7 @@ pub async fn run_stress_test(
         _ => StressType::Http,
     };
 
-    let (host, port) = if target.contains(':') {
-        let parts: Vec<&str> = target.splitn(2, ':').collect();
-        (parts[0].to_string(), parts[1].parse().unwrap_or(80))
-    } else {
-        (target.clone(), 80)
-    };
+    let (host, port) = parse_target_host_port(&target);
 
     let config = StressConfig {
         target: host,
@@ -106,19 +102,25 @@ pub async fn run_packet_capture(
         .find(|i| i.name == interface)
         .ok_or_else(|| anyhow::anyhow!("Interface not found: {}", interface))?;
 
-    let capture = CaptureBuilder::new()
+    let mut builder = CaptureBuilder::new()
         .interface(iface.name.clone())
         .filter(filter)
         .promiscuous(true)
         .snapshot_len(65535)
         .timeout(std::time::Duration::from_secs(1))
-        .max_packets(max_packets)
-        .build();
+        .max_packets(max_packets);
+
+    if let Some(path) = output_file.clone() {
+        builder = builder.save_to_file(path);
+    }
+
+    let capture = builder.build();
 
     let mut captured = 0;
     let _ = progress_tx.send((0, max_packets as u64)).await;
 
     let mut capture = capture;
+    let running = capture.running();
     let (pkt_tx, mut pkt_rx) = tokio::sync::mpsc::channel(100);
     let handle = tokio::spawn(async move { capture.start(pkt_tx).await });
 
@@ -141,12 +143,14 @@ pub async fn run_packet_capture(
             }
             _ = tokio::time::sleep(timeout_duration) => {
                 tracing::warn!("Packet capture timeout - no packets received for {} seconds", timeout_duration.as_secs());
+                running.store(false, std::sync::atomic::Ordering::SeqCst);
                 break;
             }
         }
     }
 
-    let _ = handle.await;
+    running.store(false, std::sync::atomic::Ordering::SeqCst);
+    let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
 
     let _ = result_tx
         .send(TaskResult::PacketCapture {
@@ -179,8 +183,7 @@ pub async fn run_packet_traceroute(
 ) -> anyhow::Result<()> {
     use crate::packet::traceroute::{Traceroute, TracerouteConfig};
     use crate::tui::workers::TracerouteHopResult;
-    let addr = format!("{}:80", target);
-    let _socket_addr = tokio::net::lookup_host(addr.as_str())
+    let _socket_addr = tokio::net::lookup_host((target.as_str(), 80))
         .await
         .map_err(|e| anyhow::anyhow!("Invalid target: {}", e))?
         .next()
@@ -232,6 +235,61 @@ pub async fn run_packet_traceroute(
     _result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
     anyhow::bail!("Traceroute not available. Compile with --features stress-testing");
+}
+
+fn parse_target_host_port(target: &str) -> (String, u16) {
+    if let Ok(addr) = target.parse::<SocketAddr>() {
+        return (addr.ip().to_string(), addr.port());
+    }
+
+    if target.contains("]:") {
+        if let Some((host_part, port_part)) = target.rsplit_once("]:") {
+            let host = host_part.trim_start_matches('[').to_string();
+            let port = port_part.parse().unwrap_or(80);
+            return (host, port);
+        }
+    }
+
+    if target.matches(':').count() == 1 {
+        if let Some((host, port_part)) = target.split_once(':') {
+            return (host.to_string(), port_part.parse().unwrap_or(80));
+        }
+    }
+
+    (target.to_string(), 80)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_target_host_port;
+
+    #[test]
+    fn parse_target_host_port_ipv4() {
+        let (host, port) = parse_target_host_port("127.0.0.1:8443");
+        assert_eq!(host, "127.0.0.1");
+        assert_eq!(port, 8443);
+    }
+
+    #[test]
+    fn parse_target_host_port_hostname() {
+        let (host, port) = parse_target_host_port("example.com:443");
+        assert_eq!(host, "example.com");
+        assert_eq!(port, 443);
+    }
+
+    #[test]
+    fn parse_target_host_port_ipv6_with_port() {
+        let (host, port) = parse_target_host_port("[2001:db8::1]:8080");
+        assert_eq!(host, "2001:db8::1");
+        assert_eq!(port, 8080);
+    }
+
+    #[test]
+    fn parse_target_host_port_ipv6_without_port() {
+        let (host, port) = parse_target_host_port("2001:db8::1");
+        assert_eq!(host, "2001:db8::1");
+        assert_eq!(port, 80);
+    }
 }
 
 #[cfg(all(feature = "stress-testing", unix))]

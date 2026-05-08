@@ -209,6 +209,10 @@ impl PacketCapture {
 
             match rx_packet.try_recv() {
                 Ok(packet) => {
+                    if !Self::packet_matches_filter(&packet, self.config.filter.as_deref()) {
+                        continue;
+                    }
+
                     if let Some(ref mut writer) = pcap_writer {
                         let _ = writer.write_packet(&packet);
                     }
@@ -274,6 +278,85 @@ impl PacketCapture {
             raw_size: data.len(),
             hex_dump: hex,
         }
+    }
+
+    fn packet_matches_filter(data: &[u8], filter: Option<&str>) -> bool {
+        let Some(filter) = filter.map(str::trim).filter(|f| !f.is_empty()) else {
+            return true;
+        };
+
+        let lowered = filter.to_ascii_lowercase();
+        let Some((ip_proto, src_port, dst_port)) = Self::extract_transport_tuple(data) else {
+            return false;
+        };
+
+        if lowered == "tcp" {
+            return ip_proto == 6;
+        }
+        if lowered == "udp" {
+            return ip_proto == 17;
+        }
+        if lowered == "icmp" {
+            return ip_proto == 1 || ip_proto == 58;
+        }
+        if lowered == "ip" {
+            return true;
+        }
+
+        if let Some(port_part) = lowered.strip_prefix("port ") {
+            if let Ok(port) = port_part.trim().parse::<u16>() {
+                return src_port == Some(port) || dst_port == Some(port);
+            }
+            return false;
+        }
+
+        false
+    }
+
+    fn extract_transport_tuple(data: &[u8]) -> Option<(u8, Option<u16>, Option<u16>)> {
+        let (ip_start, is_ipv6) = if data.len() >= 14 {
+            let ethertype = u16::from_be_bytes([data[12], data[13]]);
+            if ethertype == 0x0800 {
+                (14usize, false)
+            } else if ethertype == 0x86DD {
+                (14usize, true)
+            } else {
+                (0usize, false)
+            }
+        } else {
+            (0usize, false)
+        };
+
+        let first = *data.get(ip_start)?;
+        let version = first >> 4;
+
+        if !is_ipv6 && version == 4 {
+            let ihl_words = (first & 0x0f) as usize;
+            let ip_header_len = ihl_words * 4;
+            let proto = *data.get(ip_start + 9)?;
+            let transport_start = ip_start + ip_header_len;
+            let src_port = data
+                .get(transport_start..transport_start + 2)
+                .map(|b| u16::from_be_bytes([b[0], b[1]]));
+            let dst_port = data
+                .get(transport_start + 2..transport_start + 4)
+                .map(|b| u16::from_be_bytes([b[0], b[1]]));
+            return Some((proto, src_port, dst_port));
+        }
+
+        if is_ipv6 || version == 6 {
+            let proto = *data.get(ip_start + 6)?;
+            let transport_start = ip_start + 40;
+            let src_port = data
+                .get(transport_start..transport_start + 2)
+                .map(|b| u16::from_be_bytes([b[0], b[1]]));
+            let dst_port = data
+                .get(transport_start + 2..transport_start + 4)
+                .map(|b| u16::from_be_bytes([b[0], b[1]]));
+            return Some((proto, src_port, dst_port));
+        }
+
+        None
     }
 
     #[cfg(not(all(feature = "packet-inspection", unix)))]
@@ -429,5 +512,35 @@ impl CaptureBuilder {
 impl Default for CaptureBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PacketCapture;
+
+    const TCP_PACKET: [u8; 54] = [
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0x08, 0x00,
+        0x45, 0x00, 0x00, 0x28, 0x00, 0x01, 0x40, 0x00, 0x40, 0x06, 0x00, 0x00, 0xc0, 0xa8,
+        0x00, 0x01, 0xc0, 0xa8, 0x00, 0x02, 0x04, 0xd2, 0x00, 0x50, 0x00, 0x00, 0x00, 0x01,
+        0x00, 0x00, 0x00, 0x00, 0x50, 0x02, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ];
+
+    #[test]
+    fn packet_filter_matches_protocol() {
+        assert!(PacketCapture::packet_matches_filter(&TCP_PACKET, Some("tcp")));
+        assert!(!PacketCapture::packet_matches_filter(&TCP_PACKET, Some("udp")));
+    }
+
+    #[test]
+    fn packet_filter_matches_port() {
+        assert!(PacketCapture::packet_matches_filter(
+            &TCP_PACKET,
+            Some("port 80")
+        ));
+        assert!(!PacketCapture::packet_matches_filter(
+            &TCP_PACKET,
+            Some("port 443")
+        ));
     }
 }
