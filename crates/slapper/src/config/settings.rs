@@ -401,6 +401,18 @@ impl ScanConfig {
                 "scan.port_timeout_secs cannot exceed 60".to_string(),
             ));
         }
+        if let Some(rate_limit) = self.rate_limit_per_second {
+            if rate_limit == 0 {
+                return Err(ConfigError::Validation(
+                    "scan.rate_limit_per_second cannot be 0 when set".to_string(),
+                ));
+            }
+            if rate_limit > 100000 {
+                return Err(ConfigError::Validation(
+                    "scan.rate_limit_per_second cannot exceed 100000".to_string(),
+                ));
+            }
+        }
         for port in &self.exclude_ports {
             if *port == 0 {
                 return Err(ConfigError::Validation(format!(
@@ -523,98 +535,12 @@ impl SlapperConfig {
             crate::constants::PROJECT_NAME,
             crate::constants::PROJECT_NAME,
         )
-        .map(|p: ProjectDirs| p.config_dir().join("config.toml"))
+        .map(|p: ProjectDirs| p.config_dir().join(super::loader::DEFAULT_CONFIG_NAME))
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
-        if self.http.timeout_secs == 0 {
-            return Err(ConfigError::Validation(
-                "timeout_secs cannot be 0".to_string(),
-            ));
-        }
-        if self.http.timeout_secs > 300 {
-            return Err(ConfigError::Validation(
-                "timeout_secs cannot exceed 300".to_string(),
-            ));
-        }
-        if self.http.max_retries > 10 {
-            return Err(ConfigError::Validation(
-                "max_retries cannot exceed 10".to_string(),
-            ));
-        }
-        if self.http.retry_delay_ms == 0 {
-            return Err(ConfigError::Validation(
-                "retry_delay_ms cannot be 0".to_string(),
-            ));
-        }
-        if self.http.max_redirects > 50 {
-            return Err(ConfigError::Validation(
-                "max_redirects cannot exceed 50".to_string(),
-            ));
-        }
-        if self.http.proxy_auth.is_some() && self.http.proxy.is_none() {
-            return Err(ConfigError::Validation(
-                "proxy_auth requires proxy to be set".to_string(),
-            ));
-        }
-        if let Some(ref proxy) = self.http.proxy {
-            if !proxy.starts_with("http://")
-                && !proxy.starts_with("https://")
-                && !proxy.starts_with("socks5://")
-                && !proxy.starts_with("socks4://")
-            {
-                return Err(ConfigError::Validation(
-                    "proxy must start with http://, https://, socks5://, or socks4://".to_string(),
-                ));
-            }
-        }
-        if self.scan.default_concurrency == 0 {
-            return Err(ConfigError::Validation(
-                "default_concurrency cannot be 0".to_string(),
-            ));
-        }
-        if self.scan.default_concurrency > 1000 {
-            return Err(ConfigError::Validation(
-                "default_concurrency cannot exceed 1000".to_string(),
-            ));
-        }
-        if self.scan.port_timeout_secs == 0 {
-            return Err(ConfigError::Validation(
-                "port_timeout_secs cannot be 0".to_string(),
-            ));
-        }
-        if self.scan.port_timeout_secs > 60 {
-            return Err(ConfigError::Validation(
-                "port_timeout_secs cannot exceed 60".to_string(),
-            ));
-        }
-        if let Some(rate_limit) = self.scan.rate_limit_per_second {
-            if rate_limit == 0 {
-                return Err(ConfigError::Validation(
-                    "rate_limit_per_second cannot be 0 when set".to_string(),
-                ));
-            }
-            if rate_limit > 100000 {
-                return Err(ConfigError::Validation(
-                    "rate_limit_per_second cannot exceed 100000".to_string(),
-                ));
-            }
-        }
-        for port in &self.scan.exclude_ports {
-            if *port == 0 {
-                return Err(ConfigError::Validation(format!(
-                    "exclude_ports contains invalid port {}",
-                    port
-                )));
-            }
-        }
-        for host in &self.scan.exclude_hosts {
-            if host.is_empty() {
-                return Err(ConfigError::Validation(
-                    "exclude_hosts cannot contain empty strings".to_string(),
-                ));
-            }
-        }
+        self.http.validate()?;
+        self.scan.validate()?;
         if self.recon.dns_concurrency == 0 {
             return Err(ConfigError::Validation(
                 "dns_concurrency cannot be 0".to_string(),
@@ -715,5 +641,17 @@ impl From<toml::de::Error> for ConfigError {
 impl From<toml::ser::Error> for ConfigError {
     fn from(e: toml::ser::Error) -> Self {
         ConfigError::Serialize(e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SlapperConfig;
+    use crate::config::loader::DEFAULT_CONFIG_NAME;
+
+    #[test]
+    fn test_slapper_config_default_path_uses_default_config_name() {
+        let path = SlapperConfig::default_path().expect("default path should be available");
+        assert!(path.to_string_lossy().ends_with(DEFAULT_CONFIG_NAME));
     }
 }
