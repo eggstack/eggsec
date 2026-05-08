@@ -34,9 +34,14 @@ pub struct SoaRecord {
 
 pub async fn enumerate_dns_records(domain: &str) -> Result<DnsRecords> {
     use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-    use hickory_resolver::TokioAsyncResolver;
+    use hickory_resolver::TokioResolver;
 
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
+    let resolver = TokioResolver::builder_with_config(
+        ResolverConfig::default(),
+        hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+    )
+    .with_options(ResolverOpts::default())
+    .build()?;
 
     let mut records = DnsRecords {
         domain: domain.to_string(),
@@ -53,23 +58,25 @@ pub async fn enumerate_dns_records(domain: &str) -> Result<DnsRecords> {
     }
 
     if let Ok(lookup) = resolver.mx_lookup(domain).await {
-        for mx in lookup.iter() {
-            records.mx.push(MxRecord {
-                preference: mx.preference(),
-                exchange: mx.exchange().to_string(),
-            });
+        for record in lookup.answers() {
+            if let hickory_resolver::proto::rr::RData::MX(mx) = &record.data {
+                records.mx.push(MxRecord {
+                    preference: mx.preference,
+                    exchange: mx.exchange.to_string(),
+                });
+            }
         }
     }
 
     if let Ok(lookup) = resolver.txt_lookup(domain).await {
-        for txt in lookup.iter() {
-            records.txt.push(txt.to_string());
+        for record in lookup.answers() {
+            records.txt.push(record.data.to_string());
         }
     }
 
     if let Ok(lookup) = resolver.ns_lookup(domain).await {
-        for ns in lookup.iter() {
-            records.ns.push(ns.to_string());
+        for record in lookup.answers() {
+            records.ns.push(record.data.to_string());
         }
     }
 
@@ -77,8 +84,8 @@ pub async fn enumerate_dns_records(domain: &str) -> Result<DnsRecords> {
         .lookup(domain, hickory_resolver::proto::rr::RecordType::CNAME)
         .await
     {
-        for record in lookup.iter() {
-            if let hickory_resolver::proto::rr::RData::CNAME(cname) = record {
+        for record in lookup.answers() {
+            if let hickory_resolver::proto::rr::RData::CNAME(cname) = &record.data {
                 records.cname.push(cname.to_string());
             }
         }

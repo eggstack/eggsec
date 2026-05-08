@@ -106,16 +106,18 @@ pub struct EmailFinding {
 pub use crate::types::Severity;
 
 pub struct EmailSecurityAnalyzer {
-    resolver: hickory_resolver::TokioAsyncResolver,
+    resolver: hickory_resolver::TokioResolver,
 }
 
 impl EmailSecurityAnalyzer {
     pub fn new() -> Result<Self> {
         use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-        let resolver = hickory_resolver::TokioAsyncResolver::tokio(
+        let resolver = hickory_resolver::TokioResolver::builder_with_config(
             ResolverConfig::default(),
-            ResolverOpts::default(),
-        );
+            hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+        )
+        .with_options(ResolverOpts::default())
+        .build()?;
         Ok(Self { resolver })
     }
 
@@ -275,8 +277,8 @@ impl EmailSecurityAnalyzer {
         let mut issues = Vec::new();
 
         if let Ok(lookup) = self.resolver.txt_lookup(domain).await {
-            for txt in lookup.iter() {
-                let txt_str = txt.to_string();
+            for answer in lookup.answers() {
+                let txt_str = answer.data.to_string();
                 if txt_str.starts_with("v=spf1") {
                     record = Some(txt_str.clone());
                     break;
@@ -286,8 +288,8 @@ impl EmailSecurityAnalyzer {
 
         if record.is_none() {
             if let Ok(lookup) = self.resolver.txt_lookup(&spf_domain).await {
-                for txt in lookup.iter() {
-                    let txt_str = txt.to_string();
+                for answer in lookup.answers() {
+                    let txt_str = answer.data.to_string();
                     if txt_str.starts_with("v=spf1") {
                         record = Some(txt_str.clone());
                         break;
@@ -366,8 +368,8 @@ impl EmailSecurityAnalyzer {
         for selector in &common_selectors {
             let dkim_domain = format!("{}._domainkey.{}", selector, domain);
             if let Ok(lookup) = self.resolver.txt_lookup(&dkim_domain).await {
-                for txt in lookup.iter() {
-                    let txt_str = txt.to_string();
+                for record in lookup.answers() {
+                    let txt_str = record.data.to_string();
                     if txt_str.contains("v=DKIM1") || txt_str.contains("p=") {
                         selectors_found.push(selector.to_string());
 
@@ -428,8 +430,8 @@ impl EmailSecurityAnalyzer {
         let mut record: Option<String> = None;
 
         if let Ok(lookup) = self.resolver.txt_lookup(&dmarc_domain).await {
-            for txt in lookup.iter() {
-                let txt_str = txt.to_string();
+            for answer in lookup.answers() {
+                let txt_str = answer.data.to_string();
                 if txt_str.starts_with("v=DMARC1") {
                     record = Some(txt_str);
                     break;
@@ -534,8 +536,11 @@ impl EmailSecurityAnalyzer {
         let mut has_wildcard_mx = false;
 
         if let Ok(lookup) = self.resolver.mx_lookup(domain).await {
-            for mx in lookup.iter() {
-                let exchange = mx.exchange().to_string();
+            for record in lookup.answers() {
+                let hickory_resolver::proto::rr::RData::MX(mx) = &record.data else {
+                    continue;
+                };
+                let exchange = mx.exchange.to_string();
 
                 if exchange == "." {
                     has_null_mx = true;
@@ -555,7 +560,7 @@ impl EmailSecurityAnalyzer {
                 }
 
                 records.push(MxRecordInfo {
-                    preference: mx.preference(),
+                    preference: mx.preference,
                     exchange,
                     ip_addresses,
                     has_spf: false,
@@ -660,8 +665,8 @@ impl EmailSecurityAnalyzer {
         let mut record: Option<String> = None;
 
         if let Ok(lookup) = self.resolver.txt_lookup(&bimi_domain).await {
-            for txt in lookup.iter() {
-                let txt_str = txt.to_string();
+            for answer in lookup.answers() {
+                let txt_str = answer.data.to_string();
                 if txt_str.starts_with("v=BIMI1") {
                     record = Some(txt_str);
                     break;

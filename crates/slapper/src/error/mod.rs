@@ -259,8 +259,8 @@ impl From<crate::config::ScopeError> for SlapperError {
     }
 }
 
-impl From<hickory_resolver::error::ResolveError> for SlapperError {
-    fn from(e: hickory_resolver::error::ResolveError) -> Self {
+impl From<hickory_resolver::net::NetError> for SlapperError {
+    fn from(e: hickory_resolver::net::NetError) -> Self {
         SlapperError::Network(format!("DNS resolution failed: {}", e))
     }
 }

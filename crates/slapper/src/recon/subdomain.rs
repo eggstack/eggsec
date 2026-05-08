@@ -2,7 +2,7 @@
 
 use crate::error::Result;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::TokioResolver;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -36,7 +36,7 @@ fn create_resolver_opts() -> ResolverOpts {
 
 pub struct SubdomainEnumerator {
     client: reqwest::Client,
-    resolver: TokioAsyncResolver,
+    resolver: TokioResolver,
     concurrency: usize,
 }
 
@@ -44,7 +44,12 @@ impl SubdomainEnumerator {
     pub fn new(concurrency: usize) -> Result<Self> {
         let client = create_http_client(10)?;
 
-        let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), create_resolver_opts());
+        let resolver = TokioResolver::builder_with_config(
+            ResolverConfig::default(),
+            hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+        )
+        .with_options(create_resolver_opts())
+        .build()?;
 
         Ok(Self {
             client,
@@ -147,8 +152,7 @@ impl SubdomainEnumerator {
             let subdomain = subdomain.clone();
             let domain = domain.to_string();
             let semaphore = Arc::clone(&semaphore);
-            let resolver =
-                TokioAsyncResolver::tokio(ResolverConfig::default(), create_resolver_opts());
+            let resolver = self.resolver.clone();
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.ok();
@@ -173,11 +177,11 @@ impl SubdomainEnumerator {
                 }
 
                 if let Ok(mx_lookup) = resolver.mx_lookup(&fqdn).await {
-                    info.has_mx = mx_lookup.iter().count() > 0;
+                    info.has_mx = !mx_lookup.answers().is_empty();
                 }
 
                 if let Ok(txt_lookup) = resolver.txt_lookup(&fqdn).await {
-                    info.has_txt = txt_lookup.iter().count() > 0;
+                    info.has_txt = !txt_lookup.answers().is_empty();
                 }
 
                 info
@@ -205,8 +209,7 @@ impl SubdomainEnumerator {
         for word in wordlist {
             let subdomain = format!("{}.{}", word, domain);
             let semaphore = Arc::clone(&semaphore);
-            let resolver =
-                TokioAsyncResolver::tokio(ResolverConfig::default(), create_resolver_opts());
+            let resolver = self.resolver.clone();
 
             let handle = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.ok();

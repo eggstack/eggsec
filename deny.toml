@@ -10,8 +10,10 @@ unsound = "transitive"
 # Ignore specific advisories that require upstream fixes
 # Review dates added to ensure periodic re-evaluation
 ignore = [
-    { id = "RUSTSEC-2025-0057", reason = "fxhash is used indirectly via selectors->scraper. No alternative available. Monitoring for upstream fix.", expires = "2026-06-01" },
-    { id = "RUSTSEC-2025-0119", reason = "number_prefix is used indirectly via indicatif. Will be fixed when indicatif updates their dependencies.", expires = "2026-06-01" },
+    { id = "RUSTSEC-2026-0097", reason = "Applies to rand::rng() with custom logger; current code paths use thread_rng/SmallRng." },
+    { id = "RUSTSEC-2025-0057", reason = "fxhash is used indirectly via selectors->scraper. No alternative available. Monitoring for upstream fix." },
+    { id = "RUSTSEC-2024-0384", reason = "Transitive via notify-types/backoff instant; waiting for upstream migration." },
+    { id = "RUSTSEC-2025-0119", reason = "number_prefix is used indirectly via indicatif. Will be fixed when indicatif updates their dependencies." },
 ]
 
 [licenses]

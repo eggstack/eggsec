@@ -1,6 +1,6 @@
 use crate::error::{Result, SlapperError};
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::TokioResolver;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::time::Duration;
@@ -23,11 +23,19 @@ fn create_resolver_opts() -> ResolverOpts {
 pub async fn reverse_dns_lookup(ip: &str) -> Result<ReverseDnsResult> {
     let ip_addr: IpAddr = ip.parse()?;
 
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), create_resolver_opts());
+    let resolver = TokioResolver::builder_with_config(
+        ResolverConfig::default(),
+        hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+    )
+    .with_options(create_resolver_opts())
+    .build()?;
 
     let lookup = resolver.reverse_lookup(ip_addr).await?;
 
-    let hostname = lookup.iter().next().map(|r| r.to_string());
+    let hostname = lookup.answers().first().map(|record| match &record.data {
+        hickory_resolver::proto::rr::RData::PTR(ptr) => ptr.to_string(),
+        data => data.to_string(),
+    });
 
     let hostname_str = hostname.clone().unwrap_or_default();
 
@@ -46,13 +54,21 @@ pub async fn reverse_dns_lookup(ip: &str) -> Result<ReverseDnsResult> {
 }
 
 pub async fn asn_lookup(ip: &str) -> Result<(Option<String>, Option<String>)> {
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), create_resolver_opts());
+    let resolver = TokioResolver::builder_with_config(
+        ResolverConfig::default(),
+        hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+    )
+    .with_options(create_resolver_opts())
+    .build()?;
 
     let ip_addr: IpAddr = ip.parse()?;
 
     let lookup = resolver.reverse_lookup(ip_addr).await?;
 
-    let hostname = lookup.iter().next().map(|r| r.to_string());
+    let hostname = lookup.answers().first().map(|record| match &record.data {
+        hickory_resolver::proto::rr::RData::PTR(ptr) => ptr.to_string(),
+        data => data.to_string(),
+    });
 
     let (asn, org) = if let Some(h) = hostname {
         extract_asn_from_hostname(&h)
@@ -102,7 +118,12 @@ fn extract_asn_from_hostname(hostname: &str) -> (Option<String>, Option<String>)
 }
 
 pub async fn resolve_domain(domain: &str) -> Result<Vec<String>> {
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), create_resolver_opts());
+    let resolver = TokioResolver::builder_with_config(
+        ResolverConfig::default(),
+        hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+    )
+    .with_options(create_resolver_opts())
+    .build()?;
 
     let lookup = resolver.lookup_ip(domain).await?;
 

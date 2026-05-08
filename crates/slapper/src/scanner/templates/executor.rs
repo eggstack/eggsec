@@ -195,10 +195,13 @@ impl TemplateExecutor {
             .cloned();
 
         let matched = if let Some(super::models::Matcher::Dns(dns)) = dns_matcher {
-            let resolver = hickory_resolver::TokioAsyncResolver::tokio(
+            let resolver = hickory_resolver::TokioResolver::builder_with_config(
                 hickory_resolver::config::ResolverConfig::default(),
-                hickory_resolver::config::ResolverOpts::default(),
-            );
+                hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+            )
+            .with_options(hickory_resolver::config::ResolverOpts::default())
+            .build()
+            .map_err(|e| SlapperError::Network(format!("DNS resolver init failed: {}", e)))?;
 
             let query_type = dns.query_type.as_deref().unwrap_or("A");
             let response = resolver
@@ -212,8 +215,9 @@ impl TemplateExecutor {
                 .map_err(|e| SlapperError::Network(format!("DNS query failed: {}", e)))?;
 
             let answer = response
+                .answers()
                 .iter()
-                .map(|r| r.to_string())
+                .map(|record| record.data.to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
 

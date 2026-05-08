@@ -36,7 +36,7 @@ md-5 = "0.10"
 dashmap = "6"
 rustc-hash = "2"
 scraper = "0.21"
-hickory-resolver = "0.24"
+hickory-resolver = "0.26"
 chrono-tz = "0.10"
 
 [profile.release]
