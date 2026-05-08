@@ -1,3 +1,4 @@
+#[cfg(feature = "packet-inspection")]
 pub(crate) const PACKET_ABOUT: &str = "Packet inspection and analysis tools
 
 Provides tools for live packet capture, packet crafting, hexdump view,

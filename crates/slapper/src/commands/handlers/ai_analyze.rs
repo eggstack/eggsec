@@ -3,7 +3,11 @@ use crate::output::ai_schema::{AiEvidence, AiFinding, AiOutput, AiRemediation};
 use crate::types::Severity;
 use anyhow::{Context, Result};
 
-pub async fn handle_ai_analyze(args: AiAnalyzeArgs) -> Result<()> {
+pub async fn handle_ai_analyze(
+    ctx: &crate::commands::CommandContext,
+    mut args: AiAnalyzeArgs,
+) -> Result<()> {
+    args.json |= ctx.json;
     let config = crate::config::load_config(None)?;
     let ai_config = config.ai.clone().unwrap_or_default();
 

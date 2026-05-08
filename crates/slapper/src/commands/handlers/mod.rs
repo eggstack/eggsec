@@ -104,8 +104,6 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Fingerprint(args)) => handle_fingerprint(ctx, args).await,
         #[cfg(feature = "nse")]
         Some(Commands::Nse(args)) => handle_nse(ctx, args).await,
-        #[cfg(not(feature = "nse"))]
-        Some(Commands::Nse(_)) => anyhow::bail!("NSE support requires the 'nse' feature"),
         Some(Commands::Fuzz(args)) => handle_fuzz(ctx, args).await,
         Some(Commands::WafStress(args)) => handle_waf_stress(ctx, args).await,
         Some(Commands::Waf(args)) => handle_waf(ctx, args).await,
@@ -120,6 +118,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::AuthTest(args)) => handle_auth_test(ctx, args).await,
         #[cfg(feature = "sbom")]
         Some(Commands::Sbom(args)) => handle_sbom(ctx, args).await,
+        #[cfg(feature = "packet-inspection")]
         Some(Commands::Packet(args)) => handle_packet(ctx, args).await,
         #[cfg(feature = "stress-testing")]
         Some(Commands::Icmp(args)) => handle_icmp(ctx, args).await,
@@ -127,10 +126,6 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Traceroute(args)) => handle_traceroute(ctx, args).await,
         #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
         Some(Commands::Plugin(args)) => handle_plugin(ctx, args).await,
-        #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-        Some(Commands::Plugin(_)) => {
-            anyhow::bail!("Plugin support requires the 'python-plugins' or 'ruby-plugins' feature")
-        }
         Some(Commands::Report(args)) => handle_report(ctx, args).await,
         #[cfg(feature = "stress-testing")]
         Some(Commands::Stress(args)) => handle_stress(ctx, args).await,
@@ -147,7 +142,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         #[cfg(feature = "rest-api")]
         Some(Commands::Agent(args)) => handle_agent(ctx, args).await,
         #[cfg(feature = "ai-integration")]
-        Some(Commands::AiAnalyze(args)) => handle_ai_analyze(args).await,
+        Some(Commands::AiAnalyze(args)) => handle_ai_analyze(ctx, args).await,
         #[cfg(feature = "grpc-api")]
         Some(Commands::Grpc(args)) => handle_grpc_server(args).await,
         Some(Commands::Vuln(args)) => handle_vuln(ctx, args).await,

@@ -124,10 +124,13 @@ pub enum Commands {
     Load(LoadArgs),
 
     // --- Tool operations ---
+    #[cfg(feature = "packet-inspection")]
     #[command(about = "Packet inspection and analysis tools", long_about = PACKET_ABOUT)]
     Packet(PacketArgs),
+    #[cfg(feature = "nse")]
     #[command(about = "Run Nmap NSE scripts for security scanning", long_about = NSE_ABOUT)]
     Nse(NseArgs),
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     #[command(about = "Manage and run security scanning plugins")]
     Plugin(PluginArgs),
     #[command(about = "Convert and generate security scan reports")]

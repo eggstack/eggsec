@@ -4,9 +4,10 @@ use crate::types::Severity;
 use anyhow::Result;
 
 pub async fn handle_auth_test(
-    _ctx: &crate::commands::CommandContext,
-    args: AuthTestArgs,
+    ctx: &crate::commands::CommandContext,
+    mut args: AuthTestArgs,
 ) -> Result<()> {
+    args.json |= ctx.json;
     eprintln!("{}", AUTH_BANNER);
 
     let engine = AuthEngine::new(args.max_attempts, args.concurrency, args.timeout)?;
