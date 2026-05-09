@@ -119,7 +119,7 @@ fn is_private_ip(ip: &IpAddr) -> bool {
         IpAddr::V4(ipv4) => {
             let octets = ipv4.octets();
             octets[0] == 10
-                || (octets[0] == 172 && (15..=31).contains(&octets[1]))
+                || (octets[0] == 172 && (16..=31).contains(&octets[1]))
                 || (octets[0] == 192 && octets[1] == 168)
         }
         IpAddr::V6(ipv6) => {
@@ -880,6 +880,14 @@ mod tests {
         assert!(validate_callback_url("http://10.0.0.1").is_err());
         assert!(validate_callback_url("http://172.16.0.1").is_err());
         assert!(validate_callback_url("http://192.168.1.1").is_err());
+    }
+
+    #[test]
+    fn test_callback_url_allows_non_private_172_15() {
+        let resolver = |_host: &str, _port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
+            Ok(vec!["172.15.0.1".parse().unwrap()])
+        };
+        assert!(validate_callback_url_with_resolver("http://example.com", resolver).is_ok());
     }
 
     #[test]

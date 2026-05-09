@@ -136,6 +136,16 @@ impl TaskScheduler {
         let now = now_ms();
         let expiry = now + lease_duration_ms;
 
+        // Reclaim expired leases so stranded tasks can be picked up again.
+        for task in queue.iter_mut() {
+            if task.status == TaskStatus::Leased && lease_expired(task, now) {
+                task.status = TaskStatus::Pending;
+                task.assigned_agent_id = None;
+                task.leased_until = None;
+                task.updated_at = Some(now);
+            }
+        }
+
         if let Some(pos) = queue
             .iter()
             .position(|t| t.status == TaskStatus::Pending && is_due(t, now))
@@ -366,5 +376,25 @@ impl TaskQueue {
         task: ScheduledTask,
     ) -> Result<(), mpsc::error::SendError<ScheduledTask>> {
         self.sender.send(task).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_lease_next_task_reclaims_expired_lease() {
+        let scheduler = TaskScheduler::new();
+        let mut task = scheduler.create_task("scan", serde_json::json!({}));
+        task.status = TaskStatus::Leased;
+        task.assigned_agent_id = Some(Uuid::new_v4());
+        task.leased_until = Some(now_ms().saturating_sub(1));
+
+        scheduler.schedule(task.clone()).await;
+
+        let next = scheduler.lease_next_task(Uuid::new_v4(), 10_000).await;
+        assert!(next.is_some());
+        assert_eq!(next.unwrap().id, task.id);
     }
 }

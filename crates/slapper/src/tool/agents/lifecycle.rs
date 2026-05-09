@@ -250,55 +250,42 @@ impl LifecycleManager {
                 .unwrap_or(false);
         }
 
-        let mut status = health_status.write().await;
-        for check in check_states {
-            let is_stale = check.is_stale;
-            let callback_unhealthy = check.callback_unhealthy;
-            let was_healthy = check.was_healthy;
-            let has_missed_heartbeat = check.has_missed_heartbeat;
-            let has_callback_issue = check.has_callback_issue;
+        let mut pending_events: Vec<LifecycleEvent> = Vec::new();
+        let mut mark_offline: Vec<Uuid> = Vec::new();
+        let mut stale_heartbeat_agents: Vec<(Uuid, String)> = Vec::new();
 
-            let agent_health = status.entry(check.agent_id).or_insert_with(|| AgentHealth {
-                agent_id: check.agent_id,
-                is_healthy: true,
-                consecutive_failures: 0,
-                last_health_check: now,
-                issues: Vec::new(),
-            });
+        {
+            let mut status = health_status.write().await;
+            for check in check_states {
+                let is_stale = check.is_stale;
+                let callback_unhealthy = check.callback_unhealthy;
+                let was_healthy = check.was_healthy;
+                let has_missed_heartbeat = check.has_missed_heartbeat;
+                let has_callback_issue = check.has_callback_issue;
 
-            agent_health.last_health_check = now;
+                let agent_health = status.entry(check.agent_id).or_insert_with(|| AgentHealth {
+                    agent_id: check.agent_id,
+                    is_healthy: true,
+                    consecutive_failures: 0,
+                    last_health_check: now,
+                    issues: Vec::new(),
+                });
 
-            if is_stale || callback_unhealthy {
-                agent_health.is_healthy = false;
+                agent_health.last_health_check = now;
 
-                if is_stale && !has_missed_heartbeat {
-                    agent_health.issues.push(HealthIssue::MissedHeartbeat);
-                    let _ = event_tx
-                        .send(LifecycleEvent {
-                            event_type: LifecycleEventType::AgentMarkedStale,
-                            agent_id: check.agent_id,
-                            timestamp: now,
-                            details: Some(format!(
-                                "Agent {} missed heartbeat, last seen {}s ago",
-                                check.agent_name,
-                                now.saturating_sub(
-                                    agent_registry
-                                        .get(check.agent_id)
-                                        .await
-                                        .map(|a| a.last_heartbeat)
-                                        .unwrap_or(now)
-                                )
-                            )),
-                        })
-                        .await;
-                }
+                if is_stale || callback_unhealthy {
+                    agent_health.is_healthy = false;
 
-                if callback_unhealthy && !has_callback_issue {
-                    agent_health.issues.push(HealthIssue::CallbackUnhealthy(
-                        "Callback health check failed".to_string(),
-                    ));
-                    let _ = event_tx
-                        .send(LifecycleEvent {
+                    if is_stale && !has_missed_heartbeat {
+                        agent_health.issues.push(HealthIssue::MissedHeartbeat);
+                        stale_heartbeat_agents.push((check.agent_id, check.agent_name.clone()));
+                    }
+
+                    if callback_unhealthy && !has_callback_issue {
+                        agent_health.issues.push(HealthIssue::CallbackUnhealthy(
+                            "Callback health check failed".to_string(),
+                        ));
+                        pending_events.push(LifecycleEvent {
                             event_type: LifecycleEventType::AgentMarkedStale,
                             agent_id: check.agent_id,
                             timestamp: now,
@@ -306,32 +293,52 @@ impl LifecycleManager {
                                 "Agent {} failed callback health check",
                                 check.agent_name
                             )),
-                        })
-                        .await;
-                }
+                        });
+                    }
 
-                let _ = agent_registry
-                    .update_status(check.agent_id, AgentStatus::Offline)
-                    .await;
-            } else if !was_healthy && !is_stale && !callback_unhealthy {
-                if !agent_health.issues.is_empty() || !agent_health.is_healthy {
-                    agent_health.issues.clear();
-                    agent_health.is_healthy = true;
-                    let _ = event_tx
-                        .send(LifecycleEvent {
+                    mark_offline.push(check.agent_id);
+                } else if !was_healthy && !is_stale && !callback_unhealthy {
+                    if !agent_health.issues.is_empty() || !agent_health.is_healthy {
+                        agent_health.issues.clear();
+                        agent_health.is_healthy = true;
+                        pending_events.push(LifecycleEvent {
                             event_type: LifecycleEventType::AgentRecovered,
                             agent_id: check.agent_id,
                             timestamp: now,
                             details: Some("Agent health restored".to_string()),
-                        })
-                        .await;
+                        });
+                    }
+                } else if agent_health.consecutive_failures >= config.max_consecutive_failures {
+                    agent_health.is_healthy = false;
+                    mark_offline.push(check.agent_id);
                 }
-            } else if agent_health.consecutive_failures >= config.max_consecutive_failures {
-                agent_health.is_healthy = false;
-                let _ = agent_registry
-                    .update_status(check.agent_id, AgentStatus::Offline)
-                    .await;
             }
+        }
+
+        for (agent_id, agent_name) in stale_heartbeat_agents {
+            let last_seen = agent_registry
+                .get(agent_id)
+                .await
+                .map(|a| a.last_heartbeat)
+                .unwrap_or(now);
+            pending_events.push(LifecycleEvent {
+                event_type: LifecycleEventType::AgentMarkedStale,
+                agent_id,
+                timestamp: now,
+                details: Some(format!(
+                    "Agent {} missed heartbeat, last seen {}s ago",
+                    agent_name,
+                    now.saturating_sub(last_seen)
+                )),
+            });
+        }
+
+        for agent_id in mark_offline {
+            let _ = agent_registry.update_status(agent_id, AgentStatus::Offline).await;
+        }
+
+        for event in pending_events {
+            let _ = event_tx.send(event).await;
         }
     }
 

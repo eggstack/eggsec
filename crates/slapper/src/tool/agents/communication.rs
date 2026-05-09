@@ -195,7 +195,8 @@ impl InterAgentChannel {
 
     pub async fn broadcast(&self, message: AgentMessage) -> Result<(), InterAgentError> {
         let mut messages = self.messages.write().await;
-        messages.push(message.clone());
+        messages.push(message);
+        self.cleanup_expired_messages(&mut messages).await;
         Ok(())
     }
 
@@ -336,6 +337,7 @@ impl MultiAgentCoordinator {
             timestamp: chrono::Utc::now(),
             ttl_seconds: 300,
         };
+        let message_id = message.id;
 
         self.channel
             .send_message(message)
@@ -345,7 +347,7 @@ impl MultiAgentCoordinator {
                 message: e.to_string(),
             })?;
 
-        Ok(Uuid::new_v4())
+        Ok(message_id)
     }
 
     pub async fn advertise_capabilities(
@@ -566,5 +568,63 @@ mod tests {
 
         let result = coordinator.delegate_task(request).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_multi_agent_coordinator_delegate_returns_message_id() {
+        let registry = AgentRegistry::new();
+        let local_id = Uuid::new_v4();
+        let coordinator = MultiAgentCoordinator::new(registry, local_id);
+
+        let request = DelegationRequest {
+            id: Uuid::new_v4(),
+            task_type: "scan".to_string(),
+            target: "https://example.com".to_string(),
+            parameters: serde_json::json!({}),
+            callback_url: None,
+        };
+
+        let returned_id = coordinator.delegate_task(request).await.unwrap();
+        let messages = coordinator.get_pending_messages().await;
+        let delegated = messages
+            .iter()
+            .find(|m| matches!(m.message_type, MessageType::Delegation(_)))
+            .expect("delegation message should exist");
+
+        assert_eq!(returned_id, delegated.id);
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_cleans_up_expired_messages() {
+        let registry = AgentRegistry::new();
+        let channel = InterAgentChannel::new(registry);
+        let now = chrono::Utc::now();
+
+        let expired = AgentMessage {
+            id: Uuid::new_v4(),
+            sender_id: Uuid::new_v4(),
+            recipient_id: None,
+            message_type: MessageType::Heartbeat,
+            payload: serde_json::Value::Null,
+            timestamp: now - chrono::Duration::seconds(120),
+            ttl_seconds: 1,
+        };
+        let expired_id = expired.id;
+        channel.broadcast(expired).await.unwrap();
+
+        let fresh = AgentMessage {
+            id: Uuid::new_v4(),
+            sender_id: Uuid::new_v4(),
+            recipient_id: None,
+            message_type: MessageType::Heartbeat,
+            payload: serde_json::Value::Null,
+            timestamp: now,
+            ttl_seconds: 60,
+        };
+        channel.broadcast(fresh.clone()).await.unwrap();
+
+        let all = channel.get_messages_for_agent(&Uuid::new_v4()).await;
+        assert!(all.iter().any(|m| m.id == fresh.id));
+        assert!(all.iter().all(|m| m.id != expired_id));
     }
 }
