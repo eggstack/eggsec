@@ -98,6 +98,8 @@ impl CommandContext {
 pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
     match cli.command {
         None => handle_no_command(&cli).await,
+        // Keep this match exhaustive: no wildcard arm.
+        // This guarantees compile-time sync with `cli::Commands` variants.
         Some(Commands::Load(args)) => handle_load(ctx, args).await,
         Some(Commands::ScanPorts(args)) => handle_scan_ports(ctx, args).await,
         Some(Commands::ScanEndpoints(args)) => handle_scan_endpoints(ctx, args).await,

@@ -15,10 +15,11 @@ Slapper uses `clap` for command-line argument parsing. The CLI is organized into
 
 ## Command Dispatch (`src/commands/`)
 
-Once arguments are parsed, the `main` function initializes a `CommandContext` and calls `handle_command` in `src/commands/mod.rs`.
+Once arguments are parsed, the `main` function initializes a `CommandContext` and calls `handle_command` via `src/commands/mod.rs` re-exports. The implementation lives in `src/commands/handlers/mod.rs`.
 
 - **`CommandContext`**: Carries global state including the loaded `SlapperConfig`, `Scope`, and output preferences.
-- **`handle_command`**: A large match statement that dispatches to the correct handler based on the subcommand.
+- **`handle_command`**: A large exhaustive match statement that dispatches to the correct handler based on the subcommand.
+  Because it is exhaustive (no wildcard arm), adding/removing `Commands` variants requires updating dispatch at compile time.
 
 ## Handlers (`src/commands/handlers/`)
 
@@ -36,5 +37,5 @@ Examples:
 2. Logging is initialized.
 3. Configuration and Scope are loaded.
 4. `CommandContext` is created.
-5. `handle_command` dispatches to a specific handler in `src/commands/handlers/`.
+5. `handle_command` (implemented in `src/commands/handlers/mod.rs`) dispatches to a specific handler in `src/commands/handlers/`.
 6. The handler executes the requested operation, often interacting with other core modules like `scanner` or `fuzzer`.
