@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::error::Result;
+use crate::utils::parsing::resolve_host;
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 use tokio::sync::Semaphore;
@@ -111,6 +112,7 @@ pub async fn fingerprint_udp_services(
     ports: Vec<u16>,
     timeout_duration: Duration,
 ) -> Result<UdpFingerprintResults> {
+    let resolved_ip = resolve_host(host)?;
     let start = std::time::Instant::now();
     let ports_count = ports.len();
     let semaphore = Arc::new(Semaphore::new(50));
@@ -118,9 +120,9 @@ pub async fn fingerprint_udp_services(
 
     for port in ports {
         let permit = semaphore.clone().acquire_owned().await?;
-        let host = host.to_string();
+        let ip = resolved_ip;
         let handle = tokio::spawn(async move {
-            let result = fingerprint_udp_port(&host, port, timeout_duration).await;
+            let result = fingerprint_udp_port(ip, port, timeout_duration).await;
             drop(permit);
             result
         });
@@ -146,11 +148,10 @@ pub async fn fingerprint_udp_services(
 }
 
 async fn fingerprint_udp_port(
-    host: &str,
+    ip: IpAddr,
     port: u16,
     timeout_duration: Duration,
 ) -> Option<UdpServiceFingerprint> {
-    let ip: IpAddr = host.parse().ok()?;
     let addr = SocketAddr::new(ip, port);
 
     let socket = match UdpSocket::bind("0.0.0.0:0").await {

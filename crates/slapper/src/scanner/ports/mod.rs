@@ -572,25 +572,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
                         );
                     }
                 }
-                Err(_) => {
-                    let should_insert = match config.max_results {
-                        Some(limit) => {
-                            let old = results_count.fetch_add(1, Ordering::Relaxed);
-                            old < limit as u64
-                        }
-                        None => true,
-                    };
-                    if should_insert {
-                        results.insert(
-                            port,
-                            PortResult {
-                                port,
-                                status: "closed".to_string(),
-                                service: get_service_name(port).to_string(),
-                            },
-                        );
-                    }
-                }
+                Err(_) => {}
             }
             if let Some(ref pb) = progress {
                 pb.inc(1);

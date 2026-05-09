@@ -475,6 +475,7 @@ pub(crate) async fn scan_ports_spoofed(
         .expect("All task clones should have been dropped after join_all")
         .into_iter()
         .map(|(_, v)| v)
+        .filter(|p| p.status == "open")
         .collect();
     results.sort_by_key(|p| p.port);
 
