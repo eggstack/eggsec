@@ -164,6 +164,18 @@ impl StressAuthorization {
     pub fn max_duration(&self) -> Option<u64> {
         self.stress_scope.max_duration_secs
     }
+
+    #[cfg(test)]
+    pub(crate) fn for_tests(require_confirmation: bool) -> Self {
+        Self {
+            scope: Scope::default(),
+            stress_scope: StressScope {
+                allow_stress_test: true,
+                require_confirmation,
+                ..StressScope::default()
+            },
+        }
+    }
 }
 
 pub fn create_example_stress_config() -> String {

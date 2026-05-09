@@ -1,6 +1,10 @@
 use crate::tui::workers::TaskResult;
+#[cfg(feature = "stress-testing")]
 use std::net::SocketAddr;
 use std::time::Duration;
+
+#[cfg(all(feature = "packet-inspection", unix))]
+const PACKET_CAPTURE_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub async fn run_load_test(
     target: String,
@@ -59,7 +63,7 @@ pub async fn run_stress_test(
     };
 
     let test = StressTest::new(config)?;
-    let stats = test.run().await?;
+    let stats = test.run_non_interactive().await?;
 
     let _ = result_tx
         .send(TaskResult::StressTest {
@@ -124,7 +128,6 @@ pub async fn run_packet_capture(
     let (pkt_tx, mut pkt_rx) = tokio::sync::mpsc::channel(100);
     let handle = tokio::spawn(async move { capture.start(pkt_tx).await });
 
-    let timeout_duration = Duration::from_secs(5);
     loop {
         tokio::select! {
             packet = pkt_rx.recv() => {
@@ -141,8 +144,11 @@ pub async fn run_packet_capture(
                     None => break,
                 }
             }
-            _ = tokio::time::sleep(timeout_duration) => {
-                tracing::warn!("Packet capture timeout - no packets received for {} seconds", timeout_duration.as_secs());
+            _ = tokio::time::sleep(PACKET_CAPTURE_IDLE_TIMEOUT) => {
+                tracing::warn!(
+                    "Packet capture idle timeout - no packets received for {} seconds",
+                    PACKET_CAPTURE_IDLE_TIMEOUT.as_secs()
+                );
                 running.store(false, std::sync::atomic::Ordering::SeqCst);
                 break;
             }
@@ -237,6 +243,7 @@ pub async fn run_packet_traceroute(
     anyhow::bail!("Traceroute not available. Compile with --features stress-testing");
 }
 
+#[cfg(feature = "stress-testing")]
 fn parse_target_host_port(target: &str) -> (String, u16) {
     if let Ok(addr) = target.parse::<SocketAddr>() {
         return (addr.ip().to_string(), addr.port());
@@ -261,8 +268,10 @@ fn parse_target_host_port(target: &str) -> (String, u16) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "stress-testing")]
     use super::parse_target_host_port;
 
+    #[cfg(feature = "stress-testing")]
     #[test]
     fn parse_target_host_port_ipv4() {
         let (host, port) = parse_target_host_port("127.0.0.1:8443");
@@ -270,6 +279,7 @@ mod tests {
         assert_eq!(port, 8443);
     }
 
+    #[cfg(feature = "stress-testing")]
     #[test]
     fn parse_target_host_port_hostname() {
         let (host, port) = parse_target_host_port("example.com:443");
@@ -277,6 +287,7 @@ mod tests {
         assert_eq!(port, 443);
     }
 
+    #[cfg(feature = "stress-testing")]
     #[test]
     fn parse_target_host_port_ipv6_with_port() {
         let (host, port) = parse_target_host_port("[2001:db8::1]:8080");
@@ -284,6 +295,7 @@ mod tests {
         assert_eq!(port, 8080);
     }
 
+    #[cfg(feature = "stress-testing")]
     #[test]
     fn parse_target_host_port_ipv6_without_port() {
         let (host, port) = parse_target_host_port("2001:db8::1");

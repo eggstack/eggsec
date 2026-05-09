@@ -222,13 +222,22 @@ async fn run_udp_flood_spoofed(
         let metrics = metrics.clone();
 
         let handle = tokio::spawn(async move {
-            let dst = libc::sockaddr_in {
-                sin_family: libc::AF_INET as u16,
-                sin_port: target_addr.port().to_be(),
-                sin_addr: libc::in_addr {
-                    s_addr: u32::from_be_bytes(target_ip_v4.octets()),
-                },
-                sin_zero: [0; 8],
+            let mut dst: libc::sockaddr_in = unsafe { std::mem::zeroed() };
+            #[cfg(any(
+                target_os = "macos",
+                target_os = "ios",
+                target_os = "freebsd",
+                target_os = "netbsd",
+                target_os = "openbsd",
+                target_os = "dragonfly"
+            ))]
+            {
+                dst.sin_len = std::mem::size_of::<libc::sockaddr_in>() as u8;
+            }
+            dst.sin_family = libc::AF_INET as _;
+            dst.sin_port = target_addr.port().to_be();
+            dst.sin_addr = libc::in_addr {
+                s_addr: u32::from_be_bytes(target_ip_v4.octets()),
             };
 
             let result = unsafe {

@@ -6,6 +6,8 @@
 use crate::error::{Result, SlapperError};
 use std::time::Duration;
 
+#[cfg(all(feature = "stress-testing", unix))]
+use super::get_service_name;
 use super::PortScanResults;
 use crate::scanner::spoof::SpoofConfig;
 

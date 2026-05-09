@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+use hickory_resolver::TokioResolver;
 use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
 
@@ -114,6 +116,12 @@ impl Traceroute {
     }
 
     pub async fn run(&self) -> Result<TracerouteResult, TracerouteError> {
+        if self.config.use_icmp {
+            return Err(TracerouteError::Unsupported(
+                "ICMP traceroute is currently disabled because hop TTL controls are not applied correctly. Use UDP mode.".to_string(),
+            ));
+        }
+
         let target_ip = self.resolve_target(&self.config.target)?;
         let target_str = target_ip.to_string();
 
@@ -142,7 +150,7 @@ impl Traceroute {
                 if let Some(ref addr) = hop_addr {
                     if self.config.resolve_names {
                         let mut hop_with_name = hop;
-                        hop_with_name.name = Self::reverse_dns(addr).ok();
+                        hop_with_name.name = Self::reverse_dns(addr).await.ok();
                         hops.push(hop_with_name);
                     } else {
                         hops.push(hop);
@@ -204,7 +212,7 @@ impl Traceroute {
                     let hop_addr = hop.address.clone();
                     if let Some(ref addr) = hop_addr {
                         let mut hop_with_name = hop;
-                        hop_with_name.name = Self::reverse_dns(addr).ok();
+                        hop_with_name.name = Self::reverse_dns(addr).await.ok();
                         hops.push(hop_with_name);
                     } else {
                         hops.push(hop);
@@ -372,18 +380,38 @@ impl Traceroute {
         TracerouteHop::new(_ttl)
     }
 
-    fn reverse_dns(addr: &str) -> Result<String, TracerouteError> {
-        use std::net::ToSocketAddrs;
+    async fn reverse_dns(addr: &str) -> Result<String, TracerouteError> {
+        let ip: IpAddr = addr
+            .parse()
+            .map_err(|e| TracerouteError::ResolveError(format!("Invalid IP '{addr}': {e}")))?;
 
-        let socket_addrs: std::vec::IntoIter<SocketAddr> = (addr, 80)
-            .to_socket_addrs()
+        let mut opts = ResolverOpts::default();
+        opts.timeout = Duration::from_secs(2);
+        opts.attempts = 1;
+
+        let resolver = TokioResolver::builder_with_config(
+            ResolverConfig::default(),
+            hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+        )
+        .with_options(opts)
+        .build()
+        .map_err(|e| TracerouteError::ResolveError(e.to_string()))?;
+
+        let lookup = resolver
+            .reverse_lookup(ip)
+            .await
             .map_err(|e| TracerouteError::ResolveError(e.to_string()))?;
 
-        if socket_addrs.count() > 0 {
-            return Ok(addr.to_string());
-        }
+        let name = lookup
+            .answers()
+            .first()
+            .map(|record| match &record.data {
+                hickory_resolver::proto::rr::RData::PTR(ptr) => ptr.to_string(),
+                data => data.to_string(),
+            })
+            .ok_or_else(|| TracerouteError::ResolveError("No PTR record found".to_string()))?;
 
-        Ok(addr.to_string())
+        Ok(normalize_ptr_name(&name))
     }
 
     fn resolve_target(&self, target: &str) -> Result<IpAddr, TracerouteError> {
@@ -444,8 +472,6 @@ impl Traceroute {
     async fn probe_icmp(&self, target: IpAddr, ttl: u8) -> Result<IpAddr, ProbeError> {
         #[cfg(all(feature = "stress-testing", unix))]
         {
-            use std::net::ToSocketAddrs;
-
             let timeout = self.config.timeout;
             let payload = vec![0u8; self.config.packet_size];
 
@@ -474,6 +500,10 @@ impl Traceroute {
     }
 }
 
+fn normalize_ptr_name(name: &str) -> String {
+    name.trim_end_matches('.').to_string()
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum TracerouteError {
     #[error("Failed to resolve target: {0}")]
@@ -482,6 +512,8 @@ pub enum TracerouteError {
     ProbeError(#[from] ProbeError),
     #[error("Requires root privileges for ICMP traceroute")]
     RequiresRoot,
+    #[error("{0}")]
+    Unsupported(String),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -567,5 +599,33 @@ impl TracerouteBuilder {
 impl Default for TracerouteBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn run_returns_unsupported_for_icmp_mode() {
+        let traceroute = Traceroute::new(TracerouteConfig {
+            target: "127.0.0.1".to_string(),
+            use_icmp: true,
+            ..TracerouteConfig::default()
+        });
+
+        let result = traceroute.run().await;
+        match result {
+            Err(TracerouteError::Unsupported(msg)) => {
+                assert!(msg.contains("ICMP traceroute"));
+            }
+            other => panic!("expected Unsupported error, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn normalize_ptr_name_trims_trailing_dot() {
+        assert_eq!(normalize_ptr_name("example.com."), "example.com");
+        assert_eq!(normalize_ptr_name("router.local"), "router.local");
     }
 }

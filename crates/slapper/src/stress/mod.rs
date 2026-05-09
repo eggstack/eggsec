@@ -81,7 +81,7 @@ impl Default for StressConfig {
 
 pub struct StressTest {
     config: StressConfig,
-    _authorization: StressAuthorization,
+    authorization: StressAuthorization,
     #[cfg(feature = "stress-testing")]
     metrics: StressMetrics,
 }
@@ -96,7 +96,7 @@ impl StressTest {
 
         Ok(Self {
             config,
-            _authorization: authorization,
+            authorization,
             #[cfg(feature = "stress-testing")]
             metrics: StressMetrics::new(),
         })
@@ -105,10 +105,18 @@ impl StressTest {
     pub async fn run(&self) -> Result<StressStats> {
         display_warning(&self.config)?;
 
-        if !require_confirmation()? {
+        if self.authorization.requires_confirmation() && !require_confirmation()? {
             return Err(SlapperError::Cancelled);
         }
+        self.run_inner().await
+    }
 
+    pub async fn run_non_interactive(&self) -> Result<StressStats> {
+        display_warning(&self.config)?;
+        self.run_inner().await
+    }
+
+    async fn run_inner(&self) -> Result<StressStats> {
         tracing::info!(
             target = %self.config.target,
             port = self.config.port,
@@ -166,4 +174,34 @@ pub struct StressConfigSummary {
     pub duration_secs: u64,
     pub spoof_source: bool,
     pub used_proxies: bool,
+}
+
+#[cfg(all(test, feature = "stress-testing"))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn run_non_interactive_does_not_require_confirmation() {
+        let test = StressTest {
+            config: StressConfig {
+                target: "127.0.0.1".to_string(),
+                port: 80,
+                stress_type: StressType::Http,
+                rate_pps: 1,
+                duration_secs: 0,
+                concurrency: 1,
+                spoof_source: false,
+                spoof_range: None,
+                random_source_port: true,
+                payload_size: 0,
+                use_proxies: false,
+                proxy_pool: None,
+            },
+            authorization: StressAuthorization::for_tests(true),
+            metrics: StressMetrics::new(),
+        };
+
+        let result = test.run_non_interactive().await;
+        assert!(result.is_ok(), "expected non-interactive run to bypass stdin confirmation");
+    }
 }
