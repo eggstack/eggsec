@@ -260,7 +260,12 @@ impl SmugglingBypass {
         let status = response.status().as_u16();
         let body = response.text().await.unwrap_or_default();
 
-        let success = self.is_bypass_successful(status, detection, "", &body);
+        let mut success = self.is_bypass_successful(status, detection, "", &body);
+        let requires_raw_http =
+            matches!(req.smuggling_type, SmugglingType::H2CUpgrade | SmugglingType::Http2Frame);
+        if requires_raw_http {
+            success = false;
+        }
 
         let technique = match req.smuggling_type {
             SmugglingType::ClTe => BypassTechnique::ContentLengthConflict,
@@ -276,7 +281,11 @@ impl SmugglingBypass {
         Ok(BypassResult {
             technique,
             success,
-            description: format!("{} [probe]", req.description),
+            description: if requires_raw_http {
+                format!("{} [heuristic probe; raw HTTP required]", req.description)
+            } else {
+                format!("{} [heuristic probe]", req.description)
+            },
             status_code: status,
             response_diff: None,
         })

@@ -74,5 +74,17 @@ pub mod waf {
     pub const LENGTH_DIFF_THRESHOLD: usize = 100;
     pub const HIGH_CONFIDENCE_EXIT: u8 = 90;
     pub const BLOCKED_STATUS_CODES: [u16; 4] = [403, 406, 429, 503];
-    pub const BLOCKED_PATTERNS: [&str; 5] = ["blocked", "denied", "forbidden", "waf", "firewall"];
+    pub const BLOCKED_PATTERNS: [&str; 8] = [
+        "access denied",
+        "request blocked",
+        "your request has been blocked",
+        "malicious request",
+        "security policy violation",
+        "forbidden",
+        "waf",
+        "firewall",
+    ];
+    pub const WEAK_BLOCK_INDICATOR_PATTERNS: [&str; 4] =
+        ["security", "unauthorized", "suspicious", "rate limit"];
+    pub const UNKNOWN_WAF_WEAK_PATTERN_THRESHOLD: usize = 2;
 }

@@ -13,15 +13,14 @@ pub fn get_common_waf_response_patterns() -> Vec<&'static str> {
         "request blocked",
         "waf",
         "firewall",
-        "security",
         "not acceptable",
         "forbidden",
-        "unauthorized",
         "your ip has been blocked",
         "rate limit",
         "too many requests",
         "suspicious activity",
-        "malicious",
+        "security policy violation",
+        "malicious request",
     ]
 }
 

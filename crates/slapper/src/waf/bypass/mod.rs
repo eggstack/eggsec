@@ -131,18 +131,46 @@ pub fn is_bypass_successful(
     payload: &str,
     response_body: &str,
 ) -> bool {
-    !crate::constants::waf::BLOCKED_STATUS_CODES.contains(&status)
-        && status != detection.status_code
-        && (200..300).contains(&status)
-        && payload_is_reflected(payload, response_body)
+    let blocked_codes = crate::constants::waf::BLOCKED_STATUS_CODES;
+    let baseline_status = detection.status_code;
+    let baseline_blocked = blocked_codes.contains(&baseline_status);
+    let response_blocked = blocked_codes.contains(&status) || body_looks_blocked(response_body);
+    if response_blocked {
+        return false;
+    }
+
+    let reflected = payload_is_reflected(payload, response_body);
+    let status_changed = status != baseline_status;
+    let status_2xx = (200..300).contains(&status);
+    let status_3xx = (300..400).contains(&status);
+
+    if payload.is_empty() {
+        return baseline_blocked && status_changed && (status_2xx || status_3xx);
+    }
+
+    if baseline_blocked && status_changed && (status_2xx || status_3xx) {
+        return reflected;
+    }
+
+    status_2xx && status_changed && reflected
 }
 
 fn payload_is_reflected(payload: &str, response_body: &str) -> bool {
-    if payload.is_empty() || response_body.is_empty() {
+    if payload.is_empty() {
         return true;
+    }
+    if response_body.is_empty() {
+        return false;
     }
     let encoded_payload = urlencoding::encode(payload);
     response_body.contains(payload) || response_body.contains(encoded_payload.as_ref())
+}
+
+fn body_looks_blocked(response_body: &str) -> bool {
+    let lower = response_body.to_lowercase();
+    crate::constants::waf::BLOCKED_PATTERNS
+        .iter()
+        .any(|pattern| lower.contains(pattern))
 }
 
 #[cfg(test)]
@@ -178,7 +206,7 @@ mod tests {
     #[test]
     fn bypass_requires_2xx_status() {
         let detection = detection_with_status(403);
-        assert!(!is_bypass_successful(302, &detection, "", "ok"));
+        assert!(is_bypass_successful(302, &detection, "", "ok"));
     }
 
     #[test]
@@ -192,6 +220,24 @@ mod tests {
             &detection,
             "admin'--",
             "admin'-- accepted"
+        ));
+    }
+
+    #[test]
+    fn empty_payload_needs_block_to_non_block_transition() {
+        let detection = detection_with_status(200);
+        assert!(!is_bypass_successful(200, &detection, "", "ok"));
+        assert!(!is_bypass_successful(302, &detection, "", "ok"));
+    }
+
+    #[test]
+    fn reflected_payload_fails_when_body_still_looks_blocked() {
+        let detection = detection_with_status(403);
+        assert!(!is_bypass_successful(
+            200,
+            &detection,
+            "admin'--",
+            "request blocked admin'--"
         ));
     }
 }

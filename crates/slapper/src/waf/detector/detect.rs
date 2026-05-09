@@ -127,12 +127,26 @@ impl WafDetector {
         }
 
         if best_match.is_none() {
+            let mut weak_hits = 0usize;
+
             for pattern in get_common_waf_response_patterns() {
                 if body_lower.contains(pattern) {
                     matched_patterns.push(pattern.to_string());
-                    if best_match.is_none() {
-                        best_match = Some(("Unknown WAF".to_string(), waf::UNKNOWN_WAF_CONFIDENCE));
-                    }
+                }
+            }
+
+            for pattern in waf::WEAK_BLOCK_INDICATOR_PATTERNS {
+                if body_lower.contains(pattern) {
+                    weak_hits += 1;
+                }
+            }
+
+            if !matched_patterns.is_empty()
+                || weak_hits >= waf::UNKNOWN_WAF_WEAK_PATTERN_THRESHOLD
+            {
+                best_match = Some(("Unknown WAF".to_string(), waf::UNKNOWN_WAF_CONFIDENCE));
+                if weak_hits > 0 {
+                    matched_patterns.push(format!("weak-indicators:{}", weak_hits));
                 }
             }
         }
