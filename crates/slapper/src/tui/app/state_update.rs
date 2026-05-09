@@ -266,7 +266,12 @@ impl super::App {
             TaskResult::Compliance(_) => None,
             #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
             TaskResult::PluginsLoaded(plugins) => {
-                self.plugin.plugin_list = plugins;
+                self.plugin.load_plugins(plugins);
+                None
+            }
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            TaskResult::PluginResult(results) => {
+                self.plugin.set_results(results);
                 None
             }
             _ => Some(result),
@@ -423,6 +428,12 @@ impl TabProgressUpdate for super::tabs::Tab {
 
 #[cfg(test)]
 mod tests {
+    use crate::tui::tabs::AppState;
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+    use crate::tui::tabs::plugin::{Finding, PluginInfo, PluginResults};
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+    use crate::tui::workers::TaskResult;
+
     use super::super::{create_shared_history, App};
 
     fn create_test_app() -> App {
@@ -457,5 +468,46 @@ mod tests {
         app.result_rx = Some(rx);
         app.update();
         assert!(app.result_rx.is_none());
+    }
+
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+    #[test]
+    fn test_plugin_results_are_applied_to_plugin_tab() {
+        let mut app = create_test_app();
+        let payload = PluginResults {
+            plugin_name: "test_check".to_string(),
+            target: "https://example.com".to_string(),
+            success: true,
+            findings: vec![Finding {
+                title: "F1".to_string(),
+                severity: "low".to_string(),
+                description: "d".to_string(),
+                evidence: None,
+            }],
+            errors: vec![],
+            execution_time_ms: 42,
+        };
+
+        app.handle_result(TaskResult::PluginResult(payload));
+        assert!(matches!(app.plugin.state, AppState::Completed));
+        assert!(!app.plugin.results_view.lines.is_empty());
+    }
+
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+    #[test]
+    fn test_plugins_loaded_marks_plugin_tab_loaded() {
+        let mut app = create_test_app();
+        let plugins = vec![PluginInfo {
+            name: "test_check".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            author: String::new(),
+            tags: vec![],
+            language: "Python".to_string(),
+        }];
+
+        app.handle_result(TaskResult::PluginsLoaded(plugins));
+        assert!(app.plugin.plugins_loaded);
+        assert_eq!(app.plugin.plugin_list.len(), 1);
     }
 }

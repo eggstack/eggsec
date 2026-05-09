@@ -71,11 +71,15 @@ impl ProcessPluginRunner {
     async fn run_sandboxed(&self, path: &Path, target: &str) -> Result<PluginResult> {
         let mut cmd = Command::new("python3");
         cmd.arg("-u")
+            .arg("-I")
+            .arg("-S")
             .arg(path)
             .arg(target)
             .kill_on_drop(true)
+            .env_clear()
             .env("PYTHONPATH", "")
             .env("HOME", "/tmp");
+        cmd.current_dir("/tmp");
 
         let result = timeout(self.timeout, cmd.output()).await;
 

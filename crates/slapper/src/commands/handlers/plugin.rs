@@ -8,8 +8,11 @@ use slapper_plugin::Plugin;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) -> Result<()> {
     use crate::cli::PluginCommand;
+    #[cfg(feature = "python-plugins")]
+    use crate::plugin::PluginConfig;
 
-    let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(None);
+    let plugin_dirs =
+        crate::plugin::PluginManager::default_plugin_dirs(_ctx.config.paths.plugins_dir.clone());
 
     match &args.command {
         PluginCommand::List(list_args) => {
@@ -66,8 +69,12 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
             // Try Python plugins first
             #[cfg(feature = "python-plugins")]
             {
-                let mut python_mgr = crate::plugin::PythonPluginManager::new();
-                let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(None);
+                let plugin_config = PluginConfig {
+                    block_suspicious_plugins: true,
+                    timeout_secs: _ctx.config.http.timeout_secs.min(300),
+                    ..PluginConfig::default()
+                };
+                let mut python_mgr = crate::plugin::PythonPluginManager::from_config(&plugin_config);
                 for dir in &plugin_dirs {
                     if dir.exists() {
                         if let Err(e) = python_mgr.load_plugins(dir) {
@@ -82,9 +89,17 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
                     .any(|check| check.name == run_args.name);
 
                 if has_python_check {
-                    let results = python_mgr
-                        .run_check(&run_args.name, &run_args.target)
-                        .await?;
+                    let results = tokio::time::timeout(
+                        std::time::Duration::from_secs(plugin_config.timeout_secs),
+                        python_mgr.run_check(&run_args.name, &run_args.target),
+                    )
+                    .await
+                    .map_err(|_| {
+                        anyhow::anyhow!(
+                            "Plugin execution timed out after {} seconds",
+                            plugin_config.timeout_secs
+                        )
+                    })??;
                     println!(
                         "Running Python plugin '{}' against target '{}'",
                         run_args.name, run_args.target
@@ -163,6 +178,7 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
 pub fn discover_all_plugins() -> Vec<crate::tui::tabs::plugin::PluginInfo> {
     use crate::tui::tabs::plugin::PluginInfo;
 
+    #[cfg(feature = "ruby-plugins")]
     let plugin_dirs = slapper_plugin::PluginManager::default_plugin_dirs(None);
     let mut all_plugins = Vec::new();
 

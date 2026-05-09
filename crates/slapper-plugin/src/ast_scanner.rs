@@ -307,6 +307,14 @@ pub fn validate_python_plugin_ast(
     if mode.use_ast() {
         let ast_result = scanner.analyze(content);
         if !ast_result.analysis_success {
+            if block_suspicious_plugins {
+                anyhow::bail!(
+                    "AST analysis failed while blocking is enabled: {}",
+                    ast_result
+                        .error
+                        .unwrap_or_else(|| "unknown AST error".to_string())
+                );
+            }
             tracing::warn!("AST analysis failed: {:?}", ast_result.error);
         }
         all_suspicious.extend(ast_result.suspicious_items);

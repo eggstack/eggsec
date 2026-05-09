@@ -418,7 +418,17 @@ impl TaskBuilder for super::tabs::NseTab {
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 impl TaskBuilder for super::tabs::PluginTab {
     fn build_task_config(&self) -> Option<workers::TaskConfig> {
-        None
+        let target = self.target().trim();
+        let plugin_name = self.plugin_name()?.trim();
+        if target.is_empty() || plugin_name.is_empty() {
+            return None;
+        }
+
+        Some(workers::TaskConfig::Plugin {
+            plugin_name: plugin_name.to_string(),
+            target: target.to_string(),
+            timeout_secs: 120,
+        })
     }
 }
 
@@ -482,6 +492,45 @@ impl super::App {
                     }
                 }
             }));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TaskBuilder;
+    use crate::tui::tabs::plugin::PluginInfo;
+    use crate::tui::tabs::TabInput;
+
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+    #[test]
+    fn plugin_tab_builds_plugin_task_config() {
+        let mut tab = crate::tui::tabs::PluginTab::new();
+        tab.load_plugins(vec![PluginInfo {
+            name: "test_check".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            author: String::new(),
+            tags: vec![],
+            language: "Python".to_string(),
+        }]);
+        tab.inputs.focus(0);
+        tab.handle_paste("https://example.com");
+
+        let cfg = <crate::tui::tabs::PluginTab as TaskBuilder>::build_task_config(&tab);
+        let cfg = cfg.expect("expected plugin task config");
+
+        match cfg {
+            crate::tui::workers::TaskConfig::Plugin {
+                plugin_name,
+                target,
+                timeout_secs,
+            } => {
+                assert_eq!(plugin_name, "test_check");
+                assert_eq!(target, "https://example.com");
+                assert_eq!(timeout_secs, 120);
+            }
+            _ => panic!("expected TaskConfig::Plugin"),
         }
     }
 }

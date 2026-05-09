@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use pyo3::IntoPyObjectExt;
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -168,17 +169,24 @@ impl PythonPluginManager {
                                 continue;
                             }
 
-                            match PyModule::import(py, module_name) {
+                            match Self::import_module_from_path(py, module_name, &file_path) {
                                 Ok(module) => {
                                     let class_plugins =
                                         Self::extract_class_plugins(py, &module, module_name);
-                                    let loaded = LoadedPlugin {
-                                        name: module_name.to_string(),
-                                        module: module.into(),
-                                        class_plugins,
-                                    };
+
                                     if let Ok(mut plugins) = self.plugins.lock() {
-                                        plugins.push(loaded);
+                                        if plugins.iter().any(|p| p.name == module_name) {
+                                            tracing::debug!(
+                                                module = %module_name,
+                                                "Skipping duplicate plugin module"
+                                            );
+                                            continue;
+                                        }
+                                        plugins.push(LoadedPlugin {
+                                            name: module_name.to_string(),
+                                            module: module.into(),
+                                            class_plugins,
+                                        });
                                     }
                                 }
                                 Err(e) => {
@@ -195,8 +203,54 @@ impl PythonPluginManager {
                 }
             }
 
+            let _ = self.checks_cache.take();
             Ok(())
         })
+    }
+
+    fn import_module_from_path<'py>(
+        py: Python<'py>,
+        module_name: &str,
+        file_path: &Path,
+    ) -> Result<pyo3::Bound<'py, PyModule>> {
+        let importlib_util = py.import("importlib.util")?;
+        let importlib = py.import("importlib")?;
+        let path_str = file_path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Plugin path is not valid UTF-8"))?;
+        let unique_name = format!("slapper_plugin_{}", module_name);
+
+        let spec = importlib_util
+            .call_method1("spec_from_file_location", (unique_name, path_str))
+            .map_err(|e| anyhow::anyhow!("Failed to build module spec: {}", e))?;
+
+        if spec.is_none() {
+            anyhow::bail!("Could not create import spec for {}", file_path.display());
+        }
+
+        let module = importlib_util
+            .call_method1("module_from_spec", (spec.clone(),))
+            .map_err(|e| anyhow::anyhow!("Failed to instantiate module: {}", e))?;
+
+        let loader = spec
+            .getattr("loader")
+            .map_err(|e| anyhow::anyhow!("Failed to load plugin loader: {}", e))?;
+
+        if loader.is_none() {
+            anyhow::bail!("No loader available for {}", file_path.display());
+        }
+
+        loader
+            .call_method1("exec_module", (module.clone(),))
+            .map_err(|e| anyhow::anyhow!("Failed to execute plugin module: {}", e))?;
+
+        importlib
+            .call_method1("invalidate_caches", ())
+            .map_err(|e| anyhow::anyhow!("Failed to invalidate import cache: {}", e))?;
+
+        module
+            .cast_into::<PyModule>()
+            .map_err(|e| anyhow::anyhow!("Loaded object is not a Python module: {}", e))
     }
 
     /// Extract class-based plugins from a module's PLUGINS list.
@@ -349,6 +403,8 @@ impl PythonPluginManager {
                         }
                     }
 
+                    let mut seen = HashSet::new();
+                    checks.retain(|c| seen.insert(c.name.clone()));
                     checks
                 })
             })

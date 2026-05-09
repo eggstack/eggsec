@@ -19,6 +19,16 @@ cargo clippy --lib -p slapper
 cargo build --release -p slapper
 ```
 
+### Ruby Plugin Build Note
+
+For `all-plugins` or `ruby-plugins` builds on macOS, prefer Homebrew Ruby over system Ruby:
+
+```bash
+RUBY=/usr/local/opt/ruby/bin/ruby RB_SYS_STABLE_API_COMPILED_FALLBACK=1 cargo check --lib -p slapper --features all-plugins
+```
+
+Reason: system Ruby (2.6) can fail to provide symbols expected by `magnus`/`rb-sys` during Rust compilation.
+
 ### Module Override Files
 
 For specialized guidance on specific modules, see `AGENTS.override.md` in each module directory:

@@ -3,6 +3,8 @@ use std::sync::LazyLock;
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 use regex::Regex;
+#[cfg(feature = "python-plugins")]
+use crate::ast_scanner::{validate_python_plugin_ast, DetectionMode};
 
 const MAX_PLUGIN_SIZE_BYTES: usize = 1_000_000;
 
@@ -93,6 +95,9 @@ pub fn validate_python_plugin(content: &str, block_suspicious_plugins: bool) -> 
             );
         }
     }
+
+    // Structure-aware checks catch dynamic constructs that regex may miss.
+    validate_python_plugin_ast(content, DetectionMode::Strict, block_suspicious_plugins)?;
 
     Ok(())
 }
