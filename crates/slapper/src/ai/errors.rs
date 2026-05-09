@@ -1,4 +1,5 @@
 use reqwest::Error as ReqwestError;
+use std::io::Error as IoError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -42,6 +43,12 @@ impl From<ReqwestError> for AiError {
         } else {
             AiError::RequestFailed(err.to_string())
         }
+    }
+}
+
+impl From<IoError> for AiError {
+    fn from(err: IoError) -> Self {
+        AiError::RequestFailed(err.to_string())
     }
 }
 

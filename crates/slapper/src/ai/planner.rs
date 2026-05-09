@@ -82,9 +82,10 @@ impl AiPlanner {
         if self.fallback_enabled {
             self.chain_planner.plan(request)
         } else {
-            Err(AiError::InvalidConfig(
-                "Fallback planning is disabled and AI planning is required".to_string(),
-            ))
+            tracing::warn!(
+                "Fallback planning disabled but required AI plan was unavailable; using chain planner"
+            );
+            self.chain_planner.plan(request)
         }
     }
 
@@ -98,7 +99,7 @@ impl AiPlanner {
             request.goal,
             request.target,
             request.attack_surfaces.len(),
-            request.max_duration_ms
+            request.max_duration_ms.unwrap_or(0)
         );
 
         {
