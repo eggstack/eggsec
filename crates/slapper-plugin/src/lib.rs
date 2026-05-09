@@ -762,14 +762,14 @@ mod tests {
         assert!(results.unwrap().is_empty());
     }
 
-    #[test]
-    fn test_plugin_registry_run_all() {
+    #[tokio::test]
+    async fn test_plugin_registry_run_all() {
         let mut registry = PluginRegistry::new();
         registry.register(Arc::new(MockPlugin::new("Plugin1", vec![])));
         registry.register(Arc::new(MockPlugin::new("Plugin2", vec![])));
 
         let config = PluginConfig::default();
-        let results = futures::executor::block_on(registry.run_all("http://test.com", &config));
+        let results = registry.run_all("http://test.com", &config).await;
         assert!(results.is_ok());
         assert_eq!(results.unwrap().len(), 2);
     }

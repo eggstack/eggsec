@@ -558,6 +558,11 @@ impl Plugin for PythonPluginManager {
     }
 
     async fn run_check(&self, check_name: &str, target: &str) -> Result<PluginResult> {
+        let check_exists = self.get_checks().iter().any(|c| c.name == check_name);
+        if !check_exists {
+            anyhow::bail!("Check '{}' not found in loaded Python plugins", check_name);
+        }
+
         let start = Instant::now();
         let json_results = self.run_check_direct(
             check_name,
@@ -653,5 +658,20 @@ impl Plugin for PythonPluginManager {
 
     fn priority(&self) -> u32 {
         50
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PythonPluginManager;
+    use crate::Plugin;
+
+    #[test]
+    fn run_check_returns_error_for_unknown_check() {
+        let manager = PythonPluginManager::new();
+        let result = futures::executor::block_on(manager.run_check("does_not_exist", "example"));
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("not found"));
     }
 }

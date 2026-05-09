@@ -76,10 +76,15 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
                     }
                 }
 
-                let results = python_mgr
-                    .run_check(&run_args.name, &run_args.target)
-                    .await?;
-                if !results.findings.is_empty() || results.success || !results.errors.is_empty() {
+                let has_python_check = python_mgr
+                    .get_checks()
+                    .iter()
+                    .any(|check| check.name == run_args.name);
+
+                if has_python_check {
+                    let results = python_mgr
+                        .run_check(&run_args.name, &run_args.target)
+                        .await?;
                     println!(
                         "Running Python plugin '{}' against target '{}'",
                         run_args.name, run_args.target
