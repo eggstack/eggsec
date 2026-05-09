@@ -3,7 +3,6 @@
 //! Provides various output format handlers compatible with nmap conventions.
 
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::fmt::Write as FmtWrite;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,31 +155,28 @@ pub fn generate_normal(results: &[NseOutput]) -> String {
         output,
         "Starting Slapper NSE scan at {}",
         chrono_lite_timestamp()
-    );
+    )
+    .unwrap();
     writeln!(
         output,
         "NSE Timing: About {}% done",
         (results.len() as f32 * 33.0).min(100.0)
-    );
-    writeln!(output,);
+    )
+    .unwrap();
+    writeln!(output).unwrap();
 
     for result in results {
-        writeln!(output, "Nmap scan report for {}", result.target);
-        writeln!(output, "Host is up (0.0010s latency).");
-        if let Some(ref ports) = result.ports {
-            writeln!(output, "PORT     STATE SERVICE");
-            writeln!(output, "80/tcp   open  http");
-        } else {
-            writeln!(output, "PORT     STATE SERVICE");
-            writeln!(output, "80/tcp   open  http");
-        }
+        writeln!(output, "Nmap scan report for {}", result.target).unwrap();
+        writeln!(output, "Host is up (0.0010s latency).").unwrap();
+        writeln!(output, "PORT     STATE SERVICE").unwrap();
+        write_ports(&mut output, result.ports.as_deref()).unwrap();
 
-        writeln!(output, "| {}:", result.scripts);
+        writeln!(output, "| {}:", result.scripts).unwrap();
         for line in result.output.lines() {
-            writeln!(output, "|   {}", line);
+            writeln!(output, "|   {}", line).unwrap();
         }
 
-        writeln!(output,);
+        writeln!(output).unwrap();
     }
 
     writeln!(
@@ -192,6 +188,24 @@ pub fn generate_normal(results: &[NseOutput]) -> String {
     .unwrap();
 
     output
+}
+
+fn write_ports(output: &mut String, ports: Option<&str>) -> std::fmt::Result {
+    match ports {
+        Some(ports) => {
+            for raw in ports.lines().map(str::trim).filter(|line| !line.is_empty()) {
+                if raw.contains('/') {
+                    writeln!(output, "{}", raw)?;
+                } else {
+                    writeln!(output, "{}/tcp   open  unknown", raw)?;
+                }
+            }
+        }
+        None => {
+            writeln!(output, "80/tcp   open  http")?;
+        }
+    }
+    Ok(())
 }
 
 fn escape_xml(s: &str) -> String {
@@ -264,5 +278,21 @@ mod tests {
 
         let normal = generate_normal(&results);
         assert!(normal.contains("example.com"));
+    }
+
+    #[test]
+    fn test_normal_output_uses_ports_field() {
+        let results = vec![NseOutput {
+            target: "example.com".to_string(),
+            scripts: "http-title".to_string(),
+            output: "Example Domain".to_string(),
+            ports: Some("443/tcp   open  https".to_string()),
+            timing: 3,
+            debug: 0,
+        }];
+
+        let normal = generate_normal(&results);
+        assert!(normal.contains("443/tcp   open  https"));
+        assert!(!normal.contains("80/tcp   open  http"));
     }
 }
