@@ -532,7 +532,7 @@ impl SlapperConfig {
     pub fn default_path() -> Option<PathBuf> {
         ProjectDirs::from(
             crate::constants::PROJECT_QUALIFIER,
-            crate::constants::PROJECT_NAME,
+            "",
             crate::constants::PROJECT_NAME,
         )
         .map(|p: ProjectDirs| p.config_dir().join(super::loader::DEFAULT_CONFIG_NAME))

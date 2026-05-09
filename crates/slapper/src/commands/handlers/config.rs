@@ -13,7 +13,7 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
                     println!("✓ Configuration is valid");
                     println!(
                         "  Config file: {}",
-                        config_path.unwrap_or("~/.config/slapper/config.toml")
+                        config_path.unwrap_or("~/.config/slapper/slapper.toml")
                     );
                 }
                 Err(e) => {

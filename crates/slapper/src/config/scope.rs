@@ -325,9 +325,8 @@ fn is_private_ip(ip: &IpAddr) -> bool {
         }
         IpAddr::V6(ipv6) => {
             ipv6.is_loopback()
-                || ipv6.segments()[0] == 0xfc00 >> 8
-                || ipv6.segments()[0] == 0xfd00 >> 8
-                || ipv6.segments()[0] == 0xfe80 >> 8
+                || (ipv6.segments()[0] & 0xfe00) == 0xfc00
+                || (ipv6.segments()[0] & 0xffc0) == 0xfe80
         }
     }
 }
@@ -440,5 +439,18 @@ mod tests {
             !rule.matches(&target2),
             "11.0.0.1 should NOT be in 10.0.0.0/8"
         );
+    }
+
+    #[test]
+    fn test_is_private_ip_ipv6_ranges() {
+        let ula_fc00: IpAddr = "fc00::1".parse().unwrap();
+        let ula_fd00: IpAddr = "fd00::1".parse().unwrap();
+        let link_local: IpAddr = "fe80::1".parse().unwrap();
+        let global: IpAddr = "2001:4860:4860::8888".parse().unwrap();
+
+        assert!(is_private_ip(&ula_fc00));
+        assert!(is_private_ip(&ula_fd00));
+        assert!(is_private_ip(&link_local));
+        assert!(!is_private_ip(&global));
     }
 }
