@@ -4,20 +4,26 @@
 //! Based on Nmap's dnsbl library concepts.
 
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::TokioResolver;
 use mlua::{Lua, Result as LuaResult, Table};
 use std::sync::OnceLock;
 use std::time::Duration;
 
-static DNSBL_RESOLVER: OnceLock<TokioAsyncResolver> = OnceLock::new();
+static DNSBL_RESOLVER: OnceLock<TokioResolver> = OnceLock::new();
 
-fn get_resolver() -> &'static TokioAsyncResolver {
+fn get_resolver() -> &'static TokioResolver {
     DNSBL_RESOLVER.get_or_init(|| {
-        let config = ResolverConfig::google();
+        let config = ResolverConfig::default();
         let mut opts = ResolverOpts::default();
         opts.timeout = Duration::from_secs(3);
         opts.attempts = 1;
-        TokioAsyncResolver::tokio(config, opts)
+        TokioResolver::builder_with_config(
+            config,
+            hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+        )
+        .with_options(opts)
+        .build()
+        .expect("failed to build DNSBL resolver")
     })
 }
 

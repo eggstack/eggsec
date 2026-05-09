@@ -57,7 +57,10 @@ end
 
 ## Sandbox Mode
 
-When built with `--features nse-sandbox`, dangerous operations are restricted:
+Sandbox restrictions are enabled when built with `--features nse-sandbox`.
+With `--features nse` alone, sandbox restrictions are disabled by default.
+
+When sandbox is enabled, dangerous operations are restricted:
 
 - `io.popen`: Blocked by default (returns error). Can allow specific commands via config.
 - `io.open`: Path traversal blocked. Can restrict to a specific directory.

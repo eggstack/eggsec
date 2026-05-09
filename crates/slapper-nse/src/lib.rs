@@ -61,7 +61,8 @@ pub struct SandboxConfig {
 impl Default for SandboxConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            // Sandbox behavior is controlled by the `sandbox` feature.
+            enabled: cfg!(feature = "sandbox"),
             allowed_dir: Some(PathBuf::from("/tmp/slapper-nse")),
             allowed_commands: Vec::new(),
             log_violations: true,
@@ -204,7 +205,9 @@ pub async fn run_cli(config: NseConfig) -> anyhow::Result<()> {
     let result = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
         let mut executor = NseExecutor::with_target(&target)
             .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
-        executor.set_script_args(&script_args);
+        executor
+            .set_script_args(&script_args)
+            .map_err(|e| anyhow::anyhow!("Invalid script args: {}", e))?;
 
         let script_content = if let Some(ref script_file) = script_file {
             std::fs::read_to_string(script_file)?

@@ -16,21 +16,17 @@ pub fn get_lfs_sandbox_metrics() -> usize {
     LFS_SANDBOX_VIOLATIONS.load(Ordering::SeqCst)
 }
 
-fn is_path_allowed(path: &str, sandbox: &SandboxConfig) -> bool {
-    if !sandbox.enabled {
-        return true;
+fn resolve_path_for_sandbox(path: &PathBuf) -> Result<PathBuf, std::io::Error> {
+    if path.exists() {
+        return path.canonicalize();
     }
-    if let Some(ref allowed_dir) = sandbox.allowed_dir {
-        let path_buf = PathBuf::from(path);
-        let canonical = match path_buf.canonicalize() {
-            Ok(c) => c,
-            Err(_) => return false,
-        };
-        if !canonical.starts_with(allowed_dir) {
-            return false;
+    if let Some(parent) = path.parent() {
+        let canonical_parent = parent.canonicalize()?;
+        if let Some(name) = path.file_name() {
+            return Ok(canonical_parent.join(name));
         }
     }
-    true
+    path.canonicalize()
 }
 
 pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> {
@@ -49,7 +45,7 @@ pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()>
             }
             if let Some(ref dir) = allowed_dir {
                 let path_buf = PathBuf::from(path);
-                let canonical = match path_buf.canonicalize() {
+                let canonical = match resolve_path_for_sandbox(&path_buf) {
                     Ok(c) => c,
                     Err(_) => return false,
                 };

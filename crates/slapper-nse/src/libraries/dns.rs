@@ -4,20 +4,26 @@
 
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::proto::rr::RecordType;
-use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::TokioResolver;
 use mlua::{Lua, Result as LuaResult};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::OnceLock;
 
-static RESOLVER: OnceLock<TokioAsyncResolver> = OnceLock::new();
+static RESOLVER: OnceLock<TokioResolver> = OnceLock::new();
 
-fn get_resolver() -> &'static TokioAsyncResolver {
+fn get_resolver() -> &'static TokioResolver {
     RESOLVER.get_or_init(|| {
-        let config = ResolverConfig::google();
+        let config = ResolverConfig::default();
         let mut opts = ResolverOpts::default();
         opts.timeout = std::time::Duration::from_secs(5);
         opts.attempts = 2;
-        TokioAsyncResolver::tokio(config, opts)
+        TokioResolver::builder_with_config(
+            config,
+            hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
+        )
+        .with_options(opts)
+        .build()
+        .expect("failed to build DNS resolver")
     })
 }
 
@@ -64,13 +70,13 @@ pub fn register_dns_library(lua: &Lua) -> LuaResult<()> {
                         result.set("type", qtype_clone.as_str())?;
 
                         let answers = lua.create_table()?;
-                        for (i, rdata) in lookup.iter().enumerate() {
-                            answers.set(i + 1, rdata.to_string())?;
+                        for (i, record) in lookup.answers().iter().enumerate() {
+                            answers.set(i + 1, record.data.to_string())?;
                         }
                         result.set("answers", answers)?;
 
-                        if !lookup.is_empty() {
-                            result.set("address", lookup.iter().next().unwrap().to_string())?;
+                        if !lookup.answers().is_empty() {
+                            result.set("address", lookup.answers()[0].data.to_string())?;
                         }
 
                         Ok(result)
@@ -149,8 +155,8 @@ pub fn register_dns_library(lua: &Lua) -> LuaResult<()> {
                     Ok(lookup) => {
                         result.set("status", "ok")?;
                         let answers = lua.create_table()?;
-                        for (i, rdata) in lookup.iter().enumerate() {
-                            answers.set(i + 1, rdata.to_string())?;
+                        for (i, record) in lookup.answers().iter().enumerate() {
+                            answers.set(i + 1, record.data.to_string())?;
                         }
                         result.set("answers", answers)?;
                     }
@@ -212,8 +218,8 @@ pub fn register_dns_library(lua: &Lua) -> LuaResult<()> {
                     Ok(lookup) => {
                         result.set("status", "ok")?;
                         let addresses = lua.create_table()?;
-                        for (i, rdata) in lookup.iter().enumerate() {
-                            addresses.set(i + 1, rdata.to_string())?;
+                        for (i, record) in lookup.answers().iter().enumerate() {
+                            addresses.set(i + 1, record.data.to_string())?;
                         }
                         result.set("addresses", addresses)?;
                     }
@@ -251,8 +257,8 @@ pub fn register_dns_library(lua: &Lua) -> LuaResult<()> {
                     {
                         Ok(lookup) => {
                             result.set("status", "ok")?;
-                            if let Some(rdata) = lookup.iter().next() {
-                                result.set("name", rdata.to_string())?;
+                            if let Some(record) = lookup.answers().first() {
+                                result.set("name", record.data.to_string())?;
                             }
                         }
                         Err(e) => {

@@ -1,5 +1,9 @@
 # NSE Library Implementation Plan
 
+> Status update (May 2026): this document is partially historical.
+> The executor now registers a broad NSE-compatible library surface from `executor_core.rs`.
+> Use this plan for future enhancements, not as the source of truth for current registration state.
+
 ## Overview
 
 This document outlines the implementation plan for missing and incomplete NSE (Nmap Scripting Engine) libraries in the Slapper project.
@@ -15,28 +19,13 @@ This document outlines the implementation plan for missing and incomplete NSE (N
 - `vulns` - CVE database access
 - `bit` - Bitwise operations
 
-### Libraries Implemented but Need Registration
-The following modules exist but are NOT registered in `executor.rs`:
-- `base64` 
-- `base32`
-- `bin`
-- `datetime`
-- `rand`
-- `strbuf`
-- `tab`
-- `stringaux`
-- `target`
-- `creds`
-- `url`
-- `openssl`
-- `pcre`
-- `io`
-- `os`
-- `unittest`
-- `nsedebug`
-- `strict`
-- `match_lib` (as `r#match`)
-- Various protocol libraries (http2, mqtt, kafka, websocket, telnet, sftp, whois, finger)
+### Libraries Implemented and Registered
+The following modules are registered by `ExecutorCore::register_libraries()` and available via `require`:
+- `base64`, `base32`, `bin`, `datetime`, `rand`
+- `strbuf`, `tab`, `stringaux`, `target`
+- `creds`, `url`, `openssl`, `pcre`
+- `io`, `os`, `lfs`, `unittest`
+- `http2`, `mqtt`, `kafka`, `websocket`, `telnet`, `sftp`, `whois`, `finger`
 
 ---
 
@@ -86,28 +75,13 @@ LPeg is a powerful pattern matching library. However, mlua has limited support. 
 
 ## Phase 2: Library Registration Fixes (HIGH PRIORITY)
 
-### 2.1 Register Existing Libraries in Executor
+### 2.1 Registration Maintenance
 
-Add the following to `src/nse/executor.rs` in `register_libraries()`:
-
-```rust
-// Add these registrations:
-crate::nse::libraries::base64::register_base64_library(&self.lua)?;
-crate::nse::libraries::base32::register_base32_library(&self.lua)?;
-crate::nse::libraries::datetime::register_datetime_library(&self.lua)?;
-crate::nse::libraries::rand::register_rand_library(&self.lua)?;
-crate::nse::libraries::url::register_url_library(&self.lua)?;
-crate::nse::libraries::creds::register_creds_library(&self.lua)?;
-crate::nse::libraries::openssl::register_openssl_library(&self.lua)?;
-crate::nse::libraries::pcre::register_pcre_library(&self.lua)?;
-crate::nse::libraries::io::register_io_library(&self.lua)?;
-crate::nse::libraries::os::register_os_library(&self.lua)?;
-crate::nse::libraries::unittest::register_unittest_library(&self.lua)?;
-crate::nse::libraries::target::register_target_library(&self.lua)?;
-crate::nse::libraries::strbuf::register_strbuf_library(&self.lua)?;
-crate::nse::libraries::tab::register_tab_library(&self.lua)?;
-crate::nse::libraries::stringaux::register_stringaux_library(&self.lua)?;
-```
+Registration now lives in `src/executor_core.rs` (`register_libraries()`), not a standalone executor-specific list.
+Future additions should update:
+- `setup_globals()` table initialization
+- `register_libraries()` bindings
+- `shared::sync_require_modules()` mapping
 
 ### 2.2 Add Global Table Registrations
 
@@ -234,10 +208,8 @@ These exist but may need enhancement:
 - [ ] Test with NSE scripts that use regex/httpspider
 
 ### Phase 2 Tasks
-- [ ] Register base64, base32, datetime, rand in executor
-- [ ] Register url, creds, openssl, pcre in executor
-- [ ] Register io, os, unittest, target in executor
-- [ ] Update setup_globals() for all new tables
+- [ ] Keep `setup_globals()` and `register_libraries()` synchronized for new modules
+- [ ] Keep `_REQUIRE_MODULES` synchronization updated for new modules
 
 ### Phase 3 Tasks
 - [ ] Implement async HTTP client in http.rs

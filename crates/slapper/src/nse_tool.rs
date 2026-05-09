@@ -89,7 +89,9 @@ impl SecurityTool for NseTool {
                 executor.add_default_scripts_path();
             }
 
-            let _ = executor.set_script_args(&script_args);
+            executor
+                .set_script_args(&script_args)
+                .map_err(SlapperError::Config)?;
 
             let script_content = if matches!(
                 script_for_executor.as_str(),

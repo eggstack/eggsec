@@ -68,14 +68,23 @@ impl NseExecutor {
         timeout: std::time::Duration,
     ) -> LuaResult<String> {
         let script = script.to_string();
+        let sandbox = self.core.sandbox.clone();
+        let target = self.target().to_string();
+        let script_paths = self.core.scripts_path.lock().clone();
         let (tx, rx) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
-            let lua = Lua::new();
-            let result = lua.load(&script).eval::<Value>();
+            let result = (|| -> LuaResult<String> {
+                let mut exec = NseExecutor::with_sandbox(sandbox)?;
+                let _ = exec.set_target(&target);
+                for path in script_paths {
+                    exec.add_scripts_path(path);
+                }
+                exec.run_script(&script)
+            })();
             let _ = tx.send(
                 result
-                    .map(|v| format!("{:?}", v))
+                    .map(|v| v.to_string())
                     .map_err(|e| e.to_string()),
             );
         });

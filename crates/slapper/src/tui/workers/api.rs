@@ -308,7 +308,9 @@ pub async fn run_nse(
             .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
 
         if let Some(ref args) = script_args {
-            let _ = executor.set_script_args(args);
+            executor
+                .set_script_args(args)
+                .map_err(|e| anyhow::anyhow!("Invalid script args: {}", e))?;
         }
 
         let script_content = if let Some(ref script_path) = custom_script {
