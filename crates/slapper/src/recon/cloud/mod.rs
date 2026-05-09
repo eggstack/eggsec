@@ -36,6 +36,11 @@ pub struct CloudScanner {
     concurrency: usize,
 }
 
+fn response_indicates_resource_exists(status: u16) -> bool {
+    // Object stores commonly return 403 for private-but-existing resources.
+    status != 404
+}
+
 impl CloudScanner {
     pub fn new(concurrency: usize) -> Result<Self> {
         let client = create_insecure_http_client(10)?;
@@ -89,7 +94,7 @@ impl CloudScanner {
                         Some(CloudAsset {
                             name: name.clone(),
                             url: bucket_url,
-                            exists: true,
+                            exists: response_indicates_resource_exists(status),
                             is_public,
                             bucket_type: "S3".to_string(),
                         })
@@ -133,7 +138,7 @@ impl CloudScanner {
                         Some(CloudAsset {
                             name: name.clone(),
                             url: blob_url,
-                            exists: true,
+                            exists: response_indicates_resource_exists(status),
                             is_public,
                             bucket_type: "Azure Blob".to_string(),
                         })
@@ -177,7 +182,7 @@ impl CloudScanner {
                         Some(CloudAsset {
                             name: name.clone(),
                             url: bucket_url,
-                            exists: true,
+                            exists: response_indicates_resource_exists(status),
                             is_public,
                             bucket_type: "GCP Storage".to_string(),
                         })
@@ -222,7 +227,7 @@ impl CloudScanner {
                         Some(CloudAsset {
                             name: name.clone(),
                             url: firebase_url,
-                            exists: true,
+                            exists: response_indicates_resource_exists(status),
                             is_public,
                             bucket_type: "Firebase".to_string(),
                         })

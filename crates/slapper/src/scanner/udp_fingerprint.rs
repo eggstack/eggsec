@@ -112,9 +112,19 @@ pub async fn fingerprint_udp_services(
     ports: Vec<u16>,
     timeout_duration: Duration,
 ) -> Result<UdpFingerprintResults> {
-    let resolved_ip = resolve_host(host)?;
     let start = std::time::Instant::now();
     let ports_count = ports.len();
+    if ports_count == 0 {
+        return Ok(UdpFingerprintResults {
+            host: host.to_string(),
+            ports_scanned: 0,
+            services_identified: 0,
+            duration_ms: start.elapsed().as_millis() as u64,
+            results: Vec::new(),
+        });
+    }
+
+    let resolved_ip = resolve_host(host)?;
     let semaphore = Arc::new(Semaphore::new(50));
     let mut handles = Vec::new();
 
@@ -396,8 +406,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_fingerprint_udp_port_invalid_host() {
+        let invalid_ip: std::net::IpAddr = "192.0.2.255".parse().unwrap();
         let result = fingerprint_udp_port(
-            "invalid-host-that-does-not-exist.local",
+            invalid_ip,
             53,
             Duration::from_millis(10),
         )

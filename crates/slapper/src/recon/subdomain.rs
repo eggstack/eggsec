@@ -2,6 +2,7 @@
 
 use crate::error::Result;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::TokioResolver;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -182,6 +183,15 @@ impl SubdomainEnumerator {
 
                 if let Ok(txt_lookup) = resolver.txt_lookup(&fqdn).await {
                     info.has_txt = !txt_lookup.answers().is_empty();
+                }
+
+                if let Ok(cname_lookup) = resolver.lookup(&fqdn, RecordType::CNAME).await {
+                    info.has_cname = cname_lookup.answers().iter().any(|record| {
+                        matches!(
+                            record.data,
+                            hickory_resolver::proto::rr::RData::CNAME(_)
+                        )
+                    });
                 }
 
                 info

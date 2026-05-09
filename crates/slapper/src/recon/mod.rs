@@ -13,7 +13,7 @@
 //! - [`CorsAnalyzer`](cors::CorsAnalyzer) - CORS misconfiguration detection
 //! - [`CveMapper`](cve::CveMapper) - CVE mapping for detected technologies
 //!
-//! ## Modules
+//! ## Full Recon Pipeline Modules
 //!
 //! - `techdetect` - Technology stack detection (servers, frameworks, CMS)
 //! - `subdomain` - Subdomain enumeration via crt.sh, DNS, and brute force
@@ -34,6 +34,12 @@
 //! - `dependency_scan` - Dependency vulnerability scanning
 //! - `git_secrets` - Git repository secret detection
 //! - `api_schema` - API schema discovery
+//!
+//! ## Additional Recon Utilities (standalone)
+//!
+//! Exported modules like `email_security`, `dependency_scan`, `git_secrets`,
+//! `api_schema`, `asn`, `dns_enhanced`, and protocol auth testers are available
+//! for direct invocation, but are not currently part of `run_full_recon`.
 //!
 //! ## Feature Flags
 //!

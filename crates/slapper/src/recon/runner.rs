@@ -7,29 +7,44 @@ use crate::recon::{
 };
 use crate::types::SensitiveString;
 use crate::utils::sanitize_for_logging;
-use crate::utils::target::strip_url_protocol;
+use reqwest::Url;
+use url::Host;
 use parking_lot::Mutex;
+use std::net::IpAddr;
 use std::sync::Arc;
 
 /// Resolves the target domain to an IP address.
 ///
 /// Strips protocol prefixes, extracts the domain, and performs DNS resolution
 /// if the target is not already an IP address.
-async fn resolve_target(target: &str, verbose: bool) -> (String, Option<String>, Option<String>) {
-    let target_clean = strip_url_protocol(target);
-
-    let domain = target_clean.split('/').next().map(|s| s.to_string());
+async fn resolve_target(
+    target: &str,
+    verbose: bool,
+) -> (String, Option<String>, Option<String>, Option<u16>) {
+    let looks_like_ipv6 = target.parse::<IpAddr>().map(|ip| ip.is_ipv6()).unwrap_or(false);
     let url = if target.starts_with("http://") || target.starts_with("https://") {
         target.to_string()
+    } else if looks_like_ipv6 {
+        format!("https://[{}]", target)
     } else {
         format!("https://{}", target)
     };
 
-    let resolved_ip = if let Some(ref d) = domain {
-        if d.parse::<std::net::IpAddr>().is_ok() {
-            Some(d.clone())
+    let parsed = Url::parse(&url).ok();
+    let host = parsed.as_ref().and_then(|u| {
+        u.host().map(|h| match h {
+            Host::Domain(d) => d.to_string(),
+            Host::Ipv4(ip) => ip.to_string(),
+            Host::Ipv6(ip) => ip.to_string(),
+        })
+    });
+    let port = parsed.as_ref().and_then(Url::port_or_known_default);
+
+    let resolved_ip = if let Some(ref host) = host {
+        if host.parse::<IpAddr>().is_ok() {
+            Some(host.clone())
         } else {
-            match reverse_dns::resolve_domain(d).await {
+            match reverse_dns::resolve_domain(host).await {
                 Ok(ips) if !ips.is_empty() => {
                     if verbose {
                         eprintln!("Resolved to {}", ips[0]);
@@ -43,7 +58,7 @@ async fn resolve_target(target: &str, verbose: bool) -> (String, Option<String>,
         None
     };
 
-    (url, domain, resolved_ip)
+    (url, host, resolved_ip, port)
 }
 
 /// Performs reverse DNS lookup for the given IP address.
@@ -92,7 +107,7 @@ async fn run_geo_lookup(
 ///
 /// Returns `None` if `no_threat` is true, no IP is provided, or the lookup fails.
 async fn run_threat_intel(
-    ip: Option<&String>,
+    target: Option<&String>,
     no_threat: bool,
     virustotal_key: Option<&SensitiveString>,
     alienvault_key: Option<&SensitiveString>,
@@ -101,10 +116,16 @@ async fn run_threat_intel(
     if no_threat {
         return None;
     }
-    let ip = ip?;
-    let is_ip = ip.parse::<std::net::IpAddr>().is_ok();
-    match threatintel::check_threat_intel(ip, is_ip, virustotal_key, alienvault_key, shodan_key)
-        .await
+    let target = target?;
+    let is_ip = target.parse::<std::net::IpAddr>().is_ok();
+    match threatintel::check_threat_intel(
+        target,
+        is_ip,
+        virustotal_key,
+        alienvault_key,
+        shodan_key,
+    )
+    .await
     {
         Ok(v) => Some(v),
         Err(e) => {
@@ -117,12 +138,12 @@ async fn run_threat_intel(
 /// Performs SSL/TLS certificate analysis.
 ///
 /// Returns `None` if `no_ssl` is true, no host is provided, or the analysis fails.
-async fn run_ssl_recon(host: Option<&String>, url: &str, no_ssl: bool) -> Option<ssl::SslAnalysis> {
+async fn run_ssl_recon(host: Option<&String>, port: Option<u16>, no_ssl: bool) -> Option<ssl::SslAnalysis> {
     if no_ssl {
         return None;
     }
     let host = host?;
-    let port = if url.contains("https://") { 443 } else { 80 };
+    let port = port.unwrap_or(443);
     match ssl::analyze_ssl(host, port).await {
         Ok(v) => Some(v),
         Err(e) => {
@@ -390,7 +411,7 @@ pub async fn run_full_recon(
 
     set_stage(&stage, "resolving");
 
-    let (url, domain, resolved_ip) = resolve_target(target, verbose).await;
+    let (url, domain, resolved_ip, port) = resolve_target(target, verbose).await;
 
     let mut recon = FullReconResult::new(target);
 
@@ -421,6 +442,9 @@ pub async fn run_full_recon(
     let shodan_key = config.recon.apis.shodan.api_key.as_ref();
     let wayback_key = config.recon.apis.wayback_machine.api_key.as_ref();
 
+    let threat_target = domain.as_ref().or(resolved_ip.as_ref());
+    let ssl_host = domain.as_ref().or(resolved_ip.as_ref());
+
     let (
         reverse_dns_result,
         geolocation_result,
@@ -445,13 +469,13 @@ pub async fn run_full_recon(
             maxmind_settings
         ),
         run_threat_intel(
-            resolved_ip.as_ref(),
+            threat_target,
             args.no_threat,
             virustotal_key,
             alienvault_key,
             shodan_key
         ),
-        run_ssl_recon(resolved_ip.as_ref(), &url, args.no_ssl),
+        run_ssl_recon(ssl_host, port, args.no_ssl),
         run_whois_lookup(domain.as_ref(), args.no_whois),
         run_subdomain_enum(domain.as_ref(), concurrency, args.no_subdomains),
         run_dns_records(domain.as_ref(), args.no_dns_records),
@@ -468,8 +492,8 @@ pub async fn run_full_recon(
 
     let reverse_dns_failed = reverse_dns_result.is_none() && !args.no_dns && resolved_ip.is_some();
     let geo_failed = geolocation_result.is_none() && !args.no_geo && resolved_ip.is_some();
-    let threat_failed = threat_intel_result.is_none() && !args.no_threat && resolved_ip.is_some();
-    let ssl_failed = ssl_result.is_none() && !args.no_ssl && resolved_ip.is_some();
+    let threat_failed = threat_intel_result.is_none() && !args.no_threat && threat_target.is_some();
+    let ssl_failed = ssl_result.is_none() && !args.no_ssl && ssl_host.is_some();
     let whois_failed = whois_result.is_none() && !args.no_whois && domain.is_some();
     let subdomains_failed = subdomain_result.is_none() && !args.no_subdomains && domain.is_some();
     let dns_records_failed =
@@ -480,8 +504,9 @@ pub async fn run_full_recon(
     let content_failed = content_result.is_none() && !args.no_content;
     let cors_failed = cors_result.is_none() && !args.no_cors;
     let email_failed = email_result.is_none() && !args.no_email;
-    let takeover_failed =
-        takeover_result.is_none() && !args.no_takeover && subdomain_result.is_some();
+    let takeover_failed = !args.no_takeover
+        && matches!(subdomain_result.as_ref(), Some(s) if !s.subdomains.is_empty())
+        && takeover_result.is_none();
 
     recon.reverse_dns = reverse_dns_result;
     recon.geolocation = geolocation_result;
@@ -499,52 +524,60 @@ pub async fn run_full_recon(
     recon.takeover = takeover_result;
 
     if reverse_dns_failed {
-        recon.reverse_dns_error = Some("Reverse DNS lookup failed".to_string());
+        recon.reverse_dns_error =
+            Some("Reverse DNS lookup failed (see logs for the underlying error)".to_string());
     }
     if geo_failed {
-        recon.geoip_error = Some("Geolocation lookup failed".to_string());
+        recon.geoip_error =
+            Some("Geolocation lookup failed (see logs for the underlying error)".to_string());
     }
     if threat_failed {
-        recon.threat_intel_error = Some("Threat intel lookup failed".to_string());
+        recon.threat_intel_error =
+            Some("Threat intel lookup failed (see logs for the underlying error)".to_string());
     }
     if ssl_failed {
-        recon.ssl_error = Some("SSL analysis failed".to_string());
+        recon.ssl_error = Some("SSL analysis failed (see logs for the underlying error)".to_string());
     }
     if whois_failed {
-        recon.whois_error = Some("WHOIS lookup failed".to_string());
+        recon.whois_error = Some("WHOIS lookup failed (see logs for the underlying error)".to_string());
     }
     if subdomains_failed {
-        recon.subdomains_error = Some("Subdomain enumeration failed".to_string());
+        recon.subdomains_error =
+            Some("Subdomain enumeration failed (see logs for the underlying error)".to_string());
     }
     if dns_records_failed {
-        recon.dns_records_error = Some("DNS records enumeration failed".to_string());
+        recon.dns_records_error =
+            Some("DNS records enumeration failed (see logs for the underlying error)".to_string());
     }
     if js_failed {
-        recon.js_error = Some("JS analysis failed".to_string());
+        recon.js_error = Some("JS analysis failed (see logs for the underlying error)".to_string());
     }
     if wayback_failed {
-        recon.wayback_error = Some("Wayback lookup failed".to_string());
+        recon.wayback_error = Some("Wayback lookup failed (see logs for the underlying error)".to_string());
     }
     if cloud_failed {
-        recon.cloud_error = Some("Cloud scan failed".to_string());
+        recon.cloud_error = Some("Cloud scan failed (see logs for the underlying error)".to_string());
     }
     if content_failed {
-        recon.content_error = Some("Content discovery failed".to_string());
+        recon.content_error =
+            Some("Content discovery failed (see logs for the underlying error)".to_string());
     }
     if cors_failed {
-        recon.cors_error = Some("CORS analysis failed".to_string());
+        recon.cors_error = Some("CORS analysis failed (see logs for the underlying error)".to_string());
     }
     if email_failed {
-        recon.email_error = Some("Email discovery failed".to_string());
+        recon.email_error = Some("Email discovery failed (see logs for the underlying error)".to_string());
     }
     if takeover_failed {
-        recon.takeover_error =
-            Some("Takeover check failed or no vulnerable subdomains".to_string());
+        recon.takeover_error = Some(
+            "Takeover check failed on discovered subdomains (see logs for the underlying error)"
+                .to_string(),
+        );
     }
 
     recon.cve_mapping = run_cve_check(techdetect_result.as_ref(), args.no_cve).await;
     if recon.cve_mapping.is_none() && !args.no_cve && techdetect_result.is_some() {
-        recon.cve_error = Some("CVE mapping failed".to_string());
+        recon.cve_error = Some("CVE mapping failed (see logs for the underlying error)".to_string());
     }
 
     recon.tech_stack = techdetect_result.map(|t| t.tech_stack);
@@ -729,29 +762,32 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_target_http_prefix() {
-        let (url, domain, _) = resolve_target("http://example.com/path", false).await;
+        let (url, domain, _, port) = resolve_target("http://example.com/path", false).await;
         assert_eq!(url, "http://example.com/path");
         assert_eq!(domain, Some("example.com".to_string()));
+        assert_eq!(port, Some(80));
     }
 
     #[tokio::test]
     async fn test_resolve_target_https_prefix() {
-        let (url, domain, _) = resolve_target("https://example.com/page?q=1", false).await;
+        let (url, domain, _, port) = resolve_target("https://example.com/page?q=1", false).await;
         assert_eq!(url, "https://example.com/page?q=1");
         assert_eq!(domain, Some("example.com".to_string()));
+        assert_eq!(port, Some(443));
     }
 
     #[tokio::test]
     async fn test_resolve_target_no_prefix() {
-        let (url, domain, resolved_ip) = resolve_target("example.com", false).await;
+        let (url, domain, resolved_ip, port) = resolve_target("example.com", false).await;
         assert_eq!(url, "https://example.com");
         assert_eq!(domain, Some("example.com".to_string()));
+        assert_eq!(port, Some(443));
         let _ = resolved_ip;
     }
 
     #[tokio::test]
     async fn test_resolve_target_ip_address() {
-        let (url, domain, resolved_ip) = resolve_target("8.8.8.8", false).await;
+        let (url, domain, resolved_ip, _) = resolve_target("8.8.8.8", false).await;
         assert_eq!(url, "https://8.8.8.8");
         assert_eq!(domain, Some("8.8.8.8".to_string()));
         assert_eq!(resolved_ip, Some("8.8.8.8".to_string()));
@@ -759,22 +795,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_target_ipv6() {
-        let (url, domain, resolved_ip) = resolve_target("::1", false).await;
-        assert_eq!(url, "https://::1");
+        let (url, domain, resolved_ip, _) = resolve_target("::1", false).await;
+        assert_eq!(url, "https://[::1]");
         assert_eq!(domain, Some("::1".to_string()));
         assert_eq!(resolved_ip, Some("::1".to_string()));
     }
 
     #[tokio::test]
     async fn test_resolve_target_with_port() {
-        let (url, domain, _) = resolve_target("http://example.com:8080/admin", false).await;
+        let (url, domain, _, port) = resolve_target("http://example.com:8080/admin", false).await;
         assert_eq!(url, "http://example.com:8080/admin");
-        assert_eq!(domain, Some("example.com:8080".to_string()));
+        assert_eq!(domain, Some("example.com".to_string()));
+        assert_eq!(port, Some(8080));
     }
 
     #[tokio::test]
     async fn test_resolve_target_strips_path_from_domain() {
-        let (url, domain, _) = resolve_target("https://example.com/a/b/c", false).await;
+        let (url, domain, _, _) = resolve_target("https://example.com/a/b/c", false).await;
         assert_eq!(url, "https://example.com/a/b/c");
         assert_eq!(domain, Some("example.com".to_string()));
     }
