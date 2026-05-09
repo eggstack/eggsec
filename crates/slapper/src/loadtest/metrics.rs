@@ -88,6 +88,21 @@ impl Metrics {
         *self.status_codes.entry(status_code).or_insert(0) += 1;
     }
 
+    pub fn record_http_response(&mut self, latency: Duration, status_code: u16) {
+        let latency_ms = latency.as_millis() as u64;
+        self.histogram.record(latency_ms).ok();
+        *self.status_codes.entry(status_code).or_insert(0) += 1;
+
+        if (200..400).contains(&status_code) {
+            self.successful += 1;
+        } else {
+            self.failed += 1;
+            if self.errors.len() < 100 {
+                self.errors.push(format!("HTTP {}", status_code));
+            }
+        }
+    }
+
     pub fn record_failure(&mut self, error: String) {
         self.failed += 1;
         if self.errors.len() < 100 {

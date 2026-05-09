@@ -1,12 +1,14 @@
 use crate::error::{Result, SlapperError};
 use crate::utils::stealth::tool_user_agent;
 use base64::{engine::general_purpose, Engine as _};
-use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{Client, Method};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
+use tokio::task::JoinSet;
+use tokio::time::{Instant as TokioInstant, sleep};
 use tracing;
 
 use super::metrics::{LoadTestResults, Metrics};
@@ -276,12 +278,20 @@ impl LoadTestRunner {
         };
 
         let start = Instant::now();
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.concurrency));
+        let issued_requests = Arc::new(AtomicU64::new(0));
 
-        let mut handles = Vec::with_capacity(self.total_requests as usize);
+        let rate_limit_state = self.rate_limit.map(|rate| {
+            let min_interval = Duration::from_secs_f64(1.0 / f64::from(rate));
+            (
+                min_interval,
+                Arc::new(Mutex::new(TokioInstant::now() - min_interval)),
+            )
+        });
 
-        for _ in 0..self.total_requests {
-            let permit = semaphore.clone().acquire_owned().await?;
+        let worker_count = self.concurrency.min(self.total_requests as usize);
+        let mut workers = JoinSet::new();
+
+        for _ in 0..worker_count {
             let client = client.clone();
             let url = self.url.clone();
             let method = self.method.clone();
@@ -290,45 +300,64 @@ impl LoadTestRunner {
             let metrics = metrics.clone();
             let progress = progress.clone();
             let user_agent = self.user_agent.clone();
+            let issued_requests = issued_requests.clone();
+            let rate_limit_state = rate_limit_state.clone();
+            let total_requests = self.total_requests;
 
-            let handle = tokio::spawn(async move {
-                let request_start = Instant::now();
-
-                let mut req = client.request(method.clone(), &url);
-                req = req.header("User-Agent", &user_agent);
-
-                for (key, value) in &headers {
-                    req = req.header(key, value);
-                }
-
-                if let Some(b) = &body {
-                    req = req.body(b.clone());
-                }
-
-                let result = req.send().await;
-                let latency = request_start.elapsed();
-
-                let mut metrics = metrics.lock().await;
-
-                match result {
-                    Ok(response) => {
-                        metrics.record_success(latency, response.status().as_u16());
+            workers.spawn(async move {
+                loop {
+                    let request_index = issued_requests.fetch_add(1, Ordering::Relaxed);
+                    if request_index >= total_requests {
+                        break;
                     }
-                    Err(e) => {
-                        metrics.record_failure(e.to_string());
+
+                    if let Some((min_interval, next_allowed_at)) = &rate_limit_state {
+                        let mut next = next_allowed_at.lock().await;
+                        let now = TokioInstant::now();
+                        if now < *next {
+                            sleep(*next - now).await;
+                        }
+                        *next = TokioInstant::now() + *min_interval;
+                    }
+
+                    let request_start = Instant::now();
+
+                    let mut req = client.request(method.clone(), &url);
+                    req = req.header("User-Agent", &user_agent);
+
+                    for (key, value) in &headers {
+                        req = req.header(key, value);
+                    }
+
+                    if let Some(b) = &body {
+                        req = req.body(b.clone());
+                    }
+
+                    let result = req.send().await;
+                    let latency = request_start.elapsed();
+
+                    let mut metrics = metrics.lock().await;
+
+                    match result {
+                        Ok(response) => {
+                            metrics.record_http_response(latency, response.status().as_u16());
+                        }
+                        Err(e) => {
+                            metrics.record_failure(e.to_string());
+                        }
+                    }
+
+                    if let Some(ref pb) = progress {
+                        pb.inc(1);
                     }
                 }
-
-                if let Some(ref pb) = progress {
-                    pb.inc(1);
-                }
-                drop(permit);
             });
-
-            handles.push(handle);
         }
 
-        join_all(handles).await;
+        while let Some(join_result) = workers.join_next().await {
+            join_result
+                .map_err(|e| SlapperError::Runtime(format!("Load test worker task failed: {e}")))?;
+        }
 
         let total_duration = start.elapsed();
         if let Some(ref pb) = progress {

@@ -27,7 +27,7 @@ use serde::Serialize;
 /// ```
 pub fn assert_serialize_roundtrip<T>(value: &T)
 where
-    T: Serialize + DeserializeOwned + Eq,
+    T: Serialize + DeserializeOwned + Eq + std::fmt::Debug,
 {
     let json = serde_json::to_string(value).unwrap();
     let decoded: T = serde_json::from_str(&json).unwrap();

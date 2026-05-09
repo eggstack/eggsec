@@ -10,15 +10,16 @@ The `runner.rs` file contains the core logic for generating high volumes of HTTP
 
 - **High Concurrency**: Leverages Rust's async/await and `tokio` to manage thousands of concurrent connections efficiently.
 - **Configurable Workload**: Supports different request methods, headers, and body content.
-- **Ramping & Duration**: Allows for gradually increasing the load and running tests for a specific duration.
+- **Fixed-Request Workload**: Executes a configured total request count with bounded concurrency.
+- **Rate Limiting**: Optionally caps global request issuance with `--rate-limit`.
 
 ### Metrics (`metrics.rs`)
 
 Collects and processes performance data in real-time.
 
 - **Latency Tracking**: Records response times and calculates percentiles (p50, p90, p99).
-- **Throughput**: Measures requests per second (RPS) and bytes per second.
-- **Error Rates**: Tracks non-200 status codes and connection failures.
+- **Throughput**: Measures requests per second (RPS).
+- **Error Rates**: Tracks non-2xx/3xx status codes and transport failures.
 - **Histograms**: Uses `hdrhistogram` for efficient and accurate latency tracking.
 
 ## Usage

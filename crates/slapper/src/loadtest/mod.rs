@@ -64,7 +64,7 @@ pub use runner::LoadTestRunner;
 /// - Network connectivity issues occur
 /// - Output file cannot be written
 pub async fn run_cli(args: LoadArgs, config: &SlapperConfig) -> Result<()> {
-    if args.verbose {
+    if args.verbose && !args.quiet {
         eprintln!(
             "Starting load test against {} with {} concurrent connections",
             args.url, args.concurrency
@@ -82,14 +82,14 @@ pub async fn run_cli(args: LoadArgs, config: &SlapperConfig) -> Result<()> {
 
     if let Some(ref output_file) = args.output {
         tokio::fs::write(output_file, &output).await?;
-        if args.verbose {
+        if args.verbose && !args.quiet {
             eprintln!("Results written to {}", output_file);
         }
-    } else {
+    } else if !args.quiet {
         println!("{}", output);
     }
 
-    if args.verbose {
+    if args.verbose && !args.quiet {
         eprintln!(
             "Load test complete: {} requests, {} errors",
             results.total_requests, results.failed_requests

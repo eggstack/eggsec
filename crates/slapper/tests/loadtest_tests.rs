@@ -51,7 +51,8 @@ async fn test_load_test_with_errors() {
     let results = runner.run().await.unwrap();
 
     assert_eq!(results.total_requests, 5);
-    assert_eq!(results.successful_requests, 5);
+    assert_eq!(results.successful_requests, 0);
+    assert_eq!(results.failed_requests, 5);
     assert!(results.status_codes.contains_key(&404));
 }
 
