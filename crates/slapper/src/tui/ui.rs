@@ -423,152 +423,16 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     use crate::tui::tabs::TabRender;
     let insert_mode = app.mode == crate::tui::InputMode::Insert;
 
-    match app.current_tab {
-        crate::tui::tabs::Tab::Recon => {
-            app.recon.render(f, area, insert_mode);
-            app.recon.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Load => {
-            app.load.render(f, area, insert_mode);
-            app.load.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::ScanPorts => {
-            app.scan_ports.render(f, area, insert_mode);
-            app.scan_ports.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::ScanEndpoints => {
-            app.scan_endpoints.render(f, area, insert_mode);
-            app.scan_endpoints.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Fingerprint => {
-            app.fingerprint.render(f, area, insert_mode);
-            app.fingerprint.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Fuzz => {
-            app.fuzz.render(f, area, insert_mode);
-            app.fuzz.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Waf => {
-            app.waf.render(f, area, insert_mode);
-            app.waf.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::WafStress => {
-            app.waf_stress.render(f, area, insert_mode);
-            app.waf_stress.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Scan => {
-            app.scan.render(f, area, insert_mode);
-            app.scan.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Resume => {
-            app.resume.render(f, area, insert_mode);
-            app.resume.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Proxy => {
-            app.proxy.render(f, area, insert_mode);
-            app.proxy.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Packet => {
-            app.packet.render(f, area, insert_mode);
-            app.packet.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::GraphQl => {
-            app.graphql.render(f, area, insert_mode);
-            app.graphql.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::OAuth => {
-            app.oauth.render(f, area, insert_mode);
-            app.oauth.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Cluster => {
-            app.cluster.render(f, area, insert_mode);
-            app.cluster.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Stress => {
-            app.stress.render(f, area, insert_mode);
-            app.stress.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Report => {
-            app.report.render(f, area, insert_mode);
-            app.report.render_overlays(f, area);
-        }
-        #[cfg(feature = "nse")]
-        crate::tui::tabs::Tab::Nse => {
-            app.nse.render(f, area, insert_mode);
-            app.nse.render_overlays(f, area);
-        }
-        #[cfg(not(feature = "nse"))]
-        crate::tui::tabs::Tab::Nse => {}
-        #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-        crate::tui::tabs::Tab::Plugin => {
-            app.plugin.render(f, area, insert_mode);
-            app.plugin.render_overlays(f, area);
-        }
-        #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-        crate::tui::tabs::Tab::Plugin => {}
-        crate::tui::tabs::Tab::Settings => {
-            app.settings.render(f, area, insert_mode);
-            app.settings.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::History => {
-            let h = app.history.lock();
-            h.render(f, area, insert_mode);
-            h.render_overlays(f, area);
-        }
-        crate::tui::tabs::Tab::Dashboard => {
-            app.dashboard.render(f, area, insert_mode);
-            app.dashboard.render_overlays(f, area);
-        }
-        #[cfg(feature = "advanced-hunting")]
-        crate::tui::tabs::Tab::Hunt => {
-            app.hunt.render(f, area, insert_mode);
-            app.hunt.render_overlays(f, area);
-        }
-        #[cfg(not(feature = "advanced-hunting"))]
-        crate::tui::tabs::Tab::Hunt => {}
-        #[cfg(feature = "headless-browser")]
-        crate::tui::tabs::Tab::Browser => {
-            app.browser.render(f, area, insert_mode);
-            app.browser.render_overlays(f, area);
-        }
-        #[cfg(not(feature = "headless-browser"))]
-        crate::tui::tabs::Tab::Browser => {}
-        #[cfg(feature = "compliance")]
-        crate::tui::tabs::Tab::Compliance => {
-            app.compliance.render(f, area, insert_mode);
-            app.compliance.render_overlays(f, area);
-        }
-        #[cfg(not(feature = "compliance"))]
-        crate::tui::tabs::Tab::Compliance => {}
-        #[cfg(feature = "database")]
-        crate::tui::tabs::Tab::Storage => {
-            app.storage.render(f, area, insert_mode);
-            app.storage.render_overlays(f, area);
-        }
-        #[cfg(not(feature = "database"))]
-        crate::tui::tabs::Tab::Storage => {}
-        #[cfg(feature = "external-integrations")]
-        crate::tui::tabs::Tab::Integrations => {
-            app.integrations.render(f, area, insert_mode);
-            app.integrations.render_overlays(f, area);
-        }
-        #[cfg(not(feature = "external-integrations"))]
-        crate::tui::tabs::Tab::Integrations => {}
-        #[cfg(feature = "finding-workflow")]
-        crate::tui::tabs::Tab::Workflow => {
-            app.workflow.render(f, area, insert_mode);
-            app.workflow.render_overlays(f, area);
-        }
-        #[cfg(not(feature = "finding-workflow"))]
-        crate::tui::tabs::Tab::Workflow => {}
-        #[cfg(feature = "vuln-management")]
-        crate::tui::tabs::Tab::Vuln => {
-            app.vuln.render(f, area, insert_mode);
-            app.vuln.render_overlays(f, area);
-        }
-        #[cfg(not(feature = "vuln-management"))]
-        crate::tui::tabs::Tab::Vuln => {}
+    if app.current_tab == crate::tui::tabs::Tab::History {
+        let h = app.history.lock();
+        h.render(f, area, insert_mode);
+        h.render_overlays(f, area);
+        return;
     }
+
+    let tab_render = app.current_tab.as_tab_render(app);
+    tab_render.render(f, area, insert_mode);
+    tab_render.render_overlays(f, area);
 }
 
 #[cfg(test)]
@@ -619,18 +483,6 @@ fn get_tab_status(state: &crate::tui::tabs::AppState) -> (String, ratatui::style
 
 fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
     match app.current_tab {
-        crate::tui::tabs::Tab::Recon => get_tab_status(&app.recon.state),
-        crate::tui::tabs::Tab::Load => get_tab_status(&app.load.state),
-        crate::tui::tabs::Tab::ScanPorts => get_tab_status(&app.scan_ports.state),
-        crate::tui::tabs::Tab::ScanEndpoints => get_tab_status(&app.scan_endpoints.state),
-        crate::tui::tabs::Tab::Fingerprint => get_tab_status(&app.fingerprint.state),
-        crate::tui::tabs::Tab::Fuzz => get_tab_status(&app.fuzz.state),
-        crate::tui::tabs::Tab::Waf => get_tab_status(&app.waf.state),
-        crate::tui::tabs::Tab::WafStress => get_tab_status(&app.waf_stress.state),
-        crate::tui::tabs::Tab::Scan => get_tab_status(&app.scan.state),
-        crate::tui::tabs::Tab::Resume => get_tab_status(&app.resume.state),
-        crate::tui::tabs::Tab::Proxy => get_tab_status(&app.proxy.state),
-        crate::tui::tabs::Tab::Packet => get_tab_status(&app.packet.state),
         crate::tui::tabs::Tab::Settings => (
             "Press 's' to save settings, 'r' to reset".to_string(),
             tc!(status_idle),
@@ -643,62 +495,9 @@ fn get_normal_status(app: &App) -> (String, ratatui::style::Color) {
             "Dashboard - View scan results overview".to_string(),
             tc!(status_idle),
         ),
-        crate::tui::tabs::Tab::GraphQl => get_tab_status(&app.graphql.state),
-        crate::tui::tabs::Tab::OAuth => get_tab_status(&app.oauth.state),
-        crate::tui::tabs::Tab::Cluster => get_tab_status(&app.cluster.state),
-        crate::tui::tabs::Tab::Stress => get_tab_status(&app.stress.state),
-        crate::tui::tabs::Tab::Report => get_tab_status(&app.report.state),
-        #[cfg(feature = "nse")]
-        crate::tui::tabs::Tab::Nse => get_tab_status(&app.nse.state),
-        #[cfg(not(feature = "nse"))]
-        crate::tui::tabs::Tab::Nse => ("NSE not available".to_string(), tc!(status_idle)),
-        #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-        crate::tui::tabs::Tab::Plugin => get_tab_status(&app.plugin.state),
-        #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-        crate::tui::tabs::Tab::Plugin => ("Plugins not available".to_string(), tc!(status_idle)),
-        #[cfg(feature = "advanced-hunting")]
-        crate::tui::tabs::Tab::Hunt => get_tab_status(&app.hunt.state),
-        #[cfg(not(feature = "advanced-hunting"))]
-        crate::tui::tabs::Tab::Hunt => {
-            ("Hunting feature not enabled".to_string(), tc!(status_idle))
-        }
-        #[cfg(feature = "headless-browser")]
-        crate::tui::tabs::Tab::Browser => get_tab_status(&app.browser.state),
-        #[cfg(not(feature = "headless-browser"))]
-        crate::tui::tabs::Tab::Browser => {
-            ("Browser feature not enabled".to_string(), tc!(status_idle))
-        }
-        #[cfg(feature = "compliance")]
-        crate::tui::tabs::Tab::Compliance => get_tab_status(&app.compliance.state),
-        #[cfg(not(feature = "compliance"))]
-        crate::tui::tabs::Tab::Compliance => (
-            "Compliance feature not enabled".to_string(),
-            tc!(status_idle),
-        ),
-        #[cfg(feature = "database")]
-        crate::tui::tabs::Tab::Storage => get_tab_status(&app.storage.state),
-        #[cfg(not(feature = "database"))]
-        crate::tui::tabs::Tab::Storage => {
-            ("Storage feature not enabled".to_string(), tc!(status_idle))
-        }
-        #[cfg(feature = "external-integrations")]
-        crate::tui::tabs::Tab::Integrations => get_tab_status(&app.integrations.state),
-        #[cfg(not(feature = "external-integrations"))]
-        crate::tui::tabs::Tab::Integrations => (
-            "Integrations feature not enabled".to_string(),
-            tc!(status_idle),
-        ),
-        #[cfg(feature = "finding-workflow")]
-        crate::tui::tabs::Tab::Workflow => get_tab_status(&app.workflow.state),
-        #[cfg(not(feature = "finding-workflow"))]
-        crate::tui::tabs::Tab::Workflow => {
-            ("Workflow feature not enabled".to_string(), tc!(status_idle))
-        }
-        #[cfg(feature = "vuln-management")]
-        crate::tui::tabs::Tab::Vuln => get_tab_status(&app.vuln.state),
-        #[cfg(not(feature = "vuln-management"))]
-        crate::tui::tabs::Tab::Vuln => {
-            ("Vuln management not enabled".to_string(), tc!(status_idle))
+        _ => {
+            let state = app.current_tab.as_tab_state(app).state();
+            get_tab_status(&state)
         }
     }
 }

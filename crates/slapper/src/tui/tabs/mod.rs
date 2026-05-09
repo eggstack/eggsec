@@ -114,40 +114,38 @@ pub enum Tab {
 }
 
 impl Tab {
-    const TAB_TITLES: &'static [&'static str] = &[
-        "Recon",
-        "Load",
-        "Scan Ports",
-        "Scan Endpoints",
-        "Fingerprint",
-        "Fuzz",
-        "WAF",
-        "WAF Stress",
-        "Scan",
-        "Resume",
-        "Proxy",
-        "Packet",
-        "GraphQL",
-        "OAuth",
-        "Cluster",
-        "Stress",
-        "Report",
-        "NSE",
-        "Plugins",
-        "Settings",
-        "History",
-        "Dashboard",
-        "Hunt",
-        "Browser",
-        "Compliance",
-        "Storage",
-        "Integrations",
-        "Workflow",
-        "Vuln",
-    ];
-
     pub fn title(&self) -> &'static str {
-        Self::TAB_TITLES[*self as usize]
+        match self {
+            Tab::Recon => "Recon",
+            Tab::Load => "Load",
+            Tab::ScanPorts => "Scan Ports",
+            Tab::ScanEndpoints => "Scan Endpoints",
+            Tab::Fingerprint => "Fingerprint",
+            Tab::Fuzz => "Fuzz",
+            Tab::Waf => "WAF",
+            Tab::WafStress => "WAF Stress",
+            Tab::Scan => "Scan",
+            Tab::Resume => "Resume",
+            Tab::Proxy => "Proxy",
+            Tab::Packet => "Packet",
+            Tab::GraphQl => "GraphQL",
+            Tab::OAuth => "OAuth",
+            Tab::Cluster => "Cluster",
+            Tab::Stress => "Stress",
+            Tab::Report => "Report",
+            Tab::Nse => "NSE",
+            Tab::Plugin => "Plugins",
+            Tab::Settings => "Settings",
+            Tab::History => "History",
+            Tab::Dashboard => "Dashboard",
+            Tab::Hunt => "Hunt",
+            Tab::Browser => "Browser",
+            Tab::Compliance => "Compliance",
+            Tab::Storage => "Storage",
+            Tab::Integrations => "Integrations",
+            Tab::Workflow => "Workflow",
+            Tab::Vuln => "Vuln",
+        }
     }
 
     pub fn cli_command(&self) -> &'static str {
@@ -629,40 +627,39 @@ impl Tab {
         }
     }
 
-    const TAB_BREADCRUMBS: &'static [&'static str] = &[
-        "Recon",
-        "Load",
-        "Scan Ports",
-        "Scan Endpoints",
-        "Fingerprint",
-        "Fuzz",
-        "WAF",
-        "WAF Stress",
-        "Scan",
-        "Resume",
-        "Proxy",
-        "Packet",
-        "GraphQL Security",
-        "OAuth/OIDC Security",
-        "Cluster Management",
-        "Stress Testing",
-        "Report",
-        "NSE Scripts",
-        "Plugins",
-        "Settings",
-        "History",
-        "Dashboard",
-        "Hunt",
-        "Browser",
-        "Compliance",
-        "Storage",
-        "Integrations",
-        "Workflow",
-        "Vuln",
-    ];
-
     pub fn default_breadcrumb(&self) -> Vec<&'static str> {
-        vec![Self::TAB_BREADCRUMBS[*self as usize]]
+        let label = match self {
+            Tab::Recon => "Recon",
+            Tab::Load => "Load",
+            Tab::ScanPorts => "Scan Ports",
+            Tab::ScanEndpoints => "Scan Endpoints",
+            Tab::Fingerprint => "Fingerprint",
+            Tab::Fuzz => "Fuzz",
+            Tab::Waf => "WAF",
+            Tab::WafStress => "WAF Stress",
+            Tab::Scan => "Scan",
+            Tab::Resume => "Resume",
+            Tab::Proxy => "Proxy",
+            Tab::Packet => "Packet",
+            Tab::GraphQl => "GraphQL Security",
+            Tab::OAuth => "OAuth/OIDC Security",
+            Tab::Cluster => "Cluster Management",
+            Tab::Stress => "Stress Testing",
+            Tab::Report => "Report",
+            Tab::Nse => "NSE Scripts",
+            Tab::Plugin => "Plugins",
+            Tab::Settings => "Settings",
+            Tab::History => "History",
+            Tab::Dashboard => "Dashboard",
+            Tab::Hunt => "Hunt",
+            Tab::Browser => "Browser",
+            Tab::Compliance => "Compliance",
+            Tab::Storage => "Storage",
+            Tab::Integrations => "Integrations",
+            Tab::Workflow => "Workflow",
+            Tab::Vuln => "Vuln",
+        };
+        vec![label]
     }
 
     pub fn as_tab_state_mut<'a>(&mut self, app: &'a mut super::App) -> &'a mut dyn TabState {
@@ -926,6 +923,30 @@ pub trait TabInput: TabState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tab_metadata_is_defined_for_all_visible_tabs() {
+        for tab in Tab::all() {
+            assert!(!tab.title().is_empty(), "missing title for {:?}", tab);
+            assert!(
+                !tab.description().is_empty(),
+                "missing description for {:?}",
+                tab
+            );
+            assert!(!tab.stable_id().is_empty(), "missing stable_id for {:?}", tab);
+            assert_eq!(
+                tab.default_breadcrumb().len(),
+                1,
+                "unexpected breadcrumb shape for {:?}",
+                tab
+            );
+            assert!(
+                Tab::from_stable_id(tab.stable_id()).is_some(),
+                "stable_id did not roundtrip for {:?}",
+                tab
+            );
+        }
+    }
 
     #[test]
     fn visible_tab_spans_uneven_widths() {

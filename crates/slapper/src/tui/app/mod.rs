@@ -36,7 +36,7 @@ use crate::tui::workers;
 use crate::types::OutputFormat;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
-use task_management::TaskBuilder;
+use task_management::TabTaskConfigSource;
 
 pub struct App {
     pub current_tab: Tab,
@@ -347,64 +347,8 @@ impl App {
             return TabDispatcher::new_locked(self.history.lock());
         }
 
-        let tab_input: &mut dyn TabInput = match self.current_tab {
-            Tab::Recon => &mut self.recon,
-            Tab::Load => &mut self.load,
-            Tab::ScanPorts => &mut self.scan_ports,
-            Tab::ScanEndpoints => &mut self.scan_endpoints,
-            Tab::Fingerprint => &mut self.fingerprint,
-            Tab::Fuzz => &mut self.fuzz,
-            Tab::Waf => &mut self.waf,
-            Tab::WafStress => &mut self.waf_stress,
-            Tab::Scan => &mut self.scan,
-            Tab::Resume => &mut self.resume,
-            Tab::Proxy => &mut self.proxy,
-            Tab::Packet => &mut self.packet,
-            Tab::GraphQl => &mut self.graphql,
-            Tab::OAuth => &mut self.oauth,
-            Tab::Cluster => &mut self.cluster,
-            Tab::Stress => &mut self.stress,
-            Tab::Report => &mut self.report,
-            #[cfg(feature = "nse")]
-            Tab::Nse => &mut self.nse,
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => &mut self.dashboard,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => &mut self.plugin,
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => &mut self.dashboard,
-            Tab::Settings => &mut self.settings,
-            Tab::History => unreachable!("History tab handled separately above"),
-            Tab::Dashboard => &mut self.dashboard,
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => &mut self.hunt,
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => &mut self.dashboard,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => &mut self.browser,
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => &mut self.dashboard,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => &mut self.compliance,
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => &mut self.dashboard,
-            #[cfg(feature = "database")]
-            Tab::Storage => &mut self.storage,
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => &mut self.dashboard,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => &mut self.integrations,
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => &mut self.dashboard,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => &mut self.workflow,
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => &mut self.dashboard,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => &mut self.vuln,
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => &mut self.dashboard,
-        };
+        let mut tab = self.current_tab;
+        let tab_input: &mut dyn TabInput = tab.as_tab_input(self);
         TabDispatcher::new(tab_input)
     }
 
@@ -466,47 +410,7 @@ impl App {
     }
 
     fn build_current_task(&self) -> Option<workers::TaskConfig> {
-        match self.current_tab {
-            Tab::Recon => Some(self.recon.build_task_config()?),
-            Tab::Load => Some(self.load.build_task_config()?),
-            Tab::ScanPorts => Some(self.scan_ports.build_task_config()?),
-            Tab::ScanEndpoints => Some(self.scan_endpoints.build_task_config()?),
-            Tab::Fingerprint => Some(self.fingerprint.build_task_config()?),
-            Tab::Fuzz => Some(self.fuzz.build_task_config()?),
-            Tab::Waf => Some(self.waf.build_task_config()?),
-            Tab::WafStress => Some(self.waf_stress.build_task_config()?),
-            Tab::Scan => Some(self.scan.build_task_config()?),
-            Tab::Packet => Some(self.packet.build_task_config()?),
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => Some(self.hunt.build_task_config()?),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => None,
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => Some(self.browser.build_task_config()?),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => None,
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => Some(self.compliance.build_task_config()?),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => None,
-            #[cfg(feature = "database")]
-            Tab::Storage => Some(self.storage.build_task_config()?),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => None,
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => Some(self.integrations.build_task_config()?),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => None,
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => Some(self.workflow.build_task_config()?),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => None,
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => Some(self.vuln.build_task_config()?),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => None,
-            _ => None,
-        }
+        self.current_tab.build_task_config_from_app(self)
     }
 
     pub fn handle_escape(&mut self) {

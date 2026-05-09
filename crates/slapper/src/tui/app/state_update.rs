@@ -1,11 +1,17 @@
-use super::NotificationSeverity;
 use crate::tui::app::tab_error::TabError;
 #[cfg(any(feature = "database", feature = "external-integrations"))]
 use crate::tui::tabs::AppState;
-use crate::tui::tabs::TabState;
 use crate::tui::workers::TaskResult;
 
 impl super::App {
+    fn with_history<F>(&self, f: F)
+    where
+        F: FnOnce(&mut crate::tui::tabs::HistoryTab),
+    {
+        let mut history = self.history.lock();
+        f(&mut history);
+    }
+
     pub(super) fn update(&mut self) {
         let mut dirty = false;
 
@@ -44,35 +50,33 @@ impl super::App {
     }
 
     fn update_progress(&mut self, completed: u64, total: u64) {
-        use super::tabs::Tab;
         // Use task_tab if set, otherwise fall back to current_tab (for backwards compatibility)
         let tab = self.task_tab.unwrap_or(self.current_tab);
-        match tab {
-            Tab::Recon => self.recon.update_progress(completed, total),
-            Tab::Load => self.load.update_progress(completed, total),
-            Tab::ScanPorts => self.scan_ports.update_progress(completed, total),
-            Tab::ScanEndpoints => self.scan_endpoints.update_progress(completed, total),
-            Tab::Fingerprint => self.fingerprint.update_progress(completed, total),
-            Tab::Fuzz => self.fuzz.update_progress(completed, total),
-            Tab::Waf => self.waf.update_progress(completed, total),
-            Tab::WafStress => self.waf_stress.update_progress(completed, total),
-            Tab::Scan => self.scan.update_progress(
-                self.scan
-                    .stages
-                    .iter()
-                    .filter(|s| matches!(s.status, super::tabs::StageStatus::Completed))
-                    .count() as u64,
-                self.scan.stages.len() as u64,
-            ),
+        tab.update_progress_in_app(self, completed, total);
+    }
+
+    pub(super) fn handle_result(&mut self, result: TaskResult) {
+        let Some(result) = self.handle_security_result(result) else {
+            return;
+        };
+        let Some(result) = self.handle_protocol_result(result) else {
+            return;
+        };
+        let Some(result) = self.handle_feature_result(result) else {
+            return;
+        };
+        match result {
+            TaskResult::Error(msg) => {
+                self.set_error_for_current_tab(TabError::Unknown(msg));
+            }
             _ => {}
         }
     }
 
-    pub(super) fn handle_result(&mut self, result: TaskResult) {
+    fn handle_security_result(&mut self, result: TaskResult) -> Option<TaskResult> {
         match result {
             TaskResult::LoadTest(r) => {
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_load_test_result(
                         &r.target_url,
                         r.total_requests,
@@ -81,8 +85,9 @@ impl super::App {
                         r.requests_per_second,
                         r.latency_mean_ms,
                     );
-                }
+                });
                 self.load.set_results(r);
+                None
             }
             #[cfg(feature = "stress-testing")]
             TaskResult::StressTest { target, stats } => {
@@ -91,8 +96,7 @@ impl super::App {
                 } else {
                     0
                 };
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_load_test_result(
                         "stress-test",
                         stats.packets_sent,
@@ -101,34 +105,34 @@ impl super::App {
                         pps as f64,
                         0.0,
                     );
-                }
+                });
                 self.load.set_stress_results(target.clone(), stats);
+                None
             }
             TaskResult::PortScan(r) => {
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_port_scan_result(
                         &r.host,
                         r.ports_scanned as usize,
                         r.open_ports.iter().map(|p| p.port).collect(),
                     );
-                }
+                });
                 self.scan_ports.set_results(r);
+                None
             }
             TaskResult::EndpointScan(r) => {
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_endpoint_scan_result(
                         &r.base_url,
                         r.endpoints_found,
                         r.interesting_findings,
                     );
-                }
+                });
                 self.scan_endpoints.set_results(r);
+                None
             }
             TaskResult::Fingerprint(r) => {
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_fingerprint_result(
                         &r.host,
                         r.services_identified,
@@ -137,16 +141,17 @@ impl super::App {
                             .map(|fp| format!("{}: {}", fp.port, fp.service))
                             .collect(),
                     );
-                }
+                });
                 self.fingerprint.set_results(r);
+                None
             }
             TaskResult::WafDetection(r) => {
                 let waf_name = r.waf_name.clone().unwrap_or_default();
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_waf_result("<target>", r.waf_name.is_some(), &waf_name, 0);
-                }
+                });
                 self.waf.set_results(r);
+                None
             }
             TaskResult::WafBypass {
                 detection,
@@ -154,95 +159,122 @@ impl super::App {
             } => {
                 let success_count = bypasses.iter().filter(|b| b.success).count();
                 let waf_name = detection.waf_name.clone().unwrap_or_default();
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_waf_result(
                         "<target>",
                         detection.waf_name.is_some(),
                         &waf_name,
                         success_count,
                     );
-                }
+                });
                 self.waf.set_results(detection);
                 self.waf.set_bypass_results(bypasses);
+                None
             }
             TaskResult::WafStress(bypasses) => {
                 let success_count = bypasses.iter().filter(|b| b.success).count();
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_waf_result("<target>", true, "WAF Stress", success_count);
-                }
+                });
                 self.waf.set_bypass_results(bypasses);
+                None
             }
             TaskResult::Pipeline(r) => {
                 let completed = r.stage_results.iter().filter(|s| s.success).count();
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_pipeline_result(
                         &r.target,
                         completed,
                         r.stage_results.len(),
                         r.total_duration_ms,
                     );
-                }
+                });
                 self.scan.set_report(r);
+                None
             }
             TaskResult::Fuzz(session) => {
                 self.fuzz.set_results(session);
+                None
             }
             TaskResult::Recon(r) => {
-                let mut h = self.history.lock();
-                {
+                self.with_history(|h| {
                     h.add_recon_result(
                         &r.target,
                         r.domain.clone().unwrap_or_default(),
                         r.ip_address.clone().unwrap_or_default(),
                     );
-                }
+                });
                 self.recon.set_results(r);
+                None
             }
+            _ => Some(result),
+        }
+    }
+
+    fn handle_protocol_result(&mut self, result: TaskResult) -> Option<TaskResult> {
+        match result {
             TaskResult::PacketCapture {
                 packets_captured,
                 output_file,
             } => {
                 self.packet
                     .set_capture_results(packets_captured, output_file);
+                None
             }
             TaskResult::PacketTraceroute { hops } => {
                 self.packet.set_traceroute_results(hops);
+                None
             }
             TaskResult::PacketSend {
                 packets_sent,
                 bytes_sent,
             } => {
                 self.packet.set_send_results(packets_sent, bytes_sent);
+                None
             }
             TaskResult::GraphQl(r) => {
                 self.graphql.set_results(r);
+                None
             }
             TaskResult::OAuth(r) => {
                 self.oauth.set_results(r);
+                None
             }
             #[cfg(feature = "nse")]
             TaskResult::Nse(r) => {
                 self.nse.set_results(r);
+                None
             }
             #[cfg(feature = "advanced-hunting")]
             TaskResult::Hunt(r) => {
                 self.hunt.set_report(r);
+                None
             }
             #[cfg(not(feature = "advanced-hunting"))]
-            TaskResult::Hunt(_) => {}
+            TaskResult::Hunt(_) => None,
             #[cfg(feature = "headless-browser")]
             TaskResult::Browser(r) => {
                 self.browser.set_report(r);
+                None
             }
             #[cfg(feature = "compliance")]
             TaskResult::Compliance(r) => {
                 self.compliance.set_report(r);
+                None
             }
             #[cfg(not(feature = "compliance"))]
-            TaskResult::Compliance(_) => {}
+            TaskResult::Compliance(_) => None,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            TaskResult::PluginsLoaded(plugins) => {
+                self.plugin.plugin_list = plugins;
+                None
+            }
+            _ => Some(result),
+        }
+    }
+
+    fn handle_feature_result(&mut self, result: TaskResult) -> Option<TaskResult> {
+        match result {
             TaskResult::Storage => {
                 #[cfg(feature = "database")]
                 {
@@ -251,21 +283,24 @@ impl super::App {
                         .results_view
                         .add_line(ratatui::text::Line::from("Storage task completed"));
                 }
+                None
             }
             #[cfg(feature = "database")]
             TaskResult::StorageListScans { scans } => {
                 self.storage.set_scans(scans.clone());
                 self.storage.state = AppState::Completed;
+                None
             }
             #[cfg(feature = "database")]
             TaskResult::StorageListFindings { findings } => {
                 self.storage.set_findings(findings.clone());
                 self.storage.state = AppState::Completed;
+                None
             }
             #[cfg(not(feature = "database"))]
-            TaskResult::StorageListScans { .. } => {}
+            TaskResult::StorageListScans { .. } => None,
             #[cfg(not(feature = "database"))]
-            TaskResult::StorageListFindings { .. } => {}
+            TaskResult::StorageListFindings { .. } => None,
             TaskResult::Integrations => {
                 #[cfg(feature = "external-integrations")]
                 {
@@ -274,6 +309,7 @@ impl super::App {
                         .results_view
                         .add_line(ratatui::text::Line::from("Integrations task completed"));
                 }
+                None
             }
             #[cfg(feature = "external-integrations")]
             TaskResult::IntegrationsCreateIssue { ref issue } => {
@@ -286,6 +322,7 @@ impl super::App {
                         issue.title,
                         issue.id.as_deref().unwrap_or("no-id")
                     )));
+                None
             }
             #[cfg(feature = "external-integrations")]
             TaskResult::IntegrationsSearchIssues { issues } => {
@@ -297,18 +334,20 @@ impl super::App {
                         "Found {} issues",
                         issues.len()
                     )));
+                None
             }
             #[cfg(not(feature = "external-integrations"))]
-            TaskResult::IntegrationsCreateIssue { .. } => {}
+            TaskResult::IntegrationsCreateIssue { .. } => None,
             #[cfg(not(feature = "external-integrations"))]
-            TaskResult::IntegrationsSearchIssues { .. } => {}
+            TaskResult::IntegrationsSearchIssues { .. } => None,
             #[cfg(feature = "finding-workflow")]
             TaskResult::Workflow(ref report) => {
                 self.workflow.report = Some(report.clone());
                 self.workflow.state = AppState::Completed;
+                None
             }
             #[cfg(not(feature = "finding-workflow"))]
-            TaskResult::Workflow(_) => {}
+            TaskResult::Workflow(_) => None,
             #[cfg(feature = "vuln-management")]
             TaskResult::Vuln(ref assessment) => {
                 self.vuln.state = AppState::Completed;
@@ -318,130 +357,66 @@ impl super::App {
                         .results_view
                         .add_line(ratatui::text::Line::from(line.clone()));
                 }
+                None
             }
             #[cfg(not(feature = "vuln-management"))]
-            TaskResult::Vuln(_) => {}
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            TaskResult::PluginsLoaded(plugins) => {
-                self.plugin.plugin_list = plugins;
-            }
-            TaskResult::Error(msg) => {
-                self.set_error_for_current_tab(TabError::Unknown(msg));
-            }
+            TaskResult::Vuln(_) => None,
+            _ => Some(result),
         }
     }
 
     pub(super) fn set_error_for_current_tab(&mut self, error: TabError) {
-        use super::tabs::Tab;
-        let tab = self.task_tab.unwrap_or(self.current_tab);
-        match tab {
-            Tab::Recon => self.recon.set_error(error.clone()),
-            Tab::Load => self.load.set_error(error.clone()),
-            Tab::ScanPorts => self.scan_ports.set_error(error.clone()),
-            Tab::ScanEndpoints => self.scan_endpoints.set_error(error.clone()),
-            Tab::Fingerprint => self.fingerprint.set_error(error.clone()),
-            Tab::Fuzz => self.fuzz.set_error(error.clone()),
-            Tab::Waf => self.waf.set_error(error.clone()),
-            Tab::WafStress => self.waf_stress.set_error(error.clone()),
-            Tab::Scan => self.scan.set_error(error.clone()),
-            Tab::Resume => self.resume.set_error(error.clone()),
-            Tab::Proxy => self.proxy.set_error(error.clone()),
-            Tab::Packet => self.packet.set_error(error.clone()),
-            Tab::GraphQl => self.graphql.set_error(error.clone()),
-            Tab::OAuth => self.oauth.set_error(error.clone()),
-            Tab::Cluster => self.cluster.set_error(error.clone()),
-            Tab::Stress => self.stress.set_error(error.clone()),
-            Tab::Report => self.report.set_error(error.clone()),
-            #[cfg(feature = "nse")]
-            Tab::Nse => self.nse.set_error(error.clone()),
-            #[cfg(not(feature = "nse"))]
-            Tab::Nse => {
-                self.set_notification(
-                    format!("NSE tab unavailable: {}", error),
-                    NotificationSeverity::Error,
-                );
-            }
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => self.plugin.set_error(error.clone()),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => {
-                self.set_notification(
-                    format!("Plugin tab unavailable: {}", error),
-                    NotificationSeverity::Error,
-                );
-            }
-            #[cfg(feature = "advanced-hunting")]
-            Tab::Hunt => self.hunt.set_error(error.clone()),
-            #[cfg(not(feature = "advanced-hunting"))]
-            Tab::Hunt => {
-                self.set_notification(
-                    format!("Hunt feature not available: {}", error),
-                    NotificationSeverity::Error,
-                );
-            }
-            #[cfg(feature = "headless-browser")]
-            Tab::Browser => self.browser.set_error(error.clone()),
-            #[cfg(not(feature = "headless-browser"))]
-            Tab::Browser => {
-                self.set_notification(
-                    format!("Browser feature not available: {}", error),
-                    NotificationSeverity::Error,
-                );
-            }
-            #[cfg(feature = "compliance")]
-            Tab::Compliance => self.compliance.set_error(error.clone()),
-            #[cfg(not(feature = "compliance"))]
-            Tab::Compliance => {
-                self.set_notification(
-                    format!("Compliance feature not available: {}", error),
-                    NotificationSeverity::Error,
-                );
-            }
-            #[cfg(feature = "database")]
-            Tab::Storage => self.storage.set_error(error.clone()),
-            #[cfg(not(feature = "database"))]
-            Tab::Storage => {
-                self.set_notification(
-                    format!("Storage feature not available: {}", error),
-                    NotificationSeverity::Error,
-                );
-            }
-            #[cfg(feature = "external-integrations")]
-            Tab::Integrations => self.integrations.set_error(error.clone()),
-            #[cfg(not(feature = "external-integrations"))]
-            Tab::Integrations => {
-                self.set_notification(
-                    format!("Integrations feature not available: {}", error),
-                    NotificationSeverity::Error,
-                );
-            }
-            #[cfg(feature = "finding-workflow")]
-            Tab::Workflow => self.workflow.set_error(error.clone()),
-            #[cfg(not(feature = "finding-workflow"))]
-            Tab::Workflow => {
-                self.set_notification(
-                    format!("Workflow feature not available: {}", error),
-                    NotificationSeverity::Error,
-                );
-            }
-            #[cfg(feature = "vuln-management")]
-            Tab::Vuln => self.vuln.set_error(error.clone()),
-            #[cfg(not(feature = "vuln-management"))]
-            Tab::Vuln => {
-                self.set_notification(
-                    format!("Vuln management not available: {}", error),
-                    NotificationSeverity::Error,
-                );
-            }
-            Tab::Settings => {
-                tracing::error!("Settings tab does not support error state: {}", error);
-            }
-            Tab::History => {
-                tracing::error!("History tab does not support error state: {}", error);
-            }
-            Tab::Dashboard => {
-                tracing::error!("Dashboard tab does not support error state: {}", error);
-            }
+        let mut tab = self.task_tab.unwrap_or(self.current_tab);
+        if Self::is_error_unsupported_tab(tab) {
+            self.log_unsupported_tab_error(tab, &error);
+            return;
+        }
+
+        tab.as_tab_state_mut(self).set_error(error);
+    }
+
+    fn is_error_unsupported_tab(tab: super::tabs::Tab) -> bool {
+        matches!(
+            tab,
+            super::tabs::Tab::Settings | super::tabs::Tab::History | super::tabs::Tab::Dashboard
+        )
+    }
+
+    fn log_unsupported_tab_error(&self, tab: super::tabs::Tab, error: &TabError) {
+        let tab_name = match tab {
+            super::tabs::Tab::Settings => "Settings",
+            super::tabs::Tab::History => "History",
+            super::tabs::Tab::Dashboard => "Dashboard",
+            _ => "Unknown",
+        };
+        tracing::error!("{} tab does not support error state: {}", tab_name, error);
+    }
+}
+
+trait TabProgressUpdate {
+    fn update_progress_in_app(&self, app: &mut super::App, completed: u64, total: u64);
+}
+
+impl TabProgressUpdate for super::tabs::Tab {
+    fn update_progress_in_app(&self, app: &mut super::App, completed: u64, total: u64) {
+        match self {
+            super::tabs::Tab::Recon => app.recon.update_progress(completed, total),
+            super::tabs::Tab::Load => app.load.update_progress(completed, total),
+            super::tabs::Tab::ScanPorts => app.scan_ports.update_progress(completed, total),
+            super::tabs::Tab::ScanEndpoints => app.scan_endpoints.update_progress(completed, total),
+            super::tabs::Tab::Fingerprint => app.fingerprint.update_progress(completed, total),
+            super::tabs::Tab::Fuzz => app.fuzz.update_progress(completed, total),
+            super::tabs::Tab::Waf => app.waf.update_progress(completed, total),
+            super::tabs::Tab::WafStress => app.waf_stress.update_progress(completed, total),
+            super::tabs::Tab::Scan => app.scan.update_progress(
+                app.scan
+                    .stages
+                    .iter()
+                    .filter(|s| matches!(s.status, super::tabs::StageStatus::Completed))
+                    .count() as u64,
+                app.scan.stages.len() as u64,
+            ),
+            _ => {}
         }
     }
 }

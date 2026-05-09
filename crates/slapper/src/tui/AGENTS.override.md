@@ -38,10 +38,11 @@ crates/slapper/src/tui/
 
 ## Event Loop Order
 
-`runner.rs` follows `update() -> draw() -> poll()` order:
+`runner.rs` follows `update() -> draw() -> input-check` order:
 - `update()` processes background task results first
-- `draw()` renders only if `needs_redraw` is set
-- `poll()` waits for user input with 100ms timeout
+- `draw()` renders only if `needs_redraw` (or pending redraw) is set
+- Input is read via non-blocking `EventStream::next().now_or_never()`
+- If no event is available, loop sleeps for 10ms
 
 ## Quick Switch Panel
 
