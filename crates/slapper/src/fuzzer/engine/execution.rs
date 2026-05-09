@@ -136,6 +136,23 @@ impl FuzzEngine {
                     }
                     Err(e) => {
                         tracing::warn!("Fuzz request failed: {:?}", e);
+                        results.insert(
+                            idx,
+                            FuzzResult {
+                                payload: payload_clone.clone(),
+                                status_code: 0,
+                                response_time_ms: 0,
+                                response_length: None,
+                                response_body: None,
+                                is_waf_blocked: false,
+                                is_anomaly: false,
+                                is_redos_suspected: false,
+                                leaks_found: vec![],
+                                error: Some(e.to_string()),
+                                owasp_category: Some(payload_clone.payload_type.to_string()),
+                                detected_severity: Severity::Info,
+                            },
+                        );
                     }
                 }
 

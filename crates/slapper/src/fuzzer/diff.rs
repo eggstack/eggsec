@@ -110,6 +110,10 @@ impl ResponseDiffer {
         self.baseline = Some(snapshot);
     }
 
+    pub fn baseline_snapshot(&self) -> Option<&ResponseSnapshot> {
+        self.baseline.as_ref()
+    }
+
     pub fn capture_baseline(
         &mut self,
         status_code: u16,

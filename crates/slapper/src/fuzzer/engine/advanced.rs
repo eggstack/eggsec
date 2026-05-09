@@ -147,6 +147,14 @@ impl FuzzEngine {
                 "cache" | "cache-poisoning" => Some(PayloadType::Cache),
                 "csv" | "formula" => Some(PayloadType::Csv),
                 "soap" => Some(PayloadType::Soap),
+                "websocket" | "ws" => Some(PayloadType::Websocket),
+                "nosql" => Some(PayloadType::Nosql),
+                "xpath" => Some(PayloadType::Xpath),
+                "expression" | "el" => Some(PayloadType::Expression),
+                "prototype" => Some(PayloadType::Prototype),
+                "race" | "race-condition" => Some(PayloadType::Race),
+                "mass-assign" | "mass-assignment" => Some(PayloadType::MassAssign),
+                "oast" => Some(PayloadType::Oast),
                 _ => None,
             })
             .collect();
@@ -334,5 +342,22 @@ mod tests {
         let engine = make_engine_with_payload_type("");
         let result = engine.parse_payload_types();
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_payload_types_extended_families() {
+        let engine = make_engine_with_payload_type(
+            "websocket,nosql,xpath,expression,prototype,race,mass-assignment,oast",
+        );
+        let types = engine.parse_payload_types().unwrap();
+        assert_eq!(types.len(), 8);
+        assert!(types.contains(&PayloadType::Websocket));
+        assert!(types.contains(&PayloadType::Nosql));
+        assert!(types.contains(&PayloadType::Xpath));
+        assert!(types.contains(&PayloadType::Expression));
+        assert!(types.contains(&PayloadType::Prototype));
+        assert!(types.contains(&PayloadType::Race));
+        assert!(types.contains(&PayloadType::MassAssign));
+        assert!(types.contains(&PayloadType::Oast));
     }
 }

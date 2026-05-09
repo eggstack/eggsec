@@ -17,6 +17,14 @@ use crate::waf::types::Severity;
 use super::super::detection::{PatternMatcher, TimingAnalyzer};
 use super::types::{FuzzResult, FuzzSession};
 
+fn payload_type_for_target_category(category: &str) -> PayloadType {
+    match category {
+        "backup" | "vcs" | "info-disclosure" => PayloadType::Traversal,
+        "debug" => PayloadType::Headers,
+        _ => PayloadType::Traversal,
+    }
+}
+
 /// The main fuzzing engine that orchestrates payload generation, HTTP request
 /// execution, and vulnerability detection.
 ///
@@ -358,7 +366,7 @@ impl FuzzEngine {
                 let payloads: Vec<super::super::payloads::Payload> = target_payloads
                     .into_iter()
                     .map(|tp| super::super::payloads::Payload {
-                        payload_type: PayloadType::Traversal,
+                        payload_type: payload_type_for_target_category(&tp.category),
                         payload: tp.payload,
                         description: tp.description,
                         severity: Severity::High,
@@ -388,7 +396,18 @@ impl FuzzEngine {
             }
         }
 
-        Ok(self.build_session(all_results, start.elapsed(), None))
+        let baseline = self
+            .differ
+            .as_ref()
+            .and_then(|differ| differ.baseline_snapshot())
+            .map(|snapshot| super::types::BaselineResponse {
+                status_code: snapshot.status_code,
+                response_time_ms: snapshot.timing_ms,
+                content_length: Some(snapshot.body_length as u64),
+                headers: snapshot.headers.headers.iter().cloned().collect(),
+            });
+
+        Ok(self.build_session(all_results, start.elapsed(), baseline))
     }
 
     /// Runs fuzzing against all payload types sequentially.

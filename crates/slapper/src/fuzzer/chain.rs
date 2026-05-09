@@ -79,6 +79,7 @@ pub struct ChainExecutionResult {
 
 pub struct ChainExecutor {
     client: Client,
+    client_no_redirect: Client,
     variables: FxHashMap<String, String>,
     results: Vec<ChainResult>,
     regex_cache: LruCache<String, regex::Regex>,
@@ -86,8 +87,13 @@ pub struct ChainExecutor {
 
 impl ChainExecutor {
     pub fn new(client: Client) -> Self {
+        let client_no_redirect = Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap_or_else(|_| Client::new());
         Self {
             client,
+            client_no_redirect,
             variables: FxHashMap::default(),
             results: Vec::new(),
             regex_cache: LruCache::new(REGEX_CACHE_SIZE),
@@ -190,7 +196,12 @@ impl ChainExecutor {
             _ => Method::GET,
         };
 
-        let mut request = self.client.request(method, &url);
+        let selected_client = if template.follow_redirects {
+            &self.client
+        } else {
+            &self.client_no_redirect
+        };
+        let mut request = selected_client.request(method, &url);
 
         for (key, value) in &template.headers {
             let interpolated = self.interpolate_string(value);
@@ -206,6 +217,7 @@ impl ChainExecutor {
                 let elapsed = start.elapsed().as_millis() as u64;
                 let status = response.status().as_u16();
                 let is_success = response.status().is_success();
+                let headers = response.headers().clone();
 
                 let body_text = response.text().await.unwrap_or_default();
 
@@ -213,6 +225,26 @@ impl ChainExecutor {
                     .insert("_last_status".to_string(), status.to_string());
                 self.variables
                     .insert("_last_body".to_string(), body_text.clone());
+                for (name, value) in &headers {
+                    if let Ok(value_str) = value.to_str() {
+                        self.variables
+                            .insert(format!("_header_{}", name.as_str()), value_str.to_string());
+                    }
+                }
+                for cookie_val in &headers.get_all("set-cookie") {
+                    if let Ok(cookie_str) = cookie_val.to_str() {
+                        let mut parts = cookie_str.splitn(2, ';');
+                        if let Some(name_value) = parts.next() {
+                            let mut nv = name_value.splitn(2, '=');
+                            if let (Some(name), Some(value)) = (nv.next(), nv.next()) {
+                                self.variables.insert(
+                                    format!("_cookie_{}", name.trim()),
+                                    value.trim().to_string(),
+                                );
+                            }
+                        }
+                    }
+                }
 
                 ChainResult {
                     action_index: self.results.len(),
