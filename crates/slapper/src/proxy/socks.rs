@@ -402,36 +402,43 @@ pub async fn chain_connect(proxies: &[ProxyEntry], target: SocketAddr) -> Result
         return Err(SlapperError::Proxy("No proxies in chain".to_string()));
     }
 
-    let mut current_stream: Option<TcpStream> = None;
-
-    for (i, proxy) in proxies.iter().enumerate() {
-        let proxy_addr = proxy.socket_addr()?;
-
-        let _stream = match current_stream.take() {
-            Some(existing) => existing,
-            _ => connect_with_nodelay_timeout(&proxy_addr, Duration::from_millis(proxy.timeout_ms))
-                .await
-                .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?,
-        };
-
-        let socks = SocksProxy::new(SocksVersion::V5, proxy_addr)
-            .with_timeout(Duration::from_millis(proxy.timeout_ms));
-
-        let socks = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
-            socks.with_auth(user.clone(), pass.expose_secret().to_string())
-        } else {
-            socks
-        };
-
-        current_stream = Some(if i == proxies.len() - 1 {
-            socks.connect(target).await?
-        } else {
-            let next_proxy = &proxies[i + 1];
-            socks.connect(next_proxy.socket_addr()?).await?
-        });
+    for proxy in proxies {
+        if !matches!(proxy.proxy_type, ProxyType::Socks5 | ProxyType::Tor) {
+            return Err(SlapperError::Proxy(
+                "SOCKS proxy chaining currently supports only SOCKS5/Tor entries".to_string(),
+            ));
+        }
     }
 
-    current_stream.ok_or_else(|| SlapperError::Proxy("Failed to establish proxy chain".to_string()))
+    let first = &proxies[0];
+    let first_addr = first.socket_addr()?;
+    let mut stream =
+        connect_with_nodelay_timeout(&first_addr, Duration::from_millis(first.timeout_ms))
+            .await
+            .map_err(|e| SlapperError::Proxy(format!("Failed to connect to proxy: {}", e)))?;
+
+    for (i, proxy) in proxies.iter().enumerate() {
+        let hop = SocksProxy::new(SocksVersion::V5, proxy.socket_addr()?)
+            .with_timeout(Duration::from_millis(proxy.timeout_ms));
+        let hop = if let (Some(user), Some(pass)) = (&proxy.username, &proxy.password) {
+            hop.with_auth(user.clone(), pass.expose_secret().to_string())
+        } else {
+            hop
+        };
+
+        hop.socks5_handshake(&mut stream).await?;
+
+        if i == proxies.len() - 1 {
+            hop.socks5_connect(&mut stream, &target.ip(), target.port())
+                .await?;
+        } else {
+            let next = proxies[i + 1].socket_addr()?;
+            hop.socks5_connect(&mut stream, &next.ip(), next.port())
+                .await?;
+        }
+    }
+
+    Ok(stream)
 }
 
 #[cfg(test)]

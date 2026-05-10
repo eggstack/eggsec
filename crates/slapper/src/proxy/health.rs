@@ -104,7 +104,8 @@ impl HealthChecker {
     }
 
     pub async fn check_all(&self, proxies: &[ProxyEntry]) -> Result<ProxyHealth> {
-        let mut results = Vec::with_capacity(proxies.len());
+        let enabled_total = proxies.iter().filter(|p| p.enabled).count();
+        let mut results = Vec::with_capacity(enabled_total);
 
         for proxy in proxies {
             if proxy.enabled {
@@ -116,9 +117,9 @@ impl HealthChecker {
         let healthy = results.iter().filter(|r| r.is_healthy).count();
 
         Ok(ProxyHealth {
-            total: proxies.len(),
+            total: enabled_total,
             healthy,
-            unhealthy: proxies.len() - healthy,
+            unhealthy: enabled_total.saturating_sub(healthy),
             results,
         })
     }
@@ -132,6 +133,7 @@ impl HealthChecker {
         use std::sync::Arc;
         use tokio::sync::Semaphore;
 
+        let enabled_total = proxies.iter().filter(|p| p.enabled).count();
         let semaphore = Arc::new(Semaphore::new(concurrency));
         let mut handles = Vec::new();
 
@@ -162,9 +164,9 @@ impl HealthChecker {
         let healthy = results.iter().filter(|r| r.is_healthy).count();
 
         Ok(ProxyHealth {
-            total: proxies.len(),
+            total: enabled_total,
             healthy,
-            unhealthy: proxies.len() - healthy,
+            unhealthy: enabled_total.saturating_sub(healthy),
             results,
         })
     }
@@ -309,8 +311,9 @@ mod tests {
 
         let proxies = vec![disabled];
         let health = checker.check_all(&proxies).await.unwrap();
-        assert_eq!(health.total, 1);
+        assert_eq!(health.total, 0);
         assert_eq!(health.healthy, 0);
+        assert_eq!(health.unhealthy, 0);
         assert_eq!(health.results.len(), 0);
     }
 
@@ -362,7 +365,8 @@ mod tests {
         disabled.enabled = false;
 
         let health = checker.check_concurrent(&[disabled], 5).await.unwrap();
-        assert_eq!(health.total, 1);
+        assert_eq!(health.total, 0);
+        assert_eq!(health.unhealthy, 0);
         assert_eq!(health.results.len(), 0);
     }
 }

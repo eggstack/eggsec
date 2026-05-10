@@ -58,6 +58,10 @@ pub struct ProxyPool {
 }
 
 impl ProxyPool {
+    fn stats_key(proxy: &ProxyEntry) -> String {
+        proxy.to_log_key()
+    }
+
     pub fn new(config: ProxyConfig) -> Self {
         Self {
             proxies: DashMap::new(),
@@ -68,14 +72,17 @@ impl ProxyPool {
     }
 
     pub fn add(&mut self, proxy: ProxyEntry) {
-        let key = proxy.to_url();
-        self.stats.insert(key.clone(), ProxyStats::default());
-        self.proxies.insert(key, proxy);
+        let stats_key = Self::stats_key(&proxy);
+        let proxy_key = proxy.to_url();
+        self.stats.insert(stats_key, ProxyStats::default());
+        self.proxies.insert(proxy_key, proxy);
     }
 
     pub fn remove(&self, key: &str) -> Option<ProxyEntry> {
-        self.stats.remove(key);
-        self.proxies.remove(key).map(|(_, v)| v)
+        self.proxies.remove(key).map(|(_, proxy)| {
+            self.stats.remove(&Self::stats_key(&proxy));
+            proxy
+        })
     }
 
     pub fn get(&self, key: &str) -> Option<ProxyEntry> {
@@ -97,7 +104,7 @@ impl ProxyPool {
     pub fn get_healthy(&self) -> Vec<ProxyEntry> {
         self.proxies
             .iter()
-            .filter(|r| match self.stats.get(r.key()) {
+            .filter(|r| match self.stats.get(&Self::stats_key(r.value())) {
                 Some(stats) => stats.is_healthy && r.enabled,
                 _ => r.enabled,
             })
@@ -159,7 +166,7 @@ impl ProxyPool {
     }
 
     pub fn record_success(&self, proxy: &ProxyEntry, latency_ms: u64) {
-        let key = proxy.to_log_key();
+        let key = Self::stats_key(proxy);
         if let Some(mut stats) = self.stats.get_mut(&key) {
             stats.total_requests += 1;
             stats.successful_requests += 1;
@@ -171,7 +178,7 @@ impl ProxyPool {
     }
 
     pub fn record_failure(&self, proxy: &ProxyEntry) {
-        let key = proxy.to_log_key();
+        let key = Self::stats_key(proxy);
         if let Some(mut stats) = self.stats.get_mut(&key) {
             stats.total_requests += 1;
             stats.failed_requests += 1;
@@ -373,7 +380,7 @@ mod tests {
         let mut pool = ProxyPool::new(config);
         let p1 = make_proxy("1.1.1.1", 1080);
         let p2 = make_proxy("2.2.2.2", 1080);
-        let k1 = p1.to_url();
+        let k1 = p1.to_log_key();
         pool.add(p1);
         pool.add(p2);
 
@@ -453,7 +460,7 @@ mod tests {
         let config = ProxyConfig::default();
         let mut pool = ProxyPool::new(config);
         let proxy = make_proxy("1.1.1.1", 1080);
-        let key = proxy.to_url();
+        let key = proxy.to_log_key();
         pool.add(proxy.clone());
 
         pool.record_success(&proxy, 50);
@@ -473,7 +480,7 @@ mod tests {
         config.max_failures_before_disable = 2;
         let mut pool = ProxyPool::new(config);
         let proxy = make_proxy("1.1.1.1", 1080);
-        let key = proxy.to_url();
+        let key = proxy.to_log_key();
         pool.add(proxy.clone());
 
         pool.record_failure(&proxy);
@@ -490,7 +497,7 @@ mod tests {
         let config = ProxyConfig::default();
         let mut pool = ProxyPool::new(config);
         let proxy = make_proxy("1.1.1.1", 1080);
-        let key = proxy.to_url();
+        let key = proxy.to_log_key();
         pool.add(proxy);
 
         pool.mark_unhealthy(&key);

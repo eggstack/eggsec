@@ -180,40 +180,32 @@ impl ProxyManager {
 
         let chain_vec: Vec<ProxyEntry> = chain.to_vec();
 
-        let all_socks = chain_vec
+        let socks_only = chain_vec
             .iter()
-            .all(|p| matches!(p.proxy_type, ProxyType::Socks4 | ProxyType::Socks5));
+            .all(|p| matches!(p.proxy_type, ProxyType::Socks5 | ProxyType::Tor));
 
-        let final_local_addr = if all_socks && chain_vec.len() > 1 {
+        let final_local_addr = if chain_vec.len() > 1 {
+            if !socks_only {
+                return Err(SlapperError::Proxy(
+                    "Proxy chaining currently supports only SOCKS5/Tor proxy chains".to_string(),
+                ));
+            }
+
             let stream = socks::chain_connect(&chain_vec, target_addr).await?;
             stream.local_addr()?
         } else {
-            let mut all_connections: Vec<ProxiedConnection> = Vec::new();
+            let proxy = &chain_vec[0];
+            let conn = match proxy.proxy_type {
+                ProxyType::Socks4 | ProxyType::Socks5 => {
+                    socks::connect_through(proxy.clone(), target_addr).await?
+                }
+                ProxyType::Http | ProxyType::Https => {
+                    http_connect::connect_through(proxy.clone(), target_addr).await?
+                }
+                ProxyType::Tor => socks::connect_through_tor(proxy.clone(), target_addr).await?,
+            };
 
-            for proxy in chain_vec.iter() {
-                let conn = match proxy.proxy_type {
-                    ProxyType::Socks4 | ProxyType::Socks5 => {
-                        socks::connect_through(proxy.clone(), target_addr).await?
-                    }
-                    ProxyType::Http | ProxyType::Https => {
-                        http_connect::connect_through(proxy.clone(), target_addr).await?
-                    }
-                    ProxyType::Tor => {
-                        socks::connect_through_tor(proxy.clone(), target_addr).await?
-                    }
-                };
-                all_connections.push(conn);
-            }
-
-            all_connections
-                .last()
-                .map(|c| c.local_addr)
-                .unwrap_or_else(|| {
-                    std::net::SocketAddr::new(
-                        std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
-                        0,
-                    )
-                })
+            conn.local_addr
         };
 
         let proxy_chain: Vec<ProxyEntry> = chain.into_iter().collect();
