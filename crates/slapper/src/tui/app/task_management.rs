@@ -498,8 +498,11 @@ impl super::App {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     use super::TaskBuilder;
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     use crate::tui::tabs::plugin::PluginInfo;
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     use crate::tui::tabs::TabInput;
 
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]

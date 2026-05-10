@@ -25,8 +25,8 @@ pub enum PayloadFilter {
     LineCount(Vec<u64>),
     /// Filter by line count range
     LineCountRange { min: u64, max: u64 },
-    /// Filter by response time in ms (exclude if time matches)
-    ResponseTime(u64),
+    /// Filter by response time in ms (exclude if <= threshold)
+    ResponseTimeMax(u64),
     /// Filter by response time range in ms
     ResponseTimeRange { min: u64, max: u64 },
     /// Filter by regex pattern on response body
@@ -80,9 +80,9 @@ impl FilterChain {
         }
     }
 
-    /// Add a response time filter
+    /// Add a response time max filter (exclude if <= threshold)
     pub fn add_time_filter(&mut self, time_ms: u64) {
-        self.filters.push(PayloadFilter::ResponseTime(time_ms));
+        self.filters.push(PayloadFilter::ResponseTimeMax(time_ms));
     }
 
     /// Add a regex filter
@@ -163,7 +163,7 @@ impl FilterChain {
                 };
                 lines >= *min && lines <= *max
             }
-            PayloadFilter::ResponseTime(time) => result.response_time_ms <= *time,
+            PayloadFilter::ResponseTimeMax(time) => result.response_time_ms <= *time,
             PayloadFilter::ResponseTimeRange { min, max } => {
                 result.response_time_ms >= *min && result.response_time_ms <= *max
             }
@@ -337,5 +337,19 @@ mod tests {
         chain.add_line_filter(vec![3]);
         let result = make_result_with_body(200, "line1\nline2\nline3", 10);
         assert!(chain.should_filter(&result));
+    }
+
+    #[test]
+    fn test_time_filter_excludes_responses_at_or_below_threshold() {
+        let mut chain = FilterChain::new();
+        chain.add_time_filter(100);
+
+        let result_fast = make_result(200, Some(100), 50);
+        let result_equal = make_result(200, Some(100), 100);
+        let result_slow = make_result(200, Some(100), 101);
+
+        assert!(chain.should_filter(&result_fast));
+        assert!(chain.should_filter(&result_equal));
+        assert!(!chain.should_filter(&result_slow));
     }
 }

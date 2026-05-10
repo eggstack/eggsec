@@ -2,9 +2,7 @@ use crate::error::Result;
 use dashmap::DashMap;
 use futures::future::join_all;
 use indicatif::{ProgressBar, ProgressStyle};
-use reqwest::Method;
 use std::sync::Arc;
-use std::time::Instant;
 
 use crate::waf::types::Severity;
 
@@ -198,7 +196,7 @@ impl FuzzEngine {
         let mut results = Vec::with_capacity(payloads.len());
 
         for payload in payloads {
-            let result = self.send_fuzz_request(&payload, Method::GET).await?;
+            let result = self.send_payload(&payload).await?;
             results.push(result);
         }
 
@@ -227,7 +225,7 @@ impl FuzzEngine {
                 break;
             }
 
-            let result = self.send_fuzz_request(&payload, Method::GET).await;
+            let result = self.send_payload(&payload).await;
 
             match result {
                 Ok(r) => {
@@ -257,76 +255,12 @@ impl FuzzEngine {
         Ok(results)
     }
 
-    pub(crate) async fn send_fuzz_request(
-        &self,
-        payload: &Payload,
-        method: Method,
-    ) -> Result<FuzzResult> {
-        let url = self.build_fuzz_url(&payload.payload);
-
-        let start = Instant::now();
-        let mut request = self
-            .client
-            .request(method.clone(), &url)
-            .header("User-Agent", &self.user_agent);
-
-        if self.args.session {
-            if let Some(ref session) = self.http_session {
-                for (name, cookie) in &session.cookies {
-                    request = request.header("Cookie", format!("{}={}", name, cookie.value));
-                }
-            }
-        }
-
-        if let Some(ref bearer) = self.args.common.bearer {
-            request = request.bearer_auth(bearer);
-        }
-
-        let response = request.send().await;
-        let elapsed = start.elapsed();
-
-        match response {
-            Ok(resp) => {
-                let status = resp.status().as_u16();
-                let length = resp.content_length();
-                let body = resp.text().await.ok();
-
-                Ok(FuzzResult {
-                    payload: payload.clone(),
-                    status_code: status,
-                    response_time_ms: elapsed.as_millis() as u64,
-                    response_length: length,
-                    response_body: body,
-                    is_waf_blocked: false,
-                    is_anomaly: false,
-                    is_redos_suspected: false,
-                    leaks_found: vec![],
-                    error: None,
-                    owasp_category: None,
-                    detected_severity: payload.severity,
-                })
-            }
-            Err(e) => Ok(FuzzResult {
-                payload: payload.clone(),
-                status_code: 0,
-                response_time_ms: elapsed.as_millis() as u64,
-                response_length: None,
-                response_body: None,
-                is_waf_blocked: false,
-                is_anomaly: false,
-                is_redos_suspected: false,
-                leaks_found: vec![],
-                error: Some(e.to_string()),
-                owasp_category: None,
-                detected_severity: Severity::Info,
-            }),
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::cli::{CommonHttpArgs, FuzzArgs, FuzzMode};
+    use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
 
     fn make_fuzz_args(url: &str) -> FuzzArgs {
         FuzzArgs {
@@ -391,10 +325,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_send_fuzz_request_engine_construction() {
+    async fn test_send_payload_engine_construction() {
         let args = make_fuzz_args("http://localhost:1");
         let engine = super::super::core::FuzzEngine::new(args);
         assert!(engine.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_run_sequential_with_session_uses_analyzed_payload_path() {
+        let mut args = make_fuzz_args("http://localhost:1");
+        args.session = true;
+        let mut engine = super::super::core::FuzzEngine::new(args).unwrap();
+
+        let payloads = vec![Payload {
+            payload_type: PayloadType::Sqli,
+            payload: "' OR 1=1--".to_string(),
+            description: "test".to_string(),
+            severity: Severity::Medium,
+            tags: vec!["test".to_string()],
+        }];
+
+        let results = engine.run_sequential_with_session(payloads).await.unwrap();
+        assert_eq!(results.len(), 1);
+        // send_payload_async populates OWASP category from payload type even on request error.
+        assert!(results[0].owasp_category.is_some());
     }
 
     #[test]

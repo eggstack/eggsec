@@ -129,6 +129,10 @@ impl FuzzEngine {
     ///
     /// Returns an error if the HTTP client cannot be built.
     pub fn new_with_tui_mode(args: FuzzArgs, tui_mode: bool) -> Result<Self> {
+        let mut args = args;
+        // Ensure execution paths never observe a zero-concurrency configuration.
+        args.concurrency = args.concurrency.clamp(1, 500);
+
         let user_agent = args
             .common
             .user_agent
@@ -183,7 +187,7 @@ impl FuzzEngine {
     }
 
     fn build_client(args: &FuzzArgs) -> Result<Client> {
-        let concurrency = args.concurrency.clamp(1, 500);
+        let concurrency = args.concurrency;
 
         if args.common.insecure {
             tracing::warn!(
@@ -564,16 +568,16 @@ mod tests {
     fn test_fuzz_engine_concurrency_clamped() {
         let mut args = make_fuzz_args("http://example.com");
         args.concurrency = 1000;
-        let engine = FuzzEngine::new(args);
-        assert!(engine.is_ok());
+        let engine = FuzzEngine::new(args).unwrap();
+        assert_eq!(engine.args.concurrency, 500);
     }
 
     #[test]
     fn test_fuzz_engine_concurrency_minimum() {
         let mut args = make_fuzz_args("http://example.com");
         args.concurrency = 0;
-        let engine = FuzzEngine::new(args);
-        assert!(engine.is_ok());
+        let engine = FuzzEngine::new(args).unwrap();
+        assert_eq!(engine.args.concurrency, 1);
     }
 
     #[test]
