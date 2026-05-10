@@ -1,5 +1,13 @@
 use crate::error::Result;
 use reqwest::Client;
+use rustls::ClientConfig;
+use rustls::RootCertStore;
+use rustls::pki_types::ServerName;
+use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::time::timeout;
+use tokio_rustls::TlsConnector;
 
 use super::{BypassResult, BypassTechnique, WafProfile};
 use crate::waf::detector::WafDetectionResult;
@@ -37,7 +45,7 @@ impl SmugglingBypass {
 
     pub async fn run(
         &self,
-        client: &Client,
+        _client: &Client,
         url: &str,
         detection: &WafDetectionResult,
     ) -> Result<Vec<BypassResult>> {
@@ -46,7 +54,7 @@ impl SmugglingBypass {
         let smuggling_requests = self.generate_smuggling_requests(url);
 
         for smug_req in smuggling_requests {
-            match self.test_smuggling(client, url, &smug_req, detection).await {
+            match self.test_smuggling(url, &smug_req, detection).await {
                 Ok(result) => results.push(result),
                 Err(e) => {
                     results.push(BypassResult {
@@ -236,36 +244,24 @@ impl SmugglingBypass {
 
     async fn test_smuggling(
         &self,
-        client: &Client,
         url: &str,
         req: &SmugglingRequest,
         detection: &WafDetectionResult,
     ) -> Result<BypassResult> {
-        let request_url = self.compose_request_url(url, &req.path);
-        let mut request = match req.method.as_str() {
-            "GET" => client.get(&request_url),
-            "POST" => client.post(&request_url),
-            "PUT" => client.put(&request_url),
-            _ => client.post(&request_url),
+        let requires_http2 =
+            matches!(req.smuggling_type, SmugglingType::H2CUpgrade | SmugglingType::Http2Frame);
+        let (status, body, description_suffix) = if requires_http2 {
+            (
+                0,
+                String::new(),
+                "raw HTTP/1.1 probe only; HTTP/2 frame validation not implemented".to_string(),
+            )
+        } else {
+            let (status, body) = self.execute_raw_http1(url, req).await?;
+            (status, body, "raw socket HTTP/1.1 validation".to_string())
         };
 
-        for (key, value) in &req.headers {
-            request = request.header(key, value);
-        }
-
-        request = request.header("User-Agent", crate::waf::bypass::headers::get_random_ua());
-        request = request.body(req.body.clone());
-
-        let response = request.send().await?;
-        let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
-
-        let mut success = self.is_bypass_successful(status, detection, "", &body);
-        let requires_raw_http =
-            matches!(req.smuggling_type, SmugglingType::H2CUpgrade | SmugglingType::Http2Frame);
-        if requires_raw_http {
-            success = false;
-        }
+        let success = !requires_http2 && self.is_bypass_successful(status, detection, "", &body);
 
         let technique = match req.smuggling_type {
             SmugglingType::ClTe => BypassTechnique::ContentLengthConflict,
@@ -281,23 +277,119 @@ impl SmugglingBypass {
         Ok(BypassResult {
             technique,
             success,
-            description: if requires_raw_http {
-                format!("{} [heuristic probe; raw HTTP required]", req.description)
-            } else {
-                format!("{} [heuristic probe]", req.description)
-            },
+            description: format!("{} [{}]", req.description, description_suffix),
             status_code: status,
             response_diff: None,
         })
     }
 
-    fn compose_request_url(&self, base_url: &str, path: &str) -> String {
-        if let Ok(base) = url::Url::parse(base_url) {
-            if let Ok(joined) = base.join(path) {
-                return joined.to_string();
+    async fn execute_raw_http1(
+        &self,
+        base_url: &str,
+        req: &SmugglingRequest,
+    ) -> Result<(u16, String)> {
+        let base = url::Url::parse(base_url)?;
+        let host = base
+            .host_str()
+            .ok_or_else(|| crate::error::SlapperError::Validation("Missing host in URL".to_string()))?;
+        let scheme = base.scheme();
+        let port = base.port_or_known_default().unwrap_or(match scheme {
+            "https" => 443,
+            _ => 80,
+        });
+        let authority = format!("{}:{}", host, port);
+        let stream = timeout(Duration::from_secs(15), TcpStream::connect(&authority)).await??;
+
+        let mut request_bytes = self.build_raw_request(host, req);
+        let mut response = Vec::new();
+        match scheme {
+            "http" => {
+                let mut plain = stream;
+                plain.write_all(&request_bytes).await?;
+                plain.flush().await?;
+                timeout(Duration::from_secs(15), plain.read_to_end(&mut response)).await??;
+            }
+            "https" => {
+                let connector = Self::build_tls_connector();
+                let server_name = ServerName::try_from(host.to_string())
+                    .map_err(|e| crate::error::SlapperError::Validation(format!("Invalid TLS server name '{}': {}", host, e)))?;
+                let mut tls = timeout(
+                    Duration::from_secs(15),
+                    connector.connect(server_name, stream),
+                )
+                .await
+                .map_err(|_| {
+                    crate::error::SlapperError::Timeout {
+                        timeout_ms: 15_000,
+                        operation: format!("TLS connect {}", authority),
+                    }
+                })??;
+                tls.write_all(&request_bytes).await?;
+                tls.flush().await?;
+                timeout(Duration::from_secs(15), tls.read_to_end(&mut response)).await??;
+            }
+            other => {
+                return Err(crate::error::SlapperError::Validation(format!(
+                    "Unsupported URL scheme for smuggling probe: {}",
+                    other
+                )));
             }
         }
-        base_url.to_string()
+
+        let status = Self::parse_status_code(&response).unwrap_or(0);
+        let body = Self::extract_body(&response);
+
+        request_bytes.fill(0);
+
+        Ok((status, body))
+    }
+
+    fn build_tls_connector() -> TlsConnector {
+        let mut roots = RootCertStore::empty();
+        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let config = ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        TlsConnector::from(std::sync::Arc::new(config))
+    }
+
+    fn build_raw_request(&self, host: &str, req: &SmugglingRequest) -> Vec<u8> {
+        let mut raw = Vec::with_capacity(512 + req.body.len());
+        raw.extend_from_slice(format!("{} {} HTTP/1.1\r\n", req.method, req.path).as_bytes());
+        raw.extend_from_slice(format!("Host: {}\r\n", host).as_bytes());
+        raw.extend_from_slice(
+            format!(
+                "User-Agent: {}\r\n",
+                crate::waf::bypass::headers::get_random_ua()
+            )
+            .as_bytes(),
+        );
+        raw.extend_from_slice(b"Connection: close\r\n");
+        for (key, value) in &req.headers {
+            raw.extend_from_slice(format!("{}: {}\r\n", key, value).as_bytes());
+        }
+        raw.extend_from_slice(b"\r\n");
+        raw.extend_from_slice(&req.body);
+        raw
+    }
+
+    fn parse_status_code(response: &[u8]) -> Option<u16> {
+        let status_line = response
+            .split(|b| *b == b'\n')
+            .next()
+            .and_then(|line| std::str::from_utf8(line).ok())?;
+        status_line
+            .split_whitespace()
+            .nth(1)
+            .and_then(|code| code.parse::<u16>().ok())
+    }
+
+    fn extract_body(response: &[u8]) -> String {
+        let split = b"\r\n\r\n";
+        if let Some(pos) = response.windows(split.len()).position(|w| w == split) {
+            return String::from_utf8_lossy(&response[(pos + split.len())..]).to_string();
+        }
+        String::new()
     }
 
     fn is_bypass_successful(
@@ -316,10 +408,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compose_request_url_uses_smuggling_path() {
-        let bypass = SmugglingBypass::new(None);
-        let composed = bypass.compose_request_url("https://example.com/api", "/admin");
-        assert_eq!(composed, "https://example.com/admin");
+    fn parse_status_code_from_raw_response() {
+        let raw = b"HTTP/1.1 403 Forbidden\r\nServer: test\r\n\r\nblocked";
+        assert_eq!(SmugglingBypass::parse_status_code(raw), Some(403));
+    }
+
+    #[test]
+    fn extract_body_from_raw_response() {
+        let raw = b"HTTP/1.1 200 OK\r\nServer: test\r\n\r\nhello";
+        assert_eq!(SmugglingBypass::extract_body(raw), "hello".to_string());
     }
 }
 

@@ -5893,6 +5893,7 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "webpki-roots 0.26.11",
  "wiremock",
  "zeroize",
 ]

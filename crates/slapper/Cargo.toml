@@ -26,6 +26,7 @@ tokio = { workspace = true }
 tokio-util = "0.7"
 tokio-rustls = "0.26"
 rustls = { version = "0.23", features = ["ring"] }
+webpki-roots = "0.26"
 pem = "3"
 reqwest = { version = "0.13", features = ["json", "rustls", "socks", "http2", "form", "query", "blocking", "cookies"], default-features = false }
 ratatui = "0.30"

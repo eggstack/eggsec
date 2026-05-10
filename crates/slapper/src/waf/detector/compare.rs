@@ -16,11 +16,16 @@ impl WafDetector {
                 .redirect(reqwest::redirect::Policy::limited(5))
                 .user_agent(ua)
         })?;
+        let normalized_url = super::WafDetector::normalize_url_static(url);
 
-        let normal_response = client.get(url).query(&[("q", normal_req)]).send().await?;
+        let normal_response = client
+            .get(&normalized_url)
+            .query(&[("q", normal_req)])
+            .send()
+            .await?;
 
         let malicious_response = client
-            .get(url)
+            .get(&normalized_url)
             .query(&[("q", malicious_req)])
             .send()
             .await?;

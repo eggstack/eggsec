@@ -7,7 +7,7 @@ use super::WafDetector;
 
 impl WafDetector {
     pub async fn detect(&self, url: &str) -> Result<WafDetectionResult> {
-        let normalized_url = self.normalize_url(url);
+        let normalized_url = Self::normalize_url_static(url);
 
         let response = match self.client.get(&normalized_url).send().await {
             Ok(r) => r,
@@ -50,19 +50,12 @@ impl WafDetector {
             })
             .collect();
 
-        let cookie_header_lower: Option<String> = {
-            let cookies: Vec<String> = headers
-                .get_all("set-cookie")
-                .iter()
-                .filter_map(|v| v.to_str().ok())
-                .map(|s| s.to_lowercase())
-                .collect();
-            if cookies.is_empty() {
-                None
-            } else {
-                Some(cookies.join("; "))
-            }
-        };
+        let cookie_headers_lower: Vec<String> = headers
+            .get_all("set-cookie")
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .map(|s| s.to_lowercase())
+            .collect();
 
         for (sig_key, signature) in self.signatures.iter() {
             let sig_lower = &self.signatures_lower[sig_key];
@@ -73,9 +66,11 @@ impl WafDetector {
 
             for header_pattern_lower in &sig_lower.headers {
                 for (name_lower, value_lower) in &headers_lower {
-                    if name_lower.contains(header_pattern_lower.as_str())
-                        || value_lower.contains(header_pattern_lower.as_str())
-                    {
+                    let header_name_match = name_lower == header_pattern_lower.as_str();
+                    let header_value_match =
+                        value_lower.contains(header_pattern_lower.as_str())
+                            && value_lower.len() <= 256;
+                    if header_name_match || header_value_match {
                         score += waf::HEADER_MATCH_SCORE;
                         sig_matched_headers.push(format!("{}: {}", name_lower, value_lower));
                     }
@@ -83,8 +78,16 @@ impl WafDetector {
             }
 
             for cookie_pattern_lower in &sig_lower.cookies {
-                if let Some(ref cookie_lower) = cookie_header_lower {
-                    if cookie_lower.contains(cookie_pattern_lower.as_str()) {
+                for cookie_header in &cookie_headers_lower {
+                    let cookie_name = cookie_header
+                        .split(';')
+                        .next()
+                        .unwrap_or("")
+                        .split('=')
+                        .next()
+                        .unwrap_or("")
+                        .trim();
+                    if cookie_name == cookie_pattern_lower.as_str() {
                         score += waf::COOKIE_MATCH_SCORE;
                         sig_matched_cookies.push(
                             signature.cookies[sig_lower
@@ -94,6 +97,7 @@ impl WafDetector {
                                 .unwrap_or(0)]
                             .clone(),
                         );
+                        break;
                     }
                 }
             }
@@ -171,7 +175,7 @@ impl WafDetector {
         })
     }
 
-    fn normalize_url(&self, url: &str) -> String {
+    pub(crate) fn normalize_url_static(url: &str) -> String {
         let url = url.trim();
         if url.starts_with("http://") || url.starts_with("https://") {
             url.to_string()
@@ -196,33 +200,32 @@ mod tests {
 
     #[test]
     fn test_normalize_url_with_https() {
-        let detector = test_detector();
         assert_eq!(
-            detector.normalize_url("https://example.com"),
+            WafDetector::normalize_url_static("https://example.com"),
             "https://example.com"
         );
     }
 
     #[test]
     fn test_normalize_url_with_http() {
-        let detector = test_detector();
         assert_eq!(
-            detector.normalize_url("http://example.com"),
+            WafDetector::normalize_url_static("http://example.com"),
             "http://example.com"
         );
     }
 
     #[test]
     fn test_normalize_url_without_scheme() {
-        let detector = test_detector();
-        assert_eq!(detector.normalize_url("example.com"), "https://example.com");
+        assert_eq!(
+            WafDetector::normalize_url_static("example.com"),
+            "https://example.com"
+        );
     }
 
     #[test]
     fn test_normalize_url_trims_whitespace() {
-        let detector = test_detector();
         assert_eq!(
-            detector.normalize_url("  example.com  "),
+            WafDetector::normalize_url_static("  example.com  "),
             "https://example.com"
         );
     }
