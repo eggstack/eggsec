@@ -52,7 +52,11 @@ impl FuzzEngine {
     ) -> FuzzSession {
         let successful = results.iter().filter(|r| r.error.is_none()).count();
         let failed = results.len() - successful;
-        let waf_bypasses = results.iter().filter(|r| r.is_waf_blocked).count();
+        // A bypass means a finding was observed without being blocked by WAF controls.
+        let waf_bypasses = results
+            .iter()
+            .filter(|r| r.is_vulnerable() && !r.is_waf_blocked)
+            .count();
         let leaks = results.iter().filter(|r| !r.leaks_found.is_empty()).count();
         let anomalies = results.iter().filter(|r| r.is_anomaly).count();
         let redos = results.iter().filter(|r| r.is_redos_suspected).count();
@@ -325,6 +329,88 @@ fn compute_severity(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::{CommonHttpArgs, FuzzArgs, FuzzMode};
+    use crate::fuzzer::payloads::{Payload, PayloadType};
+    use std::time::Duration;
+
+    fn make_test_engine() -> FuzzEngine {
+        let args = FuzzArgs {
+            url: "http://example.com".to_string(),
+            payload_type: "sqli".to_string(),
+            common: CommonHttpArgs::default(),
+            method: "GET".to_string(),
+            param: None,
+            concurrency: 10,
+            timeout: 5,
+            verbose: false,
+            quiet: false,
+            json: false,
+            output: None,
+            mutate: false,
+            mutation_count: 5,
+            grammar_fuzz: false,
+            grammar_type: None,
+            session: false,
+            diffing: false,
+            capture_baseline: false,
+            mode: FuzzMode::Sequential,
+            target: None,
+            graphql_introspection: false,
+            graphql_depth_bypass: false,
+            graphql_alias_overload: false,
+            jwt_token: None,
+            oauth_client_id: None,
+            oauth_client_secret: None,
+            oauth_redirect: false,
+            oauth_scope: false,
+            oauth_state: false,
+            oauth_grant: false,
+            oauth_issuer: None,
+            idor_base_id: None,
+            idor_user_ids: None,
+            ssti_param: None,
+            adaptive_rate: false,
+            enhanced_redos: false,
+            waf_fingerprint: false,
+            chaining: false,
+            chain_file: None,
+            format: None,
+            schema: None,
+            discover_only: false,
+            auto_discover_schema: false,
+            calibrate: false,
+            fc: None,
+            fs: None,
+            fw: None,
+            fl: None,
+            ft: None,
+            fr: None,
+        };
+        FuzzEngine::new(args).expect("engine should construct")
+    }
+
+    fn make_result(is_vulnerable: bool, is_waf_blocked: bool) -> FuzzResult {
+        FuzzResult {
+            payload: Payload {
+                payload_type: PayloadType::Sqli,
+                payload: "test".to_string(),
+                description: "test".to_string(),
+                severity: Severity::Low,
+                tags: vec![],
+            },
+            status_code: 200,
+            response_time_ms: 10,
+            response_length: Some(1),
+            response_body: Some("ok".to_string()),
+            is_waf_blocked,
+            is_anomaly: is_vulnerable,
+            is_redos_suspected: false,
+            leaks_found: vec![],
+            error: None,
+            owasp_category: Some("sqli".to_string()),
+            detected_severity: Severity::Low,
+        }
+    }
 
     #[test]
     fn test_parse_method_get() {
@@ -441,5 +527,19 @@ mod tests {
     fn test_build_url_invalid_base() {
         let result = build_url("not-a-url", None, "test");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_build_session_waf_bypasses_counts_unblocked_findings_only() {
+        let engine = make_test_engine();
+        let results = vec![
+            make_result(true, false),  // vulnerable and unblocked => bypass
+            make_result(true, true),   // vulnerable but blocked => not a bypass
+            make_result(false, false), // not vulnerable => not a bypass
+        ];
+
+        let session = engine.build_session(results, Duration::from_millis(5), None);
+        assert_eq!(session.waf_bypasses, 1);
+        assert_eq!(session.findings, 2);
     }
 }

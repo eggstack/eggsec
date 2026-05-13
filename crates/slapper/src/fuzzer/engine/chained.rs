@@ -1,8 +1,10 @@
 use crate::cli::FuzzArgs;
 use crate::error::Result;
 use crate::fuzzer::chain::ExtractRule;
+use crate::fuzzer::chain::ExtractionSource;
 use crate::fuzzer::engine::types::FuzzSession;
 use crate::fuzzer::FuzzEngine;
+use regex::Regex;
 use reqwest::Client;
 use rustc_hash::FxHashMap;
 
@@ -113,7 +115,46 @@ impl StatefulFuzzer {
         }
     }
 
-    fn apply_extract_rule(&self, _session: &mut FuzzSession, _rule: &ExtractRule) {}
+    fn apply_extract_rule(&mut self, session: &mut FuzzSession, rule: &ExtractRule) {
+        let source = match &rule.from {
+            ExtractionSource::ResponseBody => session
+                .results
+                .iter()
+                .rev()
+                .find_map(|r| r.response_body.clone())
+                .unwrap_or_default(),
+            ExtractionSource::ResponseStatus => session
+                .results
+                .last()
+                .map(|r| r.status_code.to_string())
+                .unwrap_or_default(),
+            ExtractionSource::ResponseHeader(_) | ExtractionSource::Cookie(_) => {
+                String::new()
+            }
+        };
+
+        if source.is_empty() {
+            return;
+        }
+
+        let value = if let Ok(re) = Regex::new(&rule.pattern) {
+            re.captures(&source).and_then(|caps| {
+                if let Some(group) = rule.group {
+                    caps.get(group).map(|m| m.as_str().to_string())
+                } else {
+                    caps.get(0).map(|m| m.as_str().to_string())
+                }
+            })
+        } else if source.contains(&rule.pattern) {
+            Some(rule.pattern.clone())
+        } else {
+            None
+        };
+
+        if let Some(value) = value {
+            self.variables.insert(rule.field.clone(), value);
+        }
+    }
 
     fn apply_variables_to_args(&self, mut args: FuzzArgs) -> FuzzArgs {
         if args.param.is_none() {
@@ -273,5 +314,72 @@ mod tests {
         assert_eq!(vars.len(), 2);
         assert_eq!(vars.get("key1"), Some(&"value1".to_string()));
         assert_eq!(vars.get("key2"), Some(&"value2".to_string()));
+    }
+
+    #[test]
+    fn test_apply_extract_rule_from_response_body_sets_variable() {
+        let client = Client::new();
+        let mut fuzzer = StatefulFuzzer::new(client);
+        let mut session = FuzzSession {
+            target_url: "http://example.com".to_string(),
+            mode: "Sequential".to_string(),
+            payload_type: "sqli".to_string(),
+            total_payloads: 1,
+            successful_requests: 1,
+            failed_requests: 0,
+            waf_bypasses: 0,
+            potential_leaks: 0,
+            time_anomalies: 0,
+            redos_suspected: 0,
+            duration_ms: 1,
+            total_requests: 1,
+            findings: 0,
+            results: vec![crate::fuzzer::FuzzResult {
+                payload: crate::fuzzer::Payload {
+                    payload_type: crate::fuzzer::PayloadType::Sqli,
+                    payload: "x".to_string(),
+                    description: "d".to_string(),
+                    severity: crate::fuzzer::Severity::Low,
+                    tags: vec![],
+                },
+                status_code: 200,
+                response_time_ms: 10,
+                response_length: Some(10),
+                response_body: Some("token=abc123".to_string()),
+                is_waf_blocked: false,
+                is_anomaly: false,
+                is_redos_suspected: false,
+                leaks_found: vec![],
+                error: None,
+                owasp_category: None,
+                detected_severity: crate::fuzzer::Severity::Low,
+            }],
+            owasp_summary: crate::fuzzer::OwaspSummary {
+                a01_broken_access_control: 0,
+                a02_cryptographic_failures: 0,
+                a03_injection: 0,
+                a04_insecure_design: 0,
+                a05_security_misconfiguration: 0,
+                a06_vulnerable_components: 0,
+                a07_auth_failures: 0,
+                a08_software_integrity: 0,
+                a09_logging_failures: 0,
+                a10_ssrf: 0,
+            },
+            baseline: None,
+        };
+
+        let rule = ExtractRule {
+            from: ExtractionSource::ResponseBody,
+            field: "extracted_token".to_string(),
+            pattern: r"token=([a-z0-9]+)".to_string(),
+            group: Some(1),
+        };
+
+        fuzzer.apply_extract_rule(&mut session, &rule);
+        assert_eq!(
+            fuzzer.get_variable("extracted_token"),
+            Some(&"abc123".to_string())
+        );
     }
 }

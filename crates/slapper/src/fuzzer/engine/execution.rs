@@ -96,8 +96,10 @@ impl FuzzEngine {
         let results: Arc<DashMap<usize, FuzzResult>> = Arc::new(DashMap::new());
         let semaphore = Arc::new(tokio::sync::Semaphore::new(self.args.concurrency));
         let mut handles = Vec::new();
+        let mut payload_catalog = Vec::with_capacity(payload_count);
 
         for (idx, payload) in payloads.into_iter().enumerate() {
+            payload_catalog.push(payload.clone());
             let semaphore = semaphore.clone();
             let client = self.client.clone();
             let url = self.args.url.clone();
@@ -113,6 +115,23 @@ impl FuzzEngine {
             let handle = tokio::spawn(async move {
                 let Ok(_permit) = semaphore.acquire_owned().await else {
                     tracing::warn!("Semaphore closed before request dispatch");
+                    results.insert(
+                        idx,
+                        FuzzResult {
+                            payload: payload_clone.clone(),
+                            status_code: 0,
+                            response_time_ms: 0,
+                            response_length: None,
+                            response_body: None,
+                            is_waf_blocked: false,
+                            is_anomaly: false,
+                            is_redos_suspected: false,
+                            leaks_found: vec![],
+                            error: Some("semaphore closed before request dispatch".to_string()),
+                            owasp_category: Some(payload_clone.payload_type.to_string()),
+                            detected_severity: Severity::Info,
+                        },
+                    );
                     return;
                 };
                 let result = send_payload_async(
@@ -162,9 +181,29 @@ impl FuzzEngine {
             handles.push(handle);
         }
 
-        join_all(handles).await;
+        for join_result in join_all(handles).await {
+            if let Err(e) = join_result {
+                tracing::warn!("Fuzz worker task join failure: {}", e);
+            }
+        }
         if let Some(ref pb) = progress {
             pb.finish_and_clear();
+        }
+        for (idx, payload) in payload_catalog.into_iter().enumerate() {
+            results.entry(idx).or_insert_with(|| FuzzResult {
+                payload: payload.clone(),
+                status_code: 0,
+                response_time_ms: 0,
+                response_length: None,
+                response_body: None,
+                is_waf_blocked: false,
+                is_anomaly: false,
+                is_redos_suspected: false,
+                leaks_found: vec![],
+                error: Some("worker task failed or cancelled".to_string()),
+                owasp_category: Some(payload.payload_type.to_string()),
+                detected_severity: Severity::Info,
+            });
         }
         let mut ordered_results: Vec<(usize, FuzzResult)> = Arc::try_unwrap(results)
             .expect("all workers completed")
