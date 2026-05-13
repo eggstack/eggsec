@@ -38,8 +38,8 @@
 //! ## Additional Recon Utilities (standalone)
 //!
 //! Exported modules like `email_security`, `dependency_scan`, `git_secrets`,
-//! `api_schema`, `asn`, `dns_enhanced`, and protocol auth testers are available
-//! for direct invocation, but are not currently part of `run_full_recon`.
+//! and `api_schema` are available for direct invocation, but are not currently
+//! part of `run_full_recon`.
 //!
 //! ## Feature Flags
 //!
@@ -75,6 +75,7 @@
 
 pub mod api_schema;
 pub mod cloud;
+pub mod containers;
 pub mod content;
 pub mod cors;
 pub mod cve;
@@ -335,3 +336,70 @@ pub async fn run_cli(args: ReconArgs, config: &SlapperConfig) -> Result<()> {
 }
 
 pub use runner::{print_recon_results_string, run_full_recon};
+
+#[cfg(test)]
+mod module_registration_tests {
+    use std::collections::BTreeSet;
+    use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn recon_modules_match_filesystem() {
+        let mod_src = include_str!("mod.rs");
+        let declared: BTreeSet<String> = mod_src
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if let Some(rest) = trimmed.strip_prefix("pub mod ") {
+                    return rest.strip_suffix(';').map(str::to_string);
+                }
+                None
+            })
+            .collect();
+
+        let recon_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/recon");
+        let mut discovered = BTreeSet::new();
+
+        for entry in fs::read_dir(&recon_dir).expect("read src/recon") {
+            let entry = entry.expect("read_dir entry");
+            let path = entry.path();
+
+            if path.is_file() {
+                if path.extension().and_then(|ext| ext.to_str()) == Some("rs")
+                    && path.file_name().and_then(|n| n.to_str()) != Some("mod.rs")
+                {
+                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                        discovered.insert(stem.to_string());
+                    }
+                }
+            } else if path.is_dir() && path.join("mod.rs").is_file() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    discovered.insert(name.to_string());
+                }
+            }
+        }
+
+        let intentionally_detached: BTreeSet<String> = [
+            "asn",
+            "cve_lookup",
+            "dns_enhanced",
+            "ftp_auth",
+            "smtp_auth",
+            "ssh_auth",
+            "ssl_audit",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+
+        let discovered: BTreeSet<String> = discovered
+            .into_iter()
+            .filter(|m| !intentionally_detached.contains(m))
+            .collect();
+
+        assert_eq!(
+            declared, discovered,
+            "recon module declarations are out of sync with src/recon filesystem"
+        );
+    }
+}
