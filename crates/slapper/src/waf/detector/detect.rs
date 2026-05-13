@@ -1,6 +1,8 @@
 use crate::constants::waf;
 use crate::error::Result;
 use crate::waf::waf_patterns::get_common_waf_response_patterns;
+use ipnetwork::IpNetwork;
+use std::net::IpAddr;
 
 use super::types::WafDetectionResult;
 use super::WafDetector;
@@ -26,6 +28,7 @@ impl WafDetector {
         };
 
         let status = response.status().as_u16();
+        let remote_ip = response.remote_addr().map(|addr| addr.ip());
         let headers = response.headers().clone();
         let body = response.text().await.unwrap_or_default();
         let body_lower = body.to_lowercase();
@@ -110,6 +113,12 @@ impl WafDetector {
                 }
             }
 
+            if let Some(ip) = remote_ip {
+                if apply_remote_ip_match(ip, &signature.ip_ranges, &mut sig_matched_patterns) {
+                    score += waf::COOKIE_MATCH_SCORE;
+                }
+            }
+
             if score > 0 {
                 if let Some((_, best_score)) = &best_match {
                     if score > *best_score {
@@ -186,9 +195,24 @@ impl WafDetector {
     }
 }
 
+fn remote_ip_in_cidr(ip: IpAddr, cidr: &str) -> bool {
+    cidr.parse::<IpNetwork>()
+        .map(|network| network.contains(ip))
+        .unwrap_or(false)
+}
+
+fn apply_remote_ip_match(ip: IpAddr, ip_ranges: &[String], matched_patterns: &mut Vec<String>) -> bool {
+    if ip_ranges.iter().any(|cidr| remote_ip_in_cidr(ip, cidr)) {
+        matched_patterns.push(format!("remote-ip-match:{}", ip));
+        return true;
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
     #[test]
     fn test_normalize_url_with_https() {
@@ -220,5 +244,49 @@ mod tests {
             WafDetector::normalize_url_static("  example.com  "),
             "https://example.com"
         );
+    }
+
+    #[test]
+    fn test_remote_ip_in_cidr_ipv4_match() {
+        let ip = IpAddr::V4(Ipv4Addr::new(104, 16, 1, 10));
+        assert!(remote_ip_in_cidr(ip, "104.16.0.0/12"));
+    }
+
+    #[test]
+    fn test_remote_ip_in_cidr_ipv4_miss() {
+        let ip = IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
+        assert!(!remote_ip_in_cidr(ip, "104.16.0.0/12"));
+    }
+
+    #[test]
+    fn test_remote_ip_in_cidr_ipv6_match() {
+        let ip = IpAddr::V6(Ipv6Addr::LOCALHOST);
+        assert!(remote_ip_in_cidr(ip, "::1/128"));
+    }
+
+    #[test]
+    fn test_remote_ip_in_cidr_invalid_cidr() {
+        let ip = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1));
+        assert!(!remote_ip_in_cidr(ip, "not-a-cidr"));
+    }
+
+    #[test]
+    fn test_apply_remote_ip_match_adds_pattern_on_match() {
+        let ip = IpAddr::V4(Ipv4Addr::new(104, 16, 1, 10));
+        let ip_ranges = vec!["104.16.0.0/12".to_string()];
+        let mut matched = Vec::new();
+        let did_match = apply_remote_ip_match(ip, &ip_ranges, &mut matched);
+        assert!(did_match);
+        assert!(matched.iter().any(|p| p == "remote-ip-match:104.16.1.10"));
+    }
+
+    #[test]
+    fn test_apply_remote_ip_match_no_pattern_on_miss() {
+        let ip = IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
+        let ip_ranges = vec!["104.16.0.0/12".to_string()];
+        let mut matched = Vec::new();
+        let did_match = apply_remote_ip_match(ip, &ip_ranges, &mut matched);
+        assert!(!did_match);
+        assert!(matched.is_empty());
     }
 }

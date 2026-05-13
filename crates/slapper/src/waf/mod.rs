@@ -247,7 +247,7 @@ impl WafEngine {
                     detection.waf_name.clone(),
                     br.success,
                     format!("{:?}", br.technique),
-                    br.description.clone(),
+                    br.payload.clone().unwrap_or_default(),
                     br.status_code,
                 )
             })

@@ -64,6 +64,7 @@ pub struct BypassResult {
     pub technique: BypassTechnique,
     pub success: bool,
     pub description: String,
+    pub payload: Option<String>,
     pub status_code: u16,
     pub response_diff: Option<i64>,
 }
@@ -142,13 +143,11 @@ pub fn is_bypass_successful(
     let reflected = payload_is_reflected(payload, response_body);
     let status_changed = status != baseline_status;
     let status_2xx = (200..300).contains(&status);
-    let status_3xx = (300..400).contains(&status);
-
     if payload.is_empty() {
-        return baseline_blocked && status_changed && (status_2xx || status_3xx);
+        return baseline_blocked && status_changed && status_2xx;
     }
 
-    if baseline_blocked && status_changed && (status_2xx || status_3xx) {
+    if baseline_blocked && status_changed && status_2xx {
         return reflected;
     }
 
@@ -204,9 +203,10 @@ mod tests {
     }
 
     #[test]
-    fn bypass_requires_2xx_status() {
+    fn bypass_requires_2xx_status_for_success() {
         let detection = detection_with_status(403);
-        assert!(is_bypass_successful(302, &detection, "", "ok"));
+        assert!(!is_bypass_successful(302, &detection, "", "ok"));
+        assert!(is_bypass_successful(200, &detection, "", "ok"));
     }
 
     #[test]

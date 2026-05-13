@@ -31,6 +31,7 @@ impl HeaderBypass {
         _test_type: TestType,
     ) -> Result<Vec<BypassResult>> {
         let mut results = Vec::new();
+        let normalized_url = crate::waf::WafDetector::normalize_url_static(url);
 
         if let Some(ref profile) = self.profile {
             for bypass in &profile.bypasses {
@@ -42,7 +43,7 @@ impl HeaderBypass {
                         | BypassTechnique::ContentTypeBypass
                 ) {
                     let result = self
-                        .test_profile_bypass(client, url, bypass, detection)
+                        .test_profile_bypass(client, &normalized_url, bypass, detection)
                         .await?;
                     results.push(result);
                 }
@@ -50,7 +51,7 @@ impl HeaderBypass {
         } else {
             for header_set in self.generate_header_bypasses() {
                 let result = self
-                    .test_header_set(client, url, &header_set, detection)
+                    .test_header_set(client, &normalized_url, &header_set, detection)
                     .await?;
                 results.push(result);
             }
@@ -88,6 +89,7 @@ impl HeaderBypass {
             technique: bypass.technique,
             success,
             description: format!("{} [probe={}]", bypass.description, probe_payload),
+            payload: Some(probe_payload.to_string()),
             status_code: status,
             response_diff: None,
         })
@@ -211,6 +213,7 @@ impl HeaderBypass {
                 "{} [probe={}]",
                 header_set.name, DEFAULT_HEADER_PROBE_PAYLOAD
             ),
+            payload: Some(DEFAULT_HEADER_PROBE_PAYLOAD.to_string()),
             status_code: status,
             response_diff: Some(body_len),
         })

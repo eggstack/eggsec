@@ -25,6 +25,7 @@ impl EvasionBypass {
         test_type: TestType,
     ) -> Result<Vec<BypassResult>> {
         let mut results = Vec::new();
+        let normalized_url = crate::waf::WafDetector::normalize_url_static(url);
 
         if let Some(ref profile) = self.profile {
             for bypass in &profile.bypasses {
@@ -44,7 +45,7 @@ impl EvasionBypass {
                         let result = self
                             .test_payload(
                                 client,
-                                url,
+                                &normalized_url,
                                 payload,
                                 technique,
                                 bypass.description.clone(),
@@ -60,7 +61,14 @@ impl EvasionBypass {
 
             for (technique, payload, description) in test_payloads {
                 let result = self
-                    .test_payload(client, url, &payload, technique, description, detection)
+                    .test_payload(
+                        client,
+                        &normalized_url,
+                        &payload,
+                        technique,
+                        description,
+                        detection,
+                    )
                     .await?;
                 results.push(result);
             }
@@ -68,7 +76,14 @@ impl EvasionBypass {
             let structured_payloads = self.generate_structured_payloads(test_type);
             for (technique, payload, description) in structured_payloads {
                 let result = self
-                    .test_payload(client, url, &payload, technique, description, detection)
+                    .test_payload(
+                        client,
+                        &normalized_url,
+                        &payload,
+                        technique,
+                        description,
+                        detection,
+                    )
                     .await?;
                 results.push(result);
             }
@@ -244,6 +259,7 @@ impl EvasionBypass {
             technique,
             success,
             description,
+            payload: Some(payload.to_string()),
             status_code: status,
             response_diff: None,
         })

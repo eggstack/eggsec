@@ -50,17 +50,22 @@ impl SmugglingBypass {
         detection: &WafDetectionResult,
     ) -> Result<Vec<BypassResult>> {
         let mut results = Vec::new();
+        let normalized_url = crate::waf::WafDetector::normalize_url_static(url);
 
-        let smuggling_requests = self.generate_smuggling_requests(url);
+        let smuggling_requests = self.generate_smuggling_requests(&normalized_url);
 
         for smug_req in smuggling_requests {
-            match self.test_smuggling(url, &smug_req, detection).await {
+            match self
+                .test_smuggling(&normalized_url, &smug_req, detection)
+                .await
+            {
                 Ok(result) => results.push(result),
                 Err(e) => {
                     results.push(BypassResult {
                         technique: BypassTechnique::ContentLengthConflict,
                         success: false,
                         description: format!("{} - Error: {}", smug_req.description, e),
+                        payload: None,
                         status_code: 0,
                         response_diff: None,
                     });
@@ -190,21 +195,23 @@ impl SmugglingBypass {
             description: "Multipart method override".to_string(),
         });
 
-        requests.push(SmugglingRequest {
-            smuggling_type: SmugglingType::H2CUpgrade,
-            method: "GET".to_string(),
-            path: path.to_string(),
-            headers: vec![
-                (
-                    "Connection".to_string(),
-                    "Upgrade, HTTP2-Settings".to_string(),
-                ),
-                ("Upgrade".to_string(), "h2c".to_string()),
-                ("HTTP2-Settings".to_string(), "AAMAAABkAAQAap__".to_string()),
-            ],
-            body: vec![],
-            description: "HTTP/2 cleartext (h2c) upgrade".to_string(),
-        });
+        if Self::supports_http2_probes() {
+            requests.push(SmugglingRequest {
+                smuggling_type: SmugglingType::H2CUpgrade,
+                method: "GET".to_string(),
+                path: path.to_string(),
+                headers: vec![
+                    (
+                        "Connection".to_string(),
+                        "Upgrade, HTTP2-Settings".to_string(),
+                    ),
+                    ("Upgrade".to_string(), "h2c".to_string()),
+                    ("HTTP2-Settings".to_string(), "AAMAAABkAAQAap__".to_string()),
+                ],
+                body: vec![],
+                description: "HTTP/2 cleartext (h2c) upgrade".to_string(),
+            });
+        }
 
         requests.push(SmugglingRequest {
             smuggling_type: SmugglingType::ChunkedMalformed,
@@ -280,6 +287,7 @@ impl SmugglingBypass {
             technique,
             success,
             description: format!("{} [{}]", req.description, description_suffix),
+            payload: None,
             status_code: status,
             response_diff: None,
         })
