@@ -227,6 +227,6 @@ mod tests {
     fn test_find_manifests_empty_dir() {
         let scanner = DependencyScanner::new().unwrap();
         let manifests = scanner.find_manifests(Path::new("/tmp"));
-        assert!(manifests.is_empty() || manifests.len() >= 0);
+        assert!(!manifests.iter().any(|path| path.as_os_str().is_empty()));
     }
 }

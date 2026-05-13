@@ -428,7 +428,6 @@ impl TabProgressUpdate for super::tabs::Tab {
 
 #[cfg(test)]
 mod tests {
-    use crate::tui::tabs::AppState;
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     use crate::tui::tabs::plugin::{Finding, PluginInfo, PluginResults};
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]

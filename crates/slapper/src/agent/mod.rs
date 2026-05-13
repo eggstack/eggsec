@@ -291,8 +291,14 @@ impl Agent {
 
     #[cfg(feature = "ai-integration")]
     pub async fn with_ai_client(mut self, ai_config: crate::config::AiConfig) -> Self {
-        let ai_client = AiClient::new(ai_config.clone());
-        self.ai_client = Some(ai_client);
+        match AiClient::new(ai_config.clone()) {
+            Ok(ai_client) => {
+                self.ai_client = Some(ai_client);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize AI client: {}", e);
+            }
+        }
         self
     }
 

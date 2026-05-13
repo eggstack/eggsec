@@ -42,6 +42,10 @@ impl Provider {
     pub fn supports_azure_auth(&self) -> bool {
         matches!(self, Provider::Azure)
     }
+
+    pub fn requires_api_key(&self) -> bool {
+        matches!(self, Provider::OpenAI | Provider::Azure | Provider::Anthropic)
+    }
 }
 
 #[derive(Clone)]
@@ -53,27 +57,53 @@ pub struct AiClient {
 }
 
 impl AiClient {
-    pub fn new(config: AiConfig) -> Self {
+    pub fn new(config: AiConfig) -> Result<Self> {
         if config.provider.is_empty() {
-            panic!("AiConfig provider cannot be empty");
+            return Err(AiError::invalid_config("provider cannot be empty"));
         }
         let provider = Provider::from_str(&config.provider);
         if provider == Provider::Azure && config.base_url.is_none() {
-            panic!("AiConfig base_url is required for Azure provider");
+            return Err(AiError::invalid_config(
+                "base_url is required for Azure provider",
+            ));
         }
         let circuit_breaker = Arc::new(CircuitBreaker::new(5, 3, Duration::from_secs(60)));
-        Self {
-            client: Client::builder()
-                .timeout(Duration::from_secs(60))
-                .pool_max_idle_per_host(20)
-                .pool_idle_timeout(Duration::from_secs(30))
-                .tcp_nodelay(true)
-                .build()
-                .expect("Failed to create AI HTTP client"),
+        let client = Client::builder()
+            .timeout(Duration::from_secs(60))
+            .pool_max_idle_per_host(20)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_nodelay(true)
+            .build()
+            .map_err(|e| AiError::RequestFailed(format!("failed to create AI HTTP client: {e}")))?;
+        Ok(Self {
+            client,
             config,
             circuit_breaker,
             provider,
+        })
+    }
+
+    fn has_required_auth(&self) -> bool {
+        !self.provider.requires_api_key() || self.config.api_key.is_some()
+    }
+
+    fn extract_json_content(content: &str) -> &str {
+        let trimmed = content.trim();
+        if trimmed.starts_with('{') || trimmed.starts_with('[') {
+            return trimmed;
         }
+        if let Some(start) = trimmed.find("```") {
+            let rest = &trimmed[start + 3..];
+            let rest = if let Some(newline_idx) = rest.find('\n') {
+                &rest[newline_idx + 1..]
+            } else {
+                rest
+            };
+            if let Some(end) = rest.find("```") {
+                return rest[..end].trim();
+            }
+        }
+        trimmed
     }
 
     pub fn provider(&self) -> Provider {
@@ -135,6 +165,10 @@ impl AiClient {
         &self,
         body: &serde_json::Value,
     ) -> Result<serde_json::Value> {
+        if !self.has_required_auth() {
+            return Err(AiError::MissingApiKey);
+        }
+
         if !self.circuit_breaker.is_available() {
             return Err(AiError::CircuitBreakerOpen {});
         }
@@ -308,7 +342,7 @@ impl AiClient {
         findings: &[serde_json::Value],
     ) -> Result<crate::ai::types::AiAnalysisResult> {
         let prompt = format!(
-            "Analyze these security findings:\n{}",
+            "Analyze these security findings and return JSON only with this exact shape: {{\"reassessed_severity\": string, \"exploitability\": string, \"impact\": string, \"remediation\": string[], \"confidence\": number}}.\nFindings:\n{}",
             serde_json::to_string_pretty(findings)
                 .map_err(|e| AiError::ParseError(e.to_string()))?
         );
@@ -328,18 +362,14 @@ impl AiClient {
                     .and_then(|m| m.get("content"))
                     .and_then(|c| c.as_str())
                 {
-                    if let Ok(parsed) =
-                        serde_json::from_str::<crate::ai::types::AiAnalysisResult>(content)
+                    let json_content = Self::extract_json_content(content);
+                    if let Ok(parsed) = serde_json::from_str::<crate::ai::types::AiAnalysisResult>(
+                        json_content,
+                    )
                     {
                         return Ok(parsed);
                     }
-                    return Ok(crate::ai::types::AiAnalysisResult {
-                        reassessed_severity: "Unknown".to_string(),
-                        exploitability: "Unknown".to_string(),
-                        impact: content.to_string(),
-                        remediation: vec![],
-                        confidence: 0.5,
-                    });
+                    return Err(AiError::InvalidResponse);
                 }
             }
         }
@@ -418,11 +448,11 @@ mod tests {
     fn create_client_with_key(key: &str) -> AiClient {
         let mut config = create_test_config();
         config.api_key = Some(crate::types::SensitiveString::from(key.to_string()));
-        AiClient::new(config)
+        AiClient::new(config).expect("test AI client should be valid")
     }
 
     fn create_client_without_key() -> AiClient {
-        AiClient::new(create_test_config())
+        AiClient::new(create_test_config()).expect("test AI client should be valid")
     }
 
     #[test]
@@ -437,7 +467,7 @@ mod tests {
             max_payloads: 50,
             max_bypasses: 10,
         };
-        let client = AiClient::new(config);
+        let client = AiClient::new(config).expect("test AI client should be valid");
         assert_eq!(
             client.api_url(),
             "https://api.openai.com/v1/chat/completions"
@@ -457,7 +487,7 @@ mod tests {
     fn test_api_url_custom_base_url() {
         let mut config = create_test_config();
         config.base_url = Some("https://custom.api.com/v1/chat".to_string());
-        let client = AiClient::new(config);
+        let client = AiClient::new(config).expect("test AI client should be valid");
         assert_eq!(client.api_url(), "https://custom.api.com/v1/chat");
     }
 
@@ -465,7 +495,7 @@ mod tests {
     fn test_model_default() {
         let mut config = create_test_config();
         config.model = None;
-        let client = AiClient::new(config);
+        let client = AiClient::new(config).expect("test AI client should be valid");
         assert_eq!(client.model(), "gpt-4");
     }
 
@@ -479,7 +509,7 @@ mod tests {
     fn test_model_custom_value() {
         let mut config = create_test_config();
         config.model = Some("gpt-3.5-turbo".to_string());
-        let client = AiClient::new(config);
+        let client = AiClient::new(config).expect("test AI client should be valid");
         assert_eq!(client.model(), "gpt-3.5-turbo");
     }
 
@@ -620,7 +650,7 @@ mod tests {
     fn test_client_provider_azure() {
         let mut config = create_test_config();
         config.provider = "azure".to_string();
-        let client = AiClient::new(config);
+        let client = AiClient::new(config).expect("test AI client should be valid");
         assert_eq!(client.provider(), Provider::Azure);
     }
 
@@ -628,7 +658,7 @@ mod tests {
     fn test_client_provider_anthropic() {
         let mut config = create_test_config();
         config.provider = "anthropic".to_string();
-        let client = AiClient::new(config);
+        let client = AiClient::new(config).expect("test AI client should be valid");
         assert_eq!(client.provider(), Provider::Anthropic);
     }
 
@@ -637,7 +667,7 @@ mod tests {
         let mut config = create_test_config();
         config.provider = "anthropic".to_string();
         config.base_url = None;
-        let client = AiClient::new(config);
+        let client = AiClient::new(config).expect("test AI client should be valid");
         assert_eq!(client.api_url(), "https://api.anthropic.com/v1/messages");
     }
 
@@ -792,11 +822,19 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "AiConfig base_url is required for Azure provider")]
+    fn test_provider_requires_api_key() {
+        assert!(Provider::OpenAI.requires_api_key());
+        assert!(Provider::Azure.requires_api_key());
+        assert!(Provider::Anthropic.requires_api_key());
+        assert!(!Provider::OpenAICompatible.requires_api_key());
+    }
+
+    #[test]
     fn test_azure_provider_requires_base_url() {
         let mut config = create_test_config();
         config.provider = "azure".to_string();
         config.base_url = None;
-        let _ = AiClient::new(config);
+        let result = AiClient::new(config);
+        assert!(matches!(result, Err(AiError::InvalidConfig(_))));
     }
 }

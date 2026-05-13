@@ -44,7 +44,7 @@ pub async fn handle_ai_analyze(
 
     eprintln!("Analyzing {} finding(s) with AI...", findings_list.len());
 
-    let client = crate::ai::AiClient::new(ai_config);
+    let client = crate::ai::AiClient::new(ai_config).context("Failed to initialize AI client")?;
     let ai_response = client
         .analyze_findings(&findings_list)
         .await

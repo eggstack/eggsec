@@ -733,7 +733,6 @@ mod tests {
     fn test_common_ports_in_range() {
         for (port, _) in COMMON_PORTS {
             assert!(*port > 0, "Port 0 should not be in COMMON_PORTS");
-            assert!(*port <= 65535, "Port {} exceeds u16 max", port);
         }
     }
 }

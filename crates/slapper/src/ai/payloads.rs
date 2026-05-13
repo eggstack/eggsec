@@ -25,11 +25,14 @@ impl AiPayloadGenerator {
         let cache_key = format!("{}:{}", vuln_type, context);
 
         if let Some(cached) = self.cache.get(&cache_key).await {
-            return Ok(cached.split('\n').map(String::from).collect());
+            if let Ok(parsed) = serde_json::from_str::<Vec<String>>(&cached) {
+                return Ok(parsed);
+            }
         }
 
         let payloads = self.client.suggest_payloads(vuln_type, context).await?;
-        let payload_str = payloads.join("\n");
+        let payload_str = serde_json::to_string(&payloads)
+            .map_err(|e| AiError::parse_error(format!("failed to serialize payload cache: {e}")))?;
         self.cache
             .set(&cache_key, &payload_str, Some(Duration::from_secs(3600)))
             .await;

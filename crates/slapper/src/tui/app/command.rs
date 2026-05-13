@@ -486,7 +486,7 @@ mod tests {
     fn test_all_tabs_reachable_via_next_tab() {
         let all_tabs = Tab::all();
         for target_tab in all_tabs {
-            let mut app = create_test_app();
+            let app = create_test_app();
             let mut current = app.current_tab;
             let mut found = false;
             for _ in 0..all_tabs.len() {
@@ -508,7 +508,7 @@ mod tests {
     fn test_all_tabs_reachable_via_prev_tab() {
         let all_tabs = Tab::all();
         for target_tab in all_tabs {
-            let mut app = create_test_app();
+            let app = create_test_app();
             let mut current = app.current_tab;
             let mut found = false;
             for _ in 0..all_tabs.len() {

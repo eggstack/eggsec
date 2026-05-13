@@ -469,8 +469,14 @@ pub fn router(ai_config: Option<crate::config::AiConfig>) -> Router {
     let mut state = AiState::new(api_key);
 
     if let Some(config) = ai_config {
-        let client = AiClient::new(config);
-        state = state.with_ai_client(client);
+        match AiClient::new(config) {
+            Ok(client) => {
+                state = state.with_ai_client(client);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize AI routes client: {}", e);
+            }
+        }
     }
 
     Router::new()

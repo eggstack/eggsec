@@ -60,6 +60,16 @@ struct CachedPlan {
 }
 
 impl AiPlanner {
+    fn request_cache_key(request: &PlanRequest) -> String {
+        format!(
+            "{}:{}:{}:{}",
+            request.goal,
+            request.target,
+            request.attack_surfaces.len(),
+            request.max_duration_ms.unwrap_or(0)
+        )
+    }
+
     pub fn new(client: Option<AiClient>, chain_planner: ChainPlanner) -> Self {
         Self {
             client,
@@ -94,13 +104,7 @@ impl AiPlanner {
         client: &AiClient,
         request: &PlanRequest,
     ) -> Result<ExecutionPlan> {
-        let cache_key = format!(
-            "{}:{}:{}:{}",
-            request.goal,
-            request.target,
-            request.attack_surfaces.len(),
-            request.max_duration_ms.unwrap_or(0)
-        );
+        let cache_key = Self::request_cache_key(request);
 
         {
             let cache = self.learning_cache.read();
@@ -439,21 +443,35 @@ impl AiPlanner {
     }
 
     pub fn record_outcome(&self, plan: &ExecutionPlan, outcome: &PlanOutcome) {
-        let key = format!("{}:{}", plan.total_tools, outcome.target);
         let mut cache = self.learning_cache.write();
+        let candidate_key = cache
+            .iter()
+            .filter(|(_, cached)| {
+                cached.plan.total_tools == plan.total_tools
+                    && cached
+                        .plan
+                        .stages
+                        .iter()
+                        .any(|s| s.target.contains(&outcome.target))
+            })
+            .max_by_key(|(_, cached)| cached.last_used)
+            .map(|(k, _)| k.clone());
 
-        if let Some(cached) = cache.get_mut(&key) {
-            cached.use_count += 1;
-            cached.success_rate = (cached.success_rate * (cached.use_count - 1) as f32
-                + if outcome.success { 1.0 } else { 0.0 })
-                / cached.use_count as f32;
-            cached.last_used = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
+        if let Some(key) = candidate_key {
+            if let Some(cached) = cache.get_mut(&key) {
+                cached.use_count += 1;
+                cached.success_rate = (cached.success_rate * (cached.use_count - 1) as f32
+                    + if outcome.success { 1.0 } else { 0.0 })
+                    / cached.use_count as f32;
+                cached.last_used = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+            }
         } else {
+            let fallback_key = format!("observed:{}:{}", plan.total_tools, outcome.target);
             cache.insert(
-                key,
+                fallback_key,
                 CachedPlan {
                     plan: plan.clone(),
                     success_rate: if outcome.success { 1.0 } else { 0.0 },

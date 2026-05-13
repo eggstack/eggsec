@@ -3,7 +3,7 @@
 //! Handles loading vulnerability templates from YAML/JSON files,
 //! directory scanning, and validation.
 
-use super::models::{TemplateInfo, VulnerabilityTemplate};
+use super::models::VulnerabilityTemplate;
 use crate::error::{Result, SlapperError};
 use crate::utils::validation::validate_path;
 use std::path::{Path, PathBuf};
@@ -197,6 +197,7 @@ impl Default for TemplateLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scanner::templates::models::TemplateInfo;
     use std::io::Write;
     use tempfile::TempDir;
 

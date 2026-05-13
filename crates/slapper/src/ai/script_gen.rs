@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use crate::ai::client::AiClient;
 use crate::ai::errors::{AiError, Result};
-use crate::ai::waf_bypass::SmartWafBypass;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PluginLanguage {
@@ -55,7 +54,6 @@ pub struct ScriptMetadata {
 
 pub struct ScriptGenerator {
     client: Option<AiClient>,
-    waf_bypass: Option<SmartWafBypass>,
     script_dir: PathBuf,
 }
 
@@ -67,7 +65,6 @@ impl ScriptGenerator {
 
         Self {
             client: client.clone(),
-            waf_bypass: client.clone().map(|c| SmartWafBypass::new(c)),
             script_dir,
         }
     }
@@ -317,7 +314,6 @@ impl Clone for ScriptGenerator {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
-            waf_bypass: self.waf_bypass.clone(),
             script_dir: self.script_dir.clone(),
         }
     }
@@ -328,7 +324,8 @@ mod tests {
     use super::*;
 
     fn create_test_client() -> Option<AiClient> {
-        Some(AiClient::new(crate::config::AiConfig {
+        Some(
+            AiClient::new(crate::config::AiConfig {
             provider: "openai".to_string(),
             model: Some("gpt-4".to_string()),
             api_key: None,
@@ -337,7 +334,9 @@ mod tests {
             temperature: Some(0.7),
             max_payloads: 50,
             max_bypasses: 10,
-        }))
+            })
+            .expect("test client should be valid"),
+        )
     }
 
     #[test]

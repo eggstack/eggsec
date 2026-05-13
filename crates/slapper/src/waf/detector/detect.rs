@@ -188,15 +188,6 @@ impl WafDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustc_hash::FxHashMap;
-
-    fn test_detector() -> WafDetector {
-        WafDetector {
-            client: crate::utils::get_shared_http_client(),
-            signatures: FxHashMap::default(),
-            signatures_lower: FxHashMap::default(),
-        }
-    }
 
     #[test]
     fn test_normalize_url_with_https() {

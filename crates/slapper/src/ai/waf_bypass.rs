@@ -83,6 +83,9 @@ impl SmartWafBypass {
             }
             if entry.waf_name == waf && entry.original_payload == blocked_payload && !entry.success
             {
+                if entry.failed_attempts < 3 {
+                    break;
+                }
                 tracing::debug!(
                     "Skipping WAF bypass query for {}/{} - previously failed {} attempts",
                     waf,
@@ -119,15 +122,25 @@ impl SmartWafBypass {
             return Err(AiError::invalid_config("waf name cannot be empty"));
         }
 
+        let original_payload = payload.clone();
+        let mut changed = false;
         for _ in 0..max_iterations.min(self.max_bypasses) {
             let suggestions = self.client.suggest_waf_bypass(waf, &payload).await?;
             if let Some(new_payload) = suggestions.first() {
+                if *new_payload == payload {
+                    break;
+                }
                 payload = new_payload.clone();
+                changed = true;
             } else {
                 break;
             }
         }
-        Ok(Some(payload))
+        if changed && payload != original_payload {
+            Ok(Some(payload))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn record_success(&mut self, waf: &str, original: &str, bypass: &str, technique: &str) {
@@ -213,6 +226,7 @@ mod tests {
             max_payloads: 50,
             max_bypasses: 10,
         })
+        .expect("test AI client should be valid")
     }
 
     fn create_test_bypass() -> SmartWafBypass {
