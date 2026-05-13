@@ -189,19 +189,6 @@ impl CveMapper {
         );
 
         map.insert(
-            vec!["php"],
-            vec![VulnerabilityInfo {
-                cve_id: "CVE-2023-45678".to_string(),
-                description: "PHP arbitrary file upload vulnerability".to_string(),
-                severity: "CRITICAL".to_string(),
-                cvss_score: 9.8,
-                affected_product: "PHP".to_string(),
-                references: vec!["https://www.php.net/security.php".to_string()],
-                published_date: Some("2023-11-01".to_string()),
-            }],
-        );
-
-        map.insert(
             vec!["nodejs", "express"],
             vec![VulnerabilityInfo {
                 cve_id: "CVE-2023-44487".to_string(),
@@ -264,19 +251,6 @@ impl CveMapper {
                 affected_product: "MongoDB".to_string(),
                 references: vec!["https://nvd.nist.gov/vuln/detail/CVE-2023-21318".to_string()],
                 published_date: Some("2023-04-11".to_string()),
-            }],
-        );
-
-        map.insert(
-            vec!["aws", "amazon"],
-            vec![VulnerabilityInfo {
-                cve_id: "CVE-2023-12345".to_string(),
-                description: "AWS S3 bucket misconfiguration vulnerability".to_string(),
-                severity: "MEDIUM".to_string(),
-                cvss_score: 6.5,
-                affected_product: "AWS S3".to_string(),
-                references: vec!["https://aws.amazon.com/security".to_string()],
-                published_date: Some("2023-01-01".to_string()),
             }],
         );
 

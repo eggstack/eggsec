@@ -42,6 +42,16 @@ pub struct SubdomainEnumerator {
 }
 
 impl SubdomainEnumerator {
+    fn normalize_fqdn(domain: &str, subdomain: &str) -> String {
+        let domain = domain.trim_end_matches('.');
+        let subdomain = subdomain.trim_end_matches('.');
+        if subdomain == domain || subdomain.ends_with(&format!(".{}", domain)) {
+            subdomain.to_string()
+        } else {
+            format!("{}.{}", subdomain, domain)
+        }
+    }
+
     pub fn new(concurrency: usize) -> Result<Self> {
         let client = create_http_client(10)?;
 
@@ -165,11 +175,7 @@ impl SubdomainEnumerator {
                     has_txt: false,
                 };
 
-                let fqdn = if subdomain == domain {
-                    subdomain.clone()
-                } else {
-                    format!("{}.{}", subdomain, domain)
-                };
+                let fqdn = Self::normalize_fqdn(&domain, &subdomain);
 
                 if let Ok(lookup) = resolver.lookup_ip(&fqdn).await {
                     for ip in lookup.iter() {
@@ -286,6 +292,22 @@ pub async fn bruteforce_subdomains(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_normalize_fqdn_keeps_fqdn() {
+        assert_eq!(
+            SubdomainEnumerator::normalize_fqdn("example.com", "api.example.com"),
+            "api.example.com"
+        );
+    }
+
+    #[test]
+    fn test_normalize_fqdn_appends_label() {
+        assert_eq!(
+            SubdomainEnumerator::normalize_fqdn("example.com", "api"),
+            "api.example.com"
+        );
+    }
 
     #[test]
     fn test_subdomain_result_serialization() {

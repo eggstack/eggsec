@@ -19,6 +19,7 @@ pub struct DiscoveredContent {
     pub content_type: Option<String>,
     pub is_sensitive: bool,
     pub category: String,
+    pub severity: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,7 +69,7 @@ impl ContentScanner {
                             .map(|s| s.to_string());
 
                         if status == 200 || status == 401 || status == 403 {
-                            let (category, _severity) = Self::categorize_path(path);
+                            let (category, severity) = Self::categorize_path(path);
                             let is_sensitive = !category.is_empty();
 
                             Some(DiscoveredContent {
@@ -77,6 +78,7 @@ impl ContentScanner {
                                 content_type,
                                 is_sensitive,
                                 category,
+                                severity,
                             })
                         } else {
                             None
@@ -98,7 +100,7 @@ impl ContentScanner {
                     sensitive.push(SensitiveFile {
                         url: content.url.clone(),
                         file_type: Self::get_file_type(&content.url),
-                        severity: content.category.clone(),
+                        severity: content.severity.clone(),
                         description: Self::get_description(&content.url),
                     });
                 }
@@ -354,5 +356,19 @@ mod tests {
     fn test_get_description_env() {
         let desc = ContentScanner::get_description("/.env");
         assert!(desc.contains("credentials") || desc.contains("sensitive"));
+    }
+
+    #[test]
+    fn test_sensitive_file_uses_severity_not_category() {
+        let content = DiscoveredContent {
+            url: "https://example.com/.env".to_string(),
+            status_code: 200,
+            content_type: Some("text/plain".to_string()),
+            is_sensitive: true,
+            category: "credentials".to_string(),
+            severity: "critical".to_string(),
+        };
+        assert_eq!(content.severity, "critical");
+        assert_ne!(content.severity, content.category);
     }
 }

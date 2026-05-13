@@ -380,18 +380,30 @@ async fn run_takeover_check(
 async fn run_cve_check(
     tech_result: Option<&techdetect::TechDetectionResult>,
     no_cve: bool,
+    nvd_api_key: Option<&str>,
 ) -> Option<cve::CveMapping> {
     if no_cve {
         return None;
     }
     let tech = tech_result?;
-    match cve::map_cves(&tech.tech_stack, None).await {
+    let nvd_api_key = nvd_api_key.map(ToString::to_string);
+    match cve::map_cves(&tech.tech_stack, nvd_api_key).await {
         Ok(v) => Some(v),
         Err(e) => {
             tracing::warn!("CVE mapping failed: {}", e);
             None
         }
     }
+}
+
+fn nvd_api_key_from_config(config: &SlapperConfig) -> Option<String> {
+    config
+        .recon
+        .apis
+        .nvd
+        .api_key
+        .as_ref()
+        .map(|k| k.expose_secret().to_string())
 }
 
 pub async fn run_full_recon(
@@ -441,6 +453,7 @@ pub async fn run_full_recon(
     let alienvault_key = config.recon.apis.alienvault.api_key.as_ref();
     let shodan_key = config.recon.apis.shodan.api_key.as_ref();
     let wayback_key = config.recon.apis.wayback_machine.api_key.as_ref();
+    let nvd_api_key = nvd_api_key_from_config(config);
 
     let threat_target = domain.as_ref().or(resolved_ip.as_ref());
     let ssl_host = domain.as_ref().or(resolved_ip.as_ref());
@@ -575,7 +588,12 @@ pub async fn run_full_recon(
         );
     }
 
-    recon.cve_mapping = run_cve_check(techdetect_result.as_ref(), args.no_cve).await;
+    recon.cve_mapping = run_cve_check(
+        techdetect_result.as_ref(),
+        args.no_cve,
+        nvd_api_key.as_deref(),
+    )
+    .await;
     if recon.cve_mapping.is_none() && !args.no_cve && techdetect_result.is_some() {
         recon.cve_error = Some("CVE mapping failed (see logs for the underlying error)".to_string());
     }
@@ -759,6 +777,7 @@ pub fn print_recon_results_string(recon: &FullReconResult) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::SensitiveString;
 
     #[tokio::test]
     async fn test_resolve_target_http_prefix() {
@@ -872,5 +891,13 @@ mod tests {
         let subs = result.subdomains.unwrap();
         assert_eq!(subs.subdomains.len(), 1);
         assert_eq!(subs.subdomains[0].subdomain, "www");
+    }
+
+    #[test]
+    fn test_nvd_api_key_from_config() {
+        let mut config = SlapperConfig::default();
+        config.recon.apis.nvd.api_key = Some(SensitiveString::new("nvd-test-key".to_string()));
+        let extracted = nvd_api_key_from_config(&config);
+        assert_eq!(extracted, Some("nvd-test-key".to_string()));
     }
 }
