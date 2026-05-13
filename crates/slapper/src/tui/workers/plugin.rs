@@ -1,4 +1,3 @@
-use crate::tui::workers::TaskResult;
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub async fn run_load_plugins(

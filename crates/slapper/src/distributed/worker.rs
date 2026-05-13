@@ -1,6 +1,5 @@
 use crate::distributed::{
-    command::CommandMessage, Heartbeat, RemoteClient, Task, TaskResult, TaskType,
-    WorkerRegistration, WorkerStatus,
+    Heartbeat, RemoteClient, Task, TaskResult, TaskType, WorkerStatus,
 };
 use crate::error::{Result, SlapperError};
 use crate::scanner::endpoints::EndpointScanConfig;

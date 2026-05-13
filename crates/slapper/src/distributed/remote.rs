@@ -545,7 +545,7 @@ impl RemoteClient {
         &self,
         host: &str,
         port: u16,
-        worker_id: String,
+        _worker_id: String,
         status: String,
     ) -> Result<()> {
         let mut line_writer = self.connect_to_coordinator(host, port).await?;

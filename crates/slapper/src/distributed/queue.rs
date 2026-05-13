@@ -54,7 +54,7 @@ impl TaskQueue {
         Ok(())
     }
 
-    pub async fn dequeue(&self, worker_id: &str) -> Option<Task> {
+    pub async fn dequeue(&self, _worker_id: &str) -> Option<Task> {
         let mut pending = self.pending.write().await;
         let task = pending.pop_front()?;
 
@@ -69,7 +69,7 @@ impl TaskQueue {
         let now = chrono::Utc::now().timestamp();
 
         let mut in_progress = self.in_progress.write().await;
-        in_progress.retain(|id, task| {
+        in_progress.retain(|_id, task| {
             if let Some(assigned_at) = task.assigned_at_secs {
                 if now - assigned_at > timeout_secs {
                     stale_tasks.push(task.clone());
