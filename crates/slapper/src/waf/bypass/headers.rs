@@ -10,6 +10,8 @@ pub struct HeaderBypass {
     profile: Option<WafProfile>,
 }
 
+const DEFAULT_HEADER_PROBE_PAYLOAD: &str = "' OR 1=1--";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeaderSet {
     pub name: String,
@@ -64,7 +66,13 @@ impl HeaderBypass {
         bypass: &ProfileBypass,
         detection: &WafDetectionResult,
     ) -> Result<BypassResult> {
-        let mut request = client.get(url);
+        let probe_payload = bypass
+            .payloads
+            .first()
+            .map(String::as_str)
+            .unwrap_or(DEFAULT_HEADER_PROBE_PAYLOAD);
+        let probe_url = format!("{}?q={}", url, urlencoding::encode(probe_payload));
+        let mut request = client.get(probe_url);
 
         for (key, value) in &bypass.headers {
             request = request.header(key.as_str(), value.as_str());
@@ -74,12 +82,12 @@ impl HeaderBypass {
         let status = response.status().as_u16();
         let body = response.text().await.unwrap_or_default();
 
-        let success = self.is_bypass_successful(status, detection, "", &body);
+        let success = self.is_bypass_successful(status, detection, probe_payload, &body);
 
         Ok(BypassResult {
             technique: bypass.technique,
             success,
-            description: bypass.description.clone(),
+            description: format!("{} [probe={}]", bypass.description, probe_payload),
             status_code: status,
             response_diff: None,
         })
@@ -175,7 +183,12 @@ impl HeaderBypass {
         header_set: &HeaderSet,
         detection: &WafDetectionResult,
     ) -> Result<BypassResult> {
-        let mut request = client.get(url);
+        let probe_url = format!(
+            "{}?q={}",
+            url,
+            urlencoding::encode(DEFAULT_HEADER_PROBE_PAYLOAD)
+        );
+        let mut request = client.get(probe_url);
 
         for (key, value) in &header_set.headers {
             request = request.header(key, value);
@@ -186,14 +199,18 @@ impl HeaderBypass {
         let body = response.text().await.unwrap_or_default();
         let body_len = body.len() as i64;
 
-        let success = self.is_bypass_successful(status, detection, "", &body);
+        let success =
+            self.is_bypass_successful(status, detection, DEFAULT_HEADER_PROBE_PAYLOAD, &body);
 
         let technique = self.identify_technique(&header_set.name);
 
         Ok(BypassResult {
             technique,
             success,
-            description: header_set.name.clone(),
+            description: format!(
+                "{} [probe={}]",
+                header_set.name, DEFAULT_HEADER_PROBE_PAYLOAD
+            ),
             status_code: status,
             response_diff: Some(body_len),
         })
@@ -203,10 +220,10 @@ impl HeaderBypass {
         &self,
         status: u16,
         detection: &WafDetectionResult,
-        _payload: &str,
+        payload: &str,
         response_body: &str,
     ) -> bool {
-        super::is_bypass_successful(status, detection, "", response_body)
+        super::is_bypass_successful(status, detection, payload, response_body)
     }
 
     fn identify_technique(&self, name: &str) -> BypassTechnique {

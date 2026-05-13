@@ -73,6 +73,7 @@ impl WafDetector {
                     if header_name_match || header_value_match {
                         score += waf::HEADER_MATCH_SCORE;
                         sig_matched_headers.push(format!("{}: {}", name_lower, value_lower));
+                        break;
                     }
                 }
             }

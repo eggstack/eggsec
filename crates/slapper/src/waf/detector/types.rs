@@ -34,10 +34,9 @@ pub struct ResponseDiff {
 
 impl ResponseDiff {
     pub fn is_waf_blocked(&self) -> bool {
+        let blocked_codes = crate::constants::waf::BLOCKED_STATUS_CODES;
         let status_blocked = self.malicious_status != self.normal_status
-            && (self.malicious_status == 403
-                || self.malicious_status == 406
-                || self.malicious_status == 405);
+            && blocked_codes.contains(&self.malicious_status);
 
         let length_blocked = self.normal_length.saturating_sub(self.malicious_length)
             > crate::constants::waf::LENGTH_DIFF_THRESHOLD;

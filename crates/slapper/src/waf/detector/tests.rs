@@ -31,11 +31,26 @@ fn test_response_diff_is_waf_blocked_by_406() {
 }
 
 #[test]
-fn test_response_diff_is_waf_blocked_by_405() {
+fn test_response_diff_not_blocked_by_405() {
     let diff = ResponseDiff {
         normal_status: 200,
         normal_length: 5000,
         malicious_status: 405,
+        malicious_length: 4900,
+        normal_headers: None,
+        malicious_headers: None,
+        header_diffs: vec![],
+        body_diffs: None,
+    };
+    assert!(!diff.is_waf_blocked());
+}
+
+#[test]
+fn test_response_diff_is_waf_blocked_by_429() {
+    let diff = ResponseDiff {
+        normal_status: 200,
+        normal_length: 5000,
+        malicious_status: 429,
         malicious_length: 4900,
         normal_headers: None,
         malicious_headers: None,

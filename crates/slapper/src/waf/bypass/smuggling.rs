@@ -248,13 +248,15 @@ impl SmugglingBypass {
         req: &SmugglingRequest,
         detection: &WafDetectionResult,
     ) -> Result<BypassResult> {
-        let requires_http2 =
-            matches!(req.smuggling_type, SmugglingType::H2CUpgrade | SmugglingType::Http2Frame);
+        let requires_http2 = Self::requires_http2_probe(&req.smuggling_type);
         let (status, body, description_suffix) = if requires_http2 {
             (
                 0,
                 String::new(),
-                "raw HTTP/1.1 probe only; HTTP/2 frame validation not implemented".to_string(),
+                format!(
+                    "skipped: HTTP/2 probe requested but support unavailable (http2_probe_supported={})",
+                    Self::supports_http2_probes()
+                ),
             )
         } else {
             let (status, body) = self.execute_raw_http1(url, req).await?;
@@ -281,6 +283,17 @@ impl SmugglingBypass {
             status_code: status,
             response_diff: None,
         })
+    }
+
+    fn supports_http2_probes() -> bool {
+        false
+    }
+
+    fn requires_http2_probe(smuggling_type: &SmugglingType) -> bool {
+        matches!(
+            smuggling_type,
+            SmugglingType::H2CUpgrade | SmugglingType::Http2Frame
+        )
     }
 
     async fn execute_raw_http1(
