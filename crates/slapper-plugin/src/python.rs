@@ -594,7 +594,13 @@ fn json_value_to_py(py: Python<'_>, v: &serde_json::Value) -> PyResult<Py<PyAny>
             let list = PyList::new(py, &items)?;
             list.into_any()
         }
-        serde_json::Value::Object(_) => v.to_string().into_bound_py_any(py)?,
+        serde_json::Value::Object(obj) => {
+            let dict = PyDict::new(py);
+            for (k, val) in obj {
+                dict.set_item(k, json_value_to_py(py, val)?)?;
+            }
+            dict.into_any()
+        }
     };
     Ok(result.unbind())
 }

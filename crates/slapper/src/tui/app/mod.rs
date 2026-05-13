@@ -36,6 +36,7 @@ use crate::tui::workers;
 use crate::types::OutputFormat;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
+use std::path::PathBuf;
 use task_management::TabTaskConfigSource;
 
 pub struct App {
@@ -114,6 +115,7 @@ pub struct App {
     pub show_quick_switch: bool,
     pub quick_switch_query: String,
     pub quick_switch_selected: usize,
+    pub config_plugins_dir: Option<PathBuf>,
 }
 
 impl App {
@@ -244,6 +246,7 @@ impl App {
             show_quick_switch: false,
             quick_switch_query: String::new(),
             quick_switch_selected: 0,
+            config_plugins_dir: None,
         };
 
         // Sync settings with current theme

@@ -49,6 +49,16 @@ impl TabTaskConfigSource for super::tabs::Tab {
             super::tabs::Tab::Vuln => Some(app.vuln.build_task_config()?),
             #[cfg(not(feature = "vuln-management"))]
             super::tabs::Tab::Vuln => None,
+            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+            super::tabs::Tab::Plugin => {
+                let mut cfg = app.plugin.build_task_config()?;
+                if let workers::TaskConfig::Plugin { plugins_dir, .. } = &mut cfg {
+                    *plugins_dir = app.config_plugins_dir.clone();
+                }
+                Some(cfg)
+            }
+            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
+            super::tabs::Tab::Plugin => None,
             _ => None,
         }
     }
@@ -428,6 +438,7 @@ impl TaskBuilder for super::tabs::PluginTab {
             plugin_name: plugin_name.to_string(),
             target: target.to_string(),
             timeout_secs: 120,
+            plugins_dir: None,
         })
     }
 }
@@ -499,11 +510,15 @@ impl super::App {
 #[cfg(test)]
 mod tests {
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-    use super::TaskBuilder;
+    use super::{TabTaskConfigSource, TaskBuilder};
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+    use crate::tui::tabs::Tab;
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     use crate::tui::tabs::plugin::PluginInfo;
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     use crate::tui::tabs::TabInput;
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+    use std::path::PathBuf;
 
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
     #[test]
@@ -528,10 +543,42 @@ mod tests {
                 plugin_name,
                 target,
                 timeout_secs,
+                plugins_dir,
             } => {
                 assert_eq!(plugin_name, "test_check");
                 assert_eq!(target, "https://example.com");
                 assert_eq!(timeout_secs, 120);
+                assert_eq!(plugins_dir, None);
+            }
+            _ => panic!("expected TaskConfig::Plugin"),
+        }
+    }
+
+    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+    #[test]
+    fn plugin_task_config_from_app_includes_plugins_dir() {
+        let history = crate::tui::state::create_shared_history();
+        let mut app = crate::tui::app::App::new_for_testing(history);
+        app.current_tab = Tab::Plugin;
+        app.config_plugins_dir = Some(PathBuf::from("/tmp/slapper/plugins"));
+
+        app.plugin.load_plugins(vec![PluginInfo {
+            name: "test_check".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            author: String::new(),
+            tags: vec![],
+            language: "Python".to_string(),
+        }]);
+        app.plugin.inputs.focus(0);
+        app.plugin.handle_paste("https://example.com");
+
+        let cfg = app.current_tab.build_task_config_from_app(&app);
+        let cfg = cfg.expect("expected plugin task config");
+
+        match cfg {
+            crate::tui::workers::TaskConfig::Plugin { plugins_dir, .. } => {
+                assert_eq!(plugins_dir, Some(PathBuf::from("/tmp/slapper/plugins")));
             }
             _ => panic!("expected TaskConfig::Plugin"),
         }

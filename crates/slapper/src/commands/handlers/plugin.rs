@@ -4,6 +4,8 @@ use crate::commands::handlers::CommandContext;
 use anyhow::Result;
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 use slapper_plugin::Plugin;
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+use std::path::PathBuf;
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) -> Result<()> {
@@ -20,7 +22,8 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
 
             #[cfg(feature = "python-plugins")]
             {
-                let mut manager = crate::plugin::PluginManager::new();
+                let mut manager =
+                    crate::plugin::PluginManager::with_config_dir(_ctx.config.paths.plugins_dir.clone());
                 manager.discover_plugins();
                 for info in manager.list_plugins() {
                     found_any = true;
@@ -135,7 +138,11 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
                             run_args.name, run_args.target
                         );
 
-                        let result = loader.run_plugin(&run_args.name, &run_args.target, 300)?;
+                        let result = loader.run_plugin(
+                            &run_args.name,
+                            &run_args.target,
+                            _ctx.config.http.timeout_secs.min(300),
+                        )?;
 
                         println!("\nPlugin Results:");
                         println!("  Success: {}", result.success);
@@ -175,16 +182,18 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
 }
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-pub fn discover_all_plugins() -> Vec<crate::tui::tabs::plugin::PluginInfo> {
+pub fn discover_all_plugins(
+    config_plugins_dir: Option<PathBuf>,
+) -> Vec<crate::tui::tabs::plugin::PluginInfo> {
     use crate::tui::tabs::plugin::PluginInfo;
 
     #[cfg(feature = "ruby-plugins")]
-    let plugin_dirs = slapper_plugin::PluginManager::default_plugin_dirs(None);
+    let plugin_dirs = slapper_plugin::PluginManager::default_plugin_dirs(config_plugins_dir.clone());
     let mut all_plugins = Vec::new();
 
     #[cfg(feature = "python-plugins")]
     {
-        let mut manager = slapper_plugin::PluginManager::new();
+        let mut manager = slapper_plugin::PluginManager::with_config_dir(config_plugins_dir);
         let discovered = manager.discover_plugins();
         for info in discovered {
             all_plugins.push(PluginInfo::from(info));

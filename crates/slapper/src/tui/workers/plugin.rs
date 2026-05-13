@@ -1,11 +1,15 @@
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+use super::TaskResult;
+
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub async fn run_load_plugins(
+    config_plugins_dir: Option<std::path::PathBuf>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
     use crate::commands::handlers::plugin::discover_all_plugins;
 
-    let plugins = discover_all_plugins();
+    let plugins = discover_all_plugins(config_plugins_dir);
 
     let _ = result_tx.send(TaskResult::PluginsLoaded(plugins)).await;
 
@@ -17,18 +21,21 @@ pub async fn run_plugin_check(
     plugin_name: String,
     target: String,
     timeout_secs: u64,
+    config_plugins_dir: Option<std::path::PathBuf>,
     progress_tx: tokio::sync::mpsc::Sender<(u64, u64)>,
     result_tx: tokio::sync::mpsc::Sender<TaskResult>,
 ) -> anyhow::Result<()> {
     use crate::tui::tabs::plugin::{Finding, PluginResults};
     use slapper_plugin::Plugin;
+    use std::time::Instant;
 
     let _ = progress_tx.send((0, 3)).await;
 
     #[cfg(feature = "python-plugins")]
     {
         let mut python_mgr = crate::plugin::PythonPluginManager::with_block_suspicious_plugins(true);
-        let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(None);
+        let plugin_dirs =
+            crate::plugin::PluginManager::default_plugin_dirs(config_plugins_dir.clone());
         for dir in &plugin_dirs {
             if dir.exists() {
                 python_mgr.load_plugins(dir)?;
@@ -76,11 +83,12 @@ pub async fn run_plugin_check(
 
     #[cfg(feature = "ruby-plugins")]
     {
-        let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(None);
+        let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(config_plugins_dir);
         if let Ok(mut loader) = crate::ruby::PluginLoader::new(plugin_dirs) {
             let _ = loader.discover_plugins();
             if loader.list_plugins().iter().any(|p| p.name == plugin_name) {
                 let _ = progress_tx.send((1, 3)).await;
+                let started = Instant::now();
                 let result = loader.run_plugin(&plugin_name, &target, timeout_secs)?;
                 let _ = progress_tx.send((2, 3)).await;
 
@@ -99,7 +107,7 @@ pub async fn run_plugin_check(
                         })
                         .collect(),
                     errors: result.error.into_iter().collect(),
-                    execution_time_ms: 0,
+                    execution_time_ms: started.elapsed().as_millis() as u64,
                 };
 
                 let _ = progress_tx.send((3, 3)).await;

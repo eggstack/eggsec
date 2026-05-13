@@ -1,5 +1,7 @@
 use crate::cli::ScanProfile;
 use crate::tui::tabs::recon::ReconOptions;
+#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
+use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -115,6 +117,7 @@ pub enum TaskConfig {
         plugin_name: String,
         target: String,
         timeout_secs: u64,
+        plugins_dir: Option<PathBuf>,
     },
     #[cfg(feature = "nse")]
     Nse {
@@ -504,11 +507,13 @@ impl TaskRunner {
                 plugin_name,
                 target,
                 timeout_secs,
+                plugins_dir,
             } => {
                 super::plugin::run_plugin_check(
                     plugin_name,
                     target,
                     timeout_secs,
+                    plugins_dir,
                     progress_tx,
                     result_tx,
                 )
