@@ -15,6 +15,9 @@
 //!
 //! ## Full Recon Pipeline Modules
 //!
+//! `run_full_recon` is a curated pipeline, not an invocation of every module in
+//! `src/recon`.
+//!
 //! - `techdetect` - Technology stack detection (servers, frameworks, CMS)
 //! - `subdomain` - Subdomain enumeration via crt.sh, DNS, and brute force
 //! - `ssl` - SSL/TLS certificate and configuration analysis
@@ -40,6 +43,9 @@
 //! Exported modules like `email_security`, `dependency_scan`, `git_secrets`,
 //! and `api_schema` are available for direct invocation, but are not currently
 //! part of `run_full_recon`.
+//!
+//! See [`FULL_RECON_PIPELINE_MODULES`] for the exact module list used by
+//! `run_full_recon`.
 //!
 //! ## Feature Flags
 //!
@@ -336,6 +342,25 @@ pub async fn run_cli(args: ReconArgs, config: &SlapperConfig) -> Result<()> {
 }
 
 pub use runner::{print_recon_results_string, run_full_recon};
+
+pub const FULL_RECON_PIPELINE_MODULES: &[&str] = &[
+    "reverse_dns",
+    "geolocation",
+    "threatintel",
+    "ssl",
+    "whois",
+    "subdomain",
+    "dns_records",
+    "techdetect",
+    "js",
+    "wayback",
+    "cloud",
+    "content",
+    "cors",
+    "email",
+    "takeover",
+    "cve",
+];
 
 #[cfg(test)]
 mod module_registration_tests {

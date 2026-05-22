@@ -54,6 +54,7 @@ impl SubdomainEnumerator {
 
     pub fn new(concurrency: usize) -> Result<Self> {
         let client = create_http_client(10)?;
+        let concurrency = concurrency.max(1);
 
         let resolver = TokioResolver::builder_with_config(
             ResolverConfig::default(),
@@ -358,8 +359,10 @@ mod tests {
     fn test_subdomain_enumerator_new() {
         let result = SubdomainEnumerator::new(10);
         assert!(result.is_ok());
-        let result = SubdomainEnumerator::new(0);
-        assert!(result.is_ok());
+        let zero_result = SubdomainEnumerator::new(0);
+        assert!(zero_result.is_ok());
+        let zero_enumerator = zero_result.unwrap();
+        assert_eq!(zero_enumerator.concurrency, 1);
     }
 
     #[test]

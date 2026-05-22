@@ -1,11 +1,10 @@
 //! SSH authentication testing
 //!
-//! Provides SSH server banner grabbing and authentication testing capabilities.
-//! Tests password-based SSH authentication against target servers.
+//! Provides SSH server banner grabbing and limited authentication probing.
 //!
 //! Note: Full SSH authentication testing requires the ssh2 crate which depends
-//! on OpenSSL. This module provides banner grabbing and version detection when
-//! ssh2 is not available, and full auth testing when it is.
+//! on OpenSSL. In this build, full protocol authentication is not implemented;
+//! attempts are reported as unsupported to avoid false-positive capability claims.
 
 use crate::error::Result;
 use crate::recon::secrets::Severity;
@@ -75,28 +74,17 @@ pub async fn test_ssh_auth(
     });
 
     let mut auth_results = Vec::new();
-    let mut successful_credential = None;
+    let successful_credential = None;
 
     for (username, password) in credentials {
         let result = test_single_credential(target, port, username, password, timeout).await;
         auth_results.push(result.clone());
 
-        if result.success && successful_credential.is_none() {
-            successful_credential = Some((username.clone(), password.clone()));
-        }
     }
 
-    let success = successful_credential.is_some();
-    let severity = if success { Severity::Critical } else { Severity::Info };
-    let message = if success {
-        format!(
-            "SSH authentication successful with {}:{}",
-            successful_credential.as_ref().unwrap().0,
-            "[REDACTED]"
-        )
-    } else {
-        "SSH authentication failed for all tested credentials".to_string()
-    };
+    let success = false;
+    let severity = Severity::Info;
+    let message = "SSH authentication probing is unavailable in this build; banner and version were collected".to_string();
 
     Ok(SshAuthResult {
         target: target.to_string(),
@@ -152,8 +140,8 @@ async fn test_single_credential(
     }
 }
 
-async fn ssh_auth_attempt(addr: &str, username: &str, password: &str) -> Result<bool> {
-    use std::io::{Read, Write};
+async fn ssh_auth_attempt(addr: &str, _username: &str, _password: &str) -> Result<bool> {
+    use std::io::Read;
 
     let mut stream = TcpStream::connect(addr)
         .map_err(|e| crate::error::SlapperError::Network(format!("TCP connection failed: {}", e)))?;
@@ -171,24 +159,10 @@ async fn ssh_auth_attempt(addr: &str, username: &str, password: &str) -> Result<
         return Err(crate::error::SlapperError::Network("Invalid SSH banner".to_string()));
     }
 
-    let key_exchange = b"SSH-2.0-Rencrypt\r\n";
-    stream.write_all(key_exchange)
-        .map_err(|e| crate::error::SlapperError::Network(format!("Write failed: {}", e)))?;
-
-    let mut response = [0u8; 4096];
-    let n = stream.read(&mut response)
-        .map_err(|e| crate::error::SlapperError::Network(format!("Read failed: {}", e)))?;
-
-    let _response_str = String::from_utf8_lossy(&response[..n]);
-
-    let user_msg = format!("{}/{}@{}\r\n", username.len(), username.len(), username.len());
-    stream.write_all(user_msg.as_bytes())
-        .map_err(|e| crate::error::SlapperError::Network(format!("Write failed: {}", e)))?;
-
-    stream.write_all(password.as_bytes())
-        .map_err(|e| crate::error::SlapperError::Network(format!("Write failed: {}", e)))?;
-
-    Ok(false)
+    Err(crate::error::SlapperError::Unknown(format!(
+        "SSH credential authentication is unsupported in this build for target {}",
+        addr
+    )))
 }
 
 #[cfg(test)]

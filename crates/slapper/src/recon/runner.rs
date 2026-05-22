@@ -13,6 +13,25 @@ use parking_lot::Mutex;
 use std::net::IpAddr;
 use std::sync::Arc;
 
+enum ReconStep<T> {
+    Skipped,
+    Completed(T),
+    Failed,
+}
+
+impl<T> ReconStep<T> {
+    fn into_option(self) -> Option<T> {
+        match self {
+            Self::Completed(value) => Some(value),
+            Self::Skipped | Self::Failed => None,
+        }
+    }
+
+    fn is_failed(&self) -> bool {
+        matches!(self, Self::Failed)
+    }
+}
+
 /// Resolves the target domain to an IP address.
 ///
 /// Strips protocol prefixes, extracts the domain, and performs DNS resolution
@@ -67,16 +86,18 @@ async fn resolve_target(
 async fn run_reverse_dns(
     ip: Option<&String>,
     no_dns: bool,
-) -> Option<reverse_dns::ReverseDnsResult> {
+) -> ReconStep<reverse_dns::ReverseDnsResult> {
     if no_dns {
-        return None;
+        return ReconStep::Skipped;
     }
-    let ip = ip?;
+    let Some(ip) = ip else {
+        return ReconStep::Skipped;
+    };
     match reverse_dns::reverse_dns_lookup(ip).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("reverse DNS lookup failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -89,16 +110,18 @@ async fn run_geo_lookup(
     no_geo: bool,
     ipapi_key: Option<&SensitiveString>,
     maxmind_settings: Option<geolocation::MaxMindSettings>,
-) -> Option<geolocation::GeoLocation> {
+) -> ReconStep<geolocation::GeoLocation> {
     if no_geo {
-        return None;
+        return ReconStep::Skipped;
     }
-    let ip = ip?;
+    let Some(ip) = ip else {
+        return ReconStep::Skipped;
+    };
     match geolocation::geolocation_lookup_with_config(ip, ipapi_key, maxmind_settings).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("geolocation lookup failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -112,11 +135,13 @@ async fn run_threat_intel(
     virustotal_key: Option<&SensitiveString>,
     alienvault_key: Option<&SensitiveString>,
     shodan_key: Option<&SensitiveString>,
-) -> Option<threatintel::ThreatIntel> {
+) -> ReconStep<threatintel::ThreatIntel> {
     if no_threat {
-        return None;
+        return ReconStep::Skipped;
     }
-    let target = target?;
+    let Some(target) = target else {
+        return ReconStep::Skipped;
+    };
     let is_ip = target.parse::<std::net::IpAddr>().is_ok();
     match threatintel::check_threat_intel(
         target,
@@ -127,10 +152,10 @@ async fn run_threat_intel(
     )
     .await
     {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("threat intel lookup failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -138,17 +163,23 @@ async fn run_threat_intel(
 /// Performs SSL/TLS certificate analysis.
 ///
 /// Returns `None` if `no_ssl` is true, no host is provided, or the analysis fails.
-async fn run_ssl_recon(host: Option<&String>, port: Option<u16>, no_ssl: bool) -> Option<ssl::SslAnalysis> {
+async fn run_ssl_recon(
+    host: Option<&String>,
+    port: Option<u16>,
+    no_ssl: bool,
+) -> ReconStep<ssl::SslAnalysis> {
     if no_ssl {
-        return None;
+        return ReconStep::Skipped;
     }
-    let host = host?;
+    let Some(host) = host else {
+        return ReconStep::Skipped;
+    };
     let port = port.unwrap_or(443);
     match ssl::analyze_ssl(host, port).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("SSL analysis failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -156,16 +187,18 @@ async fn run_ssl_recon(host: Option<&String>, port: Option<u16>, no_ssl: bool) -
 /// Performs WHOIS lookup for a domain.
 ///
 /// Returns `None` if `no_whois` is true, no domain is provided, or the lookup fails.
-async fn run_whois_lookup(domain: Option<&String>, no_whois: bool) -> Option<whois::WhoisResult> {
+async fn run_whois_lookup(domain: Option<&String>, no_whois: bool) -> ReconStep<whois::WhoisResult> {
     if no_whois {
-        return None;
+        return ReconStep::Skipped;
     }
-    let domain = domain?;
+    let Some(domain) = domain else {
+        return ReconStep::Skipped;
+    };
     match whois::whois_lookup(domain).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("whois lookup failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -177,16 +210,18 @@ async fn run_subdomain_enum(
     domain: Option<&String>,
     concurrency: usize,
     no_subdomains: bool,
-) -> Option<subdomain::SubdomainResult> {
+) -> ReconStep<subdomain::SubdomainResult> {
     if no_subdomains {
-        return None;
+        return ReconStep::Skipped;
     }
-    let domain = domain?;
+    let Some(domain) = domain else {
+        return ReconStep::Skipped;
+    };
     match subdomain::enumerate_subdomains(domain, concurrency).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("subdomain enumeration failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -197,16 +232,18 @@ async fn run_subdomain_enum(
 async fn run_dns_records(
     domain: Option<&String>,
     no_dns_records: bool,
-) -> Option<dns_records::DnsRecords> {
+) -> ReconStep<dns_records::DnsRecords> {
     if no_dns_records {
-        return None;
+        return ReconStep::Skipped;
     }
-    let domain = domain?;
+    let Some(domain) = domain else {
+        return ReconStep::Skipped;
+    };
     match dns_records::enumerate_dns_records(domain).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("DNS records enumeration failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -214,15 +251,15 @@ async fn run_dns_records(
 /// Detects the technology stack used by a web application.
 ///
 /// Returns `None` if `no_tech` is true or detection fails.
-async fn run_tech_detection(url: &str, no_tech: bool) -> Option<techdetect::TechDetectionResult> {
+async fn run_tech_detection(url: &str, no_tech: bool) -> ReconStep<techdetect::TechDetectionResult> {
     if no_tech {
-        return None;
+        return ReconStep::Skipped;
     }
     match techdetect::detect_tech_stack(url).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("tech detection failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -230,15 +267,15 @@ async fn run_tech_detection(url: &str, no_tech: bool) -> Option<techdetect::Tech
 /// Analyzes JavaScript files for endpoints and secrets.
 ///
 /// Returns `None` if `no_js` is true or analysis fails.
-async fn run_js_analysis(url: &str, no_js: bool) -> Option<js::JsAnalysis> {
+async fn run_js_analysis(url: &str, no_js: bool) -> ReconStep<js::JsAnalysis> {
     if no_js {
-        return None;
+        return ReconStep::Skipped;
     }
     match js::analyze_js(url).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("JS analysis failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -250,16 +287,18 @@ async fn run_wayback_check(
     domain: Option<&String>,
     no_wayback: bool,
     wayback_key: Option<&SensitiveString>,
-) -> Option<wayback::WaybackResult> {
+) -> ReconStep<wayback::WaybackResult> {
     if no_wayback {
-        return None;
+        return ReconStep::Skipped;
     }
-    let domain = domain?;
+    let Some(domain) = domain else {
+        return ReconStep::Skipped;
+    };
     match wayback::get_wayback_snapshots(domain, wayback_key, 100).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("wayback lookup failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -271,16 +310,18 @@ async fn run_cloud_detection(
     domain: Option<&String>,
     concurrency: usize,
     no_cloud: bool,
-) -> Option<cloud::CloudDiscovery> {
+) -> ReconStep<cloud::CloudDiscovery> {
     if no_cloud {
-        return None;
+        return ReconStep::Skipped;
     }
-    let domain = domain?;
+    let Some(domain) = domain else {
+        return ReconStep::Skipped;
+    };
     match cloud::scan_cloud(domain, concurrency).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("cloud scan failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -292,15 +333,15 @@ async fn run_content_analysis(
     url: &str,
     concurrency: usize,
     no_content: bool,
-) -> Option<content::ContentDiscovery> {
+) -> ReconStep<content::ContentDiscovery> {
     if no_content {
-        return None;
+        return ReconStep::Skipped;
     }
     match content::scan_content(url, concurrency).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("content scan failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -308,15 +349,15 @@ async fn run_content_analysis(
 /// Analyzes CORS configuration for misconfigurations.
 ///
 /// Returns `None` if `no_cors` is true or the analysis fails.
-async fn run_cors_check(url: &str, no_cors: bool) -> Option<cors::CorsAnalysis> {
+async fn run_cors_check(url: &str, no_cors: bool) -> ReconStep<cors::CorsAnalysis> {
     if no_cors {
-        return None;
+        return ReconStep::Skipped;
     }
     match cors::analyze_cors(url).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("CORS analysis failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -324,15 +365,15 @@ async fn run_cors_check(url: &str, no_cors: bool) -> Option<cors::CorsAnalysis> 
 /// Discovers email addresses associated with a target.
 ///
 /// Returns `None` if `no_email` is true or discovery fails.
-async fn run_email_security(url: &str, no_email: bool) -> Option<email::EmailDiscovery> {
+async fn run_email_security(url: &str, no_email: bool) -> ReconStep<email::EmailDiscovery> {
     if no_email {
-        return None;
+        return ReconStep::Skipped;
     }
     match email::discover_contacts(url).await {
-        Ok(v) => Some(v),
+        Ok(v) => ReconStep::Completed(v),
         Err(e) => {
             tracing::warn!("email discovery failed: {}", e);
-            None
+            ReconStep::Failed
         }
     }
 }
@@ -501,39 +542,39 @@ pub async fn run_full_recon(
         run_email_security(&url, args.no_email),
     );
 
-    let takeover_result = run_takeover_check(subdomain_result.as_ref(), args.no_takeover).await;
+    let reverse_dns_failed = reverse_dns_result.is_failed();
+    let geo_failed = geolocation_result.is_failed();
+    let threat_failed = threat_intel_result.is_failed();
+    let ssl_failed = ssl_result.is_failed();
+    let whois_failed = whois_result.is_failed();
+    let subdomains_failed = subdomain_result.is_failed();
+    let dns_records_failed = dns_records_result.is_failed();
+    let js_failed = js_result.is_failed();
+    let wayback_failed = wayback_result.is_failed();
+    let cloud_failed = cloud_result.is_failed();
+    let content_failed = content_result.is_failed();
+    let cors_failed = cors_result.is_failed();
+    let email_failed = email_result.is_failed();
 
-    let reverse_dns_failed = reverse_dns_result.is_none() && !args.no_dns && resolved_ip.is_some();
-    let geo_failed = geolocation_result.is_none() && !args.no_geo && resolved_ip.is_some();
-    let threat_failed = threat_intel_result.is_none() && !args.no_threat && threat_target.is_some();
-    let ssl_failed = ssl_result.is_none() && !args.no_ssl && ssl_host.is_some();
-    let whois_failed = whois_result.is_none() && !args.no_whois && domain.is_some();
-    let subdomains_failed = subdomain_result.is_none() && !args.no_subdomains && domain.is_some();
-    let dns_records_failed =
-        dns_records_result.is_none() && !args.no_dns_records && domain.is_some();
-    let js_failed = js_result.is_none() && !args.no_js;
-    let wayback_failed = wayback_result.is_none() && !args.no_wayback && domain.is_some();
-    let cloud_failed = cloud_result.is_none() && !args.no_cloud && domain.is_some();
-    let content_failed = content_result.is_none() && !args.no_content;
-    let cors_failed = cors_result.is_none() && !args.no_cors;
-    let email_failed = email_result.is_none() && !args.no_email;
+    let subdomain_result = subdomain_result.into_option();
+    let takeover_result = run_takeover_check(subdomain_result.as_ref(), args.no_takeover).await;
     let takeover_failed = !args.no_takeover
         && matches!(subdomain_result.as_ref(), Some(s) if !s.subdomains.is_empty())
         && takeover_result.is_none();
 
-    recon.reverse_dns = reverse_dns_result;
-    recon.geolocation = geolocation_result;
-    recon.threat_intel = threat_intel_result;
-    recon.ssl_analysis = ssl_result;
-    recon.whois = whois_result;
+    recon.reverse_dns = reverse_dns_result.into_option();
+    recon.geolocation = geolocation_result.into_option();
+    recon.threat_intel = threat_intel_result.into_option();
+    recon.ssl_analysis = ssl_result.into_option();
+    recon.whois = whois_result.into_option();
     recon.subdomains = subdomain_result;
-    recon.dns_records = dns_records_result;
-    recon.js_analysis = js_result;
-    recon.wayback = wayback_result;
-    recon.cloud = cloud_result;
-    recon.content = content_result;
-    recon.cors = cors_result;
-    recon.email_discovery = email_result;
+    recon.dns_records = dns_records_result.into_option();
+    recon.js_analysis = js_result.into_option();
+    recon.wayback = wayback_result.into_option();
+    recon.cloud = cloud_result.into_option();
+    recon.content = content_result.into_option();
+    recon.cors = cors_result.into_option();
+    recon.email_discovery = email_result.into_option();
     recon.takeover = takeover_result;
 
     if reverse_dns_failed {
@@ -588,18 +629,16 @@ pub async fn run_full_recon(
         );
     }
 
-    recon.cve_mapping = run_cve_check(
-        techdetect_result.as_ref(),
-        args.no_cve,
-        nvd_api_key.as_deref(),
-    )
-    .await;
+    let techdetect_failed = techdetect_result.is_failed();
+    let techdetect_result = techdetect_result.into_option();
+
+    recon.cve_mapping = run_cve_check(techdetect_result.as_ref(), args.no_cve, nvd_api_key.as_deref()).await;
     if recon.cve_mapping.is_none() && !args.no_cve && techdetect_result.is_some() {
         recon.cve_error = Some("CVE mapping failed (see logs for the underlying error)".to_string());
     }
 
     recon.tech_stack = techdetect_result.map(|t| t.tech_stack);
-    if recon.tech_stack.is_none() && !args.no_tech {
+    if techdetect_failed {
         recon.tech_error = Some("Technology detection failed".to_string());
     }
 
