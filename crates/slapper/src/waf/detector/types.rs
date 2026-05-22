@@ -1,4 +1,5 @@
 use crate::utils::contains_ignore_case;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,8 +27,8 @@ pub struct ResponseDiff {
     pub normal_length: usize,
     pub malicious_status: u16,
     pub malicious_length: usize,
-    pub normal_headers: Option<std::collections::HashMap<String, String>>,
-    pub malicious_headers: Option<std::collections::HashMap<String, String>>,
+    pub normal_headers: Option<FxHashMap<String, String>>,
+    pub malicious_headers: Option<FxHashMap<String, String>>,
     pub header_diffs: Vec<String>,
     pub body_diffs: Option<bool>,
 }

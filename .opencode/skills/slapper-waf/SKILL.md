@@ -2,6 +2,10 @@
 
 WAF detection and bypass module workflows and patterns.
 
+## Performance Note
+
+This module uses `FxHashMap` and `FxHashSet` from `rustc_hash` for performance. Do NOT use `std::collections::HashMap` or `std::collections::HashSet` in WAF code. All hash-based collections in this module should use the faster variants.
+
 ## Key Types and Patterns
 
 ### Constants (`constants::waf`)
@@ -100,9 +104,10 @@ Follow existing test patterns in `waf/` modules, testing detection logic and byp
 ### Adding a New WAF Detection Rule
 1. Add scoring/detection constants to `constants::waf`
 2. Add signature to `data/patterns.rs` (FxHashMap<String, WafSignature>)
-3. Implement detection logic in `detector/detect.rs`
-4. Avoid magic numbers by using defined constants
-5. Add tests for new detection rule
+3. Implementation note: signatures_lower in detector uses lowercase Vec<String> for matching
+4. Implement detection logic in `detector/detect.rs`
+5. Avoid magic numbers by using defined constants
+6. Add tests for new detection rule
 
 ### Implementing a New Bypass Technique
 1. Add technique to `BypassTechnique` enum in `bypass/mod.rs`

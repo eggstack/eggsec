@@ -213,6 +213,9 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `waf/detector/detect.rs:118` | IP match scoring used `COOKIE_MATCH_SCORE` instead of `IP_MATCH_SCORE` | Added `IP_MATCH_SCORE` constant (20) and fixed scoring |
 | `waf/mod.rs:4` | Docstring said "26 WAF products" but 34 are supported | Updated to "34 WAF products" |
 | `waf/detector/*.rs` | `unwrap_or_default()` on `response.text().await` silently suppressed errors | Changed to explicit match with `tracing::debug` |
+| `waf/detector/types.rs:29-30` | `ResponseDiff.headers` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `waf/detector/compare.rs:34,49` | `compare_responses` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `waf/bypass/profiles.rs:4,426` | `get_generated_profiles` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |
 | `cli/scan.rs` | Missing `-o` short flag on PortScanArgs, EndpointScanArgs, FingerprintArgs, NseArgs, ResumeArgs | Added `short = 'o'` to output fields |
 | `cli/fuzz.rs` | Missing `-o` short flag on WafStressArgs; indentation issue after edit | Added `short = 'o'` and fixed indentation; preserved `From<WafStressArgs>` impl |
 | `cli/http.rs` | Missing `-o` short flag on ReconArgs | Added `short = 'o'` to output field |

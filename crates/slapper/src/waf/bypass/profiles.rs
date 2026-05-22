@@ -1,7 +1,7 @@
 use crate::waf::bypass::BypassTechnique;
 use crate::waf::data::get_waf_signatures;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WafProfile {
@@ -423,7 +423,7 @@ pub fn get_auto_profile() -> WafProfile {
 }
 
 fn get_generated_profiles(existing_profiles: &[WafProfile]) -> Vec<WafProfile> {
-    let existing_names: HashSet<String> = existing_profiles
+    let existing_names: FxHashSet<String> = existing_profiles
         .iter()
         .map(|p| p.name.to_lowercase())
         .collect();

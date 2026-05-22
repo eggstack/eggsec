@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::utils::create_insecure_client_with_options;
+use rustc_hash::FxHashMap;
 
 use super::types::ResponseDiff;
 use super::WafDetector;
@@ -31,7 +32,7 @@ impl WafDetector {
             .await?;
 
         let normal_status = normal_response.status().as_u16();
-        let normal_headers: std::collections::HashMap<String, String> = normal_response
+        let normal_headers: FxHashMap<String, String> = normal_response
             .headers()
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
@@ -46,7 +47,7 @@ impl WafDetector {
         let normal_length = normal_body.len();
 
         let malicious_status = malicious_response.status().as_u16();
-        let malicious_headers: std::collections::HashMap<String, String> = malicious_response
+        let malicious_headers: FxHashMap<String, String> = malicious_response
             .headers()
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))

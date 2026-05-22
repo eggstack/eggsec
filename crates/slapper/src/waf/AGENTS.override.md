@@ -6,6 +6,15 @@ Specialized guidance for the WAF detection and bypass module.
 
 `constants::waf` module has scoring and detection constants. Use these instead of magic numbers in WAF-related code.
 
+## Performance Note
+
+This module uses `FxHashMap` and `FxHashSet` from `rustc_hash` for performance. Do NOT use `std::collections::HashMap` or `std::collections::HashSet` in WAF code.
+
+Key types:
+- `ResponseDiff.normal_headers` / `malicious_headers` - `FxHashMap<String, String>`
+- `WafDetector.signatures` - `FxHashMap<String, WafSignature>`
+- `WafProfile` generation uses `FxHashSet<String>` for existing names
+
 ## Bypass Detection Pattern
 
 When implementing WAF bypass detection, use `is_bypass_successful()` from `waf/bypass/mod.rs`:
