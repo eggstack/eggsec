@@ -85,8 +85,12 @@ async fn detect_joomla_version(target: &CmsTarget, client: &Client) -> Option<St
             if let Ok(text) = resp.text().await {
                 if let Some(version_start) = text.find("<version>") {
                     let version_start = version_start + 9;
-                    if let Some(version_end) = text[version_start..].find("</version>") {
-                        return Some(text[version_start..version_start + version_end].to_string());
+                    if version_start <= text.len() {
+                        if let Some(version_end) = text[version_start..].find("</version>") {
+                            if version_start + version_end <= text.len() {
+                                return Some(text[version_start..version_start + version_end].to_string());
+                            }
+                        }
                     }
                 }
             }

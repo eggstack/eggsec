@@ -765,48 +765,53 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
                 }
             }
 
-            if let Ok(response) = request.send().await {
-                let status = response.status();
-                let status_code = status.as_u16();
+            match request.send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    let status_code = status.as_u16();
 
-                if config.include_404 || status_code != 404 {
-                    let content_length = response.content_length();
-                    let redirect = if status.is_redirection() {
-                        response
-                            .headers()
-                            .get("location")
-                            .and_then(|h| h.to_str().ok())
-                            .map(|s| s.to_string())
-                    } else {
-                        None
-                    };
+                    if config.include_404 || status_code != 404 {
+                        let content_length = response.content_length();
+                        let redirect = if status.is_redirection() {
+                            response
+                                .headers()
+                                .get("location")
+                                .and_then(|h| h.to_str().ok())
+                                .map(|s| s.to_string())
+                        } else {
+                            None
+                        };
 
-                    let interesting = is_interesting(&endpoint_path, status_code);
+                        let interesting = is_interesting(&endpoint_path, status_code);
 
-                    let should_insert = match max_results {
-                        Some(limit) => {
-                            let old = results_count.fetch_add(1, Ordering::Relaxed);
-                            old < limit as u64
+                        let should_insert = match max_results {
+                            Some(limit) => {
+                                let old = results_count.fetch_add(1, Ordering::Relaxed);
+                                old < limit as u64
+                            }
+                            None => true,
+                        };
+                        if should_insert {
+                            results.insert(
+                                idx,
+                                EndpointResult {
+                                    path: endpoint_path,
+                                    status_code,
+                                    status_text: status
+                                        .canonical_reason()
+                                        .unwrap_or("Unknown")
+                                        .to_string(),
+                                    content_length,
+                                    response_time_ms: request_start.elapsed().as_millis() as u64,
+                                    redirect,
+                                    interesting,
+                                },
+                            );
                         }
-                        None => true,
-                    };
-                    if should_insert {
-                        results.insert(
-                            idx,
-                            EndpointResult {
-                                path: endpoint_path,
-                                status_code,
-                                status_text: status
-                                    .canonical_reason()
-                                    .unwrap_or("Unknown")
-                                    .to_string(),
-                                content_length,
-                                response_time_ms: request_start.elapsed().as_millis() as u64,
-                                redirect,
-                                interesting,
-                            },
-                        );
                     }
+                }
+                Err(e) => {
+                    tracing::debug!("endpoint scan request failed for {}: {}", endpoint_path, e);
                 }
             }
 

@@ -327,7 +327,9 @@ fn version_lt(current: &str, fixed: &str) -> bool {
 
 impl Default for CmsScanner {
     fn default() -> Self {
-        Self::new().unwrap()
+        Self::new().unwrap_or_else(|e| {
+            panic!("CmsScanner initialization failed: {}", e)
+        })
     }
 }
 

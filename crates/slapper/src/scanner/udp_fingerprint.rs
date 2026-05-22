@@ -141,8 +141,10 @@ pub async fn fingerprint_udp_services(
 
     let mut results: Vec<UdpServiceFingerprint> = Vec::new();
     for handle in handles {
-        if let Some(fp) = handle.await.ok().flatten() {
-            results.push(fp);
+        match handle.await {
+            Ok(Some(fp)) => results.push(fp),
+            Ok(None) => {}
+            Err(e) => tracing::debug!("UDP fingerprint task panicked: {}", e),
         }
     }
 

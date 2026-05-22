@@ -252,6 +252,16 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `pipeline/executor.rs:19-36` | `StageResult` lacked constructor for cleaner object creation | Added `StageResult::new()` constructor |
 | `pipeline/executor.rs:157` | Progress bar created even for empty stage list | Changed condition to `self.tui_mode \|\| self.stages.is_empty()` |
 
+### Recent Bug Fixes (2026-05-27 - Scanner Module)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| `scanner/cms/joomla.rs:88-89` | String slice bounds could panic on malformed XML | Added bounds check before slicing |
+| `scanner/templates/matcher.rs:185-189` | Invalid regex silently returned false | Added `tracing::debug` warning on invalid regex |
+| `scanner/cms/mod.rs:330` | Default impl could panic on init failure | Changed `unwrap()` to `unwrap_or_else` with panic |
+| `scanner/endpoints.rs:768` | Silent error suppression on network failures | Changed to explicit `match` with debug logging |
+| `scanner/udp_fingerprint.rs:144` | Silent task join failures | Changed to explicit `match` with debug logging |
+
 ### Recent Bug Fixes (2026-05-22 - Recon Module)
 
 | Component | Issue | Fix |

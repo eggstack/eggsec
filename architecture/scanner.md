@@ -67,3 +67,13 @@ Discovered information is often fed into the **Fuzzer** or **Vulnerability Manag
 | `cms/mod.rs:52,165,291` | `HashMap` instead of `FxHashMap` | Performance fix |
 | `endpoints.rs:835-839` | `Arc::try_unwrap(...).expect()` panic | Proper error handling |
 | `fingerprint.rs:319-323` | `Arc::try_unwrap(...).expect()` panic | Proper error handling |
+
+## Bug Fixes (2026-05-27)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `cms/joomla.rs:88-89` | String slice bounds could panic on malformed XML | Added bounds check before slicing |
+| `templates/matcher.rs:185-189` | Invalid regex silently returned false | Added `tracing::debug` warning on invalid regex |
+| `cms/mod.rs:330` | Default impl could panic on init failure | Changed `unwrap()` to `unwrap_or_else` with panic |
+| `endpoints.rs:768` | Silent error suppression on network failures | Changed to explicit `match` with debug logging |
+| `udp_fingerprint.rs:144` | Silent task join failures | Changed to explicit `match` with debug logging |

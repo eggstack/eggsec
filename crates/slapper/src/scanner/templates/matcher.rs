@@ -186,7 +186,10 @@ impl TemplateMatcher {
                 .size_limit(100_000)
                 .build()
                 .map(|re| re.is_match(text))
-                .unwrap_or(false),
+                .unwrap_or_else(|e| {
+                    tracing::debug!("invalid regex pattern '{}': {}", search.pattern, e);
+                    false
+                }),
             super::models::MatchMode::Binary => {
                 let decoded: Vec<u8> = if search.encoding == "base64" {
                     base64::Engine::decode(
