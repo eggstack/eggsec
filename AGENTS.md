@@ -359,44 +359,46 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `slapper-nse/src/libraries/ldap.rs` | Duplicate `std::io::{Read, Write}` import | Removed duplicate |
 | `slapper-nse/src/libraries/nmap.rs` | Duplicate `std::io::Write` import | Removed duplicate |
 
-## Architecture Review Findings (2026-05-28)
+## Architecture Review Consolidated
 
-The `architecture/review_plan.md` tracks ongoing architecture reviews. Key findings from completed reviews:
+The `plans/plan.md` file consolidates findings from all architecture reviews into actionable items organized for parallel execution (3 waves).
 
-### Recurring Issues Found
-1. **HashMap/HashSet vs FxHashMap/FxHashSet** - Still present in some files:
-   - `cli/report.rs:44-57` - HashMap usage
-   - `fuzzer/targets/api.rs` - Multiple HashMap usages (P1 priority)
-   - `slapper-nse/vulns.rs`, `rpc.rs`, `smbauth.rs`, `public_api/api.rs`, `creds.rs`
-2. **unwrap()/expect() calls** in production code:
-   - `planner.rs:208,469,482` - unwrap() on SystemTime
-   - `chain.rs:381` - LazyLock regex with unwrap()
-3. **Silent error suppression** - `unwrap_or_default()` in various places
-4. **Documentation discrepancies**:
-   - `config.md` - ScanConfig.profiles reference location wrong
-   - `waf/mod.rs` - Only lists 25 WAF products instead of 34
-   - `tui.md` - Key binding table shows `b` for toggle_bookmark but actual is `Ctrl+b`
+### Key Findings from Reviews
+
+#### High Priority (Production Safety)
+- **AI `planner.rs`**: `unwrap()` on `SystemTime::now().duration_since(UNIX_EPOCH)` at lines 206-209, 467-470, 480-483 - use `unwrap_or_else` to prevent panic on clock skew
+- **Tool `planner.rs`**: Uses `std::collections::HashSet` instead of `FxHashSet` - performance issue
+- **Fuzzer `targets/api.rs`**: Uses `std::collections::HashMap` in 11 locations - performance issue
+- **NSE `smbauth.rs`**: Multiple functions defined twice (shadowing issue) - `compute_lm_hash`, `ntlmv1_session`, `ntlmv2_session`, `get_ntlm_challenge`, `signing_md5`, `signing_hmac_md5`, `encrypt_password`, `decrypt_password`
+- **Recon `email.rs`, `js.rs`**: `LazyLock` regex uses `.unwrap()` - startup panic risk
+- **Networking `capture.rs:46-53`**: System time errors silently suppressed
+
+#### NSE Libraries HashMap Usage (Performance)
+The following NSE library files still use `std::collections::HashMap` instead of `FxHashMap`:
+- `slapper-nse/src/libraries/http.rs` (parse_options)
+- `slapper-nse/src/libraries/vulns.rs`
+- `slapper-nse/src/libraries/datafiles.rs` (also has duplicate entries: ssh, ntp, mongodb appear twice)
+- `slapper-nse/src/libraries/smbauth.rs`
+- `slapper-nse/src/libraries/rpc.rs`
+- `slapper-nse/src/libraries/public_api/api.rs`
+- `slapper-nse/src/libraries/creds.rs` (uses HashSet)
+
+#### Documentation Discrepancies
+- `architecture/config.md`: `ScanConfig.profiles` reference is wrong, should be `SlapperConfig.profiles`
+- `architecture/tui.md`: Key binding table shows `b` for toggle_bookmark but actual is `Ctrl+b`
+- `architecture/waf.md`: Lists only 25 WAF products instead of 34
 
 ### Review Files
-All review outputs are in `plans/` directory:
-- `plans/ai_agents_review.md` - AI/agent module review
-- `plans/cli_commands_review.md` - CLI/commands review
-- `plans/config_review.md` - Config module review
-- `plans/distributed_review.md` - Distributed module review
-- `plans/fuzzer_review.md` - Fuzzer module review
-- `plans/loadtest_review.md` - Loadtest module review
-- `plans/networking_review.md` - Networking/packet module review
-- `plans/output_review.md` - Output module review
-- `plans/overview_review.md` - Overview review
-- `plans/pipeline_review.md` - Pipeline module review
-- `plans/plugins_nse_review.md` - Plugins/NSE module review
-- `plans/recon_review.md` - Recon module review
-- `plans/scanner_review.md` - Scanner module review
-- `plans/tui_review.md` - TUI module review
-- `plans/waf_review.md` - WAF module review
+All review outputs are consolidated in `plans/plan.md`. Individual review files in `plans/` directory:
+- `ai_agents_review.md`, `cli_commands_review.md`, `config_review.md`, `distributed_review.md`
+- `fuzzer_review.md`, `loadtest_review.md`, `networking_review.md`, `output_review.md`
+- `overview_review.md`, `pipeline_review.md`, `plugins_nse_review.md`, `recon_review.md`
+- `scanner_review.md`, `tui_review.md`, `waf_review.md`
 
 ### Key Patterns from Reviews
 - **Division by zero guard**: Always check `if self.stages.is_empty()` before division
 - **Scroll offset bounds**: Use `self.lines.is_empty()` check before calculating scroll_offset
 - **Arc::try_unwrap**: Use `map_err` instead of `.expect()` to avoid panic
-- **LazyLock regex**: Use `unwrap_or_else` instead of `.unwrap()` in LazyLock initialization
+- **LazyLock regex**: Use `expect()` with descriptive message instead of `.unwrap()`
+- **NSE duplicate functions**: Check for duplicate function definitions (especially in smbauth.rs)
+- **FxHashMap/FxHashSet**: Always use for performance in new code

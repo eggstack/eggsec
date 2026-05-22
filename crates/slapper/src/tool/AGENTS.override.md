@@ -1,16 +1,29 @@
 # Tool Module Override
 
-Specialized guidance for the tool abstraction layer.
+ Specialized guidance for the tool abstraction layer.
 
 ## SecurityTool Trait
 
-`tool/traits.rs:117` has `SecurityTool` trait for tool abstraction.
+ `tool/traits.rs:117` has `SecurityTool` trait for tool abstraction.
 
 ## ToolRegistry
 
-`tool/registry.rs:9` has `ToolRegistry` for managing tool instances.
+ `tool/registry.rs:9` has `ToolRegistry` for managing tool instances.
 
-Feature-gated behind `tool-api` (enabled by `rest-api`, `grpc-api`, `nse`).
+ Feature-gated behind `tool-api` (enabled by `rest-api`, `grpc-api`, `nse`).
+
+## Known Issues (2026-05-28)
+
+### HashSet Performance Issue
+**File**: `planner.rs:4`
+
+Uses `std::collections::HashSet` instead of `FxHashSet`. This is in the hot path for execution planning.
+
+**Fix**: Change to `rustc_hash::FxHashSet`:
+```rust
+use rustc_hash::FxHashSet;
+// Line 80, 204, 247, 309, 351, 386, 429, 492: Change HashSet → FxHashSet
+```
 
 ## Protocol Implementations
 
