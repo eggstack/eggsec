@@ -73,6 +73,9 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 4. **`handlers/mod.rs:155-169`**: Replaced hardcoded command list in `handle_no_command` with guidance to use `slapper --help`
 5. **`handlers/cluster.rs:348`**: Replaced `unwrap_or(22)` with `unwrap_or_else(|_| 22)` to avoid panic on invalid parsing
 6. **`handlers/auth_test.rs:10`**: Added missing scope validation `ctx.ensure_scope_url(&args.target)?`
+7. **`cli/scan.rs`**: Added `-o` short flag to `PortScanArgs`, `EndpointScanArgs`, `FingerprintArgs`, `NseArgs`, `ResumeArgs`
+8. **`cli/fuzz.rs`**: Added `-o` short flag to `WafStressArgs`; preserved `From<WafStressArgs>` implementation
+9. **`cli/http.rs`**: Added `-o` short flag to `ReconArgs`
 
 ### CLI Consistency Guidelines
 

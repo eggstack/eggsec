@@ -141,7 +141,7 @@ pub struct ReconArgs {
     pub quiet: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
-    #[arg(long, help = "Output to file")]
+    #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
 }
 

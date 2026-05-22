@@ -179,6 +179,16 @@ cargo test --lib -p slapper cli::
 | Hardcoded `unwrap_or(22)` in parse | Changed to `unwrap_or_else(\|_\| 22)` | `handlers/cluster.rs:348` |
 | Hardcoded list in `handle_no_command` | Replaced with `slapper --help` guidance | `handlers/mod.rs:155-169` |
 
+### Output Flag (`-o`) Consistency (2026-05-22)
+All CLI argument structs now have consistent `-o`/`--output` short flag:
+- `PortScanArgs`, `EndpointScanArgs`, `FuzzArgs`, `WafStressArgs`, `WafArgs`, `LoadArgs`, `GraphQlArgs`, `OAuthArgs`, `FingerprintArgs`, `NseArgs`, `ResumeArgs`, `ScanArgs`, `ReconArgs`
+
+### Type Conversions for FuzzArgs
+Several `From` implementations exist for converting CLI args to `FuzzArgs`:
+- `From<WafStressArgs>` - defined in `cli/fuzz.rs` (WAF stress testing)
+- `From<GraphQlArgs>` - defined in `commands/fuzz_convert.rs`
+- `From<OAuthArgs>` - defined in `commands/fuzz_convert.rs`
+
 ## Resources
 - `architecture/cli_commands.md` - CLI architecture documentation
 - `AGENTS.md` - General project guidelines

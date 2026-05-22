@@ -169,7 +169,7 @@ pub struct PortScanArgs {
     pub verbose: bool,
     #[arg(long, short = 'q', help = "Suppress non-essential output")]
     pub quiet: bool,
-    #[arg(long, help = "Output to file")]
+    #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
 }
 
@@ -221,7 +221,7 @@ pub struct EndpointScanArgs {
     pub verbose: bool,
     #[arg(long, short = 'q', help = "Suppress non-essential output")]
     pub quiet: bool,
-    #[arg(long, help = "Output to file")]
+    #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[command(flatten)]
     pub common: CommonHttpArgs,
@@ -248,7 +248,7 @@ pub struct FingerprintArgs {
     pub verbose: bool,
     #[arg(long, short = 'q', help = "Suppress non-essential output")]
     pub quiet: bool,
-    #[arg(long, help = "Output to file")]
+    #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
     #[arg(
         short = 'c',
@@ -278,7 +278,7 @@ pub struct NseArgs {
     pub json: bool,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
-    #[arg(long, help = "Output to file")]
+    #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
 }
 
@@ -383,6 +383,6 @@ pub struct ResumeArgs {
     pub session: String,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
-    #[arg(long, help = "Output to file")]
+    #[arg(long, short = 'o', help = "Output to file")]
     pub output: Option<String>,
 }
