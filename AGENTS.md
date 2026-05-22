@@ -56,7 +56,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 - `python-plugins` / `ruby-plugins` - Plugin language support
 - `rest-api` / `grpc-api` - API server integration
 - `nse` - Nmap NSE script support
-- `ai-integration` - Autonomous agent, skill system
+- `ai-integration` - AI planner, script generator, autonomous agent skills
 - `ws-api` - WebSocket pub/sub
 - `full` - All features combined
 
@@ -68,6 +68,10 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 - `SensitiveString` - Zeroized credential wrapper
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine
 - `PayloadType` - Enum of 30 payload categories
+- `AiClient` / `Provider` - AI LLM client and provider enum
+- `AiCache` / `CacheKeyBuilder` - TTL cache for AI responses
+- `SmartWafBypass` - WAF bypass with knowledge base
+- `AiPlanner` - AI-driven execution planning (requires `ai-integration`)
 
 ### Important Patterns
 
@@ -78,13 +82,15 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 - **Circuit Breaker**: `utils/circuit_breaker.rs` - `CircuitBreaker` + `CircuitBreakerRegistry`
 - **Truncation**: `utils/formatting.rs` - `strip_controls` (recommended) and `preserve_all`
 - **Visual Regression Testing**: Use `TestBackend` + `Terminal::new()` with `terminal.backend().buffer()` to verify rendered content
+- **AI Cache Keys**: Always use `CacheKeyBuilder` for cache keys in AI module to avoid collisions
+- **AI Module Override**: See `crates/slapper/src/ai/AGENTS.override.md` for AI-specific patterns
 
 ### Codebase Health
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1190 base, 1394 with full features |
-| Clippy | ~2 warnings (TUI-specific fixed) |
+| Tests | 1324 base, 1394+ with full features |
+| Clippy | ~33 warnings (pre-existing, none in ai module) |
 | Source files | 743 |
 | Payload types | 30 |
 | Tabs | 29 |

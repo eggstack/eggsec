@@ -170,38 +170,49 @@ impl AiCache {
     }
 
     pub async fn set(&self, key: &str, value: &str, ttl: Option<Duration>) {
-        let mut entries = self.entries.write().await;
-        if entries.len() >= self.max_entries {
-            self.evict_expired(&mut entries);
+        let should_persist;
+        {
+            let mut entries = self.entries.write().await;
             if entries.len() >= self.max_entries {
-                if let Some((oldest_key, _)) = entries
-                    .iter()
-                    .min_by_key(|(_, v)| v.created_at)
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                {
-                    entries.remove(&oldest_key);
+                self.evict_expired(&mut entries);
+                if entries.len() >= self.max_entries {
+                    if let Some((oldest_key, _)) = entries
+                        .iter()
+                        .min_by_key(|(_, v)| v.created_at)
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                    {
+                        entries.remove(&oldest_key);
+                    }
                 }
             }
+            entries.insert(
+                key.to_string(),
+                CacheEntry::new(value.to_string(), ttl.unwrap_or(self.default_ttl)),
+            );
+            should_persist = self.persist_path.is_some();
         }
-        entries.insert(
-            key.to_string(),
-            CacheEntry::new(value.to_string(), ttl.unwrap_or(self.default_ttl)),
-        );
-        drop(entries);
-        self.persist().await;
+        if should_persist {
+            self.persist().await;
+        }
     }
 
     pub async fn remove(&self, key: &str) {
-        let mut entries = self.entries.write().await;
-        entries.remove(key);
-        drop(entries);
-        self.persist().await;
+        let should_persist;
+        {
+            let mut entries = self.entries.write().await;
+            entries.remove(key);
+            should_persist = self.persist_path.is_some();
+        }
+        if should_persist {
+            self.persist().await;
+        }
     }
 
     pub async fn clear(&self) {
-        let mut entries = self.entries.write().await;
-        entries.clear();
-        drop(entries);
+        {
+            let mut entries = self.entries.write().await;
+            entries.clear();
+        }
         self.persist().await;
     }
 
@@ -231,9 +242,10 @@ impl AiCache {
     }
 
     pub async fn cleanup(&self) {
-        let mut entries = self.entries.write().await;
-        self.evict_expired(&mut entries);
-        drop(entries);
+        {
+            let mut entries = self.entries.write().await;
+            self.evict_expired(&mut entries);
+        }
         self.persist().await;
     }
 

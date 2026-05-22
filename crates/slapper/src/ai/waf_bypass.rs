@@ -24,6 +24,7 @@ pub struct SmartWafBypass {
     knowledge_base: Vec<WafBypassEntry>,
     persist_path: PathBuf,
     max_bypasses: usize,
+    max_knowledge_base_size: usize,
 }
 
 impl SmartWafBypass {
@@ -51,6 +52,7 @@ impl SmartWafBypass {
             knowledge_base,
             persist_path,
             max_bypasses,
+            max_knowledge_base_size: 1000,
         }
     }
 
@@ -62,6 +64,17 @@ impl SmartWafBypass {
             knowledge_base,
             persist_path: PathBuf::from("waf_bypasses.json"),
             max_bypasses: 10,
+            max_knowledge_base_size: 1000,
+        }
+    }
+
+    fn evict_knowledge_base_if_needed(&mut self) {
+        if self.knowledge_base.len() >= self.max_knowledge_base_size {
+            self.knowledge_base.retain(|e| e.success);
+            if self.knowledge_base.len() >= self.max_knowledge_base_size {
+                self.knowledge_base.sort_by_key(|e| e.failed_attempts);
+                self.knowledge_base.truncate(self.max_knowledge_base_size / 2);
+            }
         }
     }
 
@@ -78,21 +91,19 @@ impl SmartWafBypass {
         }
 
         for entry in &self.knowledge_base {
-            if entry.waf_name == waf && entry.original_payload == blocked_payload && entry.success {
-                return Ok(Some(entry.bypass_payload.clone()));
-            }
-            if entry.waf_name == waf && entry.original_payload == blocked_payload && !entry.success
-            {
-                if entry.failed_attempts < 3 {
-                    break;
+            if entry.waf_name == waf && entry.original_payload == blocked_payload {
+                if entry.success {
+                    return Ok(Some(entry.bypass_payload.clone()));
                 }
-                tracing::debug!(
-                    "Skipping WAF bypass query for {}/{} - previously failed {} attempts",
-                    waf,
-                    blocked_payload,
-                    entry.failed_attempts
-                );
-                return Ok(None);
+                if entry.failed_attempts >= 3 {
+                    tracing::debug!(
+                        "Skipping WAF bypass query for {}/{} - previously failed {} attempts",
+                        waf,
+                        blocked_payload,
+                        entry.failed_attempts
+                    );
+                    return Ok(None);
+                }
             }
         }
 
@@ -154,6 +165,7 @@ impl SmartWafBypass {
             entry.success = true;
             entry.failed_attempts = 0;
         } else {
+            self.evict_knowledge_base_if_needed();
             self.knowledge_base.push(WafBypassEntry {
                 waf_name: waf.to_string(),
                 original_payload: original.to_string(),
@@ -175,6 +187,7 @@ impl SmartWafBypass {
             entry.failed_attempts += 1;
             entry.success = false;
         } else {
+            self.evict_knowledge_base_if_needed();
             self.knowledge_base.push(WafBypassEntry {
                 waf_name: waf.to_string(),
                 original_payload: original.to_string(),
@@ -205,6 +218,7 @@ impl Clone for SmartWafBypass {
             knowledge_base: self.knowledge_base.clone(),
             persist_path: self.persist_path.clone(),
             max_bypasses: self.max_bypasses,
+            max_knowledge_base_size: self.max_knowledge_base_size,
         }
     }
 }

@@ -1,4 +1,5 @@
 use crate::ai::cache::AiCache;
+use crate::ai::cache::CacheKeyBuilder;
 use crate::ai::client::AiClient;
 use crate::ai::errors::{AiError, Result};
 use std::sync::Arc;
@@ -22,7 +23,7 @@ impl AiPayloadGenerator {
             return Err(AiError::invalid_config("vuln_type cannot be empty"));
         }
 
-        let cache_key = format!("{}:{}", vuln_type, context);
+        let cache_key = CacheKeyBuilder::for_payload_suggestion(vuln_type, context);
 
         if let Some(cached) = self.cache.get(&cache_key).await {
             if let Ok(parsed) = serde_json::from_str::<Vec<String>>(&cached) {

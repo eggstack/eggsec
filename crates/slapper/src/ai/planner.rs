@@ -109,8 +109,9 @@ impl AiPlanner {
         {
             let cache = self.learning_cache.read();
             if let Some(cached) = cache.get(&cache_key) {
-                if cached.use_count > 3 && cached.success_rate > 0.8 {
-                    tracing::debug!("Using cached plan for {}", cache_key);
+                if cached.use_count >= 2 && cached.success_rate >= 0.5 {
+                    tracing::debug!("Using cached plan for {} (success_rate={}, use_count={})",
+                        cache_key, cached.success_rate, cached.use_count);
                     return Ok(cached.plan.clone());
                 }
             }
