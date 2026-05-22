@@ -238,6 +238,32 @@ match serde_json::to_string_pretty(&export_data) {
 }
 ```
 
+### Bounds Check for Array Access
+
+When accessing arrays/vectors via index, always validate bounds to prevent panic:
+
+```rust
+// WRONG - panics if index >= len
+self.option_checkboxes[self.focused_checkbox_index].toggle();
+
+// CORRECT - bounds check prevents panic
+if self.focused_checkbox_index < self.option_checkboxes.len() {
+    self.option_checkboxes[self.focused_checkbox_index].toggle();
+}
+```
+
+Similarly for InputGroup field access:
+
+```rust
+// WRONG - assumes at least 2 fields
+self.inputs.fields[1].value = "report.json".to_string();
+
+// CORRECT - check length first
+if self.inputs.fields.len() > 1 {
+    self.inputs.fields[1].value = "report.json".to_string();
+}
+```
+
 ## Resources
 - `crates/slapper/src/tui/AGENTS.override.md` - Detailed TUI patterns
 - `ARCHITECTURE.md` - Overall design

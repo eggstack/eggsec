@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 use serde::Deserialize;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Clone, Debug, Deserialize)]
 struct PortfolioSnapshot {
@@ -14,7 +14,7 @@ struct PortfolioSnapshot {
     total_scans: usize,
     #[allow(dead_code)]
     scans_today: usize,
-    findings_by_severity: HashMap<String, usize>,
+    findings_by_severity: FxHashMap<String, usize>,
     findings_trend: Vec<(String, usize)>,
     critical_findings: usize,
     health_score: f64,
@@ -186,7 +186,7 @@ impl DashboardTab {
     }
 
     pub fn update_from_history(&mut self, history: &[crate::tui::tabs::history::HistoryEntry]) {
-        use std::collections::HashSet;
+        use rustc_hash::FxHashSet;
 
         // Reset counters before recalculating
         self.today_scans = 0;
@@ -219,7 +219,7 @@ impl DashboardTab {
             .map(|e| Self::extract_activity_score(&e.summary))
             .collect();
 
-        let mut targets: HashSet<String> = HashSet::new();
+        let mut targets: FxHashSet<String> = FxHashSet::default();
         let mut critical_count = 0;
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 

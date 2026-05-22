@@ -496,3 +496,54 @@ match serde_json::to_string_pretty(&export_data) {
     }
 }
 ```
+
+### FxHashMap/FxHashSet Usage
+
+For performance, use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of `std::collections::HashMap/HashSet`:
+
+```rust
+use rustc_hash::{FxHashMap, FxHashSet};
+
+// In struct definitions
+pub tabs: FxHashMap<Tab, Box<dyn TabInput>>,
+pub bookmarks: FxHashSet<String>,
+
+// In initialization
+let mut map = FxHashMap::default();
+let mut set = FxHashSet::default();
+```
+
+Files affected by HashMap→FxHashMap migration (2026-05-22):
+- `app/mod.rs` - App.tabs, App.bookmarks
+- `app/bookmarks.rs` - toggle_bookmark, is_bookmarked, get_bookmarked_tab_ids
+- `app/help_config.rs` - StaticHelpData.sections
+- `help.rs` - HelpManager uses FxHashMap
+- `theme.rs` - ThemeManager.themes
+- `tabs/dashboard.rs` - PortfolioSnapshot.findings_by_severity
+
+### Bounds Check for Array Access
+
+When accessing arrays/vectors via index in handle_enter or similar, always validate bounds:
+
+```rust
+// WRONG - could panic if index >= len
+self.option_checkboxes[self.focused_checkbox_index].toggle();
+
+// CORRECT - bounds check prevents panic
+if self.focused_checkbox_index < self.option_checkboxes.len() {
+    self.option_checkboxes[self.focused_checkbox_index].toggle();
+}
+```
+
+Similarly for InputGroup field access:
+
+```rust
+// WRONG - assumes at least 2 fields
+self.inputs.fields[1].value = "report.json".to_string();
+
+// CORRECT - check length first
+if self.inputs.fields.len() > 1 {
+    self.inputs.fields[1].value = "report.json".to_string();
+    self.inputs.fields[1].cursor_pos = 11;
+}
+```

@@ -202,6 +202,14 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `tui/workers/api.rs:89` | Silent error suppression on HTTP response read | Changed to explicit match with `tracing::debug` |
 | `tui/app/state_update.rs:58-74` | Unhandled `TaskResult` variants silently dropped | Added debug logging for unhandled variants |
 | `tui/tabs/history.rs:55` | `unwrap_or_default()` silenced JSON serialization errors | Changed to explicit match with `tracing::debug` |
+| `tui/tabs/recon.rs:588` | Direct array access without bounds check could panic | Added bounds check before `option_checkboxes[index].toggle()` |
+| `tui/tabs/scan.rs:268-272` | Hardcoded index access assumed at least 2 fields | Added length check before accessing `fields[1]` |
+| `tui/app/mod.rs:50,112` | `HashMap`/`HashSet` used instead of `FxHashMap`/`FxHashSet` | Changed to `FxHashMap`/`FxHashSet` for performance |
+| `tui/app/bookmarks.rs:3,12,16` | Bookmark functions used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for consistency |
+| `tui/app/help_config.rs:8,14` | StaticHelpData used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `tui/help.rs:207` | `HelpManager.sections` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `tui/theme.rs:179,191` | `ThemeManager.themes` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `tui/tabs/dashboard.rs:17,189,222` | `PortfolioSnapshot.findings_by_severity` and local `HashSet` | Changed to `FxHashMap`/`FxHashSet` for performance |
 | `waf/detector/detect.rs:118` | IP match scoring used `COOKIE_MATCH_SCORE` instead of `IP_MATCH_SCORE` | Added `IP_MATCH_SCORE` constant (20) and fixed scoring |
 | `waf/mod.rs:4` | Docstring said "26 WAF products" but 34 are supported | Updated to "34 WAF products" |
 | `waf/detector/*.rs` | `unwrap_or_default()` on `response.text().await` silently suppressed errors | Changed to explicit match with `tracing::debug` |
@@ -254,3 +262,4 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/networking.md` | Networking & packets module |
 | `architecture/output.md` | Output & reporting module |
 | `architecture/plugins_nse.md` | Plugin system (Python/Ruby) and NSE integration |
+| `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |

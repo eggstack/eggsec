@@ -37,6 +37,8 @@ use crate::tui::workers;
 use crate::types::OutputFormat;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std::path::PathBuf;
 use task_management::TabTaskConfigSource;
 
@@ -47,7 +49,7 @@ pub struct App {
     pub session_manager: crate::tui::session::SessionManager,
     pub last_auto_save: std::time::Instant,
     pub theme_manager: crate::tui::theme::ThemeManager,
-    pub tabs: std::collections::HashMap<Tab, Box<dyn TabInput>>,
+    pub tabs: FxHashMap<Tab, Box<dyn TabInput>>,
     pub recon: tabs::ReconTab,
     pub load: tabs::LoadTab,
     pub scan_ports: tabs::ScanPortsTab,
@@ -109,7 +111,7 @@ pub struct App {
     pub needs_redraw: bool,
     pub tab_scroll_offset: u16,
     pub last_tab_area_width: u16,
-    pub bookmarks: std::collections::HashSet<String>,
+    pub bookmarks: FxHashSet<String>,
     pub paused: bool,
     pub spinner_tick: u64,
     pub notification: Option<Notification>,
@@ -137,9 +139,9 @@ impl App {
             None
         };
 
-        let restored_bookmarks: std::collections::HashSet<String> =
+        let restored_bookmarks: FxHashSet<String> =
             if let Some(ref state) = restored_state {
-                let mut bookmarks = std::collections::HashSet::new();
+                let mut bookmarks = FxHashSet::default();
                 for bookmark_id in &state.bookmarks {
                     if let Some(tab) = Tab::from_stable_id(bookmark_id) {
                         bookmarks.insert(tab.stable_id().to_string());
@@ -154,7 +156,7 @@ impl App {
                 }
                 bookmarks
             } else {
-                std::collections::HashSet::new()
+                FxHashSet::default()
             };
 
         let restored_current_tab = restored_state
@@ -178,7 +180,7 @@ impl App {
             session_manager,
             last_auto_save: std::time::Instant::now(),
             theme_manager: ThemeManager::new(),
-            tabs: std::collections::HashMap::new(),
+            tabs: FxHashMap::default(),
             recon: tabs::ReconTab::new(),
             load: tabs::LoadTab::new(),
             scan_ports: tabs::ScanPortsTab::new(),

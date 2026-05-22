@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use crate::tui::utils::fuzzy::fuzzy_score;
@@ -204,7 +204,7 @@ pub struct CommandPaletteResult {
 
 #[derive(Debug, Clone)]
 pub struct HelpContent {
-    pub sections: HashMap<Tab, HelpSection>,
+    pub sections: FxHashMap<Tab, HelpSection>,
     pub global_commands: Vec<HelpCommand>,
     pub command_palette_entries: Arc<Vec<CommandPaletteResult>>,
 }

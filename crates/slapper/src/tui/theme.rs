@@ -1,6 +1,6 @@
 use ratatui::style::{Color, Modifier, Style};
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 thread_local! {
     pub static THEME_MANAGER: RefCell<ThemeManager> = RefCell::new(ThemeManager::new());
@@ -176,7 +176,7 @@ impl Theme {
 }
 
 pub struct ThemeManager {
-    themes: HashMap<String, Theme>,
+    themes: FxHashMap<String, Theme>,
     current: Theme,
 }
 
@@ -188,7 +188,7 @@ impl Default for ThemeManager {
 
 impl ThemeManager {
     pub fn new() -> Self {
-        let mut themes = HashMap::new();
+        let mut themes = FxHashMap::default();
         themes.insert("dark".to_string(), dark_theme());
         themes.insert("light".to_string(), light_theme());
 

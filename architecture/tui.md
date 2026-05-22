@@ -252,3 +252,52 @@ if self.handle_feature_result(result).is_none() {
     tracing::debug!("Unhandled TaskResult variant");
 }
 ```
+
+### FxHashMap/FxHashSet Usage
+
+For performance consistency, use `rustc_hash::FxHashMap` and `FxHashSet` instead of standard collections:
+
+```rust
+// WRONG
+pub tabs: std::collections::HashMap<Tab, Box<dyn TabInput>>,
+pub bookmarks: std::collections::HashSet<String>,
+
+// CORRECT
+use rustc_hash::{FxHashMap, FxHashSet};
+pub tabs: FxHashMap<Tab, Box<dyn TabInput>>,
+pub bookmarks: FxHashSet<String>,
+```
+
+Files using FxHashMap/FxHashSet in TUI module:
+- `app/mod.rs` - App.tabs, App.bookmarks
+- `app/bookmarks.rs` - Bookmark functions
+- `app/help_config.rs` - StaticHelpData.sections
+- `help.rs` - HelpManager.sections
+- `theme.rs` - ThemeManager.themes
+- `tabs/dashboard.rs` - PortfolioSnapshot.findings_by_severity
+
+### Bounds Check for Array Access
+
+When accessing arrays/vectors via index, always validate bounds:
+
+```rust
+// WRONG - could panic if index >= len
+self.option_checkboxes[self.focused_checkbox_index].toggle();
+
+// CORRECT - bounds check prevents panic
+if self.focused_checkbox_index < self.option_checkboxes.len() {
+    self.option_checkboxes[self.focused_checkbox_index].toggle();
+}
+```
+
+Similarly for InputGroup field access:
+
+```rust
+// WRONG - assumes at least 2 fields
+self.inputs.fields[1].value = "report.json".to_string();
+
+// CORRECT - check length first
+if self.inputs.fields.len() > 1 {
+    self.inputs.fields[1].value = "report.json".to_string();
+}
+```

@@ -88,6 +88,16 @@ for (i, cb) in self.technique_checkboxes.iter().enumerate() {
 2. **Use saturating_sub for left edge** - Prevents underflow
 3. **Reset index on focus change** - When leaving Techniques area, reset to 0
 4. **Edge checks use index** - `is_at_left_edge` returns `index == 0`
+5. **Always validate bounds in handle_enter** - Direct array access can panic:
+   ```rust
+   // WRONG - could panic
+   self.option_checkboxes[self.focused_checkbox_index].toggle();
+   
+   // CORRECT - bounds check prevents panic
+   if self.focused_checkbox_index < self.option_checkboxes.len() {
+       self.option_checkboxes[self.focused_checkbox_index].toggle();
+   }
+   ```
 
 ## Anti-Pattern
 

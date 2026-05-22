@@ -585,7 +585,9 @@ impl TabInput for ReconTab {
         }
 
         if self.focus_area == ReconFocusArea::Options {
-            self.option_checkboxes[self.focused_checkbox_index].toggle();
+            if self.focused_checkbox_index < self.option_checkboxes.len() {
+                self.option_checkboxes[self.focused_checkbox_index].toggle();
+            }
             return;
         }
 

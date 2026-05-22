@@ -1,17 +1,17 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use crate::tui::help::{CommandPaletteResult, HelpCommand, HelpSection};
 use crate::tui::tabs::Tab;
 
 pub struct StaticHelpData {
-    pub sections: HashMap<Tab, HelpSection>,
+    pub sections: FxHashMap<Tab, HelpSection>,
     pub global_commands: Vec<HelpCommand>,
     pub command_palette_entries: Arc<Vec<CommandPaletteResult>>,
 }
 
 pub fn get_static_help_data() -> StaticHelpData {
-    let mut sections = HashMap::new();
+    let mut sections = FxHashMap::default();
 
     sections.insert(
         Tab::Recon,

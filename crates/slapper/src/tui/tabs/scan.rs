@@ -268,8 +268,10 @@ impl TabState for ScanTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        self.inputs.fields[1].value = "report.json".to_string();
-        self.inputs.fields[1].cursor_pos = 11;
+        if self.inputs.fields.len() > 1 {
+            self.inputs.fields[1].value = "report.json".to_string();
+            self.inputs.fields[1].cursor_pos = 11;
+        }
         self.profile_selector.select(0);
         self.output_selector.select(0);
     }
