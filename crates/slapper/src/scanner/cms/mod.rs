@@ -9,6 +9,7 @@ pub mod wordpress;
 
 use crate::error::Result;
 use crate::types::Severity;
+use crate::utils::{create_http_client, create_insecure_http_client};
 use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -77,7 +78,19 @@ pub struct CmsScanner {
 
 impl CmsScanner {
     pub fn new() -> Result<Self> {
-        let client = create_insecure_http_client(30)?;
+        Self::new_with_tls_verification(true)
+    }
+
+    pub fn new_insecure() -> Result<Self> {
+        Self::new_with_tls_verification(false)
+    }
+
+    pub fn new_with_tls_verification(verify_tls: bool) -> Result<Self> {
+        let client = if verify_tls {
+            create_http_client(30)?
+        } else {
+            create_insecure_http_client(30)?
+        };
 
         Ok(Self {
             http_client: client,

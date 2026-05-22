@@ -78,9 +78,15 @@ impl TemplateLoader {
 
         match matcher {
             Matcher::Http(http) => {
-                if http.search.is_empty() && http.interactsh.is_none() {
+                let has_status = !http.status_codes.is_empty();
+                let has_header_match = !http.headers.is_empty();
+                let has_search = !http.search.is_empty();
+                let has_interactsh = http.interactsh.as_ref().map(|i| i.enabled).unwrap_or(false);
+
+                if !(has_status || has_header_match || has_search || has_interactsh) {
                     return Err(SlapperError::Config(
-                        "HTTP matcher must have at least one search pattern or interactsh config"
+                        "HTTP matcher must define at least one matching condition: \
+                         status_codes, headers, search, or enabled interactsh"
                             .to_string(),
                     ));
                 }

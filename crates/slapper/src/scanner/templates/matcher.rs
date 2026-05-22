@@ -101,43 +101,62 @@ impl TemplateMatcher {
         for (header, value) in &matcher.headers {
             let header_key = header.to_ascii_lowercase();
             let resp_header = response.headers.get(&header_key).map(String::as_str);
-
-            if resp_header
+            let matched = resp_header
                 .map(|v| v.contains(value.as_str()))
-                .unwrap_or(false)
-            {
-                if !value.contains("{{interactsh-url}}") {
-                    return Ok(true);
-                }
+                .unwrap_or(false);
+            if !matched {
+                return Ok(false);
             }
         }
 
         let status = response.status;
         let body = &response.body;
 
-        if matcher.status_codes.contains(&status) {
-            return Ok(true);
+        if !matcher.status_codes.is_empty() && !matcher.status_codes.contains(&status) {
+            return Ok(false);
+        }
+
+        let mut has_positive_condition = false;
+
+        if !matcher.status_codes.is_empty() {
+            has_positive_condition = true;
         }
 
         if !matcher.search.is_empty() {
+            has_positive_condition = true;
+            let mut search_matched = false;
             for search in &matcher.search {
                 if self.search_pattern(body, search) {
-                    return Ok(true);
+                    search_matched = true;
+                    break;
                 }
+            }
+            if !search_matched {
+                return Ok(false);
             }
         }
 
         if let Some(ref interactsh) = matcher.interactsh {
             if interactsh.enabled && !self.interactsh_urls.is_empty() {
+                has_positive_condition = true;
+                let mut matched = false;
                 for url in &self.interactsh_urls {
                     if body.contains(url) {
-                        return Ok(true);
+                        matched = true;
+                        break;
                     }
+                }
+                if !matched {
+                    return Ok(false);
                 }
             }
         }
 
-        Ok(false)
+        if !matcher.headers.is_empty() {
+            has_positive_condition = true;
+        }
+
+        Ok(has_positive_condition)
     }
 
     pub(crate) fn match_dns(
@@ -315,7 +334,7 @@ mod tests {
                 headers: HashMap::new(),
                 body: None,
                 search: vec![SearchPattern {
-                    pattern: "not-present".to_string(),
+                    pattern: "callback.example".to_string(),
                     mode: MatchMode::Word,
                     encoding: String::new(),
                 }],
@@ -324,6 +343,80 @@ mod tests {
                     enabled: true,
                     authorization: None,
                 }),
+            })],
+            requests: vec![],
+        };
+
+        let result = matcher
+            .match_template(&template, Some(&response), None)
+            .await
+            .unwrap();
+        assert!(result.matched);
+    }
+
+    #[tokio::test]
+    async fn test_match_http_requires_all_configured_conditions() {
+        let matcher = TemplateMatcher::new();
+        let response = make_test_response("body has vulnerable marker").await;
+
+        let template = VulnerabilityTemplate {
+            id: "strict-http-conditions".to_string(),
+            info: TemplateInfo {
+                name: "Strict HTTP Conditions".to_string(),
+                author: "tester".to_string(),
+                severity: "medium".to_string(),
+                description: String::new(),
+                tags: vec![],
+                references: vec![],
+                remediation: String::new(),
+            },
+            matchers: vec![Matcher::Http(HttpMatcher {
+                path: Some("/".to_string()),
+                method: Some("GET".to_string()),
+                headers: HashMap::new(),
+                body: None,
+                search: vec![SearchPattern {
+                    pattern: "vulnerable".to_string(),
+                    mode: MatchMode::Word,
+                    encoding: String::new(),
+                }],
+                status_codes: vec![404],
+                interactsh: None,
+            })],
+            requests: vec![],
+        };
+
+        let result = matcher
+            .match_template(&template, Some(&response), None)
+            .await
+            .unwrap();
+        assert!(!result.matched);
+    }
+
+    #[tokio::test]
+    async fn test_match_http_status_only_is_valid_match() {
+        let matcher = TemplateMatcher::new();
+        let response = make_test_response("ok body").await;
+
+        let template = VulnerabilityTemplate {
+            id: "status-only".to_string(),
+            info: TemplateInfo {
+                name: "Status Only".to_string(),
+                author: "tester".to_string(),
+                severity: "low".to_string(),
+                description: String::new(),
+                tags: vec![],
+                references: vec![],
+                remediation: String::new(),
+            },
+            matchers: vec![Matcher::Http(HttpMatcher {
+                path: Some("/".to_string()),
+                method: Some("GET".to_string()),
+                headers: HashMap::new(),
+                body: None,
+                search: vec![],
+                status_codes: vec![200],
+                interactsh: None,
             })],
             requests: vec![],
         };

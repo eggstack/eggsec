@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::utils::parsing::parse_ports;
+use crate::utils::parsing::{parse_ports, resolve_host};
 use crate::utils::strip_controls;
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -247,6 +247,7 @@ pub async fn fingerprint_services(
     progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
     max_results: Option<usize>,
 ) -> Result<FingerprintResults> {
+    let resolved_ip = resolve_host(host)?;
     let results: Arc<DashMap<u16, ServiceFingerprint>> = Arc::new(DashMap::new());
     let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
     let results_count = Arc::new(AtomicU64::new(0));
@@ -272,7 +273,7 @@ pub async fn fingerprint_services(
 
     for port in ports {
         let permit = semaphore.clone().acquire_owned().await?;
-        let host = host.to_string();
+        let resolved_ip = resolved_ip;
         let results = results.clone();
         let progress = progress.clone();
         let timeout_dur = timeout_duration;
@@ -281,7 +282,7 @@ pub async fn fingerprint_services(
         let results_count = results_count.clone();
 
         let handle = tokio::spawn(async move {
-            if let Some(fp) = fingerprint_port(&host, port, timeout_dur).await {
+            if let Some(fp) = fingerprint_port(resolved_ip, port, timeout_dur).await {
                 let should_insert = match max_results {
                     Some(limit) => {
                         let old = results_count.fetch_add(1, Ordering::Relaxed);
@@ -337,12 +338,7 @@ pub async fn fingerprint_services(
     })
 }
 
-async fn fingerprint_port(
-    host: &str,
-    port: u16,
-    timeout_duration: Duration,
-) -> Option<ServiceFingerprint> {
-    let ip: IpAddr = host.parse().ok()?;
+async fn fingerprint_port(ip: IpAddr, port: u16, timeout_duration: Duration) -> Option<ServiceFingerprint> {
     let addr = SocketAddr::new(ip, port);
 
     #[allow(unreachable_patterns)]

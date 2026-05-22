@@ -8,6 +8,7 @@ use super::matcher::{DnsResponse, HttpResponseData, TemplateMatcher};
 use super::models::{TemplateRequest, VulnerabilityTemplate};
 use crate::error::{Result, SlapperError};
 use crate::types::Severity;
+use crate::utils::{create_http_client, create_insecure_http_client};
 use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,11 +20,21 @@ pub struct TemplateExecutor {
     timeout: Duration,
 }
 
-use crate::utils::create_insecure_http_client;
-
 impl TemplateExecutor {
     pub fn new(loader: TemplateLoader) -> Result<Self> {
-        let client = create_insecure_http_client(30)?;
+        Self::new_with_tls_verification(loader, true)
+    }
+
+    pub fn new_insecure(loader: TemplateLoader) -> Result<Self> {
+        Self::new_with_tls_verification(loader, false)
+    }
+
+    pub fn new_with_tls_verification(loader: TemplateLoader, verify_tls: bool) -> Result<Self> {
+        let client = if verify_tls {
+            create_http_client(30)?
+        } else {
+            create_insecure_http_client(30)?
+        };
 
         Ok(Self {
             client,
