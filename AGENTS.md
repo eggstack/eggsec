@@ -136,3 +136,4 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/waf.md` | WAF detection and bypass |
 | `architecture/recon.md` | Reconnaissance module |
 | `architecture/pipeline.md` | Security assessment pipeline |
+| `architecture/distributed.md` | Distributed coordinator/worker architecture |

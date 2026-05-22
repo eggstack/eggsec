@@ -4,6 +4,12 @@ Distributed computing module workflows and patterns for cluster-based testing.
 
 ## Key Types and Patterns
 
+### Worker Configuration
+`Worker::new(config, psk)` requires both `WorkerConfig` and a PSK string:
+```rust
+let worker = Worker::new(config, "your-secret-psk".to_string());
+```
+
 ### TLS
 `distributed/io.rs` has `StreamWrapper` enum:
 - `Plain` - Unencrypted stream
@@ -62,4 +68,4 @@ Follow existing test patterns in `distributed/` modules, testing TLS stream hand
 ## Resources
 - `crates/slapper/src/distributed/AGENTS.override.md` - Detailed distributed patterns
 - `AGENTS.md` - General project guidelines
-- `ARCHITECTURE.md` - Overall design
+- `architecture/distributed.md` - Module architecture docs

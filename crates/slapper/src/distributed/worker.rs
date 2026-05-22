@@ -57,18 +57,19 @@ pub struct WorkerStats {
     pub last_heartbeat_secs: i64,
 }
 
-pub struct Worker {
-    config: WorkerConfig,
-    stats: WorkerStats,
-    sender: Option<mpsc::Sender<Task>>,
-    receiver: Option<mpsc::Receiver<Task>>,
-    client: reqwest::Client,
-    heartbeat_handle: Option<JoinHandle<()>>,
-    task_processor_handle: Option<JoinHandle<()>>,
-}
+    pub struct Worker {
+        config: WorkerConfig,
+        stats: WorkerStats,
+        sender: Option<mpsc::Sender<Task>>,
+        receiver: Option<mpsc::Receiver<Task>>,
+        client: reqwest::Client,
+        heartbeat_handle: Option<JoinHandle<()>>,
+        task_processor_handle: Option<JoinHandle<()>>,
+        psk: String,
+    }
 
 impl Worker {
-    pub fn new(config: WorkerConfig) -> Self {
+    pub fn new(config: WorkerConfig, psk: String) -> Self {
         Self {
             config: config.clone(),
             stats: WorkerStats {
@@ -83,6 +84,7 @@ impl Worker {
             client: crate::utils::get_shared_http_client(),
             heartbeat_handle: None,
             task_processor_handle: None,
+            psk,
         }
     }
 
@@ -104,8 +106,7 @@ impl Worker {
 
         let (host, port) = parse_coordinator_url(&self.config.coordinator_url)?;
 
-        let psk = "worker-psk"; // TODO: make this configurable
-        let client = RemoteClient::new_plaintext(psk.to_string());
+        let client = RemoteClient::new_plaintext(self.psk.clone());
 
         client
             .register_worker(

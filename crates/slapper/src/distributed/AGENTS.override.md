@@ -2,6 +2,13 @@
 
 Specialized guidance for the distributed computing module.
 
+## Worker Configuration
+
+`Worker::new(config, psk)` requires both `WorkerConfig` and a PSK string:
+```rust
+let worker = Worker::new(config, "your-secret-psk".to_string());
+```
+
 ## TLS
 
 `distributed/io.rs` has `StreamWrapper` enum:
