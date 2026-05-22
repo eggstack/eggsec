@@ -43,7 +43,6 @@ fn get_services() -> &'static HashMap<&'static str, (u16, &'static str)> {
         m.insert("mysql", (3306, "tcp"));
         m.insert("postgres", (5432, "tcp"));
         m.insert("redis", (6379, "tcp"));
-        m.insert("mongodb", (27017, "tcp"));
         m.insert("dns", (53, "udp"));
         m.insert("ntp", (123, "udp"));
         m.insert("snmp", (161, "udp"));
@@ -60,13 +59,11 @@ fn get_services() -> &'static HashMap<&'static str, (u16, &'static str)> {
         m.insert("mssql", (1433, "tcp"));
         m.insert("oracle", (1521, "tcp"));
         m.insert("ftp-data", (20, "tcp"));
-        m.insert("ssh", (22, "tcp"));
         m.insert("smtps", (465, "tcp"));
         m.insert("pop3s", (995, "tcp"));
         m.insert("imaps", (993, "tcp"));
         m.insert("sip", (5060, "udp"));
         m.insert("sips", (5061, "tcp"));
-        m.insert("ntp", (123, "udp"));
         m.insert("dhcp", (67, "udp"));
         m.insert("tftp", (69, "udp"));
         m.insert("rpcbind", (111, "tcp"));
@@ -74,7 +71,6 @@ fn get_services() -> &'static HashMap<&'static str, (u16, &'static str)> {
         m.insert("rsync", (873, "tcp"));
         m.insert("mysqlx", (33060, "tcp"));
         m.insert("postgresql", (5432, "tcp"));
-        m.insert("mongodb", (27017, "tcp"));
         m.insert("couchdb", (5984, "tcp"));
         m.insert("grafana", (3000, "tcp"));
         m.insert("prometheus", (9090, "tcp"));

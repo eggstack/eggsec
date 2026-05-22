@@ -368,6 +368,9 @@ impl Traceroute {
                 Ok((None, None)) => {
                     hop.add_probe(None, None);
                 }
+                Err(e) => {
+                    tracing::debug!("Traceroute probe task failed: {}", e);
+                }
                 _ => {}
             }
         }
