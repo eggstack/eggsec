@@ -48,6 +48,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `stress/` | `crates/slapper/src/stress/AGENTS.override.md` |
 | `ai/` | `crates/slapper/src/ai/AGENTS.override.md` |
 | `distributed/` | `crates/slapper/src/distributed/AGENTS.override.md` |
+| `packet/` | `crates/slapper/src/packet/` (uses pnet, pnet_packet for raw sockets) |
 | `loadtest/` | `crates/slapper/src/loadtest/` (uses FxHashMap, hdrhistogram) |
 
 ### Feature Flags
@@ -118,6 +119,7 @@ Skills are located in:
 - `.opencode/skills/slapper-scanner/` - Scanner module workflows
 - `.opencode/skills/slapper-security/` - Security testing skill workflows
 - `.opencode/skills/slapper-stress/` - Stress module workflows
+- `.opencode/skills/slapper-packet/` - Packet capture/crafting/parsing workflows
 - `.opencode/skills/slapper-loadtest/` - Loadtest module workflows
 - `.opencode/skills/slapper-tool/` - Tool module workflows
 - `.opencode/skills/slapper-tui/` - TUI module workflows
@@ -142,3 +144,4 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/pipeline.md` | Security assessment pipeline |
 | `architecture/distributed.md` | Distributed coordinator/worker architecture |
 | `architecture/loadtest.md` | HTTP load testing and benchmarking |
+| `architecture/networking.md` | Networking & packets module |
