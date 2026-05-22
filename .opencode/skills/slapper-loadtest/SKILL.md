@@ -82,6 +82,22 @@ slapper load https://example.com -n 1000 -c 50 -o results.json
 - Histogram uses `hdrhistogram::Histogram<u64>` with 3 significant figures
 - Suppress histogram errors with `let _ = self.histogram.record(...)` not `.ok()`
 - Auth headers handled via `apply_auth_headers()` helper
+- Non-success response bodies are consumed to avoid memory leaks in the connection pool
+- Rate limiting uses a global lock with proper interval calculation to avoid drift
+
+## Implementation Notes
+
+### Response Body Handling
+When a non-success response is received (4xx, 5xx), the response body is consumed before recording the metrics. This prevents the underlying HTTP client connection from being closed prematurely and returned to the pool in an inconsistent state.
+
+### Rate Limiting Algorithm
+Rate limiting uses a lock-protected token bucket approach:
+1. Worker acquires lock on `next_allowed_at`
+2. If `now < next`, sleep until `next`
+3. Update `next = now_after_sleep + interval` (not `next + interval`) to maintain correct rate
+
+### Dead Code
+`Metrics::record_success()` exists for external callers but is not used internally by `LoadTestRunner`. It does not check HTTP status codes - it blindly records as successful. Prefer `record_http_response()` which correctly distinguishes 2xx-3xx as success.
 
 ## Resources
 - `crates/slapper/src/loadtest/` - Module source

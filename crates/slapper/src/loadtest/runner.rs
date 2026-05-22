@@ -303,7 +303,12 @@ impl LoadTestRunner {
                         if now < *next {
                             sleep(*next - now).await;
                         }
-                        *next = TokioInstant::now() + *min_interval;
+                        let now_after_sleep = TokioInstant::now();
+                        if now_after_sleep >= *next {
+                            *next = now_after_sleep + *min_interval;
+                        } else {
+                            *next = *next + *min_interval;
+                        }
                     }
 
                     let request_start = Instant::now();
@@ -326,7 +331,13 @@ impl LoadTestRunner {
 
                     match result {
                         Ok(response) => {
-                            metrics.record_http_response(latency, response.status().as_u16());
+                            let status = response.status();
+                            if !status.is_success() {
+                                if let Ok(bytes) = response.bytes().await {
+                                    let _ = bytes;
+                                }
+                            }
+                            metrics.record_http_response(latency, status.as_u16());
                         }
                         Err(e) => {
                             metrics.record_failure(e.to_string());

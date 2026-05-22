@@ -81,6 +81,17 @@ Keywords: load, stress, performance, benchmark, concurrency, rate limit, dos, fl
 4. Test with realistic payload sizes
 5. Check for graceful degradation under load
 
+## Implementation Notes
+
+### Response Body Handling
+When running load tests, non-success HTTP responses (4xx/5xx) should have their response bodies consumed before recording metrics. This prevents the HTTP client's connection pool from being left in an inconsistent state.
+
+### Rate Limiting
+Rate limiting in `LoadTestRunner` uses a global lock with proper interval calculation to avoid timing drift. The algorithm is:
+1. Worker acquires lock on `next_allowed_at` atomic
+2. If `now < next`, sleep until `next`
+3. Update `next = now_after_sleep + interval` (not `next + interval`)
+
 ## Configuration
 
 ```toml
