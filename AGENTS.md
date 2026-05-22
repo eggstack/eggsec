@@ -243,6 +243,15 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `output/attack_graph.rs:136-137` | `unwrap_or_default()` on JSON serialization silently failed | Changed `to_html()` to return `Result<String, serde_json::Error>` |
 | `output/template.rs:190` | `unwrap_or_default()` on JSON serialization silently failed | Changed to explicit `if let Ok()` with `map_err` |
 
+### Recent Bug Fixes (2026-05-27)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| `pipeline/mod.rs:77-238` | `run_cli()` and `run_cli_with_callback()` had duplicated output writing code | Extracted to `write_output()` helper function |
+| `pipeline/executor.rs:19-24` | `StageResult.duration_ms` was serialized to JSON (unnecessary, causes bloat) | Added `#[serde(skip)]` to `duration_ms` field |
+| `pipeline/executor.rs:19-36` | `StageResult` lacked constructor for cleaner object creation | Added `StageResult::new()` constructor |
+| `pipeline/executor.rs:157` | Progress bar created even for empty stage list | Changed condition to `self.tui_mode \|\| self.stages.is_empty()` |
+
 ## Skills Directory
 
 Skills are located in:

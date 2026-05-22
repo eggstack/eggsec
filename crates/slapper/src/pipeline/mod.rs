@@ -60,6 +60,40 @@ pub use executor::Pipeline;
 pub use report::PipelineReport;
 pub use stage::{parse_stages, Stage};
 
+async fn write_output(report: &PipelineReport, output_path: &str, format: Option<crate::cli::OutputFormat>) -> Result<()> {
+    match format {
+        Some(crate::cli::OutputFormat::Html)
+        | Some(crate::cli::OutputFormat::Pretty)
+        | Some(crate::cli::OutputFormat::Compact)
+        | Some(crate::cli::OutputFormat::Markdown)
+        | None => {
+            let html = report::generate_html(report)?;
+            tokio::fs::write(output_path, html).await?;
+        }
+        Some(crate::cli::OutputFormat::Json) => {
+            let json = serde_json::to_string_pretty(report)?;
+            tokio::fs::write(output_path, json).await?;
+        }
+        Some(crate::cli::OutputFormat::Csv) => {
+            let csv = report::generate_csv(report)?;
+            tokio::fs::write(output_path, csv).await?;
+        }
+        Some(crate::cli::OutputFormat::Sarif) => {
+            let sarif = crate::output::SarifBuilder::new()
+                .with_report(report)
+                .build();
+            tokio::fs::write(output_path, serde_json::to_string_pretty(&sarif)?).await?;
+        }
+        Some(crate::cli::OutputFormat::Junit) => {
+            let junit = crate::output::JUnitBuilder::new("slapper")
+                .with_report(report)
+                .build();
+            tokio::fs::write(output_path, junit.to_xml()?).await?;
+        }
+    }
+    Ok(())
+}
+
 /// Run security assessment pipeline from CLI
 ///
 /// # Arguments
@@ -115,37 +149,8 @@ where
         callback(endpoint.clone().into());
     }
 
-    if let Some(output_path) = args.output {
-        match args.format {
-            Some(crate::cli::OutputFormat::Html)
-            | Some(crate::cli::OutputFormat::Pretty)
-            | Some(crate::cli::OutputFormat::Compact)
-            | Some(crate::cli::OutputFormat::Markdown)
-            | None => {
-                let html = report::generate_html(&report)?;
-                tokio::fs::write(&output_path, html).await?;
-            }
-            Some(crate::cli::OutputFormat::Json) => {
-                let json = serde_json::to_string_pretty(&report)?;
-                tokio::fs::write(&output_path, json).await?;
-            }
-            Some(crate::cli::OutputFormat::Csv) => {
-                let csv = report::generate_csv(&report)?;
-                tokio::fs::write(&output_path, csv).await?;
-            }
-            Some(crate::cli::OutputFormat::Sarif) => {
-                let sarif = crate::output::SarifBuilder::new()
-                    .with_report(&report)
-                    .build();
-                tokio::fs::write(&output_path, serde_json::to_string_pretty(&sarif)?).await?;
-            }
-            Some(crate::cli::OutputFormat::Junit) => {
-                let junit = crate::output::JUnitBuilder::new("slapper")
-                    .with_report(&report)
-                    .build();
-                tokio::fs::write(&output_path, junit.to_xml()?).await?;
-            }
-        }
+    if let Some(ref output_path) = args.output {
+        write_output(&report, output_path, args.format).await?;
         if args.verbose {
             eprintln!("Results written to {}", output_path);
         }
@@ -188,37 +193,8 @@ pub async fn run_cli(args: ScanArgs, config: &SlapperConfig) -> Result<()> {
         println!("{}", report);
     }
 
-    if let Some(output_path) = args.output {
-        match args.format {
-            Some(crate::cli::OutputFormat::Html)
-            | Some(crate::cli::OutputFormat::Pretty)
-            | Some(crate::cli::OutputFormat::Compact)
-            | Some(crate::cli::OutputFormat::Markdown)
-            | None => {
-                let html = report::generate_html(&report)?;
-                tokio::fs::write(&output_path, html).await?;
-            }
-            Some(crate::cli::OutputFormat::Json) => {
-                let json = serde_json::to_string_pretty(&report)?;
-                tokio::fs::write(&output_path, json).await?;
-            }
-            Some(crate::cli::OutputFormat::Csv) => {
-                let csv = report::generate_csv(&report)?;
-                tokio::fs::write(&output_path, csv).await?;
-            }
-            Some(crate::cli::OutputFormat::Sarif) => {
-                let sarif = crate::output::SarifBuilder::new()
-                    .with_report(&report)
-                    .build();
-                tokio::fs::write(&output_path, serde_json::to_string_pretty(&sarif)?).await?;
-            }
-            Some(crate::cli::OutputFormat::Junit) => {
-                let junit = crate::output::JUnitBuilder::new("slapper")
-                    .with_report(&report)
-                    .build();
-                tokio::fs::write(&output_path, junit.to_xml()?).await?;
-            }
-        }
+    if let Some(ref output_path) = args.output {
+        write_output(&report, output_path, args.format).await?;
         if args.verbose {
             eprintln!("Results written to {}", output_path);
         }

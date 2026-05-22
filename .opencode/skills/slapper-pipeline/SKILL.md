@@ -109,6 +109,16 @@ execute_stage() → match Stage:
 3. **Session persistence** only when output path is session-like
 4. **No verify_tls in FuzzArgs** - use `common.insecure` flag instead
 5. **Hash Collections**: Always use `FxHashMap` from `rustc_hash` instead of `std::collections::HashMap`
+6. **Output writing**: Extracted to `write_output()` helper in `mod.rs:63-95` to avoid code duplication
+
+## Bug Fixes (2026-05-27)
+
+| Issue | Fix |
+|-------|-----|
+| Duplicate output writing code in `run_cli()` and `run_cli_with_callback()` | Extracted to `write_output()` helper |
+| `StageResult.duration_ms` serialized to JSON unnecessarily | Added `#[serde(skip)]` attribute |
+| `StageResult` lacked constructor | Added `StageResult::new()` builder |
+| Progress bar created for empty stage list | Changed condition to `self.tui_mode \|\| self.stages.is_empty()` |
 
 ## Override File
 

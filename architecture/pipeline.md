@@ -99,6 +99,15 @@ Session checkpoints are written only when output path is explicitly a session-li
 | `run_load_test()` ignored config, used default TLS settings | Changed to `LoadTestRunner::from_args_with_config()` |
 | `PipelineContext.services` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 
+## Recent Bug Fixes (2026-05-27)
+
+| Issue | Fix |
+|-------|-----|
+| `run_cli()` and `run_cli_with_callback()` had duplicated output writing code | Extracted to `write_output()` helper function in `mod.rs:63-95` |
+| `StageResult.duration_ms` was serialized to JSON (unnecessary, causes bloat) | Added `#[serde(skip)]` to `duration_ms` field in `executor.rs:21` |
+| `StageResult` lacked constructor for cleaner object creation | Added `StageResult::new()` constructor in `executor.rs:27-35` |
+| Progress bar created even for empty stage list | Changed condition to `self.tui_mode \|\| self.stages.is_empty()` in `executor.rs:157` |
+
 ## Key Files
 
 | File | Purpose |

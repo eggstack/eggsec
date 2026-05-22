@@ -18,9 +18,21 @@ use crate::scanner::spoof::SpoofConfig;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StageResult {
     pub stage: Stage,
+    #[serde(skip)]
     pub duration_ms: u64,
     pub success: bool,
     pub error: Option<String>,
+}
+
+impl StageResult {
+    pub fn new(stage: Stage, duration_ms: u64, success: bool, error: Option<String>) -> Self {
+        Self {
+            stage,
+            duration_ms,
+            success,
+            error,
+        }
+    }
 }
 
 pub struct Pipeline {
@@ -154,7 +166,7 @@ impl Pipeline {
         let start = Instant::now();
         let mut stage_results = Vec::new();
 
-        let progress = if self.tui_mode {
+        let progress = if self.tui_mode || self.stages.is_empty() {
             None
         } else {
             let pb = Arc::new(ProgressBar::new(self.stages.len() as u64));
