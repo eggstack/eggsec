@@ -1,7 +1,7 @@
 use crate::tool::traits::AttackSurface;
 use crate::tool::{ToolInfo, ToolRegistry};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use rustc_hash::FxFxHashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionPlan {
@@ -77,7 +77,7 @@ impl ChainPlanner {
     pub fn plan(&self, request: &PlanRequest) -> ExecutionPlan {
         let tools = self.registry.list();
         let mut stages = Vec::new();
-        let mut used_tools: HashSet<String> = HashSet::new();
+        let mut used_tools: FxHashSet<String> = FxHashSet::new();
         let mut estimated_duration: u64 = 0;
 
         match request.goal.as_str() {
@@ -201,7 +201,7 @@ impl ChainPlanner {
         &self,
         tools: &[ToolInfo],
         _target: &str,
-        used: &mut HashSet<String>,
+        used: &mut FxHashSet<String>,
     ) -> Option<ExecutionStage> {
         let mut stage_tools = Vec::new();
 
@@ -244,7 +244,7 @@ impl ChainPlanner {
         &self,
         tools: &[ToolInfo],
         _target: &str,
-        used: &mut HashSet<String>,
+        used: &mut FxHashSet<String>,
     ) -> Option<ExecutionStage> {
         let mut stage_tools = Vec::new();
 
@@ -306,7 +306,7 @@ impl ChainPlanner {
         &self,
         tools: &[ToolInfo],
         _target: &str,
-        used: &mut HashSet<String>,
+        used: &mut FxHashSet<String>,
     ) -> Option<ExecutionStage> {
         let mut stage_tools = Vec::new();
 
@@ -348,7 +348,7 @@ impl ChainPlanner {
         &self,
         tools: &[ToolInfo],
         _target: &str,
-        used: &mut HashSet<String>,
+        used: &mut FxHashSet<String>,
     ) -> Option<ExecutionStage> {
         let mut stage_tools = Vec::new();
 
@@ -383,7 +383,7 @@ impl ChainPlanner {
         &self,
         tools: &[ToolInfo],
         _target: &str,
-        used: &mut HashSet<String>,
+        used: &mut FxHashSet<String>,
     ) -> Option<ExecutionStage> {
         let mut stage_tools = Vec::new();
 
@@ -426,7 +426,7 @@ impl ChainPlanner {
         &self,
         tools: &[ToolInfo],
         _target: &str,
-        used: &mut HashSet<String>,
+        used: &mut FxHashSet<String>,
     ) -> ExecutionStage {
         let mut stage_tools = Vec::new();
 
@@ -489,7 +489,7 @@ impl ChainPlanner {
         let mut errors = Vec::new();
         let mut warnings = Vec::new();
 
-        let mut resolved_stages: HashSet<String> = HashSet::new();
+        let mut resolved_stages: FxHashSet<String> = FxHashSet::new();
 
         for stage in &plan.stages {
             for dep in &stage.depends_on {
