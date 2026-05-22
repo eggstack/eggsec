@@ -141,6 +141,103 @@ mod tests {
 2. Use `tc!` colors for severity
 3. Test that notification displays in status bar
 
+### Division by Zero Prevention
+
+When computing progress as a ratio, always guard against empty collections:
+
+```rust
+// WRONG - panics if stages is empty
+fn progress(&self) -> f64 {
+    let completed = self.stages.iter().filter(...).count();
+    (completed as f64 / self.stages.len() as f64) * 100.0
+}
+
+// CORRECT - returns 0.0 when empty
+fn progress(&self) -> f64 {
+    if self.stages.is_empty() {
+        return 0.0;
+    }
+    let completed = self.stages.iter().filter(...).count();
+    (completed as f64 / self.stages.len() as f64) * 100.0
+}
+```
+
+### ScrollableText Empty Lines Prevention
+
+When calculating scroll offset, guard against empty lines:
+
+```rust
+// WRONG - usize::MAX when lines is empty
+let scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1));
+
+// CORRECT - returns 0 when empty
+let scroll_offset = if self.lines.is_empty() {
+    0
+} else {
+    self.scroll_offset.min(self.lines.len() - 1)
+};
+```
+
+### Error Handling in Workers
+
+Avoid silent error suppression when reading response bodies:
+
+```rust
+// WRONG - silently returns empty string on error
+let response_text = response.text().await.unwrap_or_default();
+
+// CORRECT - logs the error at debug level
+let response_text = match response.text().await {
+    Ok(text) => text,
+    Err(e) => {
+        tracing::debug!("Failed to read response body: {}", e);
+        String::new()
+    }
+};
+```
+
+### TaskResult Handling
+
+When routing TaskResult through multiple handlers, avoid use-after-move:
+
+```rust
+// WRONG - result is moved and can't be used in debug log
+let Some(result) = self.handle_security_result(result) else { return };
+let Some(result) = self.handle_protocol_result(result) else { return };
+tracing::debug!("Unhandled: {:?}", result); // ERROR: result already moved
+
+// CORRECT - use early return pattern that doesn't consume result
+let result = match self.handle_security_result(result) {
+    Some(r) => r,
+    None => return,
+};
+let result = match self.handle_protocol_result(result) {
+    Some(r) => r,
+    None => return,
+};
+if self.handle_feature_result(result).is_none() {
+    tracing::debug!("Unhandled TaskResult variant");
+}
+```
+
+### History Export Error Handling
+
+Handle serialization errors explicitly:
+
+```rust
+// WRONG - silently returns empty string
+serde_json::to_string_pretty(&export_data).unwrap_or_default()
+
+// CORRECT - logs at debug level
+match serde_json::to_string_pretty(&export_data) {
+    Ok(s) => s,
+    Err(e) => {
+        tracing::debug!("Failed to serialize history export: {}", e);
+        String::new()
+    }
+}
+```
+
 ## Resources
 - `crates/slapper/src/tui/AGENTS.override.md` - Detailed TUI patterns
 - `ARCHITECTURE.md` - Overall design

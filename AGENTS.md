@@ -159,6 +159,12 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `scanner/cms/mod.rs:15,52,165,291` | `security_headers` used `HashMap` | Changed to `FxHashMap` for performance |
 | `scanner/endpoints.rs:835-839` | `Arc::try_unwrap(...).expect()` could panic | Changed to proper error handling with `map_err` |
 | `scanner/fingerprint.rs:319-323` | `Arc::try_unwrap(...).expect()` could panic | Changed to proper error handling with `map_err` |
+| `tui/tabs/scan.rs:250-256` | Division by zero when `stages` is empty | Added `if self.stages.is_empty()` guard |
+| `tui/components/scrollable.rs:135` | `scroll_offset` could be `usize::MAX` when `lines` is empty | Added `if self.lines.is_empty()` check |
+| `tui/workers/recon.rs:212` | `unreachable!()` panic after retry loop | Replaced with proper `Err()` return |
+| `tui/workers/api.rs:89` | Silent error suppression on HTTP response read | Changed to explicit match with `tracing::debug` |
+| `tui/app/state_update.rs:58-74` | Unhandled `TaskResult` variants silently dropped | Added debug logging for unhandled variants |
+| `tui/tabs/history.rs:55` | `unwrap_or_default()` silenced JSON serialization errors | Changed to explicit match with `tracing::debug` |
 
 ## Skills Directory
 

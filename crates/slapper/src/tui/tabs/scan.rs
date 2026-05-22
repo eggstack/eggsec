@@ -248,6 +248,9 @@ impl TabState for ScanTab {
     }
 
     fn progress(&self) -> f64 {
+        if self.stages.is_empty() {
+            return 0.0;
+        }
         let completed = self
             .stages
             .iter()

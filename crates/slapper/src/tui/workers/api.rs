@@ -86,7 +86,13 @@ pub async fn run_graphql(
             {
                 Ok(response) => {
                     let status = response.status().as_u16();
-                    let response_text = response.text().await.unwrap_or_default();
+                    let response_text = match response.text().await {
+                        Ok(text) => text,
+                        Err(e) => {
+                            tracing::debug!("Failed to read GraphQL response body: {}", e);
+                            String::new()
+                        }
+                    };
 
                     test_result.response_snippet = response_text.chars().take(200).collect();
                     test_result.success = is_graphql_error(&response_text)

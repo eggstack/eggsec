@@ -422,3 +422,77 @@ Selector contract:
 - Enter on open selector commits and closes
 - Esc closes without committing
 - Up/Down only move selection when open
+
+## Common Bug Patterns
+
+### Division by Zero in Progress
+
+When computing progress as a ratio, always guard against empty collections:
+
+```rust
+fn progress(&self) -> f64 {
+    if self.stages.is_empty() {
+        return 0.0;
+    }
+    let completed = self.stages.iter().filter(...).count();
+    (completed as f64 / self.stages.len() as f64) * 100.0
+}
+```
+
+### ScrollableText Scroll Offset
+
+Guard against empty lines when calculating scroll offset:
+
+```rust
+let scroll_offset = if self.lines.is_empty() {
+    0
+} else {
+    self.scroll_offset.min(self.lines.len() - 1)
+};
+```
+
+### TaskResult Handling
+
+When routing TaskResult through multiple handlers, use early return pattern:
+
+```rust
+let result = match self.handle_security_result(result) {
+    Some(r) => r,
+    None => return,
+};
+let result = match self.handle_protocol_result(result) {
+    Some(r) => r,
+    None => return,
+};
+if self.handle_feature_result(result).is_none() {
+    tracing::debug!("Unhandled TaskResult variant");
+}
+```
+
+### Worker Error Handling
+
+When reading response bodies in workers, log errors instead of silent suppression:
+
+```rust
+let response_text = match response.text().await {
+    Ok(text) => text,
+    Err(e) => {
+        tracing::debug!("Failed to read response body: {}", e);
+        String::new()
+    }
+};
+```
+
+### History Export Serialization
+
+Handle errors explicitly when serializing history:
+
+```rust
+match serde_json::to_string_pretty(&export_data) {
+    Ok(s) => s,
+    Err(e) => {
+        tracing::debug!("Failed to serialize history export: {}", e);
+        String::new()
+    }
+}
+```

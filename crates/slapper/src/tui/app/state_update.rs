@@ -56,20 +56,16 @@ impl super::App {
     }
 
     pub(super) fn handle_result(&mut self, result: TaskResult) {
-        let Some(result) = self.handle_security_result(result) else {
-            return;
+        let result = match self.handle_security_result(result) {
+            Some(r) => r,
+            None => return,
         };
-        let Some(result) = self.handle_protocol_result(result) else {
-            return;
+        let result = match self.handle_protocol_result(result) {
+            Some(r) => r,
+            None => return,
         };
-        let Some(result) = self.handle_feature_result(result) else {
-            return;
-        };
-        match result {
-            TaskResult::Error(msg) => {
-                self.set_error_for_current_tab(TabError::Unknown(msg));
-            }
-            _ => {}
+        if self.handle_feature_result(result).is_none() {
+            tracing::debug!("Unhandled TaskResult variant");
         }
     }
 

@@ -132,7 +132,11 @@ impl ScrollableText {
             .border_style(Style::default().fg(border_color));
 
         let visible_height = area.height.saturating_sub(2) as usize;
-        let scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1));
+        let scroll_offset = if self.lines.is_empty() {
+            0
+        } else {
+            self.scroll_offset.min(self.lines.len() - 1)
+        };
 
         let paragraph = Paragraph::new(self.lines.clone())
             .block(block)

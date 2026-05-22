@@ -209,5 +209,5 @@ pub async fn run_recon(
         }
     }
 
-    unreachable!()
+    Err(anyhow::anyhow!("Recon failed after max retries").into())
 }

@@ -52,7 +52,13 @@ impl HistoryTab {
         let export_data = HistoryExport {
             entries: self.entries.iter().cloned().collect(),
         };
-        serde_json::to_string_pretty(&export_data).unwrap_or_default()
+        match serde_json::to_string_pretty(&export_data) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::debug!("Failed to serialize history export: {}", e);
+                String::new()
+            }
+        }
     }
 }
 
