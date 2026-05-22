@@ -1,6 +1,6 @@
 use regex::{Regex, RegexBuilder};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -273,7 +273,7 @@ impl ReDosDetector {
 
 pub struct PayloadReDosChecker {
     detector: ReDosDetector,
-    vulnerable_payloads: HashMap<String, Vec<String>>,
+    vulnerable_payloads: FxHashMap<String, Vec<String>>,
 }
 
 impl Default for PayloadReDosChecker {
@@ -286,7 +286,7 @@ impl PayloadReDosChecker {
     pub fn new() -> Self {
         Self {
             detector: ReDosDetector::new(),
-            vulnerable_payloads: HashMap::new(),
+            vulnerable_payloads: FxHashMap::default(),
         }
     }
 

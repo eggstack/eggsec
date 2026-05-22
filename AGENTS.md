@@ -121,6 +121,12 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `commands/handlers/mod.rs:155-169` | Hardcoded command list in `handle_no_command` | Replaced with guidance to use `slapper --help` |
 | `config/scope.rs:209-226` | Direct IP addresses bypassed private IP checks | Added loopback and private IP validation in `TargetScope::parse()` |
 | `config/api.rs:8` | `maxmind.data_dir` used wrong qualifier | Changed to use `PROJECT_QUALIFIER` consistently |
+| `fuzzer/engine/execution.rs:75-79` | Unused `_update_session` parameter in `run_concurrent_inner` | Removed parameter; refactored callers |
+| `fuzzer/detection/analyzer.rs:168,206` | `unwrap_or(Ordering::Equal)` on f64 `partial_cmp` could panic on NaN | Added explicit NaN handling with `is_nan()` checks |
+| `fuzzer/api_schema/mod.rs:310` | `unwrap_or_default()` silenced body read errors | Changed to explicit match with tracing debug |
+| `fuzzer/engine/utils.rs:249` | WAF status codes (403, 406, 429) hardcoded | Extracted to `WAF_BLOCKED_STATUS_CODES` constant |
+| `fuzzer/engine/types.rs:176` | `BaselineResponse.headers` used `std::collections::HashMap` | Changed to `FxHashMap` for performance |
+| `fuzzer/redos_detect.rs:276` | `PayloadReDosChecker.vulnerable_payloads` used `HashMap` | Changed to `FxHashMap` for performance |
 
 ## Skills Directory
 

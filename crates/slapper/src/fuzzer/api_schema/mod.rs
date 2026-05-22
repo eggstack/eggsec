@@ -307,7 +307,13 @@ impl ApiSchemaFuzzer {
 
                 let status = response.status().as_u16();
                 let is_error = status >= 500;
-                let body = response.text().await.unwrap_or_default();
+                let body = match response.text().await {
+                    Ok(text) => text,
+                    Err(e) => {
+                        tracing::debug!("Failed to read response body for {}: {}", endpoint.path, e);
+                        String::new()
+                    }
+                };
                 let has_error = body.contains("SQL syntax")
                     || body.contains("stack trace")
                     || body.contains("exception");

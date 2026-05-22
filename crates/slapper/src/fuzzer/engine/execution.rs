@@ -56,14 +56,14 @@ impl FuzzEngine {
         payloads: Vec<Payload>,
         mode_name: &str,
     ) -> Result<Vec<FuzzResult>> {
-        self.run_concurrent_inner(payloads, mode_name, false).await
+        self.run_concurrent_inner(payloads, mode_name).await
     }
 
     pub(crate) async fn run_burst_with_session(
         &mut self,
         payloads: Vec<Payload>,
     ) -> Result<Vec<FuzzResult>> {
-        let results = self.run_concurrent_inner(payloads, "burst", true).await?;
+        let results = self.run_concurrent_inner(payloads, "burst").await?;
 
         if self.args.session {
             self.update_session_from_results(&results).await;
@@ -76,7 +76,6 @@ impl FuzzEngine {
         &self,
         payloads: Vec<Payload>,
         mode_name: &str,
-        _update_session: bool,
     ) -> Result<Vec<FuzzResult>> {
         let payload_count = payloads.len();
 

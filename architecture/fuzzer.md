@@ -73,3 +73,23 @@ let body = match response.text().await {
     }
 };
 ```
+
+### WAF Detection
+WAF blocked status codes are defined as a constant in `engine/utils.rs`:
+```rust
+const WAF_BLOCKED_STATUS_CODES: &[u16] = &[403, 406, 429];
+```
+
+### Timing Analysis
+The `TimingAnalyzer` in `detection/analyzer.rs` uses IQR (Interquartile Range) for baseline calculation. It handles NaN values in `partial_cmp` explicitly to prevent panics:
+```rust
+s.sort_by(|a, b| a.partial_cmp(b).unwrap_or_else(|| {
+    if a.is_nan() && b.is_nan() {
+        std::cmp::Ordering::Equal
+    } else if a.is_nan() {
+        std::cmp::Ordering::Greater
+    } else {
+        std::cmp::Ordering::Less
+    }
+}));
+```

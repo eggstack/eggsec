@@ -15,6 +15,8 @@ use super::types::{BaselineResponse, FuzzResult, FuzzSession, OwaspSummary};
 
 use super::core::FuzzEngine;
 
+const WAF_BLOCKED_STATUS_CODES: &[u16] = &[403, 406, 429];
+
 impl FuzzEngine {
     pub(crate) fn mutate_payloads(&self, payloads: &[Payload]) -> Vec<Payload> {
         let mut mutated = Vec::new();
@@ -246,7 +248,7 @@ pub(crate) async fn send_payload_async(
             };
             let leaks = pattern_matcher.scan(&body);
 
-            let is_waf_blocked = status == 403 || status == 406 || status == 429;
+            let is_waf_blocked = WAF_BLOCKED_STATUS_CODES.contains(&status);
 
             let owasp_str = payload.payload_type.to_string();
             let detected_severity = compute_severity(

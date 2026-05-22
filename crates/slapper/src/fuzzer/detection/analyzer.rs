@@ -165,7 +165,15 @@ impl TimingAnalyzer {
 
         let sorted_samples: Vec<f64> = {
             let mut s = self.samples.clone();
-            s.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            s.sort_by(|a, b| a.partial_cmp(b).unwrap_or_else(|| {
+                if a.is_nan() && b.is_nan() {
+                    std::cmp::Ordering::Equal
+                } else if a.is_nan() {
+                    std::cmp::Ordering::Greater
+                } else {
+                    std::cmp::Ordering::Less
+                }
+            }));
             s
         };
 
@@ -203,7 +211,15 @@ impl TimingAnalyzer {
         }
 
         let mut sorted = self.samples.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or_else(|| {
+            if a.is_nan() && b.is_nan() {
+                std::cmp::Ordering::Equal
+            } else if a.is_nan() {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Less
+            }
+        }));
 
         let len = sorted.len();
         let sum: f64 = sorted.iter().sum();

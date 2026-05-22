@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::utils::strip_controls;
@@ -173,7 +174,7 @@ pub struct BaselineResponse {
     pub status_code: u16,
     pub response_time_ms: u64,
     pub content_length: Option<u64>,
-    pub headers: std::collections::HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
 }
 
 impl std::fmt::Display for FuzzSession {
@@ -393,7 +394,7 @@ mod tests {
             status_code: 200,
             response_time_ms: 50,
             content_length: Some(1024),
-            headers: std::collections::HashMap::new(),
+            headers: FxHashMap::default(),
         };
         assert_eq!(baseline.status_code, 200);
         assert_eq!(baseline.response_time_ms, 50);
