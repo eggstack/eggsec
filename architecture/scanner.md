@@ -61,6 +61,7 @@ Discovered information is often fed into the **Fuzzer** or **Vulnerability Manag
 |------|-------|-----|
 | `ports/mod.rs:595-598` | `Arc::try_unwrap(...).expect()` panic | Proper error handling |
 | `ports/spoofed.rs:75-95` | `init_packet_trace` opened file twice | Added `include_header` parameter |
+| `ports/spoofed.rs:111` | Unused `std::collections::HashMap` import | Removed unused import |
 | `templates/models.rs:57,61` | Duplicate `HttpMatcher` + missing `DnsMatcher` | Fixed struct order |
 | `templates/matcher.rs:9,24` | `HashMap` instead of `FxHashMap` | Performance fix |
 | `cms/mod.rs:52,165,291` | `HashMap` instead of `FxHashMap` | Performance fix |

@@ -108,7 +108,6 @@ pub(crate) async fn scan_ports_spoofed(
     use futures::future::join_all;
     use indicatif::{ProgressBar, ProgressStyle};
     use pnet::datalink::Config;
-    use std::collections::HashMap;
     use std::net::Ipv4Addr;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;

@@ -187,6 +187,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `fuzzer/api_schema/mod.rs:196` | Magic number for oversized payload sizes | Extracted to `OVERSIZED_PAYLOAD_SIZES` constant |
 | `scanner/ports/mod.rs:595-598` | `Arc::try_unwrap(...).expect()` could panic if workers not fully joined | Changed to proper error handling with `map_err` |
 | `scanner/ports/spoofed.rs:75-95` | `init_packet_trace` opened file twice - second open with `create_new()` failed when file existed | Fixed by opening file once and writing header directly to same handle |
+| `scanner/ports/spoofed.rs:111` | Unused `std::collections::HashMap` import | Removed unused import |
 | `scanner/ports/spoofed.rs:476-480` | `Arc::try_unwrap(...).expect()` could panic | Changed to proper error handling with `map_err` |
 | `scanner/templates/models.rs:57,61` | Duplicate `HttpMatcher` struct definition + missing `DnsMatcher` | Removed duplicate, added `DnsMatcher` before `Matcher` enum |
 | `scanner/templates/models.rs:8,61,111` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |

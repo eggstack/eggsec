@@ -45,3 +45,4 @@ let map: FxHashMap<String, String> = FxHashMap::default();
 | `init_packet_trace` opened file twice with contradictory options | Added `include_header` parameter |
 | Duplicate `HttpMatcher` definition | Removed duplicate, `DnsMatcher` now defined before `Matcher` enum |
 | HashMap in templates/matcher, templates/models, cms/mod | Changed to `FxHashMap` |
+| Unused `std::collections::HashMap` import in spoofed.rs | Removed unused import |
