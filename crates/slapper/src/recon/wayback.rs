@@ -83,7 +83,7 @@ impl WaybackClient {
 
         let text = response.text().await?;
         let mut snapshots = Vec::new();
-        let mut endpoints = std::collections::HashSet::new();
+        let mut endpoints = rustc_hash::FxHashSet::default();
 
         let lines: Vec<&str> = text.lines().collect();
         snapshots.reserve(lines.len().saturating_sub(1));

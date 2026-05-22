@@ -1,6 +1,6 @@
 use crate::error::Result;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use crate::recon::techdetect::TechStack;
 use crate::utils::create_http_client;
@@ -28,7 +28,7 @@ pub struct VulnerabilityInfo {
 pub struct CveMapper {
     client: reqwest::Client,
     nvd_api_key: Option<String>,
-    cache: HashMap<String, Vec<VulnerabilityInfo>>,
+    cache: FxHashMap<String, Vec<VulnerabilityInfo>>,
 }
 
 impl CveMapper {
@@ -38,7 +38,7 @@ impl CveMapper {
         Ok(Self {
             client,
             nvd_api_key,
-            cache: HashMap::new(),
+            cache: FxHashMap::default(),
         })
     }
 
@@ -130,8 +130,8 @@ impl CveMapper {
         None
     }
 
-    fn get_known_cves(&self) -> HashMap<Vec<&'static str>, Vec<VulnerabilityInfo>> {
-        let mut map = HashMap::new();
+    fn get_known_cves(&self) -> FxHashMap<Vec<&'static str>, Vec<VulnerabilityInfo>> {
+        let mut map = FxHashMap::default();
 
         map.insert(
             vec!["apache", "httpd"],

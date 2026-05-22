@@ -3,8 +3,8 @@ use crate::types::SensitiveString;
 use crate::utils::create_http_client_with_options;
 use maxminddb::geoip2;
 use maxminddb::Reader;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -24,8 +24,8 @@ pub struct GeoLocation {
     pub asn: Option<String>,
 }
 
-static LOCAL_IP_DATA: LazyLock<HashMap<String, (String, String, String)>> = LazyLock::new(|| {
-    let mut m = HashMap::new();
+static LOCAL_IP_DATA: LazyLock<FxHashMap<String, (String, String, String)>> = LazyLock::new(|| {
+    let mut m = FxHashMap::default();
     m.insert(
         "10.0.0.0/8".to_string(),
         (

@@ -93,10 +93,6 @@ impl SslAnalyzer {
             }
         }
 
-        analysis.supported_versions = Vec::new();
-
-        analysis.supported_cipher_suites = Vec::new();
-
         self.check_vulnerabilities(&mut analysis);
 
         Ok(analysis)

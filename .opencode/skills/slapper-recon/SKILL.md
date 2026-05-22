@@ -2,38 +2,61 @@
 
 Reconnaissance module workflows and patterns for information gathering.
 
-## Key Types and Patterns
+## Key Components
 
-### Auth Testing
-`recon/auth/` - Multi-protocol authentication testing:
-- `ssh_auth` - SSH authentication testing
-- `ftp_auth` - FTP authentication testing
-- `smtp_auth` - SMTP authentication testing
+### Full Recon Pipeline (`run_full_recon` in `runner.rs`)
 
-### Dependency Scanning
-`recon/dependency_scan/` - Split by ecosystem:
-- `npm` - npm package scanning
-- `cargo` - Rust cargo scanning
-- `go` - Go module scanning
+The full recon pipeline runs 14 tasks in parallel via `tokio::join!`:
+```
+reverse_dns, geolocation, threat_intel, ssl, whois, subdomain_enum,
+dns_records, tech_detection, js_analysis, wayback_check, cloud_detection,
+content_analysis, cors_check, email_discovery
+```
+
+Sequential dependencies:
+- Takeover check runs after subdomain enumeration
+- CVE mapping runs after tech detection
+
+### Module Structure (src/recon/)
+
+| Category | Files | Notes |
+|----------|-------|-------|
+| Network | `dns_records.rs`, `reverse_dns.rs`, `whois.rs`, `geolocation.rs` | DNS, WHOIS, GeoIP |
+| Web | `techdetect.rs`, `content.rs`, `js.rs`, `cors.rs` | Tech detection, content discovery |
+| Subdomains | `subdomain.rs`, `wayback.rs`, `takeover.rs` | Enumeration, history, takeover |
+| Security | `cve.rs`, `secrets.rs`, `ssl.rs`, `threatintel.rs` | CVE, secrets, SSL, threat intel |
+| Cloud | `cloud/mod.rs`, `cloud/services.rs`, `cloud/iam.rs`, `cloud/metadata.rs` | AWS/GCP/Azure discovery |
+| Email | `email.rs`, `email_security.rs` | Discovery + SPF/DKIM/DMARC |
+| Dependency | `dependency_scan/npm/`, `dependency_scan/cargo/`, `dependency_scan/go/` | Package scanning |
+| Other | `api_schema.rs`, `containers.rs`, `git_secrets.rs` | Feature-gated modules |
+
+### Key Types
+
+- `FullReconResult` - Aggregated results with error tracking
+- `ReconStep<T>` - Graceful degradation enum (Skipped/Completed/Failed)
+- `TechStack` - Detected technologies grouped by category
+- `CveMapper` - CVE mapping with built-in database + NVD API cache
 
 ### SSL/TLS
+
 `recon/ssl.rs` uses `rustls_pki_types::CertificateDer` for cert extraction.
 
-**Certificate Info Extraction**: The `extract_certificate_info()` function parses PEM data to extract:
-- `subject` - Certificate subject
-- `issuer` - Certificate issuer
-- `valid_from` / `valid_until` - Validity dates (RFC3339 format)
-- `serial_number` - Serial number
-- `is_expired` - Boolean, computed from validity dates
-- `days_until_expiry` - Computed from `valid_until`
-- `subject_alternative_names` - SAN entries
-
+**Certificate Info Extraction**: The `extract_certificate_info()` function parses PEM data:
 ```rust
 if let Ok(pem_data) = pem::parse(der_bytes) {
     let pem_str = String::from_utf8_lossy(pem_data.contents());
     // Parse fields from PEM contents
 }
 ```
+
+Note: TLS version and cipher suite detection is not yet implemented - `supported_versions` and `supported_cipher_suites` fields are populated by external tooling.
+
+### Performance
+
+- Use `FxHashMap`/`FxHashSet` instead of `std::collections::HashMap`/`HashSet`
+- `CveMapper.cache` uses `FxHashMap` (cve.rs)
+- `LOCAL_IP_DATA` in geolocation.rs uses `FxHashMap`
+- `WaybackClient.endpoints` uses `FxHashSet`
 
 ## Testing
 
@@ -42,22 +65,17 @@ if let Ok(pem_data) = pem::parse(der_bytes) {
 cargo test --lib -p slapper recon::
 ```
 
-### Writing Tests
-Follow existing test patterns in `recon/` modules, testing auth, dependency scanning, and SSL/TLS logic.
+### Test Module Synchronization
 
-## Common Tasks
-
-### Adding a New Auth Protocol Test
-1. Create module in `recon/auth/`
-2. Implement authentication testing logic
-3. Add tests for new protocol
-
-### Adding Dependency Scanning for New Ecosystem
-1. Create module in `recon/dependency_scan/`
-2. Implement package scanning logic
-3. Add tests for new ecosystem
+The test `recon_modules_match_filesystem` (mod.rs) validates that `pub mod` declarations match the filesystem. Detached modules are explicitly excluded:
+```rust
+let intentionally_detached: BTreeSet<String> = [
+    "asn", "cve_lookup", "dns_enhanced",
+    "ftp_auth", "smtp_auth", "ssh_auth", "ssl_audit",
+].into_iter().map(str::to_string).collect();
+```
 
 ## Resources
-- `crates/slapper/src/recon/AGENTS.override.md` - Detailed recon patterns
+- `crates/slapper/src/recon/AGENTS.override.md` - Detailed recon module patterns
 - `AGENTS.md` - General project guidelines
-- `ARCHITECTURE.md` - Overall design
+- `architecture/recon.md` - Architecture documentation
