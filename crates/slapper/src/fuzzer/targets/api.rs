@@ -1,7 +1,7 @@
 use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
 use crate::utils::validation::validate_path;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rustc_hash::FxFxHashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,7 +9,7 @@ pub struct OpenAPISpec {
     pub openapi: String,
     pub info: ApiInfo,
     pub servers: Vec<Server>,
-    pub paths: HashMap<String, PathItem>,
+    pub paths: FxHashMap<String, PathItem>,
     pub components: Components,
 }
 
@@ -44,7 +44,7 @@ pub struct Operation {
     pub description: Option<String>,
     pub parameters: Vec<Parameter>,
     pub request_body: Option<RequestBody>,
-    pub responses: HashMap<String, Response>,
+    pub responses: FxHashMap<String, Response>,
     pub security: Option<Vec<SecurityRequirement>>,
     pub tags: Option<Vec<String>>,
 }
@@ -61,7 +61,7 @@ pub struct Parameter {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestBody {
     pub required: bool,
-    pub content: HashMap<String, MediaType>,
+    pub content: FxHashMap<String, MediaType>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,7 +74,7 @@ pub struct MediaType {
 pub struct Schema {
     pub r#type: Option<String>,
     pub format: Option<String>,
-    pub properties: Option<HashMap<String, Schema>>,
+    pub properties: Option<FxHashMap<String, Schema>>,
     pub items: Option<Box<Schema>>,
     pub enum_values: Option<Vec<serde_json::Value>>,
     pub minimum: Option<f64>,
@@ -92,14 +92,14 @@ pub struct Schema {
 #[serde(rename_all = "camelCase")]
 pub struct Response {
     pub description: String,
-    pub content: Option<HashMap<String, MediaType>>,
-    pub headers: Option<HashMap<String, serde_json::Value>>,
+    pub content: Option<FxHashMap<String, MediaType>>,
+    pub headers: Option<FxHashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Components {
-    pub schemas: Option<HashMap<String, Schema>>,
-    pub security_schemes: Option<HashMap<String, SecurityScheme>>,
+    pub schemas: Option<FxHashMap<String, Schema>>,
+    pub security_schemes: Option<FxHashMap<String, SecurityScheme>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,7 +114,7 @@ pub struct SecurityScheme {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityRequirement {
     #[serde(flatten)]
-    pub schemes: HashMap<String, Vec<String>>,
+    pub schemes: FxHashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
