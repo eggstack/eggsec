@@ -115,9 +115,26 @@ This prevents SSRF against cloud metadata endpoints (e.g., `169.254.169.254`).
 ## Performance
 
 **FxHashMap**: All HashMap usages in the config module use `rustc_hash::FxHashMap` instead of `std::collections::HashMap` for performance. This applies to:
-- `AlertChannelsConfig.channels`
-- `WebhookConfigEntry.headers`
-- `HttpConfig.default_headers`
-- `ScanConfig.profiles`
+- `AlertChannelsConfig.channels` (`settings.rs:21`)
+- `WebhookConfigEntry.headers` (`settings.rs:38`)
+- `HttpConfig.default_headers` (`http.rs:39`)
+- `ScanConfig.profiles` (`settings.rs:109`)
+- `WebhookConfig.headers` (`scan.rs:132`)
+
+## TUI Settings Tab Limitation
+
+The TUI Settings Tab (`tui/tabs/settings.rs`) only exposes a subset of config fields. Saving via the TUI will cause data loss for:
+- `profiles`
+- `schedule`
+- `remote`
+- `ai`
+- `search`
+- `alert_channels`
+- Other fields not shown in the UI
+
+For full config management, use CLI commands or edit config files directly.
+
+## Related Documentation
+
 - `crates/slapper/src/config/AGENTS.override.md` - Detailed config patterns
 - `architecture/config.md` - Architecture documentation

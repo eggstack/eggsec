@@ -133,7 +133,9 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `commands/handlers/cluster.rs:348` | `unwrap_or(22)` in parse could panic | Changed to `unwrap_or_else(\|_\| 22)` |
 | `commands/handlers/mod.rs:155-169` | Hardcoded command list in `handle_no_command` | Replaced with guidance to use `slapper --help` |
 | `config/scope.rs:209-226` | Direct IP addresses bypassed private IP checks | Added loopback and private IP validation in `TargetScope::parse()` |
-| `config/settings.rs, http.rs, scan.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance in AlertChannelsConfig, WebhookConfigEntry, HttpConfig, ScanConfig |
+| `config/settings.rs:21,38` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance in `AlertChannelsConfig.channels`, `WebhookConfigEntry.headers` |
+| `config/http.rs:39` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance in `HttpConfig.default_headers` |
+| `config/scan.rs:132` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance in `WebhookConfig.headers` |
 | `config/api.rs:8` | `maxmind.data_dir` used wrong qualifier | Changed to use `PROJECT_QUALIFIER` consistently |
 | `fuzzer/engine/execution.rs:75-79` | Unused `_update_session` parameter in `run_concurrent_inner` | Removed parameter; refactored callers |
 | `fuzzer/detection/analyzer.rs:168,206` | `unwrap_or(Ordering::Equal)` on f64 `partial_cmp` could panic on NaN | Added explicit NaN handling with `is_nan()` checks |

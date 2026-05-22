@@ -23,12 +23,22 @@ The main configuration struct that holds all tool settings. It is typically load
 
 The `Scope` struct is critical for security and compliance. It defines which targets are "in-scope" and which are explicitly excluded.
 
+**Key Methods:**
+- `is_target_allowed(target)` - Returns `Result<bool, ScopeError>`, checks if target is allowed
+- `validate_url(url)` - Returns `Result<bool, ScopeError>`, validates URL's host via `is_target_allowed`
+- `is_port_allowed(port)` - Returns `bool`, checks port allowlist/blocklist
+
 **Security enforcement:**
 - **Private IP blocking**: Direct IP addresses (e.g., `127.0.0.1`, `169.254.169.254`) are blocked via `TargetScope::parse()` and `parse_hostname_only()` - they now properly go through private IP checks
 - **Included Targets**: IP ranges (CIDR), domains, or specific URLs
 - **Excluded Targets**: Blacklisted IPs or domains that should never be touched
 - **Enforcement**: Most scanning and fuzzing operations check the `Scope` before initiating a connection
-- **FxHashMap**: All HashMap usages use `rustc_hash::FxHashMap` for performance (AlertChannelsConfig.channels, WebhookConfigEntry.headers, HttpConfig.default_headers, ScanConfig.profiles)
+- **FxHashMap**: All HashMap usages use `rustc_hash::FxHashMap` for performance:
+  - `AlertChannelsConfig.channels` (`settings.rs:21`)
+  - `WebhookConfigEntry.headers` (`settings.rs:38`)
+  - `HttpConfig.default_headers` (`http.rs:39`)
+  - `ScanConfig.profiles` (`settings.rs:109`)
+  - `WebhookConfig.headers` (`scan.rs:132`)
 
 ### `Loader` (`loader.rs`)
 
