@@ -203,10 +203,14 @@ impl SmartWafBypass {
 
     fn persist(&self) {
         if let Some(parent) = self.persist_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                tracing::warn!("Failed to create persist directory: {}", e);
+            }
         }
         if let Ok(json) = serde_json::to_string(&self.knowledge_base) {
-            let _ = std::fs::write(&self.persist_path, json);
+            if let Err(e) = std::fs::write(&self.persist_path, json) {
+                tracing::warn!("Failed to persist WAF bypass knowledge base: {}", e);
+            }
         }
     }
 }
