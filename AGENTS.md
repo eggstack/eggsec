@@ -157,6 +157,9 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `recon/geolocation.rs:27` | `LOCAL_IP_DATA` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `recon/wayback.rs:86` | `WaybackClient.endpoints` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |
 | `recon/ssl.rs:96-98` | Unimplemented `supported_versions`/`supported_cipher_suites` fields | Removed misleading empty vector assignments |
+| `fuzzer/api_schema/mod.rs:5` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `fuzzer/payloads/grpc.rs:62` | `GrpcFuzzer.metadata` used `HashMap` | Changed to `FxHashMap` for performance |
+| `fuzzer/api_schema/mod.rs:196` | Magic number for oversized payload sizes | Extracted to `OVERSIZED_PAYLOAD_SIZES` constant |
 | `scanner/ports/mod.rs:595-598` | `Arc::try_unwrap(...).expect()` could panic if workers not fully joined | Changed to proper error handling with `map_err` |
 | `scanner/ports/spoofed.rs:75-95` | `init_packet_trace` opened file twice - second open with `create_new()` failed when file existed | Fixed by opening file once and writing header directly to same handle |
 | `scanner/ports/spoofed.rs:476-480` | `Arc::try_unwrap(...).expect()` could panic | Changed to proper error handling with `map_err` |

@@ -19,7 +19,34 @@ Fuzzing engine module workflows and patterns for security testing.
 `fuzzer/chain.rs` has `ChainExecutor` with LRU regex cache using `lru = "0.18"` (cache size 100, `NonZeroUsizer`).
 
 ### Timing Analysis
-`fuzzer/detection/` has `TimingAnalyzer` with lock-free atomics.
+`fuzzer/detection/` has `TimingAnalyzer` with lock-free atomics, using IQR (Interquartile Range) for baseline calculation.
+
+### API Schema Fuzzing
+`fuzzer/api_schema/mod.rs` provides OpenAPI 3.0 (JSON/YAML) parsing with type-aware fuzzing:
+- `ApiSchemaFuzzer` - Generates fuzz targets from OpenAPI specs
+- Type-aware payloads based on parameter types (string, integer, boolean, array, object)
+- Auth bypass via headers (X-Original-URL, X-Override-URL, X-Rewrite-URL)
+- Required parameter omission testing
+- Oversized payload generation (1KB, 10KB, 100KB, 1MB)
+
+### Advanced Fuzzers (`fuzzer/advanced.rs`)
+- `GraphQLFuzzer` - Introspection, depth bypass, alias overload, batch queries
+- `JwtFuzzer` - None algorithm attack, key injection, token validation
+- `OAuthFuzzer` - Redirect URI, scope escalation, state parameter, grant mixing
+- `IdorFuzzer` - Horizontal/vertical escalation testing
+- `SstiFuzzer` - Template engine detection (Jinja2, ERB, etc.)
+- `WebSocketFuzzer` - Message injection
+- `GrpcFuzzer` - Method injection
+
+### ReDoS Detection (`fuzzer/redos_detect.rs`)
+- `RegexExecutor` - Timeout-based detection (default 1000ms, max 100k iterations)
+- Known vulnerable patterns: `(.+)+`, `(.*)*`, `(a+)+`, etc.
+- Uses `FxHashMap` for vulnerable payload tracking
+
+### WAF Fingerprinting (`fuzzer/waf_fingerprint.rs`)
+- Supports 18 WAF products (Cloudflare, Akamai, AWS WAF, Imperva, etc.)
+- Header-based signatures and body pattern matching
+- Confidence scoring with 0.2 threshold
 
 ## Code Conventions
 
@@ -32,6 +59,8 @@ Extract magic numbers to named constants at module level:
 const DEFAULT_SPIKE_THRESHOLD: f64 = 3.0;
 const DEFAULT_REDOS_THRESHOLD_MS: u64 = 5000;
 const BODY_LENGTH_ANOMALY_THRESHOLD: isize = 1000;
+const TIMING_ANOMALY_THRESHOLD_MS: i64 = 1000;
+const OVERSIZED_PAYLOAD_SIZES: [usize; 4] = [1_000, 10_000, 100_000, 1_000_000];
 ```
 
 ### Error Handling
@@ -48,6 +77,20 @@ let body = match response.text().await {
         String::new()
     }
 };
+```
+
+### NaN Handling in Timing Analysis
+When using `partial_cmp` with f64 values, handle NaN explicitly:
+```rust
+s.sort_by(|a, b| a.partial_cmp(b).unwrap_or_else(|| {
+    if a.is_nan() && b.is_nan() {
+        std::cmp::Ordering::Equal
+    } else if a.is_nan() {
+        std::cmp::Ordering::Greater
+    } else {
+        std::cmp::Ordering::Less
+    }
+}));
 ```
 
 ## Testing
@@ -73,7 +116,15 @@ Follow existing test patterns in `fuzzer/` modules, using `FuzzEngine` and `Fuzz
 2. Use compiled `Regex` for performance
 3. Test with `FuzzResult` samples
 
+### OpenAPI Schema Fuzzing Workflow
+1. Parse spec: `ApiSchemaFuzzer::parse_openapi(content)`
+2. Generate type-aware payloads: `generate_type_aware_payloads(&param)`
+3. Generate auth bypass: `generate_auth_bypass_payloads(endpoints, base_url)`
+4. Generate oversized: `generate_oversized_payloads(endpoints)`
+5. Fuzz endpoint: `fuzz_endpoint(&target).await`
+
 ## Resources
 - `crates/slapper/src/fuzzer/AGENTS.override.md` - Detailed fuzzer patterns
 - `AGENTS.md` - General project guidelines
 - `ARCHITECTURE.md` - Overall design
+- `architecture/fuzzer.md` - Fuzzer module architecture details

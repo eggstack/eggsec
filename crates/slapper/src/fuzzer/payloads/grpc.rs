@@ -1,6 +1,7 @@
 #![allow(clippy::vec_init_then_push)]
 
 use crate::fuzzer::payloads::{Payload, PayloadType, Severity};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,7 +60,7 @@ pub struct GrpcMethod {
 pub struct GrpcFuzzer {
     endpoint: String,
     methods: Vec<GrpcMethod>,
-    metadata: std::collections::HashMap<String, String>,
+    metadata: FxHashMap<String, String>,
 }
 
 impl GrpcFuzzer {
@@ -67,7 +68,7 @@ impl GrpcFuzzer {
         Self {
             endpoint,
             methods: Vec::new(),
-            metadata: std::collections::HashMap::new(),
+            metadata: FxHashMap::default(),
         }
     }
 

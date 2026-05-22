@@ -1,8 +1,10 @@
 use crate::error::Result;
 use crate::fuzzer::payloads::{Payload, PayloadType};
 use crate::types::Severity;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+
+const OVERSIZED_PAYLOAD_SIZES: [usize; 4] = [1_000, 10_000, 100_000, 1_000_000];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiEndpoint {
@@ -191,12 +193,11 @@ impl ApiSchemaFuzzer {
         endpoints: &[ApiEndpoint],
     ) -> Vec<(String, String, String)> {
         let mut payloads = Vec::new();
-        let sizes = [1_000, 10_000, 100_000, 1_000_000];
 
         for endpoint in endpoints {
             for param in &endpoint.parameters {
                 if param.param_type == "string" {
-                    for size in sizes {
+                    for size in OVERSIZED_PAYLOAD_SIZES {
                         let oversized = "A".repeat(size);
                         payloads.push((endpoint.path.clone(), param.name.clone(), oversized));
                     }
@@ -205,7 +206,7 @@ impl ApiSchemaFuzzer {
 
             if let Some(ref body) = endpoint.request_body {
                 if body.content_type.contains("json") {
-                    for size in sizes {
+                    for size in OVERSIZED_PAYLOAD_SIZES {
                         let oversized_body = format!("{{\"data\": \"{}\"}}", "A".repeat(size));
                         payloads.push((endpoint.path.clone(), "body".to_string(), oversized_body));
                     }
@@ -220,7 +221,7 @@ impl ApiSchemaFuzzer {
         &self,
         endpoints: &[ApiEndpoint],
         base_url: &str,
-    ) -> Vec<(String, String, HashMap<String, String>)> {
+    ) -> Vec<(String, String, FxHashMap<String, String>)> {
         let mut payloads = Vec::new();
 
         for endpoint in endpoints {
@@ -232,7 +233,7 @@ impl ApiSchemaFuzzer {
                 ];
 
                 for (header, value) in auth_bypass_headers {
-                    let mut headers = HashMap::new();
+                    let mut headers = FxHashMap::default();
                     headers.insert(header, value);
                     payloads.push((
                         base_url.to_string() + &endpoint.path,
@@ -241,7 +242,7 @@ impl ApiSchemaFuzzer {
                     ));
                 }
 
-                let mut no_auth = HashMap::new();
+                let mut no_auth = FxHashMap::default();
                 no_auth.insert("Authorization".to_string(), "".to_string());
                 payloads.push((
                     base_url.to_string() + &endpoint.path,

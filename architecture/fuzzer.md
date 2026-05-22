@@ -56,6 +56,8 @@ Extract magic numbers to named constants at module level:
 const DEFAULT_SPIKE_THRESHOLD: f64 = 3.0;
 const DEFAULT_REDOS_THRESHOLD_MS: u64 = 5000;
 const BODY_LENGTH_ANOMALY_THRESHOLD: isize = 1000;
+const TIMING_ANOMALY_THRESHOLD_MS: i64 = 1000;
+const OVERSIZED_PAYLOAD_SIZES: [usize; 4] = [1_000, 10_000, 100_000, 1_000_000];
 ```
 
 ### Error Handling
@@ -93,3 +95,27 @@ s.sort_by(|a, b| a.partial_cmp(b).unwrap_or_else(|| {
     }
 }));
 ```
+
+### API Schema Fuzzing
+`api_schema/mod.rs` provides OpenAPI 3.0 (JSON/YAML) parsing with type-aware fuzzing:
+- `ApiSchemaFuzzer` - Generates fuzz targets from OpenAPI specs
+- Type-aware payloads based on parameter types (string, integer, boolean, array, object)
+- Auth bypass via headers (X-Original-URL, X-Override-URL, X-Rewrite-URL)
+- Required parameter omission testing
+- Oversized payload generation using `OVERSIZED_PAYLOAD_SIZES` constant
+
+### Advanced Fuzzers
+`advanced.rs` provides specialized fuzzers for:
+- `GraphQLFuzzer` - Introspection, depth bypass, alias overload, batch queries
+- `JwtFuzzer` - None algorithm attack, key injection, token validation
+- `OAuthFuzzer` - Redirect URI, scope escalation, state parameter, grant mixing
+- `IdorFuzzer` - Horizontal/vertical escalation testing
+- `SstiFuzzer` - Template engine detection (Jinja2, ERB, etc.)
+- `WebSocketFuzzer` - Message injection
+- `GrpcFuzzer` - Method injection
+
+### ReDoS Detection
+`redos_detect.rs` provides:
+- `RegexExecutor` - Timeout-based detection (default 1000ms, max 100k iterations)
+- Known vulnerable patterns: `(.+)+`, `(.*)*`, `(a+)+`, etc.
+- Uses `FxHashMap` for vulnerable payload tracking
