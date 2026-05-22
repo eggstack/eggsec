@@ -24,6 +24,10 @@ pub struct TimingAnalyzer {
     redos_count: AtomicUsize,
 }
 
+const DEFAULT_SPIKE_THRESHOLD: f64 = 3.0;
+const DEFAULT_REDOS_THRESHOLD_MS: u64 = 5000;
+const DEFAULT_MIN_SAMPLES_FOR_BASELINE: usize = 20;
+
 impl Clone for TimingAnalyzer {
     fn clone(&self) -> Self {
         Self {
@@ -47,9 +51,9 @@ impl Default for TimingAnalyzer {
         Self {
             baseline_ms: None,
             samples: Vec::new(),
-            spike_threshold: 3.0,
-            redos_threshold_ms: 5000,
-            min_samples_for_baseline: 20,
+            spike_threshold: DEFAULT_SPIKE_THRESHOLD,
+            redos_threshold_ms: DEFAULT_REDOS_THRESHOLD_MS,
+            min_samples_for_baseline: DEFAULT_MIN_SAMPLES_FOR_BASELINE,
             total_requests: AtomicU64::new(0),
             total_response_time: AtomicU64::new(0),
             min_response_time: AtomicU64::new(u64::MAX),
@@ -71,7 +75,7 @@ impl TimingAnalyzer {
             samples: Vec::new(),
             spike_threshold,
             redos_threshold_ms,
-            min_samples_for_baseline: 20,
+            min_samples_for_baseline: DEFAULT_MIN_SAMPLES_FOR_BASELINE,
             total_requests: AtomicU64::new(0),
             total_response_time: AtomicU64::new(0),
             min_response_time: AtomicU64::new(u64::MAX),

@@ -205,10 +205,16 @@ impl FuzzEngine {
                 detected_severity: Severity::Info,
             });
         }
-        let mut ordered_results: Vec<(usize, FuzzResult)> = Arc::try_unwrap(results)
-            .expect("all workers completed")
-            .into_iter()
-            .collect();
+        let mut ordered_results: Vec<(usize, FuzzResult)> = match Arc::try_unwrap(results) {
+            Ok(map) => map.into_iter().collect(),
+            Err(_) => {
+                tracing::error!("Failed to unwrap results - workers still holding references");
+                return Err(crate::error::SlapperError::Runtime(
+                    "Fuzz engine state inconsistent: workers still running".into(),
+                )
+                .into());
+            }
+        };
         ordered_results.sort_by_key(|(k, _)| *k);
         let final_results: Vec<FuzzResult> = ordered_results.into_iter().map(|(_, v)| v).collect();
         Ok(final_results)

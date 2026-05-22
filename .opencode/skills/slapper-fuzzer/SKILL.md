@@ -21,6 +21,35 @@ Fuzzing engine module workflows and patterns for security testing.
 ### Timing Analysis
 `fuzzer/detection/` has `TimingAnalyzer` with lock-free atomics.
 
+## Code Conventions
+
+### Hash Collections
+Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of `std::collections::HashMap/HashSet` for better performance.
+
+### Magic Numbers
+Extract magic numbers to named constants at module level:
+```rust
+const DEFAULT_SPIKE_THRESHOLD: f64 = 3.0;
+const DEFAULT_REDOS_THRESHOLD_MS: u64 = 5000;
+const BODY_LENGTH_ANOMALY_THRESHOLD: isize = 1000;
+```
+
+### Error Handling
+Prefer explicit error handling over `unwrap_or_default()`:
+```rust
+// Instead of:
+let body = response.text().await.unwrap_or_default();
+
+// Use:
+let body = match response.text().await {
+    Ok(text) => text,
+    Err(e) => {
+        tracing::debug!("Failed to read response body: {}", e);
+        String::new()
+    }
+};
+```
+
 ## Testing
 
 ### Running Fuzzer Tests

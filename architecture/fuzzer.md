@@ -11,6 +11,7 @@ The core loop that manages targets, payloads, and detections.
 - **State Management (`state.rs`)**: Keeps track of progress, discovered vulnerabilities, and session information.
 - **Mutator (`mutator.rs`)**: Applies transformations to payloads (e.g., encoding, truncation, bit-flipping).
 - **Rate Limiting (`rate_limit.rs`)**: Ensures the fuzzer doesn't overwhelm the target or the local network.
+- **Execution Modes**: Sequential (one at a time), Burst (concurrent up to 500), Adaptive (rate-limited)
 
 ### Payloads (`payloads/`)
 
@@ -43,3 +44,32 @@ Specialized logic to detect Web Application Firewalls and apply bypass technique
 ## Feedback Loop
 
 The fuzzer is designed to be "smart," using feedback from the target (e.g., changes in response time or body content) to prioritize certain payloads or mutators.
+
+## Code Conventions
+
+### Hash Collections
+Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of `std::collections::HashMap/HashSet` for performance.
+
+### Magic Numbers
+Extract magic numbers to named constants at module level:
+```rust
+const DEFAULT_SPIKE_THRESHOLD: f64 = 3.0;
+const DEFAULT_REDOS_THRESHOLD_MS: u64 = 5000;
+const BODY_LENGTH_ANOMALY_THRESHOLD: isize = 1000;
+```
+
+### Error Handling
+Prefer explicit error handling over `unwrap_or_default()`:
+```rust
+// Instead of:
+let body = response.text().await.unwrap_or_default();
+
+// Use:
+let body = match response.text().await {
+    Ok(text) => text,
+    Err(e) => {
+        tracing::debug!("Failed to read response body: {}", e);
+        String::new()
+    }
+};
+```

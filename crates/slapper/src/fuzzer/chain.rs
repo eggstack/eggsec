@@ -219,7 +219,20 @@ impl ChainExecutor {
                 let is_success = response.status().is_success();
                 let headers = response.headers().clone();
 
-                let body_text = response.text().await.unwrap_or_default();
+                let body_text = response.text().await;
+                let body_text = match body_text {
+                    Ok(text) => text,
+                    Err(e) => {
+                        return ChainResult {
+                            action_index: self.results.len(),
+                            success: false,
+                            status_code: Some(status),
+                            response_time_ms: elapsed,
+                            extracted_vars: FxHashMap::default(),
+                            error: Some(format!("Failed to read response body: {}", e)),
+                        };
+                    }
+                };
 
                 self.variables
                     .insert("_last_status".to_string(), status.to_string());

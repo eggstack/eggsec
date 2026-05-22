@@ -95,7 +95,14 @@ impl FuzzEngine {
 
             let status_code = response.status().as_u16();
             let headers = response.headers().clone();
-            let body = response.bytes().await.unwrap_or_default();
+            let body = response.bytes().await;
+            let body = match body {
+                Ok(b) => b.to_vec(),
+                Err(e) => {
+                    tracing::debug!("Failed to read baseline response body: {}", e);
+                    vec![]
+                }
+            };
             let timing_ms = start.elapsed().as_millis() as u64;
 
             differ.capture_baseline(status_code, &headers, &body, timing_ms);
@@ -130,7 +137,13 @@ impl FuzzEngine {
                 if let Ok(resp) = request.send().await {
                     let status_code = resp.status().as_u16();
                     let headers = resp.headers().clone();
-                    let body = resp.bytes().await.unwrap_or_default();
+                    let body = match resp.bytes().await {
+                        Ok(b) => b.to_vec(),
+                        Err(e) => {
+                            tracing::debug!("Failed to read diffing response body: {}", e);
+                            vec![]
+                        }
+                    };
                     let timing_ms = start.elapsed().as_millis() as u64;
 
                     let diff = differ.diff(status_code, &headers, &body, timing_ms);
@@ -224,7 +237,13 @@ pub(crate) async fn send_payload_async(
             let status = resp.status().as_u16();
             let content_length = resp.content_length();
 
-            let body = resp.text().await.unwrap_or_default();
+            let body = match resp.text().await {
+                Ok(text) => text,
+                Err(e) => {
+                    tracing::debug!("Failed to read response body for {}: {}", url, e);
+                    String::new()
+                }
+            };
             let leaks = pattern_matcher.scan(&body);
 
             let is_waf_blocked = status == 403 || status == 406 || status == 429;

@@ -1,6 +1,7 @@
 use reqwest::header::HeaderMap;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseDiff {
@@ -67,7 +68,7 @@ impl Default for DiffResult {
 
 pub struct ResponseDiffer {
     baseline: Option<ResponseSnapshot>,
-    ignore_headers: HashSet<String>,
+    ignore_headers: FxHashSet<String>,
     ignore_body_patterns: Vec<String>,
     min_anomaly_threshold: f64,
 }
@@ -80,11 +81,10 @@ impl Default for ResponseDiffer {
 
 impl ResponseDiffer {
     pub fn new() -> Self {
-        let mut ignore_headers = HashSet::new();
-        ignore_headers.insert("date".to_string());
-        ignore_headers.insert("content-length".to_string());
-        ignore_headers.insert("connection".to_string());
-        ignore_headers.insert("keep-alive".to_string());
+        let ignore_headers: FxHashSet<String> = ["date", "content-length", "connection", "keep-alive"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
 
         Self {
             baseline: None,
@@ -225,17 +225,18 @@ impl ResponseDiffer {
         let body_diff = current.body_length as isize - baseline.body_length as isize;
         diff.body_length_diff = body_diff;
 
-        if !(-1000..=1000).contains(&body_diff) {
+        const BODY_LENGTH_ANOMALY_THRESHOLD: isize = 1000;
+        if !(-BODY_LENGTH_ANOMALY_THRESHOLD..=BODY_LENGTH_ANOMALY_THRESHOLD).contains(&body_diff) {
             diff.anomaly_score += 0.2;
         }
 
-        let baseline_headers: HashSet<_> = baseline
+        let baseline_headers: FxHashSet<_> = baseline
             .headers
             .headers
             .iter()
             .map(|(k, _)| k.clone())
             .collect();
-        let current_headers: HashSet<_> = current
+        let current_headers: FxHashSet<_> = current
             .headers
             .headers
             .iter()
@@ -252,13 +253,13 @@ impl ResponseDiffer {
             diff.anomaly_score += 0.1;
         }
 
-        let baseline_header_map: HashMap<_, _> = baseline
+        let baseline_header_map: FxHashMap<_, _> = baseline
             .headers
             .headers
             .iter()
             .map(|(k, v)| (k, v))
             .collect();
-        let current_header_map: HashMap<_, _> = current
+        let current_header_map: FxHashMap<_, _> = current
             .headers
             .headers
             .iter()
@@ -278,8 +279,8 @@ impl ResponseDiffer {
             }
         }
 
-        let baseline_cookies: HashSet<_> = baseline.headers.set_cookie.iter().collect();
-        let current_cookies: HashSet<_> = current.headers.set_cookie.iter().collect();
+        let baseline_cookies: FxHashSet<_> = baseline.headers.set_cookie.iter().collect();
+        let current_cookies: FxHashSet<_> = current.headers.set_cookie.iter().collect();
 
         for c in current_cookies.difference(&baseline_cookies) {
             diff.new_cookies.push((*c).clone());
@@ -289,7 +290,8 @@ impl ResponseDiffer {
         let timing_diff = current.timing_ms as i64 - baseline.timing_ms as i64;
         diff.timing_change_ms = timing_diff;
 
-        if timing_diff > 1000 {
+        const TIMING_ANOMALY_THRESHOLD_MS: i64 = 1000;
+        if timing_diff > TIMING_ANOMALY_THRESHOLD_MS {
             diff.anomaly_score += 0.2;
         }
 

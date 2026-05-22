@@ -3,6 +3,11 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 
+const DEFAULT_RATE_LIMIT_THRESHOLD: usize = 3;
+const DEFAULT_BACKOFF_MULTIPLIER: f64 = 0.5;
+const DEFAULT_RECOVERY_MULTIPLIER: f64 = 1.25;
+const DEFAULT_SUCCESS_THRESHOLD_FOR_INCREASE: usize = 10;
+
 #[derive(Debug, Clone)]
 pub struct AdaptiveRateLimiter {
     current_rate: Arc<AtomicU64>,
@@ -33,9 +38,9 @@ impl AdaptiveRateLimiter {
             window_ms,
             consecutive_errors: Arc::new(AtomicUsize::new(0)),
             consecutive_successes: Arc::new(AtomicUsize::new(0)),
-            rate_limit_threshold: 3,
-            backoff_multiplier: 0.5,
-            recovery_multiplier: 1.25,
+            rate_limit_threshold: DEFAULT_RATE_LIMIT_THRESHOLD,
+            backoff_multiplier: DEFAULT_BACKOFF_MULTIPLIER,
+            recovery_multiplier: DEFAULT_RECOVERY_MULTIPLIER,
         }
     }
 
@@ -68,7 +73,7 @@ impl AdaptiveRateLimiter {
         self.consecutive_errors.store(0, Ordering::SeqCst);
         let current = self.consecutive_successes.fetch_add(1, Ordering::SeqCst);
 
-        if current >= 10 {
+        if current >= DEFAULT_SUCCESS_THRESHOLD_FOR_INCREASE {
             self.try_increase_rate();
             self.consecutive_successes.store(0, Ordering::SeqCst);
         }

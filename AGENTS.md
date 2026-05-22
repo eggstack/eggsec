@@ -84,6 +84,8 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 - **Visual Regression Testing**: Use `TestBackend` + `Terminal::new()` with `terminal.backend().buffer()` to verify rendered content
 - **AI Cache Keys**: Always use `CacheKeyBuilder` for cache keys in AI module to avoid collisions
 - **AI Module Override**: See `crates/slapper/src/ai/AGENTS.override.md` for AI-specific patterns
+- **Hash Collections**: Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of std collections for performance
+- **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
 
 ### Codebase Health
 
