@@ -642,16 +642,8 @@ impl ParsedPacket {
         };
 
         let ip = if data.len() > offset {
-            IpPacket::parse(&data[offset..]).map(|mut ip| {
-                let ip_header_len = ip.header_len as usize;
-                let payload_len = ip.payload.len();
-                offset += ip_header_len;
-                if payload_len > 0 && offset + payload_len <= data.len() {
-                    ip.payload = data[offset..offset + payload_len].to_vec();
-                } else {
-                    ip.payload = data[offset..].to_vec();
-                }
-                offset += payload_len;
+            IpPacket::parse(&data[offset..]).map(|ip| {
+                offset += ip.header_len as usize;
                 ip
             })
         } else {

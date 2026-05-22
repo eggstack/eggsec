@@ -62,6 +62,8 @@ Packet capture, crafting, and parsing module workflows and patterns.
 | `parse_impl.rs:649` | Bounds check added for IP payload extraction to prevent out-of-bounds access |
 | `parse_impl.rs:664` | TCP payload extraction now uses `and_then` with bounds check instead of `unwrap()` |
 | `traceroute.rs:622` | `panic!` replaced with `unreachable!` in test code |
+| `craft.rs:186-187` | IPv4 fragmentation flags byte properly initialized (was missing `bytes[7] = 0`) |
+| `capture.rs:47-49` | PcapWriter timestamp now propagates error instead of silently using zero on clock skew |
 
 ## Testing
 

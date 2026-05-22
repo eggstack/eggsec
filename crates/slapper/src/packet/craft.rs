@@ -184,6 +184,7 @@ impl Ipv4Builder {
         bytes[2..4].copy_from_slice(&20u16.to_be_bytes());
         bytes[4..6].copy_from_slice(&self.id.to_be_bytes());
         bytes[6] = 0;
+        bytes[7] = 0;
         bytes[8] = self.ttl;
         bytes[9] = self.protocol;
         bytes[12..16].copy_from_slice(&self.src.octets());

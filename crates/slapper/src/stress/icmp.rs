@@ -117,6 +117,7 @@ fn build_icmp_packet_v4(
     ipv4_packet.set_header_length(5);
     ipv4_packet.set_total_length(total_len as u16);
     ipv4_packet.set_ttl(64);
+    ipv4_packet.set_flags(0x40);
     ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Icmp);
     ipv4_packet.set_source(src_ip);
     ipv4_packet.set_destination(dst_ip);

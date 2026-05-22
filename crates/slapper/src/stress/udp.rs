@@ -241,7 +241,10 @@ async fn run_udp_flood_spoofed(
             };
 
             let result = unsafe {
-                let sock = *socket.lock().unwrap();
+                let sock = match socket.lock() {
+                    Ok(guard) => *guard,
+                    Err(poisoned) => *poisoned.into_inner(),
+                };
                 libc::sendto(
                     sock,
                     packet.as_ptr() as *const libc::c_void,

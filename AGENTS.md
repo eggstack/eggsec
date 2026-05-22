@@ -140,6 +140,9 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `loadtest/runner.rs:300-307` | Rate limiting interval calculation could drift due to using `next + interval` instead of `now + interval` | Changed to compute `next = now_after_sleep + interval` to maintain accurate rate |
 | `packet/parse_impl.rs:649` | IP payload extraction could cause out-of-bounds access | Added bounds check before payload extraction |
 | `packet/parse_impl.rs:664` | TCP payload extraction used `unwrap()` that could panic | Changed to `and_then` with bounds check |
+| `packet/parse_impl.rs:644-651` | Redundant IP payload re-extraction in `ParsedPacket::parse()` | Removed; `IpPacket::parse_ipv4()` already extracts payload correctly |
+| `packet/craft.rs:186-187` | IPv4 fragmentation flags byte not initialized in `Ipv4Builder` | Added `bytes[7] = 0` to properly set flags octet |
+| `packet/capture.rs:47-49` | PcapWriter timestamp silently defaulted on clock error | Changed to propagate error with warning log |
 | `packet/traceroute.rs:622` | `panic!` in test code | Changed to `unreachable!` |
 | `packet/mod.rs` | `http_parse` module declared but not present | Removed unused module declaration |
 | `output/trend.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
@@ -154,6 +157,8 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `slapper-nse/src/libraries/socket.rs:98-139` | UDP `connect_udp()` sandbox check was implemented correctly | NSE socket sandbox is fully enforced for all UDP operations |
 | `slapper-nse/src/libraries/socket.rs:514-543` | `sendto()` called `connect_udp()` which validates sandbox | UDP sendto is now sandboxed via `connect_udp()` host check |
 | `slapper-nse/src/libraries/os.rs:295-302` | Duplicate `getenv` registration in os library | Removed duplicate `getenv_fn2` |
+| `stress/icmp.rs:119` | IPv4 flags not set in ICMP packet builder | Added `set_flags(0x40)` for Don't Fragment in `build_icmp_packet_v4()` |
+| `stress/udp.rs:244` | Mutex poisoning could cause panic in raw UDP flood | Changed `unwrap()` to `into_inner()` for graceful handling |
 | `recon/cve.rs:31` | `CveMapper.cache` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `recon/geolocation.rs:27` | `LOCAL_IP_DATA` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `recon/wayback.rs:86` | `WaybackClient.endpoints` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |

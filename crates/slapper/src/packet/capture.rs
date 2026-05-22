@@ -44,9 +44,13 @@ impl PcapWriter {
     }
 
     pub fn write_packet(&mut self, data: &[u8]) -> std::io::Result<()> {
-        let ts = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default();
+        let ts = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::warn!("Failed to get system time: {}", e);
+                return Ok(());
+            }
+        };
 
         let len = data.len().min(self.snapshot_len);
 

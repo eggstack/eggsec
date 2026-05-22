@@ -53,3 +53,13 @@ All stress tests require `stress-testing` feature flag. Raw socket operations re
 ## Security & Privileges
 
 Many features in this module require elevated privileges (e.g., `root` or `CAP_NET_RAW` on Linux) as they interact with raw sockets.
+
+## Recent Bug Fixes (2026-05-22)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| `parse_impl.rs:644-651` | Redundant IP payload re-extraction in `ParsedPacket::parse()` | Removed; `IpPacket::parse_ipv4()` already extracts payload correctly |
+| `craft.rs:186-187` | IPv4 fragmentation flags byte not initialized in `Ipv4Builder` | Added `bytes[7] = 0` to properly set flags octet |
+| `capture.rs:47-49` | PcapWriter timestamp silently defaulted on clock error | Changed to propagate error with warning log |
+| `icmp.rs:119` | IPv4 flags not set in ICMP packet builder | Added `set_flags(0x40)` for Don't Fragment in `build_icmp_packet_v4()` |
+| `udp.rs:244` | Mutex poisoning could cause panic in raw UDP flood | Changed `unwrap()` to `into_inner()` for graceful handling |

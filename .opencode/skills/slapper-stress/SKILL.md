@@ -27,7 +27,14 @@ The `raw_udp` module in `stress/udp.rs:20-117` is integrated:
 - `StressAuthorization::verify_duration()` - enforces max_duration_secs
 - `StressScope` config loaded from `stress.toml` in config dir
 
-### Feature Requirements
+### Bug Fixes (2026-05-22)
+
+| Issue | Fix |
+|-------|-----|
+| `icmp.rs:119` | IPv4 flags field properly set to `0x40` (Don't Fragment) in `build_icmp_packet_v4()` |
+| `udp.rs:244` | Mutex poisoning handled in `run_udp_flood_spoofed()` with `into_inner()` instead of `unwrap()` |
+
+## Feature Requirements
 - All stress tests require `stress-testing` feature flag
 - Raw socket operations (SYN, UDP spoofed, ICMP) require Unix platform
 - IP spoofing requires `CAP_NET_RAW` or root privileges
