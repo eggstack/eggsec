@@ -135,9 +135,14 @@ impl LongitudinalMemory {
         let target_path = self.get_target_path(target);
         let target_hash = target_path
             .file_stem()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                target.hash(&mut hasher);
+                format!("{:016x}", hasher.finish())
+            });
 
         let mut locks = self.target_locks.lock().await;
         locks

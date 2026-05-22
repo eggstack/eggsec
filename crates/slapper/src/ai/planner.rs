@@ -453,7 +453,7 @@ impl AiPlanner {
                         .plan
                         .stages
                         .iter()
-                        .any(|s| s.target.contains(&outcome.target))
+                        .any(|s| s.name.to_lowercase().contains(&outcome.target.to_lowercase()))
             })
             .max_by_key(|(_, cached)| cached.last_used)
             .map(|(k, _)| k.clone());

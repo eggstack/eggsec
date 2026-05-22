@@ -85,6 +85,14 @@ self.evict_knowledge_base_if_needed();
 self.knowledge_base.push(entry);
 ```
 
+## Bug Fixes (2026-05-22)
+
+### waf_bypass.rs:find_bypass loop
+Added `continue` after `failed_attempts >= 3` check to properly skip non-matching entries instead of falling through to AI query for remaining entries.
+
+### planner.rs:record_outcome
+Fixed `ExecutionStage` field reference - changed `s.target.contains()` to `s.name.to_lowercase().contains()` since `ExecutionStage` has `name`, not `target`.
+
 ## Resources
 - `crates/slapper/src/ai/AGENTS.override.md` - Detailed AI patterns and bug fixes
 - `AGENTS.md` - General project guidelines

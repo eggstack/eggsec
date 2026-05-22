@@ -654,7 +654,12 @@ impl Agent {
         if let Some(ref client) = self.ai_client {
             let finding_values: Vec<serde_json::Value> = findings
                 .iter()
-                .map(|f| serde_json::to_value(f).unwrap_or_default())
+                .map(|f| {
+                    serde_json::to_value(f).unwrap_or_else(|e| {
+                        tracing::warn!("Failed to serialize finding {}: {}", f.id, e);
+                        serde_json::Value::Null
+                    })
+                })
                 .collect();
 
             if let Ok(analysis) = client.analyze_findings_typed(&finding_values).await {

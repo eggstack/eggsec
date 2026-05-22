@@ -104,6 +104,7 @@ impl SmartWafBypass {
                     );
                     return Ok(None);
                 }
+                continue;
             }
         }
 

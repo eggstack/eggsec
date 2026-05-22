@@ -36,6 +36,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | Module | Override File |
 |--------|---------------|
 | `agent/` | `crates/slapper/src/agent/AGENTS.override.md` |
+| `ai/` | `crates/slapper/src/ai/AGENTS.override.md` |
 | `fuzzer/` | `crates/slapper/src/fuzzer/AGENTS.override.md` |
 | `scanner/` | `crates/slapper/src/scanner/AGENTS.override.md` |
 | `tui/` | `crates/slapper/src/tui/AGENTS.override.md` |
@@ -46,7 +47,6 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `output/` | `crates/slapper/src/output/AGENTS.override.md` |
 | `proxy/` | `crates/slapper/src/proxy/AGENTS.override.md` |
 | `stress/` | `crates/slapper/src/stress/AGENTS.override.md` |
-| `ai/` | `crates/slapper/src/ai/AGENTS.override.md` |
 | `distributed/` | `crates/slapper/src/distributed/AGENTS.override.md` |
 | `packet/` | `crates/slapper/src/packet/` (uses pnet, pnet_packet for raw sockets) |
 | `loadtest/` | `crates/slapper/src/loadtest/` (uses FxHashMap, hdrhistogram) |
@@ -93,7 +93,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 
 | Metric | Value |
 |--------|-------|
-| Tests | 1324 base, 1394+ with full features |
+| Tests | 1324 base, 1469+ with full features |
 | Clippy | ~33 warnings (pre-existing, none in ai module) |
 | Source files | 743 |
 | Payload types | 30 |
@@ -102,7 +102,18 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 ### Security Notes
 
 - **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are now blocked via private IP checks in `TargetScope::parse()`. Previously they bypassed DNS resolution and private IP blocking.
-- **TUI Settings Tab**: Only exposes a subset of config fields. Saving via the TUI will cause data loss for `profiles`, `schedule`, `remote`, `ai`, `search`, `alert_channels`, and other fields not shown in the UI. |
+- **TUI Settings Tab**: Only exposes a subset of config fields. Saving via the TUI will cause data loss for `profiles`, `schedule`, `remote`, `ai`, `search`, `alert_channels`, and other fields not shown in the UI.
+
+### Recent Bug Fixes (2026-05-22)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| `ai/waf_bypass.rs:107` | Loop missing `continue` caused incorrect fallthrough to AI query when entry had `failed_attempts < 3` | Added `continue` after `failed_attempts >= 3` check |
+| `ai/planner.rs:456` | `ExecutionStage` has `name` field, not `target` | Changed to `s.name.to_lowercase().contains()` |
+| `agent/alerts/routing.rs:81` | `expect()` on fallback HTTP client could panic | Propagate error via `?` instead |
+| `agent/alerts/routing.rs:107-112` | Race condition in `cleanup_stale_entries` | Inline cleanup under single lock scope |
+| `agent/memory.rs:137` | `unwrap()` on `file_stem()` could panic for hidden files | Added fallback hash-based name |
+| `agent/mod.rs:657` | Silent error suppression with `unwrap_or_default()` | Log warning with `unwrap_or_else()` |
 
 ## Skills Directory
 

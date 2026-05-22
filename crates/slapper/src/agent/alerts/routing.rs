@@ -70,16 +70,18 @@ impl AlertRouter {
     }
 
     pub fn new() -> Result<Self> {
+        let client = Self::create_pooled_client().unwrap_or_else(|_| {
+            reqwest::Client::builder()
+                .pool_max_idle_per_host(5)
+                .build()
+                .context("Failed to create fallback HTTP client")?
+        });
+
         Ok(Self {
             registry: Arc::new(Mutex::new(ChannelRegistry::new())),
             recent_alerts: Arc::new(Mutex::new(std::collections::HashMap::new())),
             dedup_window_secs: 300,
-            client: Self::create_pooled_client().unwrap_or_else(|_| {
-                reqwest::Client::builder()
-                    .pool_max_idle_per_host(5)
-                    .build()
-                    .expect("Failed to create fallback HTTP client")
-            }),
+            client,
         })
     }
 
@@ -105,10 +107,10 @@ impl AlertRouter {
     /// Send alert to all channels, or filter by channel_names if provided
     pub async fn send(&self, alert: &Alert, channel_names: Option<&[String]>) -> Result<()> {
         {
-            let recent_alerts = self.recent_alerts.lock();
+            let mut recent_alerts = self.recent_alerts.lock();
             if recent_alerts.len() > 1000 {
-                drop(recent_alerts);
-                self.cleanup_stale_entries();
+                let cutoff = Duration::from_secs(self.dedup_window_secs * 2);
+                recent_alerts.retain(|_, last_sent| last_sent.elapsed() < cutoff);
             }
         }
 

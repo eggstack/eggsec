@@ -94,10 +94,18 @@ Slapper implements the **Model Context Protocol (MCP)**, allowing it to be used 
 
 ## Recent Bug Fixes (2026-05-22)
 
-1. Fixed WAF bypass knowledge base lookup logic for failed entries
-2. Fixed cache lock handling to prevent race conditions during persist
-3. Lowered planner cache thresholds for better hit rate
-4. Added knowledge base eviction to prevent unbounded growth
-5. Fixed Clone implementation for SmartWafBypass
+### AI Module
+1. **waf_bypass.rs:107** - Added `continue` after `failed_attempts >= 3` check to prevent incorrect fallthrough to AI query
+2. **planner.rs:456** - Fixed `ExecutionStage` field reference from `s.target` to `s.name.to_lowercase().contains()`
+3. **cache lock handling** - Race condition prevention during persist (2026-05-22 earlier fix)
+4. **planner cache thresholds** - Lowered from `use_count > 3` to `>= 2` for better hit rate
+5. **Knowledge base eviction** - Added `evict_knowledge_base_if_needed()` to prevent unbounded growth
+6. **SmartWafBypass Clone** - Fixed Clone implementation
 
-See `crates/slapper/src/ai/AGENTS.override.md` for detailed patterns.
+### Agent Module
+1. **alerts/routing.rs:81** - Removed `expect()` panic on fallback HTTP client creation
+2. **alerts/routing.rs:107-112** - Fixed race condition in `cleanup_stale_entries` by inlining cleanup under single lock scope
+3. **memory.rs:137** - Added fallback hash-based name when `file_stem()` returns None
+4. **mod.rs:657** - Changed `unwrap_or_default()` to `unwrap_or_else()` with warning log
+
+See `crates/slapper/src/ai/AGENTS.override.md` for detailed AI patterns and `crates/slapper/src/agent/AGENTS.override.md` for agent patterns.
