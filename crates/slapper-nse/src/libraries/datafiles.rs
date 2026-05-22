@@ -34,7 +34,6 @@ fn get_services() -> &'static HashMap<&'static str, (u16, &'static str)> {
         m.insert("http", (80, "tcp"));
         m.insert("https", (443, "tcp"));
         m.insert("ftp", (21, "tcp"));
-        m.insert("ssh", (22, "tcp"));
         m.insert("telnet", (23, "tcp"));
         m.insert("smtp", (25, "tcp"));
         m.insert("pop3", (110, "tcp"));
