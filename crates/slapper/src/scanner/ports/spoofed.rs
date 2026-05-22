@@ -72,20 +72,19 @@ fn log_packet_trace(src_ip: &str, src_port: u16, dst_ip: &str, dst_port: u16, sc
     }
 }
 
-pub fn init_packet_trace(path: &str) -> Result<()> {
+pub fn init_packet_trace(path: &str, include_header: bool) -> Result<()> {
     let file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)?;
 
-    let mut header = std::fs::OpenOptions::new()
-        .create_new(true)
-        .append(true)
-        .open(path);
-
-    if let Ok(ref mut f) = header {
+    if include_header {
+        let mut header_file = std::fs::OpenOptions::new()
+            .create_new(true)
+            .append(true)
+            .open(path)?;
         use std::io::Write;
-        let _ = writeln!(f, "timestamp,src_ip,src_port,dst_ip,dst_port,scan_type");
+        let _ = writeln!(header_file, "timestamp,src_ip,src_port,dst_ip,dst_port,scan_type");
     }
 
     PACKET_TRACE_FILE
@@ -473,8 +472,10 @@ pub(crate) async fn scan_ports_spoofed(
         pb.finish_and_clear();
     }
 
-    let mut results: Vec<PortResult> = Arc::try_unwrap(results)
-        .expect("All task clones should have been dropped after join_all")
+    let results_map = Arc::try_unwrap(results).map_err(|_| {
+        crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
+    })?;
+    let mut results: Vec<PortResult> = results_map
         .into_iter()
         .map(|(_, v)| v)
         .filter(|p| p.status == "open")
@@ -532,7 +533,7 @@ mod tests {
         let path = temp_dir.join("test_packet_trace.csv");
         let path_str = path.to_str().unwrap();
 
-        let result = init_packet_trace(path_str);
+        let result = init_packet_trace(path_str, true);
         assert!(result.is_ok());
 
         // Clean up

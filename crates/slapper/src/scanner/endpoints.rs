@@ -832,8 +832,10 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         pb.finish_and_clear();
     }
 
-    let mut results: Vec<EndpointResult> = Arc::try_unwrap(results)
-        .expect("all workers completed")
+    let results_map = Arc::try_unwrap(results).map_err(|_| {
+        crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
+    })?;
+    let mut results: Vec<EndpointResult> = results_map
         .into_iter()
         .map(|(_, v)| v)
         .collect();

@@ -4,8 +4,8 @@
 //! conditions, and template metadata.
 
 use crate::types::Severity;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VulnerabilityTemplate {
@@ -45,21 +45,11 @@ impl VulnerabilityTemplate {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum Matcher {
-    Http(HttpMatcher),
-    Dns(DnsMatcher),
-    #[serde(other)]
-    Other,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpMatcher {
     pub path: Option<String>,
     pub method: Option<String>,
     #[serde(default)]
-    pub headers: HashMap<String, String>,
-    #[serde(default)]
+    pub headers: FxHashMap<String, String>,
     pub body: Option<String>,
     #[serde(default)]
     pub search: Vec<SearchPattern>,
@@ -74,6 +64,15 @@ pub struct DnsMatcher {
     pub query_type: Option<String>,
     #[serde(default)]
     pub search: Vec<SearchPattern>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Matcher {
+    Http(HttpMatcher),
+    Dns(DnsMatcher),
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,7 +107,7 @@ pub struct TemplateRequest {
     #[serde(default)]
     pub path: String,
     #[serde(default)]
-    pub headers: HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
     #[serde(default)]
     pub body: Option<String>,
     #[serde(default)]
@@ -120,7 +119,7 @@ impl Default for TemplateRequest {
         Self {
             method: "GET".to_string(),
             path: "/".to_string(),
-            headers: HashMap::new(),
+            headers: FxHashMap::default(),
             body: None,
             raw: None,
         }

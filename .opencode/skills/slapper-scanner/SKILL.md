@@ -2,75 +2,89 @@
 
 Port scanning and endpoint discovery module workflows and patterns.
 
-## Key Types and Patterns
+## Key Files and Types
 
-### Port Scanning
-- `scanner/ports/mod.rs` - Main port scanning logic
-- `scanner/ports/spoofed.rs` - Raw socket scanning (feature-gated behind `stress-testing`)
-- `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled
-- Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing
+### Port Scanning (`scanner/ports/`)
+- `mod.rs` - `scan_ports()` entry point, `PortScanConfig`, `PortResult`, `PortScanResults`
+- `spoofed.rs` - Raw socket scanning, `init_packet_trace(path, include_header)` for CSV tracing
 
-### CLI Integration
-Port scanning is invoked via CLI commands:
-- `slapper scan-ports <host>` - TCP port scanning
-- `slapper scan-endpoints <url>` - HTTP endpoint discovery
-- `slapper fingerprint <host>` - Service fingerprinting
+### Endpoint Discovery (`scanner/endpoints.rs`)
+- `EndpointScanConfig`, `EndpointResult`, `EndpointScanResults`
+- 224 built-in endpoint paths
 
-Arguments are defined in `cli/scan.rs` (`PortScanArgs`, `EndpointScanArgs`, `FingerprintArgs`).
+### Fingerprinting (`scanner/fingerprint.rs`, `scanner/udp_fingerprint.rs`)
+- `ServiceFingerprint`, `fingerprint_services()`, `fingerprint_udp_services()`
 
-Handlers are in `commands/handlers/scan.rs`:
-- `handle_scan_ports()` - Port scanning entry point
-- `handle_scan_endpoints()` - Endpoint discovery entry point
-- `handle_fingerprint()` - Service fingerprinting
+### Templates (`scanner/templates/`)
+- `VulnerabilityTemplate`, `Matcher`, `HttpMatcher`, `DnsMatcher`, `TemplateInfo`
+- `TemplateExecutor`, `TemplateMatcher`
+- Uses `FxHashMap` for headers (not `std::collections::HashMap`)
 
-### CLI Argument Patterns
+### CMS (`scanner/cms/`)
+- WordPress, Drupal, Joomla detection
+- `CmsScanResult`, `CmsVulnerability`
 
-**PortScanArgs key fields:**
-- `host: String` - Target IP or hostname
-- `ports: String` - Port range (e.g., "1-1024" or "22,80,443")
-- `source_ip: Option<String>` - Source IP for spoofing
-- `spoof_range: Option<String>` - Spoof IP range
-- `source_port: Option<u16>` - Source port
-- `timeout: u64` - Scan timeout in seconds
+## CLI Commands
 
-**EndpointScanArgs key fields:**
-- `url: String` - Target base URL
-- `wordlist: Option<String>` - Path to wordlist file
-- `spoof_ip: Option<String>` - Spoof source IP
-- `decoy: Option<String>` - Decoy IP for stealth
+| Command | Handler | Key Args |
+|---------|---------|----------|
+| `scan-ports <host>` | `handle_scan_ports()` | `--ports`, `--timeout`, `--spoof-ip`, `--decoy` |
+| `scan-endpoints <url>` | `handle_scan_endpoints()` | `--wordlist`, `--spoof-ip`, `--concurrency` |
+| `fingerprint <host>` | `handle_fingerprint()` | `--ports`, `--timeout` |
 
-### Endpoint Discovery
-`scanner/endpoints.rs` handles HTTP endpoint discovery.
+## Critical Patterns
 
-### Templates
-`scanner/templates/` - Nuclei-style template engine.
+### Arc::try_unwrap Error Handling
+```rust
+// CORRECT - proper error handling
+let results_map = Arc::try_unwrap(results).map_err(|_| {
+    SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
+})?;
+let results = results_map.into_iter().map(|(_, v)| v).collect();
 
-### Fingerprinting
-`scanner/fingerprint.rs` and `scanner/udp_fingerprint.rs` for service detection.
+// WRONG - could panic
+let results = Arc::try_unwrap(results).expect("all workers completed").into_iter()...
+```
+
+### HashMap Usage
+Use `FxHashMap` from `rustc_hash` for performance:
+```rust
+use rustc_hash::FxHashMap;
+let headers: FxHashMap<String, String> = FxHashMap::default();
+```
+
+### init_packet_trace
+```rust
+// For new files (tests) - write header
+init_packet_trace(path, true);
+
+// For CLI runs - append without header
+init_packet_trace(path, false);
+```
 
 ## Testing
 
-### Running Scanner Tests
 ```bash
-cargo test --lib -p slapper scanner::
+cargo test --lib -p slapper -- scanner::
+cargo test --test scanner_tests -p slapper
 ```
 
-### Writing Tests
-Follow existing test patterns in `scanner/` modules, testing port scanning, endpoint discovery, and fingerprinting logic.
+## Adding New Features
 
-## Common Tasks
-
-### Adding a New Port Scan Type
-1. Implement scan logic in `scanner/ports/`
-2. Gate raw socket features behind `stress-testing` feature flag
+### New Port Scan Type
+1. Add to `scanner/ports/mod.rs` or `spoofed.rs`
+2. Gate raw socket features behind `#[cfg(feature = "stress-testing")]`
 3. Use `OnceLock<Mutex<File>>` for thread-safe packet tracing
-4. Add tests for new scan type
+4. Return proper `Result<PortScanResults>` with error handling
 
-### Adding Endpoint Discovery Rules
-1. Update `scanner/endpoints.rs` with new discovery logic
-2. Test endpoint extraction from HTTP responses
+### New Endpoint Discovery Pattern
+1. Add to `DEFAULT_ENDPOINTS` in `endpoints.rs`
+2. Update `is_interesting()` for new sensitivity patterns
+3. Add tests
 
-## Resources
-- `crates/slapper/src/scanner/AGENTS.override.md` - Detailed scanner patterns
-- `AGENTS.md` - General project guidelines
-- `ARCHITECTURE.md` - Overall design
+## Bug Fixes (2026-05-22)
+
+- `Arc::try_unwrap().expect()` replaced with `map_err` + proper error handling in 4 files
+- `init_packet_trace` fixed with `include_header` boolean parameter
+- Duplicate `HttpMatcher` removed, `DnsMatcher` properly ordered before `Matcher` enum
+- HashMap → FxHashMap in templates/matcher.rs, templates/models.rs, cms/mod.rs

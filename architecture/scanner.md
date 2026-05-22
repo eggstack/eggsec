@@ -8,31 +8,34 @@ The Scanner module is responsible for the "discovery" phase of a security assess
 
 High-performance TCP and UDP port scanning.
 
-- **TCP Connect Scan**: Standard 3-way handshake.
-- **SYN Scan**: Half-open scanning for speed and stealth (requires elevated privileges).
-- **Service Fingerprinting**: Once a port is found open, Slapper attempts to identify the running service and version.
+- **TCP Connect Scan**: Standard TCP connection using `tokio::net::TcpStream` with semaphore-controlled concurrency
+- **SYN Scan**: Raw socket scanning via `pnet` crate (requires `stress-testing` feature + Unix + root privileges)
+- **Service Fingerprinting**: Once a port is found open, Slapper attempts to identify the running service and version
+- **Spoofed Scanning**: IP spoofing with decoy support (Simultaneous or Staggered modes)
+- **Timing Templates**: Nmap-style T0-T5 presets controlling parallelism, timeouts, and rate limits
 
 ### Endpoint Discovery (`endpoints.rs`)
 
 Finding hidden files and directories on web servers.
 
-- **Wordlist-based Brute Forcing**: Uses extensive wordlists to find common endpoints.
-- **Recursive Scanning**: Automatically crawls discovered directories.
-- **Custom Payload Support**: Allows for targeted discovery based on specific technologies.
+- **Wordlist-based Brute Forcing**: Uses extensive wordlists (224 built-in paths) to find common endpoints
+- **Custom Wordlist Loading**: Load endpoints from file
+- **Custom Payload Support**: Allows for targeted discovery based on specific technologies
+- **Note**: Does NOT implement recursive crawling - flat wordlist scan only
 
 ### Fingerprinting (`fingerprint.rs`, `cms/`)
 
 Identifying the technology stack of a target.
 
-- **HTTP Banner Grabbing**: Extracting information from server headers.
-- **Technology Detection**: Identifying frameworks (e.g., React, Django), databases, and CMS (e.g., WordPress, Drupal).
-- **CVE Mapping**: Automatically mapping discovered versions to known vulnerabilities.
+- **HTTP Banner Grabbing**: Extracting information from server headers
+- **Technology Detection**: Identifying frameworks (e.g., React, Django), databases, and CMS (e.g., WordPress, Drupal)
+- **CVE Mapping**: Automatically mapping discovered versions to known vulnerabilities
 
 ### Advanced Probing (`icmp_probe.rs`, `udp_fingerprint.rs`)
 
-- **ICMP Probing**: Host discovery using echo requests and other ICMP types.
-- **UDP Fingerprinting**: Identifying services on UDP ports through specific probe payloads.
-- **Spoofing (`spoof.rs`)**: Techniques for source IP spoofing and decoys (where supported).
+- **ICMP Probing**: Host discovery using echo requests (requires `stress-testing`)
+- **UDP Fingerprinting**: Identifying services on UDP ports through specific probe payloads
+- **Spoofing (`spoof.rs`)**: Techniques for source IP spoofing and decoys (where supported)
 
 ## Timing and Performance (`timing.rs`)
 
@@ -41,3 +44,25 @@ The scanner uses "Timing Templates" (similar to Nmap's -T0 through -T5) to contr
 ## Integration
 
 Discovered information is often fed into the **Fuzzer** or **Vulnerability Management** modules for further analysis.
+
+## Key Design Patterns
+
+| Pattern | Usage |
+|---------|-------|
+| `DashMap` | Lock-free concurrent result collection |
+| `tokio::sync::Semaphore` | Concurrency control for parallel operations |
+| `rustc_hash::FxHashMap` | High-performance hash map (instead of std `HashMap`) |
+| Feature gating (`stress-testing`) | ICMP and raw socket features gated behind feature flag |
+| `Arc::try_unwrap` + `map_err` | Safe error handling when collecting parallel results |
+
+## Bug Fixes (2026-05-22)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `ports/mod.rs:595-598` | `Arc::try_unwrap(...).expect()` panic | Proper error handling |
+| `ports/spoofed.rs:75-95` | `init_packet_trace` opened file twice | Added `include_header` parameter |
+| `templates/models.rs:57,61` | Duplicate `HttpMatcher` + missing `DnsMatcher` | Fixed struct order |
+| `templates/matcher.rs:9,24` | `HashMap` instead of `FxHashMap` | Performance fix |
+| `cms/mod.rs:52,165,291` | `HashMap` instead of `FxHashMap` | Performance fix |
+| `endpoints.rs:835-839` | `Arc::try_unwrap(...).expect()` panic | Proper error handling |
+| `fingerprint.rs:319-323` | `Arc::try_unwrap(...).expect()` panic | Proper error handling |

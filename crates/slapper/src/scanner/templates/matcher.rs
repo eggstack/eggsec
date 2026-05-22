@@ -6,7 +6,7 @@
 use super::models::{HttpMatcher, Matcher, SearchPattern, VulnerabilityTemplate};
 use crate::error::Result;
 use crate::types::Severity;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone)]
 pub struct MatchResult {
@@ -21,7 +21,7 @@ pub struct MatchResult {
 pub struct HttpResponseData {
     pub path: String,
     pub status: u16,
-    pub headers: HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
     pub body: String,
 }
 
@@ -222,7 +222,7 @@ mod tests {
         DnsMatcher, HttpMatcher, InteractshConfig, MatchMode, SearchPattern, TemplateInfo,
         VulnerabilityTemplate,
     };
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
@@ -247,7 +247,7 @@ mod tests {
         let response = reqwest::get(url).await.unwrap();
         let status = response.status().as_u16();
         let path = response.url().path().to_string();
-        let mut headers = HashMap::new();
+        let mut headers = FxHashMap::default();
         for (key, value) in response.headers() {
             headers.insert(
                 key.as_str().to_ascii_lowercase(),
@@ -331,7 +331,7 @@ mod tests {
             matchers: vec![Matcher::Http(HttpMatcher {
                 path: Some("/".to_string()),
                 method: Some("GET".to_string()),
-                headers: HashMap::new(),
+                headers: FxHashMap::default(),
                 body: None,
                 search: vec![SearchPattern {
                     pattern: "callback.example".to_string(),
@@ -373,7 +373,7 @@ mod tests {
             matchers: vec![Matcher::Http(HttpMatcher {
                 path: Some("/".to_string()),
                 method: Some("GET".to_string()),
-                headers: HashMap::new(),
+                headers: FxHashMap::default(),
                 body: None,
                 search: vec![SearchPattern {
                     pattern: "vulnerable".to_string(),
@@ -412,7 +412,7 @@ mod tests {
             matchers: vec![Matcher::Http(HttpMatcher {
                 path: Some("/".to_string()),
                 method: Some("GET".to_string()),
-                headers: HashMap::new(),
+                headers: FxHashMap::default(),
                 body: None,
                 search: vec![],
                 status_codes: vec![200],

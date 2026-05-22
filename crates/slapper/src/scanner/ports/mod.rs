@@ -191,7 +191,7 @@ pub async fn run_cli(args: PortScanArgs, config: &SlapperConfig) -> Result<()> {
     )?;
 
     if let Some(ref trace_path) = spoof_config.packet_trace {
-        if let Err(e) = init_packet_trace(trace_path) {
+        if let Err(e) = init_packet_trace(trace_path, false) {
             eprintln!("Warning: Failed to initialize packet trace: {}", e);
         }
     }
@@ -367,7 +367,7 @@ where
     )?;
 
     if let Some(ref trace_path) = spoof_config.packet_trace {
-        if let Err(e) = init_packet_trace(trace_path) {
+        if let Err(e) = init_packet_trace(trace_path, false) {
             eprintln!("Warning: Failed to initialize packet trace: {}", e);
         }
     }
@@ -592,8 +592,10 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         pb.finish_and_clear();
     }
 
-    let mut results: Vec<PortResult> = Arc::try_unwrap(results)
-        .expect("all workers completed")
+    let results_map = Arc::try_unwrap(results).map_err(|_| {
+        crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
+    })?;
+    let mut results: Vec<PortResult> = results_map
         .into_iter()
         .map(|(_, v)| v)
         .collect();

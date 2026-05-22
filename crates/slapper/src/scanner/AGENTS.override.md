@@ -1,22 +1,47 @@
 # Scanner Module Override
 
-Specialized guidance for the port scanning and endpoint discovery module.
+## Key Files
 
-## Port Scanning
+| File | Purpose |
+|------|---------|
+| `scanner/ports/mod.rs` | Main TCP port scanning with semaphore concurrency |
+| `scanner/ports/spoofed.rs` | Raw socket scanning (requires `stress-testing` + Unix) |
+| `scanner/endpoints.rs` | HTTP endpoint discovery with wordlist brute forcing |
+| `scanner/fingerprint.rs` | TCP service fingerprinting via banner grabbing |
+| `scanner/udp_fingerprint.rs` | UDP service fingerprinting |
+| `scanner/spoof.rs` | IP spoofing config, decoy modes, packet crafting |
+| `scanner/timing.rs` | Nmap-style timing presets (T0-T5) |
+| `scanner/templates/` | Nuclei-style vulnerability template engine |
+| `scanner/cms/` | WordPress, Drupal, Joomla detection + CVE mapping |
 
-- `scanner/ports/mod.rs` - Main port scanning logic
-- `scanner/ports/spoofed.rs` - Raw socket scanning (feature-gated behind `stress-testing`)
-- `scan_ports()` delegates to `spoofed::scan_ports_spoofed()` when spoof enabled
-- Packet trace uses `OnceLock<Mutex<File>>` for thread-safe file writing
+## Critical Patterns
 
-## Endpoint Discovery
+### Arc::try_unwrap Error Handling
+When collecting results from parallel workers, the pattern is:
+```rust
+let results_map = Arc::try_unwrap(results).map_err(|_| {
+    crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
+})?;
+let results = results_map.into_iter().map(|(_, v)| v).collect();
+```
 
-`scanner/endpoints.rs` handles HTTP endpoint discovery
+### Hash Collections
+Use `FxHashMap`/`FxHashSet` from `rustc_hash` instead of `std::collections::HashMap`:
+```rust
+use rustc_hash::FxHashMap;
+let map: FxHashMap<String, String> = FxHashMap::default();
+```
 
-## Templates
+### Packet Trace Initialization
+`init_packet_trace(path, include_header)` takes a boolean to control header writing:
+- `true` = write CSV header (for new files/tests)
+- `false` = append without header (for CLI runs)
 
-`scanner/templates/` - Nuclei-style template engine
+## Bug Fixes Applied (2026-05-22)
 
-## Fingerprinting
-
-`scanner/fingerprint.rs` and `scanner/udp_fingerprint.rs` for service detection
+| Issue | Fix |
+|-------|-----|
+| `Arc::try_unwrap().expect()` panic in 4 files | Proper error handling via `map_err` |
+| `init_packet_trace` opened file twice with contradictory options | Added `include_header` parameter |
+| Duplicate `HttpMatcher` definition | Removed duplicate, `DnsMatcher` now defined before `Matcher` enum |
+| HashMap in templates/matcher, templates/models, cms/mod | Changed to `FxHashMap` |

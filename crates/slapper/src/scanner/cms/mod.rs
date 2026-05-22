@@ -11,8 +11,8 @@ use crate::error::Result;
 use crate::types::Severity;
 use crate::utils::{create_http_client, create_insecure_http_client};
 use regex::RegexBuilder;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CmsTarget {
@@ -49,7 +49,7 @@ pub struct CmsScanResult {
     pub version: Option<String>,
     pub vulnerabilities: Vec<CmsVulnerability>,
     pub misconfigurations: Vec<CmsMisconfiguration>,
-    pub security_headers: HashMap<String, String>,
+    pub security_headers: FxHashMap<String, String>,
     pub overall_severity: Severity,
 }
 
@@ -162,7 +162,7 @@ impl CmsScanner {
             version: target.version.clone(),
             vulnerabilities,
             misconfigurations,
-            security_headers: std::collections::HashMap::new(),
+            security_headers: FxHashMap::default(),
             overall_severity,
         }
     }
@@ -288,7 +288,7 @@ impl CmsScanner {
                 version: None,
                 vulnerabilities: Vec::new(),
                 misconfigurations: Vec::new(),
-                security_headers: HashMap::new(),
+                security_headers: FxHashMap::default(),
                 overall_severity: Severity::Info,
             }),
         }

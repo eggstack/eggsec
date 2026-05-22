@@ -68,7 +68,7 @@ pub use executor::{TemplateEngine, TemplateExecutionResult, TemplateExecutor};
 pub use loader::TemplateLoader;
 pub use marketplace::{MarketplaceListing, MarketplaceTemplate, TemplateMarketplace};
 pub use matcher::{MatchResult, TemplateMatcher};
-pub use models::{Matcher, VulnerabilityTemplate};
+pub use models::{Matcher, VulnerabilityTemplate, TemplateInfo};
 pub use verify::{
     SignedTemplate, SignerInfo, TemplateSigner, TemplateVerifier, VerificationResult,
 };
