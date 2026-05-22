@@ -49,7 +49,8 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
         "open",
         lua.create_function(move |lua, (filename, mode): (String, Option<String>)| {
             if sandbox_enabled {
-                if filename.contains("..") || !sandbox_for_open.is_path_allowed(&filename) {
+                let path_buf = PathBuf::from(&filename);
+                if !sandbox_for_open.is_path_allowed(path_buf.to_string_lossy().as_ref()) {
                     IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                     let result = lua.create_table()?;
                     result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
@@ -222,7 +223,8 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
         "lines",
         lua.create_function(move |lua, filename: String| {
             if sandbox_enabled {
-                if filename.contains("..") || !sandbox_for_lines.is_path_allowed(&filename) {
+                let path_buf = PathBuf::from(&filename);
+                if !sandbox_for_lines.is_path_allowed(path_buf.to_string_lossy().as_ref()) {
                     IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                     let result = lua.create_table()?;
                     result.set("error", format!("Path '{}' blocked by sandbox", filename))?;

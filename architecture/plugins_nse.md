@@ -97,3 +97,8 @@ The `vulns` library provides access to CVE databases:
 | Python plugin result truncation was silent | Now logs count of truncated findings |
 | UDP `sendto()` didn't validate sandbox | `connect_udp()` now checks host via `is_host_allowed()` |
 | Duplicate `getenv` registration in `os.rs` | Removed duplicate `getenv_fn2` at line 295-302 |
+| `output.rs` multiple `unwrap()` on `writeln!` calls | Changed to use `let _ = writeln!()` pattern |
+| `CveCache` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `CveAggregator` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |
+| Path traversal check bypass via `..` string check | Removed simple string check; rely on `is_path_allowed()` |
+| `async_executor.rs` Default impl panicked | Changed to `unwrap_or_else` panic with descriptive message |

@@ -104,6 +104,12 @@ impl Drop for AsyncNseExecutor {
 
 impl Default for AsyncNseExecutor {
     fn default() -> Self {
-        Self::new().expect("Failed to create async NSE executor")
+        Self {
+            core: ExecutorCore::new().unwrap_or_else(|_| {
+                panic!("Failed to create ExecutorCore in Default impl")
+            }),
+            runtime: None,
+            owns_runtime: false,
+        }
     }
 }

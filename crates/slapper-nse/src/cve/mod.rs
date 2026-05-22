@@ -12,10 +12,11 @@ pub use cisa_kev::CisaKevClient;
 pub use nvd::NvdClient;
 pub use osv::OsvClient;
 
+use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 pub enum CveClientEnum {
     Nvd(NvdClient),
@@ -170,14 +171,14 @@ pub trait CveClient: Send + Sync {
 
 /// Cache for CVE results
 pub struct CveCache {
-    records: Arc<RwLock<HashMap<String, (CveRecord, std::time::Instant)>>>,
+    records: Arc<RwLock<FxHashMap<String, (CveRecord, std::time::Instant)>>,
     ttl: std::time::Duration,
 }
 
 impl CveCache {
     pub fn new(ttl_seconds: u64) -> Self {
         Self {
-            records: Arc::new(RwLock::new(HashMap::new())),
+            records: Arc::new(RwLock::new(FxHashMap::default())),
             ttl: std::time::Duration::from_secs(ttl_seconds),
         }
     }
@@ -256,7 +257,7 @@ impl CveAggregator {
 
     pub async fn search(&self, query: &str) -> Result<Vec<CveRecord>, CveError> {
         let mut results = Vec::new();
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = FxHashSet::default();
 
         for client in &self.clients {
             match client.search(query).await {
@@ -283,7 +284,7 @@ impl CveAggregator {
         ecosystem: &str,
     ) -> Result<Vec<CveRecord>, CveError> {
         let mut results = Vec::new();
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = FxHashSet::default();
 
         for client in &self.clients {
             match client.get_for_product(package, ecosystem).await {

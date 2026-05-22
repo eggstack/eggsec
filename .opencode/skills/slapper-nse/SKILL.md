@@ -103,6 +103,11 @@ Located in `src/cve/`:
 |-------|-----|
 | UDP `sendto()` didn't validate sandbox | `connect_udp()` now checks host via `is_host_allowed()` |
 | Duplicate `getenv` registration in `os.rs` | Removed duplicate `getenv_fn2` |
+| `output.rs` multiple `unwrap()` on `writeln!` calls | Changed to use `let _ = writeln!()` pattern |
+| `CveCache` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `CveAggregator` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |
+| Path traversal check bypass via `..` string check | Removed simple string check; rely on `is_path_allowed()` canonicalization |
+| `async_executor.rs` Default impl panicked | Changed to propagate error via `unwrap_or_else` panic |
 
 ## Common Patterns
 

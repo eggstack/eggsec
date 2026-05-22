@@ -167,6 +167,11 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `slapper-nse/src/libraries/socket.rs:98-139` | UDP `connect_udp()` sandbox check was implemented correctly | NSE socket sandbox is fully enforced for all UDP operations |
 | `slapper-nse/src/libraries/socket.rs:514-543` | `sendto()` called `connect_udp()` which validates sandbox | UDP sendto is now sandboxed via `connect_udp()` host check |
 | `slapper-nse/src/libraries/os.rs:295-302` | Duplicate `getenv` registration in os library | Removed duplicate `getenv_fn2` |
+| `slapper-nse/src/output.rs:31-112` | Multiple `unwrap()` on `writeln!` calls could panic | Changed to use `let _ = writeln!()` pattern |
+| `slapper-nse/src/cve/mod.rs:172-183` | `CveCache` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `slapper-nse/src/cve/mod.rs:257-305` | `CveAggregator` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |
+| `slapper-nse/src/libraries/io.rs:52,225` | Path traversal check bypass via simple `..` string check | Removed string check; rely on `is_path_allowed()` canonicalization |
+| `slapper-nse/src/async_executor.rs:107` | `Default` impl used `expect()` that could panic | Changed to `unwrap_or_else` with descriptive panic |
 | `stress/icmp.rs:119` | IPv4 flags not set in ICMP packet builder | Added `set_flags(0x40)` for Don't Fragment in `build_icmp_packet_v4()` |
 | `stress/udp.rs:244` | Mutex poisoning could cause panic in raw UDP flood | Changed `unwrap()` to `into_inner()` for graceful handling |
 | `recon/cve.rs:31` | `CveMapper.cache` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
