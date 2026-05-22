@@ -72,19 +72,27 @@ All lfs operations validate paths against `allowed_dir`.
 
 ### socket Library (Network Access)
 
-**The `socket` library has conditional network restrictions:**
+**The `socket` library has network restrictions when `allowed_networks` is configured:**
 
 | Configuration | Behavior |
 |---------------|----------|
-| `allowed_networks` not set | Socket operations proceed normally (warning logged if sandbox enabled) |
-| `allowed_networks` configured | Connections validated against CIDR blocklist, blocked if outside allowed ranges |
+| `allowed_networks` empty | Socket operations proceed normally (sandbox still logs connection attempts) |
+| `allowed_networks` configured | Connections validated against CIDR allowlist, blocked if outside allowed ranges |
 
 **Affected functions:**
-- `socket.tcp()` - TCP socket creation
-- `socket.connect(host, port)` - TCP connection
-- `socket.udp()` - UDP socket creation
-- `socket.send(sock, data)` - Send data
-- `socket.recv(sock, size)` - Receive data
+- `socket.tcp()` - TCP socket creation (logs sandbox status)
+- `socket.connect(host, port)` - TCP connection (sandbox check)
+- `socket.udp()` - UDP socket creation (logs sandbox status)
+- `socket.tcp_connect()` - TCP connection (sandbox check)
+- `socket.sendto(sock, host, port, data)` - UDP send (sandbox check on host/port)
+- `socket.tcp_connect_async(host, port)` - Async TCP (sandbox check)
+- `socket.connect_async(host, port)` - Async connection (sandbox check)
+- `socket.resolve_async(host)` - Async DNS (sandbox check)
+
+**Sandbox enforcement details:**
+- `SocketHandle::is_host_allowed()` checks if host IP is in allowed_networks
+- DNS resolution (`resolve_async`) also checks allowed_networks since it reveals internal network info
+- `sendto()` for UDP calls `connect_udp()` which validates the new host via `is_host_allowed()`
 
 **Example configuration:**
 ```rust
@@ -92,7 +100,7 @@ pub struct SandboxConfig {
     pub enabled: bool,
     pub allowed_dir: Option<PathBuf>,
     pub allowed_commands: Vec<String>,
-    pub allowed_networks: Vec<CidrNetmask>, // Optional CIDR blocklist
+    pub allowed_networks: Vec<IpNetwork>, // Optional CIDR allowlist
     pub log_violations: bool,
 }
 ```

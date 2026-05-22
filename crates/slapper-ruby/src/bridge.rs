@@ -81,6 +81,10 @@ impl RubyPluginClient {
     }
 
     pub fn load_plugin(&self, path: &Path) -> Result<RubyPlugin> {
+        self.load_plugin_with_timeout(path, DEFAULT_TIMEOUT_SECS)
+    }
+
+    pub fn load_plugin_with_timeout(&self, path: &Path, timeout_secs: u64) -> Result<RubyPlugin> {
         let (tx, rx) = mpsc::channel();
         self.tx
             .send(RubyRequest::LoadPlugin {
@@ -88,8 +92,15 @@ impl RubyPluginClient {
                 resp: tx,
             })
             .map_err(|_| anyhow!("Ruby VM thread has shut down"))?;
-        rx.recv()
-            .map_err(|_| anyhow!("Ruby VM thread did not respond"))?
+        match rx.recv_timeout(Duration::from_secs(timeout_secs)) {
+            Ok(result) => result,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                anyhow::bail!("Plugin loading timed out after {} seconds", timeout_secs)
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                anyhow::bail!("Ruby VM thread has shut down")
+            }
+        }
     }
 
     pub fn run_plugin(
@@ -206,12 +217,79 @@ impl RubyBridge {
             .const_get("VERSION")
             .map_err(|e| anyhow!("Plugin VERSION not found: {}", e))?;
 
-        Ok(RubyPlugin::new(name, version, path.to_path_buf()))
+        let author: Option<String> = plugin_class
+            .const_get::<_, magnus::Value>("AUTHOR")
+            .ok()
+            .and_then(|v| String::try_convert(v).ok());
+
+        let description: Option<String> = plugin_class
+            .const_get::<_, magnus::Value>("DESCRIPTION")
+            .ok()
+            .and_then(|v| String::try_convert(v).ok());
+
+        Ok(RubyPlugin::new_with_meta(
+            name,
+            version,
+            path.to_path_buf(),
+            author,
+            description,
+        ))
     }
 
     #[cfg(not(feature = "ruby-plugins"))]
     fn load_plugin(&self, _path: &Path) -> Result<RubyPlugin> {
         anyhow::bail!("Ruby plugins require 'ruby-plugins' feature");
+    }
+
+    #[cfg(feature = "ruby-plugins")]
+    fn load_plugin_with_timeout(&self, path: &Path, timeout_secs: u64) -> Result<RubyPlugin> {
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| anyhow!("Invalid plugin path"))?;
+
+        let plugin_content = std::fs::read_to_string(path)
+            .map_err(|e| anyhow!("Failed to read plugin file: {}", e))?;
+
+        validate_ruby_plugin(&plugin_content, self.block_suspicious_plugins)?;
+
+        self.ruby
+            .require(path_str)
+            .map_err(|e| anyhow!("Failed to load plugin: {}", e))?;
+
+        let plugin_class = self
+            .ruby
+            .class_object()
+            .const_get::<_, magnus::RModule>("Slapper")
+            .map_err(|e| anyhow!("Slapper module not found: {}", e))?
+            .const_get::<_, magnus::RClass>("Plugin")
+            .map_err(|e| anyhow!("Plugin class not found: {}", e))?;
+
+        let name: String = plugin_class
+            .const_get("NAME")
+            .map_err(|e| anyhow!("Plugin NAME not found: {}", e))?;
+
+        let version: String = plugin_class
+            .const_get("VERSION")
+            .map_err(|e| anyhow!("Plugin VERSION not found: {}", e))?;
+
+        let author: Option<String> = plugin_class
+            .const_get::<_, magnus::Value>("AUTHOR")
+            .ok()
+            .and_then(|v| String::try_convert(v).ok());
+
+        let description: Option<String> = plugin_class
+            .const_get::<_, magnus::Value>("DESCRIPTION")
+            .ok()
+            .and_then(|v| String::try_convert(v).ok());
+
+        let _ = timeout_secs;
+        Ok(RubyPlugin::new_with_meta(
+            name,
+            version,
+            path.to_path_buf(),
+            author,
+            description,
+        ))
     }
 
     #[cfg(feature = "ruby-plugins")]

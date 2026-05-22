@@ -40,6 +40,22 @@ impl RubyPlugin {
             path,
         }
     }
+
+    pub fn new_with_meta(
+        name: String,
+        version: String,
+        path: PathBuf,
+        author: Option<String>,
+        description: Option<String>,
+    ) -> Self {
+        Self {
+            name,
+            version,
+            author,
+            description,
+            path,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

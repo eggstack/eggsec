@@ -455,18 +455,25 @@ impl PythonPluginManager {
                             let args = (check_name, target);
                             if let Ok(result) = run_func.call1(args) {
                                 if let Ok(list) = result.cast::<PyList>() {
+                                    let mut truncated_count = 0;
                                     for item in list.iter() {
                                         if let Ok(json_str) = item.extract::<String>() {
                                             if json_str.len() > MAX_JSON_SIZE_BYTES {
-                                                tracing::warn!(
-                                                    "JSON result exceeds max size, truncating"
-                                                );
+                                                truncated_count += 1;
                                                 continue;
                                             }
                                             if let Ok(value) = serde_json::from_str(&json_str) {
                                                 all_results.push(value);
                                             }
                                         }
+                                    }
+                                    if truncated_count > 0 {
+                                        tracing::warn!(
+                                            check = %check_name,
+                                            truncated = truncated_count,
+                                            "Python plugin returned {} findings exceeding max size, discarding",
+                                            truncated_count
+                                        );
                                     }
                                 }
                             }

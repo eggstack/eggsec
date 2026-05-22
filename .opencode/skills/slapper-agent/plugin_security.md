@@ -101,12 +101,34 @@ Dangerous APIs removed: HTTP, Scanner, Fuzzer, Metasploit, Encoder, Session
 ## Implementation
 
 - `slapper-plugin/src/security.rs` - Shared security patterns
-- `slapper-plugin/src/python.rs` - Python plugin validation
-- `slapper-ruby/src/bridge.rs` - Ruby plugin validation
+- `slapper-plugin/src/python.rs` - Python plugin validation and execution
+- `slapper-plugin/src/ast_scanner.rs` - AST-based security analysis
+- `slapper-ruby/src/lib.rs` - RubyPlugin struct with author/description metadata
+- `slapper-ruby/src/bridge.rs` - Ruby plugin loading with timeout
+- `slapper-ruby/src/loader.rs` - PluginLoader implementation
+
+## Recent Fixes
+
+### Ruby Plugin Loading Timeout (2026-05-22)
+- `load_plugin()` in `bridge.rs` previously had no timeout, using blocking `rx.recv()`
+- Now uses `recv_timeout()` with `DEFAULT_TIMEOUT_SECS` (300 seconds)
+- Added `load_plugin_with_timeout()` for callers that need custom timeout
+- Plugin loading now fails gracefully on timeout instead of hanging indefinitely
+
+### Ruby Plugin Metadata (2026-05-22)
+- `RubyPlugin::new_with_meta()` added to capture `author` and `description` from plugin constants
+- `load_plugin()` now extracts `AUTHOR` and `DESCRIPTION` constants from the Ruby plugin class
+- Previously only `NAME` and `VERSION` were captured
+
+### Python Plugin Result Truncation (2026-05-22)
+- `run_check_direct()` in `python.rs` now logs the count of truncated findings
+- Previously truncated findings were silently discarded with just a generic warning
+- Now reports: "Python plugin returned N findings exceeding max size, discarding"
 
 ## Verification
 
 ```bash
 cargo test --lib -p slapper-plugin --features python-plugins
 cargo test --lib -p slapper-ruby --features ruby-plugins
+cargo clippy --lib -p slapper-plugin -p slapper-ruby -p slapper-nse
 ```
