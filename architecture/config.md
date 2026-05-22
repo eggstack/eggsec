@@ -50,7 +50,18 @@ Slapper looks for config in this order:
 
 `SlapperConfig::validate()` orchestrates all sub-validations. Config files with secrets should be `chmod 600` - `check_config_file_permissions()` warns about world/group-readable permissions but does not enforce.
 
+## Error Handling
+
+`ConfigError` enum has four variants:
+- `Io` - File read/write errors
+- `Parse` - TOML/YAML parsing errors
+- `Serialize` - Serialization errors
+- `Validation` - Validation failures (field out of range, etc.)
+
+Use `?` propagation instead of `unwrap_or_default()` to avoid silent failures in async contexts.
+
 ## Key Security Fixes (2026-05-22)
 
-- **Private IP bypass fixed**: Direct IP addresses now properly blocked
+- **Private IP bypass fixed**: Direct IP addresses now properly blocked in `TargetScope::parse()` and `parse_hostname_only()`
 - **Project qualifier fixed**: `api.rs` now uses `PROJECT_QUALIFIER` consistently with other modules
+- **Error propagation**: Config module uses proper error propagation rather than silent fallback to defaults

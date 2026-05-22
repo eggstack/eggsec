@@ -117,6 +117,8 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `commands/handlers/auth_test.rs:10` | Missing scope validation for auth-test command | Added `ctx.ensure_scope_url(&args.target)?` |
 | `commands/handlers/cluster.rs:348` | `unwrap_or(22)` in parse could panic | Changed to `unwrap_or_else(\|_\| 22)` |
 | `commands/handlers/mod.rs:155-169` | Hardcoded command list in `handle_no_command` | Replaced with guidance to use `slapper --help` |
+| `config/scope.rs:209-226` | Direct IP addresses bypassed private IP checks | Added loopback and private IP validation in `TargetScope::parse()` |
+| `config/api.rs:8` | `maxmind.data_dir` used wrong qualifier | Changed to use `PROJECT_QUALIFIER` consistently |
 
 ## Skills Directory
 

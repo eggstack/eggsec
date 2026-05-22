@@ -73,6 +73,16 @@ if !scope.is_target_allowed("example.com")? {
 }
 ```
 
+## Error Handling
+
+`ConfigError` enum:
+- `Io` - File read/write errors
+- `Parse` - TOML/YAML parsing errors
+- `Serialize` - Serialization errors
+- `Validation` - Validation failures
+
+**Warning**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead.
+
 ## Testing
 
 ### Running Config Tests
