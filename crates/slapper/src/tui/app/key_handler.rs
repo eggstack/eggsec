@@ -31,70 +31,37 @@ impl KeyHandler {
             return;
         }
 
+        if self.handle_global_shortcuts(app, key) {
+            return;
+        }
+
+        if self.handle_mode_specific_input(app, key) {
+            return;
+        }
+
+        app.needs_redraw = false;
+    }
+
+    fn handle_global_shortcuts(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
         match (key.modifiers, key.code) {
-            (KeyModifiers::CONTROL, KeyCode::Char('c')) => {
-                self.handle_ctrl_c(app);
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char('x')) => {
-                app.toggle_quick_switch();
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char('u')) => {
-                app.page_up();
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char('d')) => {
-                app.page_down();
-            }
-            (KeyModifiers::NONE, KeyCode::PageUp) => {
-                app.page_up();
-            }
-            (KeyModifiers::NONE, KeyCode::PageDown) => {
-                app.page_down();
-            }
-            (KeyModifiers::NONE, KeyCode::Home) => {
-                app.handle_home();
-            }
-            (KeyModifiers::NONE, KeyCode::End) => {
-                app.handle_end();
-            }
-            (KeyModifiers::NONE, KeyCode::Up) => {
-                app.handle_up();
-            }
-            (KeyModifiers::NONE, KeyCode::Down) => {
-                app.handle_down();
-            }
-            (KeyModifiers::NONE, KeyCode::Left) => {
-                app.handle_left();
-            }
-            (KeyModifiers::NONE, KeyCode::Right) => {
-                app.handle_right();
-            }
-            (KeyModifiers::NONE, KeyCode::Esc) => {
-                self.handle_escape(app);
-            }
-            (KeyModifiers::NONE, KeyCode::Char('i')) if app.mode == InputMode::Normal => {
-                self.handle_enter_insert_mode(app);
-            }
-            (KeyModifiers::NONE, KeyCode::Char('q')) if app.mode == InputMode::Normal => {
-                self.handle_quit(app);
-            }
-            (KeyModifiers::NONE, KeyCode::Char(' ')) if app.mode == InputMode::Normal => {
-                app.toggle_help();
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char('/')) => {
-                app.toggle_help();
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
-                app.toggle_command_palette();
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char('f')) => {
-                self.handle_ctrl_f(app);
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char('z')) => {
-                app.toggle_pause();
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char('t')) => {
-                app.toggle_theme();
-            }
+            (KeyModifiers::CONTROL, KeyCode::Char('c')) => self.handle_ctrl_c(app),
+            (KeyModifiers::CONTROL, KeyCode::Char('x')) => app.toggle_quick_switch(),
+            (KeyModifiers::CONTROL, KeyCode::Char('u')) => app.page_up(),
+            (KeyModifiers::CONTROL, KeyCode::Char('d')) => app.page_down(),
+            (KeyModifiers::NONE, KeyCode::PageUp) => app.page_up(),
+            (KeyModifiers::NONE, KeyCode::PageDown) => app.page_down(),
+            (KeyModifiers::NONE, KeyCode::Home) => app.handle_home(),
+            (KeyModifiers::NONE, KeyCode::End) => app.handle_end(),
+            (KeyModifiers::NONE, KeyCode::Up) => app.handle_up(),
+            (KeyModifiers::NONE, KeyCode::Down) => app.handle_down(),
+            (KeyModifiers::NONE, KeyCode::Left) => app.handle_left(),
+            (KeyModifiers::NONE, KeyCode::Right) => app.handle_right(),
+            (KeyModifiers::NONE, KeyCode::Esc) => self.handle_escape(app),
+            (KeyModifiers::CONTROL, KeyCode::Char('/')) => app.toggle_help(),
+            (KeyModifiers::CONTROL, KeyCode::Char('p')) => app.toggle_command_palette(),
+            (KeyModifiers::CONTROL, KeyCode::Char('f')) => self.handle_ctrl_f(app),
+            (KeyModifiers::CONTROL, KeyCode::Char('z')) => app.toggle_pause(),
+            (KeyModifiers::CONTROL, KeyCode::Char('t')) => app.toggle_theme(),
             (KeyModifiers::CONTROL, KeyCode::Char('v')) => {
                 if let Some(text) = Clipboard::get() {
                     app.dispatcher_mut().handle_paste(&text);
@@ -107,111 +74,85 @@ impl KeyHandler {
                     Clipboard::set(&text);
                 }
             }
-            (KeyModifiers::NONE, KeyCode::Char('y')) if app.mode == InputMode::Normal => {
-                if let Some(text) = app.dispatcher_mut().handle_copy() {
-                    Clipboard::set(&text);
-                }
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
-                app.toggle_bookmark(app.current_tab);
-            }
-            (KeyModifiers::NONE, KeyCode::Tab) => {
-                app.handle_focus_next();
-            }
-            (KeyModifiers::CONTROL, KeyCode::Char(' ')) => {
-                if app.mode == InputMode::Insert {
-                    app.handle_autocomplete();
-                }
-            }
-            (KeyModifiers::SHIFT, KeyCode::BackTab) => {
-                app.handle_focus_prev();
-            }
+            (KeyModifiers::NONE, KeyCode::Tab) => app.handle_focus_next(),
+            (KeyModifiers::SHIFT, KeyCode::BackTab) => app.handle_focus_prev(),
             (KeyModifiers::NONE, KeyCode::Char('h')) if app.is_http_options_visible() => {
                 app.show_http_options = false;
                 app.needs_redraw = true;
             }
-            (KeyModifiers::NONE, KeyCode::Char('h')) if app.mode == InputMode::Normal => {
-                app.handle_left();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('j')) if app.mode == InputMode::Normal => {
-                app.handle_down();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('k')) if app.mode == InputMode::Normal => {
-                app.handle_up();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('l')) if app.mode == InputMode::Normal => {
-                app.handle_right();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('H')) if app.mode == InputMode::Normal => {
-                app.handle_home();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('L')) if app.mode == InputMode::Normal => {
-                app.handle_end();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('G')) if app.mode == InputMode::Normal => {
-                app.handle_bottom();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('g')) if app.mode == InputMode::Normal => {
-                app.pending_key = Some(KeyCode::Char('g'));
-            }
-            (KeyModifiers::NONE, KeyCode::Char('w')) if app.mode == InputMode::Normal => {
-                app.handle_word_forward();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('b')) if app.mode == InputMode::Normal => {
-                app.handle_word_backward();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('n')) | (KeyModifiers::NONE, KeyCode::Char('N'))
-                if app.mode == InputMode::Normal =>
-            {
-                if key.code == KeyCode::Char('n') {
-                    app.next_tab();
-                } else {
-                    app.prev_tab();
+            (KeyModifiers::NONE, KeyCode::Enter) => self.handle_enter(app),
+            _ => return false,
+        }
+        true
+    }
+
+    fn handle_mode_specific_input(
+        &self,
+        app: &mut App,
+        key: &crossterm::event::KeyEvent,
+    ) -> bool {
+        match app.mode {
+            InputMode::Normal => self.handle_normal_mode_input(app, key),
+            InputMode::Insert => self.handle_insert_mode_input(app, key),
+        }
+    }
+
+    fn handle_normal_mode_input(
+        &self,
+        app: &mut App,
+        key: &crossterm::event::KeyEvent,
+    ) -> bool {
+        match (key.modifiers, key.code) {
+            (KeyModifiers::NONE, KeyCode::Char('i')) => self.handle_enter_insert_mode(app),
+            (KeyModifiers::NONE, KeyCode::Char('q')) => self.handle_quit(app),
+            (KeyModifiers::NONE, KeyCode::Char(' ')) => app.toggle_help(),
+            (KeyModifiers::NONE, KeyCode::Char('y')) => {
+                if let Some(text) = app.dispatcher_mut().handle_copy() {
+                    Clipboard::set(&text);
                 }
             }
-            (KeyModifiers::NONE, KeyCode::Backspace) if app.mode == InputMode::Insert => {
-                app.handle_backspace();
-            }
-            (KeyModifiers::NONE, KeyCode::Delete) if app.mode == InputMode::Insert => {
-                app.handle_delete();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('p')) if app.mode == InputMode::Normal => {
-                app.prev_tab();
-            }
-            (KeyModifiers::SHIFT, KeyCode::Char('H')) if app.mode == InputMode::Normal => {
-                app.prev_tab();
-            }
-            (KeyModifiers::SHIFT, KeyCode::Char('L')) if app.mode == InputMode::Normal => {
-                app.next_tab();
-            }
-            (KeyModifiers::SHIFT, KeyCode::Char('E')) if app.mode == InputMode::Normal => {
-                app.cycle_export_format();
-            }
-            (KeyModifiers::NONE, KeyCode::Char('/')) if app.mode == InputMode::Normal => {
-                app.toggle_search(false);
-            }
-            (KeyModifiers::NONE, KeyCode::Char('r')) if app.mode == InputMode::Normal => {
-                self.handle_reset(app);
-            }
-            (KeyModifiers::NONE, KeyCode::Char('s')) if app.mode == InputMode::Normal => {
-                self.handle_save_settings(app);
-            }
-            (KeyModifiers::NONE, KeyCode::Char('d')) if app.mode == InputMode::Normal => {
-                self.handle_delete_entry(app);
-            }
-            (KeyModifiers::NONE, KeyCode::Char('e')) if app.mode == InputMode::Normal => {
-                app.export_results();
-            }
-            (KeyModifiers::NONE, KeyCode::Enter) => {
-                self.handle_enter(app);
-            }
-            (KeyModifiers::NONE, KeyCode::Char(c)) if app.mode == InputMode::Insert => {
-                app.handle_char(c);
-            }
-            _ => {
-                app.needs_redraw = false;
-            }
+            (KeyModifiers::CONTROL, KeyCode::Char('b')) => app.toggle_bookmark(app.current_tab),
+            (KeyModifiers::NONE, KeyCode::Char('h')) => app.handle_left(),
+            (KeyModifiers::NONE, KeyCode::Char('j')) => app.handle_down(),
+            (KeyModifiers::NONE, KeyCode::Char('k')) => app.handle_up(),
+            (KeyModifiers::NONE, KeyCode::Char('l')) => app.handle_right(),
+            (KeyModifiers::NONE, KeyCode::Char('H')) => app.handle_home(),
+            (KeyModifiers::NONE, KeyCode::Char('L')) => app.handle_end(),
+            (KeyModifiers::NONE, KeyCode::Char('G')) => app.handle_bottom(),
+            (KeyModifiers::NONE, KeyCode::Char('g')) => app.pending_key = Some(KeyCode::Char('g')),
+            (KeyModifiers::NONE, KeyCode::Char('w')) => app.handle_word_forward(),
+            (KeyModifiers::NONE, KeyCode::Char('b')) => app.handle_word_backward(),
+            (KeyModifiers::NONE, KeyCode::Char('n')) => app.next_tab(),
+            (KeyModifiers::NONE, KeyCode::Char('N')) => app.prev_tab(),
+            (KeyModifiers::NONE, KeyCode::Char('p')) => app.prev_tab(),
+            (KeyModifiers::SHIFT, KeyCode::Char('H')) => app.prev_tab(),
+            (KeyModifiers::SHIFT, KeyCode::Char('L')) => app.next_tab(),
+            (KeyModifiers::SHIFT, KeyCode::Char('E')) => app.cycle_export_format(),
+            (KeyModifiers::NONE, KeyCode::Char('/')) => app.toggle_search(false),
+            (KeyModifiers::NONE, KeyCode::Char('r')) => self.handle_reset(app),
+            (KeyModifiers::NONE, KeyCode::Char('s')) => self.handle_save_settings(app),
+            (KeyModifiers::NONE, KeyCode::Char('d')) => self.handle_delete_entry(app),
+            (KeyModifiers::NONE, KeyCode::Char('e')) => app.export_results(),
+            _ => return false,
         }
+        true
+    }
+
+    fn handle_insert_mode_input(
+        &self,
+        app: &mut App,
+        key: &crossterm::event::KeyEvent,
+    ) -> bool {
+        match (key.modifiers, key.code) {
+            (KeyModifiers::CONTROL, KeyCode::Char(' ')) => {
+                app.handle_autocomplete();
+            }
+            (KeyModifiers::NONE, KeyCode::Backspace) => app.handle_backspace(),
+            (KeyModifiers::NONE, KeyCode::Delete) => app.handle_delete(),
+            (KeyModifiers::NONE, KeyCode::Char(c)) => app.handle_char(c),
+            _ => return false,
+        }
+        true
     }
 
     fn handle_topmost_overlay(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
@@ -253,7 +194,7 @@ impl KeyHandler {
     }
 
     fn handle_ctrl_c(&self, app: &mut App) {
-        if app.is_running() {
+        if app.has_active_task() {
             app.stop_with_message("Interrupted by user");
         } else {
             app.should_quit = true;
@@ -306,13 +247,13 @@ impl KeyHandler {
     }
 
     fn handle_quit(&self, app: &mut App) {
-        if !app.is_running() {
+        if !app.has_active_task() {
             app.should_quit = true;
         }
     }
 
     fn handle_reset(&self, app: &mut App) {
-        if !app.is_running() {
+        if !app.has_active_task() {
             if app.current_tab == Tab::History {
                 app.request_confirmation(PendingAction::ClearHistory);
             } else {
@@ -322,13 +263,13 @@ impl KeyHandler {
     }
 
     fn handle_save_settings(&self, app: &mut App) {
-        if !app.is_running() && app.current_tab == Tab::Settings {
+        if !app.has_active_task() && app.current_tab == Tab::Settings {
             app.request_confirmation(PendingAction::SaveSettings);
         }
     }
 
     fn handle_delete_entry(&self, app: &mut App) {
-        if !app.is_running() && app.current_tab == Tab::History {
+        if !app.has_active_task() && app.current_tab == Tab::History {
             app.request_confirmation(PendingAction::DeleteHistoryEntry);
         }
     }
@@ -669,5 +610,29 @@ mod tests {
         } else {
             assert!(app.quick_switch_selected < len);
         }
+    }
+
+    #[test]
+    fn test_ctrl_c_stops_active_task_even_if_current_tab_not_running() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+        app.current_tab = Tab::Dashboard;
+        app.task_tab = Some(Tab::Recon);
+
+        press_ctrl(&mut handler, &mut app, 'c');
+
+        assert!(!app.should_quit);
+        assert!(app.task_tab.is_none());
+    }
+
+    #[test]
+    fn test_quit_is_blocked_when_active_task_exists() {
+        let mut app = create_test_app();
+        let mut handler = KeyHandler::new();
+        app.task_tab = Some(Tab::Recon);
+
+        press(&mut handler, &mut app, KeyCode::Char('q'));
+
+        assert!(!app.should_quit);
     }
 }

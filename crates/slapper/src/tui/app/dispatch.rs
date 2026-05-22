@@ -177,13 +177,6 @@ impl<'a> TabDispatcher<'a> {
         }
     }
 
-    pub fn stop(&mut self) {
-        match self {
-            Self::Standard(t) => t.stop(),
-            Self::LockedHistory(h) => h.stop(),
-        }
-    }
-
     pub fn page_up(&mut self, page_size: usize) {
         match self {
             Self::Standard(t) => t.page_up(page_size),

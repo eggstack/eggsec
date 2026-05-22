@@ -461,52 +461,6 @@ impl TaskBuilder for super::tabs::HistoryTab {
     }
 }
 
-impl super::App {
-    pub(crate) fn spawn_task(&mut self, config: Option<workers::TaskConfig>) {
-        if let Some(config) = config {
-            if self.task_handle.is_some() {
-                tracing::warn!(
-                    "A task is already running. Aborting previous task before starting new one."
-                );
-                if let Some(handle) = self.task_handle.take() {
-                    handle.abort();
-                }
-                if let Some(rx) = self.progress_rx.take() {
-                    drop(rx);
-                }
-                if let Some(rx) = self.result_rx.take() {
-                    drop(rx);
-                }
-            }
-
-            let (progress_tx, progress_rx) = tokio::sync::mpsc::channel(100);
-            let (result_tx, result_rx) = tokio::sync::mpsc::channel(1);
-
-            let runner = workers::TaskRunner::new(config, progress_tx, result_tx.clone());
-            let error_tx = result_tx.clone();
-
-            self.progress_rx = Some(progress_rx);
-            self.result_rx = Some(result_rx);
-
-            // Track which tab started this task
-            self.task_tab = Some(self.current_tab);
-
-            self.task_handle = Some(tokio::spawn(async move {
-                match runner.run().await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        let friendly_error = super::make_friendly_error(&e);
-                        tracing::error!("Task failed: {}", friendly_error);
-                        let _ = error_tx
-                            .send(workers::TaskResult::Error(friendly_error))
-                            .await;
-                    }
-                }
-            }));
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]

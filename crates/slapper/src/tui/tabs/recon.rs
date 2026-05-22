@@ -685,6 +685,10 @@ impl TabInput for ReconTab {
     fn is_input_focused(&self) -> bool {
         self.focus_area == ReconFocusArea::Inputs && self.inputs.is_focused()
     }
+
+    fn stop(&mut self) {
+        ReconTab::stop(self);
+    }
 }
 
 #[cfg(test)]
