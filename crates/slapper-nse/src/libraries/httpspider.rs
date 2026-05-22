@@ -3,8 +3,7 @@
 //! Provides web crawling and page parsing functionality for NSE scripts.
 //! Based on Nmap's httpspider library: https://nmap.org/nsedoc/lib/httpspider.html
 
-use mlua::{Lua, Result as LuaResult, Table, Value};
-use regex::Regex;
+use mlua::{Lua, Result as LuaResult, Table};
 use scraper::{Html, Selector};
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;

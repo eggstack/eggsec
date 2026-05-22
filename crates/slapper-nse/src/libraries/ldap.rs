@@ -28,7 +28,7 @@ enum LdapOperation {
     ExtendedResponse = 0x78,
 }
 
-fn encode_ldap_message(message_id: i32, op: LdapOperation, content: &[u8]) -> Vec<u8> {
+fn encode_ldap_message(message_id: i32, _op: LdapOperation, content: &[u8]) -> Vec<u8> {
     let mut msg = Vec::new();
 
     // Sequence
@@ -419,12 +419,12 @@ fn decode_ldap_search_response(
     let mut entries = Vec::new();
 
     // Skip message header
-    let mut pos = 2;
     if data.len() < 2 {
         return Ok(entries);
     }
 
     // Get message length
+    let mut pos;
     if data[1] >= 0x81 {
         let len_bytes = (data[1] - 0x80) as usize;
         pos = 2 + len_bytes;

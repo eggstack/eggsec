@@ -1,0 +1,6 @@
+[target.x86_64-apple-darwin]
+rustflags = [
+  "-C", "link-arg=-L/opt/local/lib",
+  "-C", "link-arg=-lz",
+  "-C", "link-arg=-mmacosx-version-min=14.0",
+]

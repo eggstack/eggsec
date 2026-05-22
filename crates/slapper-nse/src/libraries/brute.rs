@@ -4,8 +4,8 @@
 //! Based on Nmap's brute library: https://nmap.org/nsedoc/lib/brute.html
 
 use mlua::{Lua, Result as LuaResult, Table};
-use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::collections::HashMap;
 use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -1150,7 +1150,7 @@ fn build_smb_session_setup(username: &str, password: &str, domain: &str) -> Vec<
 
 fn extract_mysql_salt(handshake: &[u8], idx: usize) -> Vec<u8> {
     let mut offset = 0;
-    for i in 0..idx {
+    for _i in 0..idx {
         if offset >= handshake.len() {
             return vec![];
         }
@@ -1219,7 +1219,7 @@ fn build_mysql_handshake_response(
     response[6] = 0x00;
     response[7] = 0x00;
 
-    let total_len = offset;
+    let _total_len = offset;
     response
 }
 

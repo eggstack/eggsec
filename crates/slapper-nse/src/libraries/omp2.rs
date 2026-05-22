@@ -69,11 +69,11 @@ pub fn register_omp2_library(lua: &Lua) -> LuaResult<()> {
     omp2.set("connect", connect_fn)?;
 
     let authenticate_fn = lua.create_function(
-        |lua, (session, username, password): (Table, String, String)| {
+        |lua, (session, username, _password): (Table, String, String)| {
             let result = lua.create_table()?;
 
             let host: String = session.get("host").unwrap_or_default();
-            let port: u16 = session.get("port").unwrap_or(9390);
+            let _port: u16 = session.get("port").unwrap_or(9390);
 
             if host.is_empty() {
                 result.set("status", "fail")?;

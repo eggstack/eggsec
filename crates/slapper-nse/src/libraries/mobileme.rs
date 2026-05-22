@@ -3,7 +3,7 @@
 //! Apple MobileMe service support.
 //! Based on Nmap's mobileme library: https://nmap.org/nsedoc/lib/mobileme.html
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 
 pub fn register_mobileme_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
@@ -73,7 +73,7 @@ pub fn register_mobileme_library(lua: &Lua) -> LuaResult<()> {
     })?;
     mobileme.set("login", login_fn)?;
 
-    let get_devices_fn = lua.create_function(|lua, username: String| {
+    let get_devices_fn = lua.create_function(|lua, _username: String| {
         let result = lua.create_table()?;
         result.set("status", "ok")?;
 
@@ -86,7 +86,7 @@ pub fn register_mobileme_library(lua: &Lua) -> LuaResult<()> {
     mobileme.set("getDevices", get_devices_fn)?;
 
     let send_message_fn = lua.create_function(
-        |lua, (username, device_id, message): (String, String, String)| {
+        |lua, (_username, device_id, message): (String, String, String)| {
             let result = lua.create_table()?;
             result.set("status", "ok")?;
             result.set("message", message)?;

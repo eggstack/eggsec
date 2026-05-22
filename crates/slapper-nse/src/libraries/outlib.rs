@@ -60,7 +60,7 @@ pub fn register_outlib_library(lua: &Lua) -> LuaResult<()> {
     })?;
     outlib.set("format_output", format_output_fn)?;
 
-    let to_xml_fn = lua.create_function(|lua, data: Table| {
+    let to_xml_fn = lua.create_function(|_lua, data: Table| {
         let mut xml = String::from("<output>");
 
         for pair in data.pairs::<String, mlua::Value>() {

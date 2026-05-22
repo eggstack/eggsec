@@ -3,7 +3,7 @@
 //! Vuze DHT (Distributed Hash Table) protocol support.
 //! Based on Nmap's vuzedht library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 
 const DHT_PORT: u16 = 6881;
 
@@ -26,7 +26,7 @@ pub fn register_vuzedht_library(lua: &Lua) -> LuaResult<()> {
     vuzedht.set(
         "find_node",
         lua.create_function(
-            |lua, (target_id, host, port): (String, String, Option<u16>)| {
+            |lua, (target_id, _host, _port): (String, String, Option<u16>)| {
                 let result = lua.create_table()?;
                 result.set("status", "ok")?;
                 result.set("target_id", target_id)?;
@@ -40,7 +40,7 @@ pub fn register_vuzedht_library(lua: &Lua) -> LuaResult<()> {
     vuzedht.set(
         "get_peers",
         lua.create_function(
-            |lua, (info_hash, host, port): (String, String, Option<u16>)| {
+            |lua, (info_hash, _host, _port): (String, String, Option<u16>)| {
                 let result = lua.create_table()?;
                 result.set("status", "ok")?;
                 result.set("info_hash", info_hash)?;

@@ -3,7 +3,7 @@
 //! GPS (Global Positioning System) protocol support.
 //! Based on Nmap's gps library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 
 pub fn register_gps_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();

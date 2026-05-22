@@ -3,7 +3,7 @@
 //! Web Service Discovery (WS-Discovery) protocol.
 //! Based on Nmap's wsdd library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -57,7 +57,7 @@ pub fn register_wsdd_library(lua: &Lua) -> LuaResult<()> {
 
             match socket.send_to(probe, &addr) {
                 Ok(_) => {
-                    let mut devices = lua.create_table()?;
+                    let devices = lua.create_table()?;
                     let mut device_count = 0;
 
                     // Collect responses for a bit
@@ -205,7 +205,7 @@ fn uuid_v4() -> String {
 fn parse_wsdd_response(response: &str, addr: String) -> Option<(String, String, String)> {
     let types = extract_types(response).unwrap_or_default();
     let xaddrs = extract_xaddrs(response).unwrap_or_default();
-    let metadata_version = extract_metadata_version(response);
+    let _metadata_version = extract_metadata_version(response);
 
     Some((addr, types, xaddrs))
 }

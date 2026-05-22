@@ -3,7 +3,7 @@
 //! IPMI (Intelligent Platform Management Interface) support.
 //! Based on Nmap's ipmi library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -80,7 +80,7 @@ pub fn register_ipmi_library(lua: &Lua) -> LuaResult<()> {
 
     ipmi.set(
         "get_user_login",
-        lua.create_function(|lua, (host, port, user_id): (String, Option<u16>, u8)| {
+        lua.create_function(|lua, (_host, _port, user_id): (String, Option<u16>, u8)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;
@@ -96,7 +96,7 @@ pub fn register_ipmi_library(lua: &Lua) -> LuaResult<()> {
     ipmi.set(
         "set_user_access",
         lua.create_function(
-            |lua, (host, port, user_id, channel, privileges): (String, Option<u16>, u8, u8, u8)| {
+            |lua, (_host, _port, user_id, channel, privileges): (String, Option<u16>, u8, u8, u8)| {
                 let result = lua.create_table()?;
 
                 result.set("status", "ok")?;
@@ -112,7 +112,7 @@ pub fn register_ipmi_library(lua: &Lua) -> LuaResult<()> {
 
     ipmi.set(
         "get_sel_info",
-        lua.create_function(|lua, (host, port): (String, Option<u16>)| {
+        lua.create_function(|lua, (_host, _port): (String, Option<u16>)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;
@@ -127,7 +127,7 @@ pub fn register_ipmi_library(lua: &Lua) -> LuaResult<()> {
 
     ipmi.set(
         "get_sdr",
-        lua.create_function(|lua, (host, port): (String, Option<u16>)| {
+        lua.create_function(|lua, (_host, _port): (String, Option<u16>)| {
             let result = lua.create_table()?;
 
             let sensors = lua.create_table()?;
@@ -147,7 +147,7 @@ pub fn register_ipmi_library(lua: &Lua) -> LuaResult<()> {
 
     ipmi.set(
         "sel_teardown",
-        lua.create_function(|lua, (host, port): (String, Option<u16>)| {
+        lua.create_function(|lua, (_host, _port): (String, Option<u16>)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;

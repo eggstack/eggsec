@@ -8,8 +8,6 @@ use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream as AsyncTcpStream;
 
 const MYSQL_HANDSHAKE_V10: u8 = 10;
 
@@ -68,7 +66,7 @@ fn mysql_handshake(host: &str, port: u16) -> std::io::Result<MySqlConnection> {
         buffer[offset + 3],
         buffer[offset + 4],
     ]);
-    let scramble_buf = &buffer[offset + 5..offset + 21];
+    let _scramble_buf = &buffer[offset + 5..offset + 21];
 
     let server_capabilities = u32::from_le_bytes([
         buffer[offset + 21],
@@ -168,7 +166,7 @@ fn mysql_query(conn: &mut MySqlConnection, query: &str) -> std::io::Result<Strin
         match conn.stream.read(&mut buffer) {
             Ok(0) => break,
             Ok(n) => response.extend_from_slice(&buffer[..n]),
-            Err(e) => break,
+            Err(_e) => break,
         }
         if response.len() < 4 {
             break;
@@ -379,7 +377,7 @@ pub fn register_mysql_library(lua: &Lua) -> LuaResult<()> {
     mysql.set("version", version_fn)?;
 
     // mysql.get_db_names() - Get list of databases
-    let get_db_names_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
+    let get_db_names_fn = lua.create_function(|_lua, (_host, _port): (String, u16)| {
         let dbs = vec![
             "information_schema".to_string(),
             "mysql".to_string(),
@@ -392,7 +390,7 @@ pub fn register_mysql_library(lua: &Lua) -> LuaResult<()> {
 
     // mysql.get_tables() - Get list of tables in a database
     let get_tables_fn =
-        lua.create_function(|_lua, (host, port, database): (String, u16, String)| {
+        lua.create_function(|_lua, (_host, _port, _database): (String, u16, String)| {
             let tables = vec![
                 "users".to_string(),
                 "orders".to_string(),
@@ -404,7 +402,7 @@ pub fn register_mysql_library(lua: &Lua) -> LuaResult<()> {
 
     // mysql.get_columns() - Get column information
     let get_columns_fn = lua.create_function(
-        |_lua, (host, port, database, table): (String, u16, String, String)| {
+        |_lua, (_host, _port, _database, _table): (String, u16, String, String)| {
             let lua = mlua::Lua::default();
             let columns = lua.create_table()?;
 
@@ -432,7 +430,7 @@ pub fn register_mysql_library(lua: &Lua) -> LuaResult<()> {
     mysql.set("get_columns", get_columns_fn)?;
 
     // mysql.get_status() - Get server status
-    let get_status_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
+    let get_status_fn = lua.create_function(|_lua, (_host, _port): (String, u16)| {
         let lua = mlua::Lua::default();
         let status = lua.create_table()?;
 
@@ -449,7 +447,7 @@ pub fn register_mysql_library(lua: &Lua) -> LuaResult<()> {
     mysql.set("get_status", get_status_fn)?;
 
     // mysql.get_variables() - Get server variables
-    let get_variables_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
+    let get_variables_fn = lua.create_function(|_lua, (_host, _port): (String, u16)| {
         let lua = mlua::Lua::default();
         let vars = lua.create_table()?;
 

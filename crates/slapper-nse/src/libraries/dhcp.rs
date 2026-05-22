@@ -117,7 +117,7 @@ fn parse_dhcp_response(packet: &[u8]) -> Result<(String, String, String, String,
     }
 
     let your_ip = Ipv4Addr::new(packet[16], packet[17], packet[18], packet[19]).to_string();
-    let server_ip = Ipv4Addr::new(packet[20], packet[21], packet[22], packet[23]).to_string();
+    let _server_ip = Ipv4Addr::new(packet[20], packet[21], packet[22], packet[23]).to_string();
 
     let mut subnet_mask = "255.255.255.0".to_string();
     let mut router = "0.0.0.0".to_string();
@@ -319,7 +319,7 @@ pub fn register_dhcp_library(lua: &Lua) -> LuaResult<()> {
     dhcp.set("request", request_fn)?;
 
     let release_fn = lua.create_function(|lua, (host, ip): (String, String)| {
-        let mac_bytes = [0u8; 6];
+        let _mac_bytes = [0u8; 6];
         let xid = rand::random::<u32>();
 
         let mut packet = vec![0u8; 240];

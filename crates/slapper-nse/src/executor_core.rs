@@ -484,7 +484,7 @@ impl ExecutorCore {
         crate::libraries::base64::register_base64_library(&self.lua)?;
         crate::libraries::base32::register_base32_library(&self.lua)?;
         crate::libraries::datetime::register_datetime_library(&self.lua);
-        crate::libraries::rand::register_rand_library(&self.lua);
+        let _ = crate::libraries::rand::register_rand_library(&self.lua);
         crate::libraries::url::register_url_library(&self.lua)?;
         crate::libraries::creds::register_creds_library(&self.lua)?;
         crate::libraries::openssl::register_openssl_library(&self.lua)?;

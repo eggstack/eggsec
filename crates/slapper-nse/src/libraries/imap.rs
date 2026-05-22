@@ -7,8 +7,6 @@ use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use tokio::io::AsyncReadExt;
-use tokio::net::TcpStream as AsyncTcpStream;
 
 fn escape_imap_quoted(s: &str) -> String {
     let mut result = String::with_capacity(s.len() * 2);
@@ -99,7 +97,7 @@ pub fn register_imap_library(lua: &Lua) -> LuaResult<()> {
 
     // imap.login_cram_md5() - CRAM-MD5 authentication
     let login_cram_md5_fn = lua.create_function(
-        |lua, (host, port, user, password): (String, u16, String, String)| {
+        |lua, (host, port, user, _password): (String, u16, String, String)| {
             let tag = format!("A{:04}", 1);
             let cmd = format!("{} AUTHENTICATE CRAM-MD5\r\n", tag);
             match imap_send(&host, port, &cmd) {

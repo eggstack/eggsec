@@ -3,18 +3,18 @@
 //! LibSSH2 bindings for NSE scripts.
 //! Based on Nmap's libssh2 library: https://nmap.org/nsedoc/lib/libssh2.html
 
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use mlua::{Lua, Result as LuaResult, Table, UserData, UserDataMethods, Value};
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use ssh2::Session;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use std::net::TcpStream;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use std::path::Path;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use std::time::Duration;
 
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 pub fn register_libssh2_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
     let libssh2 = lua.create_table()?;
@@ -89,7 +89,7 @@ pub fn register_libssh2_library(lua: &Lua) -> LuaResult<()> {
     Ok(())
 }
 
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 struct LibSsh2Session {
     session: Option<Session>,
     host: String,
@@ -97,7 +97,7 @@ struct LibSsh2Session {
     authenticated: bool,
 }
 
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 impl UserData for LibSsh2Session {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         // userauth_password
@@ -402,16 +402,15 @@ impl UserData for LibSsh2Session {
     }
 }
 
-#[cfg(not(feature = "ssh2"))]
-pub fn register_libssh2_library(lua: &Lua) -> mlua::Result<()> {
-    use mlua::{Lua, Result as LuaResult};
+#[cfg(not(feature = "nse-ssh2"))]
+pub fn register_libssh2_library(lua: &mlua::Lua) -> mlua::Result<()> {
     let globals = lua.globals();
     let libssh2 = lua.create_table()?;
 
     let session_fn = lua.create_function(|lua, (host, port): (String, Option<u16>)| {
         let _ = (host, port);
         let result = lua.create_table()?;
-        result.set("error", "libssh2 requires ssh2 feature")?;
+        result.set("error", "libssh2 requires nse-ssh2 feature")?;
         Ok(result)
     })?;
     libssh2.set("session", session_fn)?;

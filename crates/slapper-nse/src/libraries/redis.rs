@@ -8,7 +8,6 @@ use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream as AsyncTcpStream;
 
 fn redis_command(addr: &str, cmd: &str) -> std::io::Result<String> {

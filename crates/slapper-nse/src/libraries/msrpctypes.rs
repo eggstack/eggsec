@@ -3,7 +3,7 @@
 //! MSRPC type definitions.
 //! Based on Nmap's msrpctypes library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 
 pub fn register_msrpctypes_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();

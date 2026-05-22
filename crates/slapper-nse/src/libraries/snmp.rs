@@ -3,8 +3,7 @@
 //! SNMP (Simple Network Management Protocol) support for NSE scripts.
 //! Includes SNMPv1, SNMPv2c implementations with actual protocol handling.
 
-use mlua::{Lua, Result as LuaResult, Table};
-use std::io::{Read, Write};
+use mlua::{Lua, Result as LuaResult};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -281,7 +280,7 @@ fn decode_snmp_response(data: &[u8]) -> Result<Vec<(String, String, String)>, St
 
     // Skip PDU header
     pos += 1;
-    let pdu_len = if data[pos] >= 0x81 {
+    let _pdu_len = if data[pos] >= 0x81 {
         let num_bytes = (data[pos] - 0x80) as usize;
         let mut len = 0usize;
         for i in 1..=num_bytes {
@@ -343,7 +342,7 @@ fn decode_snmp_response(data: &[u8]) -> Result<Vec<(String, String, String)>, St
             pos += 1;
             let oid_len = data[pos] as usize;
             pos += 1;
-            let (oid, new_pos) = decode_oid(&data[pos..], 0);
+            let (oid, _new_pos) = decode_oid(&data[pos..], 0);
             pos += oid_len;
 
             // Get value
@@ -515,7 +514,7 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
             let port = port.unwrap_or(SNMP_PORT);
             let community = community.unwrap_or_else(|| "public".to_string());
 
-            let mut results = lua.create_table()?;
+            let results = lua.create_table()?;
             let mut idx = 1;
             let mut current_oid = base_oid.clone();
             let mut last_error = String::new();
@@ -758,7 +757,7 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
             let community = community.unwrap_or_else(|| "public".to_string());
 
             // Use blocking implementation for async compatibility
-            let mut request = build_snmp_request(
+            let request = build_snmp_request(
                 SNMP_VERSION_2C,
                 &community,
                 1,
@@ -799,7 +798,7 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
             let port = port.unwrap_or(SNMP_PORT);
             let community = community.unwrap_or_else(|| "public".to_string());
 
-            let mut results = lua.create_table()?;
+            let results = lua.create_table()?;
             let mut idx = 1;
             let mut current_oid = base_oid.clone();
 
@@ -848,8 +847,8 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
 
     // get_bulk_async - Async version of bulk walk
     let get_bulk_async_fn = lua.create_function(
-        |lua, (host, port, oid, max_repetitions): (String, Option<u16>, String, Option<usize>)| {
-            let port = port.unwrap_or(161);
+        |lua, (_host, port, _oid, max_repetitions): (String, Option<u16>, String, Option<usize>)| {
+            let _port = port.unwrap_or(161);
             let _max_rep = max_repetitions.unwrap_or(10);
 
             let result = lua.create_table()?;
@@ -862,7 +861,7 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
 
     // inform - Send SNMP inform request
     let inform_fn = lua.create_function(
-        |lua, (host, port, oid, value): (String, Option<u16>, String, String)| {
+        |lua, (_host, port, _oid, _value): (String, Option<u16>, String, String)| {
             let _port = port.unwrap_or(162);
 
             let result = lua.create_table()?;
@@ -876,7 +875,7 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
 
     // get_table - Get entire SNMP table
     let get_table_fn = lua.create_function(
-        |lua, (host, port, table_oid): (String, Option<u16>, String)| {
+        |lua, (_host, port, _table_oid): (String, Option<u16>, String)| {
             let _port = port.unwrap_or(161);
 
             let result = lua.create_table()?;
@@ -929,7 +928,7 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
     snmp.set("translate_oid", translate_oid_fn)?;
 
     // get_if_descr - Get network interface descriptions
-    let get_if_descr_fn = lua.create_function(|lua, (host, port): (String, Option<u16>)| {
+    let get_if_descr_fn = lua.create_function(|lua, (_host, port): (String, Option<u16>)| {
         let _port = port.unwrap_or(161);
 
         let result = lua.create_table()?;
@@ -953,7 +952,7 @@ pub fn register_snmp_library(lua: &Lua) -> LuaResult<()> {
     snmp.set("get_if_descr", get_if_descr_fn)?;
 
     // get_sysinfo - Get system information via SNMP
-    let get_sysinfo_fn = lua.create_function(|lua, (host, port): (String, Option<u16>)| {
+    let get_sysinfo_fn = lua.create_function(|lua, (_host, port): (String, Option<u16>)| {
         let _port = port.unwrap_or(161);
 
         let result = lua.create_table()?;

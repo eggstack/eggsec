@@ -8,8 +8,6 @@ use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream as AsyncTcpStream;
 
 const RDP_HEADER_SIZE: usize = 4;
 const RDP_TPDU_DATA: u8 = 0xF0;
@@ -96,9 +94,9 @@ pub fn register_rdp_library(lua: &Lua) -> LuaResult<()> {
     rdp.set("connect", connect_fn)?;
 
     let login_fn = lua.create_function(
-        |lua, (host, port, domain, user, password): (String, u16, String, String, String)| {
+        |lua, (host, port, domain, user, _password): (String, u16, String, String, String)| {
             match rdp_connect(&host, port) {
-                Ok(mut stream) => {
+                Ok(_stream) => {
                     let result = lua.create_table()?;
                     result.set("success", true)?;
                     result.set("user", user)?;
@@ -166,9 +164,9 @@ pub fn register_rdp_library(lua: &Lua) -> LuaResult<()> {
     rdp.set("check_security", check_security_fn)?;
 
     let check_creds_fn = lua.create_function(
-        |lua, (host, port, domain, user, password): (String, u16, String, String, String)| {
+        |lua, (host, port, domain, user, _password): (String, u16, String, String, String)| {
             match rdp_connect(&host, port) {
-                Ok(mut stream) => {
+                Ok(_stream) => {
                     let result = lua.create_table()?;
                     result.set("valid", true)?;
                     result.set("user", user)?;
@@ -190,7 +188,7 @@ pub fn register_rdp_library(lua: &Lua) -> LuaResult<()> {
     )?;
     rdp.set("check_creds", check_creds_fn)?;
 
-    let get_clipboard_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let get_clipboard_fn = lua.create_function(|lua, (_host, _port): (String, u16)| {
         let result = lua.create_table()?;
         result.set("text", "")?;
         result.set("status", "requires_authentication")?;
@@ -198,7 +196,7 @@ pub fn register_rdp_library(lua: &Lua) -> LuaResult<()> {
     })?;
     rdp.set("get_clipboard", get_clipboard_fn)?;
 
-    let screenshot_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let screenshot_fn = lua.create_function(|lua, (_host, _port): (String, u16)| {
         let result = lua.create_table()?;
         result.set("width", 1920)?;
         result.set("height", 1080)?;

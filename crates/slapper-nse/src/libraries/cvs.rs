@@ -3,7 +3,7 @@
 //! CVS (Concurrent Versions System) server support.
 //! Based on Nmap's cvs library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;

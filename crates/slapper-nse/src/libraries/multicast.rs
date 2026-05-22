@@ -3,7 +3,7 @@
 //! Multicast group membership and management.
 //! Based on Nmap's multicast library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 
 pub fn register_multicast_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
@@ -66,7 +66,7 @@ pub fn register_multicast_library(lua: &Lua) -> LuaResult<()> {
 
     multicast.set(
         "mcgroup_add",
-        lua.create_function(|lua, (iface, group): (String, String)| {
+        lua.create_function(|lua, (_iface, _group): (String, String)| {
             let result = lua.create_table()?;
             result.set("status", "ok")?;
             result.set("added", true)?;
@@ -76,7 +76,7 @@ pub fn register_multicast_library(lua: &Lua) -> LuaResult<()> {
 
     multicast.set(
         "mcgroup_drop",
-        lua.create_function(|lua, (iface, group): (String, String)| {
+        lua.create_function(|lua, (_iface, _group): (String, String)| {
             let result = lua.create_table()?;
             result.set("status", "ok")?;
             result.set("removed", true)?;

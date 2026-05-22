@@ -3,9 +3,9 @@
 //! File system operations for NSE scripts.
 //! Based on Nmap's lfs library concepts.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::SandboxConfig;
@@ -16,44 +16,20 @@ pub fn get_lfs_sandbox_metrics() -> usize {
     LFS_SANDBOX_VIOLATIONS.load(Ordering::SeqCst)
 }
 
-fn resolve_path_for_sandbox(path: &PathBuf) -> Result<PathBuf, std::io::Error> {
-    if path.exists() {
-        return path.canonicalize();
-    }
-    if let Some(parent) = path.parent() {
-        let canonical_parent = parent.canonicalize()?;
-        if let Some(name) = path.file_name() {
-            return Ok(canonical_parent.join(name));
-        }
-    }
-    path.canonicalize()
-}
-
 pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> {
     let globals = lua.globals();
     let lfs = lua.create_table()?;
 
     let sandbox_enabled = sandbox.enabled;
-    let allowed_dir = sandbox.allowed_dir.clone();
+    let sandbox_for_check = sandbox.clone();
 
     let check_path = {
         let sandbox_enabled = sandbox_enabled;
-        let allowed_dir = allowed_dir.clone();
         move |path: &str| -> bool {
             if !sandbox_enabled {
                 return true;
             }
-            if let Some(ref dir) = allowed_dir {
-                let path_buf = PathBuf::from(path);
-                let canonical = match resolve_path_for_sandbox(&path_buf) {
-                    Ok(c) => c,
-                    Err(_) => return false,
-                };
-                if !canonical.starts_with(dir) {
-                    return false;
-                }
-            }
-            true
+            !path.contains("..") && sandbox_for_check.is_path_allowed(path)
         }
     };
 
@@ -301,7 +277,7 @@ pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()>
     // lfs.touch(path) - Touch file
     let check_path_touch = check_path.clone();
     let touch_fn = lua.create_function(
-        move |_lua, (path, access_time, modification_time): (String, Option<u64>, Option<u64>)| {
+        move |_lua, (path, _access_time, _modification_time): (String, Option<u64>, Option<u64>)| {
             if !check_path_touch(&path) {
                 LFS_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                 return Err(mlua::Error::RuntimeError(format!(
@@ -327,19 +303,19 @@ pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()>
     lfs.set("touch", touch_fn)?;
 
     // lfs.lock(filehandle, mode) - Lock file
-    let lock_fn = lua.create_function(|_lua, (path, mode): (String, String)| {
+    let lock_fn = lua.create_function(|_lua, (_path, _mode): (String, String)| {
         // Simplified lock implementation
         Ok(true)
     })?;
     lfs.set("lock", lock_fn)?;
 
     // lfs.unlock(filehandle) - Unlock file
-    let unlock_fn = lua.create_function(|_lua, path: String| Ok(true))?;
+    let unlock_fn = lua.create_function(|_lua, _path: String| Ok(true))?;
     lfs.set("unlock", unlock_fn)?;
 
     // lfs.set_mode(path, mode) - Set file permissions
     let set_mode_fn = lua.create_function(|_lua, (path, mode): (String, String)| {
-        if let Ok(perms) = u32::from_str_radix(&mode, 8) {
+        if let Ok(_perms) = u32::from_str_radix(&mode, 8) {
             match fs::metadata(&path) {
                 Ok(meta) => {
                     let _ = meta.permissions();

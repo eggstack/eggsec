@@ -3,7 +3,7 @@
 //! Versant object database support.
 //! Based on Nmap's versant library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -227,7 +227,7 @@ pub fn register_versant_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(cmd.as_bytes()).ok();
 
             let mut response = [0u8; 8192];
-            let n = stream.read(&mut response).unwrap_or(0);
+            let _n = stream.read(&mut response).unwrap_or(0);
 
             let objects = lua.create_table()?;
             let oid_result = format!("{:x}", rand_simple());

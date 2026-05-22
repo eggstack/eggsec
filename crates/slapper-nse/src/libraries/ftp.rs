@@ -74,7 +74,7 @@ fn ftp_retr_file(host: &str, port: u16, filename: &str) -> std::io::Result<Strin
     let mut data = vec![0u8; 1048576];
     let n = data_stream.read(&mut data).unwrap_or(0);
 
-    let response = ftp_send_command(&mut stream, "")?;
+    let _response = ftp_send_command(&mut stream, "")?;
 
     if n > 0 {
         Ok(String::from_utf8_lossy(&data[..n]).to_string())
@@ -397,7 +397,7 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
     })?;
     ftp.set("cwd", cwd_fn)?;
 
-    let pwd_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let pwd_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
         let addr = format!("{}:{}", host, port);
         let mut stream = match TcpStream::connect_timeout(
             &addr
@@ -952,7 +952,7 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
     })?;
     ftp.set("type", type_fn)?;
 
-    let pasv_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let pasv_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
         let addr = format!("{}:{}", host, port);
         let mut stream = match TcpStream::connect_timeout(
             &addr
@@ -977,7 +977,7 @@ pub fn register_ftp_library(lua: &Lua) -> LuaResult<()> {
     })?;
     ftp.set("pasv", pasv_fn)?;
 
-    let epsv_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let epsv_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
         let addr = format!("{}:{}", host, port);
         let mut stream = match TcpStream::connect_timeout(
             &addr

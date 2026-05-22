@@ -27,7 +27,7 @@ impl NseExecutor {
 
     pub fn with_target(target: &str) -> LuaResult<Self> {
         let mut exec = Self::new()?;
-        exec.set_target(target);
+        let _ = exec.set_target(target);
         Ok(exec)
     }
 

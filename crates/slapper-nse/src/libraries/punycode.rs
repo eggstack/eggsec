@@ -3,7 +3,7 @@
 //! Punycode encoding/decoding for internationalized domain names.
 //! Based on Nmap's punycode library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 
 pub fn register_punycode_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
@@ -168,7 +168,7 @@ pub fn register_punycode_library(lua: &Lua) -> LuaResult<()> {
 }
 
 fn encode_codepoint(cp: u32) -> String {
-    let base: u32 = 0xAC00;
+    let _base: u32 = 0xAC00;
     if cp < 128 {
         return format!("{:x}", cp);
     }

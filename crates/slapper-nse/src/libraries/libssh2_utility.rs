@@ -4,7 +4,7 @@
 //! Based on Nmap's libssh2-utility library.
 
 use mlua::{Lua, Result as LuaResult, Table};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::net::TcpStream;
 use std::time::Duration;
 
@@ -72,7 +72,7 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
     let exec_fn =
         lua.create_function(
             |lua,
-             (host, port, username, password, cmd): (
+             (host, port, _username, _password, cmd): (
                 String,
                 Option<u16>,
                 String,
@@ -113,7 +113,7 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
     connection.set("exec", exec_fn)?;
 
     let auth_fn = lua.create_function(
-        |lua, (host, port, username, password): (String, Option<u16>, String, String)| {
+        |lua, (host, port, username, _password): (String, Option<u16>, String, String)| {
             let result = lua.create_table()?;
             let addr = format!("{}:{}", host, port.unwrap_or(SSH_PORT));
             let socket_addr = match addr.parse::<std::net::SocketAddr>() {
@@ -147,7 +147,7 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
     connection.set("auth_password", auth_fn)?;
 
     let auth_key_fn = lua.create_function(
-        |lua, (host, port, username, key_file): (String, Option<u16>, String, String)| {
+        |lua, (_host, _port, username, key_file): (String, Option<u16>, String, String)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;
@@ -163,9 +163,9 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
     libssh2_utility.set("Connection", connection)?;
 
     let scp_fn = lua.create_function(
-        |lua, (host, port, remote_path, local_path): (String, Option<u16>, String, String)| {
+        |lua, (_host, _port, remote_path, local_path): (String, Option<u16>, String, String)| {
             let result = lua.create_table()?;
-            let addr = format!("{}:{}", host, port.unwrap_or(SSH_PORT));
+            let _addr = format!("{}:{}", _host, _port.unwrap_or(SSH_PORT));
 
             result.set("status", "ok")?;
             result.set("direction", "download")?;
@@ -181,7 +181,7 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
     let scp_write_fn = lua.create_function(
         |lua, (host, port, local_path, remote_path): (String, Option<u16>, String, String)| {
             let result = lua.create_table()?;
-            let addr = format!("{}:{}", host, port.unwrap_or(SSH_PORT));
+            let _addr = format!("{}:{}", host, port.unwrap_or(SSH_PORT));
 
             result.set("status", "ok")?;
             result.set("direction", "upload")?;
@@ -196,7 +196,7 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
 
     let sftp_fn = lua.create_function(|lua, (host, port): (String, Option<u16>)| {
         let result = lua.create_table()?;
-        let addr = format!("{}:{}", host, port.unwrap_or(SSH_PORT));
+        let _addr = format!("{}:{}", host, port.unwrap_or(SSH_PORT));
 
         result.set("status", "ok")?;
         result.set("sftp_version", 3)?;
@@ -207,7 +207,7 @@ pub fn register_libssh2_utility_library(lua: &Lua) -> LuaResult<()> {
 
     let tunnel_fn = lua.create_function(
         |lua,
-         (host, port, user, pass, lhost, lport, rhost, rport): (
+         (_host, _port, _user, _pass, lhost, lport, rhost, rport): (
             String,
             Option<u16>,
             String,

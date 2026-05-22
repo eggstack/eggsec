@@ -3,7 +3,7 @@
 //! XDM (X Display Manager) Control Protocol support.
 //! Based on Nmap's xdmcp library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -201,7 +201,7 @@ pub fn register_xdmcp_library(lua: &Lua) -> LuaResult<()> {
 
             match socket.send_to(&query, &addr) {
                 Ok(_) => {
-                    let mut servers = lua.create_table()?;
+                    let servers = lua.create_table()?;
                     let mut count = 0;
 
                     // Collect responses
@@ -217,7 +217,7 @@ pub fn register_xdmcp_library(lua: &Lua) -> LuaResult<()> {
                                 if len > 0 {
                                     count += 1;
                                     let server = lua.create_table()?;
-                                    server.set("address", src.to_string());
+                                    let _ = server.set("address", src.to_string());
 
                                     if let Some(name) = parse_willing(&buf[..len]) {
                                         server.set("name", name.0)?;

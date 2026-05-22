@@ -217,7 +217,7 @@ pub fn register_informix_library(lua: &Lua) -> LuaResult<()> {
     informix.set(
         "list_tables",
         lua.create_function(
-            |lua, (host, port, database): (String, Option<u16>, String)| {
+            |lua, (host, port, _database): (String, Option<u16>, String)| {
                 let result = lua.create_table()?;
                 let addr = format!("{}:{}", host, port.unwrap_or(INFORMIX_PORT));
 

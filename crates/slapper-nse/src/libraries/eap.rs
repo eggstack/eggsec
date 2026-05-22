@@ -3,7 +3,7 @@
 //! EAP (Extensible Authentication Protocol) support.
 //! Based on Nmap's eap library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 
 pub fn register_eap_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
@@ -39,7 +39,7 @@ pub fn register_eap_library(lua: &Lua) -> LuaResult<()> {
 
     eap.set(
         "type_to_name",
-        lua.create_function(|lua, eap_type: u8| {
+        lua.create_function(|_lua, eap_type: u8| {
             let name = match eap_type {
                 1 => "EAP-Identity",
                 4 => "EAP-MD5",

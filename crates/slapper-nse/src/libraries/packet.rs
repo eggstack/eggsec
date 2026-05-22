@@ -282,7 +282,7 @@ pub fn register_packet_library(lua: &Lua) -> LuaResult<()> {
 
     packet.set(
         "send_raw",
-        lua.create_function(|lua, (_interface, packet_data): (Option<String>, String)| {
+        lua.create_function(|lua, (_interface, _packet_data): (Option<String>, String)| {
             let result = lua.create_table()?;
             #[cfg(feature = "stress-testing")]
             {
@@ -292,7 +292,7 @@ pub fn register_packet_library(lua: &Lua) -> LuaResult<()> {
                 match UdpSocket::bind("0.0.0.0:0") {
                     Ok(socket) => {
                         socket.set_broadcast(true).ok();
-                        match socket.send_to(packet_data.as_bytes(), "255.255.255.255:0") {
+                        match socket.send_to(_packet_data.as_bytes(), "255.255.255.255:0") {
                             Ok(n) => {
                                 result.set("status", "ok")?;
                                 result.set("sent", n)?;

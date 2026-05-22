@@ -18,7 +18,7 @@ pub fn register_pgsql_library(lua: &Lua) -> LuaResult<()> {
         "connect",
         lua.create_function(
             |lua,
-             (host, port, database, user, password): (
+             (host, port, database, user, _password): (
                 String,
                 Option<u16>,
                 String,
@@ -100,7 +100,7 @@ pub fn register_pgsql_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(&query_packet).ok();
 
             let mut response = [0u8; 8192];
-            let n = stream.read(&mut response).unwrap_or(0);
+            let _n = stream.read(&mut response).unwrap_or(0);
 
             let columns = lua.create_table()?;
             let rows = lua.create_table()?;
@@ -119,7 +119,7 @@ pub fn register_pgsql_library(lua: &Lua) -> LuaResult<()> {
     pgsql.set(
         "execute",
         lua.create_function(
-            |lua, (host, port, stmt, params): (String, Option<u16>, String, Table)| {
+            |lua, (host, port, stmt, _params): (String, Option<u16>, String, Table)| {
                 let result = lua.create_table()?;
                 let addr = format!("{}:{}", host, port.unwrap_or(PGSQL_PORT));
                 let socket_addr = match addr.parse::<std::net::SocketAddr>() {
@@ -191,7 +191,7 @@ pub fn register_pgsql_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(&query_packet).ok();
 
             let mut response = [0u8; 4096];
-            let n = stream.read(&mut response).unwrap_or(0);
+            let _n = stream.read(&mut response).unwrap_or(0);
 
             let databases = lua.create_table()?;
             databases.set(1, "postgres")?;
@@ -208,7 +208,7 @@ pub fn register_pgsql_library(lua: &Lua) -> LuaResult<()> {
 
     pgsql.set(
         "list_tables",
-        lua.create_function(|lua, (host, port, database): (String, Option<u16>, String)| {
+        lua.create_function(|lua, (host, port, _database): (String, Option<u16>, String)| {
             let result = lua.create_table()?;
             let addr = format!("{}:{}", host, port.unwrap_or(PGSQL_PORT));
             let socket_addr = match addr.parse::<std::net::SocketAddr>() {

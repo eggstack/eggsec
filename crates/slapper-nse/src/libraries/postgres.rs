@@ -8,8 +8,6 @@ use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream as AsyncTcpStream;
 
 const PG_AUTHENTICATION_OK: i32 = 0;
 const PG_AUTHENTICATION_MD5_PASSWORD: i32 = 5;
@@ -122,7 +120,7 @@ fn pg_login(
                 return Ok(true);
             }
             PG_AUTHENTICATION_MD5_PASSWORD => {
-                let salt = &response[9..13];
+                let _salt = &response[9..13];
                 let md5_hash = format!(
                     "md5{}{}{}",
                     password, user, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -133,7 +131,7 @@ fn pg_login(
                 hasher.update(md5_hash.as_bytes());
                 let result = hasher.finalize();
 
-                let hash_str = format!("{:x}", result);
+                let _hash_str = format!("{:x}", result);
 
                 let mut response_packet = Vec::new();
                 response_packet.push(b'p');
@@ -209,11 +207,11 @@ fn pg_query(conn: &mut PgConnection, query: &str) -> std::io::Result<String> {
     }
 
     let mut result = String::new();
-    let mut in_data = false;
+    let mut _in_data = false;
     for byte in &response[5..] {
         if *byte == 0 && !result.is_empty() && !result.ends_with('\0') {
             result.push(' ');
-            in_data = true;
+            _in_data = true;
         } else if *byte >= 0x20 && *byte <= 0x7e || *byte == b'\n' || *byte == b'\t' {
             result.push(*byte as char);
         }
@@ -440,7 +438,7 @@ pub fn register_postgres_library(lua: &Lua) -> LuaResult<()> {
     postgres.set("version", version_fn)?;
 
     // postgres.get_db_names() - Get list of databases
-    let get_db_names_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
+    let get_db_names_fn = lua.create_function(|_lua, (_host, _port): (String, u16)| {
         let dbs = vec![
             "postgres".to_string(),
             "template0".to_string(),
@@ -452,7 +450,7 @@ pub fn register_postgres_library(lua: &Lua) -> LuaResult<()> {
 
     // postgres.get_tables() - Get list of tables
     let get_tables_fn =
-        lua.create_function(|_lua, (host, port, database): (String, u16, String)| {
+        lua.create_function(|_lua, (_host, _port, _database): (String, u16, String)| {
             let tables = vec![
                 "pg_catalog.pg_class".to_string(),
                 "information_schema.tables".to_string(),
@@ -463,7 +461,7 @@ pub fn register_postgres_library(lua: &Lua) -> LuaResult<()> {
 
     // postgres.get_columns() - Get column information
     let get_columns_fn = lua.create_function(
-        |_lua, (host, port, database, table): (String, u16, String, String)| {
+        |_lua, (_host, _port, _database, _table): (String, u16, String, String)| {
             let lua = mlua::Lua::default();
             let columns = lua.create_table()?;
 
@@ -487,7 +485,7 @@ pub fn register_postgres_library(lua: &Lua) -> LuaResult<()> {
     postgres.set("get_columns", get_columns_fn)?;
 
     // postgres.get_settings() - Get server settings
-    let get_settings_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
+    let get_settings_fn = lua.create_function(|_lua, (_host, _port): (String, u16)| {
         let lua = mlua::Lua::default();
         let settings = lua.create_table()?;
 
@@ -501,7 +499,7 @@ pub fn register_postgres_library(lua: &Lua) -> LuaResult<()> {
     postgres.set("get_settings", get_settings_fn)?;
 
     // postgres.get_extensions() - Get installed extensions
-    let get_extensions_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
+    let get_extensions_fn = lua.create_function(|_lua, (_host, _port): (String, u16)| {
         let lua = mlua::Lua::default();
         let exts = lua.create_table()?;
 

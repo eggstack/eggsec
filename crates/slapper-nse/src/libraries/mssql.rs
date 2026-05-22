@@ -192,7 +192,7 @@ pub fn register_mssql_library(lua: &Lua) -> LuaResult<()> {
     mssql.set("query_async", async_query_fn)?;
 
     // mssql.exec() - Execute a stored procedure
-    let exec_fn = lua.create_function(|_lua, (host, port, procedure): (String, u16, String)| {
+    let exec_fn = lua.create_function(|_lua, (_host, _port, procedure): (String, u16, String)| {
         let result = mlua::Lua::default().create_table()?;
         result.set("procedure", procedure)?;
         result.set("executed", true)?;
@@ -201,7 +201,7 @@ pub fn register_mssql_library(lua: &Lua) -> LuaResult<()> {
     mssql.set("exec", exec_fn)?;
 
     // mssql.get_db_names() - Get list of databases
-    let get_db_names_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
+    let get_db_names_fn = lua.create_function(|_lua, (_host, _port): (String, u16)| {
         let lua = mlua::Lua::default();
         let result = lua.create_table()?;
 
@@ -218,7 +218,7 @@ pub fn register_mssql_library(lua: &Lua) -> LuaResult<()> {
 
     // mssql.get_table_names() - Get list of tables in a database
     let get_table_names_fn =
-        lua.create_function(|_lua, (host, port, database): (String, u16, String)| {
+        lua.create_function(|_lua, (_host, _port, database): (String, u16, String)| {
             let lua = mlua::Lua::default();
             let result = lua.create_table()?;
 
@@ -235,7 +235,7 @@ pub fn register_mssql_library(lua: &Lua) -> LuaResult<()> {
 
     // mssql.sp_columns() - Get column information
     let sp_columns_fn =
-        lua.create_function(|_lua, (host, port, table): (String, u16, String)| {
+        lua.create_function(|_lua, (_host, _port, table): (String, u16, String)| {
             let lua = mlua::Lua::default();
             let result = lua.create_table()?;
 
@@ -269,7 +269,7 @@ pub fn register_mssql_library(lua: &Lua) -> LuaResult<()> {
     mssql.set("sp_columns", sp_columns_fn)?;
 
     // mssql.sp_tables() - Get table information
-    let sp_tables_fn = lua.create_function(|_lua, (host, port, db): (String, u16, String)| {
+    let sp_tables_fn = lua.create_function(|_lua, (_host, _port, db): (String, u16, String)| {
         let lua = mlua::Lua::default();
         let result = lua.create_table()?;
 
@@ -298,7 +298,7 @@ pub fn register_mssql_library(lua: &Lua) -> LuaResult<()> {
 
     // mssql.get_type_info() - Get SQL data type information
     let get_type_info_fn = lua.create_function(
-        |_lua, (host, port, data_type): (String, u16, Option<i32>)| {
+        |_lua, (_host, _port, _data_type): (String, u16, Option<i32>)| {
             let lua = mlua::Lua::default();
             let result = lua.create_table()?;
 

@@ -3,8 +3,8 @@
 //! Zlib compression and decompression library.
 //! Based on Nmap's zlib library: https://nmap.org/nsedoc/lib/zlib.html
 
-use flate2::read::{DeflateDecoder, GzDecoder, ZlibDecoder};
-use flate2::write::{DeflateEncoder, GzEncoder, ZlibEncoder};
+use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use mlua::{Lua, Result as LuaResult, Table, UserData};
 use std::io::{Read, Write};
@@ -97,7 +97,7 @@ pub fn register_zlib_library(lua: &Lua) -> LuaResult<()> {
         })?;
     zlib.set("decompress", decompress_fn)?;
 
-    let deflate_fn = lua.create_function(|lua, (sink, level): (Table, Option<i32>)| {
+    let deflate_fn = lua.create_function(|lua, (_sink, level): (Table, Option<i32>)| {
         let compression_level = match level.unwrap_or(6) {
             0 => Compression::none(),
             1..=3 => Compression::fast(),

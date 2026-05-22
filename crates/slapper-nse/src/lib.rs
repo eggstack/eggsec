@@ -8,6 +8,10 @@ use ipnetwork::IpNetwork;
 use std::net::IpAddr;
 use std::path::PathBuf;
 
+#[cfg(all(feature = "nse", target_family = "unix"))]
+#[link(name = "z")]
+unsafe extern "C" {}
+
 /// Configuration for running NSE scripts.
 pub struct NseConfig {
     pub target: String,
@@ -72,6 +76,11 @@ impl Default for SandboxConfig {
 }
 
 impl SandboxConfig {
+    fn allowed_root(&self) -> Option<PathBuf> {
+        let dir = self.allowed_dir.as_ref()?;
+        dir.canonicalize().ok().or_else(|| Some(dir.clone()))
+    }
+
     /// Create a sandbox config with sandboxing enabled and default settings.
     pub fn enabled() -> Self {
         Self {
@@ -86,7 +95,7 @@ impl SandboxConfig {
             return true;
         }
 
-        let Some(ref allowed_dir) = self.allowed_dir else {
+        let Some(allowed_dir) = self.allowed_root() else {
             return true;
         };
 
@@ -95,7 +104,7 @@ impl SandboxConfig {
             // If canonicalize fails (file doesn't exist), check the parent
             if let Some(parent) = path_buf.parent() {
                 if let Ok(canonical_parent) = parent.canonicalize() {
-                    return canonical_parent.starts_with(allowed_dir);
+                    return canonical_parent.starts_with(&allowed_dir);
                 }
             }
             // Reject if we can't verify the path

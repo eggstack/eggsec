@@ -7,7 +7,6 @@ use mlua::{Lua, Result as LuaResult, UserData, UserDataMethods};
 use native_tls::TlsConnector;
 use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
-use std::io::Read;
 use std::net::TcpStream;
 use std::time::Duration;
 
@@ -662,13 +661,13 @@ pub fn register_tls_library(lua: &Lua) -> LuaResult<()> {
             Ok(tls_stream) => {
                 if let Some(cert) = tls_stream.peer_certificate().ok().flatten() {
                     if let Ok(der) = cert.to_der() {
-                        if let Ok(x509) = openssl::x509::X509::from_der(&der) {
+                        if let Ok(_x509) = openssl::x509::X509::from_der(&der) {
                             let altnames = lua.create_table()?;
-                            let mut count = 0;
+                            let mut _count = 0;
 
                             // Use the hostname as fallback for SANs
                             altnames.set(1, host.clone())?;
-                            count += 1;
+                            _count += 1;
 
                             result.set("altnames", altnames)?;
                         }
@@ -743,7 +742,7 @@ pub fn register_tls_library(lua: &Lua) -> LuaResult<()> {
         };
 
         match connector.connect(&host, stream) {
-            Ok(tls_stream) => {
+            Ok(_tls_stream) => {
                 result.set("version", "TLS 1.2")?;
                 result.set("cipher", "AES256-GCM-SHA384")?;
                 result.set("peer_certificate", true)?;
@@ -815,7 +814,7 @@ pub fn register_tls_library(lua: &Lua) -> LuaResult<()> {
         match connector.connect(&host, stream) {
             Ok(tls_stream) => {
                 let chain = lua.create_table()?;
-                if let Some(cert) = tls_stream.peer_certificate().ok().flatten() {
+                if let Some(_cert) = tls_stream.peer_certificate().ok().flatten() {
                     let cert_info = lua.create_table()?;
                     cert_info.set("subject", "CN=".to_string())?;
                     cert_info.set("issuer", "CN=".to_string())?;

@@ -3,10 +3,10 @@
 //! SSH (Secure Shell) protocol support for NSE scripts.
 //! Based on Nmap's ssh library: https://nmap.org/nsedoc/lib/ssh.html
 
-use mlua::{Lua, Result as LuaResult, Table};
-#[cfg(feature = "ssh2")]
+use mlua::{Lua, Result as LuaResult};
+use std::io::Read;
+#[cfg(feature = "nse-ssh2")]
 use ssh2::Session;
-use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
@@ -102,10 +102,10 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.login() - Authenticate to SSH server
     let login_fn = lua.create_function(
-        |lua, (host, port, user, password): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, _port, user, _password): (String, Option<u16>, String, String)| {
+            let _port = _port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
                 let addr = format!("{}:{}", host, port);
                 let tcp = match TcpStream::connect_timeout(
@@ -159,14 +159,14 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 }
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("success", false)?;
                 result.set("user", user)?;
                 result.set(
                     "error",
-                    "SSH login requires ssh2 crate (enable ssh2 feature)",
+                    "SSH login requires ssh2 crate (enable nse-ssh2 feature)",
                 )?;
 
                 Ok(result)
@@ -177,10 +177,10 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.execute() - Execute a command
     let execute_fn = lua.create_function(
-        |lua, (host, port, command): (String, Option<u16>, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, _port, command): (String, Option<u16>, String)| {
+            let _port = _port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
                 let addr = format!("{}:{}", host, port);
                 let tcp = match TcpStream::connect_timeout(
@@ -247,7 +247,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 Ok(result)
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("output", format!("Command '{}' would be executed", command))?;
@@ -261,8 +261,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.shell() - Open interactive shell
     let shell_fn =
-        lua.create_function(|lua, (host, port, user): (String, Option<u16>, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        lua.create_function(|lua, (_host, port, _user): (String, Option<u16>, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             let result = lua.create_table()?;
             result.set("shell", "/bin/bash")?;
@@ -292,7 +292,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
         };
 
         let banner = read_ssh_banner(&mut stream).unwrap_or_else(|_| "SSH-2.0".to_string());
-        let (version, software, comments) = parse_ssh_banner(&banner);
+        let (version, software, _comments) = parse_ssh_banner(&banner);
 
         let result = lua.create_table()?;
         result.set("banner", banner)?;
@@ -311,14 +311,14 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     // ssh.forward_local() - Local port forwarding
     let forward_local_fn = lua.create_function(
         |lua,
-         (host, port, local_port, dest_host, dest_port): (
+         (_host, port, local_port, dest_host, dest_port): (
             String,
             Option<u16>,
             u16,
             String,
             u16,
         )| {
-            let port = port.unwrap_or(SSH_PORT);
+            let _port = port.unwrap_or(SSH_PORT);
 
             let result = lua.create_table()?;
             result.set("success", true)?;
@@ -333,8 +333,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.scp() - Copy files via SCP
     let scp_fn = lua.create_function(
-        |lua, (host, port, src, dst): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, src, dst): (String, Option<u16>, String, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             let result = lua.create_table()?;
             result.set("success", false)?;
@@ -348,8 +348,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     ssh.set("scp", scp_fn)?;
 
     // ssh.key_fingerprint() - Get host key fingerprint
-    let key_fingerprint_fn = lua.create_function(|lua, (host, port): (String, Option<u16>)| {
-        let port = port.unwrap_or(SSH_PORT);
+    let key_fingerprint_fn = lua.create_function(|lua, (_host, port): (String, Option<u16>)| {
+        let _port = port.unwrap_or(SSH_PORT);
 
         // Return stub fingerprint
         let result = lua.create_table()?;
@@ -362,8 +362,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.get_auth_methods() - Get available authentication methods
     let auth_methods_fn =
-        lua.create_function(|lua, (host, port, user): (String, Option<u16>, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        lua.create_function(|lua, (_host, port, _user): (String, Option<u16>, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             let result = lua.create_table()?;
             result.set(1, "password")?;
@@ -374,8 +374,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     ssh.set("get_auth_methods", auth_methods_fn)?;
 
     // ssh.check_weak() - Check for weak algorithms
-    let check_weak_fn = lua.create_function(|lua, (host, port): (String, Option<u16>)| {
-        let port = port.unwrap_or(SSH_PORT);
+    let check_weak_fn = lua.create_function(|lua, (_host, port): (String, Option<u16>)| {
+        let _port = port.unwrap_or(SSH_PORT);
 
         let result = lua.create_table()?;
         result.set("weak_ciphers", lua.create_table()?)?;
@@ -387,8 +387,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     ssh.set("check_weak", check_weak_fn)?;
 
     // ssh.cipher_info() - Get cipher information
-    let cipher_info_fn = lua.create_function(|lua, (host, port): (String, Option<u16>)| {
-        let port = port.unwrap_or(SSH_PORT);
+    let cipher_info_fn = lua.create_function(|lua, (_host, port): (String, Option<u16>)| {
+        let _port = port.unwrap_or(SSH_PORT);
 
         let result = lua.create_table()?;
         result.set("local_cipher", "aes256-ctr")?;
@@ -402,8 +402,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.userauth() - Generic user authentication
     let userauth_fn = lua.create_function(
-        |lua, (host, port, user, password): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, _port, user, _password): (String, Option<u16>, String, String)| {
+            let _port = _port.unwrap_or(SSH_PORT);
 
             let result = lua.create_table()?;
             result.set("success", false)?;
@@ -420,10 +420,10 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.userauth_pubkey() - Public key authentication
     let userauth_pubkey_fn = lua.create_function(
-        |lua, (host, port, user, key_file): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, _port, user, _key_file): (String, Option<u16>, String, String)| {
+            let _port = _port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
                 let addr = format!("{}:{}", host, port);
                 let tcp = match TcpStream::connect_timeout(
@@ -488,7 +488,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 }
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("success", false)?;
@@ -502,8 +502,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.userauth_keyinteractive() - Keyboard-interactive authentication
     let userauth_keyinteractive_fn = lua.create_function(
-        |lua, (host, port, user, submethods): (String, Option<u16>, String, Option<String>)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, user, _submethods): (String, Option<u16>, String, Option<String>)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             let result = lua.create_table()?;
             result.set("success", false)?;
@@ -519,10 +519,10 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.channel() - Open a channel
     let channel_fn = lua.create_function(
-        |lua, (host, port, channel_type): (String, Option<u16>, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, channel_type): (String, Option<u16>, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
                 let result = lua.create_table()?;
                 result.set("channel_type", channel_type)?;
@@ -531,7 +531,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 Ok(result)
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("channel_type", channel_type)?;
@@ -544,8 +544,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.subsystem() - Execute a subsystem
     let subsystem_fn = lua.create_function(
-        |lua, (host, port, subsystem): (String, Option<u16>, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, subsystem): (String, Option<u16>, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             let result = lua.create_table()?;
             result.set("subsystem", subsystem)?;
@@ -557,10 +557,10 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.scp_download() - Download files via SCP
     let scp_download_fn = lua.create_function(
-        |lua, (host, port, remote_path, local_path): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, _remote_path, _local_path): (String, Option<u16>, String, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
                 let result = lua.create_table()?;
                 result.set("success", false)?;
@@ -568,7 +568,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 Ok(result)
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("success", false)?;
@@ -581,10 +581,10 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.scp_upload() - Upload files via SCP
     let scp_upload_fn = lua.create_function(
-        |lua, (host, port, local_path, remote_path): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, _port, _local_path, _remote_path): (String, Option<u16>, String, String)| {
+            let _port = _port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
                 let result = lua.create_table()?;
                 result.set("success", false)?;
@@ -592,7 +592,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 Ok(result)
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("success", false)?;
@@ -605,12 +605,12 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.scp_download() - Download files via SCP
     let scp_download_fn = lua.create_function(
-        |lua, (host, port, remote_path, local_path): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, _port, _remote_path, _local_path): (String, Option<u16>, String, String)| {
+            let _port = _port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
-                let addr = format!("{}:{}", host, port);
+                let addr = format!("{}:{}", _host, _port);
                 let tcp = match TcpStream::connect_timeout(
                     &addr.parse::<std::net::SocketAddr>().map_err(
                         |e: std::net::AddrParseError| mlua::Error::RuntimeError(e.to_string()),
@@ -651,7 +651,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 Ok(result)
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("success", false)?;
@@ -664,10 +664,10 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.scp_upload() - Upload files via SCP
     let scp_upload_fn = lua.create_function(
-        |lua, (host, port, local_path, remote_path): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, _local_path, _remote_path): (String, Option<u16>, String, String)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
                 let addr = format!("{}:{}", host, port);
                 let tcp = match TcpStream::connect_timeout(
@@ -709,7 +709,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 Ok(result)
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("success", false)?;
@@ -722,10 +722,10 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.sftp() - SFTP operations
     let sftp_fn = lua.create_function(
-        |lua, (host, port, operation, path): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, _port, operation, path): (String, Option<u16>, String, String)| {
+            let _port = _port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
                 let addr = format!("{}:{}", host, port);
                 let tcp = match TcpStream::connect_timeout(
@@ -770,7 +770,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 Ok(result)
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("operation", operation)?;
@@ -783,12 +783,12 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     ssh.set("sftp", sftp_fn)?;
 
     // ssh.hostkey() - Get host key
-    let hostkey_fn = lua.create_function(|lua, (host, port): (String, Option<u16>)| {
-        let port = port.unwrap_or(SSH_PORT);
+    let hostkey_fn = lua.create_function(|lua, (_host, _port): (String, Option<u16>)| {
+        let _port = _port.unwrap_or(SSH_PORT);
 
-        #[cfg(feature = "ssh2")]
+        #[cfg(feature = "nse-ssh2")]
         {
-            let addr = format!("{}:{}", host, port);
+            let addr = format!("{}:{}", _host, _port);
             let tcp =
                 match TcpStream::connect_timeout(
                     &addr.parse::<std::net::SocketAddr>().map_err(
@@ -827,7 +827,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
             Ok(result)
         }
 
-        #[cfg(not(feature = "ssh2"))]
+        #[cfg(not(feature = "nse-ssh2"))]
         {
             let result = lua.create_table()?;
             result.set("md5", "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx")?;
@@ -839,10 +839,10 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.userauth() - Generic user authentication
     let userauth_fn = lua.create_function(
-        |lua, (host, port, user, password): (String, Option<u16>, String, String)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, _port, user, _password): (String, Option<u16>, String, String)| {
+            let _port = _port.unwrap_or(SSH_PORT);
 
-            #[cfg(feature = "ssh2")]
+            #[cfg(feature = "nse-ssh2")]
             {
                 let addr = format!("{}:{}", host, port);
                 let tcp = match TcpStream::connect_timeout(
@@ -896,7 +896,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                 }
             }
 
-            #[cfg(not(feature = "ssh2"))]
+            #[cfg(not(feature = "nse-ssh2"))]
             {
                 let result = lua.create_table()?;
                 result.set("success", false)?;
@@ -910,8 +910,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.direct_tcpip() - Direct TCP/IP forwarding
     let direct_tcpip_fn = lua.create_function(
-        |lua, (host, port, target_host, target_port): (String, Option<u16>, String, u16)| {
-            let port = port.unwrap_or(SSH_PORT);
+        |lua, (_host, port, _target_host, _target_port): (String, Option<u16>, String, u16)| {
+            let _port = port.unwrap_or(SSH_PORT);
 
             let result = lua.create_table()?;
             result.set("success", false)?;
@@ -954,8 +954,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     ssh.set("connect_async", async_connect_fn)?;
 
     // keep_alive - Send SSH keepalive to maintain connection
-    let keep_alive_fn = lua.create_function(|_lua, (host, port): (String, Option<u16>)| {
-        let port = port.unwrap_or(22);
+    let keep_alive_fn = lua.create_function(|_lua, (_host, port): (String, Option<u16>)| {
+        let _port = port.unwrap_or(22);
 
         // In practice, this would send a global request
         Ok(true)
@@ -963,14 +963,14 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     ssh.set("keep_alive", keep_alive_fn)?;
 
     // get_cipher_info - Get current cipher information
-    let get_cipher_info_fn = lua.create_function(|_lua, (host, port): (String, Option<u16>)| {
+    let get_cipher_info_fn = lua.create_function(|_lua, (_host, _port): (String, Option<u16>)| {
         // Return cipher info structure
         Ok("aes256-ctr")
     })?;
     ssh.set("get_cipher", get_cipher_info_fn)?;
 
     // get_kex_info - Get key exchange information
-    let get_kex_info_fn = lua.create_function(|_lua, (host, port): (String, Option<u16>)| {
+    let get_kex_info_fn = lua.create_function(|_lua, (_host, _port): (String, Option<u16>)| {
         Ok("diffie-hellman-group14-sha1")
     })?;
     ssh.set("get_kex", get_kex_info_fn)?;
@@ -1013,8 +1013,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // disconnect - Gracefully close SSH connection
     let disconnect_fn = lua.create_function(
-        |_lua, (host, port, reason): (String, Option<u16>, Option<String>)| {
-            let reason = reason.unwrap_or_else(|| "User disconnected".to_string());
+        |_lua, (_host, _port, reason): (String, Option<u16>, Option<String>)| {
+            let _reason = reason.unwrap_or_else(|| "User disconnected".to_string());
             // Would send SSH_MSG_DISCONNECT
             Ok(true)
         },
@@ -1022,7 +1022,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     ssh.set("disconnect", disconnect_fn)?;
 
     // get_server_key - Get server public key
-    let get_server_key_fn = lua.create_function(|_lua, (host, port): (String, Option<u16>)| {
+    let get_server_key_fn = lua.create_function(|_lua, (_host, _port): (String, Option<u16>)| {
         // Would retrieve and return server public key
         Ok("")
     })?;
@@ -1030,8 +1030,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // verify_host_key - Verify known host key
     let verify_host_key_fn = lua.create_function(
-        |_lua, (host, port, known_hosts_path): (String, Option<u16>, Option<String>)| {
-            let known_path = known_hosts_path.unwrap_or_else(|| "~/.ssh/known_hosts".to_string());
+        |_lua, (_host, _port, known_hosts_path): (String, Option<u16>, Option<String>)| {
+            let _known_path = known_hosts_path.unwrap_or_else(|| "~/.ssh/known_hosts".to_string());
             // Would check if host key is known and trusted
             Ok("known")
         },
@@ -1041,7 +1041,7 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     // file_transfer - Generic file transfer interface
     let file_transfer_fn = lua.create_function(
         |lua,
-         (host, port, operation, local_path, remote_path): (
+         (_host, _port, operation, _local_path, _remote_path): (
             String,
             Option<u16>,
             String,

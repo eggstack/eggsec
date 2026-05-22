@@ -3,7 +3,7 @@
 //! GIOP (General Inter-ORB Protocol) support for CORBA.
 //! Based on Nmap's giop library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 
 pub fn register_giop_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();

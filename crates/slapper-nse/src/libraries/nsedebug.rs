@@ -108,7 +108,7 @@ pub fn register_nsedebug_library(lua: &Lua) -> LuaResult<()> {
     // count_objects - Count objects of a given type
     nsedebug.set(
         "count_objects",
-        lua.create_function(|lua, t: Table| {
+        lua.create_function(|_lua, t: Table| {
             let mut count = 0;
             for _ in t.pairs::<mlua::Value, mlua::Value>() {
                 count += 1;

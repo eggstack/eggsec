@@ -4,7 +4,6 @@
 //! Based on Nmap's pppoe library: https://nmap.org/nsedoc/lib/pppoe.html
 
 use mlua::{Lua, Result as LuaResult, Table};
-use std::net::UdpSocket;
 
 const PPPOE_DISCOVERY: u8 = 0x09;
 const PPPOE_SESSION: u8 = 0x00;
@@ -345,7 +344,7 @@ pub fn register_pppoe_library(lua: &Lua) -> LuaResult<()> {
 
     comm.set(
         "send",
-        lua.create_function(|lua, (comm_table, data): (Table, Vec<u8>)| {
+        lua.create_function(|lua, (_comm_table, data): (Table, Vec<u8>)| {
             let result = lua.create_table()?;
 
             // Note: Raw Ethernet sending would require elevated privileges
@@ -363,7 +362,7 @@ pub fn register_pppoe_library(lua: &Lua) -> LuaResult<()> {
 
     comm.set(
         "recv",
-        lua.create_function(|lua, comm_table: Table| {
+        lua.create_function(|lua, _comm_table: Table| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;
@@ -401,7 +400,7 @@ pub fn register_pppoe_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, helper_table: Table| {
             let result = lua.create_table()?;
 
-            let interface: String = helper_table
+            let _interface: String = helper_table
                 .get("interface")
                 .unwrap_or_else(|_| "eth0".to_string());
 
@@ -466,7 +465,7 @@ pub fn register_pppoe_library(lua: &Lua) -> LuaResult<()> {
     // discover - Discover PPPoE servers
     pppoe.set(
         "discover",
-        lua.create_function(|lua, interface: Option<String>| {
+        lua.create_function(|lua, _interface: Option<String>| {
             let result = lua.create_table()?;
 
             let interfaces: Vec<_> = match std::fs::read_dir("/sys/class/net") {

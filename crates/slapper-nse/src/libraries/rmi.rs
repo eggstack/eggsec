@@ -3,7 +3,7 @@
 //! RMI (Java Remote Method Invocation) support.
 //! Based on Nmap's rmi library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -76,7 +76,7 @@ pub fn register_rmi_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(&request).ok();
 
             let mut response = [0u8; 4096];
-            let n = stream.read(&mut response).unwrap_or(0);
+            let _n = stream.read(&mut response).unwrap_or(0);
 
             result.set("status", "ok")?;
             result.set("methods", lua.create_table()?)?;

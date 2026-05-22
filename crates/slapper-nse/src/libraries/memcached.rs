@@ -7,7 +7,6 @@ use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use tokio::net::TcpStream as AsyncTcpStream;
 
 fn memcached_send(host: &str, port: u16, command: &[u8]) -> std::io::Result<String> {
     let addr = format!("{}:{}", host, port);

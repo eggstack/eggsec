@@ -3,7 +3,7 @@
 //! iSNS (Internet Storage Name Service) protocol support.
 //! Based on Nmap's isns library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -55,7 +55,7 @@ pub fn register_isns_library(lua: &Lua) -> LuaResult<()> {
 
     isns.set(
         "device_get_next",
-        lua.create_function(|lua, (host, port): (String, Option<u16>)| {
+        lua.create_function(|lua, (_host, _port): (String, Option<u16>)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;
@@ -68,7 +68,7 @@ pub fn register_isns_library(lua: &Lua) -> LuaResult<()> {
 
     isns.set(
         "get_entity_id",
-        lua.create_function(|lua, (host, port): (String, Option<u16>)| {
+        lua.create_function(|lua, (_host, _port): (String, Option<u16>)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;
@@ -81,7 +81,7 @@ pub fn register_isns_library(lua: &Lua) -> LuaResult<()> {
 
     isns.set(
         "read_dd",
-        lua.create_function(|lua, (host, port): (String, Option<u16>)| {
+        lua.create_function(|lua, (_host, _port): (String, Option<u16>)| {
             let result = lua.create_table()?;
 
             let entities = lua.create_table()?;
@@ -99,7 +99,7 @@ pub fn register_isns_library(lua: &Lua) -> LuaResult<()> {
     isns.set(
         "dev_attr_query",
         lua.create_function(
-            |lua, (host, port, entity_id): (String, Option<u16>, String)| {
+            |lua, (_host, _port, entity_id): (String, Option<u16>, String)| {
                 let result = lua.create_table()?;
 
                 result.set("status", "ok")?;

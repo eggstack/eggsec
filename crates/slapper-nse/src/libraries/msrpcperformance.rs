@@ -4,7 +4,6 @@
 //! Based on Nmap's msrpcperformance library.
 
 use mlua::{Lua, Result as LuaResult, Table};
-use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
@@ -70,7 +69,7 @@ pub fn register_msrpcperformance_library(lua: &Lua) -> LuaResult<()> {
                 return Ok(result);
             }
         };
-        let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+        let _stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
             Ok(s) => s,
             Err(e) => {
                 result.set("status", "error")?;
@@ -89,7 +88,7 @@ pub fn register_msrpcperformance_library(lua: &Lua) -> LuaResult<()> {
     msrpcperformance.set("connect", connect_fn)?;
 
     let get_perf_counters_fn =
-        lua.create_function(|lua, (host, port, object): (String, Option<u16>, String)| {
+        lua.create_function(|lua, (_host, _port, object): (String, Option<u16>, String)| {
             let result = lua.create_table()?;
 
             let counters = lua.create_table()?;

@@ -4,7 +4,7 @@
 
 use mlua::{Lua, Result as LuaResult, Table};
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::TcpStream;
 use std::sync::LazyLock;
 use std::sync::RwLock;
@@ -605,7 +605,7 @@ pub fn register_nmap_library(lua: &Lua) -> LuaResult<()> {
         })?,
     )?;
 
-    nmap.set(
+    let _ = nmap.set(
         "socket_close",
         lua.create_function(|_lua, socket_table: Table| {
             let host: String = socket_table.get("remote_host").unwrap_or_default();

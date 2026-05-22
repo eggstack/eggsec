@@ -10,7 +10,7 @@ pub fn register_table_library(lua: &Lua) {
 
     let table_lib = lua.create_table().expect("Failed to create table table");
 
-    table_lib.set(
+    let _ = table_lib.set(
         "serialize",
         lua.create_function(|_lua, (t, _options): (Table, Option<Table>)| {
             let mut output = Vec::new();
@@ -69,13 +69,13 @@ pub fn register_table_library(lua: &Lua) {
         .ok(),
     );
 
-    table_lib.set(
+    let _ = table_lib.set(
         "deserialize",
         lua.create_function(|_lua, _s: String| Ok(_lua.create_table().ok()))
             .ok(),
     );
 
-    table_lib.set(
+    let _ = table_lib.set(
         "keys",
         lua.create_function(|_lua, t: Table| {
             let keys = _lua.create_table()?;
@@ -91,7 +91,7 @@ pub fn register_table_library(lua: &Lua) {
         .ok(),
     );
 
-    table_lib.set(
+    let _ = table_lib.set(
         "values",
         lua.create_function(|_lua, t: Table| {
             let values = _lua.create_table()?;
@@ -107,7 +107,7 @@ pub fn register_table_library(lua: &Lua) {
         .ok(),
     );
 
-    table_lib.set(
+    let _ = table_lib.set(
         "size",
         lua.create_function(|_lua, t: Table| {
             let mut count = 0;
@@ -119,7 +119,7 @@ pub fn register_table_library(lua: &Lua) {
         .ok(),
     );
 
-    table_lib.set(
+    let _ = table_lib.set(
         "contains",
         lua.create_function(|_lua, (t, value): (Table, mlua::Value)| {
             for pair in t.pairs::<mlua::Value, mlua::Value>() {
@@ -134,7 +134,7 @@ pub fn register_table_library(lua: &Lua) {
         .ok(),
     );
 
-    table_lib.set(
+    let _ = table_lib.set(
         "merge",
         lua.create_function(|_lua, (t1, t2): (Table, Table)| {
             let result = _lua.create_table()?;
@@ -156,5 +156,5 @@ pub fn register_table_library(lua: &Lua) {
         .ok(),
     );
 
-    globals.set("table", table_lib).ok();
+    let _ = globals.set("table", table_lib);
 }

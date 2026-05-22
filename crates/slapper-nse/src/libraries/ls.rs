@@ -3,7 +3,7 @@
 //! ls (list) utility support.
 //! Based on Nmap's ls library: https://nmap.org/nsedoc/lib/ls.html
 
-use mlua::{Function, Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult, Table};
 
 pub fn register_ls_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
@@ -12,11 +12,11 @@ pub fn register_ls_library(lua: &Lua) -> LuaResult<()> {
     let dir_fn = lua.create_function(|lua, path: String| {
         let entries = match std::fs::read_dir(&path) {
             Ok(rd) => {
-                let mut result = lua.create_table()?;
+                let result = lua.create_table()?;
                 let mut count = 1;
                 for entry in rd.flatten() {
                     if let Ok(file_type) = entry.file_type() {
-                        let mut file_entry = lua.create_table()?;
+                        let file_entry = lua.create_table()?;
                         file_entry.set("name", entry.file_name().to_string_lossy().to_string())?;
 
                         if let Ok(metadata) = entry.metadata() {
@@ -51,13 +51,13 @@ pub fn register_ls_library(lua: &Lua) -> LuaResult<()> {
     ls.set("dir", dir_fn)?;
 
     let add_file_fn = lua.create_function(|lua, (output, file): (Table, Table)| {
-        let mut output = output;
+        let output = output;
 
         let name: String = file.get("name").unwrap_or_default();
         let size: u64 = file.get("size").unwrap_or(0);
         let file_type: String = file.get("type").unwrap_or_else(|_| "file".to_string());
 
-        let mut file_entry = lua.create_table()?;
+        let file_entry = lua.create_table()?;
         file_entry.set("name", name)?;
         file_entry.set("size", size)?;
         file_entry.set("type", file_type)?;

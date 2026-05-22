@@ -3,7 +3,7 @@
 //! Pattern matching utilities.
 //! Based on Nmap's matchs library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use regex::RegexBuilder;
 
 pub fn register_matchs_library(lua: &Lua) -> LuaResult<()> {
@@ -70,7 +70,7 @@ pub fn register_matchs_library(lua: &Lua) -> LuaResult<()> {
         }
 
         let cidr_ip = parts[0];
-        if let Ok(cidr_num) = parts[1].parse::<u8>() {
+        if let Ok(_cidr_num) = parts[1].parse::<u8>() {
             let cidr_parts: Vec<u8> = cidr_ip.split('.').filter_map(|p| p.parse().ok()).collect();
 
             let ip_parts: Vec<u8> = ip.split('.').filter_map(|p| p.parse().ok()).collect();

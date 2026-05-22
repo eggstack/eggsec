@@ -4,6 +4,7 @@
 //! Includes both blocking and async implementations.
 
 use mlua::{Lua, Result as LuaResult};
+use std::io::{Read, Write};
 use std::io::Read;
 use std::net::TcpStream;
 use std::time::Duration;

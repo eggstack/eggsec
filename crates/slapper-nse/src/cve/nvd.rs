@@ -3,7 +3,7 @@
 //! Free API: 6 requests per minute (without API key)
 //! Documentation: https://nvd.nist.gov/developers/vulnerabilities
 
-use super::{CveClient, CveError, CveRecord, CveSource, SeverityType, VendorAdvisory};
+use super::{CveClient, CveError, CveRecord, CveSource, SeverityType};
 use serde::Deserialize;
 
 pub struct NvdClient {

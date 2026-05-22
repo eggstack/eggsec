@@ -4,9 +4,7 @@
 //! Includes both blocking and async implementations.
 
 use mlua::{Lua, Result as LuaResult};
-use std::io::{Read, Write};
 use std::net::UdpSocket;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn ntp_request(host: &str, port: u16, mode: u8, data: &[u8]) -> Result<Vec<u8>, String> {
     let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
@@ -39,28 +37,27 @@ fn ntp_read_response(response: &[u8]) -> (u8, u8, u8, u8, String, f64, f64, f64)
     let version = (response[0] >> 3) & 0x7;
     let mode = response[0] & 0x7;
     let stratum = response[1];
-    let poll = response[2] as i8 as i8;
-    let precision = response[3] as i8;
+    let _poll = response[2] as i8 as i8;
+    let _precision = response[3] as i8;
 
     let root_delay = ((response[4] as u32) << 8 | (response[5] as u32) << 0) as f64 / 65536.0;
     let root_disp = ((response[6] as u32) << 8 | (response[7] as u32) << 0) as f64 / 65536.0;
 
-    let mut ref_id = String::new();
-    if stratum == 1 {
-        ref_id = String::from_utf8_lossy(&response[12..16]).to_string();
+    let ref_id = if stratum == 1 {
+        String::from_utf8_lossy(&response[12..16]).to_string()
     } else {
         let ip = ((response[12] as u32) << 24)
             | ((response[13] as u32) << 16)
             | ((response[14] as u32) << 8)
             | (response[15] as u32);
-        ref_id = format!(
+        format!(
             "{}.{}.{}.{}",
             (ip >> 24) & 0xff,
             (ip >> 16) & 0xff,
             (ip >> 8) & 0xff,
             ip & 0xff
-        );
-    }
+        )
+    };
 
     (
         leap, version, mode, stratum, ref_id, root_delay, root_disp, 0.0,
@@ -73,7 +70,7 @@ pub fn register_ntp_library(lua: &Lua) -> LuaResult<()> {
 
     let request_fn = lua.create_function(|lua, (host, port): (String, u16)| {
         match ntp_request(&host, port, 3, &[]) {
-            Ok(response) => {
+            Ok(_response) => {
                 let result = lua.create_table()?;
                 result.set("status", "sent")?;
                 result.set("host", host)?;

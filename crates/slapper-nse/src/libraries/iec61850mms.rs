@@ -4,8 +4,7 @@
 //! Used for power grid and SCADA systems.
 //! Based on Nmap's iec61850mms library.
 
-use mlua::{Lua, Result as LuaResult, Table};
-use std::io::{Read, Write};
+use mlua::{Lua, Result as LuaResult};
 use std::net::TcpStream;
 use std::time::Duration;
 
@@ -53,7 +52,7 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
                 return Ok(result);
             }
         };
-        let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
+        let _stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(10)) {
             Ok(s) => s,
             Err(e) => {
                 result.set("status", "error")?;
@@ -72,7 +71,7 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
     mms.set("connect", connect_fn)?;
 
     let read_fn = lua.create_function(
-        |lua, (host, port, domain, item): (String, Option<u16>, String, String)| {
+        |lua, (_host, _port, domain, item): (String, Option<u16>, String, String)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;
@@ -88,7 +87,7 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
     mms.set("read", read_fn)?;
 
     let write_fn = lua.create_function(
-        |lua, (host, port, domain, item, value): (String, Option<u16>, String, String, String)| {
+        |lua, (_host, _port, domain, item, value): (String, Option<u16>, String, String, String)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;
@@ -103,7 +102,7 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
     mms.set("write", write_fn)?;
 
     let get_name_list_fn =
-        lua.create_function(|lua, (host, port, domain): (String, Option<u16>, String)| {
+        lua.create_function(|lua, (_host, _port, domain): (String, Option<u16>, String)| {
             let result = lua.create_table()?;
 
             let items = lua.create_table()?;
@@ -123,7 +122,7 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
     let define_named_variable_fn =
         lua.create_function(
             |lua,
-             (host, port, domain, item, type_name): (
+             (_host, _port, domain, item, type_name): (
                 String,
                 Option<u16>,
                 String,
@@ -144,7 +143,7 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
     mms.set("define_named_variable", define_named_variable_fn)?;
 
     let read_directory_fn =
-        lua.create_function(|lua, (host, port, domain): (String, Option<u16>, String)| {
+        lua.create_function(|lua, (_host, _port, domain): (String, Option<u16>, String)| {
             let result = lua.create_table()?;
 
             let directories = lua.create_table()?;

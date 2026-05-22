@@ -3,7 +3,7 @@
 //! BJNP (Brother Johnny Network Protocol) printer support.
 //! Based on Nmap's bjnp library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -261,7 +261,7 @@ pub fn register_bjnp_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(bjnp_jobs).ok();
 
             let mut response = [0u8; 1024];
-            let n = stream.read(&mut response).unwrap_or(0);
+            let _n = stream.read(&mut response).unwrap_or(0);
 
             let jobs = lua.create_table()?;
             result.set("status", "ok")?;

@@ -45,7 +45,7 @@ pub fn register_bitcoin_library(lua: &Lua) -> LuaResult<()> {
 
     network_address.set(
         "encode",
-        lua.create_function(|lua, addr: Table| {
+        lua.create_function(|_lua, addr: Table| {
             let host: String = addr.get("host").unwrap_or_else(|_| "".to_string());
             let port: u16 = addr.get("port").unwrap_or(8333);
 
@@ -267,7 +267,7 @@ pub fn register_bitcoin_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(&getaddr_msg).ok();
 
             // Read addr response
-            let n = stream.read(&mut buf).unwrap_or(0);
+            let _n = stream.read(&mut buf).unwrap_or(0);
 
             result.set("status", "ok")?;
             result.set("addresses", lua.create_table()?)?;
@@ -285,7 +285,7 @@ pub fn register_bitcoin_library(lua: &Lua) -> LuaResult<()> {
     Ok(())
 }
 
-fn create_version_message(version: u32) -> Vec<u8> {
+fn create_version_message(_version: u32) -> Vec<u8> {
     let mut msg = Vec::new();
 
     // Magic

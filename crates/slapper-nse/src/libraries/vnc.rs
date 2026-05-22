@@ -8,8 +8,6 @@ use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream as AsyncTcpStream;
 
 const RFB_VERSION_3_3: &[u8] = b"RFB 003.003\n";
 const RFB_VERSION_3_7: &[u8] = b"RFB 003.007\n";
@@ -244,7 +242,7 @@ pub fn register_vnc_library(lua: &Lua) -> LuaResult<()> {
         )?;
     vnc.set("get_desktop_info", get_desktop_info_fn)?;
 
-    let read_screen_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let read_screen_fn = lua.create_function(|lua, (_host, _port): (String, u16)| {
         let result = lua.create_table()?;
         result.set("width", 1920)?;
         result.set("height", 1080)?;
@@ -480,7 +478,7 @@ pub fn register_vnc_library(lua: &Lua) -> LuaResult<()> {
         })?;
     vnc.set("send_cut_text", send_cut_text_fn)?;
 
-    let get_pixel_format_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let get_pixel_format_fn = lua.create_function(|lua, (_host, _port): (String, u16)| {
         let result = lua.create_table()?;
         result.set("bits_per_pixel", 32)?;
         result.set("depth", 24)?;
@@ -503,14 +501,14 @@ pub fn register_vnc_library(lua: &Lua) -> LuaResult<()> {
             let result = tokio::task::spawn_blocking(move || vnc_connect(&host_clone, port)).await;
 
             match result {
-                Ok(Ok(conn)) => {
+                Ok(Ok(_conn)) => {
                     let r = lua.create_table()?;
                     r.set("host", host)?;
                     r.set("port", port)?;
                     r.set("status", "connected")?;
                     r.set("protocol_version", "RFB 003.008")?;
-                    r.set("width", conn.width)?;
-                    r.set("height", conn.height)?;
+                    r.set("width", _conn.width)?;
+                    r.set("height", _conn.height)?;
                     Ok(r)
                 }
                 Ok(Err(e)) => {
@@ -540,7 +538,7 @@ pub fn register_vnc_library(lua: &Lua) -> LuaResult<()> {
                         .await;
 
                 match result {
-                    Ok(Ok(conn)) => {
+                Ok(Ok(_conn)) => {
                         let r = lua.create_table()?;
                         r.set("success", true)?;
                         r.set("host", host)?;

@@ -3,7 +3,7 @@
 //! SLP (Service Location Protocol) support.
 //! Based on Nmap's srvloc library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::net::UdpSocket;
 use std::time::Duration;
 

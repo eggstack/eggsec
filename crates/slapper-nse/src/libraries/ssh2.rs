@@ -6,18 +6,18 @@
 //! This implementation provides SSH2 support using raw sockets for banner grabbing,
 //! and full SSH2 when the ssh2 crate feature is enabled.
 
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use mlua::{Lua, Result as LuaResult, UserData, UserDataMethods, Value};
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use ssh2::Session;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use std::net::TcpStream;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use std::path::Path;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 use std::time::Duration;
 
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 struct SshSession {
     session: Option<Session>,
     host: String,
@@ -27,7 +27,7 @@ struct SshSession {
     username: Option<String>,
 }
 
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 impl SshSession {
     fn connect(host: &str, port: u16) -> std::io::Result<Self> {
         let addr = format!("{}:{}", host, port);
@@ -87,7 +87,7 @@ impl SshSession {
     }
 }
 
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 impl UserData for SshSession {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method_mut("disconnect", |_lua, this, _: ()| {
@@ -210,7 +210,7 @@ impl UserData for SshSession {
     }
 }
 
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "nse-ssh2")]
 pub fn register_ssh2_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
     let ssh2 = lua.create_table()?;
@@ -315,10 +315,12 @@ pub fn register_ssh2_library(lua: &Lua) -> LuaResult<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "ssh2"))]
+#[cfg(not(feature = "nse-ssh2"))]
 use mlua::{Lua, Result as LuaResult};
+#[cfg(not(feature = "nse-ssh2"))]
+use std::io::Read;
 
-#[cfg(not(feature = "ssh2"))]
+#[cfg(not(feature = "nse-ssh2"))]
 pub fn register_ssh2_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
     let ssh2 = lua.create_table()?;
@@ -326,20 +328,22 @@ pub fn register_ssh2_library(lua: &Lua) -> LuaResult<()> {
     ssh2.set(
         "session",
         lua.create_function(|lua, (host, port): (String, Option<u16>)| {
-            use std::io::{Read, Write};
+            use std::io::Read;
             use std::net::TcpStream;
             use std::time::Duration;
 
             let result = lua.create_table()?;
             let port = port.unwrap_or(22);
-            let addr = format!("{}:{}", host, port);
+                let addr = format!("{}:{}", host, port);
 
-            match TcpStream::connect_timeout(
-                &addr.parse().map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
-                })?,
-                Duration::from_secs(10),
-            ) {
+                match TcpStream::connect_timeout(
+                    &addr.parse::<std::net::SocketAddr>().map_err(
+                        |e: std::net::AddrParseError| {
+                        std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
+                    },
+                    )?,
+                    Duration::from_secs(10),
+                ) {
                 Ok(mut stream) => {
                     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
                     let mut banner = vec![0u8; 256];
@@ -369,18 +373,23 @@ pub fn register_ssh2_library(lua: &Lua) -> LuaResult<()> {
         lua.create_function(|lua, (host, port): (String, Option<u16>)| {
             let host_clone = host.clone();
             let port = port.unwrap_or(22);
+            let host_for_blocking = host_clone.clone();
 
             tokio::runtime::Handle::current().block_on(async {
                 let result = tokio::task::spawn_blocking(move || {
-                    use std::io::{Read, Write};
                     use std::net::TcpStream;
                     use std::time::Duration;
 
-                    let addr = format!("{}:{}", host_clone, port);
+                    let addr = format!("{}:{}", host_for_blocking, port);
                     TcpStream::connect_timeout(
-                        &addr.parse().map_err(|e| {
-                            std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
-                        })?,
+                        &addr.parse::<std::net::SocketAddr>().map_err(
+                            |e: std::net::AddrParseError| {
+                                std::io::Error::new(
+                                    std::io::ErrorKind::InvalidInput,
+                                    e.to_string(),
+                                )
+                            },
+                        )?,
                         Duration::from_secs(10),
                     )
                 })
@@ -388,7 +397,9 @@ pub fn register_ssh2_library(lua: &Lua) -> LuaResult<()> {
 
                 match result {
                     Ok(Ok(mut stream)) => {
-                        stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
+                        stream
+                            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                            .ok();
                         let mut banner = vec![0u8; 256];
                         let _ = stream.read(&mut banner);
                         let banner_str = String::from_utf8_lossy(&banner).trim().to_string();
@@ -439,7 +450,7 @@ pub fn register_ssh2_library(lua: &Lua) -> LuaResult<()> {
         let channel = lua.create_table()?;
         channel.set(
             "error",
-            "SSH2 support not compiled. Enable 'ssh2' feature for full support.",
+            "SSH2 support not compiled. Enable 'nse-ssh2' feature for full support.",
         )?;
         channel.set("open", false)?;
         Ok(channel)

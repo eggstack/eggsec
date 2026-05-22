@@ -3,8 +3,7 @@
 //! Cisco AnyConnect VPN Client support.
 //! Based on Nmap's anyconnect library.
 
-use mlua::{Lua, Result as LuaResult, Table};
-use std::io::{Read, Write};
+use mlua::{Lua, Result as LuaResult};
 use std::net::TcpStream;
 use std::time::Duration;
 
@@ -77,7 +76,7 @@ pub fn register_anyconnect_library(lua: &Lua) -> LuaResult<()> {
     anyconnect_obj.set("connect", connect_fn)?;
 
     let login_fn = lua.create_function(
-        |lua, (host, port, username, password): (String, Option<u16>, String, String)| {
+        |lua, (_host, _port, username, _password): (String, Option<u16>, String, String)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;

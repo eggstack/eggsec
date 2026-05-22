@@ -3,7 +3,7 @@
 //! Remote Packet Capture (RPCAP) protocol support.
 //! Based on Nmap's rpcap library.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -168,7 +168,7 @@ pub fn register_rpcap_library(lua: &Lua) -> LuaResult<()> {
             stream.write_all(&stop_msg).ok();
 
             let mut response = [0u8; 256];
-            let _n = stream.read(&mut response).unwrap_or(0);
+            let n = stream.read(&mut response).unwrap_or(0);
 
             result.set("status", "ok")?;
             result.set("capturing", false)?;
@@ -273,7 +273,7 @@ pub fn register_rpcap_library(lua: &Lua) -> LuaResult<()> {
 
     rpcap.set(
         "get_stats",
-        lua.create_function(|lua, (host, port): (String, Option<u16>)| {
+        lua.create_function(|lua, (_host, _port): (String, Option<u16>)| {
             let result = lua.create_table()?;
 
             result.set("status", "ok")?;

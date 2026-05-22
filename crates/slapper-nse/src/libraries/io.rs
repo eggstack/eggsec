@@ -3,9 +3,9 @@
 //! Provides file I/O operations compatible with NSE.
 
 use mlua::{Lua, Result as LuaResult, Table};
+use std::io::{Read, Write};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -43,53 +43,16 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     let io = lua.create_table()?;
 
     let sandbox_enabled = sandbox.enabled;
-    let allowed_dir_for_open = sandbox.allowed_dir.clone();
-
-    let resolve_path_for_sandbox = |path: &PathBuf| -> Result<PathBuf, std::io::Error> {
-        if path.exists() {
-            return path.canonicalize();
-        }
-        if let Some(parent) = path.parent() {
-            let canonical_parent = parent.canonicalize()?;
-            if let Some(name) = path.file_name() {
-                return Ok(canonical_parent.join(name));
-            }
-        }
-        path.canonicalize()
-    };
+    let sandbox_for_open = sandbox.clone();
 
     io.set(
         "open",
         lua.create_function(move |lua, (filename, mode): (String, Option<String>)| {
             if sandbox_enabled {
-                let path_buf = PathBuf::from(&filename);
-                if let Some(ref dir) = allowed_dir_for_open {
-                    let canonical = match resolve_path_for_sandbox(&path_buf) {
-                        Ok(c) => c,
-                        Err(e) => {
-                            IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
-                            let result = lua.create_table()?;
-                            result.set(
-                                "error",
-                                format!(
-                                    "Path '{}' could not be resolved: {} - blocked by sandbox",
-                                    filename, e
-                                ),
-                            )?;
-                            return Ok(result);
-                        }
-                    };
-                    if !canonical.starts_with(dir) {
-                        IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
-                        let result = lua.create_table()?;
-                        result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
-                        return Ok(result);
-                    }
-                }
-                if filename.contains("..") {
+                if filename.contains("..") || !sandbox_for_open.is_path_allowed(&filename) {
                     IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                     let result = lua.create_table()?;
-                    result.set("error", "Path traversal blocked by sandbox")?;
+                    result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
                     return Ok(result);
                 }
             }
@@ -254,36 +217,15 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
         })?,
     )?;
 
-    let allowed_dir_for_lines = sandbox.allowed_dir.clone();
+    let sandbox_for_lines = sandbox.clone();
     io.set(
         "lines",
         lua.create_function(move |lua, filename: String| {
             if sandbox_enabled {
-                let path_buf = PathBuf::from(&filename);
-                if let Some(ref dir) = allowed_dir_for_lines {
-                    let canonical = match path_buf.canonicalize() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            let result = lua.create_table()?;
-                            result.set(
-                                "error",
-                                format!(
-                                    "Path '{}' could not be resolved: {} - blocked by sandbox",
-                                    filename, e
-                                ),
-                            )?;
-                            return Ok(result);
-                        }
-                    };
-                    if !canonical.starts_with(dir) {
-                        let result = lua.create_table()?;
-                        result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
-                        return Ok(result);
-                    }
-                }
-                if filename.contains("..") {
+                if filename.contains("..") || !sandbox_for_lines.is_path_allowed(&filename) {
+                    IO_SANDBOX_VIOLATIONS.fetch_add(1, Ordering::SeqCst);
                     let result = lua.create_table()?;
-                    result.set("error", "Path traversal blocked by sandbox")?;
+                    result.set("error", format!("Path '{}' blocked by sandbox", filename))?;
                     return Ok(result);
                 }
             }

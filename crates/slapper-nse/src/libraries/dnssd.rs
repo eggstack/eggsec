@@ -3,10 +3,7 @@
 //! DNS-SD (DNS Service Discovery) support.
 //! Based on Nmap's dnssd library.
 
-use mlua::{Lua, Result as LuaResult, Table};
-use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, TcpStream};
-use std::time::Duration;
+use mlua::{Lua, Result as LuaResult};
 
 const MDNS_ADDR: &str = "224.0.0.251";
 const MDNS_PORT: u16 = 5353;

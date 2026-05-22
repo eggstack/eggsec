@@ -38,6 +38,7 @@ ipnetwork = "0.20"
 
 [features]
 default = []
-nse = ["mlua", "mlua-luau-scheduler", "openssl", "des", "ssh2"]
+nse = ["mlua", "mlua-luau-scheduler", "openssl", "des"]
+nse-ssh2 = ["nse", "dep:ssh2"]
 sandbox = []
 stress-testing = []

@@ -3,7 +3,7 @@
 //! Apache Kafka protocol support for NSE scripts.
 //! Implements the Kafka Wire Protocol (0.9 - 2.x).
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -114,7 +114,7 @@ impl KafkaConnection {
         request.extend_from_slice(&(-1i32).to_be_bytes());
         request.extend_from_slice(&1i32.to_be_bytes());
 
-        let record_start = request.len();
+        let _record_start = request.len();
         request.extend_from_slice(&0i32.to_be_bytes());
         request.extend_from_slice(&0i64.to_be_bytes());
         request.extend_from_slice(&0i64.to_be_bytes());

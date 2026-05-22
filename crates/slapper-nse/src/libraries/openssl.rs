@@ -3,9 +3,8 @@
 //! OpenSSL bindings for NSE scripts.
 //! Based on Nmap's openssl library: https://nmap.org/nsedoc/lib/openssl.html
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use native_tls::TlsConnector;
-use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -113,7 +112,7 @@ pub fn register_openssl_library(lua: &Lua) -> LuaResult<()> {
                         let peer_cert = tls_stream.peer_certificate();
 
                         if let Ok(cert) = peer_cert {
-                            if let Some(c) = cert {
+                            if let Some(_c) = cert {
                                 result.set("subject", format!("CN={}", host))?;
                                 result.set("issuer", "Let's Encrypt")?;
                                 result.set("valid", true)?;
@@ -263,7 +262,7 @@ pub fn register_openssl_library(lua: &Lua) -> LuaResult<()> {
     openssl.set("cipher_get_min_version", min_version_fn)?;
 
     // openssl.remote_verify() - Verify remote certificate
-    let remote_verify_fn = lua.create_function(|_lua, (host, port): (String, u16)| {
+    let remote_verify_fn = lua.create_function(|_lua, (host, _port): (String, u16)| {
         let result = _lua.create_table()?;
 
         // For now, always return valid with warning
@@ -277,7 +276,8 @@ pub fn register_openssl_library(lua: &Lua) -> LuaResult<()> {
     openssl.set("remote_verify", remote_verify_fn)?;
 
     // openssl.cert_get_fingerprint() - Get certificate fingerprint
-    let fingerprint_fn = lua.create_function(|_lua, (host, port, _hash): (String, u16, String)| {
+    let fingerprint_fn =
+        lua.create_function(|_lua, (_host, _port, _hash): (String, u16, String)| {
         // Return SHA256 fingerprint
         let fingerprint = format!("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
             rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>(),
@@ -295,7 +295,7 @@ pub fn register_openssl_library(lua: &Lua) -> LuaResult<()> {
     openssl.set("cert_get_fingerprint", fingerprint_fn)?;
 
     // openssl.cert_get_altnames() - Get certificate alt names
-    let altnames_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let altnames_fn = lua.create_function(|lua, (host, _port): (String, u16)| {
         let result = lua.create_table()?;
 
         // Return common SANs
@@ -303,7 +303,7 @@ pub fn register_openssl_library(lua: &Lua) -> LuaResult<()> {
         result.set(2, host)?;
 
         Ok(result)
-    })?;
+        })?;
     openssl.set("cert_get_altnames", altnames_fn)?;
 
     globals.set("openssl", openssl)?;

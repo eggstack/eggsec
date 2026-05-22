@@ -10,7 +10,7 @@ pub fn register_string_library(lua: &Lua) {
 
     let string = lua.create_table().expect("Failed to create string table");
 
-    string.set(
+    let _ = string.set(
         "unescape",
         lua.create_function(|_lua, s: String| {
             let mut result = String::new();
@@ -42,7 +42,7 @@ pub fn register_string_library(lua: &Lua) {
         .ok(),
     );
 
-    string.set(
+    let _ = string.set(
         "escape",
         lua.create_function(|_lua, s: String| {
             let result: String = s
@@ -62,7 +62,7 @@ pub fn register_string_library(lua: &Lua) {
         .ok(),
     );
 
-    string.set(
+    let _ = string.set(
         "random",
         lua.create_function(|_lua, (length, charset): (usize, Option<String>)| {
             let charset = charset.unwrap_or_else(|| {
@@ -77,7 +77,7 @@ pub fn register_string_library(lua: &Lua) {
         .ok(),
     );
 
-    string.set(
+    let _ = string.set(
         "random_alpha",
         lua.create_function(|_lua, length: usize| {
             let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -90,7 +90,7 @@ pub fn register_string_library(lua: &Lua) {
         .ok(),
     );
 
-    string.set(
+    let _ = string.set(
         "random_numeric",
         lua.create_function(|_lua, length: usize| {
             let charset = "0123456789";
@@ -103,7 +103,7 @@ pub fn register_string_library(lua: &Lua) {
         .ok(),
     );
 
-    string.set(
+    let _ = string.set(
         "random_alphanumeric",
         lua.create_function(|_lua, length: usize| {
             let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -116,5 +116,5 @@ pub fn register_string_library(lua: &Lua) {
         .ok(),
     );
 
-    globals.set("string", string).ok();
+    let _ = globals.set("string", string);
 }

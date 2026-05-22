@@ -2,7 +2,7 @@
 //!
 //! Elasticsearch REST API support for NSE scripts.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use reqwest::blocking::Client;
 use std::time::Duration;
 
@@ -95,7 +95,7 @@ pub fn register_elasticsearch_library(lua: &Lua) -> LuaResult<()> {
     elasticsearch.set("connect", connect_fn)?;
 
     let info_fn = lua.create_function(|lua, (host, port): (String, u16)| {
-        let conn = match ElasticsearchConnection::new(&host, port) {
+        let _conn = match ElasticsearchConnection::new(&host, port) {
             Ok(c) => c,
             Err(e) => {
                 let result = lua.create_table()?;

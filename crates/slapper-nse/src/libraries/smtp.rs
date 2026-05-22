@@ -8,8 +8,6 @@ use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream as AsyncTcpStream;
 
 fn smtp_connect(host: &str, port: u16) -> std::io::Result<(TcpStream, String)> {
     let addr = format!("{}:{}", host, port);
@@ -179,7 +177,7 @@ pub fn register_smtp_library(lua: &Lua) -> LuaResult<()> {
         "connect",
         lua.create_function(
             |lua, (host, port): (String, u16)| match smtp_connect(&host, port) {
-                Ok((stream, banner)) => {
+                Ok((_stream, banner)) => {
                     let result = lua.create_table()?;
                     result.set("status", "connected")?;
                     result.set("banner", banner.trim())?;

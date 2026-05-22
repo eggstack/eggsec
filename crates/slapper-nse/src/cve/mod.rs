@@ -11,7 +11,6 @@ pub mod traits;
 pub use cisa_kev::CisaKevClient;
 pub use nvd::NvdClient;
 pub use osv::OsvClient;
-pub use traits::*;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

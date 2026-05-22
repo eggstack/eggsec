@@ -226,7 +226,7 @@ fn get_cve_database(
     m
 }
 
-fn get_service_vulnerabilities(service: &str, port: u16) -> Vec<NseVulnResult> {
+fn get_service_vulnerabilities(service: &str, _port: u16) -> Vec<NseVulnResult> {
     let mut results = Vec::new();
     let service_lower = service.to_lowercase();
     let cve_db = get_cve_database();
@@ -690,7 +690,7 @@ pub fn nse_ssh_get_info(host: &str, port: u16) -> NseResult<NseSshResult> {
 
     // Parse banner for version info
     let banner_str = banner.trim().to_string();
-    let (version, software) = if banner_str.starts_with("SSH-") {
+    let (_version, software) = if banner_str.starts_with("SSH-") {
         let parts: Vec<&str> = banner_str.split('-').collect();
         if parts.len() >= 2 {
             let ver = parts[1].to_string();
@@ -758,7 +758,7 @@ pub fn nse_snmp_get_sysinfo(host: &str, community: &str) -> NseResult<NseSnmpRes
         .map_err(|e| NseError::Connection(format!("Failed to set timeout: {}", e)))?;
 
     // Build SNMP GET request for sysDescr (1.3.6.1.2.1.1.1.0)
-    let snmp_oid = [0x30, 0x00]; // Start of SNMP message
+    let _snmp_oid = [0x30, 0x00]; // Start of SNMP message
 
     // Simple SNMPv1 GET request
     let mut request = vec![
@@ -805,7 +805,7 @@ pub fn nse_snmp_get_sysinfo(host: &str, community: &str) -> NseResult<NseSnmpRes
         .map_err(|_| NseError::Connection("No SNMP response received".to_string()))?;
 
     // Parse response - look for system info in response
-    let response = &buf[..len];
+    let _response = &buf[..len];
 
     let sys_description = if len > 20 {
         // Basic check if we got a response
@@ -1010,7 +1010,7 @@ pub struct NseMysqlResult {
 
 /// Test MySQL connection and get version
 pub fn nse_mysql_get_version(host: &str, port: u16) -> NseResult<NseMysqlResult> {
-    use std::io::{Read, Write};
+    use std::io::Read;
 
     let addr = format!("{}:{}", host, port);
     let mut stream = TcpStream::connect_timeout(

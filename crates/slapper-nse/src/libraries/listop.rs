@@ -9,7 +9,7 @@ pub fn register_listop_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();
     let listop = lua.create_table()?;
 
-    let concat_fn = lua.create_function(|lua, (list, sep): (Table, Option<String>)| {
+    let concat_fn = lua.create_function(|_lua, (list, sep): (Table, Option<String>)| {
         let sep = sep.unwrap_or_default();
         let mut parts = Vec::new();
         for i in 1..=list.len().unwrap_or(0) {
@@ -33,7 +33,7 @@ pub fn register_listop_library(lua: &Lua) -> LuaResult<()> {
     })?;
     listop.set("reverse", reverse_fn)?;
 
-    let join_fn = lua.create_function(|lua, (list, sep): (Table, Option<String>)| {
+    let join_fn = lua.create_function(|_lua, (list, sep): (Table, Option<String>)| {
         let sep = sep.unwrap_or_default();
         let mut parts = Vec::new();
         for i in 1..=list.len().unwrap_or(0) {

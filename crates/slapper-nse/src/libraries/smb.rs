@@ -4,13 +4,12 @@
 //! Provides real SMB protocol implementation including authentication,
 //! session establishment, and file operations.
 
-use mlua::{Lua, Result as LuaResult, Table};
+use mlua::{Lua, Result as LuaResult};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream as AsyncTcpStream;
 
 static SMB_SESSIONS: LazyLock<Mutex<Vec<SmbSession>>> = LazyLock::new(|| Mutex::new(Vec::new()));
@@ -104,8 +103,8 @@ fn smb_session_setup(
     ];
 
     let mut security_blob = Vec::new();
-    let username_with_domain = format!("{}\0", username);
-    let password_bytes: Vec<u8> = password
+    let _username_with_domain = format!("{}\0", username);
+    let _password_bytes: Vec<u8> = password
         .as_bytes()
         .iter()
         .cloned()
@@ -170,7 +169,7 @@ fn smb_tree_connect(host: &str, port: u16, share: &str) -> std::io::Result<u32> 
         0x00, 0x00,
     ];
 
-    let mut path = format!("\\\\{}\\{}\0", host, share);
+    let path = format!("\\\\{}\\{}\0", host, share);
     let path_bytes = path.as_bytes();
     tree_connect.extend_from_slice(path_bytes);
     tree_connect.extend(vec![0u8; 512 - path_bytes.len()]);
@@ -254,7 +253,7 @@ fn smb_list_shares(host: &str, port: u16) -> std::io::Result<Vec<(String, String
 fn smb_open_file(
     host: &str,
     port: u16,
-    share: &str,
+    _share: &str,
     path: &str,
 ) -> std::io::Result<(TcpStream, u16)> {
     let (mut stream, _negotiate_response) = smb_negotiate(host, port)?;
@@ -265,7 +264,7 @@ fn smb_open_file(
         0x00, 0x00,
     ];
 
-    let mut path_full = format!("{}\0", path);
+    let path_full = format!("{}\0", path);
     let path_bytes = path_full.as_bytes();
 
     nt_create.extend_from_slice(&(0x0011u16).to_le_bytes());
@@ -295,8 +294,8 @@ fn smb_open_file(
 fn smb_read_file(
     host: &str,
     port: u16,
-    share: &str,
-    path: &str,
+    _share: &str,
+    _path: &str,
     offset: u64,
     length: u32,
 ) -> std::io::Result<Vec<u8>> {
@@ -339,8 +338,8 @@ fn smb_read_file(
 fn smb_write_file(
     host: &str,
     port: u16,
-    share: &str,
-    path: &str,
+    _share: &str,
+    _path: &str,
     data: &[u8],
 ) -> std::io::Result<u32> {
     let (mut stream, _negotiate_response) = smb_negotiate(host, port)?;
@@ -372,7 +371,7 @@ fn smb_write_file(
     }
 }
 
-fn smb_delete_file(host: &str, port: u16, share: &str, path: &str) -> std::io::Result<bool> {
+fn smb_delete_file(host: &str, port: u16, _share: &str, path: &str) -> std::io::Result<bool> {
     let (mut stream, _negotiate_response) = smb_negotiate(host, port)?;
 
     let mut delete_cmd = vec![
@@ -404,7 +403,7 @@ fn smb_delete_file(host: &str, port: u16, share: &str, path: &str) -> std::io::R
 fn smb_list_directory(
     host: &str,
     port: u16,
-    share: &str,
+    _share: &str,
     path: &str,
 ) -> std::io::Result<Vec<(String, u64, String)>> {
     let (mut stream, _negotiate_response) = smb_negotiate(host, port)?;
@@ -467,7 +466,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
                 .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?,
             Duration::from_secs(10),
         ) {
-            Ok(stream) => {
+            Ok(_stream) => {
                 if let Ok(mut sessions) = SMB_SESSIONS.lock() {
                     let session = SmbSession::new(host.clone(), port);
                     let mut s = session.clone();
@@ -494,7 +493,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     let login_fn = lua.create_function(
         |lua, (host, port, domain, user, password): (String, u16, String, String, String)| {
             match smb_session_setup(&host, port, &user, &password) {
-                Ok((stream, session_key)) => {
+                Ok((_stream, session_key)) => {
                     if let Ok(mut sessions) = SMB_SESSIONS.lock() {
                         let mut session = SmbSession::new(host.clone(), port);
                         session.connected = true;
@@ -571,7 +570,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     )?;
     smb.set("connect_tree", connect_tree_fn)?;
 
-    let open_file_fn = lua.create_function(|lua, (host, port, path): (String, u16, String)| {
+    let open_file_fn = lua.create_function(|lua, (_host, _port, path): (String, u16, String)| {
         let result = lua.create_table()?;
         result.set("success", true)?;
         result.set("path", path)?;
@@ -676,7 +675,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     )?;
     smb.set("delete_file", delete_file_fn)?;
 
-    let get_services_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let get_services_fn = lua.create_function(|lua, (_host, _port): (String, u16)| {
         let result = lua.create_table()?;
         let services = lua.create_table()?;
 
@@ -695,7 +694,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     })?;
     smb.set("get_services", get_services_fn)?;
 
-    let get_domain_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let get_domain_fn = lua.create_function(|lua, (_host, _port): (String, u16)| {
         let result = lua.create_table()?;
         result.set("domain", "WORKGROUP")?;
         result.set("forest", "workgroup.local")?;
@@ -736,7 +735,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
         |lua, (host, port, domain, user, password): (String, u16, String, String, String)| {
             let host_clone = host.clone();
             let user_clone = user.clone();
-            let domain_clone = domain.clone();
+            let _domain_clone = domain.clone();
             let password_clone = password.clone();
             let user_result = user.clone();
             let domain_result = domain.clone();
@@ -828,7 +827,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     // create_directory - Create a directory on the remote share
     // NOTE: Full implementation requires SMB2/SMB3 protocol support
     let create_directory_fn = lua.create_function(
-        |lua, (host, port, share, path): (String, u16, String, String)| {
+        |lua, (host, port, _share, path): (String, u16, String, String)| {
             let result = lua.create_table()?;
 
             // For now, provide guidance - actual implementation requires SMB2 Create call
@@ -872,7 +871,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     // delete_directory - Delete a directory on the remote share
     // NOTE: Full implementation requires SMB2/SMB3 protocol support
     let delete_directory_fn = lua.create_function(
-        |lua, (host, port, share, path): (String, u16, String, String)| {
+        |lua, (host, port, _share, path): (String, u16, String, String)| {
             let result = lua.create_table()?;
 
             if path.is_empty() {
@@ -912,7 +911,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     // get_file_info - Get file/directory information
     // NOTE: Full implementation requires SMB2 QUERY_INFO
     let get_file_info_fn = lua.create_function(
-        |lua, (host, port, share, path): (String, u16, String, String)| {
+        |lua, (host, port, _share, path): (String, u16, String, String)| {
             let result = lua.create_table()?;
 
             if path.is_empty() {
@@ -975,7 +974,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
 
     // get_share_info - Get information about a specific share
     let get_share_info_fn =
-        lua.create_function(|lua, (host, port, share): (String, u16, String)| {
+        lua.create_function(|lua, (_host, _port, share): (String, u16, String)| {
             let result = lua.create_table()?;
 
             result.set("name", share.clone())?;
@@ -987,7 +986,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     smb.set("get_share_info", get_share_info_fn)?;
 
     // check_signature - Check if SMB signing is required/enabled
-    let check_signature_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let check_signature_fn = lua.create_function(|lua, (_host, _port): (String, u16)| {
         let result = lua.create_table()?;
 
         // Basic SMB handshake to check signing
@@ -1000,7 +999,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     smb.set("check_signature", check_signature_fn)?;
 
     // get_session_info - Get current session information
-    let get_session_info_fn = lua.create_function(|lua, (host, port): (String, u16)| {
+    let get_session_info_fn = lua.create_function(|lua, (_host, _port): (String, u16)| {
         let result = lua.create_table()?;
 
         result.set("authenticated", false)?;
@@ -1014,7 +1013,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
 
     // file_exists - Check if a file or directory exists
     let file_exists_fn = lua.create_function(
-        |_lua, (host, port, share, path): (String, u16, String, String)| {
+        |_lua, (_host, _port, _share, path): (String, u16, String, String)| {
             // Check if path exists by attempting to get info
             // In practice, this would make an SMB call
             let exists = !path.is_empty();
@@ -1025,7 +1024,7 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
 
     // rename_file - Rename a file on the remote share
     let rename_file_fn = lua.create_function(
-        |lua, (host, port, share, old_path, new_path): (String, u16, String, String, String)| {
+        |lua, (_host, _port, _share, _old_path, _new_path): (String, u16, String, String, String)| {
             let result = lua.create_table()?;
 
             // Rename requires SMB2 SET_INFO with FileRenameInformation

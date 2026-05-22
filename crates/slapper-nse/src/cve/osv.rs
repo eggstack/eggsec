@@ -3,7 +3,7 @@
 //! Free API: https://osv.dev/list
 //! Documentation: https://google.github.io/osv.dev/api/
 
-use super::{CveClient, CveError, CveRecord, CveSource, SeverityType, VendorAdvisory};
+use super::{CveClient, CveError, CveRecord, CveSource, SeverityType};
 use serde::{Deserialize, Serialize};
 
 pub struct OsvClient {
