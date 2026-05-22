@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fs;
 use std::path::Path;
 
@@ -8,14 +8,14 @@ pub struct ScanSession {
     pub version: String,
     pub created_at: String,
     pub last_modified: String,
-    pub tab_states: HashMap<String, TabSessionState>,
-    pub results: HashMap<String, serde_json::Value>,
+    pub tab_states: FxHashMap<String, TabSessionState>,
+    pub results: FxHashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TabSessionState {
     pub inputs: Vec<InputFieldState>,
-    pub options: HashMap<String, String>,
+    pub options: FxHashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,8 +30,8 @@ impl ScanSession {
             version: "1.0".to_string(),
             created_at: chrono::Local::now().to_rfc3339(),
             last_modified: chrono::Local::now().to_rfc3339(),
-            tab_states: HashMap::new(),
-            results: HashMap::new(),
+            tab_states: FxHashMap::default(),
+            results: FxHashMap::default(),
         }
     }
 

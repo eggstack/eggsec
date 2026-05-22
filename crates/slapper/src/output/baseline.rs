@@ -1,5 +1,5 @@
 use crate::output::agent::AgentFinding;
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 #[derive(Debug, Clone)]
 pub struct BaselineComparison {
@@ -10,8 +10,8 @@ pub struct BaselineComparison {
 
 impl BaselineComparison {
     pub fn compare(current: &[AgentFinding], baseline: &[AgentFinding]) -> Self {
-        let baseline_ids: HashSet<_> = baseline.iter().map(|f| f.id.clone()).collect();
-        let current_ids: HashSet<_> = current.iter().map(|f| f.id.clone()).collect();
+        let baseline_ids: FxHashSet<_> = baseline.iter().map(|f| f.id.clone()).collect();
+        let current_ids: FxHashSet<_> = current.iter().map(|f| f.id.clone()).collect();
 
         let new_findings: Vec<_> = current
             .iter()

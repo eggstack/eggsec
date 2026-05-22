@@ -147,6 +147,15 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `packet/mod.rs` | `http_parse` module declared but not present | Removed unused module declaration |
 | `output/trend.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `output/agent.rs` | `FindingSummary` used `HashMap` | Changed to `FxHashMap` for performance |
+| `output/dedup.rs` | `DedupEngine::seen` used `HashMap` | Changed to `FxHashMap` for performance |
+| `output/diff.rs` | DiffEngine compare used `HashMap`/`HashSet` | Changed to `FxHashMap`/`FxHashSet` for performance |
+| `output/baseline.rs` | BaselineComparison compare used `HashSet` | Changed to `FxHashSet` for performance |
+| `output/session.rs` | `ScanSession`, `TabSessionState` used `HashMap` | Changed to `FxHashMap` for performance |
+| `output/template.rs` | `ReportTemplateEngine`, `TemplateRenderContext` used `HashMap` | Changed to `FxHashMap` for performance |
+| `output/attack_graph.rs` | `GraphNode::properties` used `HashMap` | Changed to `FxHashMap` for performance |
+| `output/sarif.rs` | `SarifResult::properties` used `HashMap` | Changed to `FxHashMap` for performance |
+| `output/junit.rs` | `JUnitBuilder::test_suites` used `HashMap` | Changed to `FxHashMap` for performance |
+| `output/escape.rs:53` | `escape_xml` had unnecessary `#[allow(dead_code)]` | Removed attribute (function is used by scanner/pipeline) |
 | `output/junit.rs:243` | `to_string_lossy().to_string()` allocated unnecessarily | Changed to `into_owned()` |
 | `output/pdf.rs:134` | `generate_html` had clippy warning | Added `#[allow(dead_code)]` |
 | `pipeline/mod.rs:240-248` | `resume_cli()` didn't return error on failed stages | Now returns `ScanFailed` error like `run_cli()` |

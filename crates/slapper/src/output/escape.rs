@@ -49,7 +49,6 @@ mod tests {
     }
 }
 
-#[allow(dead_code)]
 pub fn escape_xml(s: &str) -> String {
     let mut buf = String::with_capacity(s.len() * 6);
     for c in s.chars() {

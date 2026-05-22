@@ -23,9 +23,17 @@ use rustc_hash::FxHashMap;
 let mut by_severity: FxHashMap<Severity, usize> = FxHashMap::default();
 ```
 
-Files needing updates:
+All files in the output module use FxHashMap for hash collections. Key files:
 - `trend.rs` - `ResultComparator`, `TrendAnalyzer`
 - `agent.rs` - `FindingSummary`
+- `dedup.rs` - `DedupEngine::seen`
+- `diff.rs` - DiffEngine compare function
+- `baseline.rs` - BaselineComparison compare function
+- `session.rs` - `ScanSession::tab_states`, `ScanSession::results`, `TabSessionState::options`
+- `template.rs` - `ReportTemplateEngine::custom_templates`, `TemplateRenderContext::custom_data`
+- `attack_graph.rs` - `GraphNode::properties`
+- `sarif.rs` - `SarifResult::properties`
+- `junit.rs` - `JUnitBuilder::test_suites`
 
 ## Report Format Conversions
 

@@ -4,8 +4,8 @@
 //! templates (PCI-DSS, SOC2, HIPAA) and custom templates.
 
 use handlebars::{Handlebars, RenderError};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -15,7 +15,7 @@ use crate::output::report::{ReportMetadata, SeverityCounts};
 #[derive(Debug, Clone)]
 pub struct ReportTemplateEngine {
     registry: Handlebars<'static>,
-    custom_templates: HashMap<String, String>,
+    custom_templates: FxHashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,7 +70,7 @@ pub struct TemplateRenderContext {
     pub findings: Vec<TemplateFinding>,
     pub summary: TemplateSummary,
     pub compliance: Option<ComplianceReport>,
-    pub custom_data: HashMap<String, serde_json::Value>,
+    pub custom_data: FxHashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,7 +152,7 @@ impl ReportTemplateEngine {
 
         Self {
             registry,
-            custom_templates: HashMap::new(),
+            custom_templates: FxHashMap::default(),
         }
     }
 

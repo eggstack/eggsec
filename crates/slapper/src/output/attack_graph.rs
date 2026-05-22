@@ -1,8 +1,8 @@
 #[cfg(feature = "advanced-hunting")]
 use crate::hunt::chain::AttackChain;
 use crate::types::Severity;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttackGraph {
@@ -17,7 +17,7 @@ pub struct GraphNode {
     pub label: String,
     pub node_type: NodeType,
     pub severity: Severity,
-    pub properties: HashMap<String, String>,
+    pub properties: FxHashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,7 +61,7 @@ impl AttackGraphBuilder {
         let mut edges = Vec::new();
         let mut clusters = Vec::new();
 
-        let mut node_ids = HashMap::new();
+        let mut node_ids = FxHashMap::default();
 
         for chain in chains {
             let cluster_id = format!("cluster-{}", chain.id);
@@ -77,7 +77,7 @@ impl AttackGraphBuilder {
                     node_type: NodeType::Vulnerability,
                     severity: step.severity,
                     properties: {
-                        let mut map = HashMap::new();
+                        let mut map = FxHashMap::default();
                         map.insert("prerequisite".to_string(), step.prerequisite.clone());
                         map.insert("impact".to_string(), step.impact.clone());
                         map.insert("evidence".to_string(), step.evidence.clone());
@@ -113,7 +113,7 @@ impl AttackGraphBuilder {
                         label: "Initial Access".to_string(),
                         node_type: NodeType::EntryPoint,
                         severity: Severity::Medium,
-                        properties: HashMap::new(),
+                        properties: FxHashMap::default(),
                     });
                     edges.push(GraphEdge {
                         from: entry_id,

@@ -1,5 +1,5 @@
 use crate::output::agent::AgentFinding;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -24,14 +24,14 @@ impl std::str::FromStr for DedupStrategy {
 
 pub struct DedupEngine {
     strategy: DedupStrategy,
-    seen: HashMap<String, Uuid>,
+    seen: FxHashMap<String, Uuid>,
 }
 
 impl DedupEngine {
     pub fn new(strategy: DedupStrategy) -> Self {
         Self {
             strategy,
-            seen: HashMap::new(),
+            seen: FxHashMap::default(),
         }
     }
 

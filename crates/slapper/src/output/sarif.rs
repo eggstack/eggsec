@@ -8,8 +8,8 @@
 //! which operates on in-memory data structures without XML parsing or entity expansion.
 
 use chrono::{DateTime, Utc};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SarifReport {
@@ -71,7 +71,7 @@ pub struct SarifResult {
     pub message: SarifMessage,
     pub locations: Vec<SarifLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<HashMap<String, serde_json::Value>>,
+    pub properties: Option<FxHashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -255,7 +255,7 @@ impl SarifBuilder {
         level: &str,
         message: &str,
         location_uri: &str,
-        properties: HashMap<String, serde_json::Value>,
+        properties: FxHashMap<String, serde_json::Value>,
     ) -> Self {
         self.results.push(SarifResult {
             rule_id: rule_id.to_string(),

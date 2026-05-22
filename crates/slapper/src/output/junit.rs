@@ -11,8 +11,8 @@
 use chrono::{DateTime, Utc};
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::io::Cursor;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,7 +80,7 @@ pub struct JUnitSkipped {
 
 pub struct JUnitBuilder {
     name: String,
-    test_suites: HashMap<String, JUnitTestSuiteBuilder>,
+    test_suites: FxHashMap<String, JUnitTestSuiteBuilder>,
 }
 
 struct JUnitTestSuiteBuilder {
@@ -93,7 +93,7 @@ impl JUnitBuilder {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
-            test_suites: HashMap::new(),
+            test_suites: FxHashMap::default(),
         }
     }
 

@@ -1,7 +1,7 @@
 use crate::output::agent::AgentFinding;
 use crate::types::Severity;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffResult {
@@ -36,17 +36,17 @@ pub struct DiffEngine;
 
 impl DiffEngine {
     pub fn compare(old_findings: &[AgentFinding], new_findings: &[AgentFinding]) -> DiffResult {
-        let old_map: HashMap<_, _> = old_findings
+        let old_map: FxHashMap<_, _> = old_findings
             .iter()
             .map(|f| (f.id.clone(), f.clone()))
             .collect();
-        let new_map: HashMap<_, _> = new_findings
+        let new_map: FxHashMap<_, _> = new_findings
             .iter()
             .map(|f| (f.id.clone(), f.clone()))
             .collect();
 
-        let old_ids: HashSet<_> = old_map.keys().cloned().collect();
-        let new_ids: HashSet<_> = new_map.keys().cloned().collect();
+        let old_ids: FxHashSet<_> = old_map.keys().cloned().collect();
+        let new_ids: FxHashSet<_> = new_map.keys().cloned().collect();
 
         let new_findings: Vec<DiffFinding> = new_findings
             .iter()

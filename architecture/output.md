@@ -80,6 +80,14 @@ pub fn has_regressions(diff: &DiffResult) -> bool;  // checks Critical escalatio
 **Hash Collections**: Use `rustc_hash::FxHashMap` instead of `std::collections::HashMap` for performance in:
 - `trend.rs` - `ResultComparator`, `TrendAnalyzer`
 - `agent.rs` - `FindingSummary`
+- `dedup.rs` - `DedupEngine::seen`
+- `diff.rs` - DiffEngine compare function
+- `baseline.rs` - BaselineComparison compare function
+- `session.rs` - `ScanSession::tab_states`, `ScanSession::results`, `TabSessionState::options`
+- `template.rs` - `ReportTemplateEngine::custom_templates`, `TemplateRenderContext::custom_data`
+- `attack_graph.rs` - `GraphNode::properties`
+- `sarif.rs` - `SarifResult::properties`
+- `junit.rs` - `JUnitBuilder::test_suites`
 
 ## Security Notes
 
