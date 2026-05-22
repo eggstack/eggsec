@@ -93,6 +93,12 @@ Added `continue` after `failed_attempts >= 3` check to properly skip non-matchin
 ### planner.rs:record_outcome
 Fixed `ExecutionStage` field reference - changed `s.target.contains()` to `s.name.to_lowercase().contains()` since `ExecutionStage` has `name`, not `target`.
 
+### cache.rs and planner.rs Performance Fixes
+Changed `std::collections::HashMap` to `rustc_hash::FxHashMap` for:
+- `AiCache.entries` - Thread-safe async cache storage
+- `AiPlanner.learning_cache` - Learning cache for plan outcomes
+- `PlanOutcome.severity_distribution` - Severity distribution tracking
+
 ## Resources
 - `crates/slapper/src/ai/AGENTS.override.md` - Detailed AI patterns and bug fixes
 - `AGENTS.md` - General project guidelines

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -70,7 +70,7 @@ impl CacheEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "AiCacheSerialized", into = "AiCacheSerialized")]
 pub struct AiCache {
-    entries: Arc<RwLock<HashMap<String, CacheEntry>>>,
+    entries: Arc<RwLock<FxHashMap<String, CacheEntry>>>,
     max_entries: usize,
     default_ttl: Duration,
     persist_path: Option<PathBuf>,
@@ -78,7 +78,7 @@ pub struct AiCache {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AiCacheSerialized {
-    entries: HashMap<String, CacheEntrySer>,
+    entries: FxHashMap<String, CacheEntrySer>,
     max_entries: usize,
     default_ttl_nanos: u64,
 }
@@ -93,7 +93,7 @@ struct CacheEntrySer {
 
 impl From<AiCacheSerialized> for AiCache {
     fn from(serialized: AiCacheSerialized) -> Self {
-        let entries: HashMap<String, CacheEntry> = serialized
+        let entries: FxHashMap<String, CacheEntry> = serialized
             .entries
             .into_iter()
             .map(|(k, v)| {
@@ -121,12 +121,8 @@ impl From<AiCacheSerialized> for AiCache {
 
 impl From<AiCache> for AiCacheSerialized {
     fn from(cache: AiCache) -> Self {
-        // Need to extract entries from the Arc<RwLock>
-        // This is a simplified version - for proper serialization we'd need to
-        // access the inner HashMap. For now, just serialize metadata.
-        // The actual entries are serialized in the persist() method.
         AiCacheSerialized {
-            entries: HashMap::new(),
+            entries: FxHashMap::default(),
             max_entries: cache.max_entries,
             default_ttl_nanos: cache.default_ttl.as_nanos() as u64,
         }
@@ -136,7 +132,7 @@ impl From<AiCache> for AiCacheSerialized {
 impl AiCache {
     pub fn new(max_entries: usize, default_ttl: Duration) -> Self {
         Self {
-            entries: Arc::new(RwLock::new(HashMap::new())),
+            entries: Arc::new(RwLock::new(FxHashMap::default())),
             max_entries,
             default_ttl,
             persist_path: None,
@@ -237,7 +233,7 @@ impl AiCache {
         }
     }
 
-    fn evict_expired(&self, entries: &mut HashMap<String, CacheEntry>) {
+    fn evict_expired(&self, entries: &mut FxHashMap<String, CacheEntry>) {
         entries.retain(|_, v| !v.is_expired());
     }
 
@@ -256,7 +252,7 @@ impl AiCache {
             }
 
             let entries = self.entries.read().await;
-            let serialized_entries: HashMap<String, CacheEntrySer> = entries
+            let serialized_entries: FxHashMap<String, CacheEntrySer> = entries
                 .iter()
                 .map(|(k, v)| {
                     (

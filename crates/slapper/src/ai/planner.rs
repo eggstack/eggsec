@@ -2,8 +2,8 @@ use crate::ai::client::AiClient;
 use crate::ai::errors::{AiError, Result};
 use crate::tool::planner::{ChainPlanner, ExecutionPlan, PlanRequest};
 use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -39,7 +39,7 @@ pub enum ModificationType {
 pub struct PlanOutcome {
     pub success: bool,
     pub findings_count: usize,
-    pub severity_distribution: HashMap<String, usize>,
+    pub severity_distribution: FxHashMap<String, usize>,
     pub duration_ms: u64,
     pub target: String,
 }
@@ -47,7 +47,7 @@ pub struct PlanOutcome {
 pub struct AiPlanner {
     client: Option<AiClient>,
     chain_planner: ChainPlanner,
-    learning_cache: Arc<RwLock<HashMap<String, CachedPlan>>>,
+    learning_cache: Arc<RwLock<FxHashMap<String, CachedPlan>>>,
     fallback_enabled: bool,
 }
 
@@ -74,7 +74,7 @@ impl AiPlanner {
         Self {
             client,
             chain_planner,
-            learning_cache: Arc::new(RwLock::new(HashMap::new())),
+            learning_cache: Arc::new(RwLock::new(FxHashMap::default())),
             fallback_enabled: true,
         }
     }
@@ -603,7 +603,7 @@ mod tests {
         let outcome = PlanOutcome {
             success: true,
             findings_count: 3,
-            severity_distribution: HashMap::new(),
+            severity_distribution: FxHashMap::default(),
             duration_ms: 1000,
             target: "http://example.com".to_string(),
         };
@@ -623,7 +623,7 @@ mod tests {
         let outcome = PlanOutcome {
             success: true,
             findings_count: 3,
-            severity_distribution: HashMap::new(),
+            severity_distribution: FxHashMap::default(),
             duration_ms: 1000,
             target: "http://example.com".to_string(),
         };

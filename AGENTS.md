@@ -114,6 +114,8 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `distributed/worker.rs:132-161` | Heartbeat used HTTP POST to non-existent REST API | Changed to use `RemoteClient::send_heartbeat()` via TCP |
 | `ai/waf_bypass.rs:107` | Loop missing `continue` caused incorrect fallthrough to AI query when entry had `failed_attempts < 3` | Added `continue` after `failed_attempts >= 3` check |
 | `ai/planner.rs:456` | `ExecutionStage` has `name` field, not `target` | Changed to `s.name.to_lowercase().contains()` |
+| `ai/cache.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `ai/planner.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance in learning_cache and PlanOutcome |
 | `agent/alerts/routing.rs:81` | `expect()` on fallback HTTP client could panic | Propagate error via `?` instead |
 | `agent/alerts/routing.rs:107-112` | Race condition in `cleanup_stale_entries` | Inline cleanup under single lock scope |
 | `agent/memory.rs:137` | `unwrap()` on `file_stem()` could panic for hidden files | Added fallback hash-based name |

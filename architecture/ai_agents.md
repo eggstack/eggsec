@@ -101,6 +101,8 @@ Slapper implements the **Model Context Protocol (MCP)**, allowing it to be used 
 4. **planner cache thresholds** - Lowered from `use_count > 3` to `>= 2` for better hit rate
 5. **Knowledge base eviction** - Added `evict_knowledge_base_if_needed()` to prevent unbounded growth
 6. **SmartWafBypass Clone** - Fixed Clone implementation
+7. **cache.rs** - Changed `HashMap` to `FxHashMap` for performance (AiCache.entries)
+8. **planner.rs** - Changed `HashMap` to `FxHashMap` for performance (learning_cache, PlanOutcome.severity_distribution)
 
 ### Agent Module
 1. **alerts/routing.rs:81** - Removed `expect()` panic on fallback HTTP client creation
