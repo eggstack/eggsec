@@ -1,7 +1,7 @@
 use crate::error::Result;
 use regex::Regex;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use crate::utils::create_http_client;
@@ -129,7 +129,7 @@ impl EmailDiscoveryClient {
     }
 
     fn extract_emails(&self, content: &str) -> Vec<EmailContact> {
-        let mut emails = HashSet::new();
+        let mut emails = FxHashSet::default();
         for cap in EMAIL_PATTERN.find_iter(content) {
             let email = cap.as_str().to_lowercase();
             if !email.contains("example.com")
@@ -152,7 +152,7 @@ impl EmailDiscoveryClient {
     }
 
     fn extract_phones(&self, content: &str) -> Vec<PhoneNumber> {
-        let mut phones = HashSet::new();
+        let mut phones = FxHashSet::default();
 
         for re in PHONE_PATTERNS.iter() {
             for cap in re.find_iter(content) {
@@ -171,7 +171,7 @@ impl EmailDiscoveryClient {
     }
 
     fn extract_social_media(&self, content: &str) -> Vec<SocialMedia> {
-        let mut socials = HashSet::new();
+        let mut socials = FxHashSet::default();
 
         for (platform, re) in SOCIAL_PATTERNS.iter() {
             for cap in re.captures_iter(content) {

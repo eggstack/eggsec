@@ -57,6 +57,10 @@ Note: TLS version and cipher suite detection is not yet implemented - `supported
 - `CveMapper.cache` uses `FxHashMap` (cve.rs)
 - `LOCAL_IP_DATA` in geolocation.rs uses `FxHashMap`
 - `WaybackClient.endpoints` uses `FxHashSet`
+- `TakeoverDetector.cname_map`/`ns_map` uses `FxHashMap` (takeover.rs:455-456)
+- `EmailDiscoveryClient` methods use `FxHashSet` (email.rs:132,155,174)
+- `JsAnalyzer` methods use `FxHashSet` (js.rs:229,287)
+- `SubdomainEnumerator` methods use `FxHashSet` (subdomain.rs:74,112,158)
 
 ## Testing
 

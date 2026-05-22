@@ -1,6 +1,6 @@
 use crate::error::Result;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use crate::utils::create_insecure_http_client;
@@ -452,8 +452,8 @@ pub async fn detect_takeovers(
 ) -> Result<Vec<TakeoverResult>> {
     let detector = TakeoverDetector::new(timeout_secs)?;
 
-    let mut cname_map: HashMap<String, String> = HashMap::new();
-    let mut ns_map: HashMap<String, String> = HashMap::new();
+    let mut cname_map: FxHashMap<String, String> = FxHashMap::default();
+    let mut ns_map: FxHashMap<String, String> = FxHashMap::default();
 
     if let Some(records) = dns_records {
         for cname in &records.cname {

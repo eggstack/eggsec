@@ -1,8 +1,8 @@
 use crate::error::Result;
 use regex::Regex;
+use rustc_hash::FxHashSet;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use crate::utils::create_http_client_with_options;
@@ -226,7 +226,7 @@ impl JsAnalyzer {
     }
 
     fn extract_endpoints(&self, content: &str) -> Vec<String> {
-        let mut endpoints = HashSet::new();
+        let mut endpoints = FxHashSet::default();
 
         for re in ENDPOINT_PATTERNS.iter() {
             for cap in re.captures_iter(content) {
@@ -284,7 +284,7 @@ impl JsAnalyzer {
     }
 
     fn extract_urls(&self, content: &str) -> Vec<String> {
-        let mut urls = HashSet::new();
+        let mut urls = FxHashSet::default();
 
         for cap in URL_PATTERN.find_iter(content) {
             let url = cap.as_str().to_string();

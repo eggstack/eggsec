@@ -77,3 +77,17 @@ content_analysis, cors_check, email_discovery
 ### Result Aggregation
 
 `FullReconResult` aggregates all results with error tracking for each module. Non-critical failures are tracked but don't stop the pipeline.
+
+## Performance Optimizations
+
+The recon module uses `rustc_hash::FxHashMap` and `FxHashSet` instead of `std::collections` equivalents for improved performance:
+
+| Component | File | Type |
+|-----------|------|------|
+| `CveMapper.cache` | `cve.rs` | `FxHashMap` |
+| `LOCAL_IP_DATA` | `geolocation.rs` | `FxHashMap` |
+| `WaybackClient.endpoints` | `wayback.rs` | `FxHashSet` |
+| `TakeoverDetector.cname_map`/`ns_map` | `takeover.rs` | `FxHashMap` |
+| `EmailDiscoveryClient` collections | `email.rs` | `FxHashSet` |
+| `JsAnalyzer` collections | `js.rs` | `FxHashSet` |
+| `SubdomainEnumerator` collections | `subdomain.rs` | `FxHashSet` |

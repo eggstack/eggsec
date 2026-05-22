@@ -4,8 +4,8 @@ use crate::error::Result;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::TokioResolver;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
@@ -71,7 +71,7 @@ impl SubdomainEnumerator {
     }
 
     pub async fn enumerate(&self, domain: &str) -> Result<SubdomainResult> {
-        let mut subdomains = HashSet::new();
+        let mut subdomains = FxHashSet::default();
         let mut sources = Vec::new();
 
         if let Ok(crtsh_subdomains) = self.query_crtsh(domain).await {
@@ -97,7 +97,7 @@ impl SubdomainEnumerator {
         })
     }
 
-    async fn query_crtsh(&self, domain: &str) -> Result<HashSet<String>> {
+    async fn query_crtsh(&self, domain: &str) -> Result<FxHashSet<String>> {
         let url = format!(
             "https://crt.sh/?q={}&output=json",
             urlencoding::encode(domain)
@@ -105,11 +105,11 @@ impl SubdomainEnumerator {
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
-            return Ok(HashSet::new());
+            return Ok(FxHashSet::default());
         }
 
         let crt_entries: Vec<CrtShEntry> = response.json().await.unwrap_or_default();
-        let mut subdomains = HashSet::new();
+        let mut subdomains = FxHashSet::default();
 
         for entry in crt_entries {
             if let Some(name_value) = entry.name_value {
@@ -132,11 +132,11 @@ impl SubdomainEnumerator {
         Ok(subdomains)
     }
 
-    async fn query_alexa(&self, _domain: &str) -> Result<HashSet<String>> {
-        Ok(HashSet::new())
+    async fn query_alexa(&self, _domain: &str) -> Result<FxHashSet<String>> {
+        Ok(FxHashSet::default())
     }
 
-    async fn query_threatminer(&self, domain: &str) -> Result<HashSet<String>> {
+    async fn query_threatminer(&self, domain: &str) -> Result<FxHashSet<String>> {
         let url = format!(
             "https://api.threatminer.org/v2/domain.php?q={}&rt=6",
             domain
@@ -145,7 +145,7 @@ impl SubdomainEnumerator {
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
-            return Ok(HashSet::new());
+            return Ok(FxHashSet::default());
         }
 
         let threatminer_resp: ThreatMinerResponse = response.json().await.unwrap_or_default();
@@ -155,7 +155,7 @@ impl SubdomainEnumerator {
     async fn verify_subdomains(
         &self,
         domain: &str,
-        subdomains: &HashSet<String>,
+        subdomains: &FxHashSet<String>,
     ) -> Vec<SubdomainInfo> {
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
         let mut handles = Vec::new();

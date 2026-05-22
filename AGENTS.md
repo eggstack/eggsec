@@ -177,6 +177,10 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `recon/cve.rs:31` | `CveMapper.cache` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `recon/geolocation.rs:27` | `LOCAL_IP_DATA` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `recon/wayback.rs:86` | `WaybackClient.endpoints` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |
+| `recon/takeover.rs:3,455-456` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `recon/email.rs:4,132,155,174` | `HashSet` used instead of `FxHashSet` | Changed to `FxHashSet` for performance |
+| `recon/js.rs:5,229,287` | `HashSet` used instead of `FxHashSet` | Changed to `FxHashSet` for performance |
+| `recon/subdomain.rs:8,74,112,158` | `HashSet` used instead of `FxHashSet` | Changed to `FxHashSet` for performance |
 | `recon/ssl.rs:96-98` | Unimplemented `supported_versions`/`supported_cipher_suites` fields | Removed misleading empty vector assignments |
 | `fuzzer/api_schema/mod.rs:5` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `fuzzer/payloads/grpc.rs:62` | `GrpcFuzzer.metadata` used `HashMap` | Changed to `FxHashMap` for performance |
