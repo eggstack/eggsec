@@ -240,7 +240,7 @@ impl JUnitBuilder {
 
     pub fn build(self) -> JUnitReport {
         let hostname = hostname::get()
-            .map(|h| h.to_string_lossy().to_string())
+            .map(|h| h.to_string_lossy().into_owned())
             .unwrap_or_else(|_| "unknown".to_string());
 
         let suites: Vec<JUnitTestSuite> = self

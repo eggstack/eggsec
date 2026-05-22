@@ -131,6 +131,7 @@ impl PdfGenerator {
         Ok(true)
     }
 
+    #[allow(dead_code)]
     fn generate_html(findings: &[AgentFinding], config: &PdfConfig) -> String {
         let findings_html: String = findings
             .iter()

@@ -133,6 +133,10 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `packet/parse_impl.rs:664` | TCP payload extraction used `unwrap()` that could panic | Changed to `and_then` with bounds check |
 | `packet/traceroute.rs:622` | `panic!` in test code | Changed to `unreachable!` |
 | `packet/mod.rs` | `http_parse` module declared but not present | Removed unused module declaration |
+| `output/trend.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `output/agent.rs` | `FindingSummary` used `HashMap` | Changed to `FxHashMap` for performance |
+| `output/junit.rs:243` | `to_string_lossy().to_string()` allocated unnecessarily | Changed to `into_owned()` |
+| `output/pdf.rs:134` | `generate_html` had clippy warning | Added `#[allow(dead_code)]` |
 
 ## Skills Directory
 
@@ -175,3 +179,4 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/distributed.md` | Distributed coordinator/worker architecture |
 | `architecture/loadtest.md` | HTTP load testing and benchmarking |
 | `architecture/networking.md` | Networking & packets module |
+| `architecture/output.md` | Output & reporting module |

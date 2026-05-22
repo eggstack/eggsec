@@ -1,5 +1,5 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResult {
@@ -65,12 +65,12 @@ impl ResultComparator {
         let mut removed = Vec::new();
         let mut unchanged = Vec::new();
 
-        let old_findings: HashMap<_, _> = old
+        let old_findings: FxHashMap<_, _> = old
             .details
             .iter()
             .map(|f| (Self::finding_key(f), f.clone()))
             .collect();
-        let new_findings: HashMap<_, _> = new
+        let new_findings: FxHashMap<_, _> = new
             .details
             .iter()
             .map(|f| (Self::finding_key(f), f.clone()))
@@ -208,8 +208,8 @@ impl TrendAnalyzer {
         }
     }
 
-    pub fn get_findings_by_category(&self) -> HashMap<String, usize> {
-        let mut categories: HashMap<String, usize> = HashMap::new();
+    pub fn get_findings_by_category(&self) -> FxHashMap<String, usize> {
+        let mut categories: FxHashMap<String, usize> = FxHashMap::default();
         for result in &self.results {
             for finding in &result.details {
                 *categories.entry(finding.category.clone()).or_insert(0) += 1;
@@ -219,7 +219,7 @@ impl TrendAnalyzer {
     }
 
     pub fn get_most_common_findings(&self, limit: usize) -> Vec<(String, usize)> {
-        let mut counts: HashMap<String, usize> = HashMap::new();
+        let mut counts: FxHashMap<String, usize> = FxHashMap::default();
         for result in &self.results {
             for finding in &result.details {
                 *counts.entry(finding.title.clone()).or_insert(0) += 1;

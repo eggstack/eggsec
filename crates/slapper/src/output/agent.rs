@@ -273,18 +273,18 @@ impl Remediation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FindingSummary {
     pub total: usize,
-    pub by_severity: HashMap<Severity, usize>,
-    pub by_confidence: HashMap<Confidence, usize>,
-    pub by_attack_surface: HashMap<AttackSurface, usize>,
-    pub by_type: HashMap<String, usize>,
+    pub by_severity: FxHashMap<Severity, usize>,
+    pub by_confidence: FxHashMap<Confidence, usize>,
+    pub by_attack_surface: FxHashMap<AttackSurface, usize>,
+    pub by_type: FxHashMap<String, usize>,
 }
 
 impl FindingSummary {
     pub fn from_findings(findings: &[AgentFinding]) -> Self {
-        let mut by_severity = HashMap::new();
-        let mut by_confidence = HashMap::new();
-        let mut by_attack_surface = HashMap::new();
-        let mut by_type = HashMap::new();
+        let mut by_severity = FxHashMap::default();
+        let mut by_confidence = FxHashMap::default();
+        let mut by_attack_surface = FxHashMap::default();
+        let mut by_type = FxHashMap::default();
 
         for finding in findings {
             *by_severity.entry(finding.severity).or_insert(0) += 1;
@@ -319,7 +319,7 @@ impl FindingSummary {
     }
 }
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[cfg(test)]
 mod tests {
