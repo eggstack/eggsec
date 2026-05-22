@@ -48,7 +48,7 @@ impl PcapWriter {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!("Failed to get system time: {}", e);
-                return Ok(());
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
             }
         };
 

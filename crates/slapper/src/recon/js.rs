@@ -10,12 +10,12 @@ use crate::utils::create_http_client_with_options;
 static ENDPOINT_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
         Regex::new(r#"(?:api|endpoint|path|route|url)["']?\s*[:=]\s*["']([^"'<>\s]+)["']"#)
-            .unwrap(),
-        Regex::new(r#"fetch\s*\(\s*["']([^"'<>\s]+)["']"#).unwrap(),
-        Regex::new(r#"axios\.[\w]+\(\s*["']([^"'<>\s]+)["']"#).unwrap(),
-        Regex::new(r#"\$\.ajax\s*\(\s*\{[^}]*url\s*:\s*["']([^"'<>\s]+)["']"#).unwrap(),
-        Regex::new(r#"window\.open\s*\(\s*["']([^"'<>\s]+)["']"#).unwrap(),
-        Regex::new(r#"(?:href|src|action)\s*=\s*["']([^"'<>\s]+)["']"#).unwrap(),
+            .expect("valid endpoint pattern"),
+        Regex::new(r#"fetch\s*\(\s*["']([^"'<>\s]+)["']"#).expect("valid fetch pattern"),
+        Regex::new(r#"axios\.[\w]+\(\s*["']([^"'<>\s]+)["']"#).expect("valid axios pattern"),
+        Regex::new(r#"\$\.ajax\s*\(\s*\{[^}]*url\s*:\s*["']([^"'<>\s]+)["']"#).expect("valid jQuery ajax pattern"),
+        Regex::new(r#"window\.open\s*\(\s*["']([^"'<>\s]+)["']"#).expect("valid window.open pattern"),
+        Regex::new(r#"(?:href|src|action)\s*=\s*["']([^"'<>\s]+)["']"#).expect("valid href/src/action pattern"),
     ]
 });
 
@@ -26,33 +26,33 @@ static SECRET_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| 
             Regex::new(
                 r#"(?i)(api[_-]?key|apikey|secret[_-]?key)["']?\s*[:=]\s*["']([^"']{8,})["']"#,
             )
-            .unwrap(),
+            .expect("valid API key secret pattern"),
         ),
         (
             r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#,
             Regex::new(
                 r#"(?i)(aws[_-]?access[_-]?key|aws[_-]?secret)["']?\s*[:=]\s*["']([^"']{10,})["']"#,
             )
-            .unwrap(),
+            .expect("valid AWS secret pattern"),
         ),
         (
             r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#,
             Regex::new(
                 r#"(?i)(private[_-]?key|password|passwd|pwd)["']?\s*[:=]\s*["']([^"']{6,})["']"#,
             )
-            .unwrap(),
+            .expect("valid password/private key pattern"),
         ),
         (
             r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#,
-            Regex::new(r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#).unwrap(),
+            Regex::new(r#"(?i)bearer\s+[a-zA-Z0-9\-_\.]+"#).expect("valid bearer token pattern"),
         ),
         (
             r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#,
-            Regex::new(r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#).unwrap(),
+            Regex::new(r#"(?i)basic\s+[a-zA-Z0-9+/=]+"#).expect("valid basic auth pattern"),
         ),
         (
             r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#,
-            Regex::new(r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#).unwrap(),
+            Regex::new(r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#).expect("valid JWT pattern"),
         ),
     ]
 });
@@ -61,33 +61,33 @@ static API_KEY_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(||
     vec![
         (
             r#"(?i)sk-[a-zA-Z0-9]{20,}"#,
-            Regex::new(r#"(?i)sk-[a-zA-Z0-9]{20,}"#).unwrap(),
+            Regex::new(r#"(?i)sk-[a-zA-Z0-9]{20,}"#).expect("valid OpenAI API key pattern"),
         ),
         (
             r#"(?i)AIza[0-9A-Za-z\-_]{35}"#,
-            Regex::new(r#"(?i)AIza[0-9A-Za-z\-_]{35}"#).unwrap(),
+            Regex::new(r#"(?i)AIza[0-9A-Za-z\-_]{35}"#).expect("valid Google API key pattern"),
         ),
         (
             r#"(?i)ya29\.[0-9A-Za-z\-_]+"#,
-            Regex::new(r#"(?i)ya29\.[0-9A-Za-z\-_]+"#).unwrap(),
+            Regex::new(r#"(?i)ya29\.[0-9A-Za-z\-_]+"#).expect("valid Google OAuth pattern"),
         ),
         (
             r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#,
-            Regex::new(r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#).unwrap(),
+            Regex::new(r#"(?i)github_pat_[a-zA-Z0-9_]{22,}"#).expect("valid GitHub PAT pattern"),
         ),
         (
             r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#,
-            Regex::new(r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#).unwrap(),
+            Regex::new(r#"(?i)glpat-[a-zA-Z0-9\-_]{20,}"#).expect("valid GitLab PAT pattern"),
         ),
         (
             r#"(?i)AKIA[0-9A-Z]{16}"#,
-            Regex::new(r#"(?i)AKIA[0-9A-Z]{16}"#).unwrap(),
+            Regex::new(r#"(?i)AKIA[0-9A-Z]{16}"#).expect("valid AWS access key pattern"),
         ),
     ]
 });
 
 static URL_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"https?://[^\s"'<>]+"#).unwrap());
+    LazyLock::new(|| Regex::new(r#"https?://[^\s"'<>]+"#).expect("valid URL pattern"));
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct JsAnalysis {
