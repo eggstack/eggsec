@@ -54,12 +54,13 @@ impl SettingsTab {
         let http_inputs = InputGroup::new()
             .add(InputField::new("Timeout (s)").with_value("30"))
             .add(InputField::new("Max Retries").with_value("3"))
+            .add(InputField::new("Retry Delay (ms)").with_value("1000"))
             .add(InputField::new("Max Redirects").with_value("10"));
 
         let scan_inputs = InputGroup::new()
             .add(InputField::new("Default Concurrency").with_value("50"))
             .add(InputField::new("Rate Limit (req/s)").with_value("0"))
-            .add(InputField::new("Port Timeout (s)").with_value("300"));
+            .add(InputField::new("Port Timeout (s)").with_value("2"));
 
         let proxy_inputs = InputGroup::new()
             .add(InputField::new("Proxy URL"))
@@ -146,7 +147,7 @@ impl SettingsTab {
 
     pub fn max_focus_index(&self) -> usize {
         match self.current_section {
-            SettingsSection::Http => 4,
+            SettingsSection::Http => 5,
             SettingsSection::Scan => 3,
             SettingsSection::Proxy => 2,
             SettingsSection::Scope => 1,
@@ -200,9 +201,9 @@ impl SettingsTab {
 
         match self.current_section {
             SettingsSection::Http => {
-                if idx < 3 {
+                if idx < 4 {
                     self.http_inputs.focus(idx);
-                } else if idx == 3 {
+                } else if idx == 4 {
                     self.follow_redirects.focused = true;
                 } else {
                     self.verify_tls.focused = true;
@@ -255,7 +256,8 @@ impl SettingsTab {
     pub fn load_config(&mut self, config: &SlapperConfig) {
         self.http_inputs.fields[0].value = config.http.timeout_secs.to_string();
         self.http_inputs.fields[1].value = config.http.max_retries.to_string();
-        self.http_inputs.fields[2].value = config.http.max_redirects.to_string();
+        self.http_inputs.fields[2].value = config.http.retry_delay_ms.to_string();
+        self.http_inputs.fields[3].value = config.http.max_redirects.to_string();
         self.follow_redirects.checked = config.http.follow_redirects;
         self.verify_tls.checked = config.http.verify_tls;
 
@@ -276,7 +278,8 @@ impl SettingsTab {
     pub fn to_config(&self) -> SlapperConfig {
         let timeout_secs = self.http_inputs.fields[0].value.parse().unwrap_or(30);
         let max_retries = self.http_inputs.fields[1].value.parse().unwrap_or(3);
-        let max_redirects = self.http_inputs.fields[2].value.parse().unwrap_or(10);
+        let retry_delay_ms = self.http_inputs.fields[2].value.parse().unwrap_or(1000);
+        let max_redirects = self.http_inputs.fields[3].value.parse().unwrap_or(10);
         let default_concurrency = self.scan_inputs.fields[0].value.parse().unwrap_or(50);
 
         SlapperConfig {
@@ -300,7 +303,7 @@ impl SettingsTab {
                 },
                 default_headers: std::collections::HashMap::new(),
                 default_user_agent: None,
-                retry_delay_ms: 100,
+                retry_delay_ms,
             },
             scan: ScanConfig {
                 default_concurrency,
@@ -309,7 +312,7 @@ impl SettingsTab {
                 jitter_ms: None,
                 exclude_ports: Vec::new(),
                 exclude_hosts: Vec::new(),
-                port_timeout_secs: self.scan_inputs.fields[2].value.parse().unwrap_or(300),
+                port_timeout_secs: self.scan_inputs.fields[2].value.parse().unwrap_or(2),
                 save_session: false,
                 session_dir: None,
             },
@@ -390,7 +393,7 @@ impl SettingsTab {
         self.http_inputs.fields[2].value = "10".to_string();
         self.scan_inputs.fields[0].value = "50".to_string();
         self.scan_inputs.fields[1].value = "0".to_string();
-        self.scan_inputs.fields[2].value = "300".to_string();
+        self.scan_inputs.fields[2].value = "2".to_string();
         self.proxy_inputs.fields[0].value.clear();
         self.proxy_inputs.fields[1].value.clear();
         self.scope_inputs.fields[0].value.clear();

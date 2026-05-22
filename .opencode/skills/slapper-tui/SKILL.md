@@ -230,6 +230,24 @@ let buf = terminal.backend().buffer();
 // Check buf.content for expected symbols
 ```
 
+## Settings Tab (tabs/settings/main.rs)
+
+**Important**: The Settings tab's `to_config()` only preserves a subset of config fields. When saving via TUI, the following fields will be LOST:
+- `profiles`, `schedule`, `remote`, `ai`, `search`, `alert_channels`
+- `notifications`, `recon`, `proxies`
+- `jitter_ms`, `exclude_ports`, `exclude_hosts`, `save_session`, `session_dir`
+
+The Settings tab should be considered a "quick settings" interface, not a full config editor.
+
+### Settings Input Fields
+- Timeout (s) - maps to `http.timeout_secs`
+- Max Retries - maps to `http.max_retries`
+- Retry Delay (ms) - maps to `http.retry_delay_ms` (added 2026-05-22)
+- Max Redirects - maps to `http.max_redirects`
+- Default Concurrency - maps to `scan.default_concurrency`
+- Rate Limit (req/s) - maps to `scan.rate_limit_per_second`
+- Port Timeout (s) - maps to `scan.port_timeout_secs` (default is 2, not 300)
+
 ## Selector API
 
 Selector provides explicit methods for dropdown interaction:

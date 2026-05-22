@@ -1,10 +1,11 @@
+use crate::constants::{PROJECT_NAME, PROJECT_QUALIFIER};
 use crate::types::SensitiveString;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 pub fn default_data_dir() -> PathBuf {
-    ProjectDirs::from("tools", "slapper", "slapper")
+    ProjectDirs::from(PROJECT_QUALIFIER, "", PROJECT_NAME)
         .map(|p: ProjectDirs| p.config_dir().join("maxmind"))
         .unwrap_or_else(|| PathBuf::from(".").join("maxmind"))
 }

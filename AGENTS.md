@@ -95,6 +95,11 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | Payload types | 30 |
 | Tabs | 29 |
 
+### Security Notes
+
+- **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are now blocked via private IP checks in `TargetScope::parse()`. Previously they bypassed DNS resolution and private IP blocking.
+- **TUI Settings Tab**: Only exposes a subset of config fields. Saving via the TUI will cause data loss for `profiles`, `schedule`, `remote`, `ai`, `search`, `alert_channels`, and other fields not shown in the UI. |
+
 ## Skills Directory
 
 Skills are located in:
@@ -125,6 +130,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 |------|--------|
 | `architecture/cli_commands.md` | CLI parsing, command dispatch, handler patterns |
 | `architecture/ai_agents.md` | AI/LLM integration and autonomous agents |
+| `architecture/config.md` | Configuration system, scope enforcement |
 | `architecture/scanner.md` | Port scanning and endpoint discovery |
 | `architecture/fuzzer.md` | Fuzzing engine and payload generation |
 | `architecture/waf.md` | WAF detection and bypass |
