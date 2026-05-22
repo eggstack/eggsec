@@ -646,7 +646,11 @@ impl ParsedPacket {
                 let ip_header_len = ip.header_len as usize;
                 let payload_len = ip.payload.len();
                 offset += ip_header_len;
-                ip.payload = data[offset..offset + payload_len].to_vec();
+                if payload_len > 0 && offset + payload_len <= data.len() {
+                    ip.payload = data[offset..offset + payload_len].to_vec();
+                } else {
+                    ip.payload = data[offset..].to_vec();
+                }
                 offset += payload_len;
                 ip
             })
@@ -657,12 +661,15 @@ impl ParsedPacket {
         let transport = if data.len() > offset {
             match ip.as_ref() {
                 Some(ip_packet) => match ip_packet.protocol {
-                    6 => TcpHeader::parse(&data[offset..]).map(|tcp| {
+                    6 => TcpHeader::parse(&data[offset..]).and_then(|tcp| {
                         let tcp_len = tcp.data_offset as usize;
-                        TransportProtocol::Tcp(TcpHeader {
+                        if offset + tcp_len > data.len() {
+                            return None;
+                        }
+                        Some(TransportProtocol::Tcp(TcpHeader {
                             payload: data[offset + tcp_len..].to_vec(),
                             ..tcp
-                        })
+                        }))
                     }),
                     17 => UdpHeader::parse(&data[offset..]).map(|udp| TransportProtocol::Udp(udp)),
                     1 => {

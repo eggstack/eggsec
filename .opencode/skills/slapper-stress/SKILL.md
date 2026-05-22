@@ -27,6 +27,11 @@ The `raw_udp` module in `stress/udp.rs:20-117` is integrated:
 - `StressAuthorization::verify_duration()` - enforces max_duration_secs
 - `StressScope` config loaded from `stress.toml` in config dir
 
+### Feature Requirements
+- All stress tests require `stress-testing` feature flag
+- Raw socket operations (SYN, UDP spoofed, ICMP) require Unix platform
+- IP spoofing requires `CAP_NET_RAW` or root privileges
+
 ## Testing
 
 ### Running Stress Tests

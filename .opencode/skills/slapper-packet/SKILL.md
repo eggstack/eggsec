@@ -38,7 +38,7 @@ Packet capture, crafting, and parsing module workflows and patterns.
 
 ### Traceroute (`packet/traceroute.rs`)
 - `Traceroute` / `TracerouteConfig` - multi-protocol traceroute
-- UDP mode (default) and ICMP mode (disabled due to bug)
+- UDP mode (default) and ICMP mode (disabled due to TTL control issues)
 - Parallel probes support
 - Reverse DNS resolution via `hickory_resolver`
 
@@ -54,6 +54,14 @@ Packet capture, crafting, and parsing module workflows and patterns.
 
 ## Feature Flags
 - `packet-inspection` - enables packet capture CLI (`packet/cli.rs`)
+
+## Bug Fixes (2026-05-22)
+
+| Issue | Fix |
+|-------|-----|
+| `parse_impl.rs:649` | Bounds check added for IP payload extraction to prevent out-of-bounds access |
+| `parse_impl.rs:664` | TCP payload extraction now uses `and_then` with bounds check instead of `unwrap()` |
+| `traceroute.rs:622` | `panic!` replaced with `unreachable!` in test code |
 
 ## Testing
 

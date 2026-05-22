@@ -1,7 +1,6 @@
 pub mod capture;
 pub mod craft;
 pub mod hexdump;
-pub mod http_parse;
 pub mod parse_impl;
 pub mod traceroute;
 pub mod types;

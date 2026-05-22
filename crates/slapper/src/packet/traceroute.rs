@@ -619,7 +619,7 @@ mod tests {
             Err(TracerouteError::Unsupported(msg)) => {
                 assert!(msg.contains("ICMP traceroute"));
             }
-            other => panic!("expected Unsupported error, got: {other:?}"),
+            other => unreachable!("expected Unsupported error, got: {other:?}"),
         }
     }
 

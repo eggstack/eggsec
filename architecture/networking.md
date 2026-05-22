@@ -2,7 +2,7 @@
 
 The Networking module provides low-level access to the network stack for tasks like packet capture, custom packet crafting, and stress testing.
 
-## Core Capabilities (`src/packet/` & `src/stress/`)
+## Core Capabilities (`crates/slapper/src/packet/` & `crates/slapper/src/stress/`)
 
 ### Packet Parsing (`parse_impl.rs`)
 
@@ -35,18 +35,20 @@ Creating custom network packets from scratch.
 
 ### Diagnostics & Tools
 
-- **Traceroute (`traceroute.rs`)**: High-performance, multi-protocol traceroute implementation.
+- **Traceroute (`traceroute.rs`)**: High-performance, multi-protocol traceroute implementation (UDP mode default; ICMP mode disabled due to TTL control issues).
 - **DNS Parsing**: Implemented in `parse_impl.rs` via `DnsRecord::parse()` - low-level DNS message parsing.
 - **TLS Parsing**: Implemented in `parse_impl.rs` via `TlsHandshake::parse()` - extracting information from TLS handshakes (SNI, certificates).
 - **HTTP Parsing**: Implemented in `parse_impl.rs` via `HttpRequest::parse()` and `HttpResponse::parse()`.
 
-### Stress Testing (`src/stress/`)
+### Stress Testing (`crates/slapper/src/stress/`)
 
 Generating massive amounts of network traffic to test the resilience of infrastructure and security appliances.
 
 - **SYN Flooding**: Testing WAF/IPS resilience to half-open connection attacks.
-- **UDP Flooding**: Volumetric stress testing.
+- **UDP Flooding**: Volumetric stress testing with IP spoofing support.
 - **HTTP Stressing**: High-volume HTTP request generation (different from the `loadtest` module which is more focused on performance benchmarking).
+
+All stress tests require `stress-testing` feature flag. Raw socket operations require Unix platform.
 
 ## Security & Privileges
 
