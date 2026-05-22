@@ -157,7 +157,7 @@ impl WafEngine {
                             || waf_lower.contains(&format!(" {}", &sig_lower))
                         {
                             self.selected_profile = Some(profile.name.clone());
-                            return Some(profile);
+                            return Some(profile.clone());
                         }
                     }
                 }
@@ -219,12 +219,11 @@ impl WafEngine {
             eprintln!("Attempting WAF bypasses...");
         }
 
-        let bypass_results = self
-            .bypass_engine
-            .as_ref()
-            .expect("bypass engine must be initialized")
-            .run_bypasses(&detection)
-            .await?;
+        let bypass_results = if let Some(engine) = self.bypass_engine.as_ref() {
+            engine.run_bypasses(&detection).await?
+        } else {
+            return Ok(());
+        };
 
         #[cfg(feature = "ai-integration")]
         let bypass_results = self.run_ai_bypasses(&detection, bypass_results).await?;

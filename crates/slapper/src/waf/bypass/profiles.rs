@@ -2,6 +2,7 @@ use crate::waf::bypass::BypassTechnique;
 use crate::waf::data::get_waf_signatures;
 use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WafProfile {
@@ -18,7 +19,7 @@ pub struct ProfileBypass {
     pub description: String,
 }
 
-pub fn get_waf_profiles() -> Vec<WafProfile> {
+static WAF_PROFILES: LazyLock<Vec<WafProfile>> = LazyLock::new(|| {
     let mut profiles = vec![
         get_cloudflare_profile(),
         get_akamai_profile(),
@@ -32,13 +33,18 @@ pub fn get_waf_profiles() -> Vec<WafProfile> {
 
     profiles.extend(get_generated_profiles(&profiles));
     profiles
+});
+
+pub fn get_waf_profiles() -> &'static Vec<WafProfile> {
+    &WAF_PROFILES
 }
 
 pub fn get_profile_by_name(name: &str) -> Option<WafProfile> {
     let name_lower = name.to_lowercase();
     get_waf_profiles()
-        .into_iter()
+        .iter()
         .find(|p| p.name.to_lowercase() == name_lower)
+        .cloned()
 }
 
 fn get_cloudflare_profile() -> WafProfile {

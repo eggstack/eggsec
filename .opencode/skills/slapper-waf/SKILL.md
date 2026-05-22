@@ -10,6 +10,8 @@ This module uses `FxHashMap` and `FxHashSet` from `rustc_hash` for performance. 
 
 ### Constants (`constants::waf`)
 
+All scoring constants are `u16` to prevent overflow when accumulating scores:
+
 | Constant | Value | Purpose |
 |----------|-------|---------|
 | `HEADER_MATCH_SCORE` | 25 | Header indicator match |
@@ -28,7 +30,7 @@ This module uses `FxHashMap` and `FxHashSet` from `rustc_hash` for performance. 
 WAF detection in `detector/detect.rs`:
 1. Sends GET request to target URL
 2. Collects headers, cookies, body, and remote IP
-3. Iterates through 34 WAF signatures calculating scores:
+3. Iterates through 34 WAF signatures calculating scores (internal score uses `u16`):
    - **Header match**: +25 points (per header, value length <= 256)
    - **Cookie match**: +20 points
    - **Body pattern match**: +15 points
@@ -88,6 +90,10 @@ pub enum BypassTechnique {
 }
 ```
 
+### Profile Caching
+
+`get_waf_profiles()` returns a static `&'static Vec<WafProfile>` via `LazyLock` to avoid recreating profiles on every call. Always use `get_profile_by_name()` which clones from this cached data rather than reconstructing profiles.
+
 ## Testing
 
 ### Running WAF Tests
@@ -134,6 +140,6 @@ let body = match response.text().await {
 
 - `crates/slapper/src/waf/AGENTS.override.md` - Detailed WAF patterns
 - `crates/slapper/src/waf/data/patterns.rs` - 34 WAF signatures (FxHashMap)
-- `crates/slapper/src/waf/bypass/profiles.rs` - WAF-specific bypass profiles
+- `crates/slapper/src/waf/bypass/profiles.rs` - WAF-specific bypass profiles (cached via LazyLock)
 - `AGENTS.md` - General project guidelines
 - `architecture/waf.md` - Architecture documentation

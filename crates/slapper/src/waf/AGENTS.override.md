@@ -4,7 +4,7 @@ Specialized guidance for the WAF detection and bypass module.
 
 ## Constants
 
-`constants::waf` module has scoring and detection constants. Use these instead of magic numbers in WAF-related code.
+`constants::waf` module has scoring and detection constants (u16 values). Use these instead of magic numbers in WAF-related code.
 
 ## Performance Note
 
@@ -14,6 +14,10 @@ Key types:
 - `ResponseDiff.normal_headers` / `malicious_headers` - `FxHashMap<String, String>`
 - `WafDetector.signatures` - `FxHashMap<String, WafSignature>`
 - `WafProfile` generation uses `FxHashSet<String>` for existing names
+
+## Profile Caching
+
+`get_waf_profiles()` and `get_profile_by_name()` in `bypass/profiles.rs` use a static `LazyLock<Vec<WafProfile>>` to avoid recreating profiles on every call. Always use these functions instead of calling profile constructors directly.
 
 ## Bypass Detection Pattern
 
@@ -33,6 +37,10 @@ The function verifies:
 2. Status differs from baseline detection
 3. Status is 2xx (200-299)
 4. Payload is reflected in response body (urlencoded or raw)
+
+## Score Overflow Prevention
+
+WAF scoring uses `u16` internally. If adding new score contributions, ensure the total doesn't overflow. Use `saturating_add()` or check bounds if adding large values.
 
 ## Certificate Info Extraction (Recon SSL)
 

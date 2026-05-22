@@ -42,7 +42,7 @@ impl WafDetector {
         let mut matched_headers = Vec::new();
         let mut matched_cookies = Vec::new();
         let mut matched_patterns = Vec::new();
-        let mut best_match: Option<(String, u8)> = None;
+        let mut best_match: Option<(String, u16)> = None;
 
         let server_header = headers
             .get("server")
@@ -68,7 +68,7 @@ impl WafDetector {
 
         for (sig_key, signature) in self.signatures.iter() {
             let sig_lower = &self.signatures_lower[sig_key];
-            let mut score = 0u8;
+            let mut score = 0u16;
             let mut sig_matched_headers = Vec::new();
             let mut sig_matched_cookies = Vec::new();
             let mut sig_matched_patterns = Vec::new();
@@ -173,7 +173,7 @@ impl WafDetector {
 
         let (waf_name, confidence) = match best_match {
             Some((name, score)) => {
-                let conf = score.min(100);
+                let conf = score.min(100) as u8;
                 (Some(name), conf)
             }
             None => (None, 0),

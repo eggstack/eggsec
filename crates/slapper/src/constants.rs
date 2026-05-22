@@ -67,13 +67,13 @@ pub mod ui {
 }
 
 pub mod waf {
-    pub const HEADER_MATCH_SCORE: u8 = 25;
-    pub const COOKIE_MATCH_SCORE: u8 = 20;
-    pub const BODY_MATCH_SCORE: u8 = 15;
-    pub const IP_MATCH_SCORE: u8 = 20;
-    pub const UNKNOWN_WAF_CONFIDENCE: u8 = 30;
+    pub const HEADER_MATCH_SCORE: u16 = 25;
+    pub const COOKIE_MATCH_SCORE: u16 = 20;
+    pub const BODY_MATCH_SCORE: u16 = 15;
+    pub const IP_MATCH_SCORE: u16 = 20;
+    pub const UNKNOWN_WAF_CONFIDENCE: u16 = 30;
     pub const LENGTH_DIFF_THRESHOLD: usize = 100;
-    pub const HIGH_CONFIDENCE_EXIT: u8 = 90;
+    pub const HIGH_CONFIDENCE_EXIT: u16 = 90;
     pub const BLOCKED_STATUS_CODES: [u16; 4] = [403, 406, 429, 503];
     pub const BLOCKED_PATTERNS: [&str; 8] = [
         "access denied",

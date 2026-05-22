@@ -52,7 +52,7 @@ Slapper can identify **34 different WAF products** by analyzing HTTP responses f
 
 - **WAF Patterns (`data/patterns.rs`)**: A collection of signatures for well-known WAFs stored in a `FxHashMap<String, WafSignature>` (keys are lowercase names)
 - **Detector Logic**: Orchestrates probes to trigger WAF responses and matches them against known patterns.
-- **Scoring System**:
+- **Scoring System** (uses `u16` internally to prevent overflow):
   - Header match: +25 points
   - Cookie match: +20 points
   - Body pattern match: +15 points
@@ -60,6 +60,8 @@ Slapper can identify **34 different WAF products** by analyzing HTTP responses f
   - High confidence exit: 90 points
 
 ### Bypass (`bypass/`)
+
+`get_waf_profiles()` and `get_profile_by_name()` in `profiles.rs` use a static `LazyLock<Vec<WafProfile>>` to cache profiles and avoid recreation on every call.
 
 Once a WAF is identified, Slapper can apply specialized bypass techniques across three sub-engines:
 

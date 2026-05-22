@@ -262,6 +262,15 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `scanner/endpoints.rs:768` | Silent error suppression on network failures | Changed to explicit `match` with debug logging |
 | `scanner/udp_fingerprint.rs:144` | Silent task join failures | Changed to explicit `match` with debug logging |
 
+### Recent Bug Fixes (2026-05-28 - WAF Module)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| `waf/bypass/profiles.rs:21,37` | `get_waf_profiles()` recreated profiles on every call | Changed to `LazyLock` static for caching |
+| `waf/mod.rs:225` | `expect("bypass engine must be initialized")` could panic | Changed to proper `if let` with early return |
+| `waf/detector/detect.rs:45,71` | Score accumulator `u8` could overflow with many matches | Changed to `u16` with proper constant types |
+| `constants.rs:69-90` | WAF scoring constants were `u8` | Changed to `u16` to prevent overflow |
+
 ### Recent Bug Fixes (2026-05-22 - Recon Module)
 
 | Component | Issue | Fix |
