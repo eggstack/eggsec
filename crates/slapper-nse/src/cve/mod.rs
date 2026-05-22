@@ -171,7 +171,7 @@ pub trait CveClient: Send + Sync {
 
 /// Cache for CVE results
 pub struct CveCache {
-    records: Arc<RwLock<FxHashMap<String, (CveRecord, std::time::Instant)>>,
+    records: Arc<RwLock<FxHashMap<String, (CveRecord, std::time::Instant)>>>,
     ttl: std::time::Duration,
 }
 
@@ -184,7 +184,7 @@ impl CveCache {
     }
 
     pub async fn get(&self, key: &str) -> Option<CveRecord> {
-        let records = self.records.read().await;
+        let records = self.records.read();
         if let Some((record, time)) = records.get(key) {
             if time.elapsed() < self.ttl {
                 return Some(record.clone());
@@ -194,7 +194,7 @@ impl CveCache {
     }
 
     pub async fn set(&self, key: String, record: CveRecord) {
-        let mut records = self.records.write().await;
+        let mut records = self.records.write();
         records.insert(key, (record, std::time::Instant::now()));
     }
 }

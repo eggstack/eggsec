@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
@@ -67,7 +67,7 @@ pub struct ScriptOutputSection {
 #[derive(Debug, Clone)]
 pub struct ScriptOutput {
     pub lines: Vec<String>,
-    pub output_table: Option<HashMap<String, String>>,
+    pub output_table: Option<FxHashMap<String, String>>,
     pub severity: String,
     pub sections: Vec<ScriptOutputSection>,
     pub raw_output: String,
@@ -102,7 +102,7 @@ impl ScriptOutput {
         self.add_line(line);
     }
 
-    pub fn set_table(&mut self, table: HashMap<String, String>) {
+    pub fn set_table(&mut self, table: FxHashMap<String, String>) {
         self.output_table = Some(table);
     }
 
@@ -140,10 +140,10 @@ impl Default for ScriptOutput {
 
 pub struct ScanContext {
     pub host: Option<HostInfo>,
-    pub ports: HashMap<(u16, String), PortInfo>,
+    pub ports: FxHashMap<(u16, String), PortInfo>,
     pub target_port: Option<PortInfo>,
     pub output: ScriptOutput,
-    pub registry: HashMap<String, mlua::Value>,
+    pub registry: FxHashMap<String, mlua::Value>,
     pub script_name: Option<String>,
     pub verbose: Option<i32>,
 }
@@ -152,10 +152,10 @@ impl ScanContext {
     pub fn new() -> Self {
         Self {
             host: None,
-            ports: HashMap::new(),
+            ports: FxHashMap::default(),
             target_port: None,
             output: ScriptOutput::new(),
-            registry: HashMap::new(),
+            registry: FxHashMap::default(),
             script_name: None,
             verbose: Some(1),
         }
@@ -217,11 +217,11 @@ impl ScanContext {
         &self.output.sections
     }
 
-    pub fn set_output_table(&mut self, table: std::collections::HashMap<String, String>) {
+    pub fn set_output_table(&mut self, table: FxHashMap<String, String>) {
         self.output.set_table(table);
     }
 
-    pub fn get_output_table(&self) -> Option<&std::collections::HashMap<String, String>> {
+    pub fn get_output_table(&self) -> Option<&FxHashMap<String, String>> {
         self.output.output_table.as_ref()
     }
 

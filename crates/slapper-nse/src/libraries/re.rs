@@ -5,11 +5,11 @@
 
 use mlua::{Lua, Result as LuaResult, Table, Value};
 use regex::{Regex, RegexBuilder};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Mutex;
 
-static COMPILED_PATTERNS: std::sync::LazyLock<Mutex<HashMap<String, Regex>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static COMPILED_PATTERNS: std::sync::LazyLock<Mutex<FxHashMap<String, Regex>>> =
+    std::sync::LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 fn parse_options(options: &str) -> (bool, bool) {
     let mut case_insensitive = false;

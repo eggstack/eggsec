@@ -4,6 +4,7 @@
 //! portrule, postrule) and category management.
 
 use mlua::{Lua, Result as LuaResult, Table, Value};
+use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
 use crate::executor_core::ExecutorCore;
@@ -332,8 +333,8 @@ impl NseExecutor {
             .collect()
     }
 
-    fn parse_all_script_categories(&self) -> std::collections::HashMap<String, Vec<String>> {
-        let mut categories = std::collections::HashMap::new();
+    fn parse_all_script_categories(&self) -> FxHashMap<String, Vec<String>> {
+        let mut categories = FxHashMap::default();
         let paths = self.core.scripts_path.lock();
 
         for dir in paths.iter() {

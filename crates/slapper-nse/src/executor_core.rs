@@ -6,7 +6,7 @@
 
 use mlua::{Lua, Result as LuaResult, Table, Value};
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -41,7 +41,7 @@ pub struct ExecutorCore {
     pub(crate) target: String,
     pub(crate) scripts_path: Arc<Mutex<Vec<PathBuf>>>,
     pub(crate) output: Mutex<Vec<String>>,
-    pub(crate) registry: Mutex<HashMap<String, Value>>,
+    pub(crate) registry: Mutex<FxHashMap<String, Value>>,
     pub(crate) sandbox: crate::SandboxConfig,
 }
 
@@ -54,7 +54,7 @@ impl ExecutorCore {
         let lua = Lua::new();
         let scripts_path = Arc::new(Mutex::new(vec![]));
         let output = Mutex::new(vec![]);
-        let registry = Mutex::new(HashMap::new());
+        let registry = Mutex::new(FxHashMap::default());
 
         let core = Self {
             lua,
@@ -588,7 +588,7 @@ impl ExecutorCore {
 
     fn setup_require(&self, _scripts_path: Arc<Mutex<Vec<PathBuf>>>) -> LuaResult<()> {
         let scripts_path = self.scripts_path.clone();
-        let cache: Arc<Mutex<HashMap<String, Value>>> = Arc::new(Mutex::new(HashMap::new()));
+        let cache: Arc<Mutex<FxHashMap<String, Value>>> = Arc::new(Mutex::new(FxHashMap::default()));
 
         let require_fn = self.lua.create_function(move |lua, name: String| {
             {

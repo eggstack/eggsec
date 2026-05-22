@@ -4,11 +4,11 @@
 //! Based on Nmap's creds library: https://nmap.org/nsedoc/lib/creds.html
 
 use mlua::{Lua, Result as LuaResult};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Mutex;
 
-static CREDENTIALS_STORE: std::sync::LazyLock<Mutex<HashMap<String, Vec<Credential>>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static CREDENTIALS_STORE: std::sync::LazyLock<Mutex<FxHashMap<String, Vec<Credential>>>> =
+    std::sync::LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 #[derive(Clone, Debug)]
 struct Credential {

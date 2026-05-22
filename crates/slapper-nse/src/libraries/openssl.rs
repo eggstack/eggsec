@@ -5,12 +5,14 @@
 
 use mlua::{Lua, Result as LuaResult};
 use native_tls::TlsConnector;
+use rustc_hash::FxHashMap;
+use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::Duration;
 
-static SSL_SESSIONS: std::sync::LazyLock<Mutex<std::collections::HashMap<String, TlsConnector>>> =
-    std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+static SSL_SESSIONS: std::sync::LazyLock<Mutex<FxHashMap<String, TlsConnector>>> =
+    std::sync::LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 fn create_ssl_connection(
     host: &str,

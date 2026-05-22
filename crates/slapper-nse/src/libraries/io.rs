@@ -3,9 +3,9 @@
 //! Provides file I/O operations compatible with NSE.
 
 use mlua::{Lua, Result as LuaResult, Table};
-use std::io::{Read, Write};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -25,8 +25,8 @@ impl Drop for FileHandle {
     }
 }
 
-static FILE_HANDLES: std::sync::LazyLock<Mutex<HashMap<i32, FileHandle>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static FILE_HANDLES: std::sync::LazyLock<Mutex<FxHashMap<i32, FileHandle>>> =
+    std::sync::LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 static NEXT_FD: std::sync::LazyLock<Mutex<i32>> = std::sync::LazyLock::new(|| Mutex::new(100));
 

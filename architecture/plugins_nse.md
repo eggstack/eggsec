@@ -102,3 +102,12 @@ The `vulns` library provides access to CVE databases:
 | `CveAggregator` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |
 | Path traversal check bypass via `..` string check | Removed simple string check; rely on `is_path_allowed()` |
 | `async_executor.rs` Default impl panicked | Changed to `unwrap_or_else` panic with descriptive message |
+| `lfs.rs` path traversal check bypass | Removed weak `!path.contains("..")` check; rely on canonicalization only |
+| Multiple `HashMap`/`HashSet` in libraries | Changed to `FxHashMap`/`FxHashSet` for performance in 13+ library files |
+| Mutex poisoning could cause panic in httpspider, pcre | Changed `.unwrap()` to `.unwrap_or_else(\|e\| e.into_inner())` |
+| `rustc-hash` not in slapper-nse dependencies | Added `rustc-hash.workspace = true` to Cargo.toml |
+| `CveCache` missing closing bracket in type definition | Fixed typo in struct definition |
+| Async `.await` on parking_lot RwLock (sync) | Removed `.await` since parking_lot RwLock is synchronous |
+| Missing `std::io::{Read, Write}` imports in libraries | Added to brute, io, nmap, openssl, ldap, and other libraries |
+| Duplicate `std::io::{Read, Write}` import in ldap.rs | Removed duplicate |
+| Duplicate `std::io::Write` import in nmap.rs | Removed duplicate |

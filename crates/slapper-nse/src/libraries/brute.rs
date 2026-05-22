@@ -4,14 +4,14 @@
 //! Based on Nmap's brute library: https://nmap.org/nsedoc/lib/brute.html
 
 use mlua::{Lua, Result as LuaResult, Table};
+use rustc_hash::FxHashMap;
 use std::io::{Read, Write};
-use std::collections::HashMap;
 use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::Duration;
 
-static CREDS_STORE: std::sync::LazyLock<Mutex<HashMap<String, Vec<(String, String)>>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static CREDS_STORE: std::sync::LazyLock<Mutex<FxHashMap<String, Vec<(String, String)>>>> =
+    std::sync::LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 static ACCOUNT_STORE: std::sync::LazyLock<Mutex<Vec<(String, String, bool)>>> =
     std::sync::LazyLock::new(|| Mutex::new(Vec::new()));

@@ -809,11 +809,11 @@ pub fn register_stdlib(lua: &Lua) -> LuaResult<()> {
     })?;
     stdnse.set("module", module_fn)?;
 
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
     use std::sync::Mutex;
 
-    static THREAD_RESULTS: std::sync::LazyLock<Mutex<HashMap<i64, String>>> =
-        std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+    static THREAD_RESULTS: std::sync::LazyLock<Mutex<FxHashMap<i64, String>>> =
+        std::sync::LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
     let new_thread_fn =
         lua.create_function(|_lua, (_func, _args): (mlua::Function, Option<Table>)| {

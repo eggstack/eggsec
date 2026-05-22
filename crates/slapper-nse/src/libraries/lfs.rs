@@ -29,7 +29,7 @@ pub fn register_lfs_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()>
             if !sandbox_enabled {
                 return true;
             }
-            !path.contains("..") && sandbox_for_check.is_path_allowed(path)
+            sandbox_for_check.is_path_allowed(path)
         }
     };
 

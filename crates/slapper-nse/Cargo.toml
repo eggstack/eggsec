@@ -25,6 +25,7 @@ hex.workspace = true
 md-5.workspace = true
 hostname.workspace = true
 dashmap.workspace = true
+rustc-hash.workspace = true
 hickory-resolver.workspace = true
 reqwest = { version = "0.13", features = ["json", "blocking", "rustls"], default-features = false }
 native-tls = "0.2.18"

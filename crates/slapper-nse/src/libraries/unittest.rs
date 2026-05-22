@@ -4,11 +4,11 @@
 //! Based on Nmap's unittest library: https://nmap.org/nsedoc/lib/unittest.html
 
 use mlua::{Lua, Result as LuaResult, Value};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Mutex;
 
-static TEST_RESULTS: std::sync::LazyLock<Mutex<HashMap<String, Vec<TestResult>>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static TEST_RESULTS: std::sync::LazyLock<Mutex<FxHashMap<String, Vec<TestResult>>>> =
+    std::sync::LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 #[derive(Debug)]
 struct TestResult {

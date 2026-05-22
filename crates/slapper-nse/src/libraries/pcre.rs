@@ -5,11 +5,11 @@
 
 use mlua::{Lua, Result as LuaResult};
 use regex::RegexBuilder;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Mutex;
 
-static COMPILED_REGEX: std::sync::LazyLock<Mutex<HashMap<usize, regex::Regex>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static COMPILED_REGEX: std::sync::LazyLock<Mutex<FxHashMap<usize, regex::Regex>>> =
+    std::sync::LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 static REGEX_COUNTER: std::sync::LazyLock<Mutex<usize>> =
     std::sync::LazyLock::new(|| Mutex::new(1));
@@ -104,11 +104,11 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
             .build()
         {
             Ok(re) => {
-                let mut counter = REGEX_COUNTER.lock().unwrap();
+                let mut counter = REGEX_COUNTER.lock().unwrap_or_else(|e| e.into_inner());
                 let id = *counter;
                 *counter += 1;
 
-                COMPILED_REGEX.lock().unwrap().insert(id, re);
+                COMPILED_REGEX.lock().unwrap_or_else(|e| e.into_inner()).insert(id, re);
 
                 Ok(id)
             }
@@ -118,7 +118,7 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
     pcre.set("compile", compile_fn)?;
 
     let exec_fn = lua.create_function(|_lua, (id, subject): (usize, String)| {
-        let compiled = COMPILED_REGEX.lock().unwrap();
+        let compiled = COMPILED_REGEX.lock().unwrap_or_else(|e| e.into_inner());
 
         if let Some(re) = compiled.get(&id) {
             if let Some(cap) = re.captures(&subject) {
@@ -139,7 +139,7 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
     pcre.set("exec", exec_fn)?;
 
     let free_fn = lua.create_function(|_lua, id: usize| {
-        COMPILED_REGEX.lock().unwrap().remove(&id);
+        COMPILED_REGEX.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
         Ok(true)
     })?;
     pcre.set("free", free_fn)?;

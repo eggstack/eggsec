@@ -4,15 +4,15 @@
 //! Based on Nmap's httpspider library: https://nmap.org/nsedoc/lib/httpspider.html
 
 use mlua::{Lua, Result as LuaResult, Table};
+use rustc_hash::{FxHashMap, FxHashSet};
 use scraper::{Html, Selector};
-use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
 use url::Url;
 
-static CRAWLERS: LazyLock<Mutex<HashMap<String, CrawlerState>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static CRAWLERS: LazyLock<Mutex<FxHashMap<String, CrawlerState>>> =
+    LazyLock::new(|| Mutex::new(FxHashMap::default()));
 static CRAWLER_COUNTER: LazyLock<Mutex<u64>> = LazyLock::new(|| Mutex::new(0));
 
 struct CrawlerState {
@@ -20,7 +20,7 @@ struct CrawlerState {
     port: u16,
     base_url: String,
     queue: Vec<String>,
-    visited: HashSet<String>,
+    visited: FxHashSet<String>,
     max_depth: usize,
     max_pages: usize,
     pages_visited: usize,
@@ -35,7 +35,7 @@ struct CrawlerState {
 }
 
 fn get_next_id() -> String {
-    let mut counter = CRAWLER_COUNTER.lock().unwrap();
+    let mut counter = CRAWLER_COUNTER.lock().unwrap_or_else(|e| e.into_inner());
     *counter += 1;
     format!("crawler_{}", *counter)
 }

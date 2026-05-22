@@ -298,3 +298,18 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/output.md` | Output & reporting module |
 | `architecture/plugins_nse.md` | Plugin system (Python/Ruby) and NSE integration |
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |
+
+| `slapper-nse/src/libraries/lfs.rs:32` | Path traversal check bypass via `!path.contains("..")` | Removed weak check; rely on `is_path_allowed()` canonicalization only |
+| `slapper-nse/src/libraries/*.rs` | Multiple `HashMap`/`HashSet` used instead of `FxHashMap`/`FxHashSet` | Changed to FxHash* for performance in 13+ library files |
+| `slapper-nse/src/libraries/httpspider.rs:38` | Mutex poisoning could cause panic | Changed `.unwrap()` to `.unwrap_or_else(\|e\| e.into_inner())` |
+| `slapper-nse/src/libraries/pcre.rs` | Mutex poisoning could cause panic in regex operations | Changed `.unwrap()` to `.unwrap_or_else(\|e\| e.into_inner())` |
+| `slapper-nse/Cargo.toml` | Missing `rustc-hash` workspace dependency | Added `rustc-hash.workspace = true` |
+| `slapper-nse/src/cve/mod.rs:174` | `CveCache` struct missing closing bracket in type definition | Fixed typo |
+| `slapper-nse/src/cve/mod.rs:187,197` | Async `.await` on parking_lot RwLock (sync) | Removed `.await` since parking_lot RwLock is synchronous |
+| `slapper-nse/src/context.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `slapper-nse/src/executor_core.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `slapper-nse/src/executor.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `slapper-nse/src/libraries/brute.rs` | Missing `std::io::{Read, Write}` imports | Added imports |
+| `slapper-nse/src/libraries/io.rs` | Missing `std::io::{Read, Write}` imports | Added imports |
+| `slapper-nse/src/libraries/ldap.rs` | Duplicate `std::io::{Read, Write}` import | Removed duplicate |
+| `slapper-nse/src/libraries/nmap.rs` | Duplicate `std::io::Write` import | Removed duplicate |

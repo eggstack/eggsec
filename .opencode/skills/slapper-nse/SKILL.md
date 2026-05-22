@@ -108,6 +108,13 @@ Located in `src/cve/`:
 | `CveAggregator` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |
 | Path traversal check bypass via `..` string check | Removed simple string check; rely on `is_path_allowed()` canonicalization |
 | `async_executor.rs` Default impl panicked | Changed to propagate error via `unwrap_or_else` panic |
+| `lfs.rs` path traversal check bypass | Removed weak `!path.contains("..")` check; rely on canonicalization only |
+| Multiple libraries using `HashMap`/`HashSet` | Changed to `FxHashMap`/`FxHashSet` for performance in 13+ libraries |
+| Mutex poisoning could cause panic | Changed `.unwrap()` to `.unwrap_or_else(\|e\| e.into_inner())` in httpspider, pcre |
+| Missing `std::io::{Read, Write}` imports | Added to brute, io, nmap, openssl, ldap, and other libraries |
+| `rustc-hash` not in slapper-nse dependencies | Added `rustc-hash.workspace = true` to Cargo.toml |
+| `CveCache` missing closing bracket | Fixed typo in struct definition |
+| `CveCache` using async `.await` on parking_lot RwLock | Removed `.await`; parking_lot RwLock is sync |
 
 ## Common Patterns
 

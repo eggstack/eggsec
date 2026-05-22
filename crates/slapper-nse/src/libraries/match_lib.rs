@@ -4,14 +4,14 @@
 
 use mlua::{Lua, Result as LuaResult, Table};
 use regex::RegexBuilder;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::OnceLock;
 
-static SERVICE_PATTERNS: OnceLock<HashMap<&'static str, Vec<&'static str>>> = OnceLock::new();
+static SERVICE_PATTERNS: OnceLock<FxHashMap<&'static str, Vec<&'static str>>> = OnceLock::new();
 
-fn get_service_patterns() -> &'static HashMap<&'static str, Vec<&'static str>> {
+fn get_service_patterns() -> &'static FxHashMap<&'static str, Vec<&'static str>> {
     SERVICE_PATTERNS.get_or_init(|| {
-        let mut m = HashMap::new();
+        let mut m = FxHashMap::default();
         m.insert(
             "http",
             vec!["http", "https", "apache", "nginx", "iis", "web"],
