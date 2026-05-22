@@ -113,7 +113,13 @@ impl LoadTestRunner {
             Duration::from_secs(args.timeout)
         };
 
-        let mut runner = Self::new(args.url, args.requests, args.concurrency, timeout)?;
+        let mut runner = Self::new_with_tui_mode(
+            args.url,
+            args.requests,
+            args.concurrency,
+            timeout,
+            false,
+        )?;
 
         runner.set_method(args.method.clone());
 

@@ -16,6 +16,18 @@ The `runner.rs` file contains the core logic for generating high volumes of HTTP
 - **Auth Headers**: Helper `apply_auth_headers()` method handles Basic, Bearer, Cookie, API Key authentication.
 - **Connection Pool**: Non-success response bodies are consumed before returning connections to the pool.
 
+#### Constructors
+
+| Method | Purpose |
+|--------|---------|
+| `new(url, total, concurrency, timeout)` | Basic constructor with validation |
+| `new_with_tui_mode(...)` | Constructor with explicit TUI mode flag |
+| `from_args(args)` | From CLI `LoadArgs` |
+| `from_args_with_tui_mode(args, tui_mode)` | CLI args with TUI mode |
+| `from_args_with_config(args, config)` | CLI args merged with `SlapperConfig` (used by pipeline) |
+
+**Important**: Use `from_args_with_config()` for pipeline integration to ensure config file settings (proxy, TLS verification, rate limits) are properly merged.
+
 ### Metrics (`metrics.rs`)
 
 Collects and processes performance data in real-time.

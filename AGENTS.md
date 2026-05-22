@@ -135,6 +135,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `fuzzer/engine/utils.rs:249` | WAF status codes (403, 406, 429) hardcoded | Extracted to `WAF_BLOCKED_STATUS_CODES` constant |
 | `fuzzer/engine/types.rs:176` | `BaselineResponse.headers` used `std::collections::HashMap` | Changed to `FxHashMap` for performance |
 | `fuzzer/redos_detect.rs:276` | `PayloadReDosChecker.vulnerable_payloads` used `HashMap` | Changed to `FxHashMap` for performance |
+| `loadtest/runner.rs:116-122` | `from_args_with_config()` used `new()` instead of `new_with_tui_mode()`, bypassing validation | Changed to use `new_with_tui_mode()` with `false` for tui_mode to ensure validation is applied |
 | `loadtest/runner.rs:327-337` | Non-success HTTP response bodies not consumed, leaving connection pool in inconsistent state | Now consumes response body for non-success before recording metrics |
 | `loadtest/runner.rs:300-307` | Rate limiting interval calculation could drift due to using `next + interval` instead of `now + interval` | Changed to compute `next = now_after_sleep + interval` to maintain accurate rate |
 | `packet/parse_impl.rs:649` | IP payload extraction could cause out-of-bounds access | Added bounds check before payload extraction |
