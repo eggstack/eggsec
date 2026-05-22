@@ -16,6 +16,26 @@ The `runner.rs` file contains the core logic for generating high volumes of HTTP
 - **Auth Headers**: Helper `apply_auth_headers()` method handles Basic, Bearer, Cookie, API Key authentication.
 - **Connection Pool**: Non-success response bodies are consumed before returning connections to the pool.
 
+#### LoadTestRunner Structure
+
+```rust
+pub struct LoadTestRunner {
+    url: String,
+    total_requests: u64,
+    concurrency: usize,
+    timeout: Duration,
+    method: Method,
+    body: Option<String>,
+    headers: Vec<(String, String)>,
+    insecure: bool,
+    proxy: Option<String>,
+    proxy_auth: Option<String>,
+    user_agent: String,
+    rate_limit: Option<u32>,    // requests per second
+    tui_mode: bool,
+}
+```
+
 #### Constructors
 
 | Method | Purpose |
@@ -35,8 +55,30 @@ Collects and processes performance data in real-time.
 - **Latency Tracking**: Records response times and calculates percentiles (p50, p90, p95, p99) using `hdrhistogram`.
 - **Throughput**: Measures requests per second (RPS).
 - **Error Rates**: Tracks non-2xx/3xx status codes and transport failures.
-- **Histograms**: Uses `hdrhistogram::Histogram<u64>` with 3 significant figures for efficient and accurate latency tracking.
+- **Histograms**: Uses `hdristogram::Histogram<u64>` with 3 significant figures for efficient and accurate latency tracking.
 - **FxHashMap**: Uses `rustc_hash::FxHashMap` for status code distribution (performance optimization).
+
+#### LoadTestResults Structure
+
+```rust
+pub struct LoadTestResults {
+    pub target_url: String,
+    pub total_requests: u64,
+    pub successful_requests: u64,
+    pub failed_requests: u64,
+    pub total_duration_ms: u64,
+    pub requests_per_second: f64,
+    pub latency_min_ms: f64,
+    pub latency_max_ms: f64,
+    pub latency_mean_ms: f64,
+    pub latency_p50_ms: f64,
+    pub latency_p90_ms: f64,
+    pub latency_p95_ms: f64,
+    pub latency_p99_ms: f64,
+    pub status_codes: FxHashMap<u16, u64>,
+    pub errors: Vec<String>,
+}
+```
 
 ## Usage
 
@@ -72,3 +114,8 @@ This ensures RPS stays close to the configured limit even under high concurrency
 ### Response Body Handling
 
 When non-success responses (4xx/5xx) are received, the response body is consumed before recording metrics. This prevents the HTTP client's connection pool from being left in an inconsistent state where a connection has an unread body waiting.
+
+## Override File
+
+For specialized guidance on the loadtest module, see:
+- `crates/slapper/src/loadtest/AGENTS.override.md` - Module-specific patterns and bug fixes

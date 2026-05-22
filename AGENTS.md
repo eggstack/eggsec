@@ -49,7 +49,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `stress/` | `crates/slapper/src/stress/AGENTS.override.md` |
 | `distributed/` | `crates/slapper/src/distributed/AGENTS.override.md` |
 | `packet/` | `crates/slapper/src/packet/` (uses pnet, pnet_packet for raw sockets) |
-| `loadtest/` | `crates/slapper/src/loadtest/` (uses FxHashMap, hdrhistogram) |
+| `loadtest/` | `crates/slapper/src/loadtest/AGENTS.override.md` |
 | `pipeline/` | `crates/slapper/src/pipeline/AGENTS.override.md` |
 | `nse/` | `crates/slapper-nse/` (Lua VM, NSE libraries, sandbox, CVE integration) |
 

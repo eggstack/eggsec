@@ -313,7 +313,7 @@ impl LoadTestRunner {
                         if now_after_sleep >= *next {
                             *next = now_after_sleep + *min_interval;
                         } else {
-                            *next = *next + *min_interval;
+                            *next += *min_interval;
                         }
                     }
 
