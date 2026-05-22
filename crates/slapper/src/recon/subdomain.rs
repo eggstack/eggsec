@@ -138,6 +138,8 @@ impl SubdomainEnumerator {
         Ok(subdomains)
     }
 
+    #[allow(dead_code)]
+    /// Alexa ranking query - implementation incomplete, returns empty
     async fn query_alexa(&self, _domain: &str) -> Result<FxHashSet<String>> {
         Ok(FxHashSet::default())
     }

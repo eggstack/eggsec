@@ -1,6 +1,7 @@
 use crate::commands::handlers::CommandContext;
 use crate::constants::DEFAULT_CONFIG_FILE;
 use anyhow::Result;
+use rustc_hash::FxHashMap;
 
 pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -> Result<()> {
     use crate::cli::{ReportCommand, ReportFormat};
@@ -41,17 +42,17 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
             let after =
                 convert::load_scan_report(&trend_args.after).map_err(|e| anyhow::anyhow!(e))?;
 
-            let before_counts: std::collections::HashMap<String, usize> = before
+            let before_counts: FxHashMap<String, usize> = before
                 .findings
                 .iter()
-                .fold(std::collections::HashMap::new(), |mut acc, f| {
+                .fold(FxHashMap::default(), |mut acc, f| {
                     *acc.entry(f.severity.clone()).or_insert(0) += 1;
                     acc
                 });
-            let after_counts: std::collections::HashMap<String, usize> = after
+            let after_counts: FxHashMap<String, usize> = after
                 .findings
                 .iter()
-                .fold(std::collections::HashMap::new(), |mut acc, f| {
+                .fold(FxHashMap::default(), |mut acc, f| {
                     *acc.entry(f.severity.clone()).or_insert(0) += 1;
                     acc
                 });

@@ -253,15 +253,15 @@ where
                     let mut m = FxHashMap::default();
                     m.insert(
                         "cname".to_string(),
-                        serde_json::to_value(&result.target.cname).unwrap_or_default(),
+                        serde_json::to_value(&result.target.cname).unwrap_or(serde_json::Value::Null),
                     );
                     m.insert(
                         "ns".to_string(),
-                        serde_json::to_value(&result.target.ns).unwrap_or_default(),
+                        serde_json::to_value(&result.target.ns).unwrap_or(serde_json::Value::Null),
                     );
                     m.insert(
                         "service".to_string(),
-                        serde_json::to_value(&result.service).unwrap_or_default(),
+                        serde_json::to_value(&result.service).unwrap_or(serde_json::Value::Null),
                     );
                     m
                 },
