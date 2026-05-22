@@ -14,7 +14,6 @@ use pnet::datalink::{self, DataLinkReceiver, NetworkInterface};
 pub struct PcapWriter {
     file: BufWriter<File>,
     snapshot_len: usize,
-    pcap_hdr: [u8; 24],
 }
 
 impl PcapWriter {
@@ -41,7 +40,6 @@ impl PcapWriter {
         Ok(Self {
             file: writer,
             snapshot_len,
-            pcap_hdr: [0; 24],
         })
     }
 
@@ -155,7 +153,7 @@ impl PacketCapture {
         }
 
         let interface = self.get_interface()?;
-        let mut rx = self.create_receiver(&interface)?;
+        let rx = self.create_receiver(&interface)?;
 
         let pcap_path = self.config.save_to_file.clone();
         let mut pcap_writer = if let Some(ref path) = pcap_path {
@@ -197,16 +195,6 @@ impl PacketCapture {
         });
 
         loop {
-            tokio::select! {
-                biased;
-                _ = tokio::time::sleep(Duration::from_millis(50)) => {
-                    if !self.running.load(Ordering::SeqCst) {
-                        break;
-                    }
-                }
-                else => {}
-            }
-
             match rx_packet.try_recv() {
                 Ok(packet) => {
                     if !Self::packet_matches_filter(&packet, self.config.filter.as_deref()) {
@@ -235,6 +223,7 @@ impl PacketCapture {
                     if !self.running.load(Ordering::SeqCst) {
                         break;
                     }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
                 }
                 Err(crossbeam::channel::TryRecvError::Disconnected) => {
                     break;
@@ -395,6 +384,7 @@ impl PacketCapture {
 
         let config = datalink::Config {
             read_timeout: Some(self.config.timeout),
+            promiscuous: self.config.promiscuous,
             ..Default::default()
         };
 

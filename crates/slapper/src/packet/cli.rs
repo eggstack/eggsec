@@ -13,11 +13,11 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 #[cfg(all(feature = "packet-inspection", unix))]
-use pnet::datalink::{self, Channel::Ethernet, Config, NetworkInterface};
+use pnet::datalink::{self, Channel::Ethernet, Config, DataLinkReceiver, DataLinkSender, NetworkInterface};
 
 pub async fn handle_packet_capture(
     args: PacketCaptureArgs,
-    json: bool,
+    _json: bool,
 ) -> Result<(), anyhow::Error> {
     #[cfg(not(all(feature = "packet-inspection", unix)))]
     {
@@ -54,7 +54,7 @@ pub async fn handle_packet_capture(
 
         let (tx, mut rx) = mpsc::channel(100);
 
-        let mut capture = PacketCapture::new(config);
+        let capture = PacketCapture::new(config);
         let running = capture.running();
 
         let capture_handle = tokio::spawn(async move {
@@ -93,16 +93,21 @@ pub async fn handle_packet_send(args: PacketSendArgs, _json: bool) -> Result<(),
     use std::net::UdpSocket;
 
     let target: SocketAddr = args.target.parse()?;
-    let src_ip: IpAddr = args
+    let src_ip: Option<IpAddr> = args
         .src_ip
         .map(|s| s.parse())
-        .unwrap_or(Ok(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))))?;
+        .transpose()?;
 
     if args.icmp {
         #[cfg(all(feature = "packet-inspection", unix))]
         {
             if is_root() {
-                send_raw_icmp(&target, args.ttl.unwrap_or(64)).await?;
+                let src_ip = match src_ip {
+                    Some(IpAddr::V4(ip)) => Some(ip),
+                    Some(IpAddr::V6(_)) => None,
+                    None => None,
+                };
+                send_raw_icmp(&target, args.ttl.unwrap_or(64), src_ip).await?;
                 return Ok(());
             } else {
                 println!("Warning: ICMP with raw sockets requires root privileges.");
@@ -117,11 +122,12 @@ pub async fn handle_packet_send(args: PacketSendArgs, _json: bool) -> Result<(),
     }
 
     let packet_data = if args.icmp {
-        build_icmp_packet()
+        build_icmp_packet(src_ip)
     } else if args.udp {
-        build_udp_packet(args.src_port.unwrap_or(40000), target.port())
+        build_udp_packet(src_ip, args.src_port.unwrap_or(40000), target.port())
     } else {
         build_tcp_packet(
+            src_ip,
             args.src_port.unwrap_or(40000),
             target.port(),
             args.flags.as_deref(),
@@ -141,12 +147,16 @@ pub async fn handle_packet_send(args: PacketSendArgs, _json: bool) -> Result<(),
 }
 
 #[cfg(all(feature = "packet-inspection", unix))]
-async fn send_raw_icmp(target: &SocketAddr, ttl: u8) -> Result<(), anyhow::Error> {
-    use pnet::datalink::{self, Channel::Ethernet, Config, NetworkInterface};
+async fn send_raw_icmp(
+    target: &SocketAddr,
+    ttl: u8,
+    src_ip: Option<Ipv4Addr>,
+) -> Result<(), anyhow::Error> {
     use pnet::packet::icmp::echo_request::MutableEchoRequestPacket;
-    use pnet::packet::icmp::{IcmpCode, IcmpTypes};
+    use pnet::packet::icmp::{checksum as icmp_checksum, IcmpCode, IcmpPacket, IcmpTypes};
     use pnet::packet::ip::IpNextHeaderProtocols;
-    use pnet_packet::ipv4::MutableIpv4Packet;
+    use pnet_packet::ipv4::{checksum as ipv4_checksum, MutableIpv4Packet};
+    use pnet_packet::Packet;
     use rand::Rng;
 
     let target_ip = match target.ip() {
@@ -157,7 +167,7 @@ async fn send_raw_icmp(target: &SocketAddr, ttl: u8) -> Result<(), anyhow::Error
     let interface = find_network_interface()?;
     let (mut tx, _rx) = create_datalink_channel(&interface)?;
 
-    let src_ip = get_interface_ip(&interface)?;
+    let src_ip = src_ip.unwrap_or(get_interface_ip(&interface)?);
 
     let payload_size = 56;
     let mut rng = rand::thread_rng();
@@ -166,8 +176,9 @@ async fn send_raw_icmp(target: &SocketAddr, ttl: u8) -> Result<(), anyhow::Error
     let icmp_len = 8 + payload.len();
     let total_len = 20 + icmp_len;
     let mut buffer = vec![0u8; total_len];
+    let (ip_bytes, icmp_bytes) = buffer.split_at_mut(20);
 
-    let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[..20])
+    let mut ipv4_packet = MutableIpv4Packet::new(ip_bytes)
         .ok_or_else(|| anyhow!("Failed to create IPv4 packet"))?;
     ipv4_packet.set_version(4);
     ipv4_packet.set_header_length(5);
@@ -177,7 +188,7 @@ async fn send_raw_icmp(target: &SocketAddr, ttl: u8) -> Result<(), anyhow::Error
     ipv4_packet.set_source(src_ip);
     ipv4_packet.set_destination(target_ip);
 
-    let mut icmp_packet = MutableEchoRequestPacket::new(&mut buffer[20..])
+    let mut icmp_packet = MutableEchoRequestPacket::new(icmp_bytes)
         .ok_or_else(|| anyhow!("Failed to create ICMP packet"))?;
     icmp_packet.set_icmp_type(IcmpTypes::EchoRequest);
     icmp_packet.set_icmp_code(IcmpCode(0));
@@ -185,6 +196,17 @@ async fn send_raw_icmp(target: &SocketAddr, ttl: u8) -> Result<(), anyhow::Error
     icmp_packet.set_sequence_number(1);
     icmp_packet.set_payload(payload.as_slice());
     icmp_packet.set_checksum(0);
+
+    let icmp_view = IcmpPacket::new(icmp_packet.packet())
+        .ok_or_else(|| anyhow!("Failed to create ICMP checksum view"))?;
+    let icmp_checksum = icmp_checksum(&icmp_view);
+    icmp_packet.set_checksum(icmp_checksum);
+
+    let ipv4_checksum = ipv4_checksum(&ipv4_packet.to_immutable());
+    ipv4_packet.set_checksum(ipv4_checksum);
+
+    drop(icmp_packet);
+    drop(ipv4_packet);
 
     match tx.send_to(&buffer, Some(interface.clone())) {
         Some(Ok(_)) => {
@@ -214,13 +236,11 @@ fn create_datalink_channel(
     interface: &NetworkInterface,
 ) -> Result<
     (
-        Box<dyn datalink::DataLinkSender>,
-        Box<dyn datalink::DataLinkReceiver>,
+        Box<dyn DataLinkSender>,
+        Box<dyn DataLinkReceiver>,
     ),
     anyhow::Error,
 > {
-    use pnet::datalink::Channel::Ethernet;
-
     let config = Config::default();
     match datalink::channel(interface, config) {
         Ok(Ethernet(tx, rx)) => Ok((tx, rx)),
@@ -266,112 +286,83 @@ pub fn handle_packet_dump(args: PacketDumpArgs, json: bool) -> Result<(), anyhow
 fn dump_pcap(
     reader: &mut BufReader<File>,
     args: PacketDumpArgs,
-    json: bool,
+    _json: bool,
 ) -> Result<(), anyhow::Error> {
-    use std::io::Seek;
-
-    let mut header = [0u8; 24];
-    reader.read_exact(&mut header)?;
-
-    let magic = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
-    let is_nano = magic == 0xa1b23c4d || magic == 0xa1b2c3d4;
-
-    let packets: Vec<(u32, Vec<u8>)> = if is_nano { vec![] } else { vec![] };
-
-    reader.seek(std::io::SeekFrom::Start(24))?;
+    let pcap = read_pcap_records(reader)?;
 
     let bytes_per_line = args.bytes_per_line.unwrap_or(16);
     let max_count = args.count.unwrap_or(usize::MAX);
     let index = args.index;
 
-    let mut packet_data = Vec::new();
-    let mut count = 0;
+    let mut selected_packet: Option<Vec<u8>> = None;
 
-    loop {
-        let mut pkt_header = [0u8; 16];
-        match reader.read_exact(&mut pkt_header) {
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-            Err(e) => return Err(e.into()),
+    for (count, record) in pcap.iter().enumerate() {
+        if record.payload.len() > 65535 {
+            continue;
         }
-
-        let ts_sec =
-            u32::from_le_bytes([pkt_header[0], pkt_header[1], pkt_header[2], pkt_header[3]]);
-        let incl_len = u32::from_le_bytes([
-            pkt_header[12],
-            pkt_header[13],
-            pkt_header[14],
-            pkt_header[15],
-        ]);
-
-        if incl_len as usize > 65535 {
-            break;
-        }
-
-        let mut payload = vec![0u8; incl_len as usize];
-        reader.read_exact(&mut payload)?;
 
         if let Some(idx) = index {
             if count == idx {
-                packet_data = payload;
+                selected_packet = Some(record.payload.clone());
                 break;
             }
-        } else if count < max_count {
-            print!("\n=== Packet {} ===\n", count);
-            print!("Timestamp: {}\n", ts_sec);
-
-            if !args.hex_only {
-                if let Some(info) = parse_and_print_packet(&payload) {
-                    if args.headers_only {
-                        println!("{}", info);
-                    } else {
-                        println!("{}\n", info);
-                        println!(
-                            "{}",
-                            hexdump::hexdump_with_offset(&payload, 0, bytes_per_line)
-                        );
-                    }
-                } else {
-                    println!(
-                        "{}",
-                        hexdump::hexdump_with_offset(&payload, 0, bytes_per_line)
-                    );
-                }
-            } else {
-                println!(
-                    "{}",
-                    hexdump::hexdump_with_offset(&payload, 0, bytes_per_line)
-                );
-            }
+            continue;
         }
 
-        count += 1;
-    }
+        if count >= max_count {
+            break;
+        }
 
-    if let Some(idx) = index {
-        if !packet_data.is_empty() {
-            if !args.hex_only {
-                if let Some(info) = parse_and_print_packet(&packet_data) {
+        print!("\n=== Packet {} ===\n", count);
+        print!("Timestamp: {}\n", record.ts_sec);
+
+        if !args.hex_only {
+            if let Some(info) = parse_and_print_packet(&record.payload) {
+                if args.headers_only {
                     println!("{}", info);
+                } else {
+                    println!("{}\n", info);
                     println!(
-                        "\n{}",
-                        hexdump::hexdump_with_offset(&packet_data, 0, bytes_per_line)
+                        "{}",
+                        hexdump::hexdump_with_offset(&record.payload, 0, bytes_per_line)
                     );
                 }
             } else {
                 println!(
                     "{}",
+                    hexdump::hexdump_with_offset(&record.payload, 0, bytes_per_line)
+                );
+            }
+        } else {
+            println!(
+                "{}",
+                hexdump::hexdump_with_offset(&record.payload, 0, bytes_per_line)
+            );
+        }
+    }
+
+    if let Some(packet_data) = selected_packet {
+        if !args.hex_only {
+            if let Some(info) = parse_and_print_packet(&packet_data) {
+                println!("{}", info);
+                println!(
+                    "\n{}",
                     hexdump::hexdump_with_offset(&packet_data, 0, bytes_per_line)
                 );
             }
+        } else {
+            println!(
+                "{}",
+                hexdump::hexdump_with_offset(&packet_data, 0, bytes_per_line)
+            );
         }
     }
 
-    println!("\nTotal packets: {}", count);
+    println!("\nTotal packets: {}", pcap.len());
     Ok(())
 }
 
-fn dump_raw_packet(data: &[u8], args: PacketDumpArgs, json: bool) -> Result<(), anyhow::Error> {
+fn dump_raw_packet(data: &[u8], args: PacketDumpArgs, _json: bool) -> Result<(), anyhow::Error> {
     let bytes_per_line = args.bytes_per_line.unwrap_or(16);
 
     if let Some(idx) = args.index {
@@ -580,7 +571,12 @@ fn parse_and_print_packet(data: &[u8]) -> Option<String> {
     Some(output)
 }
 
-fn build_tcp_packet(src_port: u16, dst_port: u16, flags_str: Option<&str>) -> Vec<u8> {
+fn build_tcp_packet(
+    src_ip: Option<IpAddr>,
+    src_port: u16,
+    dst_port: u16,
+    flags_str: Option<&str>,
+) -> Vec<u8> {
     let mut flags = TcpFlags::syn();
 
     if let Some(f) = flags_str {
@@ -598,29 +594,91 @@ fn build_tcp_packet(src_port: u16, dst_port: u16, flags_str: Option<&str>) -> Ve
     }
 
     let packet = PacketBuilder::new()
-        .ipv4(Ipv4Addr::new(0, 0, 0, 0), Ipv4Addr::new(0, 0, 0, 0), 6, 64)
+        .ipv4(source_ipv4(src_ip), Ipv4Addr::new(0, 0, 0, 0), 6, 64)
         .tcp(src_port, dst_port, 1000, 0, flags, 65535)
         .build();
 
     packet
 }
 
-fn build_udp_packet(src_port: u16, dst_port: u16) -> Vec<u8> {
+fn build_udp_packet(src_ip: Option<IpAddr>, src_port: u16, dst_port: u16) -> Vec<u8> {
     let packet = PacketBuilder::new()
-        .ipv4(Ipv4Addr::new(0, 0, 0, 0), Ipv4Addr::new(0, 0, 0, 0), 17, 64)
+        .ipv4(source_ipv4(src_ip), Ipv4Addr::new(0, 0, 0, 0), 17, 64)
         .udp(src_port, dst_port)
         .build();
 
     packet
 }
 
-fn build_icmp_packet() -> Vec<u8> {
+fn build_icmp_packet(src_ip: Option<IpAddr>) -> Vec<u8> {
     let packet = PacketBuilder::new()
-        .ipv4(Ipv4Addr::new(0, 0, 0, 0), Ipv4Addr::new(0, 0, 0, 0), 1, 64)
+        .ipv4(source_ipv4(src_ip), Ipv4Addr::new(0, 0, 0, 0), 1, 64)
         .icmp(8, 0, 1, 1)
         .build();
 
     packet
+}
+
+fn source_ipv4(src_ip: Option<IpAddr>) -> Ipv4Addr {
+    match src_ip {
+        Some(IpAddr::V4(ip)) => ip,
+        _ => Ipv4Addr::new(0, 0, 0, 0),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PcapEndian {
+    Little,
+    Big,
+}
+
+#[derive(Debug, Clone)]
+struct PcapRecord {
+    ts_sec: u32,
+    payload: Vec<u8>,
+}
+
+fn read_pcap_records(reader: &mut BufReader<File>) -> Result<Vec<PcapRecord>, anyhow::Error> {
+    use std::io::Seek;
+
+    let mut header = [0u8; 24];
+    reader.read_exact(&mut header)?;
+
+    let endian = match &header[..4] {
+        [0xd4, 0xc3, 0xb2, 0xa1] | [0x4d, 0x3c, 0xb2, 0xa1] => PcapEndian::Little,
+        [0xa1, 0xb2, 0xc3, 0xd4] | [0xa1, 0xb2, 0x3c, 0x4d] => PcapEndian::Big,
+        _ => anyhow::bail!("Unsupported PCAP magic number"),
+    };
+
+    reader.seek(std::io::SeekFrom::Start(24))?;
+
+    let mut records = Vec::new();
+    loop {
+        let mut pkt_header = [0u8; 16];
+        match reader.read_exact(&mut pkt_header) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e.into()),
+        }
+
+        let ts_sec = read_u32(&pkt_header[0..4], endian);
+        let incl_len = read_u32(&pkt_header[8..12], endian) as usize;
+
+        let mut payload = vec![0u8; incl_len];
+        reader.read_exact(&mut payload)?;
+
+        records.push(PcapRecord { ts_sec, payload });
+    }
+
+    Ok(records)
+}
+
+fn read_u32(bytes: &[u8], endian: PcapEndian) -> u32 {
+    let arr = [bytes[0], bytes[1], bytes[2], bytes[3]];
+    match endian {
+        PcapEndian::Little => u32::from_le_bytes(arr),
+        PcapEndian::Big => u32::from_be_bytes(arr),
+    }
 }
 
 fn print_traceroute_result(result: &TracerouteResult, json: bool) {
@@ -667,5 +725,40 @@ fn print_traceroute_result(result: &TracerouteResult, json: bool) {
         println!("\nTrace complete.");
     } else {
         println!("\nTrace incomplete (destination not reached).");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Seek, Write};
+
+    #[test]
+    fn read_pcap_records_uses_incl_len() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let mut file = file.reopen().unwrap();
+
+        file.write_all(&[0xd4, 0xc3, 0xb2, 0xa1]).unwrap();
+        file.write_all(&2u16.to_le_bytes()).unwrap();
+        file.write_all(&4u16.to_le_bytes()).unwrap();
+        file.write_all(&0i32.to_le_bytes()).unwrap();
+        file.write_all(&0u32.to_le_bytes()).unwrap();
+        file.write_all(&65535u32.to_le_bytes()).unwrap();
+        file.write_all(&1u32.to_le_bytes()).unwrap();
+
+        file.write_all(&1u32.to_le_bytes()).unwrap();
+        file.write_all(&2u32.to_le_bytes()).unwrap();
+        file.write_all(&4u32.to_le_bytes()).unwrap();
+        file.write_all(&8u32.to_le_bytes()).unwrap();
+        file.write_all(&[0xaa, 0xbb, 0xcc, 0xdd]).unwrap();
+
+        file.seek(std::io::SeekFrom::Start(0)).unwrap();
+
+        let mut reader = BufReader::new(file);
+        let records = read_pcap_records(&mut reader).unwrap();
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].ts_sec, 1);
+        assert_eq!(records[0].payload, vec![0xaa, 0xbb, 0xcc, 0xdd]);
     }
 }
