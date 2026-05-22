@@ -71,7 +71,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 - `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `tui/app/tab_error.rs`
 - `SensitiveString` - Zeroized credential wrapper
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine
-- `PayloadType` - Enum of 30 payload categories
+- `PayloadType` - Enum of 31 payload categories
 - `AiClient` / `Provider` - AI LLM client and provider enum
 - `AiCache` / `CacheKeyBuilder` - TTL cache for AI responses
 - `SmartWafBypass` - WAF bypass with knowledge base
@@ -357,3 +357,45 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `slapper-nse/src/libraries/io.rs` | Missing `std::io::{Read, Write}` imports | Added imports |
 | `slapper-nse/src/libraries/ldap.rs` | Duplicate `std::io::{Read, Write}` import | Removed duplicate |
 | `slapper-nse/src/libraries/nmap.rs` | Duplicate `std::io::Write` import | Removed duplicate |
+
+## Architecture Review Findings (2026-05-28)
+
+The `architecture/review_plan.md` tracks ongoing architecture reviews. Key findings from completed reviews:
+
+### Recurring Issues Found
+1. **HashMap/HashSet vs FxHashMap/FxHashSet** - Still present in some files:
+   - `cli/report.rs:44-57` - HashMap usage
+   - `fuzzer/targets/api.rs` - Multiple HashMap usages (P1 priority)
+   - `slapper-nse/vulns.rs`, `rpc.rs`, `smbauth.rs`, `public_api/api.rs`, `creds.rs`
+2. **unwrap()/expect() calls** in production code:
+   - `planner.rs:208,469,482` - unwrap() on SystemTime
+   - `chain.rs:381` - LazyLock regex with unwrap()
+3. **Silent error suppression** - `unwrap_or_default()` in various places
+4. **Documentation discrepancies**:
+   - `config.md` - ScanConfig.profiles reference location wrong
+   - `waf/mod.rs` - Only lists 25 WAF products instead of 34
+   - `tui.md` - Key binding table shows `b` for toggle_bookmark but actual is `Ctrl+b`
+
+### Review Files
+All review outputs are in `plans/` directory:
+- `plans/ai_agents_review.md` - AI/agent module review
+- `plans/cli_commands_review.md` - CLI/commands review
+- `plans/config_review.md` - Config module review
+- `plans/distributed_review.md` - Distributed module review
+- `plans/fuzzer_review.md` - Fuzzer module review
+- `plans/loadtest_review.md` - Loadtest module review
+- `plans/networking_review.md` - Networking/packet module review
+- `plans/output_review.md` - Output module review
+- `plans/overview_review.md` - Overview review
+- `plans/pipeline_review.md` - Pipeline module review
+- `plans/plugins_nse_review.md` - Plugins/NSE module review
+- `plans/recon_review.md` - Recon module review
+- `plans/scanner_review.md` - Scanner module review
+- `plans/tui_review.md` - TUI module review
+- `plans/waf_review.md` - WAF module review
+
+### Key Patterns from Reviews
+- **Division by zero guard**: Always check `if self.stages.is_empty()` before division
+- **Scroll offset bounds**: Use `self.lines.is_empty()` check before calculating scroll_offset
+- **Arc::try_unwrap**: Use `map_err` instead of `.expect()` to avoid panic
+- **LazyLock regex**: Use `unwrap_or_else` instead of `.unwrap()` in LazyLock initialization
