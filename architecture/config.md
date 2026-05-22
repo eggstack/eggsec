@@ -37,7 +37,7 @@ The `Scope` struct is critical for security and compliance. It defines which tar
   - `AlertChannelsConfig.channels` (`settings.rs:21`)
   - `WebhookConfigEntry.headers` (`settings.rs:38`)
   - `HttpConfig.default_headers` (`http.rs:39`)
-  - `ScanConfig.profiles` (`settings.rs:109`)
+  - `SlapperConfig.profiles` (`settings.rs:109`)
   - `WebhookConfig.headers` (`scan.rs:132`)
 
 ### `Loader` (`loader.rs`)

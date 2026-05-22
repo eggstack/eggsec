@@ -32,7 +32,7 @@ All HashMap usages use `rustc_hash::FxHashMap` for performance:
 - `AlertChannelsConfig.channels`
 - `WebhookConfigEntry.headers`
 - `HttpConfig.default_headers`
-- `ScanConfig.profiles`
+- `SlapperConfig.profiles`
 
 ## Validation
 
