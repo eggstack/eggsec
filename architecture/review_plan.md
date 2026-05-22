@@ -1,143 +1,68 @@
-# Architecture Review Consolidated Implementation Plan
+# Architecture Review Plan
 
-**Status: Completed - 2026-05-06**
+Generated: 2026-05-22
 
-All plan items have been verified and implemented where possible. Deferred items are documented below.
+## Overview
 
----
+This plan organizes the review of architecture documents in the `architecture/` directory. Each module will be reviewed by a dedicated subagent that will:
+1. Read the architecture document
+2. Verify claims against the actual implementation in `crates/slapper/src/`
+3. Identify potential bugs, performance issues, and improvements
+4. Write an improvement plan to `plans/<module>_review.md`
 
-## Summary
+## Modules to Review
 
-| Wave | Items | Status |
-|------|-------|--------|
-| Wave 1 (Critical Bug Fixes) | 6 | ✅ All fixed |
-| Wave 2 (High Priority Improvements) | 6 | ⚠️ Partial - some items deferred |
-| Wave 3 (Medium Priority) | 4 | ⚠️ Partial - some items deferred |
-| Wave 4 (Documentation Cleanup) | 1 | ✅ Verified |
+| # | Architecture Document | Module Path | Review Output |
+|---|----------------------|-------------|---------------|
+| 1 | `ai_agents.md` | `crates/slapper/src/ai/` | `plans/ai_agents_review.md` |
+| 2 | `cli_commands.md` | `crates/slapper/src/cli/` | `plans/cli_commands_review.md` |
+| 3 | `config.md` | `crates/slapper/src/config/` | `plans/config_review.md` |
+| 4 | `distributed.md` | `crates/slapper/src/distributed/` | `plans/distributed_review.md` |
+| 5 | `fuzzer.md` | `crates/slapper/src/fuzzer/` | `plans/fuzzer_review.md` |
+| 6 | `loadtest.md` | `crates/slapper/src/loadtest/` | `plans/loadtest_review.md` |
+| 7 | `networking.md` | `crates/slapper/src/networking/` or `packet/` | `plans/networking_review.md` |
+| 8 | `output.md` | `crates/slapper/src/output/` | `plans/output_review.md` |
+| 9 | `overview.md` | Full codebase | `plans/overview_review.md` |
+| 10 | `pipeline.md` | `crates/slapper/src/pipeline/` | `plans/pipeline_review.md` |
+| 11 | `plugins_nse.md` | `slapper-nse/src/` | `plans/plugins_nse_review.md` |
+| 12 | `recon.md` | `crates/slapper/src/recon/` | `plans/recon_review.md` |
+| 13 | `scanner.md` | `crates/slapper/src/scanner/` | `plans/scanner_review.md` |
+| 14 | `tui.md` | `crates/slapper/src/tui/` | `plans/tui_review.md` |
+| 15 | `waf.md` | `crates/slapper/src/waf/` | `plans/waf_review.md` |
 
----
+## Review Methodology
 
-## Wave 1: Critical Security/Bug Fixes ✅
+For each module, the subagent should:
+1. **Read the architecture document** to understand the intended design
+2. **Identify key claims** - extract specific functionality, patterns, and behaviors described
+3. **Verify against code** - locate the implementation in the codebase and check if it matches
+4. **Check for bugs** - look for unwrap/expect calls, race conditions, error handling gaps
+5. **Check for performance** - look for HashMap/HashSet usage, missing FxHashMap/FxHashSet
+6. **Check for patterns** - verify traits, abstractions, and conventions are followed
+7. **Write improvement plan** - document findings, issues, and recommended fixes
 
-All 6 items implemented and verified:
+## Execution
 
-### 1.1 Networking - Checksum & Flood Fixes ✅
-- **IPv4 checksum**: Fixed in `packet/craft.rs:191-192` - now uses `calculate_ipv4_checksum()`
-- **UDP pseudo-header**: Fixed in `stress/udp.rs:93-98` - protocol byte at offset 9 (was 10)
+Subagents will be launched in parallel to maximize efficiency. Each subagent will:
+- Be given the full path to their architecture document
+- Be given the corresponding module path in the codebase
+- Write their output to the designated plans/ file
+- Return a summary of findings
 
-### 1.2 WAF - Bypass Detection Fixes ✅
-- **Success range**: Changed from `200..400` to `200..300` in `waf/bypass/mod.rs:131`
-- **Payload verification**: Added `payload_is_reflected()` check in `mod.rs:140-148`
-- **Cookie handling**: `get_all("set-cookie")` properly implemented in `detect.rs:52-55`
+## Status
 
-### 1.3 Distributed - Coordinator Fixes ✅
-- **Worker registration**: Added `RemoteClient::register_worker()` using proper TCP protocol
-- **Heartbeat**: Added `RemoteClient::send_heartbeat()` using proper TCP protocol
-- **Sender storage**: Fixed - sender now stored in `self.sender` instead of dropped
-
-### 1.4 Pipeline - Capability & Result Passing ✅
-- **Parallel execution**: Fixed - now uses `futures::future::join_all()` instead of sequential await
-- **Previous stage results**: Fixed - `request.params["results"] = previous_output` in parallel path
-
-### 1.5 Recon - SSL/CNAME Critical Fixes ✅
-- **CNAME query**: Implemented in `dns_records.rs:76-82`
-- **Certificate info extraction**: Implemented in `ssl.rs:105-175` - parses PEM data for subject, issuer, validity, serial
-
-### 1.6 Output - JSON/PDF Critical Fixes ✅
-- **convert_to_json()**: Exists at `convert.rs:155-157`
-- **PDF error handling**: Returns proper error when PDF feature disabled
-- **SARIF error propagation**: Fixed - now returns `Result<String, String>` with proper error
-
----
-
-## Wave 2: High-Priority Improvements ⚠️
-
-### 2.1 Scanner - Port/UDP/Timing Fixes ⚠️ Partial
-- **open_ports naming**: ✅ Already correct - filtering happens before struct creation
-- **UDP concurrency**: ✅ Fixed - uses `Semaphore::new(50)` with `tokio::spawn`
-- **TimingConfig usage**: ⚠️ Partial - defined and tested but not applied to actual scanning
-
-### 2.2 Fuzzer - Documentation Fixes ✅
-- **30 payload types**: ✅ Fixed - `fuzzer/mod.rs` now says "30 types" (was 22)
-- **diff.rs reference**: ✅ Already correct in `architecture/fuzzer.md`
-
-### 2.3 Config - Env Var Implementation ❌ Deferred
-- Environment variable overrides documented but not implemented
-- Would require breaking changes to config system
-
-### 2.4 Loadtest - Memory/Concurrency Fixes ❌ Deferred
-- Pre-spawning all handles: Low impact, would require significant refactoring
-- Progress bar thread safety: Low risk - `Arc<ProgressBar>` is `Send + Sync`
-- Latency on errors: Minor performance issue, not correctness bug
-
-### 2.5 CLI - WafStressArgs Fix ✅
-- GraphQL/OAuth fields now explicitly set to `false` in `WafStressArgs` conversion
-
-### 2.6 Plugin/NSE - Critical Fixes ✅
-- `discover_plugins()` properly instantiates Python plugins
-- Ruby require pattern and class extraction verified
-
----
-
-## Wave 3: Medium-Priority Improvements ⚠️
-
-### 3.1 TUI - Navigation & State Fixes ✅
-- All TUI navigation and input handling verified working
-- 209 TUI tests pass
-
-### 3.2 AI/Agent - Cache & Planner Fixes ✅
-- Cache key improved in `ai/planner.rs:98-108`
-- Empty plan fallback returns error when fallback disabled
-
-### 3.3 Networking - BPF/TLS Enhancements ⚠️ Deferred
-- **BPF filter**: `CaptureConfig.filter` field exists but not applied in capture loop
-- **TLS parsing**: Extracts type/version but not SNI or certificates
-- **DNS parsing**: Duplicate between `dns_parse.rs` and `parse_impl.rs:490-585`
-- These are enhancements beyond bug fixes - marked as known issues
-
-### 3.4 Output - CSV Schema Inconsistency ⚠️ Deferred
-- Three CSV schemas identified as known inconsistency:
-  1. `convert_to_csv()`: severity,category,title,location,description,cves
-  2. `CsvExporter::export_findings()`: Severity,Target,Path,Description,CVE,Remediation
-  3. `PipelineReport` has own schema
-- Standardizing would require breaking API changes - conservative approach taken
-
----
-
-## Wave 4: Documentation Cleanup ✅
-
-### Dead Code Verification ✅
-- `query_alexa()` - returns empty HashSet, stub
-- `check_zone_transfer()` - stub returning empty Vec
-- Docker scanning in `containers.rs` - stub
-- These are architectural decisions - removing would require significant refactoring
-
----
-
-## Deferred Items (No Action Required)
-
-These items are marked as deferred because:
-1. They represent architectural decisions rather than bugs
-2. Fixing them would require breaking API changes
-3. They have low security/functional impact
-4. Dead code warnings are handled by the compiler
-
-| Item | Reason |
-|------|--------|
-| Config env vars | Would break existing config system |
-| Loadtest memory pre-spawn | Low impact, complex refactor |
-| BPF filter not applied | Enhancement not bug fix |
-| TLS SNI extraction | Enhancement not bug fix |
-| DNS parsing duplicate | Would be breaking change |
-| CSV schema standardization | Would be breaking change |
-| Stub functions | Architectural decisions |
-
----
-
-## Verification
-
-All fixes verified with:
-```bash
-cargo test --lib -p slapper  # 1253 tests pass
-cargo check --lib -p slapper  # Compiles with warnings only
-```
+- [ ] ai_agents.md review
+- [ ] cli_commands.md review
+- [ ] config.md review
+- [ ] distributed.md review
+- [ ] fuzzer.md review
+- [ ] loadtest.md review
+- [ ] networking.md review
+- [ ] output.md review
+- [ ] overview.md review
+- [ ] pipeline.md review
+- [ ] plugins_nse.md review
+- [ ] recon.md review
+- [ ] scanner.md review
+- [ ] tui.md review
+- [ ] waf.md review
