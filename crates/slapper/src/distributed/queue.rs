@@ -10,7 +10,7 @@ pub struct Task {
     pub job_id: String,
     pub task_type: crate::distributed::TaskType,
     pub target: String,
-    pub payload: std::collections::HashMap<String, serde_json::Value>,
+    pub payload: FxHashMap<String, serde_json::Value>,
     #[serde(default)]
     pub worker_id: Option<String>,
     #[serde(default)]

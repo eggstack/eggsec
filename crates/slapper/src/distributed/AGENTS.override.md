@@ -71,6 +71,16 @@ fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
 | `queue.rs:57` | `dequeue()` ignored `worker_id` param and didn't set `assigned_at_secs` | Now properly tracks which worker owns task and when assigned |
 | `worker.rs:132-161` | Heartbeat used HTTP POST to non-existent REST API endpoint | Changed to use `RemoteClient::send_heartbeat()` via TCP line-based JSON |
 
+## Performance Improvements (2026-05-22)
+
+| File | HashMap Type | Reason |
+|------|-------------|--------|
+| `queue.rs:13` | `Task.payload` | Changed from `std::collections::HashMap` to `FxHashMap` for performance |
+| `command.rs:36` | `CommandMessage::Execute.env` | Changed from `HashMap` to `FxHashMap` for performance |
+| `remote.rs:30` | `RemoteListener.rate_limits` | Changed from `HashMap` to `FxHashMap` for performance |
+
+Note: `Task::payload` uses `#[serde(default)]` for backward compatibility with serialized data.
+
 ## Key Patterns
 
 ### Task Tracking

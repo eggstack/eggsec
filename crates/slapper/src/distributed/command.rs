@@ -1,5 +1,5 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::process::Stdio;
 use std::time::Instant;
 use tokio::process::Command;
@@ -33,7 +33,8 @@ pub enum CommandMessage {
         id: String,
         command: Vec<String>,
         timeout: Option<u64>,
-        env: Option<HashMap<String, String>>,
+        #[serde(default)]
+        env: Option<FxHashMap<String, String>>,
     },
     #[serde(rename = "register")]
     Register {
@@ -106,7 +107,7 @@ impl CommandExecutor {
     pub async fn execute(
         command: Vec<String>,
         timeout_secs: Option<u64>,
-        env: Option<HashMap<String, String>>,
+        env: Option<FxHashMap<String, String>>,
     ) -> Result<(String, u64), String> {
         if command.is_empty() {
             return Err("No command provided".to_string());

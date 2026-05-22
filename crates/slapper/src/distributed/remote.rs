@@ -1,5 +1,5 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ pub struct RemoteListener {
     psk: String,
     shutdown_tx: broadcast::Sender<()>,
     connections: Arc<RwLock<Vec<String>>>,
-    rate_limits: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
+    rate_limits: Arc<RwLock<FxHashMap<String, Vec<Instant>>>>,
     max_connections: usize,
     rate_limit: u32,
     ip_allowlist: Option<Vec<String>>,
@@ -41,7 +41,7 @@ impl RemoteListener {
             psk,
             shutdown_tx,
             connections: Arc::new(RwLock::new(Vec::new())),
-            rate_limits: Arc::new(RwLock::new(HashMap::new())),
+            rate_limits: Arc::new(RwLock::new(FxHashMap::default())),
             max_connections: MAX_CONNECTIONS,
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
@@ -55,7 +55,7 @@ impl RemoteListener {
             psk,
             shutdown_tx,
             connections: Arc::new(RwLock::new(Vec::new())),
-            rate_limits: Arc::new(RwLock::new(HashMap::new())),
+            rate_limits: Arc::new(RwLock::new(FxHashMap::default())),
             max_connections,
             rate_limit,
             ip_allowlist: None,
@@ -69,7 +69,7 @@ impl RemoteListener {
             psk,
             shutdown_tx,
             connections: Arc::new(RwLock::new(Vec::new())),
-            rate_limits: Arc::new(RwLock::new(HashMap::new())),
+            rate_limits: Arc::new(RwLock::new(FxHashMap::default())),
             max_connections: MAX_CONNECTIONS,
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: Some(allowlist),
@@ -86,7 +86,7 @@ impl RemoteListener {
             psk,
             shutdown_tx,
             connections: Arc::new(RwLock::new(Vec::new())),
-            rate_limits: Arc::new(RwLock::new(HashMap::new())),
+            rate_limits: Arc::new(RwLock::new(FxHashMap::default())),
             max_connections: MAX_CONNECTIONS,
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
@@ -125,7 +125,7 @@ impl RemoteListener {
     }
 
     async fn check_rate_limit(
-        rate_limits: &Arc<RwLock<HashMap<String, Vec<Instant>>>>,
+        rate_limits: &Arc<RwLock<FxHashMap<String, Vec<Instant>>>>,
         ip: &str,
         limit: u32,
     ) -> bool {
