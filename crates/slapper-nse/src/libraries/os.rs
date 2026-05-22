@@ -292,15 +292,6 @@ pub fn register_os_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
         lua.create_function(|_lua, _: ()| Ok(env::temp_dir().to_string_lossy().to_string()))?;
     nse_os.set("tmpdir", tmpdir_fn)?;
 
-    let getenv_fn2 = lua.create_function(move |_lua, name: String| {
-        if sandbox_enabled {
-            Ok(String::new())
-        } else {
-            Ok(env::var(&name).unwrap_or_default())
-        }
-    })?;
-    nse_os.set("getenv", getenv_fn2)?;
-
     let hostname_fn = lua.create_function(|_lua, _: ()| {
         Ok(hostname::get()
             .map(|h| h.to_string_lossy().to_string())

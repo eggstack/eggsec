@@ -80,7 +80,7 @@ pub struct SandboxConfig {
 
 ### NSE Libraries
 
-80+ NSE-style libraries are implemented including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `vulns`, and many more.
+164 NSE-style library modules implemented including: `stdnse`, `nmap`, `http`, `socket`, `io`, `os`, `lfs`, `dns`, `ssl`, `ssh`, `mysql`, `postgres`, `redis`, `mongodb`, `ldap`, `snmp`, `smb`, `smb2`, `vulns`, and many more. All located in `crates/slapper-nse/src/libraries/`.
 
 ### CVE Integration
 
@@ -96,3 +96,4 @@ The `vulns` library provides access to CVE databases:
 | Ruby `load_plugin()` had no timeout | Added `recv_timeout()` with 300s default |
 | Python plugin result truncation was silent | Now logs count of truncated findings |
 | UDP `sendto()` didn't validate sandbox | `connect_udp()` now checks host via `is_host_allowed()` |
+| Duplicate `getenv` registration in `os.rs` | Removed duplicate `getenv_fn2` at line 295-302 |

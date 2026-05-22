@@ -51,6 +51,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `packet/` | `crates/slapper/src/packet/` (uses pnet, pnet_packet for raw sockets) |
 | `loadtest/` | `crates/slapper/src/loadtest/` (uses FxHashMap, hdrhistogram) |
 | `pipeline/` | `crates/slapper/src/pipeline/` (sequential stage execution, session persistence) |
+| `nse/` | `crates/slapper-nse/` (Lua VM, NSE libraries, sandbox, CVE integration) |
 
 ### Feature Flags
 
@@ -145,6 +146,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `slapper-plugin/src/python.rs:451-475` | Python plugin result truncation silently discarded findings | Now logs count of truncated findings with check name |
 | `slapper-nse/src/libraries/socket.rs:98-139` | UDP `connect_udp()` sandbox check was implemented correctly | NSE socket sandbox is fully enforced for all UDP operations |
 | `slapper-nse/src/libraries/socket.rs:514-543` | `sendto()` called `connect_udp()` which validates sandbox | UDP sendto is now sandboxed via `connect_udp()` host check |
+| `slapper-nse/src/libraries/os.rs:295-302` | Duplicate `getenv` registration in os library | Removed duplicate `getenv_fn2` |
 | `recon/cve.rs:31` | `CveMapper.cache` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `recon/geolocation.rs:27` | `LOCAL_IP_DATA` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `recon/wayback.rs:86` | `WaybackClient.endpoints` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |
@@ -184,6 +186,7 @@ Skills are located in:
 - `.opencode/skills/slapper-scanner/` - Scanner module workflows
 - `.opencode/skills/slapper-security/` - Security testing skill workflows
 - `.opencode/skills/slapper-stress/` - Stress module workflows
+- `.opencode/skills/slapper-nse/` - NSE/Lua module workflows
 - `.opencode/skills/slapper-packet/` - Packet capture/crafting/parsing workflows
 - `.opencode/skills/slapper-loadtest/` - Loadtest module workflows
 - `.opencode/skills/slapper-pipeline/` - Pipeline module workflows
