@@ -318,6 +318,7 @@ Skills are located in:
 - `.opencode/skills/slapper-tool/` - Tool module workflows
 - `.opencode/skills/slapper-tui/` - TUI module workflows
 - `.opencode/skills/slapper-waf/` - WAF module workflows
+- `.opencode/skills/slapper-architecture-review/` - Architecture document review workflows
 - `.opencode/skills/tui-testing/` - TUI testing patterns and guides
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
