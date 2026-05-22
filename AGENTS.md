@@ -50,7 +50,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `distributed/` | `crates/slapper/src/distributed/AGENTS.override.md` |
 | `packet/` | `crates/slapper/src/packet/` (uses pnet, pnet_packet for raw sockets) |
 | `loadtest/` | `crates/slapper/src/loadtest/` (uses FxHashMap, hdrhistogram) |
-| `pipeline/` | `crates/slapper/src/pipeline/` (sequential stage execution, session persistence) |
+| `pipeline/` | `crates/slapper/src/pipeline/AGENTS.override.md` |
 | `nse/` | `crates/slapper-nse/` (Lua VM, NSE libraries, sandbox, CVE integration) |
 
 ### Feature Flags
@@ -160,6 +160,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `output/pdf.rs:134` | `generate_html` had clippy warning | Added `#[allow(dead_code)]` |
 | `pipeline/mod.rs:240-248` | `resume_cli()` didn't return error on failed stages | Now returns `ScanFailed` error like `run_cli()` |
 | `pipeline/executor.rs:444-445` | `run_load_test()` ignored config, used default TLS settings | Changed to `LoadTestRunner::from_args_with_config()` |
+| `pipeline/context.rs:12` | `PipelineContext.services` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `slapper-ruby/src/bridge.rs:83-93` | `load_plugin()` used blocking `rx.recv()` with no timeout | Changed to `recv_timeout()` with `DEFAULT_TIMEOUT_SECS` (300s) |
 | `slapper-ruby/src/lib.rs:33-43` | `RubyPlugin` didn't capture `author`/`description` metadata | Added `new_with_meta()` to extract plugin metadata |
 | `slapper-plugin/src/python.rs:451-475` | Python plugin result truncation silently discarded findings | Now logs count of truncated findings with check name |

@@ -59,7 +59,7 @@ Persists inter-stage state:
 pub struct PipelineContext {
     pub target: String,
     pub open_ports: Vec<u16>,
-    pub services: HashMap<u16, ServiceFingerprint>,
+    pub services: FxHashMap<u16, ServiceFingerprint>,  // Line 12
     pub endpoints: Vec<EndpointResult>,
     pub port_results: Vec<PortResult>,
     pub http_ports: Vec<u16>,
@@ -108,6 +108,12 @@ execute_stage() → match Stage:
 2. **Context sharing** via `Arc<Mutex<PipelineContext>>`
 3. **Session persistence** only when output path is session-like
 4. **No verify_tls in FuzzArgs** - use `common.insecure` flag instead
+5. **Hash Collections**: Always use `FxHashMap` from `rustc_hash` instead of `std::collections::HashMap`
+
+## Override File
+
+For specialized guidance, see:
+- `crates/slapper/src/pipeline/AGENTS.override.md` - Performance patterns, bug fixes
 
 ## Testing
 

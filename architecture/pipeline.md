@@ -53,7 +53,7 @@ Maintains the state of a running pipeline, including intermediate results, share
 pub struct PipelineContext {
     pub target: String,
     pub open_ports: Vec<u16>,
-    pub services: HashMap<u16, ServiceFingerprint>,
+    pub services: FxHashMap<u16, ServiceFingerprint>,
     pub endpoints: Vec<EndpointResult>,
     pub port_results: Vec<PortResult>,
     pub http_ports: Vec<u16>,
@@ -97,6 +97,7 @@ Session checkpoints are written only when output path is explicitly a session-li
 |-------|-----|
 | `resume_cli()` didn't return error on failed stages | Now returns `ScanFailed` error like `run_cli()` |
 | `run_load_test()` ignored config, used default TLS settings | Changed to `LoadTestRunner::from_args_with_config()` |
+| `PipelineContext.services` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 
 ## Key Files
 

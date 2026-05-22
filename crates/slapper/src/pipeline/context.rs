@@ -1,5 +1,5 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use crate::scanner::endpoints::EndpointResult;
 use crate::scanner::fingerprint::ServiceFingerprint;
@@ -9,7 +9,7 @@ use crate::scanner::ports::PortResult;
 pub struct PipelineContext {
     pub target: String,
     pub open_ports: Vec<u16>,
-    pub services: HashMap<u16, ServiceFingerprint>,
+    pub services: FxHashMap<u16, ServiceFingerprint>,
     pub endpoints: Vec<EndpointResult>,
     pub port_results: Vec<PortResult>,
     pub http_ports: Vec<u16>,
