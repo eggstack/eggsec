@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -14,7 +15,7 @@ pub struct Alert {
 pub struct WebhookConfig {
     pub url: String,
     pub secret: Option<crate::types::SensitiveString>,
-    pub headers: std::collections::HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
 }
 
 impl Default for WebhookConfig {
@@ -22,7 +23,7 @@ impl Default for WebhookConfig {
         Self {
             url: String::new(),
             secret: None,
-            headers: std::collections::HashMap::new(),
+            headers: FxHashMap::default(),
         }
     }
 }
@@ -59,7 +60,7 @@ pub enum AlertChannel {
 #[derive(Debug, Clone)]
 pub struct AggregatedAlert {
     pub total_count: usize,
-    pub severity_counts: std::collections::HashMap<String, usize>,
+    pub severity_counts: FxHashMap<String, usize>,
     pub all_finding_ids: Vec<String>,
     pub affected_targets: Vec<String>,
     pub max_severity: String,
@@ -106,12 +107,12 @@ pub struct AlertTemplate {
 pub struct SlackTemplate {
     pub title_format: String,
     pub body_format: String,
-    pub color_by_severity: std::collections::HashMap<String, String>,
+    pub color_by_severity: FxHashMap<String, String>,
 }
 
 impl SlackTemplate {
     pub fn default_templates() -> Self {
-        let mut colors = std::collections::HashMap::new();
+        let mut colors = FxHashMap::default();
         colors.insert("critical".to_string(), "#dc3545".to_string());
         colors.insert("high".to_string(), "#fd7e14".to_string());
         colors.insert("medium".to_string(), "#ffc107".to_string());
@@ -156,12 +157,12 @@ pub struct SlackFormattedAlert {
 
 #[derive(Debug, Clone)]
 pub struct PagerDutyTemplate {
-    pub severity_mapping: std::collections::HashMap<String, String>,
+    pub severity_mapping: FxHashMap<String, String>,
 }
 
 impl PagerDutyTemplate {
     pub fn default_template() -> Self {
-        let mut mapping = std::collections::HashMap::new();
+        let mut mapping = FxHashMap::default();
         mapping.insert("critical".to_string(), "critical".to_string());
         mapping.insert("high".to_string(), "error".to_string());
         mapping.insert("medium".to_string(), "warning".to_string());

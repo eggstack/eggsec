@@ -99,6 +99,18 @@ Changed `std::collections::HashMap` to `rustc_hash::FxHashMap` for:
 - `AiPlanner.learning_cache` - Learning cache for plan outcomes
 - `PlanOutcome.severity_distribution` - Severity distribution tracking
 
+## Agent Module FxHashMap Migration (2026-05-22)
+
+The agent module also migrated to FxHashMap for performance:
+- `AlertRouter.recent_alerts`, `ChannelRegistry.channels`
+- `AlertRouter::aggregate_findings` severity_counts and targets
+- `AlertRouter::generate_recommendations` vuln_types
+- `WebhookConfig.headers`, `AggregatedAlert.severity_counts`
+- `SlackTemplate.color_by_severity`, `PagerDutyTemplate.severity_mapping`
+- `ScanCompleteEvent.severity_counts`
+- `LongitudinalMemory` internal collections
+- `PortfolioSnapshot.findings_by_severity`, `TemporalAnalysis.findings_by_day`
+
 ## Resources
 - `crates/slapper/src/ai/AGENTS.override.md` - Detailed AI patterns and bug fixes
 - `AGENTS.md` - General project guidelines

@@ -121,6 +121,12 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `ai/planner.rs` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance in learning_cache and PlanOutcome |
 | `agent/alerts/routing.rs:81` | `expect()` on fallback HTTP client could panic | Propagate error via `?` instead |
 | `agent/alerts/routing.rs:107-112` | Race condition in `cleanup_stale_entries` | Inline cleanup under single lock scope |
+| `agent/alerts/routing.rs:107` | `dedup_key` used before assignment in `send()` | Moved dedup_key computation before channels_to_send |
+| `agent/alerts/routing.rs` | Multiple `HashMap`/`HashSet` used instead of `FxHashMap`/`FxHashSet` | Changed to FxHashMap/FxHashSet for performance |
+| `agent/channels.rs` | Multiple `HashMap` used instead of `FxHashMap` | Changed to FxHashMap for performance in WebhookConfig, AggregatedAlert, SlackTemplate, PagerDutyTemplate |
+| `agent/events.rs` | `ScanCompleteEvent.severity_counts` used `HashMap` | Changed to FxHashMap for performance |
+| `agent/memory.rs` | Multiple `HashMap`/`HashSet` used instead of `FxHashMap`/`FxHashSet` | Changed to FxHashMap/FxHashSet for performance in LongitudinalMemory, PortfolioSnapshot, TemporalAnalysis |
+| `agent/mod.rs` | `severity_counts` in test events used `HashMap` | Changed to FxHashMap::default() for performance |
 | `agent/memory.rs:137` | `unwrap()` on `file_stem()` could panic for hidden files | Added fallback hash-based name |
 | `agent/mod.rs:657` | Silent error suppression with `unwrap_or_default()` | Log warning with `unwrap_or_else()` |
 | `commands/handlers/auth_test.rs:10` | Missing scope validation for auth-test command | Added `ctx.ensure_scope_url(&args.target)?` |

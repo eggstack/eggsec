@@ -54,6 +54,15 @@ Key fields on `ScheduledTask`:
 - Validates ALL resolved IPs (not just first) to prevent DNS rebinding bypass
 - Use `validate_callback_url_with_resolver(url, resolver)` for testable fake DNS
 
+## Performance Optimizations
+
+All agent module collections use `rustc_hash::FxHashMap` and `FxHashSet` for performance:
+- `AlertRouter.recent_alerts` and `ChannelRegistry.channels`
+- `LongitudinalMemory.target_locks`
+- `ScanRecord.severity_counts`
+- `AggregatedAlert.severity_counts`
+- `PortfolioSnapshot.findings_by_severity`
+
 ## Testable Seams
 - `ScanDispatcherTrait` — mock dispatch: `Box::new(MockDispatcher { response: Arc::new(Mutex::new(...)) })`
 - `AlertSenderTrait` — mock alert: `Box::new(MockAlertSender { sent_alerts: Arc::new(Mutex::new(vec![])) })`

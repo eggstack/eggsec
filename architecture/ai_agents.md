@@ -107,7 +107,13 @@ Slapper implements the **Model Context Protocol (MCP)**, allowing it to be used 
 ### Agent Module
 1. **alerts/routing.rs:81** - Removed `expect()` panic on fallback HTTP client creation
 2. **alerts/routing.rs:107-112** - Fixed race condition in `cleanup_stale_entries` by inlining cleanup under single lock scope
-3. **memory.rs:137** - Added fallback hash-based name when `file_stem()` returns None
-4. **mod.rs:657** - Changed `unwrap_or_default()` to `unwrap_or_else()` with warning log
+3. **alerts/routing.rs:117** - Fixed `dedup_key` used before assignment by moving computation before channels_to_send
+4. **alerts/routing.rs** - Changed `HashMap`/`HashSet` to `FxHashMap`/`FxHashSet` for performance (ChannelRegistry.channels, recent_alerts, severity_counts, targets, vuln_types)
+5. **channels.rs** - Changed `HashMap` to `FxHashMap` for performance (WebhookConfig.headers, AggregatedAlert.severity_counts, SlackTemplate.color_by_severity, PagerDutyTemplate.severity_mapping)
+6. **events.rs** - Changed `ScanCompleteEvent.severity_counts` to `FxHashMap`
+7. **memory.rs** - Changed `HashMap`/`HashSet` to `FxHashMap`/`FxHashSet` for performance (ScanSummary, LongitudinalMemory.target_locks, PortfolioSnapshot, TemporalAnalysis)
+8. **mod.rs** - Changed test event `severity_counts` to `FxHashMap::default()`
+9. **memory.rs:137** - Added fallback hash-based name when `file_stem()` returns None
+10. **mod.rs:657** - Changed `unwrap_or_default()` to `unwrap_or_else()` with warning log
 
 See `crates/slapper/src/ai/AGENTS.override.md` for detailed AI patterns and `crates/slapper/src/agent/AGENTS.override.md` for agent patterns.

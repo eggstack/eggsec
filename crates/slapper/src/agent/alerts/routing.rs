@@ -1,4 +1,6 @@
 use parking_lot::Mutex;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -16,13 +18,13 @@ type HmacSha256 = Hmac<Sha256>;
 
 /// Registry mapping channel names to AlertChannel definitions
 pub struct ChannelRegistry {
-    channels: std::collections::HashMap<String, AlertChannel>,
+    channels: FxHashMap<String, AlertChannel>,
 }
 
 impl ChannelRegistry {
     pub fn new() -> Self {
         Self {
-            channels: std::collections::HashMap::new(),
+            channels: FxHashMap::default(),
         }
     }
 
@@ -54,7 +56,7 @@ impl Default for ChannelRegistry {
 
 pub struct AlertRouter {
     registry: Arc<Mutex<ChannelRegistry>>,
-    recent_alerts: Arc<Mutex<std::collections::HashMap<String, Instant>>>,
+    recent_alerts: Arc<Mutex<FxHashMap<String, Instant>>>,
     dedup_window_secs: u64,
     client: reqwest::Client,
 }
@@ -79,7 +81,7 @@ impl AlertRouter {
 
         Ok(Self {
             registry: Arc::new(Mutex::new(ChannelRegistry::new())),
-            recent_alerts: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            recent_alerts: Arc::new(Mutex::new(FxHashMap::default())),
             dedup_window_secs: 300,
             client,
         })
@@ -88,7 +90,7 @@ impl AlertRouter {
     fn default() -> Self {
         Self {
             registry: Arc::new(Mutex::new(ChannelRegistry::new())),
-            recent_alerts: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            recent_alerts: Arc::new(Mutex::new(FxHashMap::default())),
             dedup_window_secs: 300,
             client: reqwest::Client::new(),
         }
@@ -170,7 +172,7 @@ impl AlertRouter {
                 let webhook_config = WebhookConfig {
                     url: config.webhook_url.clone(),
                     secret: None,
-                    headers: std::collections::HashMap::new(),
+                    headers: FxHashMap::default(),
                 };
                 self.send_webhook(&webhook_config, alert).await?;
             }
@@ -345,10 +347,10 @@ impl AlertRouter {
     }
 
     pub async fn aggregate_findings(&self, alerts: &[Alert]) -> AggregatedAlert {
-        let mut severity_counts: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
+        let mut severity_counts: FxHashMap<String, usize> =
+            FxHashMap::default();
         let mut all_finding_ids = Vec::new();
-        let mut targets: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut targets: FxHashSet<String> = FxHashSet::default();
 
         for alert in alerts {
             *severity_counts
@@ -432,7 +434,7 @@ impl AlertRouter {
     fn generate_recommendations(&self, findings: &[crate::tool::response::Finding]) -> Vec<String> {
         let mut recommendations = Vec::new();
 
-        let mut vuln_types: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut vuln_types: FxHashSet<String> = FxHashSet::default();
         for finding in findings {
             vuln_types.insert(format!("{:?}", finding.finding_type));
         }

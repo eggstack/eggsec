@@ -3,6 +3,7 @@
 //! Provides event handling for security events like scan completions,
 //! new findings, threshold violations, and external webhooks.
 
+use rustc_hash::FxHashMap;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -28,7 +29,7 @@ pub struct ScanCompleteEvent {
     pub scan_type: String,
     pub timestamp: DateTime<Utc>,
     pub findings_count: usize,
-    pub severity_counts: std::collections::HashMap<String, usize>,
+    pub severity_counts: FxHashMap<String, usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -146,7 +147,7 @@ mod tests {
             scan_type: "recon".to_string(),
             timestamp: Utc::now(),
             findings_count: 5,
-            severity_counts: std::collections::HashMap::new(),
+            severity_counts: FxHashMap::default(),
         });
 
         assert_eq!(event.event_type(), EventType::ScanComplete);

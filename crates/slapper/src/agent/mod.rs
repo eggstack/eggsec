@@ -28,6 +28,7 @@ use std::time::Duration;
 use anyhow::Result;
 use chrono::{DateTime, Timelike, Utc};
 use futures::FutureExt;
+use rustc_hash::FxHashMap;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
@@ -474,7 +475,7 @@ impl Agent {
                     if let Ok(ref response) = result {
                         let findings = self.process_findings(response);
 
-                        let mut severity_counts = std::collections::HashMap::new();
+                        let mut severity_counts = FxHashMap::default();
                         for finding in &findings {
                             let key = format!("{:?}", finding.severity);
                             *severity_counts.entry(key).or_insert(0) += 1;
@@ -998,7 +999,7 @@ mod tests {
             scan_type: "recon".to_string(),
             timestamp: Utc::now(),
             findings_count: 0,
-            severity_counts: std::collections::HashMap::new(),
+            severity_counts: FxHashMap::default(),
         });
         agent.trigger_event(event).await.unwrap();
 
@@ -1035,7 +1036,7 @@ mod tests {
             scan_type: "recon".to_string(),
             timestamp: Utc::now(),
             findings_count: 0,
-            severity_counts: std::collections::HashMap::new(),
+            severity_counts: FxHashMap::default(),
         });
         let result = agent.trigger_event(event).await;
 
@@ -1075,7 +1076,7 @@ mod tests {
             scan_type: "recon".to_string(),
             timestamp: Utc::now(),
             findings_count: 0,
-            severity_counts: std::collections::HashMap::new(),
+            severity_counts: FxHashMap::default(),
         });
         let result = agent.trigger_event(event).await;
 
@@ -1098,7 +1099,7 @@ mod tests {
             scan_type: "recon".to_string(),
             timestamp: Utc::now(),
             findings_count: 0,
-            severity_counts: std::collections::HashMap::new(),
+            severity_counts: FxHashMap::default(),
         });
         let result2 = agent.trigger_event(event2).await;
         assert!(

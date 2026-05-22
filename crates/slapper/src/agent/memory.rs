@@ -3,7 +3,8 @@
 //! Provides persistent storage of scan results, findings, and pattern detection
 //! across multiple scans of the same targets.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -32,14 +33,14 @@ pub struct ScanMemory {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScanSummary {
     pub total_findings: usize,
-    pub by_severity: HashMap<String, usize>,
-    pub by_type: HashMap<String, usize>,
+    pub by_severity: FxHashMap<String, usize>,
+    pub by_type: FxHashMap<String, usize>,
 }
 
 impl ScanSummary {
     pub fn from_findings(findings: &[Finding]) -> Self {
-        let mut by_severity: HashMap<String, usize> = HashMap::new();
-        let mut by_type: HashMap<String, usize> = HashMap::new();
+        let mut by_severity: FxHashMap<String, usize> = FxHashMap::default();
+        let mut by_type: FxHashMap<String, usize> = FxHashMap::default();
 
         for finding in findings {
             *by_severity
@@ -91,7 +92,7 @@ pub struct LongitudinalMemory {
     storage_dir: PathBuf,
     max_scans_per_target: Option<usize>,
     // Locks for concurrent access
-    target_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    target_locks: Mutex<FxHashMap<String, Arc<Mutex<()>>>>,
     alerted_lock: Mutex<()>,
     snapshot_lock: Mutex<()>,
     patterns_lock: Mutex<()>,
@@ -120,7 +121,7 @@ impl LongitudinalMemory {
         Ok(Self {
             storage_dir,
             max_scans_per_target: max_scans,
-            target_locks: Mutex::new(HashMap::new()),
+            target_locks: Mutex::new(FxHashMap::default()),
             alerted_lock: Mutex::new(()),
             snapshot_lock: Mutex::new(()),
             patterns_lock: Mutex::new(()),
@@ -264,9 +265,9 @@ impl LongitudinalMemory {
         let _lock = self.snapshot_lock.lock().await;
         let targets_dir = self.storage_dir.join("targets");
 
-        let mut unique_targets: HashSet<String> = HashSet::new();
+        let mut unique_targets: FxHashSet<String> = FxHashSet::default();
         let mut total_scans = 0;
-        let mut findings_by_severity: HashMap<String, usize> = HashMap::new();
+        let mut findings_by_severity: FxHashMap<String, usize> = FxHashMap::default();
         let mut today_scans = 0;
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
@@ -316,7 +317,7 @@ impl LongitudinalMemory {
         };
 
         let mut findings_trend: Vec<(String, usize)> = Vec::new();
-        let mut monthly_counts: HashMap<String, usize> = HashMap::new();
+        let mut monthly_counts: FxHashMap<String, usize> = FxHashMap::default();
 
         if targets_dir.exists() {
             let mut entries = fs::read_dir(&targets_dir).await?;
@@ -450,7 +451,7 @@ impl LongitudinalMemory {
 
     async fn detect_and_record_patterns(&self, _target: &str, memory: &TargetMemory) -> Result<()> {
         let _lock = self.patterns_lock.lock().await;
-        let mut patterns: HashMap<String, PatternEntry> = HashMap::new();
+        let mut patterns: FxHashMap<String, PatternEntry> = FxHashMap::default();
 
         for scan in &memory.scans {
             for finding in &scan.findings {
@@ -533,7 +534,7 @@ impl LongitudinalMemory {
     }
 
     pub async fn detect_cross_target_patterns(&self) -> Result<Vec<CrossTargetPattern>> {
-        let mut patterns: HashMap<String, CrossTargetPatternBuilder> = HashMap::new();
+        let mut patterns: FxHashMap<String, CrossTargetPatternBuilder> = FxHashMap::default();
         let targets_dir = self.storage_dir.join("targets");
 
         if !targets_dir.exists() {
@@ -595,8 +596,8 @@ impl LongitudinalMemory {
     pub async fn analyze_temporal_patterns(&self, target: &str) -> Result<TemporalAnalysis> {
         let history = self.get_target_history(target).await?;
 
-        let mut findings_by_day: HashMap<String, Vec<&Finding>> = HashMap::new();
-        let mut severity_trend: Vec<(String, HashMap<String, usize>)> = Vec::new();
+        let mut findings_by_day: FxHashMap<String, Vec<&Finding>> = FxHashMap::default();
+        let mut severity_trend: Vec<(String, FxHashMap<String, usize>)> = Vec::new();
 
         for scan in &history {
             let day = scan.timestamp.format("%Y-%m-%d").to_string();
@@ -608,7 +609,7 @@ impl LongitudinalMemory {
         }
 
         let mut current_day = String::new();
-        let mut current_counts: HashMap<String, usize> = HashMap::new();
+        let mut current_counts: FxHashMap<String, usize> = FxHashMap::default();
 
         let mut sorted_days: Vec<String> = findings_by_day.keys().cloned().collect();
         sorted_days.sort();
@@ -618,10 +619,10 @@ impl LongitudinalMemory {
                 current_day = day.clone();
             }
 
-            let day_severities: HashMap<String, usize> =
+            let day_severities: FxHashMap<String, usize> =
                 findings_by_day[&day]
                     .iter()
-                    .fold(HashMap::new(), |mut acc, f| {
+                    .fold(FxHashMap::default(), |mut acc, f| {
                         *acc.entry(f.severity.as_str().to_string()).or_insert(0) += 1;
                         acc
                     });
@@ -720,7 +721,7 @@ impl From<CrossTargetPatternBuilder> for CrossTargetPattern {
 #[derive(Clone, Debug)]
 pub struct TemporalAnalysis {
     pub target: String,
-    pub findings_by_day: Vec<(String, HashMap<String, usize>)>,
+    pub findings_by_day: Vec<(String, FxHashMap<String, usize>)>,
     pub total_scans: usize,
 }
 
@@ -736,7 +737,7 @@ pub struct PortfolioSnapshot {
     pub unique_targets: usize,
     pub total_scans: usize,
     pub scans_today: usize,
-    pub findings_by_severity: HashMap<String, usize>,
+    pub findings_by_severity: FxHashMap<String, usize>,
     pub findings_trend: Vec<(String, usize)>,
     pub critical_findings: usize,
     pub health_score: f64,
@@ -748,7 +749,7 @@ impl Default for LongitudinalMemory {
         Self {
             storage_dir: PathBuf::from("~/.config/slapper/memory"),
             max_scans_per_target: None,
-            target_locks: Mutex::new(HashMap::new()),
+            target_locks: Mutex::new(FxHashMap::default()),
             alerted_lock: Mutex::new(()),
             snapshot_lock: Mutex::new(()),
             patterns_lock: Mutex::new(()),
