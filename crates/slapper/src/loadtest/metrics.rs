@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use crate::utils::preserve_all;
 use hdrhistogram::Histogram;
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ pub struct LoadTestResults {
     pub latency_p90_ms: f64,
     pub latency_p95_ms: f64,
     pub latency_p99_ms: f64,
-    pub status_codes: std::collections::HashMap<u16, u64>,
+    pub status_codes: FxHashMap<u16, u64>,
     pub errors: Vec<String>,
 }
 
@@ -64,7 +65,7 @@ pub struct Metrics {
     histogram: Histogram<u64>,
     pub successful: u64,
     pub failed: u64,
-    pub status_codes: std::collections::HashMap<u16, u64>,
+    pub status_codes: FxHashMap<u16, u64>,
     pub errors: Vec<String>,
     target_url: String,
 }
@@ -75,7 +76,7 @@ impl Metrics {
             histogram: Histogram::new(3).expect("Failed to create histogram"),
             successful: 0,
             failed: 0,
-            status_codes: std::collections::HashMap::new(),
+            status_codes: FxHashMap::default(),
             errors: Vec::new(),
             target_url,
         }
@@ -83,14 +84,14 @@ impl Metrics {
 
     pub fn record_success(&mut self, latency: Duration, status_code: u16) {
         let latency_ms = latency.as_millis() as u64;
-        self.histogram.record(latency_ms).ok();
+        let _ = self.histogram.record(latency_ms);
         self.successful += 1;
         *self.status_codes.entry(status_code).or_insert(0) += 1;
     }
 
     pub fn record_http_response(&mut self, latency: Duration, status_code: u16) {
         let latency_ms = latency.as_millis() as u64;
-        self.histogram.record(latency_ms).ok();
+        let _ = self.histogram.record(latency_ms);
         *self.status_codes.entry(status_code).or_insert(0) += 1;
 
         if (200..400).contains(&status_code) {

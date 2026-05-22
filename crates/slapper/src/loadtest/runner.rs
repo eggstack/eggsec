@@ -141,31 +141,7 @@ impl LoadTestRunner {
             self.user_agent = ua;
         }
 
-        if let Some(auth) = common.auth {
-            let parts: Vec<&str> = auth.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                let encoded =
-                    general_purpose::STANDARD.encode(format!("{}:{}", parts[0], parts[1]));
-                self.add_header("Authorization".to_string(), format!("Basic {}", encoded));
-            }
-        }
-
-        if let Some(bearer) = common.bearer {
-            self.add_header("Authorization".to_string(), format!("Bearer {}", bearer));
-        }
-
-        if let Some(cookie) = common.cookie {
-            self.add_header("Cookie".to_string(), cookie);
-        }
-
-        if let Some(api_key) = common.api_key {
-            if api_key.contains(':') {
-                let parts: Vec<&str> = api_key.splitn(2, ':').collect();
-                self.add_header(parts[0].to_string(), parts[1].to_string());
-            } else {
-                self.add_header("X-API-Key".to_string(), api_key);
-            }
-        }
+        self.apply_auth_headers(common.auth, common.bearer, common.cookie, common.api_key);
     }
 
     pub fn set_common_with_config(&mut self, common: CommonHttpArgs, config: &SlapperConfig) {
@@ -184,7 +160,21 @@ impl LoadTestRunner {
             self.user_agent = ua.clone();
         }
 
-        if let Some(auth) = common.auth {
+        self.apply_auth_headers(common.auth, common.bearer, common.cookie, common.api_key);
+
+        for (key, value) in &config.http.default_headers {
+            self.add_header(key.clone(), value.clone());
+        }
+    }
+
+    fn apply_auth_headers(
+        &mut self,
+        auth: Option<String>,
+        bearer: Option<String>,
+        cookie: Option<String>,
+        api_key: Option<String>,
+    ) {
+        if let Some(auth) = auth {
             let parts: Vec<&str> = auth.splitn(2, ':').collect();
             if parts.len() == 2 {
                 let encoded =
@@ -193,25 +183,21 @@ impl LoadTestRunner {
             }
         }
 
-        if let Some(bearer) = common.bearer {
+        if let Some(bearer) = bearer {
             self.add_header("Authorization".to_string(), format!("Bearer {}", bearer));
         }
 
-        if let Some(cookie) = common.cookie {
+        if let Some(cookie) = cookie {
             self.add_header("Cookie".to_string(), cookie);
         }
 
-        if let Some(api_key) = common.api_key {
+        if let Some(api_key) = api_key {
             if api_key.contains(':') {
                 let parts: Vec<&str> = api_key.splitn(2, ':').collect();
                 self.add_header(parts[0].to_string(), parts[1].to_string());
             } else {
                 self.add_header("X-API-Key".to_string(), api_key);
             }
-        }
-
-        for (key, value) in &config.http.default_headers {
-            self.add_header(key.clone(), value.clone());
         }
     }
 

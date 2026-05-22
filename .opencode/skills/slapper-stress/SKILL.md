@@ -1,6 +1,11 @@
 # Slapper Stress Skill
 
-Stress testing module workflows and patterns for load testing.
+Network stress testing and DoS simulation module workflows and patterns.
+
+## Stress vs Load Testing
+
+Note: The `stress` module is for network-level stress testing (UDP floods, IP spoofing),
+while the `loadtest` module handles HTTP load/performance testing. See the `slapper-agent/http_load_testing.md` skill for HTTP load testing guidance.
 
 ## Key Types and Patterns
 
