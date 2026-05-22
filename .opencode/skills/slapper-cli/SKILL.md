@@ -90,28 +90,41 @@ impl CommandContext {
 
 ## Handler Files
 
-| Handler | File | Purpose |
-|---------|------|---------|
-| `handle_scan_ports` | `handlers/scan.rs` | TCP port scanning |
-| `handle_scan_endpoints` | `handlers/scan.rs` | Hidden endpoint discovery |
-| `handle_fingerprint` | `handlers/scan.rs` | Service fingerprinting |
-| `handle_fuzz` | `handlers/fuzz.rs` | Security fuzzing |
-| `handle_waf` | `handlers/fuzz.rs` | WAF detection/bypass |
-| `handle_waf_stress` | `handlers/fuzz.rs` | WAF stress testing |
-| `handle_load` | `handlers/load.rs` | HTTP load testing |
-| `handle_recon` | `handlers/recon.rs` | Reconnaissance |
-| `handle_graphql` | `handlers/fuzz.rs` | GraphQL testing |
-| `handle_oauth` | `handlers/fuzz.rs` | OAuth/OIDC testing |
-| `handle_auth_test` | `handlers/auth_test.rs` | Auth security testing |
-| `handle_packet` | `handlers/network.rs` | Packet inspection |
-| `handle_icmp` | `handlers/network.rs` | ICMP probing |
-| `handle_traceroute` | `handlers/network.rs` | Traceroute |
-| `handle_stress` | `handlers/stress.rs` | Stress/DoS testing |
-| `handle_config` | `handlers/config.rs` | Config validation |
-| `handle_sbom` | `handlers/sbom.rs` | SBOM generation |
-| `handle_vuln` | `handlers/vuln.rs` | Vulnerability management |
-| `handle_storage` | `handlers/storage.rs` | Storage operations |
-| `handle_cluster` | `handlers/cluster.rs` | Cluster management |
+| Handler | File | Feature Gate | Purpose |
+|---------|------|--------------|---------|
+| `handle_scan_ports` | `handlers/scan.rs` | - | TCP port scanning |
+| `handle_scan_endpoints` | `handlers/scan.rs` | - | Hidden endpoint discovery |
+| `handle_fingerprint` | `handlers/scan.rs` | - | Service fingerprinting |
+| `handle_nse` | `handlers/scan.rs` | `nse` | NSE script execution |
+| `handle_fuzz` | `handlers/fuzz.rs` | - | Security fuzzing |
+| `handle_waf` | `handlers/fuzz.rs` | - | WAF detection/bypass |
+| `handle_waf_stress` | `handlers/fuzz.rs` | - | WAF stress testing |
+| `handle_graphql` | `handlers/fuzz.rs` | - | GraphQL testing |
+| `handle_oauth` | `handlers/fuzz.rs` | - | OAuth/OIDC testing |
+| `handle_load` | `handlers/load.rs` | - | HTTP load testing |
+| `handle_recon` | `handlers/recon.rs` | - | Reconnaissance |
+| `handle_auth_test` | `handlers/auth_test.rs` | - | Auth security testing |
+| `handle_packet` | `handlers/network.rs` | `packet-inspection` | Packet inspection |
+| `handle_icmp` | `handlers/network.rs` | `stress-testing` | ICMP probing |
+| `handle_traceroute` | `handlers/network.rs` | `stress-testing` | Traceroute |
+| `handle_stress` | `handlers/stress.rs` | `stress-testing` | Stress/DoS testing |
+| `handle_proxy` | `handlers/stress.rs` | `stress-testing` | Proxy pool management |
+| `handle_config` | `handlers/config.rs` | - | Config validation |
+| `handle_sbom` | `handlers/sbom.rs` | `sbom` | SBOM generation |
+| `handle_vuln` | `handlers/vuln.rs` | - | Vulnerability management |
+| `handle_storage` | `handlers/storage.rs` | - | Storage operations |
+| `handle_cluster` | `handlers/cluster.rs` | - | Cluster management |
+| `handle_remote` | `handlers/cluster.rs` | - | Remote listener |
+| `handle_exec` | `handlers/cluster.rs` | - | Remote execution |
+| `handle_notify` | `handlers/notify.rs` | - | Notifications |
+| `handle_serve` | `handlers/notify.rs` | `rest-api` | REST API server |
+| `handle_mcp_serve` | `handlers/notify.rs` | `rest-api` | MCP server |
+| `handle_agent` | `handlers/agent.rs` | `rest-api` | Autonomous agent |
+| `handle_ai_analyze` | `handlers/ai_analyze.rs` | `ai-integration` | AI analysis |
+| `handle_grpc_server` | `handlers/grpc.rs` | `grpc-api` | gRPC server |
+| `handle_plan` | `handlers/plan.rs` | - | Execution planning |
+| `handle_ci` | `handlers/ci.rs` | - | CI/CD checks |
+| `handle_report` | `handlers/report.rs` | - | Report generation |
 
 ## Common Patterns
 
@@ -176,12 +189,15 @@ cargo test --lib -p slapper cli::
 | Issue | Fix | Location |
 |-------|-----|----------|
 | Missing scope validation in auth-test | Added `ctx.ensure_scope_url(&args.target)?` | `handlers/auth_test.rs:10` |
-| Hardcoded `unwrap_or(22)` in parse | Changed to `unwrap_or_else(\|_\| 22)` | `handlers/cluster.rs:348` |
 | Hardcoded list in `handle_no_command` | Replaced with `slapper --help` guidance | `handlers/mod.rs:155-169` |
+| `unwrap_or(22)` in cluster parse | Changed to `unwrap_or_else(\|_\| 22)` | `handlers/cluster.rs:350` |
+| Unused `-o` flag in `ClusterArgs` | Removed dead code | `cli/cluster.rs` |
 
 ### Output Flag (`-o`) Consistency (2026-05-22)
 All CLI argument structs now have consistent `-o`/`--output` short flag:
 - `PortScanArgs`, `EndpointScanArgs`, `FuzzArgs`, `WafStressArgs`, `WafArgs`, `LoadArgs`, `GraphQlArgs`, `OAuthArgs`, `FingerprintArgs`, `NseArgs`, `ResumeArgs`, `ScanArgs`, `ReconArgs`
+
+**Note:** `ClusterArgs` intentionally does NOT have an output flag since cluster commands are interactive management operations that don't produce file output.
 
 ### Type Conversions for FuzzArgs
 Several `From` implementations exist for converting CLI args to `FuzzArgs`:

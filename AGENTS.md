@@ -225,6 +225,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `cli/scan.rs` | Missing `-o` short flag on PortScanArgs, EndpointScanArgs, FingerprintArgs, NseArgs, ResumeArgs | Added `short = 'o'` to output fields |
 | `cli/fuzz.rs` | Missing `-o` short flag on WafStressArgs; indentation issue after edit | Added `short = 'o'` and fixed indentation; preserved `From<WafStressArgs>` impl |
 | `cli/http.rs` | Missing `-o` short flag on ReconArgs | Added `short = 'o'` to output field |
+| `cli/cluster.rs` | Unused `-o` flag on ClusterArgs | Removed dead code - cluster commands are interactive |
 
 ## Skills Directory
 

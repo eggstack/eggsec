@@ -76,6 +76,7 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 7. **`cli/scan.rs`**: Added `-o` short flag to `PortScanArgs`, `EndpointScanArgs`, `FingerprintArgs`, `NseArgs`, `ResumeArgs`
 8. **`cli/fuzz.rs`**: Added `-o` short flag to `WafStressArgs`; preserved `From<WafStressArgs>` implementation
 9. **`cli/http.rs`**: Added `-o` short flag to `ReconArgs`
+10. **`cli/cluster.rs`**: Removed unused `-o` flag from `ClusterArgs` - cluster commands are interactive and don't produce file output
 
 ### CLI Consistency Guidelines
 
