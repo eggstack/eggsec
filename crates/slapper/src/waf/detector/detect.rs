@@ -30,7 +30,13 @@ impl WafDetector {
         let status = response.status().as_u16();
         let remote_ip = response.remote_addr().map(|addr| addr.ip());
         let headers = response.headers().clone();
-        let body = response.text().await.unwrap_or_default();
+        let body = match response.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                tracing::debug!("Failed to read response body in WAF detection: {}", e);
+                String::new()
+            }
+        };
         let body_lower = body.to_lowercase();
 
         let mut matched_headers = Vec::new();
@@ -115,7 +121,7 @@ impl WafDetector {
 
             if let Some(ip) = remote_ip {
                 if apply_remote_ip_match(ip, &signature.ip_ranges, &mut sig_matched_patterns) {
-                    score += waf::COOKIE_MATCH_SCORE;
+                    score += waf::IP_MATCH_SCORE;
                 }
             }
 

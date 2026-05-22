@@ -165,6 +165,9 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `tui/workers/api.rs:89` | Silent error suppression on HTTP response read | Changed to explicit match with `tracing::debug` |
 | `tui/app/state_update.rs:58-74` | Unhandled `TaskResult` variants silently dropped | Added debug logging for unhandled variants |
 | `tui/tabs/history.rs:55` | `unwrap_or_default()` silenced JSON serialization errors | Changed to explicit match with `tracing::debug` |
+| `waf/detector/detect.rs:118` | IP match scoring used `COOKIE_MATCH_SCORE` instead of `IP_MATCH_SCORE` | Added `IP_MATCH_SCORE` constant (20) and fixed scoring |
+| `waf/mod.rs:4` | Docstring said "26 WAF products" but 34 are supported | Updated to "34 WAF products" |
+| `waf/detector/*.rs` | `unwrap_or_default()` on `response.text().await` silently suppressed errors | Changed to explicit match with `tracing::debug` |
 
 ## Skills Directory
 

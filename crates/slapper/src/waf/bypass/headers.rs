@@ -81,7 +81,13 @@ impl HeaderBypass {
 
         let response = request.send().await?;
         let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
+        let body = match response.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                tracing::debug!("Failed to read response body in profile bypass: {}", e);
+                String::new()
+            }
+        };
 
         let success = self.is_bypass_successful(status, detection, probe_payload, &body);
 
@@ -198,7 +204,13 @@ impl HeaderBypass {
 
         let response = request.send().await?;
         let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
+        let body = match response.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                tracing::debug!("Failed to read response body in header bypass test: {}", e);
+                String::new()
+            }
+        };
         let body_len = body.len() as i64;
 
         let success =

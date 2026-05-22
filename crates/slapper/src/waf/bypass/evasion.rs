@@ -252,7 +252,13 @@ impl EvasionBypass {
             .await?;
 
         let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
+        let body = match response.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                tracing::debug!("Failed to read response body in evasion bypass: {}", e);
+                String::new()
+            }
+        };
         let success = self.is_bypass_successful(status, detection, payload, &body);
 
         Ok(BypassResult {

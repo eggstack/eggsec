@@ -36,7 +36,13 @@ impl WafDetector {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
-        let normal_body = normal_response.text().await.unwrap_or_default();
+        let normal_body = match normal_response.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                tracing::debug!("Failed to read normal response body in compare: {}", e);
+                String::new()
+            }
+        };
         let normal_length = normal_body.len();
 
         let malicious_status = malicious_response.status().as_u16();
@@ -45,7 +51,13 @@ impl WafDetector {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
-        let malicious_body = malicious_response.text().await.unwrap_or_default();
+        let malicious_body = match malicious_response.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                tracing::debug!("Failed to read malicious response body in compare: {}", e);
+                String::new()
+            }
+        };
         let malicious_length = malicious_body.len();
 
         let header_diffs: Vec<String> = normal_headers

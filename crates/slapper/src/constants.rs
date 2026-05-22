@@ -70,6 +70,7 @@ pub mod waf {
     pub const HEADER_MATCH_SCORE: u8 = 25;
     pub const COOKIE_MATCH_SCORE: u8 = 20;
     pub const BODY_MATCH_SCORE: u8 = 15;
+    pub const IP_MATCH_SCORE: u8 = 20;
     pub const UNKNOWN_WAF_CONFIDENCE: u8 = 30;
     pub const LENGTH_DIFF_THRESHOLD: usize = 100;
     pub const HIGH_CONFIDENCE_EXIT: u8 = 90;
