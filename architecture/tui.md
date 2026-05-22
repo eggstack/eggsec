@@ -276,6 +276,21 @@ Files using FxHashMap/FxHashSet in TUI module:
 - `theme.rs` - ThemeManager.themes
 - `tabs/dashboard.rs` - PortfolioSnapshot.findings_by_severity
 
+### Key Binding Conflict Prevention
+
+When adding key bindings in `key_handler.rs`, avoid duplicate patterns in the same match arm:
+
+```rust
+// WRONG - 'e' appears twice, second arm is unreachable
+(KeyModifiers::NONE, KeyCode::Char('w')) => app.handle_word_forward(),
+(KeyModifiers::NONE, KeyCode::Char('e')) => app.export_results(),
+(KeyModifiers::NONE, KeyCode::Char('e')) => app.handle_word_forward(), // unreachable!
+
+// CORRECT - unique bindings
+(KeyModifiers::NONE, KeyCode::Char('w')) => app.handle_word_forward(),
+(KeyModifiers::NONE, KeyCode::Char('e')) => app.export_results(),
+```
+
 ### Bounds Check for Array Access
 
 When accessing arrays/vectors via index, always validate bounds:

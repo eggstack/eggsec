@@ -277,6 +277,16 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `recon/api_schema.rs:115` | Silent error suppression on response body read | Changed to explicit match with `tracing::debug` |
 | `recon/smtp_auth.rs:248,256,285` | Base64 API used incorrect trait method syntax | Changed from `base64::Engine::encode(&base64::engine::general_purpose::STANDARD, ...)` to `base64::engine::general_purpose::STANDARD.encode(...)` |
 
+### Recent Bug Fixes (2026-05-22 - TUI Module)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| `tui/app/key_handler.rs:123-124` | Duplicate `Char('b')` key binding caused `toggle_bookmark` to be shadowed by `handle_word_backward` | Moved `toggle_bookmark` to `Ctrl+b`, keeping `b` for word backward |
+| `tui/workers/network.rs:255,262` | `port_part.parse().unwrap_or(80)` could panic on invalid port input | Changed to `unwrap_or_else(\|_\| 80)` to gracefully handle parse errors |
+| `tui/workers/recon.rs:207,212` | Double `.into()` on error returns was redundant | Removed extra `.into()` call |
+| `tui/workers/api.rs:56,133` | Silent error counting with `Err(_)` pattern, errors not logged | Changed to `Err(e)` with `tracing::debug!("GraphQL ... request failed: {}", e)` |
+| `tui/workers/security.rs:224-226` | `unwrap_or_default()` silently suppressed database errors | Changed to explicit `match` with `tracing::debug` for errors, returning empty vec |
+
 ## Skills Directory
 
 Skills are located in:

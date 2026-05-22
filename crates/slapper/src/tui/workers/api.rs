@@ -53,7 +53,8 @@ pub async fn run_graphql(
                     }
                 }
             }
-            Err(_) => {
+            Err(e) => {
+                tracing::debug!("GraphQL introspection request failed: {}", e);
                 errors += 1;
             }
         }
@@ -129,7 +130,8 @@ pub async fn run_graphql(
                         _ => {}
                     }
                 }
-                Err(_) => {
+                Err(e) => {
+                    tracing::debug!("GraphQL query request failed: {}", e);
                     errors += 1;
                 }
             }

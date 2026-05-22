@@ -204,10 +204,10 @@ pub async fn run_recon(
             Err(_) => {
                 progress_handle.abort();
                 tracing::error!("Recon timed out after 120 seconds");
-                return Err(anyhow::anyhow!("Recon timed out after 120 seconds").into());
+                return Err(anyhow::anyhow!("Recon timed out after 120 seconds"));
             }
         }
     }
 
-    Err(anyhow::anyhow!("Recon failed after max retries").into())
+    Err(anyhow::anyhow!("Recon failed after max retries"))
 }

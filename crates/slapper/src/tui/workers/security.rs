@@ -221,9 +221,21 @@ pub async fn run_storage_task(
         },
         "list_findings" => {
             let findings = if let Some(ref scan) = scan_id {
-                db.list_findings(scan).await.unwrap_or_default()
+                match db.list_findings(scan).await {
+                    Ok(f) => f,
+                    Err(e) => {
+                        tracing::debug!("Failed to list findings for scan {}: {}", scan, e);
+                        vec![]
+                    }
+                }
             } else {
-                db.list_findings("all").await.unwrap_or_default()
+                match db.list_findings("all").await {
+                    Ok(f) => f,
+                    Err(e) => {
+                        tracing::debug!("Failed to list all findings: {}", e);
+                        vec![]
+                    }
+                }
             };
             let _ = result_tx
                 .send(TaskResult::StorageListFindings { findings })

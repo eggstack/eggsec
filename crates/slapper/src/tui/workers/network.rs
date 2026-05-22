@@ -252,14 +252,14 @@ fn parse_target_host_port(target: &str) -> (String, u16) {
     if target.contains("]:") {
         if let Some((host_part, port_part)) = target.rsplit_once("]:") {
             let host = host_part.trim_start_matches('[').to_string();
-            let port = port_part.parse().unwrap_or(80);
+            let port = port_part.parse().unwrap_or_else(|_| 80);
             return (host, port);
         }
     }
 
     if target.matches(':').count() == 1 {
         if let Some((host, port_part)) = target.split_once(':') {
-            return (host.to_string(), port_part.parse().unwrap_or(80));
+            return (host.to_string(), port_part.parse().unwrap_or_else(|_| 80));
         }
     }
 
