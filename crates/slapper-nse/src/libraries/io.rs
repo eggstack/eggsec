@@ -137,7 +137,10 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     io.set(
         "read",
         lua.create_function(|_lua, (file, size): (Table, Option<usize>)| {
-            let fd: i32 = file.get("fd").unwrap_or(-1);
+            let fd: i32 = file.get("fd").unwrap_or_else(|_e| {
+                tracing::debug!("File descriptor missing from handle");
+                -1
+            });
             let size = size.unwrap_or(4096);
 
             if let Ok(mut handles) = FILE_HANDLES.lock() {
@@ -160,7 +163,10 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     io.set(
         "write",
         lua.create_function(|_lua, (file, content): (Table, String)| {
-            let fd: i32 = file.get("fd").unwrap_or(-1);
+            let fd: i32 = file.get("fd").unwrap_or_else(|_e| {
+                tracing::debug!("File descriptor missing from handle");
+                -1
+            });
 
             if let Ok(mut handles) = FILE_HANDLES.lock() {
                 if let Some(handle) = handles.get_mut(&fd) {
@@ -177,7 +183,10 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     io.set(
         "flush",
         lua.create_function(|_lua, file: Table| {
-            let fd: i32 = file.get("fd").unwrap_or(-1);
+            let fd: i32 = file.get("fd").unwrap_or_else(|_e| {
+                tracing::debug!("File descriptor missing from handle");
+                -1
+            });
 
             if let Ok(mut handles) = FILE_HANDLES.lock() {
                 if let Some(handle) = handles.get_mut(&fd) {
@@ -191,7 +200,10 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     io.set(
         "seek",
         lua.create_function(|_lua, (file, offset): (Table, i64)| {
-            let fd: i32 = file.get("fd").unwrap_or(-1);
+            let fd: i32 = file.get("fd").unwrap_or_else(|_e| {
+                tracing::debug!("File descriptor missing from handle");
+                -1
+            });
 
             if let Ok(mut handles) = FILE_HANDLES.lock() {
                 if let Some(handle) = handles.get_mut(&fd) {
@@ -208,7 +220,10 @@ pub fn register_io_library(lua: &Lua, sandbox: &SandboxConfig) -> LuaResult<()> 
     io.set(
         "type",
         lua.create_function(|_lua, file: Table| {
-            let fd: i32 = file.get("fd").unwrap_or(-1);
+            let fd: i32 = file.get("fd").unwrap_or_else(|_e| {
+                tracing::debug!("File descriptor missing from handle");
+                -1
+            });
             if let Ok(handles) = FILE_HANDLES.lock() {
                 if handles.contains_key(&fd) {
                     return Ok("file".to_string());
