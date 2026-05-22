@@ -6,12 +6,19 @@ The CLI and Commands layer is responsible for parsing user input, managing globa
 
 Slapper uses `clap` for command-line argument parsing. The CLI is organized into several modules, each defining the arguments for a specific category of commands:
 
-- **`mod.rs`**: Defines the main `Cli` entry point and common arguments.
+- **`mod.rs`**: Defines the main `Cli` entry point, `Commands` enum (35+ variants), and `CommonHttpArgs`.
 - **`scan.rs`**: Arguments for the `scan` command (port scanning, endpoint discovery).
 - **`fuzz.rs`**: Arguments for the `fuzz` command (security fuzzing).
-- **`http.rs`**: Arguments for HTTP-specific operations.
+- **`http.rs`**: Arguments for HTTP-specific operations (load, recon, graphql, oauth).
 - **`packet.rs` & `stress.rs`**: Arguments for low-level networking and stress testing.
 - **`agent.rs` & `ai_analyze.rs`**: Arguments for AI-driven features.
+
+### Key CLI Patterns
+
+- **Global flags**: `--json`, `--config`, `--scope` apply to all commands
+- **Feature-gated commands**: `stress-testing`, `packet-inspection`, `nse`, `ai-integration`, `rest-api`, `grpc-api`, `sbom`
+- **Output flag**: Use `-o` / `--output` for file output (consistent across commands)
+- **Scope validation**: Handlers call `ensure_scope()` or `ensure_scope_url()` to validate targets
 
 ## Command Dispatch (`src/commands/`)
 
@@ -31,6 +38,22 @@ Examples:
 - **`cluster.rs`**: Manages distributed scanning nodes.
 - **`plugin.rs`**: Handles execution of external Python/Ruby plugins.
 
+### Handler Patterns
+
+```rust
+// Scope validation (required for target-based commands)
+pub async fn handle_fuzz(ctx: &CommandContext, args: FuzzArgs) -> Result<()> {
+    ctx.ensure_scope_url(&args.url)?;
+    // ... proceed
+}
+
+// Error handling - return Result, never std::process::exit()
+pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()> {
+    load_config(config_path).map_err(|e| anyhow::anyhow!("Configuration validation failed: {}", e))?;
+    Ok(())
+}
+```
+
 ## Workflow
 
 1. `main.rs` parses arguments using `Cli::parse()`.
@@ -39,3 +62,24 @@ Examples:
 4. `CommandContext` is created.
 5. `handle_command` (implemented in `src/commands/handlers/mod.rs`) dispatches to a specific handler in `src/commands/handlers/`.
 6. The handler executes the requested operation, often interacting with other core modules like `scanner` or `fuzzer`.
+
+## Bug Fixes and Consistency (2026-05-22)
+
+### Fixed Issues
+
+1. **`sbom.rs`**: Replaced `unwrap()` with `ok_or_else()` pattern for path conversion (handles invalid Unicode)
+2. **`config.rs`**: Replaced `std::process::exit(1)` with proper error returns via `map_err()`
+3. **`http.rs`**: Added `-o` short form to `load` and `graphql` output flags for consistency
+
+### CLI Consistency Guidelines
+
+| Issue | Recommendation |
+|-------|----------------|
+| `--host` vs `--target` vs `--url` | Use `--target` for hosts, `--url` for endpoints |
+| Timeout defaults | Use 15s as standard default |
+| WAF profile | Use `String` (not `ValueEnum`) for flexibility |
+| Source IP naming | `source_ip` / `source_port` (not `spoof_ip`) |
+
+## Skills Reference
+
+- `.opencode/skills/slapper-cli/` - Full CLI patterns and handler guide

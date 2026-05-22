@@ -100,6 +100,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 Skills are located in:
 - `.opencode/skills/slapper-agent/` - Agent-specific workflows
 - `.opencode/skills/slapper-ai/` - AI module workflows
+- `.opencode/skills/slapper-cli/` - CLI parsing, command dispatch, handler patterns
 - `.opencode/skills/slapper-config/` - Config module workflows
 - `.opencode/skills/slapper-distributed/` - Distributed module workflows
 - `.opencode/skills/slapper-fuzzer/` - Fuzzer module workflows
@@ -115,3 +116,17 @@ Skills are located in:
 - `.opencode/skills/tui-testing/` - TUI testing patterns and guides
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
+
+## Architecture Documentation
+
+Detailed architecture documentation is in the `architecture/` directory:
+
+| File | Module |
+|------|--------|
+| `architecture/cli_commands.md` | CLI parsing, command dispatch, handler patterns |
+| `architecture/ai_agents.md` | AI/LLM integration and autonomous agents |
+| `architecture/scanner.md` | Port scanning and endpoint discovery |
+| `architecture/fuzzer.md` | Fuzzing engine and payload generation |
+| `architecture/waf.md` | WAF detection and bypass |
+| `architecture/recon.md` | Reconnaissance module |
+| `architecture/pipeline.md` | Security assessment pipeline |
