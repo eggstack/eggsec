@@ -252,6 +252,21 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `pipeline/executor.rs:19-36` | `StageResult` lacked constructor for cleaner object creation | Added `StageResult::new()` constructor |
 | `pipeline/executor.rs:157` | Progress bar created even for empty stage list | Changed condition to `self.tui_mode \|\| self.stages.is_empty()` |
 
+### Recent Bug Fixes (2026-05-22 - Recon Module)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| `recon/geolocation.rs:308` | CIDR mask calculation was incorrect (`!((1u32 << (32 - prefix)) - 1)`) | Changed to proper CIDR mask: `u32::MAX << (32 - prefix)` |
+| `recon/cors.rs:3,43` | `HashSet` used instead of `FxHashSet` | Changed to `FxHashSet` for performance |
+| `recon/cloud/mod.rs:8,342` | `HashSet` used instead of `FxHashSet` | Changed to `FxHashSet` for performance |
+| `recon/containers.rs:9,243` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `recon/dns_enhanced.rs:247,252` | `HashSet` used instead of `FxHashSet` | Changed to `FxHashSet` for performance |
+| `recon/cve_lookup.rs:33,39` | `HashMap` used instead of `FxHashMap` | Changed to `FxHashMap` for performance |
+| `recon/mod.rs:220,253` | `HashMap` used instead of `FxHashMap` in metadata | Changed to `FxHashMap` for performance |
+| `recon/subdomain.rs:111,151` | Silent error suppression with `unwrap_or_default()` on JSON parse | Changed to explicit match with `tracing::debug` |
+| `recon/api_schema.rs:115` | Silent error suppression on response body read | Changed to explicit match with `tracing::debug` |
+| `recon/smtp_auth.rs:248,256,285` | Base64 API used incorrect trait method syntax | Changed from `base64::Engine::encode(&base64::engine::general_purpose::STANDARD, ...)` to `base64::engine::general_purpose::STANDARD.encode(...)` |
+
 ## Skills Directory
 
 Skills are located in:

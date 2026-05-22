@@ -4,8 +4,8 @@ pub mod services;
 pub mod storage_test;
 
 use crate::error::Result;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
@@ -339,7 +339,7 @@ impl CloudScanner {
 
     fn generate_cloud_names(&self, domain: &str) -> Vec<String> {
         let base_name = domain.split('.').next().unwrap_or(domain);
-        let mut names = HashSet::new();
+        let mut names = FxHashSet::default();
 
         names.insert(domain.to_string());
         names.insert(base_name.to_string());

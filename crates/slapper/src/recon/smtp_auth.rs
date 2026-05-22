@@ -245,7 +245,7 @@ async fn test_login_auth(
     stream.read(&mut response)
         .map_err(|e| crate::error::SlapperError::Network(format!("Read failed: {}", e)))?;
 
-    let username_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, username);
+    let username_b64 = base64::engine::general_purpose::STANDARD.encode(username);
     stream.write_all(format!("{}\r\n", username_b64).as_bytes())
         .map_err(|e| crate::error::SlapperError::Network(format!("Write failed: {}", e)))?;
 
@@ -253,7 +253,7 @@ async fn test_login_auth(
     stream.read(&mut response)
         .map_err(|e| crate::error::SlapperError::Network(format!("Read failed: {}", e)))?;
 
-    let password_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, password);
+    let password_b64 = base64::engine::general_purpose::STANDARD.encode(password);
     stream.write_all(format!("{}\r\n", password_b64).as_bytes())
         .map_err(|e| crate::error::SlapperError::Network(format!("Write failed: {}", e)))?;
 
@@ -282,7 +282,7 @@ async fn test_plain_auth(
         .map_err(|e| crate::error::SlapperError::Network(format!("Read failed: {}", e)))?;
 
     let auth_string = format!("\0{}\0{}", username, password);
-    let auth_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &auth_string);
+    let auth_b64 = base64::engine::general_purpose::STANDARD.encode(&auth_string);
     stream.write_all(format!("{}\r\n", auth_b64).as_bytes())
         .map_err(|e| crate::error::SlapperError::Network(format!("Write failed: {}", e)))?;
 

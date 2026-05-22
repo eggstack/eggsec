@@ -5,8 +5,8 @@
 
 use crate::error::{Result, SlapperError};
 use crate::types::Severity;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[cfg(feature = "container")]
 use kube::{
@@ -240,7 +240,7 @@ impl ContainerScanner {
         ))
     }
 
-    pub fn check_container_config(&self, config: &HashMap<String, String>) -> Vec<ConfigIssue> {
+    pub fn check_container_config(&self, config: &FxHashMap<String, String>) -> Vec<ConfigIssue> {
         let mut issues = Vec::new();
 
         if let Some(user) = config.get("USER") {
@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn test_config_issue_detection() {
         let scanner = ContainerScanner::default();
-        let mut config = HashMap::new();
+        let mut config = FxHashMap::default();
         config.insert("USER".to_string(), "root".to_string());
 
         let issues = scanner.check_container_config(&config);

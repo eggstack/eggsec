@@ -305,7 +305,7 @@ impl GeoLocator {
                 }
                 let base: Ipv4Addr = parts[0].parse().ok()?;
                 let prefix: u8 = parts[1].parse().ok()?;
-                let mask = !((1u32 << (32 - prefix)) - 1);
+                let mask = u32::MAX << (32 - prefix);
                 if (addr_u32 & mask) == (u32::from(base) & mask) {
                     return Some(GeoLocation {
                         ip: ip.to_string(),

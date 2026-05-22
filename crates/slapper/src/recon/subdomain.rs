@@ -108,7 +108,13 @@ impl SubdomainEnumerator {
             return Ok(FxHashSet::default());
         }
 
-        let crt_entries: Vec<CrtShEntry> = response.json().await.unwrap_or_default();
+        let crt_entries: Vec<CrtShEntry> = match response.json().await {
+            Ok(entries) => entries,
+            Err(e) => {
+                tracing::debug!("Failed to parse crt.sh response: {}", e);
+                return Ok(FxHashSet::default());
+            }
+        };
         let mut subdomains = FxHashSet::default();
 
         for entry in crt_entries {
@@ -148,7 +154,13 @@ impl SubdomainEnumerator {
             return Ok(FxHashSet::default());
         }
 
-        let threatminer_resp: ThreatMinerResponse = response.json().await.unwrap_or_default();
+        let threatminer_resp: ThreatMinerResponse = match response.json().await {
+            Ok(resp) => resp,
+            Err(e) => {
+                tracing::debug!("Failed to parse ThreatMiner response: {}", e);
+                return Ok(FxHashSet::default());
+            }
+        };
         Ok(threatminer_resp.results.into_iter().collect())
     }
 

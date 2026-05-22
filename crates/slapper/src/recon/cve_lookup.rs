@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,13 +31,13 @@ pub struct TechnologyMatch {
 }
 
 pub struct CveEngine {
-    cve_cache: std::collections::HashMap<String, Vec<CveEntry>>,
+    cve_cache: FxHashMap<String, Vec<CveEntry>>,
 }
 
 impl CveEngine {
     pub fn new() -> Self {
         Self {
-            cve_cache: std::collections::HashMap::new(),
+            cve_cache: FxHashMap::default(),
         }
     }
 

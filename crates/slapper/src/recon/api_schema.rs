@@ -112,7 +112,20 @@ impl SchemaDiscovery {
             .unwrap_or("")
             .to_string();
 
-        let body = response.text().await.unwrap_or_default();
+        let body = match response.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                tracing::debug!("Failed to read response body for {}: {}", url, e);
+                return Ok(SchemaDiscoveryResult {
+                    target: url.to_string(),
+                    found: false,
+                    url: None,
+                    schema_type: None,
+                    raw_content: None,
+                    endpoints_count: None,
+                });
+            }
+        };
         let schema_type = Self::detect_schema_type(&body, &content_type);
         let endpoints_count = Self::count_endpoints(&body, &schema_type);
 

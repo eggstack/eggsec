@@ -85,9 +85,15 @@ The recon module uses `rustc_hash::FxHashMap` and `FxHashSet` instead of `std::c
 | Component | File | Type |
 |-----------|------|------|
 | `CveMapper.cache` | `cve.rs` | `FxHashMap` |
+| `CveEngine.cve_cache` | `cve_lookup.rs` | `FxHashMap` |
 | `LOCAL_IP_DATA` | `geolocation.rs` | `FxHashMap` |
 | `WaybackClient.endpoints` | `wayback.rs` | `FxHashSet` |
 | `TakeoverDetector.cname_map`/`ns_map` | `takeover.rs` | `FxHashMap` |
 | `EmailDiscoveryClient` collections | `email.rs` | `FxHashSet` |
 | `JsAnalyzer` collections | `js.rs` | `FxHashSet` |
 | `SubdomainEnumerator` collections | `subdomain.rs` | `FxHashSet` |
+| `CorsAnalyzer.findings` | `cors.rs` | `FxHashSet` |
+| `CloudScanner.generate_cloud_names` | `cloud/mod.rs` | `FxHashSet` |
+| `ContainerScanner.check_container_config` | `containers.rs` | `FxHashMap` |
+| `compare_dns_records` | `dns_enhanced.rs` | `FxHashSet` |
+| `FullReconResult` callback metadata | `mod.rs` | `FxHashMap` |

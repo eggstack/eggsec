@@ -55,12 +55,25 @@ Note: TLS version and cipher suite detection is not yet implemented - `supported
 
 - Use `FxHashMap`/`FxHashSet` instead of `std::collections::HashMap`/`HashSet`
 - `CveMapper.cache` uses `FxHashMap` (cve.rs)
+- `CveEngine.cve_cache` uses `FxHashMap` (cve_lookup.rs)
 - `LOCAL_IP_DATA` in geolocation.rs uses `FxHashMap`
 - `WaybackClient.endpoints` uses `FxHashSet`
 - `TakeoverDetector.cname_map`/`ns_map` uses `FxHashMap` (takeover.rs:455-456)
 - `EmailDiscoveryClient` methods use `FxHashSet` (email.rs:132,155,174)
 - `JsAnalyzer` methods use `FxHashSet` (js.rs:229,287)
 - `SubdomainEnumerator` methods use `FxHashSet` (subdomain.rs:74,112,158)
+- `CorsAnalyzer.findings` uses `FxHashSet` (cors.rs:43)
+- `CloudScanner.generate_cloud_names` uses `FxHashSet` (cloud/mod.rs:342)
+- `ContainerScanner.check_container_config` uses `FxHashMap` (containers.rs:243)
+- `compare_dns_records` uses `FxHashSet` (dns_enhanced.rs:247,252)
+- `FullReconResult` callback metadata uses `FxHashMap` (mod.rs:221,253)
+
+### Notable Bug Fixes
+
+- **geolocation.rs:308** - CIDR mask calculation was incorrect. Fixed to proper CIDR mask calculation.
+- **smtp_auth.rs:248,256,285** - Base64 API used incorrect trait method syntax.
+- **subdomain.rs:111,151** - Silent error suppression with `unwrap_or_default()` changed to explicit match with tracing.
+- **api_schema.rs:115** - Silent error suppression on response body read changed to explicit match.
 
 ## Testing
 

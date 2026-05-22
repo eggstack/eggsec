@@ -1,6 +1,6 @@
 use crate::error::Result;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 use crate::utils::create_insecure_http_client;
 
@@ -40,7 +40,7 @@ impl CorsAnalyzer {
     pub async fn analyze(&self, url: &str) -> Result<CorsAnalysis> {
         let test_origins = self.generate_test_origins();
 
-        let mut findings = HashSet::new();
+        let mut findings = FxHashSet::default();
         let mut analyzed_count = 0;
 
         for origin in test_origins {

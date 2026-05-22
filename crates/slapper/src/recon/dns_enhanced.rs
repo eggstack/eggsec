@@ -1,3 +1,4 @@
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, ToSocketAddrs};
 
@@ -244,12 +245,12 @@ pub struct DnsRecordComparison {
 }
 
 pub fn compare_dns_records(previous: &[DnsRecord], current: &[DnsRecord]) -> DnsRecordComparison {
-    let prev_set: std::collections::HashSet<_> = previous
+    let prev_set: FxHashSet<_> = previous
         .iter()
         .map(|r| format!("{}:{}:{}", r.record_type, r.name, r.value))
         .collect();
 
-    let curr_set: std::collections::HashSet<_> = current
+    let curr_set: FxHashSet<_> = current
         .iter()
         .map(|r| format!("{}:{}:{}", r.record_type, r.name, r.value))
         .collect();
