@@ -26,6 +26,14 @@ match scope.is_target_allowed(target)? {
 
 2. **Project qualifier fixed**: `api.rs` now uses `PROJECT_QUALIFIER` consistently with other modules.
 
+## Performance (2026-05-22)
+
+All HashMap usages use `rustc_hash::FxHashMap` for performance:
+- `AlertChannelsConfig.channels`
+- `WebhookConfigEntry.headers`
+- `HttpConfig.default_headers`
+- `ScanConfig.profiles`
+
 ## Validation
 
 `SlapperConfig::validate()` orchestrates sub-validations. Always call it after loading config:

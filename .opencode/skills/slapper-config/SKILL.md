@@ -112,6 +112,12 @@ This prevents SSRF against cloud metadata endpoints (e.g., `169.254.169.254`).
 ### Config File Permissions
 `check_config_file_permissions()` warns but does NOT enforce. Config files with secrets should be `chmod 600`.
 
-## Resources
+## Performance
+
+**FxHashMap**: All HashMap usages in the config module use `rustc_hash::FxHashMap` instead of `std::collections::HashMap` for performance. This applies to:
+- `AlertChannelsConfig.channels`
+- `WebhookConfigEntry.headers`
+- `HttpConfig.default_headers`
+- `ScanConfig.profiles`
 - `crates/slapper/src/config/AGENTS.override.md` - Detailed config patterns
 - `architecture/config.md` - Architecture documentation

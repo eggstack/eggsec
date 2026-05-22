@@ -1,6 +1,7 @@
 use crate::config::settings::ConfigError;
 use crate::constants::http;
 use crate::types::SensitiveString;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -128,7 +129,7 @@ pub struct WebhookConfig {
     pub name: Option<String>,
 
     #[serde(default)]
-    pub headers: std::collections::HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
 
     #[serde(default)]
     pub events: Vec<WebhookEvent>,

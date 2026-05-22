@@ -8,8 +8,8 @@ pub use crate::constants::DEFAULT_REMOTE_PORT;
 use crate::proxy::ProxyType;
 use crate::types::SensitiveString;
 use directories::ProjectDirs;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -18,7 +18,7 @@ use thiserror::Error;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AlertChannelsConfig {
     #[serde(default)]
-    pub channels: HashMap<String, AlertChannelConfigEntry>,
+    pub channels: FxHashMap<String, AlertChannelConfigEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ pub struct WebhookConfigEntry {
     pub url: String,
     pub secret: Option<SensitiveString>,
     #[serde(default)]
-    pub headers: HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,7 +106,7 @@ pub struct SlapperConfig {
     pub notifications: NotificationConfig,
 
     #[serde(default)]
-    pub profiles: HashMap<String, ScanProfile>,
+    pub profiles: FxHashMap<String, ScanProfile>,
 
     #[serde(default, flatten)]
     pub paths: PathsConfig,

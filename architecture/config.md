@@ -28,6 +28,7 @@ The `Scope` struct is critical for security and compliance. It defines which tar
 - **Included Targets**: IP ranges (CIDR), domains, or specific URLs
 - **Excluded Targets**: Blacklisted IPs or domains that should never be touched
 - **Enforcement**: Most scanning and fuzzing operations check the `Scope` before initiating a connection
+- **FxHashMap**: All HashMap usages use `rustc_hash::FxHashMap` for performance (AlertChannelsConfig.channels, WebhookConfigEntry.headers, HttpConfig.default_headers, ScanConfig.profiles)
 
 ### `Loader` (`loader.rs`)
 

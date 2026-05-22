@@ -1,7 +1,7 @@
 use crate::constants::http;
 use crate::types::SensitiveString;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 fn default_timeout() -> u64 {
     http::DEFAULT_TIMEOUT_SECS
@@ -36,7 +36,7 @@ pub struct HttpConfig {
     pub max_redirects: usize,
 
     #[serde(default)]
-    pub default_headers: HashMap<String, String>,
+    pub default_headers: FxHashMap<String, String>,
 
     #[serde(default)]
     pub default_user_agent: Option<String>,
@@ -57,7 +57,7 @@ impl Default for HttpConfig {
             verify_tls: true,
             follow_redirects: true,
             max_redirects: default_max_redirects(),
-            default_headers: HashMap::new(),
+            default_headers: FxHashMap::default(),
             default_user_agent: None,
             proxy: None,
             proxy_auth: None,

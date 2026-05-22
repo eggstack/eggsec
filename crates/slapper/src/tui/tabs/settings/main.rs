@@ -301,7 +301,7 @@ impl SettingsTab {
                         self.proxy_inputs.fields[1].value.clone(),
                     ))
                 },
-                default_headers: std::collections::HashMap::new(),
+                default_headers: rustc_hash::FxHashMap::default(),
                 default_user_agent: None,
                 retry_delay_ms,
             },
@@ -330,7 +330,7 @@ impl SettingsTab {
                     Some(self.report_inputs.fields[3].value.clone())
                 },
             },
-            profiles: std::collections::HashMap::new(),
+            profiles: rustc_hash::FxHashMap::default(),
             recon: crate::config::ReconConfig::default(),
             schedule: Vec::new(),
             remote: crate::config::RemoteConfig::default(),
