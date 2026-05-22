@@ -244,5 +244,15 @@ pub async fn resume_cli(args: ResumeArgs) -> Result<()> {
 
     println!("{}", report);
 
+    if let Some(failed_stage) = report.first_failed_stage() {
+        return Err(SlapperError::ScanFailed {
+            stage: failed_stage.stage.to_string(),
+            error: failed_stage
+                .error
+                .clone()
+                .unwrap_or_else(|| "unknown pipeline stage failure".to_string()),
+        });
+    }
+
     Ok(())
 }

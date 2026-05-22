@@ -50,6 +50,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `distributed/` | `crates/slapper/src/distributed/AGENTS.override.md` |
 | `packet/` | `crates/slapper/src/packet/` (uses pnet, pnet_packet for raw sockets) |
 | `loadtest/` | `crates/slapper/src/loadtest/` (uses FxHashMap, hdrhistogram) |
+| `pipeline/` | `crates/slapper/src/pipeline/` (sequential stage execution, session persistence) |
 
 ### Feature Flags
 
@@ -137,6 +138,8 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `output/agent.rs` | `FindingSummary` used `HashMap` | Changed to `FxHashMap` for performance |
 | `output/junit.rs:243` | `to_string_lossy().to_string()` allocated unnecessarily | Changed to `into_owned()` |
 | `output/pdf.rs:134` | `generate_html` had clippy warning | Added `#[allow(dead_code)]` |
+| `pipeline/mod.rs:240-248` | `resume_cli()` didn't return error on failed stages | Now returns `ScanFailed` error like `run_cli()` |
+| `pipeline/executor.rs:444-445` | `run_load_test()` ignored config, used default TLS settings | Changed to `LoadTestRunner::from_args_with_config()` |
 
 ## Skills Directory
 
@@ -155,6 +158,7 @@ Skills are located in:
 - `.opencode/skills/slapper-stress/` - Stress module workflows
 - `.opencode/skills/slapper-packet/` - Packet capture/crafting/parsing workflows
 - `.opencode/skills/slapper-loadtest/` - Loadtest module workflows
+- `.opencode/skills/slapper-pipeline/` - Pipeline module workflows
 - `.opencode/skills/slapper-tool/` - Tool module workflows
 - `.opencode/skills/slapper-tui/` - TUI module workflows
 - `.opencode/skills/slapper-waf/` - WAF module workflows

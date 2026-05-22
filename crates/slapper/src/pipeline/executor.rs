@@ -426,6 +426,8 @@ impl Pipeline {
         });
         drop(context);
 
+        let default_config = SlapperConfig::default();
+        let config = self.config.as_ref().unwrap_or(&default_config);
         let args = crate::cli::LoadArgs {
             url: base_url,
             requests: 100,
@@ -442,7 +444,7 @@ impl Pipeline {
         };
 
         let runner =
-            crate::loadtest::runner::LoadTestRunner::from_args_with_tui_mode(args, self.tui_mode)?;
+            crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, config)?;
         runner.run().await?;
 
         Ok(())
