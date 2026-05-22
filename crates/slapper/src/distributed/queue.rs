@@ -54,10 +54,13 @@ impl TaskQueue {
         Ok(())
     }
 
-    pub async fn dequeue(&self, worker_id: &str) -> Option<Task> {
+    pub async fn dequeue(&self, worker_id: &str) -> Result<Option<Task>, QueueError> {
         let now = chrono::Utc::now().timestamp();
         let mut pending = self.pending.write().await;
-        let mut task = pending.pop_front()?;
+        let mut task = match pending.pop_front() {
+            Some(t) => t,
+            None => return Ok(None),
+        };
 
         task.worker_id = Some(worker_id.to_string());
         task.assigned_at_secs = Some(now);
@@ -65,7 +68,7 @@ impl TaskQueue {
         let mut in_progress = self.in_progress.write().await;
         in_progress.insert(task.id.clone(), task.clone());
 
-        Some(task)
+        Ok(Some(task))
     }
 
     pub async fn reassign_stale_tasks(&self, timeout_secs: i64) -> Vec<Task> {

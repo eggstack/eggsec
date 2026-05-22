@@ -114,6 +114,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `distributed/command.rs:36` | `CommandMessage::Execute.env` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `distributed/remote.rs:30` | `RemoteListener.rate_limits` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `distributed/queue.rs:57` | `dequeue()` ignored `worker_id` and didn't set `assigned_at_secs` | Now tracks which worker owns task and when assigned |
+| `distributed/queue.rs:57` | `dequeue()` returned `Option<Task>` silently dropping errors | Changed to return `Result<Option<Task>, QueueError>` |
 | `distributed/worker.rs:132-161` | Heartbeat used HTTP POST to non-existent REST API | Changed to use `RemoteClient::send_heartbeat()` via TCP |
 | `ai/waf_bypass.rs:107` | Loop missing `continue` caused incorrect fallthrough to AI query when entry had `failed_attempts < 3` | Added `continue` after `failed_attempts >= 3` check |
 | `ai/planner.rs:456` | `ExecutionStage` has `name` field, not `target` | Changed to `s.name.to_lowercase().contains()` |

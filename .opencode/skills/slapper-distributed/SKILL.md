@@ -63,7 +63,7 @@ Note: `Task::payload` is serializable with `#[serde(default)]` for backward comp
 ## Task Lifecycle
 
 1. `TaskQueue::enqueue(task)` - Add task to pending queue
-2. `TaskQueue::dequeue(worker_id)` - Worker claims task, sets `worker_id` and `assigned_at_secs`
+2. `TaskQueue::dequeue(worker_id)` - Worker claims task, sets `worker_id` and `assigned_at_secs`, returns `Result<Option<Task>, QueueError>`
 3. `TaskQueue::reassign_stale_tasks(timeout_secs)` - Returns tasks stale > timeout to pending
 4. `TaskQueue::complete(result)` - Moves task to completed, removes from in_progress
 

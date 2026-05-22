@@ -1,6 +1,6 @@
 use slapper::distributed::queue::{TaskQueue, TaskResult};
 use slapper::distributed::{Task, TaskType};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 fn make_task(id: &str, job_id: &str) -> Task {
     Task {
@@ -8,7 +8,9 @@ fn make_task(id: &str, job_id: &str) -> Task {
         job_id: job_id.to_string(),
         task_type: TaskType::PortScan,
         target: "example.com".to_string(),
-        payload: HashMap::new(),
+        payload: FxHashMap::default(),
+        worker_id: None,
+        assigned_at_secs: None,
     }
 }
 
@@ -45,7 +47,7 @@ async fn test_enqueue_dequeue() {
     queue.enqueue(make_task("task-1", "job-1")).await.unwrap();
     assert_eq!(queue.get_pending_count().await, 1);
 
-    let task = queue.dequeue().await.unwrap();
+    let task = queue.dequeue("worker-1").await.unwrap().unwrap();
     assert_eq!(task.id, "task-1");
     assert_eq!(queue.get_pending_count().await, 0);
     assert_eq!(queue.get_in_progress_count().await, 1);
@@ -54,7 +56,7 @@ async fn test_enqueue_dequeue() {
 #[tokio::test]
 async fn test_dequeue_empty() {
     let queue = TaskQueue::new(100);
-    let task = queue.dequeue().await;
+    let task = queue.dequeue("worker-1").await.unwrap();
     assert!(task.is_none());
 }
 
@@ -66,9 +68,9 @@ async fn test_enqueue_fifo_order() {
     queue.enqueue(make_task("second", "job-1")).await.unwrap();
     queue.enqueue(make_task("third", "job-1")).await.unwrap();
 
-    assert_eq!(queue.dequeue().await.unwrap().id, "first");
-    assert_eq!(queue.dequeue().await.unwrap().id, "second");
-    assert_eq!(queue.dequeue().await.unwrap().id, "third");
+    assert_eq!(queue.dequeue("worker-1").await.unwrap().unwrap().id, "first");
+    assert_eq!(queue.dequeue("worker-2").await.unwrap().unwrap().id, "second");
+    assert_eq!(queue.dequeue("worker-3").await.unwrap().unwrap().id, "third");
 }
 
 #[tokio::test]
@@ -87,7 +89,7 @@ async fn test_complete_task() {
     let queue = TaskQueue::new(100);
 
     queue.enqueue(make_task("task-1", "job-1")).await.unwrap();
-    let _task = queue.dequeue().await.unwrap();
+    let _task = queue.dequeue("worker-1").await.unwrap().unwrap();
     assert_eq!(queue.get_in_progress_count().await, 1);
 
     queue.complete(make_result("task-1", true)).await;
@@ -100,11 +102,11 @@ async fn test_get_results() {
     let queue = TaskQueue::new(100);
 
     queue.enqueue(make_task("task-1", "job-1")).await.unwrap();
-    let _ = queue.dequeue().await.unwrap();
+    let _ = queue.dequeue("worker-1").await.unwrap().unwrap();
     queue.complete(make_result("task-1", true)).await;
 
     queue.enqueue(make_task("task-2", "job-1")).await.unwrap();
-    let _ = queue.dequeue().await.unwrap();
+    let _ = queue.dequeue("worker-2").await.unwrap().unwrap();
     queue.complete(make_result("task-2", false)).await;
 
     let results = queue.get_results().await;
@@ -119,7 +121,7 @@ async fn test_clear() {
 
     queue.enqueue(make_task("task-1", "job-1")).await.unwrap();
     queue.enqueue(make_task("task-2", "job-1")).await.unwrap();
-    let _ = queue.dequeue().await.unwrap();
+    let _ = queue.dequeue("worker-1").await.unwrap().unwrap();
 
     queue.clear().await;
     assert_eq!(queue.get_pending_count().await, 0);
@@ -134,7 +136,8 @@ async fn test_completed_evicts_oldest() {
     for i in 0..5 {
         let id = format!("task-{}", i);
         queue.enqueue(make_task(&id, "job-1")).await.unwrap();
-        let _ = queue.dequeue().await.unwrap();
+        let worker_id = format!("worker-{}", i);
+        let _ = queue.dequeue(&worker_id).await.unwrap().unwrap();
         queue.complete(make_result(&id, true)).await;
     }
 

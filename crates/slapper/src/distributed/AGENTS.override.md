@@ -69,6 +69,7 @@ fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
 | File | Issue | Fix |
 |------|-------|-----|
 | `queue.rs:57` | `dequeue()` ignored `worker_id` param and didn't set `assigned_at_secs` | Now properly tracks which worker owns task and when assigned |
+| `queue.rs:57` | `dequeue()` returned `Option<Task>` silently dropping errors | Changed to return `Result<Option<Task>, QueueError>` for explicit error handling |
 | `worker.rs:132-161` | Heartbeat used HTTP POST to non-existent REST API endpoint | Changed to use `RemoteClient::send_heartbeat()` via TCP line-based JSON |
 
 ## Performance Improvements (2026-05-22)
@@ -86,7 +87,9 @@ Note: `Task::payload` uses `#[serde(default)]` for backward compatibility with s
 ### Task Tracking
 - `Task::worker_id` - Set by `dequeue()` when a worker claims a task
 - `Task::assigned_at_secs` - Timestamp when task was assigned (for stale task detection)
+- `TaskQueue::dequeue(worker_id)` returns `Result<Option<Task>, QueueError>` - handle errors explicitly
 - Use `TaskQueue::reassign_stale_tasks(timeout_secs)` to recover tasks from dead workers
+- `QueueError` enum: `QueueFull`, `TaskNotFound`
 
 ### PSK Authentication
 - PSK is sent as first message after TCP connect: `AuthMessage { psk }`

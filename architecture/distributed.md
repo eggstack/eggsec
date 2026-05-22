@@ -36,12 +36,13 @@ Secure and efficient communication between nodes using line-based JSON over TCP 
 | TaskType enum | mod.rs | 59-67 | 7 task types |
 | Task struct | queue.rs | 7-18 | Core task representation |
 | TaskResult struct | queue.rs | 20-27 | Task execution result |
-| TaskQueue | queue.rs | 29-141 | Thread-safe task queue |
+| TaskQueue | queue.rs | 29-154 | Thread-safe task queue |
+| QueueError | queue.rs | 150-154 | Queue error types |
 | RemoteListener | remote.rs | 26-388 | Coordinator server |
 | RemoteClient | remote.rs | 395-697 | Worker client |
 | CommandExecutor | command.rs | 103-220 | Secure command execution |
 | CommandMessage | command.rs | 28-46 | Protocol messages |
-| Worker | worker.rs | 60-553 | Worker node |
+| Worker | worker.rs | 60-558 | Worker node |
 | TlsServer | io.rs | 110-161 | TLS server from PEM |
 | TlsClient | io.rs | 163-225 | TLS client |
 | StreamWrapper | io.rs | 19-108 | Unified stream enum |
@@ -67,6 +68,7 @@ Secure and efficient communication between nodes using line-based JSON over TCP 
 | File | Issue | Fix |
 |------|-------|-----|
 | `queue.rs:57` | `dequeue()` ignored `worker_id` param and didn't set `assigned_at_secs` | Now properly tracks which worker owns task and when |
+| `queue.rs:57` | `dequeue()` returned `Option<Task>` silently dropped errors | Changed to return `Result<Option<Task>, QueueError>` for explicit error handling |
 | `worker.rs:132-161` | Heartbeat used HTTP POST to non-existent REST API endpoint | Changed to use `RemoteClient::send_heartbeat()` via TCP |
 
 ## Performance Improvements (2026-05-22)
