@@ -1,5 +1,5 @@
 use crate::distributed::{
-    Heartbeat, RemoteClient, Task, TaskResult, TaskType, WorkerStatus,
+    RemoteClient, Task, TaskResult, TaskType,
 };
 use crate::error::{Result, SlapperError};
 use crate::scanner::endpoints::EndpointScanConfig;
@@ -62,7 +62,6 @@ pub struct WorkerStats {
         stats: WorkerStats,
         sender: Option<mpsc::Sender<Task>>,
         receiver: Option<mpsc::Receiver<Task>>,
-        client: reqwest::Client,
         heartbeat_handle: Option<JoinHandle<()>>,
         task_processor_handle: Option<JoinHandle<()>>,
         psk: String,
@@ -81,7 +80,6 @@ impl Worker {
             },
             sender: None,
             receiver: None,
-            client: crate::utils::get_shared_http_client(),
             heartbeat_handle: None,
             task_processor_handle: None,
             psk,
@@ -133,7 +131,7 @@ impl Worker {
         let worker_id = self.config.worker_id.clone();
         let coordinator_url = self.config.coordinator_url.clone();
         let interval = self.config.heartbeat_interval_secs;
-        let client = self.client.clone();
+        let psk = self.psk.clone();
 
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval));
@@ -141,18 +139,24 @@ impl Worker {
             loop {
                 interval.tick().await;
 
-                let heartbeat = Heartbeat {
-                    worker_id: worker_id.clone(),
-                    status: WorkerStatus::Idle,
-                    current_jobs: 0,
-                    completed_jobs: 0,
-                    failed_jobs: 0,
-                    cpu_usage: 0.0,
-                    memory_usage: 0.0,
+                let (host, port) = match parse_coordinator_url(&coordinator_url) {
+                    Ok(hp) => hp,
+                    Err(e) => {
+                        tracing::warn!("Failed to parse coordinator URL for heartbeat: {}", e);
+                        continue;
+                    }
                 };
 
-                let url = format!("{}/api/workers/heartbeat", coordinator_url);
-                if let Err(e) = client.post(&url).json(&heartbeat).send().await {
+                let status = serde_json::json!({
+                    "worker_id": worker_id,
+                    "status": "idle",
+                    "current_jobs": 0,
+                    "completed_jobs": 0,
+                    "failed_jobs": 0,
+                });
+
+                let client = RemoteClient::new_plaintext(psk.clone());
+                if let Err(e) = client.send_heartbeat(host, port, worker_id.clone(), status.to_string()).await {
                     tracing::warn!("Heartbeat failed: {}", e);
                 }
             }

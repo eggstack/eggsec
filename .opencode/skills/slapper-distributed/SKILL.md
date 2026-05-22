@@ -8,6 +8,8 @@ Distributed computing module workflows and patterns for cluster-based testing.
 `Worker::new(config, psk)` requires both `WorkerConfig` and a PSK string:
 ```rust
 let worker = Worker::new(config, "your-secret-psk".to_string());
+let mut worker = worker;
+worker.start().await?;
 ```
 
 ### TLS
@@ -40,6 +42,29 @@ client.send_heartbeat(host, port, worker_id, status).await?;
 ```
 
 **Important**: Coordinator URL format is `host:port` (no http:// prefix).
+
+## Bugs Fixed (2026-05-22)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `queue.rs:57` | `dequeue()` ignored `worker_id` param and didn't set `assigned_at_secs` | Now properly tracks which worker owns task and when |
+| `worker.rs:132-161` | Heartbeat used HTTP POST to non-existent API endpoint | Changed to use `RemoteClient::send_heartbeat()` via TCP |
+
+## Task Lifecycle
+
+1. `TaskQueue::enqueue(task)` - Add task to pending queue
+2. `TaskQueue::dequeue(worker_id)` - Worker claims task, sets `worker_id` and `assigned_at_secs`
+3. `TaskQueue::reassign_stale_tasks(timeout_secs)` - Returns tasks stale > timeout to pending
+4. `TaskQueue::complete(result)` - Moves task to completed, removes from in_progress
+
+## Command Execution Security
+
+`CommandExecutor` in `command.rs` enforces:
+- Only `slapper` binary allowed
+- Max 50 arguments, 1000 chars each
+- Forbidden patterns: `../`, path traversal, sensitive paths (`/etc/`, `~/.ssh/`, `.pem`, `.key`)
+- No custom environment variables
+- 10MB output limit
 
 ## Testing
 

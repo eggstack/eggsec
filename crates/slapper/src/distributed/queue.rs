@@ -54,9 +54,13 @@ impl TaskQueue {
         Ok(())
     }
 
-    pub async fn dequeue(&self, _worker_id: &str) -> Option<Task> {
+    pub async fn dequeue(&self, worker_id: &str) -> Option<Task> {
+        let now = chrono::Utc::now().timestamp();
         let mut pending = self.pending.write().await;
-        let task = pending.pop_front()?;
+        let mut task = pending.pop_front()?;
+
+        task.worker_id = Some(worker_id.to_string());
+        task.assigned_at_secs = Some(now);
 
         let mut in_progress = self.in_progress.write().await;
         in_progress.insert(task.id.clone(), task.clone());

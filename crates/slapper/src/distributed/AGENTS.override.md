@@ -7,6 +7,8 @@ Specialized guidance for the distributed computing module.
 `Worker::new(config, psk)` requires both `WorkerConfig` and a PSK string:
 ```rust
 let worker = Worker::new(config, "your-secret-psk".to_string());
+let mut worker = worker;
+worker.start().await?;
 ```
 
 ## TLS
@@ -40,6 +42,51 @@ The coordinator expects line-based JSON messages via `CommandMessage::Register` 
 Worker coordinator URLs should be `host:port` format (no http:// prefix):
 ```rust
 fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
-    // Strip http:// or https://, parse host:port
+    let url = url
+        .trim_start_matches("http://")
+        .trim_start_matches("https://")
+        .trim_end_matches('/');
+
+    let parts: Vec<&str> = url.split(':').collect();
+    if parts.len() != 2 {
+        return Err(SlapperError::Config(format!(
+            "Invalid coordinator URL format: {} (expected host:port)",
+            url
+        )));
+    }
+
+    let host = parts[0];
+    let port: u16 = parts[1]
+        .parse()
+        .map_err(|_| SlapperError::Config(format!("Invalid port in coordinator URL: {}", url)))?;
+
+    Ok((host, port))
 }
+```
+
+## Bugs Fixed (2026-05-22)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `queue.rs:57` | `dequeue()` ignored `worker_id` param and didn't set `assigned_at_secs` | Now properly tracks which worker owns task and when assigned |
+| `worker.rs:132-161` | Heartbeat used HTTP POST to non-existent REST API endpoint | Changed to use `RemoteClient::send_heartbeat()` via TCP line-based JSON |
+
+## Key Patterns
+
+### Task Tracking
+- `Task::worker_id` - Set by `dequeue()` when a worker claims a task
+- `Task::assigned_at_secs` - Timestamp when task was assigned (for stale task detection)
+- Use `TaskQueue::reassign_stale_tasks(timeout_secs)` to recover tasks from dead workers
+
+### PSK Authentication
+- PSK is sent as first message after TCP connect: `AuthMessage { psk }`
+- Server validates using constant-time comparison: `bool::from(psk.as_bytes().ct_eq(server_psk.as_bytes()))`
+- On failure, server sends error and closes connection
+
+### Line-Based Protocol
+Messages are newline-delimited JSON. Use `LineWriter`:
+```rust
+let mut writer = LineWriter::new(stream);
+writer.write_line(&serde_json::to_string(&msg)?).await?;
+let response: ResponseMessage = serde_json::from_str(&writer.read_line().await?)?;
 ```

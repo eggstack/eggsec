@@ -48,8 +48,23 @@ Secure and efficient communication between nodes using line-based JSON over TCP 
 | LineWriter | io.rs | 306-340 | Line I/O wrapper |
 | generate_psk | command.rs | 249-254 | PSK generation |
 
+## Task Lifecycle
+
+1. **Enqueue**: Tasks are added via `TaskQueue::enqueue(task)`
+2. **Dequeue**: Workers claim tasks via `TaskQueue::dequeue(worker_id)` which sets `worker_id` and `assigned_at_secs`
+3. **Execute**: Workers execute tasks locally
+4. **Complete**: Results are submitted via `TaskQueue::complete(result)`
+5. **Reassign**: Stale tasks (timeout exceeded) are returned to pending via `TaskQueue::reassign_stale_tasks(timeout_secs)`
+
 ## Benefits
 
 - **Scalability**: Easily handle thousands of targets by adding more worker nodes.
 - **Resilience**: If a worker fails, its tasks are automatically reassigned to other nodes.
 - **Geographic Distribution**: Deploy workers in different regions to test from multiple perspectives.
+
+## Bugs Fixed (2026-05-22)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `queue.rs:57` | `dequeue()` ignored `worker_id` param and didn't set `assigned_at_secs` | Now properly tracks which worker owns task and when |
+| `worker.rs:132-161` | Heartbeat used HTTP POST to non-existent REST API endpoint | Changed to use `RemoteClient::send_heartbeat()` via TCP |
