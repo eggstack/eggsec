@@ -157,13 +157,7 @@ async fn handle_no_command(cli: &Cli) -> Result<()> {
         crate::tui::run(cli.config.clone())?;
     } else {
         println!("No command specified and not running in interactive terminal.");
-        println!("Available commands:");
-        println!("  slapper load <url>          - Run HTTP load test");
-        println!("  slapper scan-ports <host>   - Scan ports");
-        println!("  slapper scan-endpoints <url> - Discover endpoints");
-        println!("  slapper fuzz <url>          - Fuzz target");
-        println!("  slapper recon <target>      - Reconnaissance");
-        println!("  slapper --help             - Show all commands");
+        println!("Run 'slapper --help' for available commands.");
         println!("\nTo launch TUI, run from an interactive terminal.");
     }
     Ok(())

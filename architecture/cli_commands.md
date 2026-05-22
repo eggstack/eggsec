@@ -70,6 +70,9 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 1. **`sbom.rs`**: Replaced `unwrap()` with `ok_or_else()` pattern for path conversion (handles invalid Unicode)
 2. **`config.rs`**: Replaced `std::process::exit(1)` with proper error returns via `map_err()`
 3. **`http.rs`**: Added `-o` short form to `load` and `graphql` output flags for consistency
+4. **`handlers/mod.rs:155-169`**: Replaced hardcoded command list in `handle_no_command` with guidance to use `slapper --help`
+5. **`handlers/cluster.rs:348`**: Replaced `unwrap_or(22)` with `unwrap_or_else(|_| 22)` to avoid panic on invalid parsing
+6. **`handlers/auth_test.rs:10`**: Added missing scope validation `ctx.ensure_scope_url(&args.target)?`
 
 ### CLI Consistency Guidelines
 

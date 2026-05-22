@@ -114,6 +114,9 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `agent/alerts/routing.rs:107-112` | Race condition in `cleanup_stale_entries` | Inline cleanup under single lock scope |
 | `agent/memory.rs:137` | `unwrap()` on `file_stem()` could panic for hidden files | Added fallback hash-based name |
 | `agent/mod.rs:657` | Silent error suppression with `unwrap_or_default()` | Log warning with `unwrap_or_else()` |
+| `commands/handlers/auth_test.rs:10` | Missing scope validation for auth-test command | Added `ctx.ensure_scope_url(&args.target)?` |
+| `commands/handlers/cluster.rs:348` | `unwrap_or(22)` in parse could panic | Changed to `unwrap_or_else(\|_\| 22)` |
+| `commands/handlers/mod.rs:155-169` | Hardcoded command list in `handle_no_command` | Replaced with guidance to use `slapper --help` |
 
 ## Skills Directory
 

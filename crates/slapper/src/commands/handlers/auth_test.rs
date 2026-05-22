@@ -7,6 +7,7 @@ pub async fn handle_auth_test(
     ctx: &crate::commands::CommandContext,
     mut args: AuthTestArgs,
 ) -> Result<()> {
+    ctx.ensure_scope_url(&args.target)?;
     args.json |= ctx.json;
     eprintln!("{}", AUTH_BANNER);
 
