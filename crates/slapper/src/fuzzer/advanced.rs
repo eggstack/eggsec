@@ -429,7 +429,7 @@ impl FuzzerResultConverter<WebSocketTestResult> for WebSocketTestResult {
         let description = self.description.clone();
         FuzzResult {
             payload: Payload {
-                payload_type: PayloadType::Grpc,
+                payload_type: PayloadType::Websocket,
                 payload: self.message,
                 description,
                 severity: self.severity,

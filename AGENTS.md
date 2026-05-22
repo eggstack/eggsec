@@ -229,6 +229,9 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `cli/fuzz.rs` | Missing `-o` short flag on WafStressArgs; indentation issue after edit | Added `short = 'o'` and fixed indentation; preserved `From<WafStressArgs>` impl |
 | `cli/http.rs` | Missing `-o` short flag on ReconArgs | Added `short = 'o'` to output field |
 | `cli/cluster.rs` | Unused `-o` flag on ClusterArgs | Removed dead code - cluster commands are interactive |
+| `fuzzer/advanced.rs:432` | `WebSocketFuzzer.into_fuzz_result()` used `PayloadType::Grpc` instead of `PayloadType::Websocket` | Changed to `PayloadType::Websocket` |
+| `fuzzer/payloads/csv.rs:221` | Test used `std::collections::HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for consistency |
+| `fuzzer/payloads/mod.rs:123` | Redundant `use std::sync::LazyLock` inside `all_variants()` function | Removed redundant import |
 
 ## Skills Directory
 

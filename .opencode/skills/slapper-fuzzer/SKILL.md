@@ -35,7 +35,7 @@ Fuzzing engine module workflows and patterns for security testing.
 - `OAuthFuzzer` - Redirect URI, scope escalation, state parameter, grant mixing
 - `IdorFuzzer` - Horizontal/vertical escalation testing
 - `SstiFuzzer` - Template engine detection (Jinja2, ERB, etc.)
-- `WebSocketFuzzer` - Message injection
+- `WebSocketFuzzer` - Message injection (ensure `PayloadType::Websocket` is used, not `PayloadType::Grpc`)
 - `GrpcFuzzer` - Method injection
 
 ### ReDoS Detection (`fuzzer/redos_detect.rs`)

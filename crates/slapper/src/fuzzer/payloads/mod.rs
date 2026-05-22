@@ -120,7 +120,6 @@ impl PayloadType {
     }
 
     pub fn all_variants() -> &'static [PayloadType] {
-        use std::sync::LazyLock;
         static VARIANTS: LazyLock<Vec<PayloadType>> =
             LazyLock::new(|| PayloadType::iter().collect());
         &VARIANTS
