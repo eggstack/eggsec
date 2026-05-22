@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 
 use crate::output::agent::AgentFinding;
 
@@ -56,33 +57,31 @@ impl MarkdownReport {
         Self { summary, findings }
     }
 
-    pub fn generate(&self) -> String {
-        use std::fmt::Write;
+    pub fn generate(&self) -> Result<String, std::fmt::Error> {
         let mut md = String::new();
 
-        writeln!(md, "# Security Scan Report\n").unwrap();
-        writeln!(md, "## Summary\n").unwrap();
-        writeln!(md, "| Field | Value |").unwrap();
-        writeln!(md, "|-------|-------|").unwrap();
-        writeln!(md, "| Target | {} |", self.summary.target).unwrap();
-        writeln!(md, "| Scan Type | {} |", self.summary.scan_type).unwrap();
-        writeln!(md, "| Timestamp | {} |", self.summary.timestamp).unwrap();
+        writeln!(md, "# Security Scan Report\n")?;
+        writeln!(md, "## Summary\n")?;
+        writeln!(md, "| Field | Value |")?;
+        writeln!(md, "|-------|-------|")?;
+        writeln!(md, "| Target | {} |", self.summary.target)?;
+        writeln!(md, "| Scan Type | {} |", self.summary.scan_type)?;
+        writeln!(md, "| Timestamp | {} |", self.summary.timestamp)?;
         writeln!(
             md,
             "| Duration | {} seconds |",
             self.summary.duration_seconds
-        )
-        .unwrap();
-        writeln!(md, "| Total Requests | {} |", self.summary.total_requests).unwrap();
-        writeln!(md, "| Critical | {} |", self.summary.critical_count).unwrap();
-        writeln!(md, "| High | {} |", self.summary.high_count).unwrap();
-        writeln!(md, "| Medium | {} |", self.summary.medium_count).unwrap();
-        writeln!(md, "| Low | {} |", self.summary.low_count).unwrap();
-        writeln!(md, "| Info | {} |", self.summary.info_count).unwrap();
-        writeln!(md).unwrap();
+        )?;
+        writeln!(md, "| Total Requests | {} |", self.summary.total_requests)?;
+        writeln!(md, "| Critical | {} |", self.summary.critical_count)?;
+        writeln!(md, "| High | {} |", self.summary.high_count)?;
+        writeln!(md, "| Medium | {} |", self.summary.medium_count)?;
+        writeln!(md, "| Low | {} |", self.summary.low_count)?;
+        writeln!(md, "| Info | {} |", self.summary.info_count)?;
+        writeln!(md)?;
 
         if !self.findings.is_empty() {
-            writeln!(md, "## Findings\n").unwrap();
+            writeln!(md, "## Findings\n")?;
 
             for (i, finding) in self.findings.iter().enumerate() {
                 let severity_icon = match finding.severity.to_lowercase().as_str() {
@@ -93,45 +92,45 @@ impl MarkdownReport {
                     _ => "⚪",
                 };
 
-                writeln!(md, "### {}. {} {}\n", i + 1, severity_icon, finding.title).unwrap();
-                writeln!(md, "**Severity:** {}  \n", finding.severity).unwrap();
-                writeln!(md, "**Category:** {}  \n", finding.category).unwrap();
-                writeln!(md, "**Location:** {}  \n\n", finding.location).unwrap();
+                writeln!(md, "### {}. {} {}\n", i + 1, severity_icon, finding.title)?;
+                writeln!(md, "**Severity:** {}  \n", finding.severity)?;
+                writeln!(md, "**Category:** {}  \n", finding.category)?;
+                writeln!(md, "**Location:** {}  \n\n", finding.location)?;
 
-                writeln!(md, "{}\n\n", finding.description).unwrap();
+                writeln!(md, "{}\n\n", finding.description)?;
 
                 if let Some(evidence) = &finding.evidence {
-                    writeln!(md, "**Evidence:**\n```\n{}\n```\n\n", evidence).unwrap();
+                    writeln!(md, "**Evidence:**\n```\n{}\n```\n\n", evidence)?;
                 }
 
                 if let Some(remediation) = &finding.remediation {
-                    writeln!(md, "**Remediation:** {}\n\n", remediation).unwrap();
+                    writeln!(md, "**Remediation:** {}\n\n", remediation)?;
                 }
 
                 if !finding.cve_ids.is_empty() {
-                    writeln!(md, "**CVE IDs:** {}\n\n", finding.cve_ids.join(", ")).unwrap();
+                    writeln!(md, "**CVE IDs:** {}\n\n", finding.cve_ids.join(", "))?;
                 }
 
                 if !finding.references.is_empty() {
-                    writeln!(md, "**References:**\n").unwrap();
+                    writeln!(md, "**References:**\n")?;
                     for reference in &finding.references {
-                        writeln!(md, "- {}\n", reference).unwrap();
+                        writeln!(md, "- {}\n", reference)?;
                     }
-                    writeln!(md).unwrap();
+                    writeln!(md)?;
                 }
 
-                writeln!(md, "---\n\n").unwrap();
+                writeln!(md, "---\n\n")?;
             }
         } else {
-            writeln!(md, "## Findings\n\n").unwrap();
-            writeln!(md, "No vulnerabilities were found in this scan.\n\n").unwrap();
+            writeln!(md, "## Findings\n\n")?;
+            writeln!(md, "No vulnerabilities were found in this scan.\n\n")?;
         }
 
-        md
+        Ok(md)
     }
 }
 
 pub fn generate_markdown_report(summary: ScanSummary, findings: Vec<Finding>) -> String {
     let report = MarkdownReport::new(summary, findings);
-    report.generate()
+    report.generate().unwrap_or_else(|_| String::new())
 }

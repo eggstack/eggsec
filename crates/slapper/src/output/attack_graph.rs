@@ -132,11 +132,11 @@ impl AttackGraphBuilder {
         }
     }
 
-    pub fn to_html(graph: &AttackGraph) -> String {
-        let nodes_json = serde_json::to_string(&graph.nodes).unwrap_or_default();
-        let edges_json = serde_json::to_string(&graph.edges).unwrap_or_default();
+    pub fn to_html(graph: &AttackGraph) -> Result<String, serde_json::Error> {
+        let nodes_json = serde_json::to_string(&graph.nodes)?;
+        let edges_json = serde_json::to_string(&graph.edges)?;
 
-        format!(
+        Ok(format!(
             r#"<!DOCTYPE html>
 <html>
 <head>
@@ -166,7 +166,7 @@ impl AttackGraphBuilder {
     </script>
 </body>
 </html>"#
-        )
+        ))
     }
 }
 

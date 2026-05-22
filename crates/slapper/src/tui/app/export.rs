@@ -328,7 +328,7 @@ impl super::App {
                             state: "open".to_string(),
                         })
                         .collect();
-                    let csv = CsvExporter::export_ports(&ports);
+                    let csv = CsvExporter::export_ports(&ports).unwrap_or_default();
                     self.save_export(filename, csv);
                 }
             }
@@ -345,7 +345,7 @@ impl super::App {
                             content_length: e.content_length.unwrap_or(0),
                         })
                         .collect();
-                    let csv = CsvExporter::export_endpoints(&endpoints);
+                    let csv = CsvExporter::export_endpoints(&endpoints).unwrap_or_default();
                     self.save_export(filename, csv);
                 }
             }

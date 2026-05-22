@@ -237,6 +237,11 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `fuzzer/advanced.rs:432` | `WebSocketFuzzer.into_fuzz_result()` used `PayloadType::Grpc` instead of `PayloadType::Websocket` | Changed to `PayloadType::Websocket` |
 | `fuzzer/payloads/csv.rs:221` | Test used `std::collections::HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for consistency |
 | `fuzzer/payloads/mod.rs:123` | Redundant `use std::sync::LazyLock` inside `all_variants()` function | Removed redundant import |
+| `output/csv.rs:15,39,63` | `writeln!().unwrap()` could panic on write failure | Changed to return `Result<String, std::fmt::Error>` and use `?` |
+| `output/markdown.rs:63-128` | `writeln!().unwrap()` could panic on write failure | Changed `MarkdownReport::generate()` to return `Result<String, std::fmt::Error>` |
+| `output/junit.rs:337` | `unwrap_or_default()` silently swallowed UTF-8 errors | Changed to explicit error handling via `quick_xml::Error::Io` |
+| `output/attack_graph.rs:136-137` | `unwrap_or_default()` on JSON serialization silently failed | Changed `to_html()` to return `Result<String, serde_json::Error>` |
+| `output/template.rs:190` | `unwrap_or_default()` on JSON serialization silently failed | Changed to explicit `if let Ok()` with `map_err` |
 
 ## Skills Directory
 

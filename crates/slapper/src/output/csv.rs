@@ -1,18 +1,18 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 
 pub use crate::types::OutputFormat;
 
 pub struct CsvExporter;
 
 impl CsvExporter {
-    pub fn export_findings(findings: &[FindingCsv]) -> String {
+    pub fn export_findings(findings: &[FindingCsv]) -> Result<String, std::fmt::Error> {
         if findings.is_empty() {
-            return String::new();
+            return Ok(String::new());
         }
 
-        use std::fmt::Write;
         let mut output = String::new();
-        writeln!(output, "Severity,Target,Path,Description,CVE,Remediation").unwrap();
+        writeln!(output, "Severity,Target,Path,Description,CVE,Remediation")?;
 
         for f in findings {
             writeln!(
@@ -24,21 +24,19 @@ impl CsvExporter {
                 super::escape::escape_csv(&f.description),
                 super::escape::escape_csv(f.cve.as_deref().unwrap_or("")),
                 super::escape::escape_csv(f.remediation.as_deref().unwrap_or("")),
-            )
-            .unwrap();
+            )?;
         }
 
-        output
+        Ok(output)
     }
 
-    pub fn export_ports(ports: &[PortCsv]) -> String {
+    pub fn export_ports(ports: &[PortCsv]) -> Result<String, std::fmt::Error> {
         if ports.is_empty() {
-            return String::new();
+            return Ok(String::new());
         }
 
-        use std::fmt::Write;
         let mut output = String::new();
-        writeln!(output, "Host,Port,Protocol,Service,Version,State").unwrap();
+        writeln!(output, "Host,Port,Protocol,Service,Version,State")?;
 
         for p in ports {
             writeln!(
@@ -50,21 +48,19 @@ impl CsvExporter {
                 super::escape::escape_csv(p.service.as_deref().unwrap_or("")),
                 super::escape::escape_csv(p.version.as_deref().unwrap_or("")),
                 super::escape::escape_csv(&p.state),
-            )
-            .unwrap();
+            )?;
         }
 
-        output
+        Ok(output)
     }
 
-    pub fn export_endpoints(endpoints: &[EndpointCsv]) -> String {
+    pub fn export_endpoints(endpoints: &[EndpointCsv]) -> Result<String, std::fmt::Error> {
         if endpoints.is_empty() {
-            return String::new();
+            return Ok(String::new());
         }
 
-        use std::fmt::Write;
         let mut output = String::new();
-        writeln!(output, "URL,Method,Status,Content-Type,Content-Length").unwrap();
+        writeln!(output, "URL,Method,Status,Content-Type,Content-Length")?;
 
         for e in endpoints {
             writeln!(
@@ -75,11 +71,10 @@ impl CsvExporter {
                 e.status,
                 super::escape::escape_csv(e.content_type.as_deref().unwrap_or("")),
                 e.content_length,
-            )
-            .unwrap();
+            )?;
         }
 
-        output
+        Ok(output)
     }
 }
 

@@ -21,11 +21,31 @@ Report generation module workflows and patterns for exporting scan results.
 **Important**: Use `FxHashMap`/`FxHashSet` instead of `std::collections::HashMap` for performance:
 - `trend.rs` - `ResultComparator::compare()`, `TrendAnalyzer::get_findings_by_category()`, `TrendAnalyzer::get_most_common_findings()`
 - `agent.rs` - `FindingSummary::from_findings()`
+- `session.rs` - `ScanSession::tab_states`, `ScanSession::results`
+- `template.rs` - `ReportTemplateEngine::custom_templates`, `TemplateRenderContext::custom_data`
+- `attack_graph.rs` - `GraphNode::properties`
+- `sarif.rs` - `SarifResult::properties`
+- `junit.rs` - `JUnitBuilder::test_suites`
+- `dedup.rs` - `DedupEngine::seen`
+- `diff.rs` - `DiffEngine::compare()`
 
 ```rust
 use rustc_hash::FxHashMap;
 
 let mut map: FxHashMap<String, usize> = FxHashMap::default();
+```
+
+### Error Handling
+**Important**: Methods that perform I/O or serialization should return `Result` types:
+- `CsvExporter::export_findings()`, `export_ports()`, `export_endpoints()` return `Result<String, std::fmt::Error>`
+- `MarkdownReport::generate()` returns `Result<String, std::fmt::Error>`
+- `JUnitReport::to_xml()` returns `Result<String, quick_xml::Error>`
+- `AttackGraphBuilder::to_html()` returns `Result<String, serde_json::Error>`
+- `TemplateRenderContext::render_with_styling()` uses explicit `map_err` instead of `unwrap_or_default()`
+
+When using `CsvExporter` methods, handle errors appropriately:
+```rust
+let csv = CsvExporter::export_ports(&ports).unwrap_or_default();
 ```
 
 ### Dedup Strategies

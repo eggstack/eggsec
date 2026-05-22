@@ -185,10 +185,9 @@ impl ReportTemplateEngine {
         styling: &TemplateStyling,
     ) -> Result<String> {
         let mut styled_context = context.clone();
-        styled_context.custom_data.insert(
-            "styling".to_string(),
-            serde_json::to_value(styling).unwrap_or_default(),
-        );
+        if let Ok(styling_value) = serde_json::to_value(styling) {
+            styled_context.custom_data.insert("styling".to_string(), styling_value);
+        }
         self.render(template_name, &styled_context)
     }
 

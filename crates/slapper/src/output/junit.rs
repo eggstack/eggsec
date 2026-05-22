@@ -334,7 +334,12 @@ impl JUnitReport {
         writer.write_event(Event::End(BytesEnd::new("testsuites")))?;
 
         let result = writer.into_inner().into_inner();
-        Ok(String::from_utf8(result).unwrap_or_default())
+        match String::from_utf8(result) {
+            Ok(s) => Ok(s),
+            Err(e) => Err(quick_xml::Error::Io(std::sync::Arc::new(
+                std::io::Error::new(std::io::ErrorKind::InvalidData, e)
+            ))),
+        }
     }
 
     fn write_testsuite<W: std::io::Write>(

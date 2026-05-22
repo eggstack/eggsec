@@ -75,6 +75,16 @@ pub fn has_regressions(diff: &DiffResult) -> bool;  // checks Critical escalatio
 | `DiffResult` | `diff.rs` | Finding set comparison result |
 | `TrendAnalysis` | `trend.rs` | Historical trend data |
 
+### Error Handling
+
+**Important**: Methods that perform I/O or serialization return `Result` types:
+- `CsvExporter::export_findings()`, `export_ports()`, `export_endpoints()` return `Result<String, std::fmt::Error>`
+- `MarkdownReport::generate()` returns `Result<String, std::fmt::Error>`
+- `JUnitReport::to_xml()` returns `Result<String, quick_xml::Error>`
+- `AttackGraphBuilder::to_html()` returns `Result<String, serde_json::Error>`
+
+Avoid using `unwrap_or_default()` on serialization - use explicit error handling instead.
+
 ## Performance Notes
 
 **Hash Collections**: Use `rustc_hash::FxHashMap` instead of `std::collections::HashMap` for performance in:
