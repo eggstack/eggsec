@@ -33,6 +33,10 @@ The `raw_udp` module in `stress/udp.rs:20-117` is integrated:
 |-------|-----|
 | `icmp.rs:119` | IPv4 flags field properly set to `0x40` (Don't Fragment) in `build_icmp_packet_v4()` |
 | `udp.rs:244` | Mutex poisoning handled in `run_udp_flood_spoofed()` with `into_inner()` instead of `unwrap()` |
+| `syn.rs:237-260` | IPv4 spoof range now supports both CIDR notation (`10.0.0.0/24`) and range notation (`10.0.0.1-10.0.0.254`) |
+| `syn.rs:263-306` | IPv6 spoof range now supports both CIDR notation and range notation |
+| `icmp.rs:244-267` | IPv4 spoof range now supports both CIDR and range notation (consistent with syn.rs) |
+| `icmp.rs:270-313` | IPv6 spoof range now supports both CIDR and range notation (consistent with syn.rs) |
 
 ## Feature Requirements
 - All stress tests require `stress-testing` feature flag

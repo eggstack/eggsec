@@ -689,9 +689,9 @@ impl ParsedPacket {
         ip: &Option<IpPacket>,
         transport: &Option<TransportProtocol>,
     ) -> Option<AppLayer> {
-        let payload = match transport {
-            Some(TransportProtocol::Tcp(tcp)) => &tcp.payload,
-            Some(TransportProtocol::Udp(udp)) => &udp.payload,
+        let (src_port, dst_port, payload) = match transport {
+            Some(TransportProtocol::Tcp(tcp)) => (Some(tcp.src_port), Some(tcp.dst_port), tcp.payload.as_slice()),
+            Some(TransportProtocol::Udp(udp)) => (Some(udp.src_port), Some(udp.dst_port), udp.payload.as_slice()),
             _ => return None,
         };
 
@@ -702,12 +702,8 @@ impl ParsedPacket {
         if let Some(ip_pkt) = ip {
             match ip_pkt.protocol {
                 6 => {
-                    if payload.len() > 20 {
-                        let src_port = u16::from_be_bytes([payload[0], payload[1]]);
-                        let dst_port = u16::from_be_bytes([payload[2], payload[3]]);
-
-                        if dst_port == 80 || src_port == 80 || dst_port == 8080 || src_port == 8080
-                        {
+                    if let (Some(sp), Some(dp)) = (src_port, dst_port) {
+                        if dp == 80 || sp == 80 || dp == 8080 || sp == 8080 {
                             if let Some(http) = HttpRequest::parse(payload) {
                                 return Some(AppLayer::Http(http));
                             }
@@ -715,13 +711,8 @@ impl ParsedPacket {
                     }
                 }
                 17 => {
-                    let dns_payload: Vec<u8> = match transport {
-                        Some(TransportProtocol::Udp(udp)) => udp.payload.clone(),
-                        _ => vec![],
-                    };
-
-                    if !dns_payload.is_empty() {
-                        if let Some(dns) = DnsRecord::parse(&dns_payload) {
+                    if !payload.is_empty() {
+                        if let Some(dns) = DnsRecord::parse(payload) {
                             return Some(AppLayer::Dns(dns));
                         }
                     }

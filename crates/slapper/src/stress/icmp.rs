@@ -256,6 +256,16 @@ fn get_spoofed_source(range: &Option<String>) -> Result<Ipv4Addr> {
 
             return Ok(Ipv4Addr::from(base_u32 | offset));
         }
+
+        let parts: Vec<&str> = range_str.split('-').collect();
+        if parts.len() == 2 {
+            let start: u32 = parts[0].parse()?;
+            let end: u32 = parts[1].parse()?;
+            if end > start {
+                let offset = rng.gen_range(0..(end - start + 1));
+                return Ok(Ipv4Addr::from(start + offset));
+            }
+        }
     }
 
     Ok(Ipv4Addr::new(
@@ -297,6 +307,16 @@ fn get_spoofed_source_v6(range: &Option<String>) -> Result<Ipv6Addr> {
                 new_hi,
                 new_lo,
             ));
+        }
+
+        let parts: Vec<&str> = range_str.split('-').collect();
+        if parts.len() == 2 {
+            let start: u128 = parts[0].parse()?;
+            let end: u128 = parts[1].parse()?;
+            if end > start {
+                let offset = rng.gen_range(0..(end - start + 1));
+                return Ok(Ipv6Addr::from(start + offset));
+            }
         }
     }
 

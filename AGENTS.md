@@ -183,6 +183,11 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `slapper-nse/src/async_executor.rs:107` | `Default` impl used `expect()` that could panic | Changed to `unwrap_or_else` with descriptive panic |
 | `stress/icmp.rs:119` | IPv4 flags not set in ICMP packet builder | Added `set_flags(0x40)` for Don't Fragment in `build_icmp_packet_v4()` |
 | `stress/udp.rs:244` | Mutex poisoning could cause panic in raw UDP flood | Changed `unwrap()` to `into_inner()` for graceful handling |
+| `stress/syn.rs:237-260` | IPv4 spoof range now supports both CIDR and range notation | Added range notation (`10.0.0.1-10.0.0.254`) parsing alongside CIDR |
+| `stress/syn.rs:263-306` | IPv6 spoof range now supports both CIDR and range notation | Added range notation parsing for consistency |
+| `stress/icmp.rs:244-267` | IPv4 spoof range now supports both CIDR and range notation | Added range notation parsing (consistent with syn.rs) |
+| `stress/icmp.rs:270-313` | IPv6 spoof range now supports both CIDR and range notation | Added range notation parsing (consistent with syn.rs) |
+| `packet/parse_impl.rs:702-717` | `parse_app_layer()` read TCP ports from payload instead of header | Now uses `TcpHeader.src_port`/`dst_port` directly |
 | `recon/cve.rs:31` | `CveMapper.cache` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `recon/geolocation.rs:27` | `LOCAL_IP_DATA` used `HashMap` instead of `FxHashMap` | Changed to `FxHashMap` for performance |
 | `recon/wayback.rs:86` | `WaybackClient.endpoints` used `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` for performance |

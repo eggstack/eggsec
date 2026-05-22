@@ -64,6 +64,8 @@ Packet capture, crafting, and parsing module workflows and patterns.
 | `traceroute.rs:622` | `panic!` replaced with `unreachable!` in test code |
 | `craft.rs:186-187` | IPv4 fragmentation flags byte properly initialized (was missing `bytes[7] = 0`) |
 | `capture.rs:47-49` | PcapWriter timestamp now propagates error instead of silently using zero on clock skew |
+| `parse_impl.rs:702-717` | `parse_app_layer()` now reads TCP ports from `TcpHeader` struct instead of re-parsing from payload |
+| `craft.rs:267` | UDP checksum now computed and set properly (was hardcoded to 0) |
 
 ## Testing
 
