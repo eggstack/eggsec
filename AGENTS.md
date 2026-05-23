@@ -166,11 +166,31 @@ Detailed architecture documentation is in the `architecture/` directory:
 ### 2026-05-28
 
 | Component | Issue | Fix |
-|-----------|-------|-----|
+|-----------|-------|-------|
 | `waf/mod.rs:4` | Docstring listed only 25 WAF products | Updated to "34 WAF products" |
 | `waf/bypass/profiles.rs:21,37` | `get_waf_profiles()` recreated profiles every call | Changed to `LazyLock` static for caching |
 | `waf/detector/detect.rs:45,71` | Score accumulator `u8` could overflow | Changed to `u16` with proper constant types |
 | `constants.rs:69-90` | WAF scoring constants were `u8` | Changed to `u16` to prevent overflow |
+
+### 2026-05-23 - Implementation Plan
+
+All 47 items from `plans/plan.md` completed across 3 waves:
+
+| Wave | Items | Status |
+|------|-------|--------|
+| Wave 1 | 6 items (production safety) | ✅ Completed |
+| Wave 2 | 13 items (error handling) | ✅ Completed |
+| Wave 3 | 28 items (cleanup/docs) | ✅ Completed |
+
+Key fixes:
+- **AI planner.rs** - Clock skew panic prevention with `unwrap_or_else`
+- **Tool planner.rs** - HashSet→FxHashSet at 9 locations
+- **Fuzzer api.rs** - HashMap→FxHashMap at 10 locations
+- **NSE smbauth.rs** - Removed 185 lines of duplicate function definitions
+- **Recon email/js.rs** - LazyLock regex `unwrap()`→`expect()` at 32 locations
+- **Networking capture.rs** - Error propagation instead of silent suppression
+- **Output convert/markdown.rs** - `Result<String, E>` error propagation
+- **NSE HashMap replacements** - 7 library files updated to `FxHashMap`
 
 ### 2026-05-27
 
