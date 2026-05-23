@@ -64,6 +64,35 @@ fn compute_tcp_checksum(
     !sum as u16
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum PacketValidationError {
+    InvalidTtl,
+    InvalidHopLimit,
+    InvalidTcpOptionsLength(usize),
+    PacketTooLarge { size: usize, max: usize },
+    PayloadTooLarge { size: usize, max: usize },
+}
+
+impl std::fmt::Display for PacketValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PacketValidationError::InvalidTtl => write!(f, "IPv4 TTL cannot be zero"),
+            PacketValidationError::InvalidHopLimit => write!(f, "IPv6 hop limit cannot be zero"),
+            PacketValidationError::InvalidTcpOptionsLength(len) => {
+                write!(f, "TCP options length ({}) is not a multiple of 4", len)
+            }
+            PacketValidationError::PacketTooLarge { size, max } => {
+                write!(f, "Packet size ({}) exceeds maximum ({})", size, max)
+            }
+            PacketValidationError::PayloadTooLarge { size, max } => {
+                write!(f, "Payload size ({}) exceeds maximum ({})", size, max)
+            }
+        }
+    }
+}
+
+impl std::error::Error for PacketValidationError {}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PacketBuilder {
     pub ethernet: Option<EthernetBuilder>,
@@ -157,6 +186,53 @@ impl PacketBuilder {
     pub fn payload(mut self, data: Vec<u8>) -> Self {
         self.payload = Some(data);
         self
+    }
+
+    pub fn validate(&self) -> Result<(), PacketValidationError> {
+        if let Some(ref ip) = self.ipv4 {
+            if ip.ttl == 0 {
+                return Err(PacketValidationError::InvalidTtl);
+            }
+            let header_len = 20;
+            let payload_len = self.payload.as_ref().map(|p| p.len()).unwrap_or(0);
+            if header_len + payload_len > 65535 {
+                return Err(PacketValidationError::PacketTooLarge {
+                    size: header_len + payload_len,
+                    max: 65535,
+                });
+            }
+            if payload_len > 65507 {
+                return Err(PacketValidationError::PayloadTooLarge {
+                    size: payload_len,
+                    max: 65507,
+                });
+            }
+        }
+
+        if let Some(ref ip) = self.ipv6 {
+            if ip.hop_limit == 0 {
+                return Err(PacketValidationError::InvalidHopLimit);
+            }
+            let header_len = 40;
+            let payload_len = self.payload.as_ref().map(|p| p.len()).unwrap_or(0);
+            if header_len + payload_len > 65575 {
+                return Err(PacketValidationError::PacketTooLarge {
+                    size: header_len + payload_len,
+                    max: 65575,
+                });
+            }
+        }
+
+        if let Some(ref trans) = self.transport {
+            if let TransportBuilder::Tcp(tcp) = trans {
+                let options_len = tcp.options.len();
+                if options_len % 4 != 0 {
+                    return Err(PacketValidationError::InvalidTcpOptionsLength(options_len));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub fn build(&self) -> Vec<u8> {

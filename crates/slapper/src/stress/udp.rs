@@ -158,7 +158,7 @@ async fn run_udp_flood_spoofed(
         IpAddr::V4(ip) => ip,
         IpAddr::V6(_) => {
             return Err(SlapperError::Runtime(
-                "IPv6 not supported for spoofed UDP".to_string(),
+                "IPv6 not supported for spoofed UDP: raw socket spoofing requires IPv4. Use non-spoofed mode (--no-spoof) for IPv6 targets or target an IPv4 address.".to_string(),
             ));
         }
     };
