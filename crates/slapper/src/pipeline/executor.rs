@@ -221,7 +221,11 @@ pub async fn run(&self) -> Result<PipelineReport> {
                     spoof_config: self.spoof_config.clone(),
                 };
                 if let Err(e) = save(path, &session) {
-                    tracing::warn!("Failed to save session to {:?}: {}", path, e);
+                    tracing::error!(
+                        path = %path,
+                        error = %e,
+                        "Failed to save session checkpoint - progress may be lost on interrupt"
+                    );
                 }
             }
         }
