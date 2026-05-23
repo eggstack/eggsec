@@ -296,10 +296,18 @@ impl SmugglingBypass {
     }
 
     fn supports_http2_probes() -> bool {
+        // HTTP/2 smuggling support requires:
+        // - HTTP/2 connection preface detection (h2c upgrade or prior knowledge)
+        // - Frame manipulation capabilities (settings, window update frames)
+        // - ALPN negotiation support
+        // This is marked as a future enhancement pending proper HTTP/2 stack implementation
         false
     }
 
     fn requires_http2_probe(smuggling_type: &SmugglingType) -> bool {
+        // This function is only invoked when supports_http2_probes() returns true.
+        // Currently, H2CUpgrade and Http2Frame techniques are implemented but never
+        // executed because HTTP/2 support is disabled pending a full HTTP/2 stack.
         matches!(
             smuggling_type,
             SmugglingType::H2CUpgrade | SmugglingType::Http2Frame
