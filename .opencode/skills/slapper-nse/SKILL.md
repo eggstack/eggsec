@@ -115,6 +115,10 @@ Located in `src/cve/`:
 | `rustc-hash` not in slapper-nse dependencies | Added `rustc-hash.workspace = true` to Cargo.toml |
 | `CveCache` missing closing bracket | Fixed typo in struct definition |
 | `CveCache` using async `.await` on parking_lot RwLock | Removed `.await`; parking_lot RwLock is sync |
+| `public_api/api.rs` 8 std::HashMap instances | Replaced with FxHashMap for performance |
+| `libraries/http.rs:143` HashMap in parse_options | Changed to FxHashMap |
+| `libraries/datafiles.rs:31-33` HashMap in get_services | Changed to FxHashMap |
+| `libraries/creds.rs:102,123` HashSet usage | Changed to FxHashSet |
 
 ## Common Patterns
 

@@ -70,6 +70,10 @@ Note: TLS version and cipher suite detection is not yet implemented - `supported
 
 ### Notable Bug Fixes
 
+### 2026-05-28
+- **20 instances of `unwrap_or_default()`** - Replaced with explicit match with `tracing::debug` across 12 files (cve_lookup.rs, containers.rs, email.rs, js.rs, cors.rs, dependency_scan/mod.rs, reverse_dns.rs, ssl_audit.rs, cloud/storage_test.rs, asn.rs, techdetect.rs, threatintel.rs)
+
+### 2026-05-23
 - **geolocation.rs:308** - CIDR mask calculation was incorrect. Fixed to proper CIDR mask calculation.
 - **smtp_auth.rs:248,256,285** - Base64 API used incorrect trait method syntax.
 - **subdomain.rs:111,151** - Silent error suppression with `unwrap_or_default()` changed to explicit match with tracing.

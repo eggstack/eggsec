@@ -65,6 +65,12 @@ impl SlapperConfig {
 }
 ```
 
+**AlertChannelsConfig validation (2026-05-28)**: `SlapperConfig::validate()` now validates all alert channel types:
+- **Webhook**: URL must start with http:// or https://
+- **Email**: smtp_host, smtp_port, from, to cannot be empty
+- **Slack**: webhook_url must start with http:// or https://
+- **PagerDuty**: routing_key cannot be empty
+
 ### Scope Enforcement
 ```rust
 let scope = load_scope(None)?;

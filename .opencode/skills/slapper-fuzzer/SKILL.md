@@ -93,6 +93,11 @@ s.sort_by(|a, b| a.partial_cmp(b).unwrap_or_else(|| {
 }));
 ```
 
+### Notable Bug Fixes
+
+#### 2026-05-28
+- **detection/analyzer.rs:188-190** - IQR calculation could divide by zero if `iqr_samples` vec is empty after slice. Added `if iqr_samples.is_empty() { return; }` check.
+
 ## Testing
 
 ### Running Fuzzer Tests

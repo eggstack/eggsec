@@ -43,7 +43,16 @@ client.send_heartbeat(host, port, worker_id, status).await?;
 
 **Important**: Coordinator URL format is `host:port` (no http:// prefix).
 
-## Bugs Fixed (2026-05-22)
+## Bugs Fixed
+
+### 2026-05-28
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `worker.rs:115-123` | Worker advertised hardcoded string capabilities | Created `worker_capabilities()` helper deriving from `TaskType` enum |
+| `command.rs:146-149` | `env` field rejected without explanation | Added clarifying comment for intentional security rejection |
+
+### 2026-05-22
 
 | File | Issue | Fix |
 |------|-------|-----|
