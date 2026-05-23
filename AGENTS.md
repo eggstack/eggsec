@@ -102,7 +102,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 
 ### Security Notes
 
-- **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are now blocked via private IP checks in `TargetScope::parse()`. Previously they bypassed DNS resolution and private IP blocking.
+- **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are blocked via private IP checks in `TargetScope::parse()`. However, scope rule evaluation happens AFTER private IP check - so targets like `10.255.255.255` are rejected even with scope rules like `allow 10.0.0.0/8`.
 - **TUI Settings Tab**: Only exposes a subset of config fields. Saving via the TUI will cause data loss for `profiles`, `schedule`, `remote`, `ai`, `search`, `alert_channels`, and other fields not shown in the UI.
 
 ### Key Patterns
@@ -189,7 +189,6 @@ Detailed architecture documentation is in the `architecture/` directory:
 | AI | `client.rs:241` - silent fallback for Anthropic messages | Added `tracing::debug` for missing messages |
 | CLI | `fuzz.rs:292` - WafStressArgs output discarded | Preserved `args.output` in From impl |
 | Fuzzer | `execution.rs:267` - rate==0 causes early stop | Changed to `rate <= 1` |
-| Loadtest | `runner.rs:336` - metrics lock held during async | Moved body consumption outside lock |
 | Loadtest | `runner.rs:360` - JoinSet panic handling | Added panic-aware error handling |
 | Output | `diff.rs:139` - has_regressions only checked Critical | Now checks `severity >= Severity::High` |
 | WAF | `patterns.rs:656` - get_waf_signatures clones | Returns `&'static FxHashMap` instead |
@@ -254,12 +253,12 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Implementation Plan
 
-The consolidated implementation plan is in `plans/plan.md`. It contains 27 remaining items across 3 waves:
+The consolidated implementation plan is in `plans/plan.md`. It contains 26 remaining items across 3 waves:
 
 | Wave | Items | Priority | Description |
 |------|-------|----------|-------------|
 | Wave 1 | 4 | Critical | Scanner UDP reuse, WAF HashMap lookup, CLI CIDR validation, Recon CveMapper cache |
-| Wave 2 | 10 | High | Distributed (4), Pipeline (2), Loadtest (2), Output (1), Config (1) module fixes |
+| Wave 2 | 9 | High | Distributed (3), Pipeline (2), Loadtest (1), Output (1), Config (1) module fixes |
 | Wave 3 | 13 | Medium/Low | Improvement opportunities across multiple modules |
 
 ---
@@ -269,6 +268,7 @@ The consolidated implementation plan is in `plans/plan.md`. It contains 27 remai
 ### Scope Validation (CLI/Config)
 - Private IP check (`is_private_ip()`) occurs BEFORE scope rule evaluation in `TargetScope::parse()`. This means targets like `10.255.255.255` are rejected as private even if a scope rule like `allow 10.0.0.0/8` exists.
 - Scope rejection reasons are not reported - no indication of whether rejection was due to exclude rule or no include match.
+- DNS resolution failures silently return `ip: None` which can bypass CIDR rules.
 
 ### Recon Module
 - `CveMapper` cache doesn't persist - each call to `map_cves()` creates a new `CveMapper` instance, so cache is lost.
@@ -279,12 +279,13 @@ The consolidated implementation plan is in `plans/plan.md`. It contains 27 remai
 
 ### Distributed Module
 - `RemoteClient` lacks `Drop` impl - connections not explicitly closed on panic.
-- Heartbeat creates a new TCP connection each time, flooding rate limiter.
+- Heartbeat creates a new TCP connection each time via `RemoteClient::new_plaintext()`.
 - DNS lookup happens every `connect()` call, not cached.
 - Only `completed` queue has size limit; `pending` and `in_progress` can grow unbounded.
+- Rate limit check was fixed (lock duration minimized).
 
 ### WAF Module
-- `select_profile()` does O(p×s) nested linear scan through all profiles and signatures.
+- `select_profile()` does O(p×s) nested linear scan through all profiles and signatures (not yet optimized).
 - `BypassResult` lacks `error: Option<String>` field for network error details.
 - Evasion bypass calls `get_sqli_payloads()` 7 times in loops - redundant generation.
 
@@ -294,8 +295,9 @@ The consolidated implementation plan is in `plans/plan.md`. It contains 27 remai
 - Stages execute sequentially (no concurrent execution mode).
 
 ### Loadtest Module
-- `response.bytes().await` called inside lock - body consumed while holding metrics lock.
+- `response.bytes().await` called inside lock at `runner.rs:342` - body consumed while holding metrics lock (still outstanding).
 - Missing test coverage for TLS, streaming, chunked, redirect, rate limiting, auth, proxy, timeouts.
+- Panic handling in JoinSet was fixed.
 
 ### Fuzzer Module
 - `GrammarFuzzer::with_seed()` exists but undocumented.
@@ -308,4 +310,7 @@ The consolidated implementation plan is in `plans/plan.md`. It contains 27 remai
 ### Output Module
 - Compliance templates (`pcidss_template()`, `soc2_template()`) recreate structs every call (should use `LazyLock`).
 
-(End of file - total 287 lines)
+### TUI Module
+- `App.tabs` field (`FxHashMap`) is initialized but never populated or used - dead code.
+
+(End file - 298 lines)

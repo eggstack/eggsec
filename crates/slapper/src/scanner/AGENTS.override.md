@@ -54,23 +54,6 @@ let map: FxHashMap<String, String> = FxHashMap::default();
 | `fingerprint.rs:347-391` - Vec allocation in hot path | Changed to `&'static [&str]` slice |
 | `spoofed.rs:285,303` - silent errors from build_tcp_packet and send_to | Added `tracing::debug` for failed packet builds |
 
-## Known Issues (Remaining - 2026-05-28 Review)
 
-### High Priority
-
-1. **UDP socket created per port** (`udp_fingerprint.rs:169`)
-   - Each call to `fingerprint_udp_port()` creates a new `UdpSocket`
-   - Inefficient for scanning multiple ports on same host
-   - Fix: Pass `Arc<UdpSocket>` across port scans to same target
-
-### Medium Priority
-
-2. **Batch UDP scanning** (`udp_fingerprint.rs:128-139`)
-   - Could be parallelized with `tokio::sync::mpsc` worker pools
-   - Currently sequential
-
-3. **spoofed.rs silent errors** - PARTIALLY FIXED
-   - Added tracing but packet build failures still need investigation
-   - `build_tcp_packet` and `send_to` can fail silently
 
 (End file - 72 lines)
