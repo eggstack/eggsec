@@ -92,6 +92,23 @@ The recon module is organized as follows:
 - Never use `unwrap_or_default()` in async operations
 - Use `tracing::warn!` for non-fatal failures
 
+## Known Issues (2026-05-28)
+
+### 20 unwrap_or_default() Instances in Production Code
+**Files affected**: `cve_lookup.rs:140`, `containers.rs:124-125`, `email.rs:145`, `js.rs:256`, `cors.rs:107,114,121`, `dependency_scan/mod.rs:160,172,187`, `reverse_dns.rs:40`, `ssl_audit.rs:275`, `cloud/storage_test.rs:141,152`, `asn.rs:105`, `techdetect.rs:66`, `threatintel.rs:277`
+
+These silently suppress errors. Replace with explicit match and tracing:
+```rust
+// Instead of:
+let pod_name = pod.metadata.name.clone().unwrap_or_default();
+
+// Use:
+let pod_name = pod.metadata.name.clone().unwrap_or_else(|| {
+    tracing::debug!("pod missing name field");
+    String::new()
+});
+```
+
 ## Detached Modules (not in FULL_RECON_PIPELINE_MODULES)
 
 These modules exist but are not part of `run_full_recon`:

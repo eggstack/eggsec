@@ -84,6 +84,19 @@ This ensures new plans with moderate success are also cached.
     .as_secs(),
 ```
 
+### Knowledge Base Load Silent Failure
+**File**: `waf_bypass.rs:44`
+
+When loading `waf_bypasses.json`, `unwrap_or_default()` silently suppresses deserialization errors, potentially losing learned bypasses.
+
+**Fix**: Use `unwrap_or_else()` with logging:
+```rust
+.unwrap_or_else(|e| {
+    tracing::warn!("Failed to load WAF bypass knowledge base: {}", e);
+    Vec::new()
+})
+```
+
 ## Testing
 
 ```bash

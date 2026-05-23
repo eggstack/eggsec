@@ -28,3 +28,15 @@ Specialized guidance for the fuzzing engine module.
 ## Timing Analysis
 
 `fuzzer/detection/` has `TimingAnalyzer` (lock-free with atomics)
+
+## Division by Zero Guard
+
+In `fuzzer/detection/analyzer.rs:188-190`, the IQR calculation uses `if start >= end` check but this is insufficient if `sorted_samples.len() < 4`. Always add explicit empty check:
+
+```rust
+let iqr_samples: Vec<f64> = sorted_samples[start..end].to_vec();
+if iqr_samples.is_empty() {
+    return;
+}
+self.baseline_ms = Some(sum / iqr_samples.len() as f64);
+```

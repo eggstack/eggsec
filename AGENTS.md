@@ -164,16 +164,16 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Architecture Review Findings (2026-05-23)
 
-Completed review of all 14 architecture documents. Key findings:
+Completed review of all 14 architecture documents. Key findings consolidated in `plans/plan.md`.
 
 ### High Priority Issues
 
 | Module | File | Issue |
 |--------|------|-------|
-| NSE | `slapper-nse/src/public_api/api.rs` | Uses std HashMap at 4 locations (lines 107-108, 381, 413, 463, 486, 532) |
+| NSE | `slapper-nse/src/public_api/api.rs` | Uses std HashMap at 6 locations |
 | Distributed | `distributed/worker.rs:115-123` | Worker capabilities strings don't match TaskType enum |
-| Recon | Multiple files | 18 unwrap_or_default() calls silently suppress errors |
-| Networking | `networking/parse_impl.rs:531` | DNS parsing needs bounds check |
+| Recon | Multiple files | 20 unwrap_or_default() calls silently suppress errors |
+| Networking | `packet/parse_impl.rs:531` | DNS parsing needs bounds check |
 
 ### Medium Priority Issues
 
@@ -184,8 +184,8 @@ Completed review of all 14 architecture documents. Key findings:
 | NSE | `libraries/creds.rs:102,123` | Uses std HashSet |
 | Distributed | `command.rs:146-149` | env field accepted but rejected at execution |
 | Distributed | `remote.rs:127-146` | Rate limit holds write lock too long |
-| Fuzzer | `analyzer.rs:190` | Division-by-zero potential |
-| Loadtest | `metrics.rs:76` | Imprecise panic message |
+| Fuzzer | `fuzzer/detection/analyzer.rs:190` | Division-by-zero potential |
+| Loadtest | `loadtest/metrics.rs:76` | Imprecise panic message |
 
 ### Documentation Discrepancies
 
@@ -193,8 +193,9 @@ Completed review of all 14 architecture documents. Key findings:
 |--------|-------|
 | Recon | secrets module not in FULL_RECON_PIPELINE_MODULES but documented |
 | Recon | FxHashMap count (13 documented vs 55 actual) |
+| Output | Error types documentation imprecise |
 
-See `plans/*_review.md` for detailed findings per module.
+See `plans/plan.md` for consolidated implementation plan with parallelization waves.
 
 ---
 
@@ -209,45 +210,9 @@ See `plans/*_review.md` for detailed findings per module.
 | `waf/detector/detect.rs:45,71` | Score accumulator `u8` could overflow | Changed to `u16` with proper constant types |
 | `constants.rs:69-90` | WAF scoring constants were `u8` | Changed to `u16` to prevent overflow |
 
-### 2026-05-23 - Implementation Plan
+## Implementation Notes
 
-All 47 items from `plans/plan.md` completed across 3 waves:
-
-| Wave | Items | Status |
-|------|-------|--------|
-| Wave 1 | 6 items (production safety) | ✅ Completed |
-| Wave 2 | 13 items (error handling) | ✅ Completed |
-| Wave 3 | 28 items (cleanup/docs) | ✅ Completed |
-
-Key fixes:
-- **AI planner.rs** - Clock skew panic prevention with `unwrap_or_else`
-- **Tool planner.rs** - HashSet→FxHashSet at 9 locations
-- **Fuzzer api.rs** - HashMap→FxHashMap at 10 locations
-- **NSE smbauth.rs** - Removed 185 lines of duplicate function definitions
-- **Recon email/js.rs** - LazyLock regex `unwrap()`→`expect()` at 32 locations
-- **Networking capture.rs** - Error propagation instead of silent suppression
-- **Output convert/markdown.rs** - `Result<String, E>` error propagation
-- **NSE HashMap replacements** - 7 library files updated to `FxHashMap`
-
-### 2026-05-27
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| `pipeline/mod.rs:77-238` | Duplicated output writing code | Extracted to `write_output()` helper |
-| `pipeline/executor.rs:19-24` | `duration_ms` serialized to JSON unnecessarily | Added `#[serde(skip)]` |
-| `pipeline/executor.rs:19-36` | `StageResult` lacked constructor | Added `StageResult::new()` |
-| `pipeline/executor.rs:157` | Progress bar created for empty stage list | Changed condition to `self.tui_mode \|\| self.stages.is_empty()` |
-
-### 2026-05-27 - Scanner Module
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| `scanner/cms/joomla.rs:88-89` | String slice bounds could panic on malformed XML | Added bounds check before slicing |
-| `scanner/templates/matcher.rs:185-189` | Invalid regex silently returned false | Added `tracing::debug` warning |
-| `scanner/cms/mod.rs:330` | Default impl could panic on init failure | Changed `unwrap()` to `unwrap_or_else` |
-| `scanner/endpoints.rs:768` | Silent error suppression on network failures | Changed to explicit `match` with debug logging |
-| `scanner/udp_fingerprint.rs:144` | Silent task join failures | Changed to explicit `match` with debug logging |
-
----
-
-## Skills Directory
+- **NSE module** (`slapper-nse/`) is a separate crate - use `cargo check -p slapper-nse` for validation
+- **Distributed module** has worker capabilities mismatch - capabilities should be derived from `TaskType` enum
+- **Recon module** has 20 instances of `unwrap_or_default()` across multiple files that should use explicit match with tracing
+- **Test code** can use `.unwrap()` and `.expect()` - the architecture guidelines about these apply only to production code

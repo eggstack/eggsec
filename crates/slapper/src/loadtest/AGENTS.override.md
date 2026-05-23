@@ -34,6 +34,12 @@ let mut status_codes: FxHashMap<u16, u64> = FxHashMap::default();
 4. **Response Body Handling**: Non-success bodies consumed to prevent connection pool issues
 5. **Histogram Errors**: Suppress with `let _ = self.histogram.record(...)` not `.ok()`
 
+## Bug Fix (2026-05-28)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `metrics.rs:76` | Panic message "3 significant figures is invalid" is incorrect | Use `expect("Failed to create hdrhistogram")` instead |
+
 ## Testing
 
 ```bash
