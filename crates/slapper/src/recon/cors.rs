@@ -104,21 +104,30 @@ impl CorsAnalyzer {
             .get("access-control-allow-methods")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.split(',').map(|m| m.trim().to_string()).collect())
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                tracing::debug!("access-control-allow-methods header missing");
+                Vec::new()
+            });
 
         let acah = response
             .headers()
             .get("access-control-allow-headers")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.split(',').map(|h| h.trim().to_string()).collect())
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                tracing::debug!("access-control-allow-headers header missing");
+                Vec::new()
+            });
 
         let aceh = response
             .headers()
             .get("access-control-expose-headers")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.split(',').map(|h| h.trim().to_string()).collect())
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                tracing::debug!("access-control-expose-headers header missing");
+                Vec::new()
+            });
 
         let acma = response
             .headers()

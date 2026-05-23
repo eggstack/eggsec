@@ -4,7 +4,7 @@
 //! Based on Nmap's creds library: https://nmap.org/nsedoc/lib/creds.html
 
 use mlua::{Lua, Result as LuaResult};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Mutex;
 
 static CREDENTIALS_STORE: std::sync::LazyLock<Mutex<FxHashMap<String, Vec<Credential>>>> =
@@ -99,7 +99,7 @@ pub fn register_creds_library(lua: &Lua) -> LuaResult<()> {
         if let Ok(store) = CREDENTIALS_STORE.lock() {
             if let Some(creds) = store.get(&host_key) {
                 let mut i = 1;
-                let mut seen = std::collections::HashSet::new();
+                let mut seen = FxHashSet::default();
                 for cred in creds {
                     if seen.insert(cred.username.clone()) {
                         result.set(i, cred.username.clone())?;
@@ -120,7 +120,7 @@ pub fn register_creds_library(lua: &Lua) -> LuaResult<()> {
         if let Ok(store) = CREDENTIALS_STORE.lock() {
             if let Some(creds) = store.get(&host_key) {
                 let mut i = 1;
-                let mut seen = std::collections::HashSet::new();
+                let mut seen = FxHashSet::default();
                 for cred in creds {
                     if seen.insert(cred.password.clone()) {
                         result.set(i, cred.password.clone())?;

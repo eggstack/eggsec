@@ -121,8 +121,14 @@ impl ContainerScanner {
         let mut overall_severity = Severity::Info;
 
         for pod in pods {
-            let pod_name = pod.metadata.name.clone().unwrap_or_default();
-            let pod_namespace = pod.metadata.namespace.clone().unwrap_or_default();
+            let pod_name = pod.metadata.name.clone().unwrap_or_else(|| {
+                tracing::debug!("pod missing name field");
+                String::new()
+            });
+            let pod_namespace = pod.metadata.namespace.clone().unwrap_or_else(|| {
+                tracing::debug!("pod missing namespace field");
+                String::new()
+            });
 
             let security_issues = self.check_pod_security(&pod);
             if security_issues
