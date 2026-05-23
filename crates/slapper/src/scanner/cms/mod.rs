@@ -245,7 +245,13 @@ impl CmsScanner {
 
         match self.http_client.post(&xml_rpc_url).send().await {
             Ok(resp) => {
-                let text = resp.text().await.unwrap_or_default();
+                let text = match resp.text().await {
+                    Ok(text) => text,
+                    Err(e) => {
+                        tracing::debug!("Failed to read response body: {}", e);
+                        String::new()
+                    }
+                };
                 text.contains("XML-RPC") || text.contains("blogging")
             }
             Err(_) => false,
