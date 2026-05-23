@@ -172,13 +172,45 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Implementation Plan
 
-The consolidated implementation plan is in `plans/plan.md`. It contains 24 pending items across 3 waves:
+The consolidated implementation plan is in `plans/plan.md`. It contains 24 items across 3 waves:
 
 | Wave | Items | Priority | Status |
 |------|-------|----------|--------|
-| Wave 1 | 6 | High | PENDING |
-| Wave 2 | 8 | Medium | PENDING |
-| Wave 3 | 10 | Low | PENDING |
+| Wave 1 | 6 | High | COMPLETED (2026-05-29) |
+| Wave 2 | 8 | Medium | COMPLETED (2026-05-29) |
+| Wave 3 | 10 | Low | COMPLETED - 6/10 implemented, 4 deferred |
+
+---
+
+## Recently Implemented Fixes (2026-05-29)
+
+### Wave 1 (All Completed)
+- PluginManager: HashMap → FxHashMap (`slapper-plugin/src/lib.rs`)
+- Ruby timeout: Clarified parameter usage (`slapper-ruby/src/bridge.rs`)
+- CMS scanner: unwrap_or_default → explicit error handling
+- AI CacheKeyBuilder: Colon → null byte separator
+- AI Agents: All HashMaps → FxHashMap (verified already correct)
+- NSE CVE-2024-27956: Vec-based storage for multiple entries
+
+### Wave 2 (All Completed)
+- WAF HTTP/2 smuggling: Documented limitation
+- Scope.validate(): Added validation method
+- Scanner progress bar: Added catch_unwind wrapper
+- Distributed TaskResult: Implemented collection
+- Distributed heartbeat: Uses resolve_cached()
+- Pipeline session save: Errors propagated via checkpoint_error
+- Pipeline fingerprint: Uses EXTENDED_SCAN_PORTS constant
+- Pipeline WAF: Uses self.common for TLS settings
+
+### Wave 3 (6/10 Completed, 4 Deferred)
+- TUI dispatcher: Cached to reduce 4 calls to 1
+- CLI output flag: Added `-o`/`--output` to commands
+- Docs module counts: Updated recon.md (17 modules)
+- Fuzzer progress bar: Added to run_sequential_with_session
+- CSV streaming: Async BufWriter implementation
+- TUI theme restore: Implemented in restore_session
+- Recon secrets: Now invoked in pipeline
+- Deferred: TUI unwrap_or_default, NSE DNS rebinding, NSE OSV/CISA KE |
 
 ---
 
@@ -199,39 +231,49 @@ These items were verified during architecture review and do NOT need implementat
 
 ---
 
-## Key Implementation Insights (2026-05-23 Review)
+## Key Implementation Patterns (2026-05-29)
 
-### Scope Validation (CLI/Config)
-- Private IP check (`is_private_ip()`) occurs in `TargetScope::parse()` and `parse_hostname_only()` for both direct IP and DNS resolution paths
-- Scope rejection reasons are not reported - no indication of whether rejection was due to exclude rule or no include match
-- DNS resolution failures now return error when CIDR rules are configured
+### Division by zero guard
+```rust
+// Always check before division
+if self.stages.is_empty() {
+    return 0.0;
+}
+```
 
-### Recon Module
-- `CveMapper` cache persists across invocations via module-level `Arc<Mutex<FxHashMap>>`
-- `query_alexa()` function is stubbed (returns empty) and never called
-- Secrets module (`secrets.rs`) is in `FULL_RECON_PIPELINE_MODULES` but verify it's actually invoked
-- Dependency scan handles Ruby (Gemfile), PHP (composer.json), and Java (pom.xml) in addition to documented npm/cargo/go
+### Scroll offset bounds
+```rust
+// Check empty before calculating offset
+if self.lines.is_empty() {
+    return 0;
+}
+```
 
-### Distributed Module
-- `RemoteClient` has `impl Drop` for connection cleanup
-- Heartbeat reuses `RemoteClient` instance (cached)
-- DNS lookup is cached with 60s TTL via `resolve_cached()`
-- Only `completed` queue has size limit; `pending` and `in_progress` can grow unbounded
+### Arc::try_unwrap error handling
+```rust
+// Use map_err instead of expect()
+Arc::try_unwrap(arc).map_err(|_| MyError::TooManyOwners)?
+```
 
-### WAF Module
-- `select_profile()` uses HashMap-based O(1) lookup
-- `BypassResult` has `error: Option<String>` field
-- HTTP/2 smuggling bypass (`supports_http2_probes()`) is hardcoded to return `false` - needs implementation or documentation
+### LazyLock regex initialization
+```rust
+// Use unwrap_or_else for descriptive panic
+static REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(pattern).unwrap_or_else(|e| panic!("Invalid regex: {}", e))
+});
+```
 
-### Pipeline Module
-- Hardcoded ports extracted to `DEFAULT_SCAN_PORTS`/`EXTENDED_SCAN_PORTS` constants
-- Profile mapping uses shared `profile_from_str()` function
-- Optional concurrent stage execution mode via `.with_concurrent_stages(true)`
-
-### TUI Module
-- `App.tabs` field removed (was dead code)
-- `handle_enter()` calls `dispatcher_mut()` 4 times per keypress - consider caching
-- 14 `unwrap_or_default()` instances in TUI code - focus on async operations
+### Error handling pattern
+```rust
+// Instead of unwrap_or_default()
+let body = match response.text().await {
+    Ok(text) => text,
+    Err(e) => {
+        tracing::debug!("Failed to read response body: {}", e);
+        String::new()
+    }
+};
+```
 
 ### Plugin/NSE Module
 - PluginManager still uses std `HashMap` at `lib.rs:296-297` - needs FxHashMap conversion
