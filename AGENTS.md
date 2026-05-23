@@ -298,13 +298,15 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Implementation Plan
 
-The consolidated implementation plan is in `plans/plan.md`. **All 26 items across 3 waves have been completed.**
+The consolidated implementation plan is in `plans/plan.md`. **17 new items identified for future implementation.**
 
 | Wave | Items | Priority | Status |
 |------|-------|----------|--------|
-| Wave 1 | 4 | Critical | COMPLETED |
-| Wave 2 | 9 | High | COMPLETED |
-| Wave 3 | 13 | Medium/Low | COMPLETED |
+| Wave 1 | 5 | High | PENDING |
+| Wave 2 | 6 | Medium | PENDING |
+| Wave 3 | 6 | Low | PENDING |
+
+Previous 26 items from Wave 1-3 (2026-05-29) remain COMPLETED.
 
 ---
 
@@ -362,4 +364,24 @@ The consolidated implementation plan is in `plans/plan.md`. **All 26 items acros
 ### TUI Module
 - `App.tabs` field removed (was dead code).
 
-(End file - 345 lines)
+### Verified as Already Fixed (2026-05-23 Review)
+The following items from architecture reviews were verified as already fixed and do NOT need implementation:
+- Loadtest error list cap 1000 (`metrics.rs:101,109`)
+- Cloud parallelization via `tokio::join!` (`cloud/mod.rs:66`)
+- Distributed queue race condition - NOT A BUG: locks acquired upfront before operations
+- Fuzzer LazyLock per-type init (`payloads/mod.rs:140-150`)
+- WAF HEADER_VALUE_MAX_LEN at module level (`waf/detector/detect.rs:10`)
+- Config private IP check via `is_private_ip()` (`scope.rs:226,280`)
+- Fuzzer rate limiter `rate < 1` (`execution.rs:267`)
+- AI Agents HashMap→FxHashMap (all 65+ instances use FxHashMap)
+
+### Items Still Needing Implementation (2026-05-23)
+- PluginManager uses std HashMap not FxHashMap (`slapper-plugin/src/lib.rs:296-297`)
+- Ruby `load_plugin_with_timeout` ignores timeout (`bridge.rs:285`)
+- CMS component enumeration `unwrap_or_default` instances (cms/mod.rs, joomla.rs, drupal.rs, wordpress.rs)
+- AI CacheKeyBuilder colon separator collision (`cache.rs:293-307`)
+- NSE CVE-2024-27956 duplicate entry needs documentation (`vulns.rs:208`)
+- Scope.validate() method missing
+- Parser bounds checks need verification
+
+(End file - 380 lines)
