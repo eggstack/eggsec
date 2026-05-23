@@ -141,12 +141,12 @@ pub async fn fingerprint_udp_services(
     let mut handles = Vec::new();
 
     for port in ports {
-        let permit = semaphore.clone().acquire_owned().await?;
         let ip = resolved_ip;
         let socket = socket.clone();
+        let semaphore = semaphore.clone();
         let handle = tokio::spawn(async move {
+            let _permit = semaphore.acquire_owned().await.ok();
             let result = fingerprint_udp_port(ip, port, timeout_duration, Some(socket)).await;
-            drop(permit);
             result
         });
         handles.push(handle);
