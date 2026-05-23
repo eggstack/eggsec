@@ -97,9 +97,10 @@ impl EvasionBypass {
         test_type: TestType,
     ) -> Vec<(BypassTechnique, String, String)> {
         let mut payloads = Vec::new();
+        let sqli_payloads = get_sqli_payloads();
 
         if test_type == TestType::All || test_type == TestType::Sql {
-            for sqli in get_sqli_payloads() {
+            for sqli in &sqli_payloads {
                 payloads.push((
                     BypassTechnique::CaseRotation,
                     apply_case_rotation(sqli),
@@ -107,7 +108,7 @@ impl EvasionBypass {
                 ));
             }
 
-            for sqli in get_sqli_payloads() {
+            for sqli in &sqli_payloads {
                 payloads.push((
                     BypassTechnique::Homoglyph,
                     apply_homoglyphs(sqli),
@@ -115,7 +116,7 @@ impl EvasionBypass {
                 ));
             }
 
-            for sqli in get_sqli_payloads().iter().take(3) {
+            for sqli in sqli_payloads.iter().take(3) {
                 payloads.push((
                     BypassTechnique::ZeroWidthInjection,
                     apply_zero_width(sqli),
@@ -123,7 +124,7 @@ impl EvasionBypass {
                 ));
             }
 
-            for sqli in get_sqli_payloads().iter().take(3) {
+            for sqli in sqli_payloads.iter().take(3) {
                 payloads.push((
                     BypassTechnique::CommentObfuscation,
                     apply_comment_obfuscation(sqli),
@@ -131,7 +132,7 @@ impl EvasionBypass {
                 ));
             }
 
-            for sqli in get_sqli_payloads().iter().take(3) {
+            for sqli in sqli_payloads.iter().take(3) {
                 payloads.push((
                     BypassTechnique::WhitespaceVariation,
                     apply_whitespace_variation(sqli),
@@ -139,7 +140,7 @@ impl EvasionBypass {
                 ));
             }
 
-            for sqli in get_sqli_payloads().iter().take(2) {
+            for sqli in sqli_payloads.iter().take(2) {
                 payloads.push((
                     BypassTechnique::UnicodeEncoding,
                     apply_unicode_encoding(sqli),
@@ -147,7 +148,7 @@ impl EvasionBypass {
                 ));
             }
 
-            for sqli in get_sqli_payloads().iter().take(2) {
+            for sqli in sqli_payloads.iter().take(2) {
                 payloads.push((
                     BypassTechnique::DoubleEncoding,
                     apply_double_encoding(sqli),
@@ -268,6 +269,7 @@ impl EvasionBypass {
             payload: Some(payload.to_string()),
             status_code: status,
             response_diff: None,
+            error: None,
         })
     }
 

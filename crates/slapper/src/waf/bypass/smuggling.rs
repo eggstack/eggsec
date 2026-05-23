@@ -68,6 +68,7 @@ impl SmugglingBypass {
                         payload: None,
                         status_code: 0,
                         response_diff: None,
+                        error: Some(e.to_string()),
                     });
                 }
             }
@@ -290,6 +291,7 @@ impl SmugglingBypass {
             payload: None,
             status_code: status,
             response_diff: None,
+            error: None,
         })
     }
 
