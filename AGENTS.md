@@ -158,7 +158,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/distributed.md` | Distributed coordinator/worker architecture |
 | `architecture/loadtest.md` | HTTP load testing and benchmarking |
 | `architecture/networking.md` | Networking & packets module |
-| `architecture/output.md` | Output & reporting module |
+| `architecture/output.md` - Output & reporting module |
 | `architecture/plugins_nse.md` | Plugin system (Python/Ruby) and NSE integration |
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |
 
@@ -254,10 +254,58 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Implementation Plan
 
-The consolidated implementation plan is in `plans/plan.md`. It contains 3 waves of work:
+The consolidated implementation plan is in `plans/plan.md`. It contains 27 remaining items across 3 waves:
 
-| Wave | Items | Description |
-|------|-------|-------------|
-| Wave 1 | 4 items | Production safety - NSE HashMap, DNS parsing, worker capabilities, AI knowledge base |
-| Wave 2 | 5 items | Performance & correctness - NSE HashMap, distributed env, recon unwrap_or_default, fuzzer IQR, loadtest message |
-| Wave 3 | 2 items | Documentation & polish - config validation, architecture doc updates |
+| Wave | Items | Priority | Description |
+|------|-------|----------|-------------|
+| Wave 1 | 4 | Critical | Scanner UDP reuse, WAF HashMap lookup, CLI CIDR validation, Recon CveMapper cache |
+| Wave 2 | 10 | High | Distributed (4), Pipeline (2), Loadtest (2), Output (1), Config (1) module fixes |
+| Wave 3 | 13 | Medium/Low | Improvement opportunities across multiple modules |
+
+---
+
+## Knowledge Gained from Architecture Review Sessions
+
+### Scope Validation (CLI/Config)
+- Private IP check (`is_private_ip()`) occurs BEFORE scope rule evaluation in `TargetScope::parse()`. This means targets like `10.255.255.255` are rejected as private even if a scope rule like `allow 10.0.0.0/8` exists.
+- Scope rejection reasons are not reported - no indication of whether rejection was due to exclude rule or no include match.
+
+### Recon Module
+- `CveMapper` cache doesn't persist - each call to `map_cves()` creates a new `CveMapper` instance, so cache is lost.
+- `query_alexa()` function is stubbed (returns empty) and never called.
+- Secrets module (`secrets.rs`) is standalone and NOT in `FULL_RECON_PIPELINE_MODULES`.
+- Dependency scan handles Ruby (Gemfile), PHP (composer.json), and Java (pom.xml) in addition to documented npm/cargo/go.
+- FxHashMap count is actually 66+, not the documented 55.
+
+### Distributed Module
+- `RemoteClient` lacks `Drop` impl - connections not explicitly closed on panic.
+- Heartbeat creates a new TCP connection each time, flooding rate limiter.
+- DNS lookup happens every `connect()` call, not cached.
+- Only `completed` queue has size limit; `pending` and `in_progress` can grow unbounded.
+
+### WAF Module
+- `select_profile()` does O(p×s) nested linear scan through all profiles and signatures.
+- `BypassResult` lacks `error: Option<String>` field for network error details.
+- Evasion bypass calls `get_sqli_payloads()` 7 times in loops - redundant generation.
+
+### Pipeline Module
+- Hardcoded ports duplicated in `executor.rs:276-283` and `executor.rs:534`.
+- Profile mapping duplicated in `stage.rs:31-92` and `tool/implementations/pipeline.rs:64-77`.
+- Stages execute sequentially (no concurrent execution mode).
+
+### Loadtest Module
+- `response.bytes().await` called inside lock - body consumed while holding metrics lock.
+- Missing test coverage for TLS, streaming, chunked, redirect, rate limiting, auth, proxy, timeouts.
+
+### Fuzzer Module
+- `GrammarFuzzer::with_seed()` exists but undocumented.
+- `KNOWN_VULNERABLE_PATTERNS` in `redos_detect.rs` creates Vec on every call (should use `LazyLock`).
+
+### Networking/Packet Module
+- IPv6 raw sockets not supported for UDP flood (returns error).
+- `PacketBuilder` lacks `validate()` method.
+
+### Output Module
+- Compliance templates (`pcidss_template()`, `soc2_template()`) recreate structs every call (should use `LazyLock`).
+
+(End of file - total 287 lines)

@@ -32,7 +32,7 @@ The recon module is organized as follows:
 
 ### Security
 - `cve.rs` - CVE mapping with built-in database + NVD API integration
-- `secrets.rs` - Secret detection with 25+ regex patterns
+- `secrets.rs` - Secret detection with 24 regex patterns (not in pipeline)
 - `ssl.rs` - SSL/TLS certificate analysis
 - `threatintel.rs` - Threat intelligence (VirusTotal, Shodan, AlienVault OTX)
 - `git_secrets.rs` - Git repository secret scanning (feature-gated)
@@ -41,7 +41,7 @@ The recon module is organized as follows:
 - `cloud/mod.rs` - Cloud discovery (AWS, GCP, Azure, Firebase, Heroku, GitHub)
 - `cloud/services.rs` - Cloud service enumeration (Lambda, API Gateway, CloudFront)
 - `cloud/metadata.rs` - IMDSv1/v2 testing for AWS/GCP/Azure
-- `cloud/iam.rs` - IAM privilege escalation pattern analysis
+- `cloud/iam.rs` - IAM privilege escalation pattern analysis (13 patterns, not 12)
 - `cloud/storage_test.rs` - S3 bucket security tests
 
 ### Email
@@ -53,13 +53,15 @@ The recon module is organized as follows:
 
 ### Dependency Scanning
 - `dependency_scan/mod.rs` - Unified interface
-- `dependency_scan/npm/` - npm package scanning (package.json, package-lock.json, yarn.lock)
+- `dependency_scan/npm/` - npm package scanning (package.json, package-lock.json, yarn.lock, requirements.txt)
 - `dependency_scan/cargo/` - Rust cargo scanning (Cargo.toml, Cargo.lock)
 - `dependency_scan/go/` - Go module scanning (go.mod, go.sum)
+- **Also handles**: Ruby (Gemfile, Gemfile.lock), PHP (composer.json), Java (pom.xml) - undocumented
 
 ## Performance Notes
 
 - Use `rustc_hash::FxHashMap`/`FxHashSet` instead of `std::collections::HashMap`/`HashSet`
+- Actual FxHashMap/FxHashSet count is 66+, not the 55 documented in architecture/recon.md
 - `CveMapper.cache` uses `FxHashMap` (cve.rs:31)
 - `CveEngine.cve_cache` uses `FxHashMap` (cve_lookup.rs:33)
 - `LOCAL_IP_DATA` in geolocation.rs uses `FxHashMap`
@@ -92,22 +94,36 @@ The recon module is organized as follows:
 - Never use `unwrap_or_default()` in async operations
 - Use `tracing::warn!` for non-fatal failures
 
-## Known Issues (2026-05-28)
+## Known Issues (Remaining - 2026-05-28 Review)
 
-### 20 unwrap_or_default() Instances in Production Code
-**Files affected**: `cve_lookup.rs:140`, `containers.rs:124-125`, `email.rs:145`, `js.rs:256`, `cors.rs:107,114,121`, `dependency_scan/mod.rs:160,172,187`, `reverse_dns.rs:40`, `ssl_audit.rs:275`, `cloud/storage_test.rs:141,152`, `asn.rs:105`, `techdetect.rs:66`, `threatintel.rs:277`
+### High Priority
 
-These silently suppress errors. Replace with explicit match and tracing:
-```rust
-// Instead of:
-let pod_name = pod.metadata.name.clone().unwrap_or_default();
+1. **CveMapper cache doesn't persist** (`cve.rs:31,348-350`)
+   - Each call to `map_cves()` creates new `CveMapper` instance
+   - Cache `FxHashMap` never persists across calls
+   - Fix: Add `persist()`/`load()` methods or use module-level `Arc<Mutex<>>`
 
-// Use:
-let pod_name = pod.metadata.name.clone().unwrap_or_else(|| {
-    tracing::debug!("pod missing name field");
-    String::new()
-});
-```
+2. **query_alexa is stubbed** (`subdomain.rs:141-145`)
+   - Function returns empty results and is never called
+   - Fix: Implement or remove
+
+### Low Priority
+
+3. **secrets module not in FULL_RECON_PIPELINE_MODULES** (`mod.rs:346-363`)
+   - `secrets` could be valuable in full pipeline
+   - Not critical, but could be added
+
+4. **Dependency scan undocumented file types**
+   - Handles Ruby (Gemfile), PHP (composer.json), Java (pom.xml) in addition to npm/cargo/go
+   - Consider documenting or removing unadvertised support
+
+5. **Cloud extract_target_from_url warning** (`cloud/mod.rs:55`)
+   - Silently falls back to input on URL extraction failure
+   - Fix: Add `tracing::warn` when fallback occurs
+
+6. **Content scanner batching** (`content.rs:48-116`)
+   - Creates 80 futures regardless of concurrency limit
+   - Consider batching for low concurrency scenarios
 
 ## Detached Modules (not in FULL_RECON_PIPELINE_MODULES)
 
@@ -119,3 +135,6 @@ These modules exist but are not part of `run_full_recon`:
 - `smtp_auth.rs` - SMTP auth testing (detached)
 - `ssh_auth.rs` - SSH auth testing (detached)
 - `ssl_audit.rs` - SSL audit (detached)
+- `secrets.rs` - Secret detection (standalone only)
+
+(End file - 146 lines)

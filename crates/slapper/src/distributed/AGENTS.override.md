@@ -110,3 +110,36 @@ let mut writer = LineWriter::new(stream);
 writer.write_line(&serde_json::to_string(&msg)?).await?;
 let response: ResponseMessage = serde_json::from_str(&writer.read_line().await?)?;
 ```
+
+## Known Issues (Remaining - 2026-05-28 Review)
+
+### High Priority
+
+1. **RemoteClient lacks Drop impl** (`remote.rs:377-389`)
+   - Connections not explicitly closed on panic
+   - Fix: Add `impl Drop for RemoteClient` or use a `Guard` wrapper
+
+2. **Heartbeat creates new connection each time** (`worker.rs:132-161`)
+   - Every heartbeat creates new TCP connection via `RemoteClient::new_plaintext()`
+   - Fix: Parse URL once at startup, cache host/port, reuse client
+
+3. **DNS lookup per call** (`remote.rs:575-594`)
+   - `resolve_host()` called every `connect()` call
+   - Fix: Cache resolved `SocketAddr` in RemoteClient
+
+4. **Capabilities mismatch** - FIXED
+
+### Medium Priority
+
+5. **Rate limit race condition** (`remote.rs:127-148`)
+   - `check_rate_limit()` holds lock across await points
+   - Pattern: `limits.entry(ip).or_insert_with(Vec::new); timestamps.retain(...)` inside lock
+
+6. **Only completed queue bounded** (`queue.rs:112-114`)
+   - `pending` and `in_progress` can grow unbounded
+   - Fix: Add bounds checks to all three queues
+
+7. **Missing Clone on TaskQueue** (`queue.rs:29-34`)
+   - Would allow easier sharing if derived
+
+(End file - 132 lines)
