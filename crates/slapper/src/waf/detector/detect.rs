@@ -73,12 +73,14 @@ impl WafDetector {
             let mut sig_matched_cookies = Vec::new();
             let mut sig_matched_patterns = Vec::new();
 
-            for header_pattern_lower in &sig_lower.headers {
-                for (name_lower, value_lower) in &headers_lower {
-                    let header_name_match = name_lower == header_pattern_lower.as_str();
-                    let header_value_match =
-                        value_lower.contains(header_pattern_lower.as_str())
-                            && value_lower.len() <= 256;
+const HEADER_VALUE_MAX_LEN: usize = 256;
+
+                    for header_pattern_lower in &sig_lower.headers {
+                        for (name_lower, value_lower) in &headers_lower {
+                            let header_name_match = name_lower == header_pattern_lower.as_str();
+                            let header_value_match =
+                                value_lower.contains(header_pattern_lower.as_str())
+                                    && value_lower.len() <= HEADER_VALUE_MAX_LEN;
                     if header_name_match || header_value_match {
                         score += waf::HEADER_MATCH_SCORE;
                         sig_matched_headers.push(format!("{}: {}", name_lower, value_lower));
