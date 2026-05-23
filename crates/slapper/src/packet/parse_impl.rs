@@ -529,7 +529,7 @@ impl DnsRecord {
 
         for _ in 0..questions_count {
             if let Some((name, new_offset)) = super::validation::parse_dns_name(data, offset) {
-                if new_offset + 4 > data.len() {
+                if new_offset >= data.len() || new_offset + 4 > data.len() {
                     break;
                 }
                 let qtype = u16::from_be_bytes([data[new_offset], data[new_offset + 1]]);
@@ -548,7 +548,7 @@ impl DnsRecord {
 
         for _ in 0..answers_count {
             if let Some((name, new_offset)) = super::validation::parse_dns_name(data, offset) {
-                if new_offset + 10 > data.len() {
+                if new_offset >= data.len() || new_offset + 10 > data.len() {
                     break;
                 }
                 let atype = u16::from_be_bytes([data[new_offset], data[new_offset + 1]]);
