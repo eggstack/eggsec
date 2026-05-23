@@ -69,6 +69,15 @@ This ensures new plans with moderate success are also cached.
 3. **planner.rs:112** - Lowered cache lookup threshold from `use_count > 3` to `use_count >= 2`
 4. **waf_bypass.rs** - Added `max_knowledge_base_size` field and `evict_knowledge_base_if_needed()` method
 
+## Known Issues (2026-05-23 Review)
+
+1. **CacheKeyBuilder colon separator** (`cache.rs:293-307`) - Uses `:` as separator. If payload contains colon, cache keys collide. Consider using `\x00` or `|` separator instead.
+2. **SmartWafBypass knowledge base eviction** (`waf_bypass.rs:80-88`) - Eviction logic may incorrectly wipe all failures when size limit is reached. Verify `evict_knowledge_base_if_needed()` handles partial eviction correctly.
+3. **Three AI Agents files still use std HashMap**:
+   - `alerts/mod.rs:42-55` - AlertRoutingRules
+   - `constraints/checker.rs:102,109` - request_counts
+   - `portfolio.rs:191,198` - PortfolioData.targets
+
 ## Testing
 
 ```bash

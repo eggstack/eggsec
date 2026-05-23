@@ -164,132 +164,6 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ---
 
-## Recent Bug Fixes
-
-### 2026-05-29 (Implementation Wave 1-3 Complete)
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| Scanner | UDP socket created per port | Added `Arc<UdpSocket>` reuse across port scans |
-| WAF | O(p×s) nested linear scan in select_profile() | Built `FxHashMap<String, &WafProfile>` static for O(1) lookup |
-| Config | Private IP check before scope rule evaluation | Moved private IP validation after scope rules |
-| Recon | CveMapper cache not persisted | Added module-level `Arc<Mutex<FxHashMap>>` cache |
-| Distributed | No Drop impl for RemoteClient | Added `impl Drop for RemoteClient` |
-| Distributed | Heartbeat creates new TCP connection each time | Cache host/port, reuse `RemoteClient` instance |
-| Distributed | DNS lookup per connect() call | Added `resolve_cached()` with 60s TTL |
-| Pipeline | Hardcoded ports duplicated | Extracted to `DEFAULT_SCAN_PORTS`/`EXTENDED_SCAN_PORTS` constants |
-| Pipeline | Profile mapping duplicated | Created `profile_from_str()` shared function |
-| Loadtest | response.bytes() inside lock | Moved outside metrics lock |
-| Loadtest | Missing test coverage | Added 8 tests for TLS, auth, redirects, errors |
-| Output | Compliance templates recreated every call | Used `LazyLock` static for templates |
-| Config | DNS failure with CIDR rules silently allowed | Return error when DNS fails with CIDR rules configured |
-| Scanner | Sequential UDP port scanning | Batch UDP with Semaphore worker pool |
-| Pipeline | Sequential stage execution | Added optional concurrent mode with `join_all` |
-| Fuzzer | GrammarFuzzer::with_seed() undocumented | Documented with examples in struct doc comment |
-| Fuzzer | default_vulnerable_patterns() creates Vec each call | Changed to `static KNOWN_VULNERABLE_PATTERNS: LazyLock` |
-| Networking | IPv6 error message not helpful | Improved to user-facing message with guidance |
-| Networking | PacketBuilder lacks validate() | Added `validate()` method with `PacketValidationError` enum |
-| WAF | get_sqli_payloads() called 7 times in loops | Call once, store in local variable |
-| WAF | BypassResult missing error field | Added `error: Option<String>` field |
-| TUI | App.tabs dead code | Removed unused `tabs: FxHashMap<Tab, Box<dyn TabInput>>` field |
-| Recon | secrets module not in pipeline | Added `"secrets"` to `FULL_RECON_PIPELINE_MODULES` |
-| Recon | extract_target_from_url silently falls back | Added `tracing::warn` when fallback occurs |
-
-### 2026-05-30 (Architecture Review Wave 4-5)
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| AI Agents | `alerts/mod.rs` AlertRoutingRules HashMap | → FxHashMap |
-| AI Agents | `constraints/checker.rs` request_counts HashMap | → FxHashMap |
-| AI Agents | `portfolio.rs` PortfolioData.targets HashMap | → FxHashMap |
-| Config | Private IP bypass in `parse()` and `parse_hostname_only()` | Now uses `is_private_ip()` check (not just loopback) |
-| WAF | `detect.rs:76` HEADER_VALUE_MAX_LEN in loop | Moved to module level |
-| Distributed | Queue race condition in `reassign_stale_tasks()` | Atomic lock acquisition for both maps |
-| Pipeline | Session save silent failure | Changed warn to error with descriptive message |
-| Scanner | CMS `unwrap_or_default()` in enumerate_components | Explicit match with tracing |
-| Fuzzer | `rate <= 1` premature stop in adaptive limiter | Changed to `rate < 1` |
-| Loadtest | Error list cap 100 too small | Increased to 1000 |
-| Recon | Sequential cloud enumeration | Parallelized with `tokio::join!` |
-
-### 2026-05-28 (Architecture Review Wave 4)
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| WAF | `detect.rs:81` - magic number 256 for header value length | Added `HEADER_VALUE_MAX_LEN` constant |
-| Scanner | `spoofed.rs:285,303` - silent errors in spoofed scan | Added `tracing::debug` for failed packet builds |
-
-### 2026-05-28 (Architecture Review Wave 3)
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| AI | `cache.rs:276` - AiCache persist() silently failed | Added `tracing::warn` for persist failures |
-| Scanner | `fingerprint.rs:347-391` - Vec allocation in hot path | Changed to static slice references |
-
-### 2026-05-28 (Architecture Review Wave 2)
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| AI Agents | `skills.rs:202`, `portfolio.rs:112` - HashMap | Replaced with FxHashMap |
-| AI | `script_gen.rs:97,141,185,272` - unwrap_or_default | Replaced with explicit error handling |
-| AI | `client.rs:241` - silent fallback for Anthropic messages | Added `tracing::debug` for missing messages |
-| CLI | `fuzz.rs:292` - WafStressArgs output discarded | Preserved `args.output` in From impl |
-| Fuzzer | `execution.rs:267` - rate==0 causes early stop | Changed to `rate <= 1` |
-| Loadtest | `runner.rs:360` - JoinSet panic handling | Added panic-aware error handling |
-| Output | `diff.rs:139` - has_regressions only checked Critical | Now checks `severity >= Severity::High` |
-| WAF | `patterns.rs:656` - get_waf_signatures clones | Returns `&'static FxHashMap` instead |
-| WAF | `detector/mod.rs:33` - signatures clone on creation | Stores static reference |
-
-### 2026-05-28 (Architecture Review Wave 1)
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| Distributed | `queue.rs:150` - QueueError missing traits | Added Display and Error impl |
-| Distributed | `worker.rs:32`, `remote.rs:105` - capability mismatch | Unified via shared CAPABILITIES constant |
-| Networking | `stress/udp.rs:98` - UDP checksum missing payload | Added `pseudo[16..].copy_from_slice(payload)` |
-| Networking | `craft.rs:247` - TCP checksum set to 0 | Added `compute_tcp_checksum()` function |
-| Tool | `registry.rs:2,24` - HashMap instead of FxHashMap | Replaced with FxHashMap |
-| Pipeline | `executor.rs:138`, `session.rs:13` - spoof_config not persisted | Added `spoof_config` to PipelineSession |
-| NSE | `vulns.rs:209,232` - duplicate CVE-2024-27956 | Added comment documenting limitation |
-| Scanner | `fingerprint.rs:347` - Vec allocation per port | Changed to `&'static [&str]` slice |
-
-### 2026-05-28 (Implementation Session)
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| NSE | `public_api/api.rs` - 8 std::HashMap instances | Replaced with FxHashMap for performance |
-| Networking | `packet/parse_impl.rs:531,551` - DNS parsing bounds | Added `new_offset >= data.len()` check before byte access |
-| Distributed | `worker.rs:115-123` - hardcoded capabilities | Created `worker_capabilities()` helper from TaskType enum |
-| AI | `waf_bypass.rs:44` - silent knowledge base load failure | Changed to `unwrap_or_else()` with `tracing::warn` |
-| NSE | `libraries/http.rs, datafiles.rs, creds.rs` - 4 more HashMap/HashSet | Replaced with FxHashMap/FxHashSet for performance |
-| Distributed | `command.rs:146-149` - env field rejected without explanation | Added clarifying comment for intentional security rejection |
-| Recon | 20 instances of `unwrap_or_default()` | Replaced with explicit match with `tracing::debug` across 12 files |
-| Fuzzer | `analyzer.rs:188-190` - IQR division by zero | Added `if iqr_samples.is_empty()` check |
-| Loadtest | `metrics.rs:76` - imprecise panic message | Changed to "Failed to create hdrhistogram" |
-| Config | `settings.rs` - no AlertChannelsConfig validation | Added validation for all 4 channel types (Webhook, Email, Slack, PagerDuty) |
-| Docs | `architecture/*.md` - outdated counts and notes | Updated TUI payload count (30→31), recon FxHashMap count (13→55), added DNS bounds note |
-
-### 2026-05-28 (WAF Review)
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| `waf/mod.rs:4` | Docstring listed only 25 WAF products | Updated to "34 WAF products" |
-| `waf/bypass/profiles.rs:21,37` | `get_waf_profiles()` recreated profiles every call | Changed to `LazyLock` static for caching |
-| `waf/detector/detect.rs:45,71` | Score accumulator `u8` could overflow | Changed to `u16` with proper constant types |
-| `constants.rs:69-90` | WAF scoring constants were `u8` | Changed to `u16` to prevent overflow |
-
-### 2026-05-23
-
-| Component | Issue | Fix |
-|-----------|-------|-----|
-| Distributed | `queue.rs:57` dequeue() error handling | Returns `Result<Option<Task>, QueueError>` instead of silently dropping errors |
-| Distributed | `worker.rs:132-161` heartbeat | Uses `RemoteClient::send_heartbeat()` via TCP instead of HTTP POST |
-| Recon | `geolocation.rs:308` CIDR mask | Fixed to `u32::MAX << (32 - prefix)` |
-| Recon | `smtp_auth.rs:248,256,285` base64 API | Changed to `base64::engine::general_purpose::STANDARD.encode(...)` |
-| Recon | `subdomain.rs:111,151` unwrap_or_default | Changed to explicit match with `tracing::debug` |
-| Recon | `api_schema.rs:115` silent error | Changed to explicit match with `tracing::debug` |
-
----
-
 ## Implementation Notes
 
 - **NSE module** (`slapper-nse/`) is a separate crate - use `cargo check -p slapper-nse` for validation
@@ -298,90 +172,92 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Implementation Plan
 
-The consolidated implementation plan is in `plans/plan.md`. **17 new items identified for future implementation.**
+The consolidated implementation plan is in `plans/plan.md`. It contains 24 pending items across 3 waves:
 
 | Wave | Items | Priority | Status |
 |------|-------|----------|--------|
-| Wave 1 | 5 | High | PENDING |
-| Wave 2 | 6 | Medium | PENDING |
-| Wave 3 | 6 | Low | PENDING |
-
-Previous 26 items from Wave 1-3 (2026-05-29) remain COMPLETED.
+| Wave 1 | 6 | High | PENDING |
+| Wave 2 | 8 | Medium | PENDING |
+| Wave 3 | 10 | Low | PENDING |
 
 ---
 
-## Knowledge Gained from Architecture Review Sessions
+## Verified as Already Fixed (Reference)
+
+These items were verified during architecture review and do NOT need implementation:
+
+| Item | Evidence |
+|------|----------|
+| Loadtest error list cap 1000 | `metrics.rs:101,109` uses 1000 |
+| Cloud parallelization | `cloud/mod.rs:66` uses `tokio::join!` |
+| Distributed queue lock acquisition | `queue.rs:78-79` acquires both locks upfront |
+| Fuzzer LazyLock per-type init | `payloads/mod.rs:140-150` uses LazyLock correctly |
+| WAF HEADER_VALUE_MAX_LEN | `waf/detector/detect.rs:10` at module level |
+| Config private IP check | `scope.rs:226,280` uses `is_private_ip()` |
+| Fuzzer rate < 1 | `execution.rs:267` uses `rate < 1` |
+| NSE library count 164 | Correct count (no discrepancy) |
+
+---
+
+## Key Implementation Insights (2026-05-23 Review)
 
 ### Scope Validation (CLI/Config)
-- Private IP check (`is_private_ip()`) now occurs AFTER scope rule evaluation in `TargetScope::parse()`.
-- Scope rejection reasons are not reported - no indication of whether rejection was due to exclude rule or no include match.
-- DNS resolution failures now return error when CIDR rules are configured.
-- **NEW (2026-05-30):** Private IP bypass now blocked in `parse()` and `parse_hostname_only()` using `is_private_ip()` (not just loopback).
+- Private IP check (`is_private_ip()`) occurs in `TargetScope::parse()` and `parse_hostname_only()` for both direct IP and DNS resolution paths
+- Scope rejection reasons are not reported - no indication of whether rejection was due to exclude rule or no include match
+- DNS resolution failures now return error when CIDR rules are configured
 
 ### Recon Module
-- `CveMapper` cache now persists across invocations via module-level `Arc<Mutex<FxHashMap>>`.
-- `query_alexa()` function is stubbed (returns empty) and never called.
-- Secrets module (`secrets.rs`) is now in `FULL_RECON_PIPELINE_MODULES`.
-- Dependency scan handles Ruby (Gemfile), PHP (composer.json), and Java (pom.xml) in addition to documented npm/cargo/go.
-- FxHashMap count is actually 66+, not the documented 55.
-- **NEW (2026-05-30):** Cloud enumeration now parallelized with `tokio::join!` (~5x speedup).
+- `CveMapper` cache persists across invocations via module-level `Arc<Mutex<FxHashMap>>`
+- `query_alexa()` function is stubbed (returns empty) and never called
+- Secrets module (`secrets.rs`) is in `FULL_RECON_PIPELINE_MODULES` but verify it's actually invoked
+- Dependency scan handles Ruby (Gemfile), PHP (composer.json), and Java (pom.xml) in addition to documented npm/cargo/go
 
 ### Distributed Module
-- `RemoteClient` now has `impl Drop` for connection cleanup.
-- Heartbeat now reuses `RemoteClient` instance instead of creating new one each time.
-- DNS lookup is now cached with 60s TTL.
-- Only `completed` queue has size limit; `pending` and `in_progress` can grow unbounded.
-- Rate limit check was fixed (lock duration minimized).
-- **NEW (2026-05-30):** Queue race condition fixed in `reassign_stale_tasks()` - both locks acquired together atomically.
+- `RemoteClient` has `impl Drop` for connection cleanup
+- Heartbeat reuses `RemoteClient` instance (cached)
+- DNS lookup is cached with 60s TTL via `resolve_cached()`
+- Only `completed` queue has size limit; `pending` and `in_progress` can grow unbounded
 
 ### WAF Module
-- `select_profile()` now uses HashMap-based O(1) lookup instead of nested linear scan.
-- `BypassResult` now has `error: Option<String>` field for network error details.
-- Evasion bypass now calls `get_sqli_payloads()` once before loops.
-- **NEW (2026-05-30):** `HEADER_VALUE_MAX_LEN` moved to module level (was inside loop).
+- `select_profile()` uses HashMap-based O(1) lookup
+- `BypassResult` has `error: Option<String>` field
+- HTTP/2 smuggling bypass (`supports_http2_probes()`) is hardcoded to return `false` - needs implementation or documentation
 
 ### Pipeline Module
-- Hardcoded ports now extracted to `DEFAULT_SCAN_PORTS`/`EXTENDED_SCAN_PORTS` constants.
-- Profile mapping now uses shared `profile_from_str()` function.
-- Optional concurrent stage execution mode available via `.with_concurrent_stages(true)`.
-
-### Loadtest Module
-- `response.bytes().await` now called outside metrics lock.
-- Added 8 new tests for TLS, auth, redirects, errors, etc.
-- Panic handling in JoinSet was fixed.
-
-### Fuzzer Module
-- `GrammarFuzzer::with_seed()` now documented with examples.
-- `KNOWN_VULNERABLE_PATTERNS` now uses `LazyLock` static.
-
-### Networking/Packet Module
-- IPv6 error message now user-facing with guidance on using non-spoofed mode.
-- `PacketBuilder` now has `validate()` method with `PacketValidationError` enum.
-
-### Output Module
-- Compliance templates now use `LazyLock` static.
+- Hardcoded ports extracted to `DEFAULT_SCAN_PORTS`/`EXTENDED_SCAN_PORTS` constants
+- Profile mapping uses shared `profile_from_str()` function
+- Optional concurrent stage execution mode via `.with_concurrent_stages(true)`
 
 ### TUI Module
-- `App.tabs` field removed (was dead code).
+- `App.tabs` field removed (was dead code)
+- `handle_enter()` calls `dispatcher_mut()` 4 times per keypress - consider caching
+- 14 `unwrap_or_default()` instances in TUI code - focus on async operations
 
-### Verified as Already Fixed (2026-05-23 Review)
-The following items from architecture reviews were verified as already fixed and do NOT need implementation:
-- Loadtest error list cap 1000 (`metrics.rs:101,109`)
-- Cloud parallelization via `tokio::join!` (`cloud/mod.rs:66`)
-- Distributed queue race condition - NOT A BUG: locks acquired upfront before operations
-- Fuzzer LazyLock per-type init (`payloads/mod.rs:140-150`)
-- WAF HEADER_VALUE_MAX_LEN at module level (`waf/detector/detect.rs:10`)
-- Config private IP check via `is_private_ip()` (`scope.rs:226,280`)
-- Fuzzer rate limiter `rate < 1` (`execution.rs:267`)
-- AI Agents HashMap→FxHashMap (all 65+ instances use FxHashMap)
+### Plugin/NSE Module
+- PluginManager still uses std `HashMap` at `lib.rs:296-297` - needs FxHashMap conversion
+- CVE-2024-27956 appears twice in vulns.rs (AutomateWoo and WooCommerce) but HashMap only stores one
+- Socket sandbox DNS rebinding protection should be verified
 
-### Items Still Needing Implementation (2026-05-23)
-- PluginManager uses std HashMap not FxHashMap (`slapper-plugin/src/lib.rs:296-297`)
-- Ruby `load_plugin_with_timeout` ignores timeout (`bridge.rs:285`)
-- CMS component enumeration `unwrap_or_default` instances (cms/mod.rs, joomla.rs, drupal.rs, wordpress.rs)
-- AI CacheKeyBuilder colon separator collision (`cache.rs:293-307`)
-- NSE CVE-2024-27956 duplicate entry needs documentation (`vulns.rs:208`)
-- Scope.validate() method missing
-- Parser bounds checks need verification
+### AI Module
+- `CacheKeyBuilder` uses `:` separator - if payload contains colon, cache keys may collide
+- Three AI Agents files still use std HashMap: `alerts/mod.rs`, `constraints/checker.rs`, `portfolio.rs`
+- `SmartWafBypass` knowledge base eviction may incorrectly wipe all failures on size limit
 
-(End file - 380 lines)
+---
+
+## Verification Commands
+
+```bash
+cargo check --lib -p slapper
+cargo check --lib -p slapper-plugin
+cargo check --lib -p slapper-ruby
+cargo check -p slapper-nse
+cargo test --lib -p slapper
+cargo test --test negative_tests -p slapper
+cargo test --test scanner_tests -p slapper
+cargo clippy --lib -p slapper
+cargo clippy --lib -p slapper-plugin
+cargo clippy --lib -p slapper-ruby
+```
+
+(End file - ends around line 290)
