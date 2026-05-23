@@ -178,6 +178,7 @@ pub async fn run(&self) -> Result<PipelineReport> {
         }
 
         let mut stage_results = Vec::new();
+        let mut checkpoint_error = None;
 
         let progress = if self.tui_mode || self.stages.is_empty() {
             None
@@ -221,11 +222,12 @@ pub async fn run(&self) -> Result<PipelineReport> {
                     spoof_config: self.spoof_config.clone(),
                 };
                 if let Err(e) = save(path, &session) {
-                    tracing::error!(
+                    tracing::warn!(
                         path = %path,
                         error = %e,
                         "Failed to save session checkpoint - progress may be lost on interrupt"
                     );
+                    checkpoint_error = Some(e.to_string());
                 }
             }
         }
@@ -243,6 +245,7 @@ pub async fn run(&self) -> Result<PipelineReport> {
             open_ports: context.port_results,
             services: context.services.into_values().collect(),
             endpoints: context.endpoints,
+            checkpoint_error,
         })
     }
 
@@ -271,6 +274,7 @@ pub async fn run(&self) -> Result<PipelineReport> {
             open_ports: context.port_results,
             services: context.services.into_values().collect(),
             endpoints: context.endpoints,
+            checkpoint_error: None,
         })
     }
 
