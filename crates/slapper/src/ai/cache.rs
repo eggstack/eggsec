@@ -290,20 +290,20 @@ pub struct CacheStats {
 }
 
 /// Cache key builder for AI cache entries.
-/// NOTE: Uses colon separators which could cause collisions if input contains colons.
+/// Uses null byte (`\x00`) separators to prevent collisions when input contains colons.
 pub struct CacheKeyBuilder;
 
 impl CacheKeyBuilder {
     pub fn for_payload_suggestion(vuln_type: &str, context: &str) -> String {
-        format!("payload:{}:{}", vuln_type, context)
+        format!("payload{}\x00{}\x00{}", vuln_type, context)
     }
 
     pub fn for_waf_bypass(waf: &str, blocked_payload: &str) -> String {
-        format!("waf_bypass:{}:{}", waf, blocked_payload)
+        format!("waf_bypass{}\x00{}\x00{}", waf, blocked_payload)
     }
 
     pub fn for_finding_analysis(findings_hash: &str) -> String {
-        format!("analysis:{}", findings_hash)
+        format!("analysis{}\x00{}", findings_hash)
     }
 }
 
@@ -357,5 +357,12 @@ mod tests {
         assert_eq!(cache.get("key1").await, Some("value1".to_string()));
         let stats = cache.stats().await;
         assert_eq!(stats.total_hits, 3);
+    }
+
+    #[test]
+    fn test_cache_key_builder_no_collision_with_colons() {
+        let key1 = CacheKeyBuilder::for_payload_suggestion("sql:inject", "context:with:colons");
+        let key2 = CacheKeyBuilder::for_payload_suggestion("sql", "inject:context:with:colons");
+        assert_ne!(key1, key2, "Keys with colons in values should not collide");
     }
 }
