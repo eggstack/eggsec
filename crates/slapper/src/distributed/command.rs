@@ -143,7 +143,13 @@ impl CommandExecutor {
             }
         }
 
-        // Security: Do not allow custom environment variables
+        // Security: The `env` field is intentionally rejected even though it's accepted
+        // by the protocol. This is a deliberate security measure - custom environment
+        // variables could be used to inject malicious values into command execution
+        // (e.g., PATH manipulation, LD_PRELOAD, etc.). The field is kept in the protocol
+        // definition for backward compatibility but is reserved for future use. When
+        // environment variable support is eventually needed, it must be implemented with
+        // strict allowlist validation (e.g., only known-safe variables like LANG, TZ).
         if env.is_some() {
             return Err("Custom environment variables are not allowed".to_string());
         }

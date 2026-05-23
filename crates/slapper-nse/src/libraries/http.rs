@@ -140,8 +140,8 @@ fn make_client_with_tls(
     builder.build().unwrap_or_else(|_| Client::new())
 }
 
-fn parse_options(opts: Option<&Table>) -> (HashMap<String, String>, Duration) {
-    let mut headers = HashMap::new();
+fn parse_options(opts: Option<&Table>) -> (FxHashMap<String, String>, Duration) {
+    let mut headers = FxHashMap::default();
     let timeout = Duration::from_secs(30);
 
     if let Some(opts) = opts {

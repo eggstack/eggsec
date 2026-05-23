@@ -28,9 +28,9 @@ fn get_protocols() -> &'static FxHashMap<&'static str, u16> {
     })
 }
 
-fn get_services() -> &'static HashMap<&'static str, (u16, &'static str)> {
+fn get_services() -> &'static FxHashMap<&'static str, (u16, &'static str)> {
     SERVICES.get_or_init(|| {
-        let mut m = HashMap::new();
+        let mut m = FxHashMap::default();
         m.insert("http", (80, "tcp"));
         m.insert("https", (443, "tcp"));
         m.insert("ftp", (21, "tcp"));

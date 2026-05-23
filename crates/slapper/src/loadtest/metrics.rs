@@ -73,7 +73,7 @@ pub struct Metrics {
 impl Metrics {
     pub fn new(target_url: String) -> Self {
         Self {
-            histogram: Histogram::new(3).unwrap_or_else(|_| panic!("Failed to create histogram: 3 significant figures is invalid for hdrhistogram")),
+            histogram: Histogram::new(3).expect("Failed to create hdrhistogram"),
             successful: 0,
             failed: 0,
             status_codes: FxHashMap::default(),

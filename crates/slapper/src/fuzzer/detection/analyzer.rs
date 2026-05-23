@@ -186,6 +186,9 @@ impl TimingAnalyzer {
         }
 
         let iqr_samples: Vec<f64> = sorted_samples[start..end].to_vec();
+        if iqr_samples.is_empty() {
+            return;
+        }
         let sum: f64 = iqr_samples.iter().sum();
         self.baseline_ms = Some(sum / iqr_samples.len() as f64);
     }
