@@ -166,7 +166,23 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Recent Bug Fixes
 
-### 2026-05-28
+### 2026-05-28 (Implementation Session)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| NSE | `public_api/api.rs` - 8 std::HashMap instances | Replaced with FxHashMap for performance |
+| Networking | `packet/parse_impl.rs:531,551` - DNS parsing bounds | Added `new_offset >= data.len()` check before byte access |
+| Distributed | `worker.rs:115-123` - hardcoded capabilities | Created `worker_capabilities()` helper from TaskType enum |
+| AI | `waf_bypass.rs:44` - silent knowledge base load failure | Changed to `unwrap_or_else()` with `tracing::warn` |
+| NSE | `libraries/http.rs, datafiles.rs, creds.rs` - 4 more HashMap/HashSet | Replaced with FxHashMap/FxHashSet for performance |
+| Distributed | `command.rs:146-149` - env field rejected without explanation | Added clarifying comment for intentional security rejection |
+| Recon | 20 instances of `unwrap_or_default()` | Replaced with explicit match with `tracing::debug` across 12 files |
+| Fuzzer | `analyzer.rs:188-190` - IQR division by zero | Added `if iqr_samples.is_empty()` check |
+| Loadtest | `metrics.rs:76` - imprecise panic message | Changed to "Failed to create hdrhistogram" |
+| Config | `settings.rs` - no AlertChannelsConfig validation | Added validation for all 4 channel types (Webhook, Email, Slack, PagerDuty) |
+| Docs | `architecture/*.md` - outdated counts and notes | Updated TUI payload count (30→31), recon FxHashMap count (13→55), added DNS bounds note |
+
+### 2026-05-28 (WAF Review)
 
 | Component | Issue | Fix |
 |-----------|-------|-----|
@@ -191,11 +207,8 @@ Detailed architecture documentation is in the `architecture/` directory:
 ## Implementation Notes
 
 - **NSE module** (`slapper-nse/`) is a separate crate - use `cargo check -p slapper-nse` for validation
-- **Distributed module** has worker capabilities mismatch - capabilities should be derived from `TaskType` enum
-- **Recon module** has 20 instances of `unwrap_or_default()` across multiple files that should use explicit match with tracing
 - **Test code** can use `.unwrap()` and `.expect()` - the architecture guidelines about these apply only to production code
 - **Networking DNS parsing** is in `packet/parse_impl.rs` (packet module), not `networking/` module
-- **CLI `-o` flag** for `GraphQlArgs` and `OAuthArgs` is a documentation update in `architecture/cli_commands.md`, not a code change
 
 ## Implementation Plan
 
