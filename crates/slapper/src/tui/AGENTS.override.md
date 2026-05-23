@@ -2,6 +2,11 @@
 
 Specialized guidance for the terminal UI module.
 
+## Recent Fixes (2026-05-29)
+
+- **handle_enter() dispatcher caching**: `dispatcher_mut()` now cached to reduce 4 calls to 1 per Enter keypress
+- **Theme restoration**: SessionManager now restores theme when loading sessions
+
 ## Module Structure
 
 ```

@@ -29,10 +29,10 @@ Each AI client creates its own breaker directly via `CircuitBreaker::new()`.
 
 ### Cache Key Building
 Use `CacheKeyBuilder` for consistent cache key formation:
-- `CacheKeyBuilder::for_payload_suggestion(vuln_type, context)` -> `"payload:{vuln_type}:{context}"`
-- `CacheKeyBuilder::for_waf_bypass(waf, blocked_payload)` -> `"waf_bypass:{waf}:{blocked_payload}"`
+- `CacheKeyBuilder::for_payload_suggestion(vuln_type, context)` -> `"payload\x00{vuln_type}\x00{context}"`
+- `CacheKeyBuilder::for_waf_bypass(waf, blocked_payload)` -> `"waf_bypass\x00{waf}\x00{blocked_payload}"`
 
-Never use raw `format!("{}:{}", ...)` for cache keys as colons in payload content can cause collisions.
+Uses null byte (`\x00`) separator to prevent collisions when input contains colons.
 
 ### Lock Handling in AiCache
 When modifying cache and persisting, keep lock scope minimal. Always check `persist_path.is_some()` before persisting:
@@ -69,14 +69,16 @@ This ensures new plans with moderate success are also cached.
 3. **planner.rs:112** - Lowered cache lookup threshold from `use_count > 3` to `use_count >= 2`
 4. **waf_bypass.rs** - Added `max_knowledge_base_size` field and `evict_knowledge_base_if_needed()` method
 
-## Known Issues (2026-05-23 Review)
+## Known Issues (2026-05-29)
 
-1. **CacheKeyBuilder colon separator** (`cache.rs:293-307`) - Uses `:` as separator. If payload contains colon, cache keys collide. Consider using `\x00` or `|` separator instead.
+1. ~~**CacheKeyBuilder colon separator**~~ - FIXED: Changed to `\x00` separator
 2. **SmartWafBypass knowledge base eviction** (`waf_bypass.rs:80-88`) - Eviction logic may incorrectly wipe all failures when size limit is reached. Verify `evict_knowledge_base_if_needed()` handles partial eviction correctly.
-3. **Three AI Agents files still use std HashMap**:
-   - `alerts/mod.rs:42-55` - AlertRoutingRules
-   - `constraints/checker.rs:102,109` - request_counts
-   - `portfolio.rs:191,198` - PortfolioData.targets
+3. ~~**Three AI Agents files HashMap**~~ - VERIFIED: All use FxHashMap (false positive)
+
+## Bug Fixes (2026-05-29)
+
+1. **CacheKeyBuilder colon separator** - Changed from `:` to `\x00` null byte separator to prevent collisions
+2. **All HashMap instances** - Verified `alerts/mod.rs`, `constraints/checker.rs`, `portfolio.rs` use FxHashMap
 
 ## Testing
 

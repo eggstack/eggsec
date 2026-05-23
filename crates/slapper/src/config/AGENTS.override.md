@@ -42,6 +42,11 @@ let config = load_config(None)?;
 config.validate()?; // Returns ConfigError::Validation on failure
 ```
 
+`Scope::validate()` added (2026-05-29) to check:
+1. At least one allowed target exists when `require_explicit_scope` is true
+2. No duplicate ports in `allowed_ports`
+3. `max_requests_per_second` is between 1 and 10000 if specified
+
 ## Error Handling
 
 - `ConfigError::Io` - File read/write errors
