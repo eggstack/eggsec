@@ -125,14 +125,27 @@ pub async fn fingerprint_udp_services(
     }
 
     let resolved_ip = resolve_host(host)?;
+    let socket = match UdpSocket::bind("0.0.0.0:0").await {
+        Ok(s) => Arc::new(s),
+        Err(_) => {
+            return Ok(UdpFingerprintResults {
+                host: host.to_string(),
+                ports_scanned: ports_count,
+                services_identified: 0,
+                duration_ms: start.elapsed().as_millis() as u64,
+                results: Vec::new(),
+            });
+        }
+    };
     let semaphore = Arc::new(Semaphore::new(50));
     let mut handles = Vec::new();
 
     for port in ports {
         let permit = semaphore.clone().acquire_owned().await?;
         let ip = resolved_ip;
+        let socket = socket.clone();
         let handle = tokio::spawn(async move {
-            let result = fingerprint_udp_port(ip, port, timeout_duration).await;
+            let result = fingerprint_udp_port(ip, port, timeout_duration, Some(socket)).await;
             drop(permit);
             result
         });
@@ -163,12 +176,16 @@ async fn fingerprint_udp_port(
     ip: IpAddr,
     port: u16,
     timeout_duration: Duration,
+    socket: Option<Arc<UdpSocket>>,
 ) -> Option<UdpServiceFingerprint> {
     let addr = SocketAddr::new(ip, port);
 
-    let socket = match UdpSocket::bind("0.0.0.0:0").await {
-        Ok(s) => s,
-        Err(_) => return None,
+    let socket = match socket {
+        Some(s) => s,
+        None => match UdpSocket::bind("0.0.0.0:0").await {
+            Ok(s) => Arc::new(s),
+            Err(_) => return None,
+        },
     };
 
     let probes_to_try: Vec<(&str, &[u8], &str)> = UDP_PROBES
@@ -413,6 +430,7 @@ mod tests {
             invalid_ip,
             53,
             Duration::from_millis(10),
+            None,
         )
         .await;
         assert!(result.is_none());
