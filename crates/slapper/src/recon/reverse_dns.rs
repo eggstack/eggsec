@@ -37,7 +37,10 @@ pub async fn reverse_dns_lookup(ip: &str) -> Result<ReverseDnsResult> {
         data => data.to_string(),
     });
 
-    let hostname_str = hostname.clone().unwrap_or_default();
+    let hostname_str = hostname.clone().unwrap_or_else(|| {
+        tracing::debug!("reverse DNS hostname missing");
+        String::new()
+    });
 
     let (asn, organization) = if !hostname_str.is_empty() {
         extract_asn_from_hostname(&hostname_str)

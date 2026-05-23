@@ -253,7 +253,10 @@ impl JsAnalyzer {
                 let full_match = cap
                     .get(0)
                     .map(|m| m.as_str().to_string())
-                    .unwrap_or_default();
+                    .unwrap_or_else(|| {
+                        tracing::debug!("regex capture group missing");
+                        String::new()
+                    });
                 secrets.push(Secret {
                     secret_type: secret_type.to_string(),
                     value: full_match.chars().skip(4).take(20).collect::<String>() + "...",

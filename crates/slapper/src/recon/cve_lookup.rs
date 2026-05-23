@@ -137,7 +137,10 @@ impl CveEngine {
                     .filter_map(|r| r.get("url").and_then(|u| u.as_str()).map(String::from))
                     .collect()
             })
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                tracing::debug!("CVE references field missing or invalid");
+                Vec::new()
+            });
 
         let cwe = vuln
             .and_then(|v| v.get("weaknesses"))

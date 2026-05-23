@@ -142,7 +142,10 @@ impl EmailDiscoveryClient {
                         .lines()
                         .find(|l| l.contains(&email))
                         .map(|l| l.trim().chars().take(100).collect())
-                        .unwrap_or_default(),
+                        .unwrap_or_else(|| {
+                            tracing::debug!("email context line not found for {}", email);
+                            String::new()
+                        }),
                     source: "website".to_string(),
                 });
             }

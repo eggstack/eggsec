@@ -63,7 +63,13 @@ impl TechDetector {
             .filter_map(|(k, v)| v.to_str().ok().map(|v| (k.to_string(), v.to_string())))
             .collect();
 
-        let body = response.text().await.unwrap_or_default();
+        let body = match response.text().await {
+            Ok(text) => text,
+            Err(e) => {
+                tracing::debug!("failed to read tech detection response body: {}", e);
+                String::new()
+            }
+        };
         let body_lower = body.to_lowercase();
 
         let mut tech_stack = TechStack::default();

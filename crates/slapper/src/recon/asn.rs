@@ -102,7 +102,10 @@ impl AsnLookup {
                     })
                     .collect()
             })
-            .unwrap_or_default();
+                    .unwrap_or_else(|| {
+                        tracing::debug!("AS names missing");
+                        Vec::new()
+                    });
 
         Ok(AsnInfo {
             asn: format!("AS{}", asn_number),

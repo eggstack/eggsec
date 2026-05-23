@@ -157,7 +157,10 @@ impl DependencyScanner {
                     let file_path = entry.path();
                     let name_str = file_path
                         .file_name()
-                        .unwrap_or_default()
+                        .unwrap_or_else(|| {
+                            tracing::debug!("file missing name field");
+                            std::ffi::OsStr::new("")
+                        })
                         .to_string_lossy()
                         .to_string();
                     if file_path.is_file() && targets.contains(&name_str.as_ref()) {
@@ -169,7 +172,10 @@ impl DependencyScanner {
             && targets.contains(
                 &path
                     .file_name()
-                    .unwrap_or_default()
+                    .unwrap_or_else(|| {
+                        tracing::debug!("path missing file name");
+                        std::ffi::OsStr::new("")
+                    })
                     .to_string_lossy()
                     .to_string()
                     .as_ref(),
@@ -184,7 +190,10 @@ impl DependencyScanner {
     async fn parse_manifest(&self, path: &Path) -> Result<DependencyEcosystem> {
         let file_name = path
             .file_name()
-            .unwrap_or_default()
+            .unwrap_or_else(|| {
+                tracing::debug!("manifest path missing file name");
+                std::ffi::OsStr::new("")
+            })
             .to_string_lossy()
             .to_string();
 

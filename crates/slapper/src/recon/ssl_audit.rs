@@ -272,7 +272,10 @@ impl SslAuditor {
         SslFinding {
             title: check.name.clone(),
             severity: check.severity,
-            description: check.details.clone().unwrap_or_default(),
+            description: check.details.clone().unwrap_or_else(|| {
+                tracing::debug!("SSL check details missing");
+                String::new()
+            }),
             recommendation,
             cve_ids,
         }

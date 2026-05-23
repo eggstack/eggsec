@@ -138,7 +138,13 @@ impl StorageTester {
         match self.client.get(&list_url).send().await {
             Ok(resp) => {
                 let status = resp.status().as_u16();
-                let body = resp.text().await.unwrap_or_default();
+                let body = match resp.text().await {
+                    Ok(text) => text,
+                    Err(e) => {
+                        tracing::debug!("failed to read S3 list response body: {}", e);
+                        String::new()
+                    }
+                };
                 status == 200 && body.contains("<ListBucketResult>")
             }
             Err(_) => false,
@@ -149,7 +155,13 @@ impl StorageTester {
         let cors_url = format!("{}/?cors", url);
         match self.client.get(&cors_url).send().await {
             Ok(resp) if resp.status().is_success() => {
-                let body = resp.text().await.unwrap_or_default();
+                let body = match resp.text().await {
+                    Ok(text) => text,
+                    Err(e) => {
+                        tracing::debug!("failed to read S3 CORS response body: {}", e);
+                        String::new()
+                    }
+                };
                 let origins: Vec<String> = body
                     .split("<AllowedOrigin>")
                     .skip(1)
