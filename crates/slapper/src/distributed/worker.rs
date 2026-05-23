@@ -108,7 +108,7 @@ impl Worker {
 
         let (host, port) = parse_coordinator_url(&self.config.coordinator_url)?;
 
-        let client = RemoteClient::new_plaintext(self.psk.clone());
+        let mut client = RemoteClient::new_plaintext(self.psk.clone());
 
         client
             .register_worker(
@@ -123,25 +123,30 @@ impl Worker {
         Ok(())
     }
 
-    async fn start_heartbeat_loop(&mut self) {
+async fn start_heartbeat_loop(&mut self) {
         let worker_id = self.config.worker_id.clone();
         let coordinator_url = self.config.coordinator_url.clone();
         let interval = self.config.heartbeat_interval_secs;
         let psk = self.psk.clone();
 
+        let (host, port) = match parse_coordinator_url(&coordinator_url) {
+            Ok(hp) => hp,
+            Err(e) => {
+                tracing::error!("Failed to parse coordinator URL for heartbeat: {}", e);
+                return;
+            }
+        };
+
+        let host = host.to_string();
+        let port = port;
+
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval));
 
+            let mut client = RemoteClient::new_plaintext(psk);
+
             loop {
                 interval.tick().await;
-
-                let (host, port) = match parse_coordinator_url(&coordinator_url) {
-                    Ok(hp) => hp,
-                    Err(e) => {
-                        tracing::warn!("Failed to parse coordinator URL for heartbeat: {}", e);
-                        continue;
-                    }
-                };
 
                 let status = serde_json::json!({
                     "worker_id": worker_id,
@@ -151,8 +156,7 @@ impl Worker {
                     "failed_jobs": 0,
                 });
 
-                let client = RemoteClient::new_plaintext(psk.clone());
-                if let Err(e) = client.send_heartbeat(host, port, worker_id.clone(), status.to_string()).await {
+                if let Err(e) = client.send_heartbeat(&host, port, worker_id.clone(), status.to_string()).await {
                     tracing::warn!("Heartbeat failed: {}", e);
                 }
             }

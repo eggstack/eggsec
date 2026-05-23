@@ -8,6 +8,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use crate::error::{Result, SlapperError};
 use crate::output::report::{ReportMetadata, SeverityCounts};
@@ -207,9 +208,9 @@ impl ReportTemplateEngine {
         standard: ComplianceStandard,
     ) -> ComplianceTemplate {
         match standard {
-            ComplianceStandard::PCIDSS => pcidss_template(),
-            ComplianceStandard::SOC2 => soc2_template(),
-            ComplianceStandard::HIPAA => hipaa_template(),
+            ComplianceStandard::PCIDSS => PCIDSS_TEMPLATE.clone(),
+            ComplianceStandard::SOC2 => SOC2_TEMPLATE.clone(),
+            ComplianceStandard::HIPAA => HIPAA_TEMPLATE.clone(),
             ComplianceStandard::GDPR => gdpr_template(),
             ComplianceStandard::OWASP => owasp_template(),
             ComplianceStandard::NIST => nist_template(),
@@ -450,7 +451,7 @@ const COMPLIANCE_TEMPLATE: &str = r#"
 </html>
 "#;
 
-fn pcidss_template() -> ComplianceTemplate {
+static PCIDSS_TEMPLATE: LazyLock<ComplianceTemplate> = LazyLock::new(|| {
     ComplianceTemplate {
         name: "PCI-DSS Compliance".to_string(),
         standard: ComplianceStandard::PCIDSS,
@@ -470,9 +471,9 @@ fn pcidss_template() -> ComplianceTemplate {
         ],
         styling: TemplateStyling::default(),
     }
-}
+});
 
-fn soc2_template() -> ComplianceTemplate {
+static SOC2_TEMPLATE: LazyLock<ComplianceTemplate> = LazyLock::new(|| {
     ComplianceTemplate {
         name: "SOC 2 Compliance".to_string(),
         standard: ComplianceStandard::SOC2,
@@ -486,9 +487,9 @@ fn soc2_template() -> ComplianceTemplate {
         ],
         styling: TemplateStyling::default(),
     }
-}
+});
 
-fn hipaa_template() -> ComplianceTemplate {
+static HIPAA_TEMPLATE: LazyLock<ComplianceTemplate> = LazyLock::new(|| {
     ComplianceTemplate {
         name: "HIPAA Compliance".to_string(),
         standard: ComplianceStandard::HIPAA,
@@ -500,7 +501,7 @@ fn hipaa_template() -> ComplianceTemplate {
         }],
         styling: TemplateStyling::default(),
     }
-}
+});
 
 fn gdpr_template() -> ComplianceTemplate {
     ComplianceTemplate {

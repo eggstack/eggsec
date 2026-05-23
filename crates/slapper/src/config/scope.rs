@@ -57,7 +57,14 @@ impl Scope {
 
     pub fn is_target_allowed(&self, target: &str) -> Result<bool, ScopeError> {
         let target_scope = if self.has_ip_based_rules() {
-            TargetScope::parse(target)?
+            let scope = TargetScope::parse(target)?;
+            if scope.ip.is_none() {
+                return Err(ScopeError::DnsResolution(
+                    target.to_string(),
+                    "DNS resolution failed with CIDR rules configured".to_string(),
+                ));
+            }
+            scope
         } else {
             TargetScope::parse_hostname_only(target)?
         };

@@ -32,7 +32,7 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
             let (host, port) = extract_host_and_port(&worker_args.coordinator);
 
-            let client = RemoteClient::new(psk.clone());
+            let mut client = RemoteClient::new(psk.clone());
 
             println!(
                 "Worker '{}' connecting to coordinator at {}:{}",
@@ -125,7 +125,7 @@ pub async fn handle_cluster(ctx: &CommandContext, args: crate::cli::ClusterArgs)
 
                 let (host, port) = extract_host_and_port(addr);
 
-                let client = RemoteClient::new(psk);
+                let mut client = RemoteClient::new(psk);
 
                 match client
                     .execute(
@@ -259,7 +259,7 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
         "No PSK provided. Use --auth or set [remote.psk] in config".to_string(),
     )?;
 
-    let client = if let Some(_tls_cert) = &args.tls_cert {
+    let mut client = if let Some(_tls_cert) = &args.tls_cert {
         let domain = args.tls_domain.as_deref().unwrap_or("localhost");
         RemoteClient::with_tls(psk, domain)
             .map_err(|e| anyhow::anyhow!("Failed to initialize TLS: {}", e))?
