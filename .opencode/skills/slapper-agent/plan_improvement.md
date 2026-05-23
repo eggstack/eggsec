@@ -1,64 +1,53 @@
----
-name: plan_improvement
-description: "Execute codebase improvement plans with wave-based parallelization"
-triggers:
-  - plan improvement
-  - wave-based execution
-  - subagent parallelization
-  - plan verification
-metadata:
-  category: agent-ops
-  tools: []
-  scope: codebase
----
-
 ## Overview
 
 This skill guides AI agents through complex multi-wave improvement plans with parallel sub-agent execution.
 
-## Current Status
+## Plan Status
 
-**Plan is COMPLETED and pruned as of 2026-05-01.**
-All waves verified complete. The `plans/plan.md` file now contains verification notes.
+**Plan is COMPLETED and PRUNED as of 2026-05-23.**
+The `plans/plan.md` file has been archived and pruned to only contain:
+- Completion summary
+- Future/deferred items still pending
+- Historical reference
 
 ## Verification Process
 
 When reviewing plan items or implementing changes:
-1. Read `plans/plan.md` for current status
+1. Read `plans/plan.md` for historical reference
 2. Run verification commands to establish baseline: `cargo test --lib -p slapper`
 3. Use subagents to verify items in parallel (explore type for research)
 4. Always verify claims against actual code, not assuming plan accuracy
 5. Commit after each fix for traceability
-6. Update plan.md with verification status
+6. Update plan.md with verification status (only for new items)
 
 ## Key Patterns
 
 - Use subagents for parallel work (explore, general types)
 - Always verify before claiming DONE
 - Commit after each fix
-- Update plan.md with completion status
-- Test count: 1155 base, 1472 with full features (verified 2026-05-01)
+- Update plan.md with completion status (only if not fully pruned)
+- Test count: 1324 base, 1469+ with full features (verified 2026-05-23)
 
-## Verification Results (2026-05-01)
+## Verification Results (2026-05-23)
 
-All plan items verified complete:
-- **CookieStore (3.3.1)**: reqwest cookies feature enabled in Cargo.toml; manual cookie management in tool/session.rs is intentional for security testing scenarios
-- **Regex LRU Cache (4.2)**: chain.rs uses LruCache correctly; filters.rs updated to store compiled Regex directly in PayloadFilter::Regex variant
-- **AgentLogger (5.1.1)**: FIXED - was local variable in run(), now stored as Agent struct field `logger: Option<AgentLogger>` for entire lifetime
-- **ConfigWatcher (5.1.2)**: Properly wired in agent/mod.rs new() method, stored as field to keep watcher alive
+All 47 original plan items verified complete and pruned from plan file:
+- **Wave 1 (6 items)**: Production safety fixes
+- **Wave 2 (13 items)**: Error handling improvements
+- **Wave 3 (28 items)**: Cleanup and documentation
 
-## Common Issues Found During Verification
+Remaining deferred items (require design work):
+- `loadtest/runner.rs` - Per-worker metrics aggregation
+- `pipeline/session.rs` - Async file I/O conversion (acceptable as-is)
+- `networking/parse_impl.rs` - `from_utf8_lossy` optimization (may not apply)
+- `ai/cache.rs` - CacheKeyBuilder separator collision (informational only)
 
-During the 2026-04-30 review, these items were found incomplete despite plan claims:
+## Plan Pruning Pattern
 
-| Item | Issue | Fix |
-|------|-------|-----|
-| CookieStore (3.3.1) | Manual parsing still in session.rs | Enable reqwest cookies feature |
-| Regex LRU Cache (4.2) | Unbounded FxHashMap | Use lru crate with 100 entry limit |
-| AgentLogger (5.1.1) | Code existed but was local variable in run() | Store as Agent struct field, initialize in run() |
-| ConfigWatcher (5.1.2) | Code existed but never called | Wire up in agent new() |
-
-Note: 2026-05-01 verification found these items had subtle bugs that needed fixing (not just missing calls).
+When completing a plan implementation:
+1. Archive detailed line-by-line items to a summary
+2. Keep only future/deferred items requiring further work
+3. Update AGENTS.md to remove plan reference section
+4. Update skills to reference archived plan (not active)
 
 ## Triggers
 
@@ -68,3 +57,4 @@ Keywords that activate this skill:
 - "wave-based parallelization"
 - "plan execution"
 - "subagent assignment"
+- "prune completed items"

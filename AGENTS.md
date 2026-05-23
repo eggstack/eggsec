@@ -214,12 +214,4 @@ Key fixes:
 
 ---
 
-## Implementation Plan Reference
-
-The `plans/plan.md` file contains a consolidated implementation plan with 47 actionable items organized into 3 waves for parallel execution.
-
-- **Wave 1** (6 items): Production safety - panic prevention and critical performance fixes
-- **Wave 2** (13 items): Error handling improvements within specific modules
-- **Wave 3** (28 items): Cleanup, documentation, and optional enhancements
-
-See `plans/plan.md` for the full detailed plan including exact line numbers and code fixes.
+## Skills Directory
