@@ -68,6 +68,7 @@ pub struct BypassResult {
     pub payload: Option<String>,
     pub status_code: u16,
     pub response_diff: Option<i64>,
+    pub error: Option<String>,
 }
 
 pub struct BypassEngine {

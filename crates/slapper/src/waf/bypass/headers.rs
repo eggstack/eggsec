@@ -98,6 +98,7 @@ impl HeaderBypass {
             payload: Some(probe_payload.to_string()),
             status_code: status,
             response_diff: None,
+            error: None,
         })
     }
 
@@ -228,6 +229,7 @@ impl HeaderBypass {
             payload: Some(DEFAULT_HEADER_PROBE_PAYLOAD.to_string()),
             status_code: status,
             response_diff: Some(body_len),
+            error: None,
         })
     }
 
