@@ -76,6 +76,8 @@ impl TaskQueue {
         let now = chrono::Utc::now().timestamp();
 
         let mut in_progress = self.in_progress.write().await;
+        let mut pending = self.pending.write().await;
+
         in_progress.retain(|_id, task| {
             if let Some(assigned_at) = task.assigned_at_secs {
                 if now - assigned_at > timeout_secs {
@@ -86,13 +88,15 @@ impl TaskQueue {
             true
         });
 
-        let mut pending = self.pending.write().await;
         for task in stale_tasks.iter() {
             let mut t = task.clone();
             t.worker_id = None;
             t.assigned_at_secs = None;
             pending.push_back(t);
         }
+
+        drop(in_progress);
+        drop(pending);
 
         stale_tasks
     }
