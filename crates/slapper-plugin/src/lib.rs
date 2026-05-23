@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -293,8 +294,8 @@ impl Default for PluginRegistry {
 
 pub struct PluginManager {
     plugin_dirs: Vec<PathBuf>,
-    plugins: HashMap<String, PluginInfo>,
-    configs: HashMap<String, PluginConfig>,
+    plugins: FxHashMap<String, PluginInfo>,
+    configs: FxHashMap<String, PluginConfig>,
     block_suspicious_plugins: bool,
 }
 
@@ -312,8 +313,8 @@ impl PluginManager {
     pub fn with_config_dir(config_dir: Option<PathBuf>) -> Self {
         Self {
             plugin_dirs: Self::default_plugin_dirs(config_dir),
-            plugins: HashMap::new(),
-            configs: HashMap::new(),
+            plugins: FxHashMap::default(),
+            configs: FxHashMap::default(),
             block_suspicious_plugins: true,
         }
     }
