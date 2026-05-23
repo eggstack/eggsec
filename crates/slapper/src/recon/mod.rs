@@ -108,7 +108,6 @@ use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
 use crate::error::Result;
 use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -218,7 +217,7 @@ where
                 remediation: None,
                 references: vec![],
                 metadata: {
-                    let mut m = FxHashMap::default();
+                    let mut m = std::collections::HashMap::new();
                     m.insert(
                         "technology".to_string(),
                         serde_json::Value::String(server.clone()),
@@ -250,7 +249,7 @@ where
                 ),
                 references: vec![],
                 metadata: {
-                    let mut m = FxHashMap::default();
+                    let mut m = std::collections::HashMap::new();
                     m.insert(
                         "cname".to_string(),
                         serde_json::to_value(&result.target.cname).unwrap_or(serde_json::Value::Null),

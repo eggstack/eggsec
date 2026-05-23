@@ -66,6 +66,20 @@ pub enum TaskType {
     Recon,
 }
 
+impl std::fmt::Display for TaskType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskType::PortScan => write!(f, "PortScan"),
+            TaskType::ServiceFingerprint => write!(f, "ServiceFingerprint"),
+            TaskType::EndpointDiscovery => write!(f, "EndpointDiscovery"),
+            TaskType::Fuzz => write!(f, "Fuzz"),
+            TaskType::WafTest => write!(f, "WafTest"),
+            TaskType::LoadTest => write!(f, "LoadTest"),
+            TaskType::Recon => write!(f, "Recon"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerRegistration {
     pub worker_id: String,

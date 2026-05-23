@@ -38,10 +38,19 @@ impl SmartWafBypass {
             .unwrap_or_else(|| PathBuf::from("waf_bypasses.json"));
 
         let knowledge_base = if persist_path.exists() {
-            std::fs::read_to_string(&persist_path)
-                .ok()
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default()
+            match std::fs::read_to_string(&persist_path) {
+                Ok(s) => match serde_json::from_str(&s) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::warn!("Failed to parse WAF bypass knowledge base: {}", e);
+                        Vec::new()
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!("Failed to read WAF bypass knowledge base file: {}", e);
+                    Vec::new()
+                }
+            }
         } else {
             Vec::new()
         };

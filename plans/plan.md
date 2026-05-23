@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-23
 **Last Updated**: 2026-05-28
-**Status**: ✅ ALL WAVES COMPLETED
+**Status**: ✅ ALL WAVES COMPLETED + INCOMPLETE FIXES APPLIED
 
 ## Overview
 
@@ -23,6 +23,8 @@ Items that prevent potential panics, data corruption, or security issues.
 **Verification**: `cargo check -p slapper-nse && cargo test --lib -p slapper-nse && cargo clippy --lib -p slapper-nse`
 
 **Fix**: Added `use rustc_hash::FxHashMap;` at top of file and replaced all 8 `std::collections::HashMap` with `FxHashMap`.
+
+**Note**: This fix was confirmed incomplete during 2026-05-28 review - commit `bba924a` only updated the file header comment but did not apply the actual code changes. Fixed in subsequent commit.
 
 ### 1.2 Networking - DNS Parsing Bounds Check (MEDIUM) ✅
 

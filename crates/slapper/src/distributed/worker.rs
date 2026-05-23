@@ -29,6 +29,21 @@ fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
     Ok((host, port))
 }
 
+fn worker_capabilities() -> Vec<String> {
+    vec![
+        TaskType::PortScan,
+        TaskType::ServiceFingerprint,
+        TaskType::EndpointDiscovery,
+        TaskType::Fuzz,
+        TaskType::WafTest,
+        TaskType::LoadTest,
+        TaskType::Recon,
+    ]
+    .into_iter()
+    .map(|t| t.to_string())
+    .collect()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerConfig {
     pub worker_id: String,
@@ -112,15 +127,7 @@ impl Worker {
                 port,
                 self.config.worker_id.clone(),
                 hostname,
-                vec![
-                    "PortScan".to_string(),
-                    "ServiceFingerprint".to_string(),
-                    "EndpointDiscovery".to_string(),
-                    "Fuzz".to_string(),
-                    "WafTest".to_string(),
-                    "LoadTest".to_string(),
-                    "Recon".to_string(),
-                ],
+                worker_capabilities(),
             )
             .await?;
 

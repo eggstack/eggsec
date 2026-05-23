@@ -1,7 +1,7 @@
 use crate::tool::traits::AttackSurface;
 use crate::tool::{ToolInfo, ToolRegistry};
 use serde::{Deserialize, Serialize};
-use rustc_hash::FxFxHashSet;
+use rustc_hash::FxHashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionPlan {
@@ -77,7 +77,7 @@ impl ChainPlanner {
     pub fn plan(&self, request: &PlanRequest) -> ExecutionPlan {
         let tools = self.registry.list();
         let mut stages = Vec::new();
-        let mut used_tools: FxHashSet<String> = FxHashSet::new();
+        let mut used_tools: FxHashSet<String> = FxHashSet::default();
         let mut estimated_duration: u64 = 0;
 
         match request.goal.as_str() {
@@ -489,7 +489,7 @@ impl ChainPlanner {
         let mut errors = Vec::new();
         let mut warnings = Vec::new();
 
-        let mut resolved_stages: FxHashSet<String> = FxHashSet::new();
+        let mut resolved_stages: FxHashSet<String> = FxHashSet::default();
 
         for stage in &plan.stages {
             for dep in &stage.depends_on {

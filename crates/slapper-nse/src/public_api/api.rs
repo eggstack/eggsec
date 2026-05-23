@@ -4,6 +4,7 @@
 
 use native_tls::TlsConnector;
 use openssl::x509::X509;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -104,8 +105,8 @@ pub fn nse_vulns_is_known(service: &str, port: u16) -> NseResult<Vec<NseVulnResu
 }
 
 fn get_cve_database(
-) -> std::collections::HashMap<&'static str, (&'static str, &'static str, &'static str)> {
-    let mut m = std::collections::HashMap::new();
+) -> FxHashMap<&'static str, (&'static str, &'static str, &'static str)> {
+    let mut m = FxHashMap::default();
 
     // SMB vulnerabilities
     m.insert(
@@ -378,7 +379,7 @@ fn extract_sans(_cert: &X509) -> Vec<String> {
 pub struct NseHttpResponse {
     pub status: u16,
     pub status_line: String,
-    pub headers: std::collections::HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
     pub body: String,
     pub title: Option<String>,
 }
@@ -410,7 +411,7 @@ pub fn nse_http_get(host: &str, port: u16, path: &str) -> NseResult<NseHttpRespo
         .unwrap_or("Unknown")
         .to_string();
 
-    let mut headers = std::collections::HashMap::new();
+    let mut headers = FxHashMap::default();
     for (key, value) in response.headers() {
         headers.insert(key.to_string(), value.to_str().unwrap_or("").to_string());
     }
@@ -460,7 +461,7 @@ pub fn nse_http_post(host: &str, port: u16, path: &str, data: &str) -> NseResult
         .unwrap_or("Unknown")
         .to_string();
 
-    let mut headers = std::collections::HashMap::new();
+    let mut headers = FxHashMap::default();
     for (key, value) in response.headers() {
         headers.insert(key.to_string(), value.to_str().unwrap_or("").to_string());
     }
@@ -483,7 +484,7 @@ pub fn nse_http_post(host: &str, port: u16, path: &str, data: &str) -> NseResult
 pub struct NseHttpRequest {
     pub method: String,
     pub url: String,
-    pub headers: std::collections::HashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
     pub body: Option<String>,
 }
 
@@ -529,7 +530,7 @@ pub fn nse_http_request(request: NseHttpRequest) -> NseResult<NseHttpResponse> {
         .unwrap_or("Unknown")
         .to_string();
 
-    let mut headers = std::collections::HashMap::new();
+    let mut headers = FxHashMap::default();
     for (key, value) in response.headers() {
         headers.insert(key.to_string(), value.to_str().unwrap_or("").to_string());
     }
@@ -1103,7 +1104,7 @@ mod tests {
         let resp = NseHttpResponse {
             status: 200,
             status_line: "OK".to_string(),
-            headers: std::collections::HashMap::new(),
+            headers: FxHashMap::default(),
             body: "test".to_string(),
             title: None,
         };
