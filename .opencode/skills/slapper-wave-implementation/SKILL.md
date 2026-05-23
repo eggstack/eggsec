@@ -50,6 +50,15 @@ When merging multiple branches:
 3. Update relevant `AGENTS.override.md` files if module-specific guidance changed
 4. Update skills in `.opencode/skills/` if new patterns need documenting
 
+## Plan Completion (2026-05-29)
+
+As of 2026-05-29, all 26 items across 3 waves have been verified and implemented. The plan file has been pruned to a summary. If starting a new wave of fixes:
+
+1. Create a new plan document in `plans/` directory (e.g., `plans/plan-YYYY-MM-DD.md`)
+2. Use the wave-based parallelization approach demonstrated in this skill
+3. Mark items as COMPLETED only after verifying in code with subagents
+4. Use `cargo test --lib -p slapper` to verify changes don't break existing functionality
+
 ## Key Implementation Patterns
 
 ### Clock Skew Panic Prevention
@@ -137,8 +146,7 @@ use rustc_hash::FxHashSet;
 
 ## Resources
 
-- `plans/plan.md` - Full implementation plan with line numbers and exact fixes
-- `architecture/review_plan.md` - Architecture review execution plan with waves
+- `plans/plan.md` - Current implementation plan (all items completed as of 2026-05-29)
 - `AGENTS.md` - General guidelines for all agents
 - `AGENTS.override.md` - Module-specific guidance (in each module directory)
 
