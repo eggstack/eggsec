@@ -51,7 +51,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `packet/` | `crates/slapper/src/packet/` (uses pnet, pnet_packet for raw sockets) |
 | `loadtest/` | `crates/slapper/src/loadtest/AGENTS.override.md` |
 | `pipeline/` | `crates/slapper/src/pipeline/AGENTS.override.md` |
-| `nse/` | `crates/slapper-nse/` (Lua VM, NSE libraries, sandbox, CVE integration) |
+| `nse/` | `slapper-nse/` (Lua VM, NSE libraries, sandbox, CVE integration) |
 
 ### Feature Flags
 
@@ -162,41 +162,6 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/plugins_nse.md` | Plugin system (Python/Ruby) and NSE integration |
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |
 
-## Architecture Review Findings (2026-05-23)
-
-Completed review of all 14 architecture documents. Key findings consolidated in `plans/plan.md`.
-
-### High Priority Issues
-
-| Module | File | Issue |
-|--------|------|-------|
-| NSE | `slapper-nse/src/public_api/api.rs` | Uses std HashMap at 6 locations |
-| Distributed | `distributed/worker.rs:115-123` | Worker capabilities strings don't match TaskType enum |
-| Recon | Multiple files | 20 unwrap_or_default() calls silently suppress errors |
-| Networking | `packet/parse_impl.rs:531` | DNS parsing needs bounds check |
-
-### Medium Priority Issues
-
-| Module | File | Issue |
-|--------|------|-------|
-| NSE | `libraries/http.rs:143` | Uses std HashMap |
-| NSE | `libraries/datafiles.rs:31-33` | Uses std HashMap |
-| NSE | `libraries/creds.rs:102,123` | Uses std HashSet |
-| Distributed | `command.rs:146-149` | env field accepted but rejected at execution |
-| Distributed | `remote.rs:127-146` | Rate limit holds write lock too long |
-| Fuzzer | `fuzzer/detection/analyzer.rs:190` | Division-by-zero potential |
-| Loadtest | `loadtest/metrics.rs:76` | Imprecise panic message |
-
-### Documentation Discrepancies
-
-| Module | Issue |
-|--------|-------|
-| Recon | secrets module not in FULL_RECON_PIPELINE_MODULES but documented |
-| Recon | FxHashMap count (13 documented vs 55 actual) |
-| Output | Error types documentation imprecise |
-
-See `plans/plan.md` for consolidated implementation plan with parallelization waves.
-
 ---
 
 ## Recent Bug Fixes
@@ -204,11 +169,24 @@ See `plans/plan.md` for consolidated implementation plan with parallelization wa
 ### 2026-05-28
 
 | Component | Issue | Fix |
-|-----------|-------|-------|
+|-----------|-------|-----|
 | `waf/mod.rs:4` | Docstring listed only 25 WAF products | Updated to "34 WAF products" |
 | `waf/bypass/profiles.rs:21,37` | `get_waf_profiles()` recreated profiles every call | Changed to `LazyLock` static for caching |
 | `waf/detector/detect.rs:45,71` | Score accumulator `u8` could overflow | Changed to `u16` with proper constant types |
 | `constants.rs:69-90` | WAF scoring constants were `u8` | Changed to `u16` to prevent overflow |
+
+### 2026-05-23
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| Distributed | `queue.rs:57` dequeue() error handling | Returns `Result<Option<Task>, QueueError>` instead of silently dropping errors |
+| Distributed | `worker.rs:132-161` heartbeat | Uses `RemoteClient::send_heartbeat()` via TCP instead of HTTP POST |
+| Recon | `geolocation.rs:308` CIDR mask | Fixed to `u32::MAX << (32 - prefix)` |
+| Recon | `smtp_auth.rs:248,256,285` base64 API | Changed to `base64::engine::general_purpose::STANDARD.encode(...)` |
+| Recon | `subdomain.rs:111,151` unwrap_or_default | Changed to explicit match with `tracing::debug` |
+| Recon | `api_schema.rs:115` silent error | Changed to explicit match with `tracing::debug` |
+
+---
 
 ## Implementation Notes
 
@@ -216,3 +194,15 @@ See `plans/plan.md` for consolidated implementation plan with parallelization wa
 - **Distributed module** has worker capabilities mismatch - capabilities should be derived from `TaskType` enum
 - **Recon module** has 20 instances of `unwrap_or_default()` across multiple files that should use explicit match with tracing
 - **Test code** can use `.unwrap()` and `.expect()` - the architecture guidelines about these apply only to production code
+- **Networking DNS parsing** is in `packet/parse_impl.rs` (packet module), not `networking/` module
+- **CLI `-o` flag** for `GraphQlArgs` and `OAuthArgs` is a documentation update in `architecture/cli_commands.md`, not a code change
+
+## Implementation Plan
+
+The consolidated implementation plan is in `plans/plan.md`. It contains 3 waves of work:
+
+| Wave | Items | Description |
+|------|-------|-------------|
+| Wave 1 | 4 items | Production safety - NSE HashMap, DNS parsing, worker capabilities, AI knowledge base |
+| Wave 2 | 5 items | Performance & correctness - NSE HashMap, distributed env, recon unwrap_or_default, fuzzer IQR, loadtest message |
+| Wave 3 | 2 items | Documentation & polish - config validation, architecture doc updates |
