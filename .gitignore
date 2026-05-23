@@ -44,6 +44,5 @@ docs/generated/
 coverage/
 
 # Internal
-plans/
 advisory-db/
 test_safe_canonicalize
