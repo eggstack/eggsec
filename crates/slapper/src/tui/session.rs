@@ -143,6 +143,8 @@ impl SessionManager {
                 }
             }
         }
+
+        let _ = app.theme_manager.set_theme(&state.theme_name);
     }
 
     fn capture_state(&self, app: &App) -> SessionState {
