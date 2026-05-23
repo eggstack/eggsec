@@ -1,110 +1,67 @@
 # TUI Architecture Review
 
-**Date:** 2026-05-23
-**Reviewer:** Architecture Review
-**Status:** Complete
+## Summary
 
-## Architecture Compliance Summary
+The TUI module (`crates/slapper/src/tui/`) is well-implemented and follows the architecture documented in `architecture/tui.md`. Most patterns from the architecture document are correctly implemented.
 
-| Component | Status | Notes |
-|----------|--------|-------|
-| 29 Tabs | ✅ PASS | All tabs implemented and listed in `tabs/mod.rs` |
-| Core App Files | ✅ PASS | All files exist as documented |
-| KeyHandler Priority | ✅ PASS | `key_handler.rs:17-43` implements priority chain |
-| TabDispatcher | ✅ PASS | `dispatch.rs` routes to current tab |
-| TaskRunner Flow | ✅ PASS | Matches documented flow |
-| FxHashMap/FxHashSet | ✅ PASS | Used in 7 locations documented |
-| SessionManager | ✅ PASS | Auto-save at 30s interval |
-| ThemeManager | ✅ PASS | Dark/light themes with `tc!` macro |
+## Verified Correct
 
-## Verified File Locations
+1. **App struct and state management** (`app/mod.rs`):
+   - Uses `FxHashMap<Tab, Box<dyn TabInput>>` for `tabs` field (line 52)
+   - Uses `FxHashSet<String>` for `bookmarks` field (line 114)
+   - Properly implements all tab trait implementations with feature gating
 
-| File | Purpose | Verified |
-|------|---------|----------|
-| `app/mod.rs` | App struct, FxHashMap for tabs/bookmarks | ✅ |
-| `app/runner.rs` | Main event loop | ✅ |
-| `app/key_handler.rs` | Priority-based key processing | ✅ |
-| `app/dispatch.rs` | Routes input to current tab | ✅ |
-| `app/state_update.rs` | Task result handling | ✅ |
-| `app/task_runtime.rs` | Task lifecycle | ✅ |
-| `workers/runner.rs` | TaskConfig/TaskResult enums | ✅ |
-| `components/scrollable.rs` | ScrollableText with bounds check | ✅ |
-| `components/input.rs` | InputField with UTF-8 handling | ✅ |
-| `theme.rs` | ThemeManager with FxHashMap | ✅ |
-| `session.rs` | SessionManager with 30s auto-save | ✅ |
+2. **FxHashMap/FxHashSet usage** - All locations documented in architecture use FxHashMap/FxHashSet:
+   - `app/mod.rs:52` - App.tabs
+   - `app/mod.rs:114` - App.bookmarks
+   - `app/bookmarks.rs` - All bookmark functions correctly use FxHashSet
+   - `app/help_config.rs:8` - StaticHelpData.sections
+   - `help.rs:207` - HelpContent.sections
+   - `theme.rs:179` - ThemeManager.themes
+   - `tabs/dashboard.rs:17` - PortfolioSnapshot.findings_by_severity
 
-## Bug Pattern Verification
+3. **ScrollableText scroll offset** (`components/scrollable.rs:135-139`) - Correctly implements empty check:
+   ```rust
+   let scroll_offset = if self.lines.is_empty() {
+       0
+   } else {
+       self.scroll_offset.min(self.lines.len() - 1)
+   };
+   ```
 
-### Division by Zero Guard ✅
-`scrollable.rs:135-139` correctly handles empty lines:
-```rust
-let scroll_offset = if self.lines.is_empty() {
-    0
-} else {
-    self.scroll_offset.min(self.lines.len() - 1)
-};
-```
+4. **Tab traits** (`tabs/mod.rs`):
+   - `TabState` trait properly defined (lines 864-872)
+   - `TabInput` trait properly defined (lines 883-921)
+   - `TabRender` trait properly defined (lines 874-880)
 
-### TaskResult Handling ✅
-`state_update.rs:58-69` correctly avoids moved value issue:
-```rust
-pub(super) fn handle_result(&mut self, result: TaskResult) {
-    let result = match self.handle_security_result(result) {
-        Some(r) => r,
-        None => return,
-    };
-    let result = match self.handle_protocol_result(result) {
-        Some(r) => r,
-        None => return,
-    };
-    if self.handle_feature_result(result).is_none() {
-        tracing::debug!("Unhandled TaskResult variant");
-    }
-}
-```
+5. **Session management** (`session.rs`):
+   - Correctly auto-saves every 30 seconds (line 45: `auto_save_interval_secs: 30`)
+   - Uses `~/.slapper/sessions/` path via `directories::ProjectDirs`
 
-### Silent Error Suppression ✅
-`workers/runner.rs` uses explicit error handling with proper propagation.
+6. **Key bindings** (`app/key_handler.rs`):
+   - Priority-based key processing implemented correctly
+   - No duplicate key bindings found
 
-### FxHashMap/FxHashSet Usage ✅
-Files using correct collections:
-- `app/mod.rs:52` - `tabs: FxHashMap<Tab, Box<dyn TabInput>>`
-- `app/mod.rs:114` - `bookmarks: FxHashSet<String>`
-- `app/bookmarks.rs` - All functions use `FxHashSet<String>`
-- `app/help_config.rs:8` - `sections: FxHashMap<Tab, HelpSection>`
-- `help.rs:207` - `content.sections: FxHashMap`
-- `theme.rs:179` - `themes: FxHashMap<String, Theme>`
-- `tabs/dashboard.rs:17` - `findings_by_severity: FxHashMap<String, usize>`
-
-### Key Binding Conflict Prevention ⚠️
-`key_handler.rs:105-138` - Normal mode input shows duplicate `'b'` binding at lines 114 and 124. However, line 114 is `(KeyModifiers::CONTROL, ...)` while line 124 is `(KeyModifiers::NONE, ...)`, so no actual conflict.
-
-### Bounds Check for Array Access ✅
-No unsafe array access found in reviewed files.
-
-## Discrepancies
+## Bugs/Issues
 
 ### None Found
-All documented claims verified against implementation.
 
-## Minor Observations
+The TUI implementation follows all documented patterns correctly:
+- No division by zero bugs detected in progress calculations
+- No silent error suppression via `unwrap_or_default()` in critical paths
+- Scroll offset bounds properly checked
+- All HashMap/HashSet usages correctly use FxHashMap/FxHashSet
 
-1. **runner.rs:188** - Busy-wait sleep during event polling:
-   ```rust
-   std::thread::sleep(std::time::Duration::from_millis(10));
-   ```
-   This is standard practice for crossterm event loops but could theoretically be optimized.
+## Minor Discrepancies
 
-2. **key_handler.rs:114** - Terminal size with unwrap_or:
-   ```rust
-   let (term_width, _term_height) = crossterm::terminal::size().unwrap_or((80, 24));
-   ```
-   Uses literal tuple instead of deriving from constants.
+1. **Key binding 'b' appears twice in normal mode** (`app/key_handler.rs:114,124`):
+   - Line 114: `(KeyModifiers::CONTROL, KeyCode::Char('b'))` - Toggle bookmark
+   - Line 124: `(KeyModifiers::NONE, KeyCode::Char('b'))` - Word backward
+   
+   This is intentional (Ctrl+b vs regular 'b') and works correctly.
 
-3. **session.rs:119** - Session loading sorts by path alphabetically rather than by modification time. May be intentional for determinism.
+2. **Architecture document says 30 payload types for Fuzz tab**, but AGENTS.md mentions 31 payload types. No implementation issue - just documentation inconsistency.
 
 ## Conclusion
 
-The TUI implementation **matches the architecture documentation** with all documented components present and correctly implemented. No bugs or discrepancies found in the reviewed areas. All recommended patterns from the architecture doc (FxHashMap usage, division by zero guards, TaskResult handling) are properly implemented.
-
-**Overall Assessment:** ✅ COMPLIANT
+The TUI module implementation matches the architecture document. No code changes needed.
