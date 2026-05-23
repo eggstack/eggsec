@@ -195,6 +195,22 @@ Detailed architecture documentation is in the `architecture/` directory:
 | Recon | secrets module not in pipeline | Added `"secrets"` to `FULL_RECON_PIPELINE_MODULES` |
 | Recon | extract_target_from_url silently falls back | Added `tracing::warn` when fallback occurs |
 
+### 2026-05-30 (Architecture Review Wave 4-5)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| AI Agents | `alerts/mod.rs` AlertRoutingRules HashMap | → FxHashMap |
+| AI Agents | `constraints/checker.rs` request_counts HashMap | → FxHashMap |
+| AI Agents | `portfolio.rs` PortfolioData.targets HashMap | → FxHashMap |
+| Config | Private IP bypass in `parse()` and `parse_hostname_only()` | Now uses `is_private_ip()` check (not just loopback) |
+| WAF | `detect.rs:76` HEADER_VALUE_MAX_LEN in loop | Moved to module level |
+| Distributed | Queue race condition in `reassign_stale_tasks()` | Atomic lock acquisition for both maps |
+| Pipeline | Session save silent failure | Changed warn to error with descriptive message |
+| Scanner | CMS `unwrap_or_default()` in enumerate_components | Explicit match with tracing |
+| Fuzzer | `rate <= 1` premature stop in adaptive limiter | Changed to `rate < 1` |
+| Loadtest | Error list cap 100 too small | Increased to 1000 |
+| Recon | Sequential cloud enumeration | Parallelized with `tokio::join!` |
+
 ### 2026-05-28 (Architecture Review Wave 4)
 
 | Component | Issue | Fix |
@@ -298,6 +314,7 @@ The consolidated implementation plan is in `plans/plan.md`. **All 26 items acros
 - Private IP check (`is_private_ip()`) now occurs AFTER scope rule evaluation in `TargetScope::parse()`.
 - Scope rejection reasons are not reported - no indication of whether rejection was due to exclude rule or no include match.
 - DNS resolution failures now return error when CIDR rules are configured.
+- **NEW (2026-05-30):** Private IP bypass now blocked in `parse()` and `parse_hostname_only()` using `is_private_ip()` (not just loopback).
 
 ### Recon Module
 - `CveMapper` cache now persists across invocations via module-level `Arc<Mutex<FxHashMap>>`.
@@ -305,6 +322,7 @@ The consolidated implementation plan is in `plans/plan.md`. **All 26 items acros
 - Secrets module (`secrets.rs`) is now in `FULL_RECON_PIPELINE_MODULES`.
 - Dependency scan handles Ruby (Gemfile), PHP (composer.json), and Java (pom.xml) in addition to documented npm/cargo/go.
 - FxHashMap count is actually 66+, not the documented 55.
+- **NEW (2026-05-30):** Cloud enumeration now parallelized with `tokio::join!` (~5x speedup).
 
 ### Distributed Module
 - `RemoteClient` now has `impl Drop` for connection cleanup.
@@ -312,11 +330,13 @@ The consolidated implementation plan is in `plans/plan.md`. **All 26 items acros
 - DNS lookup is now cached with 60s TTL.
 - Only `completed` queue has size limit; `pending` and `in_progress` can grow unbounded.
 - Rate limit check was fixed (lock duration minimized).
+- **NEW (2026-05-30):** Queue race condition fixed in `reassign_stale_tasks()` - both locks acquired together atomically.
 
 ### WAF Module
 - `select_profile()` now uses HashMap-based O(1) lookup instead of nested linear scan.
 - `BypassResult` now has `error: Option<String>` field for network error details.
 - Evasion bypass now calls `get_sqli_payloads()` once before loops.
+- **NEW (2026-05-30):** `HEADER_VALUE_MAX_LEN` moved to module level (was inside loop).
 
 ### Pipeline Module
 - Hardcoded ports now extracted to `DEFAULT_SCAN_PORTS`/`EXTENDED_SCAN_PORTS` constants.
