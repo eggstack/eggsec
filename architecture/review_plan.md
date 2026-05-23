@@ -1,26 +1,38 @@
 # Architecture Review Plan
 
+**Status:** INCOMPLETE - Iterative improvement in progress
+
 This document outlines the plan for reviewing all architecture documents and verifying their claims against the codebase.
+
+## Review Status
+
+| Batch | Modules | Status |
+|-------|---------|--------|
+| Batch 1 | AI Agents, CLI Commands, Config, Distributed, Fuzzer | ✅ Reviews Complete |
+| Batch 2 | Loadtest, Networking, Output, Overview, Pipeline | ✅ Reviews Complete |
+| Batch 3 | Plugins/NSE, Recon, Scanner, TUI, WAF | ✅ Reviews Complete |
+
+**Next Steps:** Implement high-priority fixes identified in reviews
 
 ## Modules to Review
 
-| # | Module | Document | Review Agent Output |
-|---|--------|----------|---------------------|
-| 1 | AI Agents | `architecture/ai_agents.md` | `plans/ai_agents_review.md` |
-| 2 | CLI Commands | `architecture/cli_commands.md` | `plans/cli_commands_review.md` |
-| 3 | Config | `architecture/config.md` | `plans/config_review.md` |
-| 4 | Distributed | `architecture/distributed.md` | `plans/distributed_review.md` |
-| 5 | Fuzzer | `architecture/fuzzer.md` | `plans/fuzzer_review.md` |
-| 6 | Loadtest | `architecture/loadtest.md` | `plans/loadtest_review.md` |
-| 7 | Networking | `architecture/networking.md` | `plans/networking_review.md` |
-| 8 | Output | `architecture/output.md` | `plans/output_review.md` |
-| 9 | Overview | `architecture/overview.md` | `plans/overview_review.md` |
-| 10 | Pipeline | `architecture/pipeline.md` | `plans/pipeline_review.md` |
-| 11 | Plugins/NSE | `architecture/plugins_nse.md` | `plans/plugins_nse_review.md` |
-| 12 | Recon | `architecture/recon.md` | `plans/recon_review.md` |
-| 13 | Scanner | `architecture/scanner.md` | `plans/scanner_review.md` |
-| 14 | TUI | `architecture/tui.md` | `plans/tui_review.md` |
-| 15 | WAF | `architecture/waf.md` | `plans/waf_review.md` |
+| # | Module | Document | Review Output | Issues Found |
+|---|--------|----------|---------------------|--------------|
+| 1 | AI Agents | `architecture/ai_agents.md` | `plans/ai_agents_review.md` | 2 HashMap, 1 eviction bug, 1 cache key |
+| 2 | CLI Commands | `architecture/cli_commands.md` | `plans/cli_commands_review.md` | Missing CLI files in docs |
+| 3 | Config | `architecture/config.md` | `plans/config_review.md` | Private IP bypass (HIGH) |
+| 4 | Distributed | `architecture/distributed.md` | `plans/distributed_review.md` | Race condition (HIGH) |
+| 5 | Fuzzer | `architecture/fuzzer.md` | `plans/fuzzer_review.md` | Adaptive rate limiter (MEDIUM) |
+| 6 | Loadtest | `architecture/loadtest.md` | `plans/loadtest_review.md` | Error list cap 100 |
+| 7 | Networking | `architecture/networking.md` | `plans/networking_review.md` | UDP checksum allocation |
+| 8 | Output | `architecture/output.md` | `plans/output_review.md` | None critical |
+| 9 | Overview | `architecture/overview.md` | `plans/overview_review.md` | unwrap_or_default (pre-existing) |
+| 10 | Pipeline | `architecture/pipeline.md` | `plans/pipeline_review.md` | Session save error (MEDIUM) |
+| 11 | Plugins/NSE | `architecture/plugins_nse.md` | `plans/plugins_nse_review.md` | CVE duplicate, timeout unused |
+| 12 | Recon | `architecture/recon.md` | `plans/recon_review.md` | Async CVE, cloud parallelization |
+| 13 | Scanner | `architecture/scanner.md` | `plans/scanner_review.md` | CMS unwrap_or_default |
+| 14 | TUI | `architecture/tui.md` | `plans/tui_review.md` | 14 unwrap_or_default instances |
+| 15 | WAF | `architecture/waf.md` | `plans/waf_review.md` | Constant in loop, HTTP/2 disabled |
 
 ## Review Workflow
 
