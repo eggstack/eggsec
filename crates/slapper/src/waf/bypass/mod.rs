@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 pub use evasion::EvasionBypass;
 pub use headers::HeaderBypass;
 pub use profiles::{
-    get_auto_profile, get_profile_by_name, get_waf_profiles, ProfileBypass, WafProfile,
+    get_auto_profile, get_profile_by_detection_sig, get_profile_by_name, get_waf_profiles,
+    ProfileBypass, WafProfile,
 };
 pub use smuggling::SmugglingBypass;
 

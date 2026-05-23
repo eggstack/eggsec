@@ -86,10 +86,12 @@ use crate::cli::WafArgs;
 use crate::utils::sanitize_for_logging;
 
 pub use bypass::{
-    get_auto_profile, get_profile_by_name, BypassEngine, BypassResult, TestType, WafProfile,
+    get_auto_profile, get_profile_by_detection_sig, get_profile_by_name, BypassEngine,
+    BypassResult, TestType, WafProfile,
 };
 pub use detector::{WafDetectionResult, WafDetector};
 pub use types::{Finding, OwaspCategory, ScanResults, Severity};
+pub use waf_patterns::get_waf_signatures;
 
 /// Run WAF detection and bypass testing from CLI
 ///
@@ -148,14 +150,14 @@ impl WafEngine {
                     return Some(profile);
                 }
 
-                for profile in bypass::get_waf_profiles() {
-                    for sig in &profile.detection_signatures {
-                        let sig_lower = sig.to_lowercase();
-                        if waf_lower == sig_lower
-                            || waf_lower.starts_with(&sig_lower)
-                            || waf_lower.ends_with(&sig_lower)
-                            || waf_lower.contains(&format!(" {}", &sig_lower))
-                        {
+                for sig in get_waf_signatures().keys() {
+                    let sig_lower = sig.to_lowercase();
+                    if waf_lower == sig_lower
+                        || waf_lower.starts_with(&sig_lower)
+                        || waf_lower.ends_with(&sig_lower)
+                        || waf_lower.contains(&format!(" {}", &sig_lower))
+                    {
+                        if let Some(profile) = bypass::get_profile_by_detection_sig(sig) {
                             self.selected_profile = Some(profile.name.clone());
                             return Some(profile.clone());
                         }

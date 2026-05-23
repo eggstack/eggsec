@@ -1,5 +1,6 @@
 use crate::waf::bypass::BypassTechnique;
 use crate::waf::data::get_waf_signatures;
+use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
@@ -35,8 +36,23 @@ static WAF_PROFILES: LazyLock<Vec<WafProfile>> = LazyLock::new(|| {
     profiles
 });
 
+static SIGNATURE_TO_PROFILE: LazyLock<FxHashMap<String, &'static WafProfile>> =
+    LazyLock::new(|| {
+        let mut map = FxHashMap::with_capacity_and_hasher(100, Default::default());
+        for profile in get_waf_profiles().iter() {
+            for sig in &profile.detection_signatures {
+                map.insert(sig.to_lowercase(), profile);
+            }
+        }
+        map
+    });
+
 pub fn get_waf_profiles() -> &'static Vec<WafProfile> {
     &WAF_PROFILES
+}
+
+pub fn get_profile_by_detection_sig(sig: &str) -> Option<&'static WafProfile> {
+    SIGNATURE_TO_PROFILE.get(&sig.to_lowercase()).copied()
 }
 
 pub fn get_profile_by_name(name: &str) -> Option<WafProfile> {
