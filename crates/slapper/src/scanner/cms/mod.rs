@@ -255,16 +255,40 @@ impl CmsScanner {
     async fn enumerate_components(&self, url: &str, cms_type: CmsType) -> (Vec<String>, Vec<String>) {
         match cms_type {
             CmsType::WordPress => {
-                let plugins = wordpress::enumerate_plugins(url).await.unwrap_or_default();
-                let themes = wordpress::enumerate_themes(url).await.unwrap_or_default();
+                let plugins = match wordpress::enumerate_plugins(url).await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        tracing::debug!("WordPress plugin enumeration failed: {}", e);
+                        Vec::new()
+                    }
+                };
+                let themes = match wordpress::enumerate_themes(url).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        tracing::debug!("WordPress theme enumeration failed: {}", e);
+                        Vec::new()
+                    }
+                };
                 (plugins, themes)
             }
             CmsType::Drupal => {
-                let modules = drupal::enumerate_modules(url).await.unwrap_or_default();
+                let modules = match drupal::enumerate_modules(url).await {
+                    Ok(m) => m,
+                    Err(e) => {
+                        tracing::debug!("Drupal module enumeration failed: {}", e);
+                        Vec::new()
+                    }
+                };
                 (modules, Vec::new())
             }
             CmsType::Joomla => {
-                let extensions = joomla::enumerate_extensions(url).await.unwrap_or_default();
+                let extensions = match joomla::enumerate_extensions(url).await {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::debug!("Joomla extension enumeration failed: {}", e);
+                        Vec::new()
+                    }
+                };
                 (extensions, Vec::new())
             }
             CmsType::Unknown => (Vec::new(), Vec::new()),
@@ -352,8 +376,14 @@ pub async fn check_directory_listing(url: &str, client: &reqwest::Client) -> boo
     for test_url in &test_urls {
         match client.get(test_url).send().await {
             Ok(resp) => {
-                let text = resp.text().await.unwrap_or_default();
-                if text.contains("Index of") || text.contains("[To Parent Directory]") {
+                let body = match resp.text().await {
+                    Ok(text) => text,
+                    Err(e) => {
+                        tracing::debug!("Failed to read directory listing response: {}", e);
+                        String::new()
+                    }
+                };
+                if body.contains("Index of") || body.contains("[To Parent Directory]") {
                     return true;
                 }
             }
