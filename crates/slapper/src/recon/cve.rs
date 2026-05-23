@@ -43,7 +43,10 @@ impl CveMapper {
     }
 
     pub async fn map_cves(&mut self, tech_stack: &TechStack) -> Result<CveMapping> {
-        let mut all_vulns = Vec::new();
+        let mut all_vulns = Vec::with_capacity(
+            tech_stack.servers.len() + tech_stack.frameworks.len()
+                + tech_stack.languages.len() + tech_stack.cms.len() + tech_stack.cdns.len()
+        );
 
         for server in &tech_stack.servers {
             if let Some(vulns) = self.get_cves_for_product(server).await {
@@ -106,7 +109,7 @@ impl CveMapper {
 
         let cve_map = self.get_known_cves();
 
-        let mut matched_cves = Vec::new();
+        let mut matched_cves = Vec::with_capacity(cve_map.len().min(20));
 
         for (keywords, cves) in &cve_map {
             let matches = keywords.iter().any(|kw| product_lower.contains(kw));
