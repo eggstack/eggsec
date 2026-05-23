@@ -169,9 +169,9 @@ impl AiCache {
         let should_persist;
         {
             let mut entries = self.entries.write().await;
-            if entries.len() >= self.max_entries {
+            while entries.len() > self.max_entries {
                 self.evict_expired(&mut entries);
-                if entries.len() >= self.max_entries {
+                if entries.len() > self.max_entries {
                     if let Some((oldest_key, _)) = entries
                         .iter()
                         .min_by_key(|(_, v)| v.created_at)
@@ -287,6 +287,8 @@ pub struct CacheStats {
     pub total_hits: u64,
 }
 
+/// Cache key builder for AI cache entries.
+/// NOTE: Uses colon separators which could cause collisions if input contains colons.
 pub struct CacheKeyBuilder;
 
 impl CacheKeyBuilder {
