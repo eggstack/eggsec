@@ -59,9 +59,9 @@ impl Scope {
         let target_scope = if self.has_ip_based_rules() {
             let scope = TargetScope::parse(target)?;
             if scope.ip.is_none() {
-                return Err(anyhow::anyhow!(
-                    "DNS failed for '{}' with CIDR rules configured",
-                    target
+                return Err(ScopeError::DnsResolution(
+                    target.to_string(),
+                    "DNS resolution failed with CIDR rules configured".to_string(),
                 ));
             }
             scope
