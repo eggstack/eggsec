@@ -2,8 +2,8 @@ use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
 use crate::error::Result;
 use crate::recon::{
-    cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, ssl, subdomain,
-    takeover, techdetect, threatintel, wayback, whois, FullReconResult,
+    cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, secrets, ssl,
+    subdomain, takeover, techdetect, threatintel, wayback, whois, FullReconResult,
 };
 use crate::types::SensitiveString;
 use crate::utils::sanitize_for_logging;
@@ -437,6 +437,29 @@ async fn run_cve_check(
     }
 }
 
+/// Scans content for exposed secrets and sensitive information.
+///
+/// Returns `None` if content discovery failed or no secrets were found.
+async fn run_secrets_check(
+    content_result: Option<&content::ContentDiscovery>,
+) -> Option<Vec<secrets::SecretFinding>> {
+    let content = content_result?;
+    if content.sensitive_files.is_empty() {
+        return None;
+    }
+    let mut all_findings = Vec::new();
+    for sensitive_file in &content.sensitive_files {
+        if let Ok(file_findings) = secrets::SecretScanner::new().scan_file(&sensitive_file.url) {
+            all_findings.extend(file_findings);
+        }
+    }
+    if all_findings.is_empty() {
+        None
+    } else {
+        Some(all_findings)
+    }
+}
+
 fn nvd_api_key_from_config(config: &SlapperConfig) -> Option<String> {
     config
         .recon
@@ -572,10 +595,13 @@ pub async fn run_full_recon(
     recon.js_analysis = js_result.into_option();
     recon.wayback = wayback_result.into_option();
     recon.cloud = cloud_result.into_option();
-    recon.content = content_result.into_option();
     recon.cors = cors_result.into_option();
     recon.email_discovery = email_result.into_option();
     recon.takeover = takeover_result;
+
+    let content_result_opt = content_result.into_option();
+    recon.secrets = run_secrets_check(content_result_opt.as_ref()).await;
+    recon.content = content_result_opt;
 
     if reverse_dns_failed {
         recon.reverse_dns_error =

@@ -151,6 +151,7 @@ pub struct FullReconResult {
     pub cve_error: Option<String>,
     pub takeover: Option<Vec<takeover::TakeoverResult>>,
     pub takeover_error: Option<String>,
+    pub secrets: Option<Vec<secrets::SecretFinding>>,
 }
 
 impl FullReconResult {
