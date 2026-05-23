@@ -264,7 +264,7 @@ impl FuzzEngine {
 
         for payload in payloads {
             let rate = limiter.get_rate();
-            if rate <= 1 {
+            if rate < 1 {
                 tracing::warn!("Adaptive rate limiter backed off to 0, stopping");
                 break;
             }
