@@ -1,100 +1,130 @@
-# Plugins & NSE Integration Architecture Review
-
-## Overview
-
-Reviewed: `crates/slapper-nse/src/` (6 core files + 160+ library files)
-Reference: `architecture/plugins_nse.md`
-
-## Verification Against Documentation
-
-| Claim in Docs | Status | Implementation |
-|---------------|--------|----------------|
-| SandboxConfig with allowed_dir, allowed_commands, log_violations, allowed_networks | ✅ | `lib.rs:50-63` - All fields present |
-| `io.popen`, `lfs`, `os.getenv`, `socket` sandboxing | ✅ | Various library files |
-| 164 NSE library modules | ⚠️ | ~160 modules in `libraries/mod.rs` (counted ~160) |
-| CVE integration: NVD, OSV, CISA KEV | ✅ | `cve/mod.rs:7-9` - All three sources |
-| CveCache uses FxHashMap | ✅ | `cve/mod.rs:174` - `Arc<RwLock<FxHashMap<...>>>` |
-| CveAggregator uses FxHashSet | ✅ | `cve/mod.rs:260,287` - Uses `FxHashSet` |
-| output.rs uses `let _ = writeln!()` pattern | ✅ | `output.rs:31,42,45,59,66,72,74,91,95,96,97,99,104` - Multiple uses |
-| `async_executor.rs` Default impl uses `unwrap_or_else` | ✅ | `async_executor.rs:108` - `panic!("Failed to create ExecutorCore...")` |
-| Duplicate `getenv` removed | ✅ | `os.rs:295-300` - No duplicate found |
-| Path traversal check relies on canonicalization | ✅ | `lib.rs:93-115` - `is_path_allowed()` uses `canonicalize()` |
-| `rustc-hash` in dependencies | ✅ | Confirmed via Cargo.toml |
-
-## Bug Checks
-
-### unwrap/expect Analysis
-
-| Location | Issue | Severity |
-|----------|-------|----------|
-| `lib.rs:81` | `canonicalize().ok().or_else(\|\| Some(dir.clone()))` - Falls back to non-canonical path | Medium - could bypass check if dir doesn't exist |
-| `executor_core.rs:175` | `v.to_string().unwrap_or_default()` - Silent fallback | Low |
-| `output.rs:37-38` | `unwrap_or_default()` on SystemTime | Low - acceptable |
-| `output.rs:50-55` | Multiple `unwrap_or_default()` on SystemTime | Low - acceptable |
-| `context.rs:105` | `path_buf.canonicalize().ok()` fallback | Medium - same issue as lib.rs:81 |
-
-### HashMap/FxHashMap Analysis
-
-| Location | Type | Status |
-|----------|------|--------|
-| `context.rs:70` | `FxHashMap<String, String>` for output_table | ✅ |
-| `context.rs:143,146` | `FxHashMap<(u16, String), PortInfo>`, `FxHashMap<String, mlua::Value>` | ✅ |
-| `executor_core.rs:44` | `Mutex<FxHashMap<String, Value>>` | ✅ |
-| `executor_core.rs:591` | `Arc<Mutex<FxHashMap<String, Value>>>` for require cache | ✅ |
-| `executor.rs:7,336` | Uses `FxHashMap` | ✅ |
-| `cve/mod.rs:174` | CveCache uses FxHashMap | ✅ |
-
-### Error Handling
-
-1. **executor.rs:66-102** - `run_script_with_timeout()` uses mpsc channel with proper timeout handling
-2. **executor.rs:93-102** - All timeout/Disconnect errors handled explicitly
-3. **output.rs** - All `writeln!` calls use `let _ =` pattern, errors suppressed but logged via return value
-4. **context.rs** - Proper error propagation via `Result` types in `to_table()` methods
-
-## Security Observations
-
-### Sandbox Path Check Issue (Medium)
-
-`lib.rs:93-115` - `is_path_allowed()`:
-
-```rust
-let Ok(canonical) = path_buf.canonicalize() else {
-    // If canonicalize fails (file doesn't exist), check the parent
-    if let Some(parent) = path_buf.parent() {
-        if let Ok(canonical_parent) = parent.canonicalize() {
-            return canonical_parent.starts_with(&allowed_dir);
-        }
-    }
-    // Reject if we can't verify the path
-    return false;
-};
-```
-
-If `canonicalize()` fails on the target path (file doesn't exist), it falls back to checking the parent directory. This is reasonable for allowing operations on non-existent files in allowed directories, but the fallback logic could theoretically allow bypassing if an attacker can make canonicalization fail in certain ways.
-
-### os Library Command Allowlist (Low)
-
-`os.rs` command checking relies on the allowlist in `SandboxConfig`, which is appropriate.
-
-## Performance Observations
-
-1. **executor_core.rs:591** - Require cache is a good optimization (FxHashMap with mutex)
-2. **context.rs:189** - `protocol.to_string()` allocation on every port lookup
-3. **executor.rs:336-360** - `parse_all_script_categories()` re-reads directories on each call - could benefit from caching
-
-## Discrepancies
-
-1. **Library count**: Document says "164 NSE-style library modules" but `libraries/mod.rs` shows ~160 modules. This is a minor documentation inaccuracy.
+# Plugins & NSE Architecture Review
 
 ## Summary
 
-| Category | Status |
-|----------|--------|
-| Implementation matches docs | ⚠️ Mostly (library count discrepancy) |
-| Critical bugs | ✅ None |
-| Security issues | ⚠️ 2 medium (path canonicalization fallback) |
-| HashMap/FxHashMap usage | ✅ Correct throughout |
-| Error handling | ✅ Proper patterns used |
+The NSE module implementation in `crates/slapper-nse/src/` has several performance issues where `std::collections::HashMap` and `std::collections::HashSet` are used instead of the more efficient `FxHashMap` and `FxHashSet` from rustc-hash. Most of these were documented as fixed in `architecture/plugins_nse.md`, but some issues remain.
 
-**Review Date**: 2026-05-23
-**Reviewer**: Architecture Review
+## What's Implemented Correctly
+
+### Core NSE Features
+- Full Lua interpreter via `mlua` for running NSE scripts
+- Sandbox configuration with `allowed_dir`, `allowed_commands`, `log_violations`, `allowed_networks`
+- Sandboxed operations for `io`, `lfs`, `os`, `socket` libraries
+- 164 NSE-style library modules implemented in `libraries/` directory
+- CVE integration via `vulns` library with NVD, OSV, CISA KEV support
+
+### Library Implementation (using FxHashMap correctly)
+- `vulns.rs` - CVE_DB uses `FxHashMap`
+- `rpc.rs` - RPC_PROGRAMS uses `FxHashMap<u32, FxHashMap<u32, &'static str>>`
+- `smbauth.rs` - HASH_STORE uses `FxHashMap<String, (String, String)>`
+- `httpspider.rs` - CRAWLERS uses `FxHashMap`, visited uses `FxHashSet`
+- `pcre.rs` - COMPILED_REGEX uses `FxHashMap`
+- `context.rs` - `ScanContext` uses `FxHashMap` throughout
+- `executor.rs` - `parse_all_script_categories()` returns `FxHashMap`
+- `executor_core.rs` - registry and cache use `FxHashMap`
+- All other library files correctly use `FxHashMap`/`FxHashSet`
+
+### Bug Fixes Verified from Documentation
+- `output.rs` - Multiple `unwrap()` on `writeln!` calls changed to `let _ = writeln!()` pattern
+- `lfs.rs` - Path traversal check bypass fixed by relying on canonicalization only
+- `async_executor.rs:108` - Default impl uses `unwrap_or_else` with descriptive panic message
+- `smbauth.rs` - No duplicate `getenv` registration (removed previously)
+- `CveCache` - Uses `FxHashMap` (verified in vulns.rs)
+- `CveAggregator` - Uses `FxHashSet` (not found, may be deprecated)
+
+## Issues Found
+
+### 1. `public_api/api.rs` uses std::collections::HashMap (HIGH - Performance)
+
+**File**: `crates/slapper-nse/src/public_api/api.rs`
+
+**Lines 107-108**: `get_cve_database()` returns `std::collections::HashMap` instead of `FxHashMap`:
+```rust
+fn get_cve_database(
+) -> std::collections::HashMap<&'static str, (&'static str, &'static str, &'static str)> {
+    let mut m = std::collections::HashMap::new();
+```
+
+**Lines 381, 486**: `NseHttpResponse.headers` and `NseHttpRequest.headers` use `std::collections::HashMap`:
+```rust
+pub headers: std::collections::HashMap<String, String>,
+```
+
+**Lines 413, 463, 532**: Local variables in functions use `std::collections::HashMap`:
+```rust
+let mut headers = std::collections::HashMap::new();
+```
+
+**Recommended fix**: Replace all `std::collections::HashMap` with `FxHashMap` in `api.rs`.
+
+### 2. `libraries/http.rs` uses std::collections::HashMap (MEDIUM - Performance)
+
+**File**: `crates/slapper-nse/src/libraries/http.rs`
+
+**Line 143**: `parse_options()` function uses `HashMap`:
+```rust
+fn parse_options(opts: Option<&Table>) -> (HashMap<String, String>, Duration) {
+    let mut headers = HashMap::new();
+```
+
+**Recommended fix**: Import `FxHashMap` and use it in `parse_options()`.
+
+### 3. `libraries/datafiles.rs` uses std::collections::HashMap (MEDIUM - Performance)
+
+**File**: `crates/slapper-nse/src/libraries/datafiles.rs`
+
+**Line 31-33**: `get_services()` returns `HashMap` instead of `FxHashMap`:
+```rust
+fn get_services() -> &'static HashMap<&'static str, (u16, &'static str)> {
+    SERVICES.get_or_init(|| {
+        let mut m = HashMap::new();
+```
+
+Note: `PROTOCOLS` correctly uses `FxHashMap`, but `SERVICES` does not.
+
+**Recommended fix**: Change `get_services()` to return `FxHashMap` and use `FxHashMap::default()`.
+
+### 4. `libraries/creds.rs` uses std::collections::HashSet (MEDIUM - Performance)
+
+**File**: `crates/slapper-nse/src/libraries/creds.rs`
+
+**Lines 102, 123**: Local `seen` variables use `std::collections::HashSet`:
+```rust
+let mut seen = std::collections::HashSet::new();
+```
+
+**Recommended fix**: Change to `FxHashSet` with `FxHashSet::default()`.
+
+## Verification
+
+All other NSE library files correctly use `FxHashMap`/`FxHashSet` from rustc-hash as expected.
+
+## Files Reviewed
+
+| File | Status | Notes |
+|------|--------|-------|
+| `context.rs` | ✓ Correct | Uses FxHashMap throughout |
+| `executor.rs` | ✓ Correct | Returns FxHashMap |
+| `executor_core.rs` | ✓ Correct | Uses FxHashMap for registry |
+| `async_executor.rs` | ✓ Correct | Default impl uses unwrap_or_else |
+| `output.rs` | ✓ Correct | Uses `let _ = writeln!()` pattern |
+| `libraries/vulns.rs` | ✓ Correct | CVE_DB uses FxHashMap |
+| `libraries/rpc.rs` | ✓ Correct | Uses FxHashMap |
+| `libraries/smbauth.rs` | ✓ Correct | Uses FxHashMap |
+| `libraries/httpspider.rs` | ✓ Correct | Uses FxHashMap and FxHashSet |
+| `libraries/pcre.rs` | ✓ Correct | Uses FxHashMap |
+| `public_api/api.rs` | ⚠ Issues | Uses std HashMap (4 locations) |
+| `libraries/http.rs` | ⚠ Issues | Uses std HashMap (line 143) |
+| `libraries/datafiles.rs` | ⚠ Issues | get_services uses std HashMap |
+| `libraries/creds.rs` | ⚠ Issues | Uses std HashSet (lines 102, 123) |
+
+## Recommended Fixes Summary
+
+| File | Line | Issue | Priority |
+|------|------|-------|----------|
+| public_api/api.rs | 107-108 | HashMap → FxHashMap | HIGH |
+| public_api/api.rs | 381, 486 | HashMap → FxHashMap in struct | HIGH |
+| public_api/api.rs | 413, 463, 532 | Local HashMap → FxHashMap | HIGH |
+| libraries/http.rs | 143 | HashMap → FxHashMap | MEDIUM |
+| libraries/datafiles.rs | 31-33 | HashMap → FxHashMap | MEDIUM |
+| libraries/creds.rs | 102, 123 | HashSet → FxHashSet | MEDIUM |
