@@ -1,5 +1,9 @@
 use crate::packet::types::*;
 
+const TLS_RECORD_TYPE_HANDSHAKE: u8 = 0x16;
+const TLS_VERSION_1_0: u16 = 0x0101;
+const IPv4_VERSION_BYTE: u8 = 0x45;
+
 impl EthernetFrame {
     pub fn parse(data: &[u8]) -> Option<Self> {
         if data.len() < 14 {
@@ -590,7 +594,7 @@ impl TlsHandshake {
             return None;
         }
 
-        if data[0] != 0x16 {
+        if data[0] != TLS_RECORD_TYPE_HANDSHAKE {
             return None;
         }
 

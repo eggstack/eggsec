@@ -4,10 +4,10 @@
 //! Based on Nmap's smbauth library.
 
 use mlua::{Lua, Result as LuaResult};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::{Mutex, OnceLock};
 
-static HASH_STORE: OnceLock<Mutex<HashMap<String, (String, String)>>> = OnceLock::new();
+static HASH_STORE: OnceLock<Mutex<FxHashMap<String, (String, String)>>> = OnceLock::new();
 
 pub fn register_smbauth_library(lua: &Lua) -> LuaResult<()> {
     let globals = lua.globals();

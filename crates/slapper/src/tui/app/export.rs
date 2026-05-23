@@ -385,10 +385,12 @@ impl super::App {
             Ok(report) => {
                 let converted = match self.export_format {
                     OutputFormat::Html => crate::output::convert::convert_to_html(&report),
-                    OutputFormat::Markdown => crate::output::convert::convert_to_markdown(&report),
+                    OutputFormat::Markdown => crate::output::convert::convert_to_markdown(&report)
+                        .unwrap_or_else(|e| format!("Error: {}", e)),
                     OutputFormat::Sarif => crate::output::convert::convert_to_sarif(&report)
                         .unwrap_or_else(|e| format!("Error: {}", e)),
-                    OutputFormat::Junit => crate::output::convert::convert_to_junit(&report),
+                    OutputFormat::Junit => crate::output::convert::convert_to_junit(&report)
+                        .unwrap_or_else(|e| format!("Error: {}", e)),
                     _ => {
                         tracing::warn!("Unsupported export format: {:?}", self.export_format);
                         return;

@@ -129,7 +129,7 @@ pub fn convert_to_html(report: &ScanReportData) -> String {
     generate_html_report(summary, findings)
 }
 
-pub fn convert_to_markdown(report: &ScanReportData) -> String {
+pub fn convert_to_markdown(report: &ScanReportData) -> Result<String, std::fmt::Error> {
     use super::markdown::{generate_markdown_report, ScanSummary};
 
     let summary = ScanSummary::from(report);
