@@ -223,10 +223,10 @@ impl TargetScope {
         }
 
         if let Ok(ip) = IpAddr::from_str(target) {
-            if ip.is_loopback() {
+            if is_private_ip(&ip) {
                 return Err(ScopeError::DnsResolution(
                     target.to_string(),
-                    "Loopback address blocked by security policy".to_string(),
+                    "Private IP address blocked by security policy".to_string(),
                 ));
             }
             return Ok(Self {
@@ -277,10 +277,10 @@ impl TargetScope {
         }
 
         if let Ok(ip) = IpAddr::from_str(target) {
-            if ip.is_loopback() {
+            if is_private_ip(&ip) {
                 return Err(ScopeError::DnsResolution(
                     target.to_string(),
-                    "Loopback address blocked by security policy".to_string(),
+                    "Private IP address blocked by security policy".to_string(),
                 ));
             }
             return Ok(Self {

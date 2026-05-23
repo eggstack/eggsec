@@ -4,6 +4,7 @@ use crate::agent::constraints::{
 use crate::agent::portfolio::{ScanDepth, TargetConfig};
 use crate::types::Severity;
 use chrono::Timelike;
+use rustc_hash::FxHashMap;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,14 +100,14 @@ impl ConstraintViolation {
 
 pub struct ConstraintChecker {
     constraints: OperationalConstraints,
-    request_counts: Arc<Mutex<std::collections::HashMap<String, usize>>>,
+    request_counts: Arc<Mutex<FxHashMap<String, usize>>>,
 }
 
 impl ConstraintChecker {
     pub fn new(constraints: OperationalConstraints) -> Self {
         Self {
             constraints,
-            request_counts: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            request_counts: Arc::new(Mutex::new(FxHashMap::default())),
         }
     }
 

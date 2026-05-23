@@ -1,7 +1,7 @@
 use chrono::Timelike;
 use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::types::Severity;
@@ -19,7 +19,7 @@ pub use crate::agent::channels::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeBasedRouting {
     pub time_ranges: Vec<TimeRange>,
-    pub channel_assignments: HashMap<String, Vec<String>>,
+    pub channel_assignments: FxHashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,20 +39,20 @@ impl TimeRange {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlertRoutingRules {
-    pub by_severity: HashMap<Severity, Vec<String>>,
+    pub by_severity: FxHashMap<Severity, Vec<String>>,
     pub by_time: Option<TimeBasedRouting>,
-    pub by_vulnerability_type: HashMap<String, Vec<String>>,
+    pub by_vulnerability_type: FxHashMap<String, Vec<String>>,
     #[serde(skip)]
-    channel_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    channel_cache: Arc<RwLock<FxHashMap<String, Vec<String>>>>,
 }
 
 impl AlertRoutingRules {
     pub fn new() -> Self {
         Self {
-            by_severity: HashMap::new(),
+            by_severity: FxHashMap::default(),
             by_time: None,
-            by_vulnerability_type: HashMap::new(),
-            channel_cache: Arc::new(RwLock::new(HashMap::new())),
+            by_vulnerability_type: FxHashMap::default(),
+            channel_cache: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
 

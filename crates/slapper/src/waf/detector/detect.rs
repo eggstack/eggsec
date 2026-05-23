@@ -7,6 +7,8 @@ use std::net::IpAddr;
 use super::types::WafDetectionResult;
 use super::WafDetector;
 
+const HEADER_VALUE_MAX_LEN: usize = 256;
+
 impl WafDetector {
     pub async fn detect(&self, url: &str) -> Result<WafDetectionResult> {
         let normalized_url = Self::normalize_url_static(url);
@@ -72,8 +74,6 @@ impl WafDetector {
             let mut sig_matched_headers = Vec::new();
             let mut sig_matched_cookies = Vec::new();
             let mut sig_matched_patterns = Vec::new();
-
-const HEADER_VALUE_MAX_LEN: usize = 256;
 
                     for header_pattern_lower in &sig_lower.headers {
                         for (name_lower, value_lower) in &headers_lower {

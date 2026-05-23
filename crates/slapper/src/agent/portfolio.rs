@@ -188,14 +188,14 @@ impl Default for TargetConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PortfolioData {
     pub version: String,
-    pub targets: HashMap<String, TargetConfig>,
+    pub targets: FxHashMap<String, TargetConfig>,
 }
 
 impl Default for PortfolioData {
     fn default() -> Self {
         Self {
             version: "1.0".to_string(),
-            targets: HashMap::new(),
+            targets: FxHashMap::default(),
         }
     }
 }
