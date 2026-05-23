@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn test_all_signatures_have_names() {
         let sigs = get_waf_signatures();
-        for (key, sig) in &sigs {
+        for (key, sig) in sigs {
             assert!(!sig.name.is_empty(), "Signature '{}' has empty name", key);
         }
     }
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn test_all_signatures_have_at_least_one_indicator() {
         let sigs = get_waf_signatures();
-        for (key, sig) in &sigs {
+        for (key, sig) in sigs {
             let has_indicator = !sig.headers.is_empty()
                 || !sig.cookies.is_empty()
                 || !sig.body_patterns.is_empty()
@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn test_ip_ranges_valid_format() {
         let sigs = get_waf_signatures();
-        for (key, sig) in &sigs {
+        for (key, sig) in sigs {
             for range in &sig.ip_ranges {
                 assert!(
                     range.contains('/'),
