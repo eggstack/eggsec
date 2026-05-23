@@ -69,16 +69,14 @@ This ensures new plans with moderate success are also cached.
 3. **planner.rs:112** - Lowered cache lookup threshold from `use_count > 3` to `use_count >= 2`
 4. **waf_bypass.rs** - Added `max_knowledge_base_size` field and `evict_knowledge_base_if_needed()` method
 
-## Known Issues (2026-05-29)
-
-1. ~~**CacheKeyBuilder colon separator**~~ - FIXED: Changed to `\x00` separator
-2. **SmartWafBypass knowledge base eviction** (`waf_bypass.rs:80-88`) - Eviction logic may incorrectly wipe all failures when size limit is reached. Verify `evict_knowledge_base_if_needed()` handles partial eviction correctly.
-3. ~~**Three AI Agents files HashMap**~~ - VERIFIED: All use FxHashMap (false positive)
-
 ## Bug Fixes (2026-05-29)
 
-1. **CacheKeyBuilder colon separator** - Changed from `:` to `\x00` null byte separator to prevent collisions
-2. **All HashMap instances** - Verified `alerts/mod.rs`, `constraints/checker.rs`, `portfolio.rs` use FxHashMap
+1. ~~**CacheKeyBuilder colon separator**~~ - FIXED: Changed to `\x00` separator
+2. ~~**Three AI Agents files HashMap**~~ - VERIFIED: All use FxHashMap (false positive)
+
+## Known Issues
+
+1. **SmartWafBypass knowledge base eviction** (`waf_bypass.rs:80-88`) - Eviction logic may incorrectly wipe all failures when size limit is reached. Verify `evict_knowledge_base_if_needed()` handles partial eviction correctly.
 
 ## Testing
 
