@@ -3,13 +3,13 @@
 **Date**: 2026-05-23
 **Reviewer**: Architecture Review
 **Module**: `scanner/`
-**Files Reviewed**: 11 directories, 743 lines in fingerprint.rs alone
+**Files Reviewed**: 20+ files across ports/, cms/, templates/, endpoints/
 
 ---
 
 ## Executive Summary
 
-The scanner module architecture document is **accurate and well-documented**. All documented bug fixes from 2026-05-22 and 2026-05-27 have been properly applied. Implementation uses FxHashMap correctly (20 matches confirmed), DashMap for concurrent collections, and proper error handling with `Arc::try_unwrap` + `map_err`. No critical bugs found.
+The scanner module architecture document (`architecture/scanner.md`) is **accurate and well-documented**. All documented bug fixes from 2026-05-22 and 2026-05-27 have been properly applied. Implementation uses FxHashMap correctly (20+ matches confirmed), DashMap for concurrent collections, and proper error handling with `Arc::try_unwrap` + `map_err`. No critical bugs found.
 
 ---
 
@@ -19,34 +19,34 @@ The scanner module architecture document is **accurate and well-documented**. Al
 
 | Claim | Status | Evidence |
 |-------|--------|----------|
-| DashMap for concurrent result collection | ✅ Accurate | `ports/mod.rs:519`, `fingerprint.rs:4`, `endpoints.rs:5` |
+| DashMap for concurrent result collection | ✅ Accurate | `ports/mod.rs:519`, `fingerprint.rs`, `endpoints.rs` |
 | tokio::sync::Semaphore for concurrency control | ✅ Accurate | `ports/mod.rs:537` |
-| FxHashMap for performance | ✅ Accurate | 20 matches found across templates/, cms/, ports/ |
-| Arc::try_unwrap + map_err pattern | ✅ Accurate | `ports/mod.rs:595-597` |
+| FxHashMap for performance | ✅ Accurate | 20+ matches found across templates/, cms/, ports/ |
+| Arc::try_unwrap + map_err pattern | ✅ Accurate | `ports/mod.rs:595-597`, `endpoints.rs:840-842`, `fingerprint.rs:319-321` |
 | Feature gating (stress-testing) | ✅ Accurate | `icmp_probe.rs` behind `#[cfg(feature)]` |
 
-### ✅ Bug Fixes Applied (2026-05-22)
+### ✅ All Bug Fixes Applied (2026-05-22)
 
 | Documented Fix | File | Implementation |
 |---------------|------|----------------|
-| Arc::try_unwrap panic fix | `ports/mod.rs:595-598` | Uses `map_err` with SlapperError::Runtime |
+| Arc::try_unwrap panic fix | `ports/mod.rs:595-597` | Uses `map_err` with SlapperError::Runtime |
 | init_packet_trace file handling | `ports/spoofed.rs:75-95` | Added `include_header` parameter |
-| Unused HashMap import removed | `ports/spoofed.rs:111` | Confirmed removed |
-| Duplicate HttpMatcher fixed | `templates/models.rs:57,61` | Struct order corrected |
+| Unused HashMap import removed | `ports/spoofed.rs` | Confirmed not present |
+| Duplicate HttpMatcher fixed | `templates/models.rs` | Struct order corrected |
 | HashMap→FxHashMap performance fix | `templates/matcher.rs:9,24` | Uses `rustc_hash::FxHashMap` |
-| HashMap→FxHashMap in CMS | `cms/mod.rs:52,165,291` | Uses `rustc_hash::FxHashMap` |
-| Arc::try_unwrap panic fix | `endpoints.rs:835-839` | Uses map_err pattern |
-| Arc::try_unwrap panic fix | `fingerprint.rs:319-323` | Uses map_err pattern |
+| HashMap→FxHashMap in CMS | `cms/mod.rs:14,52,165,291` | Uses `rustc_hash::FxHashMap` |
+| Arc::try_unwrap panic fix | `endpoints.rs:840-842` | Uses map_err pattern |
+| Arc::try_unwrap panic fix | `fingerprint.rs:319-321` | Uses map_err pattern |
 
-### ✅ Bug Fixes Applied (2026-05-27)
+### ✅ All Bug Fixes Applied (2026-05-27)
 
 | Documented Fix | File | Implementation |
 |---------------|------|----------------|
-| String slice bounds check | `cms/joomla.rs:88-89` | Bounds check added before slicing |
-| Invalid regex warning | `templates/matcher.rs:185-189` | `tracing::debug` warning added |
-| unwrap→unwrap_or_else | `cms/mod.rs:330` | Uses `unwrap_or_else` |
+| String slice bounds check | `cms/joomla.rs:88-91` | Bounds checks added before slicing |
+| Invalid regex warning | `templates/matcher.rs:185-192` | `tracing::debug` warning added |
+| unwrap→unwrap_or_else | `cms/mod.rs:330-332` | Uses `unwrap_or_else` with panic message |
 | Explicit match error handling | `endpoints.rs:768` | `match` with debug logging |
-| Explicit match task join | `udp_fingerprint.rs:144` | `match` with debug logging |
+| Explicit match task join | `udp_fingerprint.rs:142-148` | `match` with debug logging |
 
 ---
 
@@ -58,14 +58,14 @@ The scanner module architecture document is **accurate and well-documented**. Al
 // ports/mod.rs:519
 let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
 
-// fingerprint.rs:4
+// fingerprint.rs
 use dashmap::DashMap;
 
-// endpoints.rs:5
+// endpoints.rs
 use dashmap::DashMap;
 ```
 
-### ✅ FxHashMap Usage (20 matches)
+### ✅ FxHashMap Usage (20+ matches)
 
 ```rust
 // templates/matcher.rs:9
@@ -77,7 +77,7 @@ pub headers: FxHashMap<String, String>,
 // cms/mod.rs:14
 use rustc_hash::FxHashMap;
 
-// ports/mod.rs:55-79
+// ports/mod.rs:55-80
 static COMMON_PORTS_MAP: LazyLock<FxHashMap<u16, &'static str>> = LazyLock::new(|| {
     let mut m = FxHashMap::default();
     m.insert(21, "FTP");
@@ -92,6 +92,16 @@ static COMMON_PORTS_MAP: LazyLock<FxHashMap<u16, &'static str>> = LazyLock::new(
 let results_map = Arc::try_unwrap(results).map_err(|_| {
     crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
 })?;
+
+// endpoints.rs:840-842 - Same pattern
+let results_map = Arc::try_unwrap(results).map_err(|_| {
+    crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
+})?;
+
+// fingerprint.rs:319-321 - Same pattern
+let results_map = Arc::try_unwrap(results).map_err(|_| {
+    crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
+})?;
 ```
 
 ---
@@ -100,11 +110,11 @@ let results_map = Arc::try_unwrap(results).map_err(|_| {
 
 ### No Critical Bugs Found
 
-The documented bug fixes have all been properly implemented:
-- No `.expect()` panics on Arc::try_unwrap
-- No silent error suppressions
-- Bounds checks on string slicing
-- Proper error propagation
+All documented bug fixes have been properly implemented:
+- ✅ No `.expect()` panics on Arc::try_unwrap
+- ✅ No silent error suppressions
+- ✅ Bounds checks on string slicing in joomla.rs
+- ✅ Proper error propagation
 
 ### ⚠️ Minor Observation: write! in Display Trait
 
@@ -128,7 +138,7 @@ static COMMON_PORTS_MAP: LazyLock<FxHashMap<u16, &'static str>> = LazyLock::new(
 });
 ```
 
-This is correct - Common ports are computed once at startup.
+Correct - Common ports are computed once at startup.
 
 ### ✅ Semaphore-Controlled Concurrency
 
@@ -149,13 +159,13 @@ Proper use of semaphore for bounded concurrency.
 ### ✅ stress-testing Feature
 
 ```rust
-// icmp_probe.rs - only compiled with stress-testing feature
+// mod.rs:90-91
 #[cfg(feature = "stress-testing")]
 pub mod icmp_probe;
 
-// spoofed.rs:9-14
+// spoofed.rs:92-93
 #[cfg(all(feature = "stress-testing", unix))]
-use super::get_service_name;
+pub(crate) async fn scan_ports_spoofed(...) {
 ```
 
 Correct implementation of feature-gated raw socket features.
@@ -167,9 +177,10 @@ Correct implementation of feature-gated raw socket features.
 ### None Found
 
 The architecture document accurately describes the implementation:
-- Bug fixes are properly documented and verified
-- Design patterns are correctly implemented
-- Feature gating works as documented
+- ✅ Bug fixes are properly documented and verified
+- ✅ Design patterns are correctly implemented
+- ✅ Feature gating works as documented
+- ✅ No missing or extra modules
 
 ---
 
@@ -185,10 +196,12 @@ The architecture document accurately describes the implementation:
 
 ## 8. Conclusion
 
-The scanner module implementation is **excellent** and fully matches the architecture document. All documented bug fixes from both 2026-05-22 and 2026-05-27 have been properly applied. The module demonstrates good practices:
+The scanner module implementation is **excellent** and fully matches the architecture document. All documented bug fixes from both 2026-05-22 and 2026-05-27 have been properly applied.
+
+**Key strengths:**
 - Proper use of concurrent collections (DashMap)
 - High-performance hash maps (FxHashMap)
 - Correct error handling patterns (Arc::try_unwrap + map_err)
 - Appropriate feature gating
 
-No critical bugs or security issues found. The module is production-ready.
+**No critical bugs or security issues found. The module is production-ready.**

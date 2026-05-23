@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The recon module architecture document is **accurate and well-maintained**. Implementation matches documented claims for execution model, parallel tasks, and sequential dependencies. FxHashMap/FxHashSet usage exceeds documented locations. Minor bugs found in production paths (unwrap on optional fields) and some discrepancies between documented pipeline modules and actual implementation.
+The recon module architecture document (`architecture/recon.md`) is **accurate and well-maintained**. Implementation matches documented claims for execution model, parallel tasks, and sequential dependencies. FxHashMap/FxHashSet usage exceeds documented locations. Minor issues found with `unwrap_or_default()` in production paths and some discrepancies between documented pipeline modules and actual implementation.
 
 ---
 
@@ -23,27 +23,21 @@ The recon module architecture document is **accurate and well-maintained**. Impl
 | `takeover` runs after `subdomain_enum` | ✅ Accurate | `runner.rs:560` - sequential await |
 | `cve` mapping after `tech_detection` | ✅ Accurate | `runner.rs:635` - sequential await |
 | `FullReconResult` aggregates results | ✅ Accurate | `mod.rs:118-164` |
-| Error tracking per module | ✅ Accurate | `mod.rs:580-638` - error fields populated |
+| Error tracking per module | ✅ Accurate | `runner.rs:580-638` - error fields populated |
+| FxHashMap/FxHashSet usage | ✅ Accurate | 55 matches found (exceeds 13 documented) |
 
 ### ⚠️ Discrepancy: Pipeline Module List
 
-**Document** (`recon.md:56-62`) lists 16 modules:
+**Document** (`architecture/recon.md:56-62`) lists 16 modules:
 ```
 reverse_dns, geolocation, threatintel, ssl, whois, subdomain,
 dns_records, techdetect, js, wayback, cloud, content, cors,
 email, takeover, cve
 ```
 
-**Implementation** (`mod.rs:347-364`) defines:
-```rust
-const FULL_RECON_PIPELINE_MODULES: &[&str] = &[
-    "reverse_dns", "geolocation", "threatintel", "ssl", "whois",
-    "subdomain", "dns_records", "techdetect", "js", "wayback",
-    "cloud", "content", "cors", "email", "takeover", "cve",
-];
-```
+**Implementation** (`mod.rs:347-364`) defines the same 16 modules. ✅
 
-**Discrepancy**: Document also mentions `secrets` module as part of full recon, but `FULL_RECON_PIPELINE_MODULES` doesn't include it. The `secrets` module exists but is NOT part of the `run_full_recon` pipeline.
+**Discrepancy**: Document mentions `secrets` module but it's NOT part of the `run_full_recon` pipeline (confirmed by `FULL_RECON_PIPELINE_MODULES` constant which doesn't include `secrets`).
 
 ---
 
@@ -59,95 +53,114 @@ Document claims 13 specific locations use FxHashMap/FxHashSet. Grep found **55 m
 | CveEngine.cve_cache | `cve_lookup.rs:34` | FxHashMap | ✅ Verified |
 | LOCAL_IP_DATA | `geolocation.rs:27` | FxHashMap | ✅ Verified |
 | WaybackClient.endpoints | `wayback.rs:86` | FxHashSet | ✅ Verified |
-| TakeoverDetector.cname_map | `takeover.rs:455` | FxHashMap | ✅ Verified |
+| TakeoverDetector.cname_map | `takeover.rs:264` | FxHashMap | ✅ Verified |
 | EmailDiscoveryClient | `email.rs:132,155,174` | FxHashSet | ✅ Verified |
 | JsAnalyzer | `js.rs:229,287` | FxHashSet | ✅ Verified |
 | SubdomainEnumerator | `subdomain.rs:74` | FxHashSet | ✅ Verified |
 | CorsAnalyzer.findings | `cors.rs:43` | FxHashSet | ✅ Verified |
 | CloudScanner.generate_cloud_names | `cloud/mod.rs:342` | FxHashSet | ✅ Verified |
-| compare_dns_records | `dns_enhanced.rs:250,255` | FxHashSet | ✅ Verified |
+| compare_dns_records | `dns_enhanced.rs` | FxHashSet | ✅ Verified |
 
 **Additional locations found** (not in docs):
 - `mod.rs:221,253` - callback metadata
-- `techdetect.rs:23,276,471,505` - headers storage
+- `techdetect.rs` - headers storage
 - `containers.rs:245,303` - config checks
-- `cve.rs:136-137` - get_known_cves return type
 
 ---
 
 ## 3. Bug Analysis
 
-### 🔴 Production Code unwrap/expect
+### ⚠️ Production Code unwrap_or_default()
 
-| File | Line | Issue | Severity |
-|------|------|-------|----------|
-| `subdomain.rs` | 401 | `entry.name_value.unwrap()` - could panic if null | Medium |
-| `takeover.rs` | 498 | `s3.unwrap()` after Option extraction | Medium |
-| `takeover.rs` | 510 | `gh.unwrap()` after Option extraction | Medium |
-| `geolocation.rs` | 149 | `expect("settings checked above")` - design flaw | Low |
+Found 18 instances of `unwrap_or_default()` in production code paths. Per AGENTS.md guidelines, these silently suppress errors:
 
-**Example issues**:
+| File | Line | Context |
+|------|------|---------|
+| `cve_lookup.rs` | 140 | `references: ...unwrap_or_default()` |
+| `containers.rs` | 124-125 | `pod_name.unwrap_or_default()`, `pod_namespace.unwrap_or_default()` |
+| `email.rs` | 145 | `context: ...unwrap_or_default()` |
+| `js.rs` | 256 | `full_match...unwrap_or_default()` |
+| `cors.rs` | 107,114,121 | Multiple header extractions |
+| `dependency_scan/mod.rs` | 160,172,187 | Multiple field extractions |
+| `reverse_dns.rs` | 40 | `hostname_str.unwrap_or_default()` |
+| `ssl_audit.rs` | 275 | `check.details.clone().unwrap_or_default()` |
+| `cloud/storage_test.rs` | 141,152 | `resp.text().await.unwrap_or_default()` |
+| `asn.rs` | 105 | `hostname.unwrap_or_default()` |
+| `techdetect.rs` | 66 | `response.text().await.unwrap_or_default()` |
+| `threatintel.rs` | 277 | `category.unwrap_or_default()` |
+
+**Example issue**:
 ```rust
-// subdomain.rs:401
-let val = entry.name_value.unwrap();  // Could panic on malformed data
-
-// takeover.rs:498
-let s3 = s3.unwrap();  // Could panic if Option was None
+// containers.rs:124
+let pod_name = pod.metadata.name.clone().unwrap_or_default();
 ```
+When `pod.metadata.name` is None, this silently creates an empty string instead of handling the missing field as an error.
 
-### ✅ Test Code unwrap/expect (Acceptable)
+### ✅ LazyLock Regex Patterns
 
-Test files contain `serde_json::to_string(&result).unwrap()` patterns which are acceptable for test code that validates serialization roundtrips.
-
----
-
-## 4. LazyLock Regex Patterns
-
-### ✅ js.rs - All regex use `.expect()`
+All regex patterns use `.expect()` with descriptive messages:
 
 ```rust
 // js.rs:10-58
 static ENDPOINT_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
-        Regex::new(r#"(?:api|endpoint|path|route|url)["']?\s*[:=]\s*["']([^"'<>\s]+)["']"#)
-            .expect("valid endpoint pattern"),
-        // ... 5 more patterns with .expect()
+        Regex::new(...).expect("valid endpoint pattern"),
+        // ... all use expect()
     ]
 });
 ```
 
-**Assessment**: Acceptable. Static regex compilation at startup is intentional - crash on invalid regex is preferred over silent failure.
-
-### ✅ email.rs - Same pattern
-
-All 17+ regex patterns in `email.rs` use `.expect()` with descriptive messages.
+**Assessment**: Acceptable. Static regex compilation at startup - crash on invalid regex is preferred over silent failure.
 
 ---
 
-## 5. Error Handling
+## 4. Key Patterns Verification
 
-### ✅ Explicit match with tracing
+### ✅ Arc::try_unwrap Pattern (Not in Recon)
 
-Recent fixes documented in AGENTS.md (2026-05-23) have been applied:
+The `Arc::try_unwrap` + `map_err` pattern is documented for Scanner module but recon uses different patterns (no Arc unwrapping in recon itself).
 
-- `subdomain.rs` - proper error propagation instead of silent failures
-- `cve.rs` - explicit match with tracing
-- `wayback.rs` - error propagation on non-200 responses
+### ✅ Error Handling in Runner
 
-### ✅ Runner Error Aggregation
+`runner.rs:580-643` properly tracks errors for all 14 parallel tasks plus sequential takeover and CVE mapping with explicit match statements and tracing warnings.
 
-`runner.rs:580-643` properly tracks errors for all 14 parallel tasks plus sequential takeover and CVE mapping.
+### ✅ Sequential Dependencies
+
+- `takeover` runs after `subdomain_enum` completes (`runner.rs:560`)
+- `cve` mapping runs after `tech_detection` completes (`runner.rs:635`)
+
+---
+
+## 5. Discrepancies
+
+### Minor Documentation Issues
+
+1. **Secrets module not in pipeline**: Document mentions `secrets` but `FULL_RECON_PIPELINE_MODULES` doesn't include it. The document should clarify `secrets` is standalone.
+
+2. **FxHashMap count**: Document claims 13 locations but 55 matches found. Not a bug - just needs documentation update.
 
 ---
 
 ## 6. Recommendations
 
-### Minor Issues (Low Priority)
+### Medium Priority
 
-1. **Update architecture doc** - Add `secrets` module to pipeline list or clarify it's standalone
-2. **Consider removing `expect()` in production** - `subdomain.rs:401` and `takeover.rs:498,510` could use `ok()` or `unwrap_or_else` with proper error logging
+1. **Replace `unwrap_or_default()` in production code** with explicit match or `unwrap_or_else` with logging:
+   ```rust
+   // Instead of:
+   let pod_name = pod.metadata.name.clone().unwrap_or_default();
+   // Use:
+   let pod_name = pod.metadata.name.clone().unwrap_or_else(|| {
+       tracing::debug!("pod missing name field");
+       String::new()
+   });
+   ```
 
-### Not Issues
+2. **Update architecture doc** to clarify `secrets` is a standalone module not part of the full recon pipeline.
+
+3. **Update FxHashMap count** in documentation from 13 to actual count (55+).
+
+### Low Priority / Not Issues
 
 1. LazyLock regex with `.expect()` - intentional design, crash on invalid regex is correct behavior
 2. Test code unwraps - acceptable for serialization tests
@@ -156,4 +169,11 @@ Recent fixes documented in AGENTS.md (2026-05-23) have been applied:
 
 ## 7. Conclusion
 
-The recon module is **well-implemented** and matches the architecture document. The main finding is that FxHashMap/FxHashSet usage exceeds documented claims (55 actual vs 13 documented locations). Production code has 4 minor unwrap issues that could be improved but are not critical. The execution model and parallel processing architecture is sound.
+The recon module is **well-implemented** and mostly matches the architecture document. Main findings:
+
+1. **Execution model is correct** - 14 parallel tasks via tokio::join!, sequential dependencies for takeover and CVE
+2. **Performance optimizations exceed documentation** - 55 FxHashMap/FxHashSet uses vs 13 documented
+3. **18 `unwrap_or_default()` calls** in production paths that silently suppress errors - should use explicit match with tracing
+4. **LazyLock regex patterns** are correctly implemented with `.expect()`
+
+The module is production-ready with minor improvements recommended for error handling consistency.
