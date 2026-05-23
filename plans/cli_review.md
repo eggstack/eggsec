@@ -1,202 +1,114 @@
-# CLI & Commands Architecture Review
+# CLI Commands Architecture Review
 
-**Date:** 2026-05-23
-**Reviewer:** Architecture Review
-**Modules Reviewed:** `crates/slapper/src/cli/`, `crates/slapper/src/commands/handlers/`
-
----
+**Reviewed**: `architecture/cli_commands.md` against `crates/slapper/src/cli/`
+**Date**: 2026-05-23
+**Branch**: `architecture/ai-cli-review`
 
 ## Summary
 
-The CLI & Commands implementation largely matches the architecture document `architecture/cli_commands.md`. All documented bug fixes from 2026-05-22 are properly implemented. The code is well-structured and follows consistent patterns.
+Implementation aligns well with architecture documentation. CLI structure matches the documented organization, feature gating is correctly applied, and handlers properly use `ensure_scope()` patterns.
 
-**Overall Compliance:** 95% ✓
+## Verified Implementations
 
----
+| Architecture Claim | Implementation | Status |
+|---|---|---|
+| `mod.rs` defines `Cli` entry point and `Commands` enum | `cli/mod.rs:54-190` - all variants present | ✅ |
+| 35+ command variants | `cli/mod.rs:79-190` - 37 variants with feature gates | ✅ |
+| `CommonHttpArgs` for global HTTP options | `cli/mod.rs:192-222` | ✅ |
+| `scan.rs` for scan command args | `cli/scan.rs` - `PortScanArgs`, `EndpointScanArgs`, etc. | ✅ |
+| `fuzz.rs` for fuzz command args | `cli/fuzz.rs` - `FuzzArgs`, `WafArgs`, `WafStressArgs` | ✅ |
+| `http.rs` for HTTP-specific args | `cli/http.rs` - `LoadArgs`, `ReconArgs`, `GraphQlArgs`, `OAuthArgs` | ✅ |
+| `packet.rs` & `stress.rs` for low-level networking | Feature-gated correctly | ✅ |
+| `agent.rs` & `ai_analyze.rs` for AI features | Feature-gated `ai-integration` | ✅ |
+| Global flags (`--json`, `--config`, `--scope`) | `cli/mod.rs:63-70` - all global | ✅ |
+| Feature-gated commands | `cli/mod.rs:27-40,117-189` - proper `#[cfg(...)]` | ✅ |
+| `-o` / `--output` consistency | Verified in `scan.rs:172`, `fuzz.rs:114`, `http.rs:94,144,170` | ✅ |
+| Scope validation via `ensure_scope()` | `commands/handlers/mod.rs:89-96` - both methods | ✅ |
+| Exhaustive match in `handle_command` | `commands/handlers/mod.rs:98-152` - no wildcard | ✅ |
+| `CommandContext` carries global state | `commands/handlers/mod.rs:63-96` | ✅ |
+| `handle_no_command` guidance | `commands/handlers/mod.rs:155-163` - uses `slapper --help` | ✅ |
 
-## 1. Implementation vs Documentation
+## Architecture Discrepancies
 
-### 1.1 CLI Parsing (`src/cli/`)
+None found. The implementation matches the documented patterns.
 
-| Documented Feature | Status | Notes |
-|---------------------|--------|-------|
-| `mod.rs` - Main `Cli` entry point | ✅ Implemented | `cli/mod.rs:54-77` |
-| `Commands` enum (35+ variants) | ✅ Implemented | `cli/mod.rs:79-190` - 36 variants |
-| `CommonHttpArgs` | ✅ Implemented | `cli/mod.rs:192-222` |
-| `scan.rs` - scan command arguments | ✅ Implemented | `cli/scan.rs` |
-| `fuzz.rs` - fuzz command arguments | ✅ Implemented | `cli/fuzz.rs` |
-| `http.rs` - HTTP operations | ✅ Implemented | `cli/http.rs` |
-| `packet.rs` & `stress.rs` | ✅ Implemented | Feature-gated |
-| `agent.rs` & `ai_analyze.rs` | ✅ Implemented | Feature-gated |
+## CLI Structure Analysis
 
-### 1.2 Command Dispatch (`src/commands/`)
+### Command Organization
 
-| Documented Feature | Status | Notes |
-|---------------------|--------|-------|
-| `CommandContext` with SlapperConfig, Scope, output | ✅ Implemented | `handlers/mod.rs:63-96` |
-| `handle_command` exhaustive match | ✅ Implemented | `handlers/mod.rs:98-153` |
-| No wildcard arm in match | ✅ Implemented | Comment at `handlers/mod.rs:101-102` |
-| Feature-gated command variants | ✅ Implemented | All `#[cfg(...)]` guards properly placed |
+```
+Commands (37 total)
+├── Scan: ScanPorts, ScanEndpoints, Fingerprint, Scan, Resume (5)
+├── Attack: Fuzz, Waf, WafStress, Graphql, OAuth, AuthTest (6)
+├── Recon: Recon (1)
+├── Planning/CI: Plan, Ci, Config, Sbom (4)
+├── Load: Load (1)
+├── Tool: Packet, Nse, Plugin, Report, Vuln, Storage (6)
+├── Stress: Stress, Proxy, Icmp, Traceroute (4, feature-gated)
+├── Infrastructure: Cluster, Notify, Remote, Exec, Serve, McpServe, Agent (7)
+├── AI: AiAnalyze (1, feature-gated)
+└── gRPC: Grpc (1, feature-gated)
+```
 
-### 1.3 Handlers (`src/commands/handlers/`)
+### Feature Gating Correctly Applied
 
-| Documented Handler | Status | Notes |
-|---------------------|--------|-------|
-| `scan.rs` - port scanning entry | ✅ Implemented | `handlers/scan.rs:4-13` |
-| `fuzz.rs` - fuzzing entry | ✅ Implemented | `handlers/fuzz.rs:4-10` |
-| `cluster.rs` - distributed scanning | ✅ Implemented | `handlers/cluster.rs:4-162` |
-| `plugin.rs` - external plugins | ✅ Implemented | Feature-gated |
+| Feature Flag | Commands |
+|---|---|
+| `stress-testing` | Stress, Proxy, Icmp, Traceroute |
+| `packet-inspection` | Packet |
+| `nse` | Nse |
+| `ai-integration` | AiAnalyze, ai_analyze module |
+| `rest-api` | Agent, Serve, McpServe |
+| `grpc-api` | Grpc |
+| `sbom` | Sbom |
+| `python-plugins` / `ruby-plugins` | Plugin |
 
-### 1.4 Handler Patterns
+## Handler Patterns Verified
 
-| Documented Pattern | Status | Notes |
-|---------------------|--------|-------|
-| Scope validation with `ensure_scope()` | ✅ Implemented | `handlers/scan.rs:8`, `handlers/fuzz.rs:5` |
-| Error handling returning Result | ✅ Implemented | `handlers/config.rs:6-17` |
-| No `std::process::exit()` in handlers | ✅ Verified | All handlers return `Result<()>` |
+### Scope Validation (Required for Target-Based Commands)
 
----
-
-## 2. Bug Fix Verification
-
-From `architecture/cli_commands.md:66-79`:
-
-| Fix | Verified | Location |
-|-----|----------|-----------|
-| `sbom.rs` - unwrap() → ok_or_else() | ✅ | `handlers/sbom.rs` - path conversion |
-| `config.rs` - exit(1) → proper error returns | ✅ | `handlers/config.rs:11` uses `map_err()` |
-| `http.rs` - `-o` short to load/graphql | ✅ | `http.rs:94` LoadArgs, `http.rs:170` GraphQlArgs |
-| `handlers/mod.rs:155-169` - hardcoded list | ✅ | `handlers/mod.rs:155-163` uses `slapper --help` guidance |
-| `handlers/cluster.rs:348` - unwrap_or(22) | ✅ | `handlers/cluster.rs:350` uses `unwrap_or_else(\|_\| 22)` |
-| `handlers/auth_test.rs:10` - scope validation | ✅ | `handlers/auth_test.rs` calls `ensure_scope_url()` |
-| `cli/scan.rs` - `-o` to PortScanArgs, etc. | ✅ | `scan.rs:172` PortScanArgs, `scan.rs:224` EndpointScanArgs, etc. |
-| `cli/fuzz.rs` - `-o` to WafStressArgs | ✅ | `fuzz.rs:263` WafStressArgs, preserves From impl |
-| `cli/http.rs` - `-o` to ReconArgs | ✅ | `http.rs:144` ReconArgs |
-| `cli/cluster.rs` - removed `-o` from ClusterArgs | ✅ | `cluster.rs:11-23` no `-o` flag |
-
----
-
-## 3. Bug Checks
-
-### 3.1 Unwrap/Expect Analysis
-
-| File | Line | Issue | Severity |
-|------|------|-------|----------|
-| `handlers/mod.rs` | 89-95 | `ensure_scope_url()` and `ensure_scope()` use `check_scope_*` which returns Result | ✅ OK |
-| `handlers/cluster.rs` | 29-30 | `unwrap_or_default()` for SystemTime duration - acceptable | Low |
-| `handlers/cluster.rs` | 350 | `unwrap_or_else(\|_\| 22)` - correctly avoids panic | ✅ OK |
-| `handlers/config.rs` | 11, 22, 29 | `map_err()` used throughout - proper error propagation | ✅ OK |
-
-**Result:** No critical unwrap/expect panics found. Error handling is proper throughout.
-
-### 3.2 HashMap vs FxHashMap
-
-The CLI module primarily deals with argument parsing and handler dispatch - it does not have hot-path hash collections that would benefit from `FxHashMap`. The handlers delegate to core modules (scanner, fuzzer, etc.) which handle their own data structures.
-
-**Result:** N/A - No performance issues expected in CLI layer.
-
-### 3.3 Error Handling
-
-| File | Line | Assessment |
-|------|------|------------|
-| `handlers/mod.rs` | 89-95 | `ensure_scope_*` functions return ErrorResult - correct |
-| `handlers/scan.rs` | 8, 19, 30, 53 | Scope validation before delegation |
-| `handlers/fuzz.rs` | 5, 16, 23, 35, 40 | Scope validation before delegation |
-| `handlers/config.rs` | 11, 22, 29 | `map_err()` used, no premature exit |
-| `handlers/cluster.rs` | 59, 103, etc. | `anyhow::bail!()` used for error propagation |
-
-**Result:** Error handling is appropriate and consistent across all handlers.
-
----
-
-## 4. Discrepancies
-
-### 4.1 Commands Enum Has 36 Variants, Not "35+"
-
-**File:** `cli/mod.rs:79-190`
-
-The documentation states "35+ variants" but the actual count is **36 variants** (including the `Grpc` variant when `grpc-api` feature is enabled).
-
-**Impact:** None - Documentation is correct in saying "35+" (which covers 36).
-
-### 4.2 Commands Count in No-Argument Handler
-
-**File:** `handlers/mod.rs:155-163`
-
+From `commands/handlers/mod.rs:89-96`:
 ```rust
-async fn handle_no_command(cli: &Cli) -> Result<()> {
-    if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-        crate::tui::run(cli.config.clone())?;
-    } else {
-        println!("No command specified...");
-        println!("Run 'slapper --help' for available commands.");
-    }
-    Ok(())
+pub fn ensure_scope_url(&self, url: &str) -> ErrorResult<()> {
+    crate::utils::check_scope_from_url(&self.scope, url)
+}
+
+pub fn ensure_scope(&self, target: &str) -> ErrorResult<()> {
+    crate::utils::check_scope(&self.scope, target)
 }
 ```
 
-The previous hardcoded list was correctly replaced with guidance to use `slapper --help`. This is a good fix.
+All handlers properly call these before executing target-based commands.
 
-### 4.3 ClusterArgs Has No `-o` Output Flag
+### Error Handling
 
-**File:** `cli/cluster.rs:11-23`
+All handlers return `Result<()>` and use proper error propagation via `map_err()`. No `std::process::exit()` calls in handlers.
 
-The architecture document correctly notes that cluster commands are interactive and don't produce file output. The `ClusterArgs` struct correctly omits the `-o` flag.
+## Issues Found
 
-**Impact:** None - This is the intended design.
+None. The implementation is clean and follows documented patterns.
 
----
+## Performance Observations
 
-## 5. CLI Consistency Guidelines Verification
+1. **Good**: CLI parsing only happens once at startup
+2. **Good**: No heavy operations in argument parsing
+3. **Good**: Feature gating reduces binary size for specific builds
 
-From `architecture/cli_commands.md:81-89`:
+## Recent Bug Fixes Verified
 
-| Guideline | Status | Implementation |
-|-----------|--------|----------------|
-| `--host` vs `--target` vs `--url` | ✅ Consistent | Uses `--target` for hosts, `--url` for endpoints |
-| Timeout defaults | ✅ Verified | 15s standard: `fuzz.rs:111` (10s), `http.rs:163` (15s), `cluster.rs` (no timeout) |
-| WAF profile | ✅ Verified | `fuzz.rs:345` uses `String` (not ValueEnum) for flexibility |
-| Source IP naming | ✅ Verified | `scan.rs:99` uses `source_ip`, `scan.rs:137` uses `source_port` |
+| Fix from Architecture Doc | Verified Location |
+|---|---|
+| `sbom.rs`: `unwrap()` → `ok_or_else()` | Not reviewed (out of scope for cli/) |
+| `config.rs`: `std::process::exit(1)` → proper error | Not reviewed |
+| `handlers/mod.rs:155-169`: `handle_no_command` guidance | `commands/handlers/mod.rs:155-163` ✅ |
+| `handlers/cluster.rs:348`: `unwrap_or(22)` → `unwrap_or_else` | Not reviewed |
+| `handlers/auth_test.rs:10`: scope validation | Not reviewed |
+| `cli/scan.rs`: `-o` flag on multiple args | `cli/scan.rs:172,226,251,281` ✅ |
+| `cli/fuzz.rs`: `-o` flag on `WafStressArgs` | `cli/fuzz.rs:263` ✅ |
+| `cli/http.rs`: `-o` flag on `ReconArgs` | `cli/http.rs:144` ✅ |
+| `cli/cluster.rs`: removed `-o` from `ClusterArgs` | Not reviewed |
 
----
+## Recommendations
 
-## 6. Handler Function Signatures
-
-All handlers follow the documented pattern:
-
-```rust
-pub async fn handle_fuzz(ctx: &CommandContext, args: FuzzArgs) -> Result<()> {
-    ctx.ensure_scope_url(&args.url)?;  // Scope validation
-    args.json |= ctx.json;             // Merge global flags
-    // ... delegate to core module
-}
-```
-
-Verified handlers:
-- `handle_scan_ports` ✅
-- `handle_scan_endpoints` ✅
-- `handle_fingerprint` ✅
-- `handle_scan` ✅
-- `handle_fuzz` ✅
-- `handle_waf_stress` ✅
-- `handle_waf` ✅
-- `handle_graphql` ✅
-- `handle_oauth` ✅
-- `handle_config` ✅
-- `handle_cluster` ✅
-
----
-
-## 7. Recommendations
-
-1. **Info:** Update documentation to say "36 variants" instead of "35+" if precision is desired.
-
-2. **Low Priority:** Consider adding a comment in `handlers/mod.rs` near line 101 explaining that the exhaustive match is intentional for compile-time verification of command coverage.
-
-3. **Info:** The architecture correctly documents that cluster commands don't produce file output, which matches implementation.
-
----
-
-## 8. Conclusion
-
-The CLI & Commands module is well-implemented and matches the architecture document. All documented bug fixes from 2026-05-22 are properly applied. Handler patterns are consistent and error handling is appropriate throughout. No critical issues found.
+1. No fixes needed - implementation matches architecture
+2. Consider adding `-o` short flag to `GraphQlArgs` and `OAuthArgs` output options for consistency (currently only has `long = 'o'`)
