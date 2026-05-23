@@ -53,12 +53,12 @@ The `runner.rs` file orchestrates all these recon tasks, running them in paralle
 
 ### Full Recon Pipeline Modules
 
-`run_full_recon()` executes these 16 modules:
+`run_full_recon()` executes these 17 modules:
 
 ```
 reverse_dns, geolocation, threatintel, ssl, whois, subdomain,
 dns_records, techdetect, js, wayback, cloud, content, cors,
-email, takeover, cve
+email, takeover, cve, secrets
 ```
 
 ### Execution Model
