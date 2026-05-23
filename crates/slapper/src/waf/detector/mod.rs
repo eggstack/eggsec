@@ -17,7 +17,7 @@ use types::WafSignatureLower;
 
 pub struct WafDetector {
     client: reqwest::Client,
-    signatures: FxHashMap<String, WafSignature>,
+    signatures: &'static FxHashMap<String, WafSignature>,
     signatures_lower: FxHashMap<String, WafSignatureLower>,
 }
 

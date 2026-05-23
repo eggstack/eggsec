@@ -3,7 +3,7 @@
 //! Manages a collection of targets to monitor, including their configurations,
 //! schedules, and scan history.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -109,7 +109,7 @@ pub struct ScanRecord {
     pub scan_type: String,
     pub timestamp: DateTime<Utc>,
     pub findings_count: usize,
-    pub severity_counts: HashMap<String, usize>,
+    pub severity_counts: FxHashMap<String, usize>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

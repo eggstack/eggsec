@@ -80,6 +80,16 @@ impl std::fmt::Display for TaskType {
     }
 }
 
+pub const CAPABILITIES: &[&str] = &[
+    "PortScan",
+    "ServiceFingerprint",
+    "EndpointDiscovery",
+    "Fuzz",
+    "WafTest",
+    "LoadTest",
+    "Recon",
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerRegistration {
     pub worker_id: String,

@@ -339,9 +339,7 @@ impl LoadTestRunner {
                         Ok(response) => {
                             let status = response.status();
                             if !status.is_success() {
-                                if let Ok(bytes) = response.bytes().await {
-                                    let _ = bytes;
-                                }
+                                let _ = response.bytes().await;
                             }
                             metrics.record_http_response(latency, status.as_u16());
                         }
@@ -358,8 +356,13 @@ impl LoadTestRunner {
         }
 
         while let Some(join_result) = workers.join_next().await {
-            join_result
-                .map_err(|e| SlapperError::Runtime(format!("Load test worker task failed: {e}")))?;
+            match join_result {
+                Ok(()) => {}
+                Err(e) if e.is_panic() => {
+                    tracing::error!("Load test worker panicked: {:?}", e);
+                }
+                Err(e) => tracing::error!("Load test worker failed: {}", e),
+            }
         }
 
         let total_duration = start.elapsed();

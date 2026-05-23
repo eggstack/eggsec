@@ -289,7 +289,7 @@ impl From<WafStressArgs> for FuzzArgs {
             concurrency: args.concurrency,
             timeout: args.timeout,
             json: args.json,
-            output: None,
+            output: args.output,
             verbose: args.verbose,
             quiet: args.quiet,
             format: None,

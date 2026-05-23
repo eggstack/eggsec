@@ -135,7 +135,7 @@ impl Pipeline {
         let mut pipeline = Self::new(&session.target);
         pipeline.stages = session.remaining_stages;
         pipeline.context = Arc::new(Mutex::new(session.context));
-        pipeline.spoof_config = SpoofConfig::default();
+        pipeline.spoof_config = session.spoof_config;
         pipeline
     }
 
@@ -205,6 +205,7 @@ impl Pipeline {
                     completed_stages: stage_results.iter().map(|r| r.stage).collect(),
                     remaining_stages: self.stages[stage_results.len()..].to_vec(),
                     context: self.context.lock().await.clone(),
+                    spoof_config: self.spoof_config.clone(),
                 };
                 if let Err(e) = save(path, &session) {
                     tracing::warn!("Failed to save session to {:?}: {}", path, e);

@@ -13,6 +13,57 @@ fn calculate_ipv4_checksum(header: &[u8; 20]) -> u16 {
     !sum as u16
 }
 
+fn compute_tcp_checksum(
+    src_ip: Ipv4Addr,
+    dst_ip: Ipv4Addr,
+    src_port: u16,
+    dst_port: u16,
+    seq: u32,
+    ack: u32,
+    data_offset: u8,
+    flags: u8,
+    window: u16,
+    urgent: u16,
+    options: &[u8],
+    payload: &[u8],
+) -> u16 {
+    let tcp_header_len = 20 + options.len();
+    let tcp_segment_len = tcp_header_len + payload.len();
+    let mut pseudo = vec![0u8; 12 + tcp_segment_len];
+
+    pseudo[0..4].copy_from_slice(&src_ip.octets());
+    pseudo[4..8].copy_from_slice(&dst_ip.octets());
+    pseudo[8] = 0;
+    pseudo[9] = 6;
+    pseudo[10] = (tcp_segment_len >> 8) as u8;
+    pseudo[11] = (tcp_segment_len & 0xff) as u8;
+    pseudo[12..14].copy_from_slice(&src_port.to_be_bytes());
+    pseudo[14..16].copy_from_slice(&dst_port.to_be_bytes());
+    pseudo[16..20].copy_from_slice(&seq.to_be_bytes());
+    pseudo[20..24].copy_from_slice(&ack.to_be_bytes());
+    pseudo[24] = data_offset;
+    pseudo[25] = flags;
+    pseudo[26..28].copy_from_slice(&window.to_be_bytes());
+    pseudo[28..30].copy_from_slice(&0u16.to_be_bytes());
+    pseudo[30..32].copy_from_slice(&urgent.to_be_bytes());
+    pseudo[32..tcp_header_len].copy_from_slice(options);
+    pseudo[tcp_header_len..].copy_from_slice(payload);
+
+    let mut sum: u32 = 0;
+    for i in (0..pseudo.len()).step_by(2) {
+        if i + 1 < pseudo.len() {
+            let word = ((pseudo[i] as u32) << 8) | (pseudo[i + 1] as u32);
+            sum += word;
+        } else {
+            sum += (pseudo[i] as u32) << 8;
+        }
+    }
+    while sum > 0xffff {
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+    !sum as u16
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PacketBuilder {
     pub ethernet: Option<EthernetBuilder>,
@@ -121,10 +172,18 @@ impl PacketBuilder {
             packet.extend_from_slice(&ip.to_bytes());
         }
 
+        let (src_ip, dst_ip) = self
+            .ipv4
+            .as_ref()
+            .map(|ip| (IpAddr::V4(ip.src), IpAddr::V4(ip.dst)))
+            .or_else(|| self.ipv6.as_ref().map(|ip| (IpAddr::V6(ip.src), IpAddr::V6(ip.dst))))
+            .unwrap_or((IpAddr::V4(Ipv4Addr::UNSPECIFIED), IpAddr::V4(Ipv4Addr::UNSPECIFIED)));
+
         if let Some(ref trans) = self.transport {
             match trans {
                 TransportBuilder::Tcp(tcp) => {
-                    packet.extend_from_slice(&tcp.to_bytes());
+                    let payload = self.payload.as_deref().unwrap_or(&[]);
+                    packet.extend_from_slice(&tcp.to_bytes(src_ip, dst_ip, payload));
                 }
                 TransportBuilder::Udp(udp) => {
                     packet.extend_from_slice(&udp.to_bytes());
@@ -233,7 +292,7 @@ pub struct TcpBuilder {
 }
 
 impl TcpBuilder {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self, src_ip: IpAddr, dst_ip: IpAddr, payload: &[u8]) -> Vec<u8> {
         let header_len = 20 + self.options.len();
         let data_offset = ((header_len / 4) as u8) << 4;
         let mut bytes = vec![0u8; header_len];
@@ -244,11 +303,29 @@ impl TcpBuilder {
         bytes[12] = data_offset;
         bytes[13] = self.flags.to_byte();
         bytes[14..16].copy_from_slice(&self.window.to_be_bytes());
-        bytes[16..18].copy_from_slice(&0u16.to_be_bytes());
         bytes[18..20].copy_from_slice(&self.urgent.to_be_bytes());
         if !self.options.is_empty() {
             bytes[20..].copy_from_slice(&self.options);
         }
+
+        if let (IpAddr::V4(src), IpAddr::V4(dst)) = (src_ip, dst_ip) {
+            let checksum = compute_tcp_checksum(
+                src,
+                dst,
+                self.src_port,
+                self.dst_port,
+                self.seq,
+                self.ack,
+                data_offset,
+                self.flags.to_byte(),
+                self.window,
+                self.urgent,
+                &self.options,
+                payload,
+            );
+            bytes[16..18].copy_from_slice(&checksum.to_be_bytes());
+        }
+
         bytes
     }
 }

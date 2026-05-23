@@ -234,11 +234,13 @@ impl AiClient {
             .and_then(|v| v.as_i64())
             .unwrap_or(2048) as u64;
 
-        let messages = body
-            .get("messages")
-            .and_then(|v| v.as_array())
-            .cloned()
-            .unwrap_or_default();
+        let messages = match body.get("messages").and_then(|v| v.as_array()).cloned() {
+            Some(msgs) => msgs,
+            None => {
+                tracing::debug!("No messages array found in request body for Anthropic transformation");
+                Vec::new()
+            }
+        };
 
         let mut system_message = String::new();
         let mut anthropic_messages = Vec::new();

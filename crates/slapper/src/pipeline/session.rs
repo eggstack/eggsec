@@ -10,6 +10,7 @@ pub struct PipelineSession {
     pub completed_stages: Vec<Stage>,
     pub remaining_stages: Vec<Stage>,
     pub context: PipelineContext,
+    pub spoof_config: crate::scanner::spoof::SpoofConfig,
 }
 
 pub fn save(path: &str, session: &PipelineSession) -> Result<()> {

@@ -96,6 +96,7 @@ mod raw_udp {
         pseudo[11] = (len & 0xff) as u8;
         pseudo[12..14].copy_from_slice(&src_port.to_be_bytes());
         pseudo[14..16].copy_from_slice(&dst_port.to_be_bytes());
+        pseudo[16..].copy_from_slice(payload);
 
         let mut sum: u32 = 0;
         for i in (0..pseudo.len()).step_by(2) {

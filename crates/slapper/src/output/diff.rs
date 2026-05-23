@@ -136,7 +136,7 @@ impl DiffEngine {
     pub fn has_regressions(diff: &DiffResult) -> bool {
         diff.escalated_findings
             .iter()
-            .any(|f| f.severity == Severity::Critical)
+            .any(|f| f.severity >= Severity::High)
     }
 }
 

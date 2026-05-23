@@ -1,5 +1,5 @@
 use crate::distributed::{
-    RemoteClient, Task, TaskResult, TaskType,
+    CAPABILITIES, RemoteClient, Task, TaskResult, TaskType,
 };
 use crate::error::{Result, SlapperError};
 use crate::scanner::endpoints::EndpointScanConfig;
@@ -30,18 +30,7 @@ fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
 }
 
 fn worker_capabilities() -> Vec<String> {
-    vec![
-        TaskType::PortScan,
-        TaskType::ServiceFingerprint,
-        TaskType::EndpointDiscovery,
-        TaskType::Fuzz,
-        TaskType::WafTest,
-        TaskType::LoadTest,
-        TaskType::Recon,
-    ]
-    .into_iter()
-    .map(|t| t.to_string())
-    .collect()
+    CAPABILITIES.iter().map(|s| s.to_string()).collect()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

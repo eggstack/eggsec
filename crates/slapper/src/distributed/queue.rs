@@ -147,8 +147,19 @@ impl TaskQueue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum QueueError {
     QueueFull,
     TaskNotFound,
 }
+
+impl std::fmt::Display for QueueError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            QueueError::QueueFull => write!(f, "Queue is full"),
+            QueueError::TaskNotFound => write!(f, "Task not found"),
+        }
+    }
+}
+
+impl std::error::Error for QueueError {}

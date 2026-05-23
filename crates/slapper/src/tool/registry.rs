@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use crate::error::SlapperError;
@@ -21,14 +21,14 @@ use crate::tool::traits::{SecurityTool, ToolCapability, ToolCategory};
 /// let tools = registry.list();
 /// ```
 pub struct ToolRegistry {
-    tools: Arc<RwLock<HashMap<String, Arc<dyn SecurityTool>>>>,
+    tools: Arc<RwLock<FxHashMap<String, Arc<dyn SecurityTool>>>>,
 }
 
 impl ToolRegistry {
     /// Creates a new empty tool registry.
     pub fn new() -> Self {
         Self {
-            tools: Arc::new(RwLock::new(HashMap::new())),
+            tools: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
 

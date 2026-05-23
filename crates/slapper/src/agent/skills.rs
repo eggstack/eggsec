@@ -2,7 +2,7 @@
 //!
 //! Loads and manages YAML+Markdown skill files that define agent capabilities.
 
-use std::collections::HashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -199,15 +199,15 @@ impl SkillLoader {
 }
 
 pub struct SkillRegistry {
-    skills: HashMap<String, Skill>,
-    trigger_index: HashMap<String, Vec<String>>,
+    skills: FxHashMap<String, Skill>,
+    trigger_index: FxHashMap<String, Vec<String>>,
 }
 
 impl SkillRegistry {
     pub fn new() -> Self {
         SkillRegistry {
-            skills: HashMap::new(),
-            trigger_index: HashMap::new(),
+            skills: FxHashMap::default(),
+            trigger_index: FxHashMap::default(),
         }
     }
 

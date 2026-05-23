@@ -10,6 +10,7 @@ use tokio::sync::{broadcast, RwLock};
 
 use crate::distributed::command::{CommandExecutor, CommandMessage, ResponseMessage};
 use crate::distributed::io::{LineWriter, StreamWrapper, TlsClient, TlsServer};
+use crate::distributed::CAPABILITIES;
 use crate::error::{Result, SlapperError};
 use crate::utils::connect_with_nodelay_timeout;
 
@@ -103,21 +104,7 @@ impl RemoteListener {
     }
 
     fn get_capabilities() -> Vec<String> {
-        vec![
-            "scan-ports".to_string(),
-            "scan-endpoints".to_string(),
-            "fuzz".to_string(),
-            "load".to_string(),
-            "recon".to_string(),
-            "graphql".to_string(),
-            "oauth".to_string(),
-            "waf".to_string(),
-            "waf-stress".to_string(),
-            "fingerprint".to_string(),
-            "packet".to_string(),
-            "traceroute".to_string(),
-            "icmp".to_string(),
-        ]
+        CAPABILITIES.iter().map(|s| s.to_string()).collect()
     }
 
     pub fn shutdown(&self) {

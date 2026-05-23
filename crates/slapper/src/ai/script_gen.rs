@@ -94,7 +94,8 @@ impl ScriptGenerator {
 
         let code = Self::extract_code_block(content, "python")
             .or_else(|| Some(content.trim().to_string()))
-            .unwrap_or_default();
+            .filter(|s| !s.is_empty())
+            .ok_or(AiError::InvalidResponse)?;
 
         Ok(GeneratedScript {
             code,
@@ -138,7 +139,8 @@ impl ScriptGenerator {
 
         let code = Self::extract_code_block(content, "python")
             .or_else(|| Some(content.trim().to_string()))
-            .unwrap_or_default();
+            .filter(|s| !s.is_empty())
+            .ok_or(AiError::InvalidResponse)?;
 
         Ok(GeneratedScript {
             code,
@@ -182,7 +184,8 @@ impl ScriptGenerator {
 
         let code = Self::extract_code_block(content, "python")
             .or_else(|| Some(content.trim().to_string()))
-            .unwrap_or_default();
+            .filter(|s| !s.is_empty())
+            .ok_or(AiError::InvalidResponse)?;
 
         Ok(GeneratedScript {
             code,
@@ -269,7 +272,13 @@ Return ONLY the Python code, no markdown formatting or explanation."#,
     }
 
     fn build_adaptive_script_prompt(findings: &[serde_json::Value]) -> String {
-        let findings_str = serde_json::to_string_pretty(findings).unwrap_or_default();
+        let findings_str = match serde_json::to_string_pretty(findings) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::debug!("Failed to serialize findings for prompt: {}", e);
+                String::new()
+            }
+        };
         format!(
             r#"Based on these security findings:
 {}

@@ -653,6 +653,6 @@ static WAF_SIGNATURES: LazyLock<FxHashMap<String, WafSignature>> = LazyLock::new
     signatures
 });
 
-pub fn get_waf_signatures() -> FxHashMap<String, WafSignature> {
-    WAF_SIGNATURES.clone()
+pub fn get_waf_signatures() -> &'static FxHashMap<String, WafSignature> {
+    &WAF_SIGNATURES
 }

@@ -205,6 +205,11 @@ fn get_cve_db() -> &'static FxHashMap<&'static str, (&'static str, &'static str,
             ("Windows Kerberos", "high", "Windows Kerberos RC4 downgrade"),
         );
 
+        // NOTE: CVE-2024-27956 appears twice below for different WordPress plugins
+        // (AutomateWoo and WooCommerce). The HashMap stores only one entry per CVE ID,
+        // so the second insert silently overwrites the first. This is a known limitation
+        // of using a plain HashMap for the CVE database. A proper fix would require a
+        // data structure like Vec<CveEntry> per CVE or composite key (CVE + product).
         m.insert(
             "CVE-2024-27956",
             ("WordPress", "critical", "WordPress AutomateWoo auth bypass"),
