@@ -117,16 +117,23 @@ docs: review <module>.md architecture
 
 ## Known Issues from Past Reviews
 
-### HashMap/HashSet (P1 Priority)
-- `cli/report.rs:44-57`
-- `fuzzer/targets/api.rs` (multiple lines)
-- `slapper-nse/vulns.rs`, `rpc.rs`, `smbauth.rs`, `public_api/api.rs`, `creds.rs`
+### HashMap/HashSet (P1 Priority - Still Outstanding as of 2026-05-23)
+- `slapper-nse/public_api/api.rs` - Uses std HashMap at 4 locations (lines 107-108, 381, 413, 463, 486, 532)
+- `slapper-nse/libraries/http.rs:143` - Uses std HashMap
+- `slapper-nse/libraries/datafiles.rs:31-33` - Uses std HashMap
+- `slapper-nse/libraries/creds.rs:102,123` - Uses std HashSet
 
-### unwrap()/expect() in Production
-- `planner.rs:208,469,482` - SystemTime unwrap()
-- `chain.rs:381` - LazyLock regex unwrap()
+### unwrap_or_default() Issues (P1 Priority - Still Outstanding)
+- `ai/waf_bypass.rs:44` - Silently suppresses deserialization errors
+- `recon/` - 18 instances across multiple files silently suppress errors
+
+### Bounds Check Issues
+- `networking/parse_impl.rs:531` - DNS parsing needs bounds check
 
 ### Documentation Discrepancies
-- `config.md` - ScanConfig.profiles reference location
-- `waf/mod.rs` - Lists 25 WAF products instead of 34
-- `tui.md` - Key binding for toggle_bookmark is `Ctrl+b`, not `b`
+- `recon/recon.md` - secrets module not in FULL_RECON_PIPELINE_MODULES but documented
+- `recon/recon.md` - FxHashMap count (13 documented vs 55 actual)
+
+### Previously Fixed (Verify if Regressions)
+- `waf/mod.rs` - Now correctly lists 34 WAF products (fixed 2026-05-28)
+- `scanner/` - All 2026-05-27 bug fixes verified applied

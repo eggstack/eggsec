@@ -162,6 +162,42 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/plugins_nse.md` | Plugin system (Python/Ruby) and NSE integration |
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |
 
+## Architecture Review Findings (2026-05-23)
+
+Completed review of all 14 architecture documents. Key findings:
+
+### High Priority Issues
+
+| Module | File | Issue |
+|--------|------|-------|
+| NSE | `slapper-nse/src/public_api/api.rs` | Uses std HashMap at 4 locations (lines 107-108, 381, 413, 463, 486, 532) |
+| Distributed | `distributed/worker.rs:115-123` | Worker capabilities strings don't match TaskType enum |
+| Recon | Multiple files | 18 unwrap_or_default() calls silently suppress errors |
+| Networking | `networking/parse_impl.rs:531` | DNS parsing needs bounds check |
+
+### Medium Priority Issues
+
+| Module | File | Issue |
+|--------|------|-------|
+| NSE | `libraries/http.rs:143` | Uses std HashMap |
+| NSE | `libraries/datafiles.rs:31-33` | Uses std HashMap |
+| NSE | `libraries/creds.rs:102,123` | Uses std HashSet |
+| Distributed | `command.rs:146-149` | env field accepted but rejected at execution |
+| Distributed | `remote.rs:127-146` | Rate limit holds write lock too long |
+| Fuzzer | `analyzer.rs:190` | Division-by-zero potential |
+| Loadtest | `metrics.rs:76` | Imprecise panic message |
+
+### Documentation Discrepancies
+
+| Module | Issue |
+|--------|-------|
+| Recon | secrets module not in FULL_RECON_PIPELINE_MODULES but documented |
+| Recon | FxHashMap count (13 documented vs 55 actual) |
+
+See `plans/*_review.md` for detailed findings per module.
+
+---
+
 ## Recent Bug Fixes
 
 ### 2026-05-28
