@@ -282,7 +282,7 @@ impl RubyBridge {
             .ok()
             .and_then(|v| String::try_convert(v).ok());
 
-        let _ = timeout_secs;
+        let _timeout = timeout_secs;
         Ok(RubyPlugin::new_with_meta(
             name,
             version,
