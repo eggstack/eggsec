@@ -52,7 +52,14 @@ When merging multiple branches:
 
 ## Plan Completion (2026-05-29)
 
-As of 2026-05-29, all 26 items across 3 waves have been verified and implemented. The plan file has been pruned to a summary. If starting a new wave of fixes:
+As of 2026-05-29, all items across 3 waves have been verified and implemented (20/24 implemented, 4 deferred). The plan file has been pruned to a summary.
+
+### Implementation Summary (2026-05-29)
+- **Wave 1**: All 6 items completed (PluginManager FxHashMap, Ruby timeout, CMS error handling, CacheKeyBuilder, AI HashMap, NSE CVE Vec storage)
+- **Wave 2**: All 8 items completed (WAF HTTP/2 docs, Scope.validate(), Scanner progress, Distributed TaskResult, heartbeat cached, Pipeline errors, fingerprint ports, WAF config)
+- **Wave 3**: 6/10 completed (TUI dispatcher cache, CLI output flag, docs module counts, fuzzer progress, CSV streaming, TUI theme restore, recon secrets), 4 deferred (TUI unwrap_or_default, NSE DNS rebinding, NSE OSV/CISA KEV)
+
+If starting a new wave of fixes:
 
 1. Create a new plan document in `plans/` directory (e.g., `plans/plan-YYYY-MM-DD.md`)
 2. Use the wave-based parallelization approach demonstrated in this skill
