@@ -15,10 +15,10 @@ This plan consolidates findings from 14 architecture review documents. Items mar
 - **File**: `crates/slapper-plugin/src/lib.rs:296-297`
 - **Verification**: `cargo clippy --lib -p slapper-plugin`
 
-### 2. [BUG] Ruby Plugin: load_plugin_with_timeout ignores timeout parameter
-- **Status**: COMPLETED (commit 0305fb3) - Clarified with `_timeout` prefix
-- **File**: `crates/slapper-ruby/src/bridge.rs:285`
-- **Verification**: Timeout IS used via `rx.recv_timeout()` - just clarified variable naming
+### 2. [VERIFY] Ruby Plugin: load_plugin_with_timeout parameter
+- **Status**: VERIFIED CORRECT - Timeout properly used at RubyPluginClient level
+- **File**: `crates/slapper-ruby/src/bridge.rs:87` (client uses timeout), `:245` (internal bridge, underscore prefix ok)
+- **Note**: `RubyPluginClient::load_plugin_with_timeout` uses `recv_timeout` for timeout enforcement. `RubyBridge::load_plugin_with_timeout` receives already-enforced timeout via message passing.
 
 ### 3. [BUG] CMS Scanner: Replace unwrap_or_default with explicit error handling
 - **Status**: COMPLETED (commit b917251)
