@@ -103,35 +103,3 @@ let mut writer = LineWriter::new(stream);
 writer.write_line(&serde_json::to_string(&msg)?).await?;
 let response: ResponseMessage = serde_json::from_str(&writer.read_line().await?)?;
 ```
-
-## Known Issues (2026-05-28)
-
-### Worker Capabilities Mismatch
-**File**: `worker.rs:115-123`
-
-Worker advertises hardcoded string capabilities ("PortScan", "ServiceFingerprint") that don't match `TaskType` enum variants. The `WorkerRegistration.capabilities` field is `Vec<TaskType>`, but registration sends strings.
-
-**Fix**: Derive capabilities from `TaskType` enum:
-```rust
-fn get_worker_capabilities() -> Vec<String> {
-    vec![
-        TaskType::PortScan.to_string(),
-        TaskType::ServiceFingerprint.to_string(),
-        // ...
-    ]
-}
-```
-
-### CommandMessage env Field Rejected
-**File**: `command.rs:146-149`
-
-The `env` field in `CommandMessage::Execute` is accepted in the protocol but rejected at execution time. This wastes bandwidth.
-
-**Fix**: Either remove `env` from `CommandMessage::Execute` or allow specific safe variables.
-
-### Rate Limit Lock Contention
-**File**: `remote.rs:127-146`
-
-`check_rate_limit()` holds write lock for entire function duration including `retain()` call.
-
-**Note**: Document this behavior. Consider atomic operations if contention becomes an issue.

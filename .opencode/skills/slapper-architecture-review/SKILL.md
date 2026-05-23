@@ -117,23 +117,29 @@ docs: review <module>.md architecture
 
 ## Known Issues from Past Reviews
 
-### HashMap/HashSet (P1 Priority - Still Outstanding as of 2026-05-23)
-- `slapper-nse/public_api/api.rs` - Uses std HashMap at 4 locations (lines 107-108, 381, 413, 463, 486, 532)
-- `slapper-nse/libraries/http.rs:143` - Uses std HashMap
-- `slapper-nse/libraries/datafiles.rs:31-33` - Uses std HashMap
-- `slapper-nse/libraries/creds.rs:102,123` - Uses std HashSet
+### HashMap/HashSet (All Fixed as of 2026-05-28)
+All `std::collections::HashMap`/`HashSet` instances in the NSE and slapper crates have been replaced with `FxHashMap`/`FxHashSet` for performance:
+- `slapper-nse/public_api/api.rs` - 8 HashMap instances replaced ✅
+- `slapper-nse/libraries/http.rs:143` - HashMap replaced ✅
+- `slapper-nse/libraries/datafiles.rs:31-33` - HashMap replaced ✅
+- `slapper-nse/libraries/creds.rs:102,123` - HashSet replaced ✅
 
-### unwrap_or_default() Issues (P1 Priority - Still Outstanding)
-- `ai/waf_bypass.rs:44` - Silently suppresses deserialization errors
-- `recon/` - 18 instances across multiple files silently suppress errors
+### unwrap_or_default() Issues (All Fixed as of 2026-05-28)
+- `ai/waf_bypass.rs:44` - Now uses explicit match with tracing.warn ✅
+- `recon/` - 20 instances replaced with explicit match ✅
 
-### Bounds Check Issues
-- `networking/parse_impl.rs:531` - DNS parsing needs bounds check
+### Bounds Check Issues (Fixed)
+- `packet/parse_impl.rs:531,551` - DNS parsing now has bounds check ✅
 
-### Documentation Discrepancies
-- `recon/recon.md` - secrets module not in FULL_RECON_PIPELINE_MODULES but documented
-- `recon/recon.md` - FxHashMap count (13 documented vs 55 actual)
+### Documentation Discrepancies (All Fixed)
+- `recon/recon.md` - secrets module documented, FxHashMap count updated to 55 ✅
+- `architecture/tui.md` - payload count updated to 31 ✅
+
+### Pre-existing Compilation Issues (Fixed 2026-05-28)
+- `tool/planner.rs` - FxFxHashSet → FxHashSet, use default() not new() ✅
+- `tool/implementations/pipeline.rs` - Arc import added, Display fix for Arc<Mutex> ✅
+- `recon/mod.rs` - Removed unused FxHashMap import, use std HashMap for Finding.metadata ✅
 
 ### Previously Fixed (Verify if Regressions)
-- `waf/mod.rs` - Now correctly lists 34 WAF products (fixed 2026-05-28)
-- `scanner/` - All 2026-05-27 bug fixes verified applied
+- `waf/mod.rs` - Correctly lists 34 WAF products (fixed 2026-05-28) ✅
+- `scanner/` - All 2026-05-27 bug fixes verified applied ✅

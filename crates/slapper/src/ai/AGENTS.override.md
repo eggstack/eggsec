@@ -69,34 +69,6 @@ This ensures new plans with moderate success are also cached.
 3. **planner.rs:112** - Lowered cache lookup threshold from `use_count > 3` to `use_count >= 2`
 4. **waf_bypass.rs** - Added `max_knowledge_base_size` field and `evict_knowledge_base_if_needed()` method
 
-## Known Issues (2026-05-28)
-
-### SystemTime unwrap() Panic Risk
-**File**: `planner.rs:206-209, 467-470, 480-483`
-
-`SystemTime::now().duration_since(UNIX_EPOCH).unwrap()` can panic if the system clock moves backwards (e.g., NTP correction).
-
-**Fix**: Use `unwrap_or_else()` with fallback:
-```rust
-.last_used = std::time::SystemTime::now()
-    .duration_since(std::time::UNIX_EPOCH)
-    .unwrap_or_else(|_| std::time::Duration::from_secs(0))
-    .as_secs(),
-```
-
-### Knowledge Base Load Silent Failure
-**File**: `waf_bypass.rs:44`
-
-When loading `waf_bypasses.json`, `unwrap_or_default()` silently suppresses deserialization errors, potentially losing learned bypasses.
-
-**Fix**: Use `unwrap_or_else()` with logging:
-```rust
-.unwrap_or_else(|e| {
-    tracing::warn!("Failed to load WAF bypass knowledge base: {}", e);
-    Vec::new()
-})
-```
-
 ## Testing
 
 ```bash

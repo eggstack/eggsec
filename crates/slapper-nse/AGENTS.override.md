@@ -12,19 +12,14 @@ The NSE (Nmap Scripting Engine) module (`crates/slapper-nse/`) provides Lua VM i
 | `slapper-nse/src/libraries/smbauth.rs` | `signing_hmac_md5` defined 3 times | Kept first (lines 121-131), removed others |
 | `slapper-nse/src/libraries/datafiles.rs` | `ssh`, `ntp`, `mongodb` entries duplicated | Removed duplicate entries |
 | `slapper-nse/src/libraries/io.rs:140,163,181,194,211` | `file.get("fd").unwrap_or(-1)` masks missing fd | Return explicit error when fd missing |
+| `src/libraries/http.rs:143-144` | Performance | Replaced `HashMap` with `FxHashMap` in `parse_options` |
+| `src/libraries/datafiles.rs:31-33` | Performance | Replaced `HashMap` with `FxHashMap` in `get_services()` |
+| `src/libraries/creds.rs:102,123` | Performance | Replaced `HashSet` with `FxHashSet` for local `seen` variables |
+| `src/public_api/api.rs:107-108,381,413,463,486,532` | Performance | Replaced all `HashMap` with `FxHashMap` for CVE database, HTTP headers |
 
-## NSE Libraries HashMap Usage (Known Issues)
+## NSE Libraries HashMap Usage
 
-The following NSE library files use `std::collections::HashMap`/`HashSet` instead of `FxHashMap`/`FxHashSet` - **pending fix**:
-
-| File | Issue | Type |
-|------|-------|------|
-| `src/libraries/http.rs:143-144` | Performance | `HashMap<String, String>` in `parse_options` |
-| `src/libraries/datafiles.rs:31-33` | Performance | `HashMap` in `get_services()` |
-| `src/libraries/creds.rs:102,123` | Performance | `HashSet` local `seen` variables |
-| `src/public_api/api.rs:107-108,381,413,463,486,532` | Performance | Multiple `HashMap` for CVE database, HTTP headers |
-
-**Fix**: Replace with `rustc_hash::FxHashMap` or `FxHashSet` for consistency and performance. See `plans/plan.md` Wave 1.
+All NSE library files now use `rustc_hash::FxHashMap`/`FxHashSet` for consistency and performance.
 
 ## Key Patterns
 
