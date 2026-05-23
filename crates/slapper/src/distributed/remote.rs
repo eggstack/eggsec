@@ -471,6 +471,10 @@ impl RemoteClient {
             resolved
         };
 
+        self.connect_to_coordinator_with_addr(&addr).await
+    }
+
+    async fn connect_to_coordinator_with_addr(&mut self, addr: &SocketAddr) -> Result<LineWriter> {
         let connect_timeout = std::time::Duration::from_secs(5);
         let stream = connect_with_nodelay_timeout(&addr, connect_timeout)
             .await
@@ -591,7 +595,21 @@ impl RemoteClient {
         _worker_id: String,
         status: String,
     ) -> Result<()> {
-        let mut line_writer = self.connect_to_coordinator(host, port).await?;
+        let host_port = format!("{}:{}", host, port);
+
+        let addr = if let Some(cached) = self.resolve_cached(host, port) {
+            cached
+        } else {
+            let resolved: SocketAddr = tokio::net::lookup_host(&host_port)
+                .await
+                .map_err(|e| SlapperError::Network(format!("Failed to resolve host: {}", e)))?
+                .next()
+                .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
+            self.cache_resolution(resolved);
+            resolved
+        };
+
+        let mut line_writer = self.connect_to_coordinator_with_addr(&addr).await?;
 
         let cmd = CommandMessage::Heartbeat {
             id: uuid::Uuid::new_v4().to_string(),
