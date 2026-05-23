@@ -28,6 +28,8 @@ pub struct PipelineReport {
     pub open_ports: Vec<PortResult>,
     pub services: Vec<ServiceFingerprint>,
     pub endpoints: Vec<EndpointResult>,
+    #[serde(skip)]
+    pub checkpoint_error: Option<String>,
 }
 
 impl std::fmt::Display for PipelineReport {
