@@ -1,6 +1,6 @@
 # Architecture Review Plan
 
-**Status:** INCOMPLETE - Iterative improvement in progress
+**Status:** COMPLETED - All review phases complete, implementation in progress
 
 This document outlines the plan for reviewing all architecture documents and verifying their claims against the codebase.
 
@@ -12,27 +12,72 @@ This document outlines the plan for reviewing all architecture documents and ver
 | Batch 2 | Loadtest, Networking, Output, Overview, Pipeline | ✅ Reviews Complete |
 | Batch 3 | Plugins/NSE, Recon, Scanner, TUI, WAF | ✅ Reviews Complete |
 
-**Next Steps:** Implement high-priority fixes identified in reviews
+## Implementation Status
 
-## Modules to Review
+### Completed Fixes
 
-| # | Module | Document | Review Output | Issues Found |
-|---|--------|----------|---------------------|--------------|
-| 1 | AI Agents | `architecture/ai_agents.md` | `plans/ai_agents_review.md` | 2 HashMap, 1 eviction bug, 1 cache key |
-| 2 | CLI Commands | `architecture/cli_commands.md` | `plans/cli_commands_review.md` | Missing CLI files in docs |
-| 3 | Config | `architecture/config.md` | `plans/config_review.md` | Private IP bypass (HIGH) |
-| 4 | Distributed | `architecture/distributed.md` | `plans/distributed_review.md` | Race condition (HIGH) |
-| 5 | Fuzzer | `architecture/fuzzer.md` | `plans/fuzzer_review.md` | Adaptive rate limiter (MEDIUM) |
-| 6 | Loadtest | `architecture/loadtest.md` | `plans/loadtest_review.md` | Error list cap 100 |
-| 7 | Networking | `architecture/networking.md` | `plans/networking_review.md` | UDP checksum allocation |
-| 8 | Output | `architecture/output.md` | `plans/output_review.md` | None critical |
-| 9 | Overview | `architecture/overview.md` | `plans/overview_review.md` | unwrap_or_default (pre-existing) |
-| 10 | Pipeline | `architecture/pipeline.md` | `plans/pipeline_review.md` | Session save error (MEDIUM) |
-| 11 | Plugins/NSE | `architecture/plugins_nse.md` | `plans/plugins_nse_review.md` | CVE duplicate, timeout unused |
-| 12 | Recon | `architecture/recon.md` | `plans/recon_review.md` | Async CVE, cloud parallelization |
-| 13 | Scanner | `architecture/scanner.md` | `plans/scanner_review.md` | CMS unwrap_or_default |
-| 14 | TUI | `architecture/tui.md` | `plans/tui_review.md` | 14 unwrap_or_default instances |
-| 15 | WAF | `architecture/waf.md` | `plans/waf_review.md` | Constant in loop, HTTP/2 disabled |
+| Branch | Fixes | Status |
+|--------|-------|--------|
+| `fix/ai-agents-hashmap-and-bugs` | AlertRoutingRules, ConstraintChecker, PortfolioData HashMap→FxHashMap; scope private IP bypass; WAF detector constant | ✅ Merged |
+| `fix/distributed-pipeline-bugs` | Queue race condition fix; Pipeline session save error logging | ✅ Merged |
+| `fix/scanner-fuzzer-improvements` | CMS error handling; Fuzzer adaptive rate limiter | ✅ Merged |
+| `fix/loadtest-recon-improvements` | Loadtest error cap 100→1000; Cloud parallelization with tokio::join | ✅ Merged |
+
+### Implementation Summary
+
+| Issue | Module | Fix | Branch |
+|-------|--------|-----|--------|
+| AlertRoutingRules HashMap | agent/alerts | → FxHashMap | fix/ai-agents-hashmap-and-bugs |
+| ConstraintChecker HashMap | agent/constraints | → FxHashMap | fix/ai-agents-hashmap-and-bugs |
+| PortfolioData HashMap | agent/portfolio | → FxHashMap | fix/ai-agents-hashmap-and-bugs |
+| Private IP bypass in parse() | config/scope | is_private_ip check | fix/ai-agents-hashmap-and-bugs |
+| HEADER_VALUE_MAX_LEN in loop | waf/detector/detect | → module level | fix/ai-agents-hashmap-and-bugs |
+| Queue race condition | distributed/queue | Atomic lock acquisition | fix/distributed-pipeline-bugs |
+| Session save silent failure | pipeline/executor | warn→error | fix/distributed-pipeline-bugs |
+| CMS unwrap_or_default | scanner/cms | explicit error handling | fix/scanner-fuzzer-improvements |
+| rate ≤ 1 premature stop | fuzzer/engine/execution | rate < 1 | fix/scanner-fuzzer-improvements |
+| Error list cap 100 | loadtest/metrics | 100→1000 | fix/loadtest-recon-improvements |
+| Sequential cloud enum | recon/cloud | tokio::join! | fix/loadtest-recon-improvements |
+
+### Remaining Issues (Not Fixed)
+
+These issues were identified but not fixed due to scope constraints or needing further design:
+
+| Issue | Module | Priority | Notes |
+|-------|--------|----------|-------|
+| CVE duplicate entry | plugins_nse | Medium | Needs data structure change |
+| load_plugin_with_timeout unused | plugins_nse | Medium | API change needed |
+| Async CVE blocking HTTP | recon | Medium | Would require API redesign |
+| TUI unwrap_or_default (14 instances) | tui | Medium | Pre-existing, many files |
+| WAF HTTP/2 always disabled | waf | Medium | Feature flag needed |
+| Networking IPv4 options bounds | networking | Low | Edge case |
+| ReDoS patterns clone | fuzzer | Low | Arc::clone instead |
+
+## Modules Reviewed
+
+| # | Module | Document | Issues Found |
+|---|--------|----------|--------------|
+| 1 | AI Agents | `architecture/ai_agents.md` | HashMap usage, cache key collision |
+| 2 | CLI Commands | `architecture/cli_commands.md` | Missing CLI files in docs |
+| 3 | Config | `architecture/config.md` | Private IP bypass (HIGH) |
+| 4 | Distributed | `architecture/distributed.md` | Race condition (HIGH) |
+| 5 | Fuzzer | `architecture/fuzzer.md` | Adaptive rate limiter (MEDIUM) |
+| 6 | Loadtest | `architecture/loadtest.md` | Error list cap 100 |
+| 7 | Networking | `architecture/networking.md` | UDP checksum allocation |
+| 8 | Output | `architecture/output.md` | None critical |
+| 9 | Overview | `architecture/overview.md` | unwrap_or_default (pre-existing) |
+| 10 | Pipeline | `architecture/pipeline.md` | Session save error (MEDIUM) |
+| 11 | Plugins/NSE | `architecture/plugins_nse.md` | CVE duplicate, timeout unused |
+| 12 | Recon | `architecture/recon.md` | Cloud sequential (HIGH→fixed) |
+| 13 | Scanner | `architecture/scanner.md` | CMS unwrap_or_default |
+| 14 | TUI | `architecture/tui.md` | 14 unwrap_or_default instances |
+| 15 | WAF | `architecture/waf.md` | Constant in loop, HTTP/2 disabled |
+
+## Key Findings Summary
+
+- **High Priority Fixed:** 2 (Config private IP bypass, Distributed race condition)
+- **Medium Priority Fixed:** 4 (Fuzzer rate limiter, Scanner CMS, Loadtest errors, Recon cloud)
+- **Low Priority Fixed:** 2 (WAF constant, Cloud parallelization)
 
 ## Review Workflow
 
@@ -47,31 +92,23 @@ For each module, a subagent will:
 
 Each subagent will be given this task:
 
-> Review the architecture document at `architecture/{module}.md`. 
-> 
+> Review the architecture document at `architecture/{module}.md`.
+>
 > Locate the corresponding implementation in the codebase (likely in `crates/slapper/src/{module}/`).
-> 
+>
 > For each section in the architecture document:
 > - Identify the key claims and design decisions
 > - Search the codebase to verify each claim against actual implementation
 > - Note any discrepancies between documentation and implementation
 > - Identify bugs, performance issues, or anti-patterns
 > - Suggest concrete improvements with estimated impact
-> 
+>
 > Write your findings to `plans/{module}_review.md` with sections:
 > - **Verified Claims** - What matches implementation
-> - **Discrepancies** - Documentation vs implementation mismatches  
+> - **Discrepancies** - Documentation vs implementation mismatches
 > - **Bugs Found** - Actual bugs discovered (with file:line references)
 > - **Improvement Opportunities** - Refactoring and optimization suggestions
 > - **Priority** - High/Medium/Low for each finding
-
-## Execution Plan
-
-Reviews will be executed in batches using subagents in parallel:
-
-**Batch 1 (5 agents):** AI Agents, CLI Commands, Config, Distributed, Fuzzer  
-**Batch 2 (5 agents):** Loadtest, Networking, Output, Overview, Pipeline  
-**Batch 3 (5 agents):** Plugins/NSE, Recon, Scanner, TUI, WAF
 
 ## Verification Criteria
 
