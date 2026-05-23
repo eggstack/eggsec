@@ -274,7 +274,9 @@ impl AiCache {
             };
 
             if let Ok(json) = serde_json::to_string(&serialized) {
-                let _ = std::fs::write(path, json);
+                if let Err(e) = std::fs::write(path, json) {
+                    tracing::warn!("Failed to persist AI cache to {:?}: {}", path, e);
+                }
             }
         }
     }

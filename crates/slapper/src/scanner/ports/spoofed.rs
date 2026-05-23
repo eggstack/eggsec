@@ -282,7 +282,8 @@ pub(crate) async fn scan_ports_spoofed(
                             packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
-                    Err(_) => {
+                    Err(e) => {
+                        tracing::debug!("Failed to build spoofed UDP packets: {}", e);
                         drop(permit);
                         return;
                     }
@@ -300,7 +301,8 @@ pub(crate) async fn scan_ports_spoofed(
                             _ => {}
                         }
                     }
-                    Err(_) => {
+                    Err(e) => {
+                        tracing::debug!("Failed to build spoofed TCP packet for port {}: {}", port, e);
                         drop(permit);
                         return;
                     }
