@@ -196,8 +196,8 @@ impl super::App {
                 self.with_history(|h| {
                     h.add_recon_result(
                         &r.target,
-                        r.domain.clone().unwrap_or_default(),
-                        r.ip_address.clone().unwrap_or_default(),
+                        r.domain.as_deref().unwrap_or("").to_string(),
+                        r.ip_address.as_deref().unwrap_or("").to_string(),
                     );
                 });
                 self.recon.set_results(r);
