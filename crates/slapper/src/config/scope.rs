@@ -33,6 +33,43 @@ impl Scope {
         Self::default()
     }
 
+    pub fn validate(&self) -> Result<(), ScopeError> {
+        if self.allowed_targets.is_empty() && self.require_explicit_scope {
+            return Err(ScopeError::Validation(
+                "At least one allowed target is required when require_explicit_scope is true"
+                    .to_string(),
+            ));
+        }
+
+        if let Some(ref ports) = self.allowed_ports {
+            let mut seen = std::collections::HashSet::new();
+            for &port in ports {
+                if !seen.insert(port) {
+                    return Err(ScopeError::Validation(format!(
+                        "Duplicate port {} in allowed_ports",
+                        port
+                    )));
+                }
+            }
+        }
+
+        if let Some(rate) = self.max_requests_per_second {
+            if rate == 0 {
+                return Err(ScopeError::Validation(
+                    "max_requests_per_second must be greater than 0".to_string(),
+                ));
+            }
+            if rate > 10000 {
+                return Err(ScopeError::Validation(
+                    "max_requests_per_second exceeds reasonable limit (10000)"
+                        .to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn from_file(path: &str) -> Result<Self, ScopeError> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| ScopeError::FileRead(path.to_string(), e.to_string()))?;
@@ -354,6 +391,9 @@ fn is_private_ip(ip: &IpAddr) -> bool {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ScopeError {
+    #[error("Validation error: {0}")]
+    Validation(String),
+
     #[error("Failed to read scope file '{0}': {1}")]
     FileRead(String, String),
 
