@@ -333,17 +333,17 @@ impl LoadTestRunner {
                     let result = req.send().await;
                     let latency = request_start.elapsed();
 
-                    let mut metrics = metrics.lock().await;
-
                     match result {
                         Ok(response) => {
                             let status = response.status();
                             if !status.is_success() {
                                 let _ = response.bytes().await;
                             }
+                            let mut metrics = metrics.lock().await;
                             metrics.record_http_response(latency, status.as_u16());
                         }
                         Err(e) => {
+                            let mut metrics = metrics.lock().await;
                             metrics.record_failure(e.to_string());
                         }
                     }
