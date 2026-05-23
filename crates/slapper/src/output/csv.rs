@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 
 pub use crate::types::OutputFormat;
 
@@ -28,6 +29,43 @@ impl CsvExporter {
         }
 
         Ok(output)
+    }
+
+    pub async fn export_findings_streaming(
+        findings: &[FindingCsv],
+        writer: &mut (impl AsyncWrite + Unpin),
+    ) -> std::io::Result<()> {
+        let mut buf = BufWriter::new(writer);
+
+        if findings.is_empty() {
+            buf.write_all(b"\n").await?;
+            return buf.flush().await;
+        }
+
+        buf.write_all(b"Severity,Target,Path,Description,CVE,Remediation\n")
+            .await?;
+
+        for f in findings {
+            buf.write_all(super::escape::escape_csv(&f.severity).as_bytes()).await?;
+            buf.write_all(b",").await?;
+            buf.write_all(super::escape::escape_csv(&f.target).as_bytes()).await?;
+            buf.write_all(b",").await?;
+            buf.write_all(super::escape::escape_csv(&f.path).as_bytes()).await?;
+            buf.write_all(b",").await?;
+            buf.write_all(super::escape::escape_csv(&f.description).as_bytes()).await?;
+            buf.write_all(b",").await?;
+            buf.write_all(super::escape::escape_csv(f.cve.as_deref().unwrap_or("")).as_bytes())
+                .await?;
+            buf.write_all(b",").await?;
+            buf.write_all(
+                super::escape::escape_csv(f.remediation.as_deref().unwrap_or(""))
+                    .as_bytes(),
+            )
+            .await?;
+            buf.write_all(b"\n").await?;
+        }
+
+        buf.flush().await
     }
 
     pub fn export_ports(ports: &[PortCsv]) -> Result<String, std::fmt::Error> {
