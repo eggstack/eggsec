@@ -87,6 +87,15 @@ impl Scope {
             .any(|rule| rule.matches(&target_scope));
 
         if !allowed {
+            if let Some(ref ip) = target_scope.ip {
+                if is_private_ip(ip) {
+                    tracing::warn!(
+                        target = %target,
+                        "Private IP address not in allowed scope"
+                    );
+                    return Ok(false);
+                }
+            }
             tracing::warn!(
                 target = %target,
                 "Target is not in allowed scope"
@@ -213,12 +222,6 @@ impl TargetScope {
                     "Loopback address blocked by security policy".to_string(),
                 ));
             }
-            if is_private_ip(&ip) {
-                return Err(ScopeError::DnsResolution(
-                    target.to_string(),
-                    "Private IP address blocked by security policy".to_string(),
-                ));
-            }
             return Ok(Self {
                 host: target.to_string(),
                 ip: Some(ip),
@@ -273,12 +276,6 @@ impl TargetScope {
                     "Loopback address blocked by security policy".to_string(),
                 ));
             }
-            if is_private_ip(&ip) {
-                return Err(ScopeError::DnsResolution(
-                    target.to_string(),
-                    "Private IP address blocked by security policy".to_string(),
-                ));
-            }
             return Ok(Self {
                 host: target.to_string(),
                 ip: Some(ip),
@@ -323,13 +320,6 @@ impl TargetScope {
             return Err(ScopeError::DnsResolution(
                 host.to_string(),
                 "Resolved to loopback address blocked by security policy".to_string(),
-            ));
-        }
-
-        if is_private_ip(&ip) {
-            return Err(ScopeError::DnsResolution(
-                host.to_string(),
-                "Resolved to private IP address blocked by security policy".to_string(),
             ));
         }
 
