@@ -587,7 +587,9 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         handles.push(handle);
     }
 
-    join_all(handles).await;
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
+        join_all(handles).await;
+    }));
     if let Some(ref pb) = progress {
         pb.finish_and_clear();
     }
