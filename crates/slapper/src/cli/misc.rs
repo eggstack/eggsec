@@ -23,6 +23,9 @@ Examples:
 pub struct ConfigArgs {
     #[command(subcommand)]
     pub command: ConfigCommand,
+
+    #[arg(short = 'o', long, help = "Output results to file")]
+    pub output: Option<String>,
 }
 
 #[derive(clap::Subcommand)]
@@ -53,6 +56,9 @@ pub struct NotifyArgs {
     /// Suppress non-essential output
     #[arg(long, short = 'q')]
     pub quiet: bool,
+
+    #[arg(short = 'o', long, help = "Output results to file")]
+    pub output: Option<String>,
 }
 
 #[derive(clap::Subcommand)]
@@ -99,6 +105,9 @@ pub struct NotifySendArgs {
 pub struct RemoteArgs {
     #[command(subcommand)]
     pub command: RemoteCommand,
+
+    #[arg(short = 'o', long, help = "Output results to file")]
+    pub output: Option<String>,
 }
 
 #[derive(clap::Subcommand)]
@@ -157,6 +166,9 @@ pub struct ExecArgs {
     pub yes: bool,
     #[arg(help = "The command to execute")]
     pub command: Vec<String>,
+
+    #[arg(short = 'o', long, help = "Output results to file")]
+    pub output: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -193,6 +205,9 @@ pub struct PluginRunArgs {
 pub struct ReportArgs {
     #[command(subcommand)]
     pub command: ReportCommand,
+
+    #[arg(short = 'o', long, help = "Output results to file")]
+    pub output: Option<String>,
 }
 
 #[derive(clap::Subcommand)]
