@@ -613,6 +613,71 @@ impl SlapperConfig {
                 "remote.default_port cannot be 0 when PSK is configured".to_string(),
             ));
         }
+        if !self.alert_channels.channels.is_empty() {
+            for (name, channel) in &self.alert_channels.channels {
+                match channel {
+                    AlertChannelConfigEntry::Webhook(webhook) => {
+                        if webhook.url.is_empty() {
+                            return Err(ConfigError::Validation(format!(
+                                "alert_channels.'{}'.url cannot be empty", name
+                            )));
+                        }
+                        if !webhook.url.starts_with("http://")
+                            && !webhook.url.starts_with("https://")
+                        {
+                            return Err(ConfigError::Validation(format!(
+                                "alert_channels.'{}'.url must start with http:// or https://",
+                                name
+                            )));
+                        }
+                    }
+                    AlertChannelConfigEntry::Email(email) => {
+                        if email.smtp_host.is_empty() {
+                            return Err(ConfigError::Validation(format!(
+                                "alert_channels.'{}'.smtp_host cannot be empty", name
+                            )));
+                        }
+                        if email.smtp_port == 0 {
+                            return Err(ConfigError::Validation(format!(
+                                "alert_channels.'{}'.smtp_port cannot be 0", name
+                            )));
+                        }
+                        if email.from.is_empty() {
+                            return Err(ConfigError::Validation(format!(
+                                "alert_channels.'{}'.from cannot be empty", name
+                            )));
+                        }
+                        if email.to.is_empty() {
+                            return Err(ConfigError::Validation(format!(
+                                "alert_channels.'{}'.to cannot be empty", name
+                            )));
+                        }
+                    }
+                    AlertChannelConfigEntry::Slack(slack) => {
+                        if slack.webhook_url.is_empty() {
+                            return Err(ConfigError::Validation(format!(
+                                "alert_channels.'{}'.webhook_url cannot be empty", name
+                            )));
+                        }
+                        if !slack.webhook_url.starts_with("http://")
+                            && !slack.webhook_url.starts_with("https://")
+                        {
+                            return Err(ConfigError::Validation(format!(
+                                "alert_channels.'{}'.webhook_url must start with http:// or https://",
+                                name
+                            )));
+                        }
+                    }
+                    AlertChannelConfigEntry::PagerDuty(pd) => {
+                        if pd.routing_key.expose_secret().is_empty() {
+                            return Err(ConfigError::Validation(format!(
+                                "alert_channels.'{}'.routing_key cannot be empty", name
+                            )));
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
