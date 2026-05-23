@@ -149,24 +149,6 @@ pub fn register_smbauth_library(lua: &Lua) -> LuaResult<()> {
 )?;
 
     smbauth.set(
-        "encrypt_password",
-        lua.create_function(|_lua, (password, key): (String, String)| {
-            // Simple XOR encryption (not real encryption)
-            let key_bytes: Vec<u8> = key.as_bytes().to_vec();
-            let mut result = Vec::new();
-
-            for (i, byte) in password.as_bytes().iter().enumerate() {
-                result.push(byte ^ key_bytes[i % key_bytes.len()]);
-            }
-
-            Ok(base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                &result,
-            ))
-        })?,
-    )?;
-
-    smbauth.set(
         "get_domain_from_dns",
         lua.create_function(|_lua, dns_name: String| {
             // Extract domain from DNS name

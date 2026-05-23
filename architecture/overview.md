@@ -18,7 +18,7 @@ This document provides a bird's-eye view of Slapper's architecture and serves as
 | `config/` | `crates/slapper/src/config/` | TOML/YAML config loading, scope enforcement, validation | [config.md](config.md) |
 | `container/` | `crates/slapper/src/container/` | Kubernetes and Docker security checks | - |
 | `distributed/` | `crates/slapper/src/distributed/` | Worker/coordinator cluster, task queue, TLS, PSK auth | [distributed.md](distributed.md) |
-| `fuzzer/` | `crates/slapper/src/fuzzer/` | Security fuzzing engine with 30 payload types, mutation, grammar, diffing | [fuzzer.md](fuzzer.md) |
+| `fuzzer/` | `crates/slapper/src/fuzzer/` | Security fuzzing engine with 31 payload types, mutation, grammar, diffing | [fuzzer.md](fuzzer.md) |
 | `integrations/` | `crates/slapper/src/integrations/` | Jira, GitHub, GitLab connectors | - |
 | `loadtest/` | `crates/slapper/src/loadtest/` | HTTP load testing with HDR histogram metrics | [loadtest.md](loadtest.md) |
 | `notify/` | `crates/slapper/src/notify/` | Webhook notifications: Slack, Discord, Teams, email | - |

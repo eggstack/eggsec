@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn junit_treats_mixed_case_high_as_failed() {
         let report = sample_report_with_severity("High");
-        let xml = convert_to_junit(&report);
+        let xml = convert_to_junit(&report).expect("JUnit conversion should succeed");
         assert!(xml.contains("<failure"));
     }
 

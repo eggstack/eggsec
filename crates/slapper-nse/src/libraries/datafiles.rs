@@ -3,15 +3,15 @@
 //! Provides access to Nmap data files like protocols, services, and RPC info.
 
 use mlua::{Lua, Result as LuaResult};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::OnceLock;
 
-static PROTOCOLS: OnceLock<HashMap<&'static str, u16>> = OnceLock::new();
-static SERVICES: OnceLock<HashMap<&'static str, (u16, &'static str)>> = OnceLock::new();
+static PROTOCOLS: OnceLock<FxHashMap<&'static str, u16>> = OnceLock::new();
+static SERVICES: OnceLock<FxHashMap<&'static str, (u16, &'static str)>> = OnceLock::new();
 
-fn get_protocols() -> &'static HashMap<&'static str, u16> {
+fn get_protocols() -> &'static FxHashMap<&'static str, u16> {
     PROTOCOLS.get_or_init(|| {
-        let mut m = HashMap::new();
+        let mut m = FxHashMap::default();
         m.insert("tcp", 6u16);
         m.insert("udp", 17u16);
         m.insert("icmp", 1u16);

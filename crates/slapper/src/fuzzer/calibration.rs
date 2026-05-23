@@ -101,7 +101,13 @@ impl Calibrator {
                 Ok(response) => {
                     let elapsed = start.elapsed();
                     let status = response.status().as_u16();
-                    let body = response.text().await.unwrap_or_default();
+                    let body = match response.text().await {
+                        Ok(text) => text,
+                        Err(e) => {
+                            tracing::debug!("Failed to read calibration response body: {}", e);
+                            String::new()
+                        }
+                    };
 
                     let words = body.split_whitespace().count() as u64;
                     let lines = body.lines().count() as u64;

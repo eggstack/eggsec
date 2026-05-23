@@ -466,7 +466,7 @@ impl AiPlanner {
                     / cached.use_count as f32;
                 cached.last_used = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                     .as_secs();
             }
         } else {
@@ -479,7 +479,7 @@ impl AiPlanner {
                     use_count: 1,
                     last_used: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
+                        .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                         .as_secs(),
                 },
             );

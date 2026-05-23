@@ -4,15 +4,15 @@
 //! This implementation provides a local CVE database with common vulnerabilities.
 
 use mlua::{Lua, Result as LuaResult};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::OnceLock;
 
-static CVE_DB: OnceLock<HashMap<&'static str, (&'static str, &'static str, &'static str)>> =
+static CVE_DB: OnceLock<FxHashMap<&'static str, (&'static str, &'static str, &'static str)>> =
     OnceLock::new();
 
-fn get_cve_db() -> &'static HashMap<&'static str, (&'static str, &'static str, &'static str)> {
+fn get_cve_db() -> &'static FxHashMap<&'static str, (&'static str, &'static str, &'static str)> {
     CVE_DB.get_or_init(|| {
-        let mut m = HashMap::new();
+        let mut m = FxHashMap::default();
 
         m.insert(
             "CVE-2017-0144",

@@ -285,22 +285,34 @@ impl ChainExecutor {
                 .variables
                 .get("_last_body")
                 .cloned()
-                .unwrap_or_default(),
+                .unwrap_or_else(|| {
+                    tracing::debug!("Variable {} not found in chain execution", "_last_body");
+                    String::new()
+                }),
             ExtractionSource::ResponseStatus => self
                 .variables
                 .get("_last_status")
                 .cloned()
-                .unwrap_or_default(),
+                .unwrap_or_else(|| {
+                    tracing::debug!("Variable {} not found in chain execution", "_last_status");
+                    String::new()
+                }),
             ExtractionSource::ResponseHeader(name) => self
                 .variables
                 .get(&format!("_header_{}", name))
                 .cloned()
-                .unwrap_or_default(),
+                .unwrap_or_else(|| {
+                    tracing::debug!("Variable {} not found in chain execution", format!("_header_{}", name));
+                    String::new()
+                }),
             ExtractionSource::Cookie(name) => self
                 .variables
                 .get(&format!("_cookie_{}", name))
                 .cloned()
-                .unwrap_or_default(),
+                .unwrap_or_else(|| {
+                    tracing::debug!("Variable {} not found in chain execution", format!("_cookie_{}", name));
+                    String::new()
+                }),
         };
 
         let pattern = self.interpolate_string(&rule.pattern);
@@ -378,7 +390,7 @@ impl ChainExecutor {
     }
 
     fn interpolate_string(&self, input: &str) -> String {
-        static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\{(\w+)\}").unwrap());
+        static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\{(\w+)\}").expect("Interpolation regex must be valid"));
 
         let mut result = input.to_string();
         for cap in RE.captures_iter(input) {

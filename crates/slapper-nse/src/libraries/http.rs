@@ -5,7 +5,7 @@
 use mlua::{Lua, Result as LuaResult, Table};
 use reqwest::blocking::Client;
 use reqwest::Client as AsyncClient;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::LazyLock;
 use std::time::Duration;

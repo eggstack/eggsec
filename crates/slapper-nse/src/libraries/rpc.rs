@@ -4,17 +4,17 @@
 //! Based on Nmap's rpc library: https://nmap.org/nsedoc/lib/rpc.html
 
 use mlua::{Lua, Result as LuaResult};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::OnceLock;
 
-static RPC_PROGRAMS: OnceLock<HashMap<u32, HashMap<u32, &'static str>>> = OnceLock::new();
+static RPC_PROGRAMS: OnceLock<FxHashMap<u32, FxHashMap<u32, &'static str>>> = OnceLock::new();
 
-fn get_rpc_programs() -> &'static HashMap<u32, HashMap<u32, &'static str>> {
+fn get_rpc_programs() -> &'static FxHashMap<u32, FxHashMap<u32, &'static str>> {
     RPC_PROGRAMS.get_or_init(|| {
-        let mut m = HashMap::new();
+        let mut m = FxHashMap::default();
 
         // portmapper
-        let mut portmapper = HashMap::new();
+        let mut portmapper = FxHashMap::default();
         portmapper.insert(0, "null");
         portmapper.insert(1, "set");
         portmapper.insert(2, "unset");
@@ -27,20 +27,20 @@ fn get_rpc_programs() -> &'static HashMap<u32, HashMap<u32, &'static str>> {
         m.insert(100000u32, portmapper);
 
         // rstatd
-        let mut rstatd = HashMap::new();
+        let mut rstatd = FxHashMap::default();
         rstatd.insert(0, "null");
         rstatd.insert(1, "stats");
         rstatd.insert(2, "havestats");
         m.insert(100001u32, rstatd);
 
         // rusersd
-        let mut rusersd = HashMap::new();
+        let mut rusersd = FxHashMap::default();
         rusersd.insert(0, "null");
         rusersd.insert(1, "rusers");
         m.insert(100002u32, rusersd);
 
         // nfs
-        let mut nfs = HashMap::new();
+        let mut nfs = FxHashMap::default();
         nfs.insert(0, "null");
         nfs.insert(1, "getattr");
         nfs.insert(2, "setattr");
@@ -62,13 +62,13 @@ fn get_rpc_programs() -> &'static HashMap<u32, HashMap<u32, &'static str>> {
         m.insert(100003u32, nfs);
 
         // ypserv
-        let mut ypserv = HashMap::new();
+        let mut ypserv = FxHashMap::default();
         ypserv.insert(0, "null");
         ypserv.insert(1, "ypprog");
         m.insert(100004u32, ypserv);
 
         // mountd
-        let mut mountd = HashMap::new();
+        let mut mountd = FxHashMap::default();
         mountd.insert(0, "null");
         mountd.insert(1, "mount");
         mountd.insert(2, "dump");
@@ -78,50 +78,50 @@ fn get_rpc_programs() -> &'static HashMap<u32, HashMap<u32, &'static str>> {
         m.insert(100005u32, mountd);
 
         // nfs_acl
-        let mut nfs_acl = HashMap::new();
+        let mut nfs_acl = FxHashMap::default();
         nfs_acl.insert(0, "null");
         nfs_acl.insert(1, "getacl");
         nfs_acl.insert(2, "setacl");
         m.insert(100006u32, nfs_acl);
 
         // ypbind
-        let mut ypbind = HashMap::new();
+        let mut ypbind = FxHashMap::default();
         ypbind.insert(0, "null");
         ypbind.insert(1, "ybinder");
         m.insert(100007u32, ypbind);
 
         // wall
-        let mut wall = HashMap::new();
+        let mut wall = FxHashMap::default();
         wall.insert(0, "null");
         wall.insert(1, "wall");
         m.insert(100008u32, wall);
 
         // yppasswd
-        let mut yppasswd = HashMap::new();
+        let mut yppasswd = FxHashMap::default();
         yppasswd.insert(0, "null");
         yppasswd.insert(1, "yppasswd");
         m.insert(100009u32, yppasswd);
 
         // etherstatd
-        let mut etherstatd = HashMap::new();
+        let mut etherstatd = FxHashMap::default();
         etherstatd.insert(0, "null");
         etherstatd.insert(1, "etherstat");
         m.insert(100010u32, etherstatd);
 
         // rquotad
-        let mut rquotad = HashMap::new();
+        let mut rquotad = FxHashMap::default();
         rquotad.insert(0, "null");
         rquotad.insert(1, "rquotaproc");
         m.insert(100011u32, rquotad);
 
         // sprayd
-        let mut sprayd = HashMap::new();
+        let mut sprayd = FxHashMap::default();
         sprayd.insert(0, "null");
         sprayd.insert(1, "spray");
         m.insert(100012u32, sprayd);
 
         // nfsd
-        let mut nfsd = HashMap::new();
+        let mut nfsd = FxHashMap::default();
         nfsd.insert(0, "null");
         nfsd.insert(1, "nfsd");
         nfsd.insert(2, "nfsd2");
@@ -132,90 +132,90 @@ fn get_rpc_programs() -> &'static HashMap<u32, HashMap<u32, &'static str>> {
         m.insert(100003u32, nfsd);
 
         // status
-        let mut status = HashMap::new();
+        let mut status = FxHashMap::default();
         status.insert(0, "null");
         status.insert(1, "status_get");
         m.insert(100020u32, status);
 
         // cmsd
-        let mut cmsd = HashMap::new();
+        let mut cmsd = FxHashMap::default();
         cmsd.insert(0, "null");
         cmsd.insert(1, "cms");
         m.insert(100022u32, cmsd);
 
         // ttdbserverd
-        let mut ttdbserverd = HashMap::new();
+        let mut ttdbserverd = FxHashMap::default();
         ttdbserverd.insert(0, "null");
         ttdbserverd.insert(1, "ttdb");
         m.insert(100023u32, ttdbserverd);
 
         // nlockmgr
-        let mut nlockmgr = HashMap::new();
+        let mut nlockmgr = FxHashMap::default();
         nlockmgr.insert(0, "null");
         nlockmgr.insert(1, "nlockmgr");
         m.insert(100021u32, nlockmgr);
 
         // common services
-        let mut nis = HashMap::new();
+        let mut nis = FxHashMap::default();
         nis.insert(0, "null");
         m.insert(100004u32, nis);
 
         // ypupdated
-        let mut ypupdated = HashMap::new();
+        let mut ypupdated = FxHashMap::default();
         ypupdated.insert(0, "null");
         ypupdated.insert(1, "update");
         m.insert(100028u32, ypupdated);
 
         // ypxfrd
-        let mut ypxfrd = HashMap::new();
+        let mut ypxfrd = FxHashMap::default();
         ypxfrd.insert(0, "null");
         ypxfrd.insert(1, "ypxfrd");
         m.insert(100069u32, ypxfrd);
 
         // kadmin
-        let mut kadmin = HashMap::new();
+        let mut kadmin = FxHashMap::default();
         kadmin.insert(0, "null");
         kadmin.insert(1, "kadmin");
         m.insert(100007u32, kadmin);
 
         // rexd
-        let mut rexd = HashMap::new();
+        let mut rexd = FxHashMap::default();
         rexd.insert(0, "null");
         rexd.insert(1, "rexd");
         m.insert(100017u32, rexd);
 
         // amd
-        let mut amd = HashMap::new();
+        let mut amd = FxHashMap::default();
         amd.insert(0, "null");
         amd.insert(1, "amd");
         m.insert(300019u32, amd);
 
         // qmaster
-        let mut qmaster = HashMap::new();
+        let mut qmaster = FxHashMap::default();
         qmaster.insert(0, "null");
         qmaster.insert(1, "qmaster");
         m.insert(100020u32, qmaster);
 
         // metad
-        let mut metad = HashMap::new();
+        let mut metad = FxHashMap::default();
         metad.insert(0, "null");
         metad.insert(1, "meta");
         m.insert(100083u32, metad);
 
         // dmispd
-        let mut dmispd = HashMap::new();
+        let mut dmispd = FxHashMap::default();
         dmispd.insert(0, "null");
         dmispd.insert(1, "dmisp");
         m.insert(100021u32, dmispd);
 
         // listed
-        let mut listed = HashMap::new();
+        let mut listed = FxHashMap::default();
         listed.insert(0, "null");
         listed.insert(1, "listed");
         m.insert(100028u32, listed);
 
         // rquota
-        let mut rquota = HashMap::new();
+        let mut rquota = FxHashMap::default();
         rquota.insert(0, "null");
         rquota.insert(1, "rquota");
         m.insert(100011u32, rquota);

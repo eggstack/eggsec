@@ -494,6 +494,7 @@ impl HttpResponse {
 impl DnsRecord {
     pub fn parse(data: &[u8]) -> Option<Self> {
         if data.len() < 12 {
+            tracing::debug!("DNS parse failed: data len {} < 12", data.len());
             return None;
         }
 

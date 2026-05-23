@@ -277,7 +277,13 @@ impl SstiFuzzer {
             match response {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
-                    let body = resp.text().await.unwrap_or_default();
+                    let body = match resp.text().await {
+                        Ok(text) => text,
+                        Err(e) => {
+                            tracing::debug!("Failed to read SSTI response body: {}", e);
+                            String::new()
+                        }
+                    };
 
                     let is_vulnerable = body.contains("49")
                         || body.contains("49.0")
