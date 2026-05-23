@@ -368,14 +368,21 @@ impl App {
             return;
         }
 
-        self.dispatcher_mut().handle_enter();
-        self.mode = if self.dispatcher_mut().is_input_focused() {
-            InputMode::Insert
-        } else {
-            InputMode::Normal
+        let is_running = {
+            let mut dispatcher = self.dispatcher_mut();
+            dispatcher.handle_enter();
+            let input_focused = dispatcher.is_input_focused();
+            let running = dispatcher.is_running();
+            drop(dispatcher);
+            self.mode = if input_focused {
+                InputMode::Insert
+            } else {
+                InputMode::Normal
+            };
+            running
         };
 
-        if self.dispatcher_mut().is_running() {
+        if is_running {
             if let Some(task_config) = self.build_current_task() {
                 self.spawn_task(Some(task_config));
             }
