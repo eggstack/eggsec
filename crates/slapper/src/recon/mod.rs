@@ -360,6 +360,7 @@ pub const FULL_RECON_PIPELINE_MODULES: &[&str] = &[
     "email",
     "takeover",
     "cve",
+    "secrets",
 ];
 
 #[cfg(test)]
