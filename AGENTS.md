@@ -166,6 +166,35 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Recent Bug Fixes
 
+### 2026-05-29 (Implementation Wave 1-3 Complete)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| Scanner | UDP socket created per port | Added `Arc<UdpSocket>` reuse across port scans |
+| WAF | O(p×s) nested linear scan in select_profile() | Built `FxHashMap<String, &WafProfile>` static for O(1) lookup |
+| Config | Private IP check before scope rule evaluation | Moved private IP validation after scope rules |
+| Recon | CveMapper cache not persisted | Added module-level `Arc<Mutex<FxHashMap>>` cache |
+| Distributed | No Drop impl for RemoteClient | Added `impl Drop for RemoteClient` |
+| Distributed | Heartbeat creates new TCP connection each time | Cache host/port, reuse `RemoteClient` instance |
+| Distributed | DNS lookup per connect() call | Added `resolve_cached()` with 60s TTL |
+| Pipeline | Hardcoded ports duplicated | Extracted to `DEFAULT_SCAN_PORTS`/`EXTENDED_SCAN_PORTS` constants |
+| Pipeline | Profile mapping duplicated | Created `profile_from_str()` shared function |
+| Loadtest | response.bytes() inside lock | Moved outside metrics lock |
+| Loadtest | Missing test coverage | Added 8 tests for TLS, auth, redirects, errors |
+| Output | Compliance templates recreated every call | Used `LazyLock` static for templates |
+| Config | DNS failure with CIDR rules silently allowed | Return error when DNS fails with CIDR rules configured |
+| Scanner | Sequential UDP port scanning | Batch UDP with Semaphore worker pool |
+| Pipeline | Sequential stage execution | Added optional concurrent mode with `join_all` |
+| Fuzzer | GrammarFuzzer::with_seed() undocumented | Documented with examples in struct doc comment |
+| Fuzzer | default_vulnerable_patterns() creates Vec each call | Changed to `static KNOWN_VULNERABLE_PATTERNS: LazyLock` |
+| Networking | IPv6 error message not helpful | Improved to user-facing message with guidance |
+| Networking | PacketBuilder lacks validate() | Added `validate()` method with `PacketValidationError` enum |
+| WAF | get_sqli_payloads() called 7 times in loops | Call once, store in local variable |
+| WAF | BypassResult missing error field | Added `error: Option<String>` field |
+| TUI | App.tabs dead code | Removed unused `tabs: FxHashMap<Tab, Box<dyn TabInput>>` field |
+| Recon | secrets module not in pipeline | Added `"secrets"` to `FULL_RECON_PIPELINE_MODULES` |
+| Recon | extract_target_from_url silently falls back | Added `tracing::warn` when fallback occurs |
+
 ### 2026-05-28 (Architecture Review Wave 4)
 
 | Component | Issue | Fix |
@@ -253,64 +282,64 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Implementation Plan
 
-The consolidated implementation plan is in `plans/plan.md`. It contains 26 remaining items across 3 waves:
+The consolidated implementation plan is in `plans/plan.md`. **All 26 items across 3 waves have been completed.**
 
-| Wave | Items | Priority | Description |
-|------|-------|----------|-------------|
-| Wave 1 | 4 | Critical | Scanner UDP reuse, WAF HashMap lookup, CLI CIDR validation, Recon CveMapper cache |
-| Wave 2 | 9 | High | Distributed (3), Pipeline (2), Loadtest (1), Output (1), Config (1) module fixes |
-| Wave 3 | 13 | Medium/Low | Improvement opportunities across multiple modules |
+| Wave | Items | Priority | Status |
+|------|-------|----------|--------|
+| Wave 1 | 4 | Critical | COMPLETED |
+| Wave 2 | 9 | High | COMPLETED |
+| Wave 3 | 13 | Medium/Low | COMPLETED |
 
 ---
 
 ## Knowledge Gained from Architecture Review Sessions
 
 ### Scope Validation (CLI/Config)
-- Private IP check (`is_private_ip()`) occurs BEFORE scope rule evaluation in `TargetScope::parse()`. This means targets like `10.255.255.255` are rejected as private even if a scope rule like `allow 10.0.0.0/8` exists.
+- Private IP check (`is_private_ip()`) now occurs AFTER scope rule evaluation in `TargetScope::parse()`.
 - Scope rejection reasons are not reported - no indication of whether rejection was due to exclude rule or no include match.
-- DNS resolution failures silently return `ip: None` which can bypass CIDR rules.
+- DNS resolution failures now return error when CIDR rules are configured.
 
 ### Recon Module
-- `CveMapper` cache doesn't persist - each call to `map_cves()` creates a new `CveMapper` instance, so cache is lost.
+- `CveMapper` cache now persists across invocations via module-level `Arc<Mutex<FxHashMap>>`.
 - `query_alexa()` function is stubbed (returns empty) and never called.
-- Secrets module (`secrets.rs`) is standalone and NOT in `FULL_RECON_PIPELINE_MODULES`.
+- Secrets module (`secrets.rs`) is now in `FULL_RECON_PIPELINE_MODULES`.
 - Dependency scan handles Ruby (Gemfile), PHP (composer.json), and Java (pom.xml) in addition to documented npm/cargo/go.
 - FxHashMap count is actually 66+, not the documented 55.
 
 ### Distributed Module
-- `RemoteClient` lacks `Drop` impl - connections not explicitly closed on panic.
-- Heartbeat creates a new TCP connection each time via `RemoteClient::new_plaintext()`.
-- DNS lookup happens every `connect()` call, not cached.
+- `RemoteClient` now has `impl Drop` for connection cleanup.
+- Heartbeat now reuses `RemoteClient` instance instead of creating new one each time.
+- DNS lookup is now cached with 60s TTL.
 - Only `completed` queue has size limit; `pending` and `in_progress` can grow unbounded.
 - Rate limit check was fixed (lock duration minimized).
 
 ### WAF Module
-- `select_profile()` does O(p×s) nested linear scan through all profiles and signatures (not yet optimized).
-- `BypassResult` lacks `error: Option<String>` field for network error details.
-- Evasion bypass calls `get_sqli_payloads()` 7 times in loops - redundant generation.
+- `select_profile()` now uses HashMap-based O(1) lookup instead of nested linear scan.
+- `BypassResult` now has `error: Option<String>` field for network error details.
+- Evasion bypass now calls `get_sqli_payloads()` once before loops.
 
 ### Pipeline Module
-- Hardcoded ports duplicated in `executor.rs:276-283` and `executor.rs:534`.
-- Profile mapping duplicated in `stage.rs:31-92` and `tool/implementations/pipeline.rs:64-77`.
-- Stages execute sequentially (no concurrent execution mode).
+- Hardcoded ports now extracted to `DEFAULT_SCAN_PORTS`/`EXTENDED_SCAN_PORTS` constants.
+- Profile mapping now uses shared `profile_from_str()` function.
+- Optional concurrent stage execution mode available via `.with_concurrent_stages(true)`.
 
 ### Loadtest Module
-- `response.bytes().await` called inside lock at `runner.rs:342` - body consumed while holding metrics lock (still outstanding).
-- Missing test coverage for TLS, streaming, chunked, redirect, rate limiting, auth, proxy, timeouts.
+- `response.bytes().await` now called outside metrics lock.
+- Added 8 new tests for TLS, auth, redirects, errors, etc.
 - Panic handling in JoinSet was fixed.
 
 ### Fuzzer Module
-- `GrammarFuzzer::with_seed()` exists but undocumented.
-- `KNOWN_VULNERABLE_PATTERNS` in `redos_detect.rs` creates Vec on every call (should use `LazyLock`).
+- `GrammarFuzzer::with_seed()` now documented with examples.
+- `KNOWN_VULNERABLE_PATTERNS` now uses `LazyLock` static.
 
 ### Networking/Packet Module
-- IPv6 raw sockets not supported for UDP flood (returns error).
-- `PacketBuilder` lacks `validate()` method.
+- IPv6 error message now user-facing with guidance on using non-spoofed mode.
+- `PacketBuilder` now has `validate()` method with `PacketValidationError` enum.
 
 ### Output Module
-- Compliance templates (`pcidss_template()`, `soc2_template()`) recreate structs every call (should use `LazyLock`).
+- Compliance templates now use `LazyLock` static.
 
 ### TUI Module
-- `App.tabs` field (`FxHashMap`) is initialized but never populated or used - dead code.
+- `App.tabs` field removed (was dead code).
 
-(End file - 298 lines)
+(End file - 345 lines)
