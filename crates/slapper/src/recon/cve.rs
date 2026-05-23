@@ -1,9 +1,19 @@
 use crate::error::Result;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::recon::techdetect::TechStack;
 use crate::utils::create_http_client;
+
+static CVE_CACHE: OnceLock<Arc<Mutex<FxHashMap<String, Vec<VulnerabilityInfo>>>>> =
+    OnceLock::new();
+
+fn get_cache() -> Arc<Mutex<FxHashMap<String, Vec<VulnerabilityInfo>>>> {
+    CVE_CACHE
+        .get_or_init(|| Arc::new(Mutex::new(FxHashMap::default())))
+        .clone()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CveMapping {
@@ -28,17 +38,18 @@ pub struct VulnerabilityInfo {
 pub struct CveMapper {
     client: reqwest::Client,
     nvd_api_key: Option<String>,
-    cache: FxHashMap<String, Vec<VulnerabilityInfo>>,
+    cache: Arc<Mutex<FxHashMap<String, Vec<VulnerabilityInfo>>>>,
 }
 
 impl CveMapper {
     pub fn new(nvd_api_key: Option<String>) -> Result<Self> {
         let client = create_http_client(30)?;
+        let cache = get_cache();
 
         Ok(Self {
             client,
             nvd_api_key,
-            cache: FxHashMap::default(),
+            cache,
         })
     }
 
@@ -103,8 +114,11 @@ impl CveMapper {
     async fn get_cves_for_product(&mut self, product: &str) -> Option<Vec<VulnerabilityInfo>> {
         let product_lower = product.to_lowercase();
 
-        if self.cache.contains_key(product) {
-            return self.cache.get(product).cloned();
+        {
+            let cache = self.cache.lock().unwrap();
+            if let Some(vulns) = cache.get(product) {
+                return Some(vulns.clone());
+            }
         }
 
         let cve_map = self.get_known_cves();
@@ -119,13 +133,13 @@ impl CveMapper {
         }
 
         if !matched_cves.is_empty() {
-            self.cache.insert(product.to_string(), matched_cves.clone());
+            self.cache.lock().unwrap().insert(product.to_string(), matched_cves.clone());
             return Some(matched_cves);
         }
 
         if let Some(nvd_key) = &self.nvd_api_key {
             if let Ok(vulns) = self.query_nvd_api(product, nvd_key).await {
-                self.cache.insert(product.to_string(), vulns.clone());
+                self.cache.lock().unwrap().insert(product.to_string(), vulns.clone());
                 return Some(vulns);
             }
         }
