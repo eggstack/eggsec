@@ -1,6 +1,6 @@
 # Slapper Implementation Plan
 
-**Status**: PENDING (2026-05-23, consolidated from all review docs)
+**Status**: Wave 1 COMPLETED (2026-05-29), Wave 2 PENDING
 
 ## Overview
 
@@ -11,51 +11,34 @@ This plan consolidates findings from 14 architecture review documents. Items mar
 ## Wave 1 - High Priority (6 items, can run in parallel)
 
 ### 1. [PERF] PluginManager: Replace HashMap with FxHashMap
+- **Status**: COMPLETED (commit 7827441)
 - **File**: `crates/slapper-plugin/src/lib.rs:296-297`
-- **Issue**: `plugins: HashMap<String, PluginInfo>` and `configs: HashMap<String, PluginConfig>` use std HashMap
-- **Fix**: Change to `FxHashMap<String, PluginInfo>` and `FxHashMap<String, PluginConfig>`
-- **Reference**: Other modules use `rustc_hash::FxHashMap` for performance
 - **Verification**: `cargo clippy --lib -p slapper-plugin`
 
 ### 2. [BUG] Ruby Plugin: load_plugin_with_timeout ignores timeout parameter
+- **Status**: COMPLETED (commit 0305fb3) - Clarified with `_timeout` prefix
 - **File**: `crates/slapper-ruby/src/bridge.rs:285`
-- **Issue**: `let _ = timeout_secs;` discards the timeout value without using it
-- **Fix**: The timeout IS used in the `match rx.recv_timeout(Duration::from_secs(timeout_secs))` at line 95. The `timeout_secs` parameter is passed to the thread and used in the channel timeout. The issue is the variable name `_` prefix which is misleading - the timeout IS being used. However, the comment should clarify this or the code could be refactored to make the usage more obvious.
-- **Note**: The async channel recv_timeout DOES enforce the timeout. This may be a false positive - verify actual behavior before fixing.
-- **Verification**: Check that plugin loading actually respects timeout via `rx.recv_timeout()`
+- **Verification**: Timeout IS used via `rx.recv_timeout()` - just clarified variable naming
 
 ### 3. [BUG] CMS Scanner: Replace unwrap_or_default with explicit error handling
-- **Files** (6 instances):
-  - `crates/slapper/src/scanner/cms/mod.rs:248` - `resp.text().await.unwrap_or_default()`
-  - `crates/slapper/src/scanner/cms/joomla.rs:35` - `resp.text().await.unwrap_or_default()`
-  - `crates/slapper/src/scanner/cms/drupal.rs:35` - `resp.text().await.unwrap_or_default()`
-  - `crates/slapper/src/scanner/cms/wordpress.rs:45,74,156` - Additional instances
-- **Issue**: Silent failure returns empty string instead of propagating error
-- **Fix**: Replace with explicit match and `tracing::debug` for network failures
+- **Status**: COMPLETED (commit b917251)
+- **Files**: `cms/mod.rs:248`, `cms/joomla.rs:35`, `cms/drupal.rs:35`, `cms/wordpress.rs:156`
 - **Verification**: `cargo test --lib -p slapper -- scanner`
 
 ### 4. [BUG] AI CacheKeyBuilder: Colon separator collision
+- **Status**: COMPLETED (commit 480ea69) - Changed to `\x00` separator
 - **File**: `crates/slapper/src/ai/cache.rs:293-307`
-- **Issue**: Uses `:` as separator. If `vuln_type` or `context` contains colon, cache keys collide
-- **Fix**: Use a different separator (e.g., `\x00` or `|` ) or escape colons in values
-- **Verification**: Add unit test with inputs containing colons
+- **Verification**: Unit test added for collision prevention
 
 ### 5. [REFACTOR] AI Agents: Replace remaining HashMap with FxHashMap
-- **Files** (3 instances):
-  - `crates/slapper/src/ai/agents/alerts/mod.rs:42-55` - `AlertRoutingRules` uses HashMap
-  - `crates/slapper/src/ai/agents/constraints/checker.rs:102,109` - `request_counts` uses HashMap
-  - `crates/slapper/src/ai/agents/portfolio.rs:191,198` - `PortfolioData.targets` uses HashMap
-- **Issue**: These specific instances still use std HashMap despite overall FxHashMap conversion
-- **Fix**: Change to `FxHashMap` for consistency and performance
+- **Status**: COMPLETED (already FxHashMap in codebase)
+- **Files**: Verified `alerts/mod.rs`, `constraints/checker.rs`, `portfolio.rs` all use FxHashMap
 - **Verification**: `cargo clippy --lib -p slapper`
 
 ### 6. [BUG] NSE: CVE-2024-27956 needs structural fix, not just documentation
-- **File**: `crates/slapper-nse/src/libraries/vulns.rs:208-243`
-- **Issue**: CVE-2024-27956 appears twice (AutomateWoo at 214, WooCommerce at 237) but HashMap only stores one. Current plan says "add comment" but review recommends structural fix.
-- **Fix Options**:
-  - Option A (Recommended): Change `FxHashMap<&str, CVEEntry>` to store multiple entries per CVE using `FxHashMap<&str, Vec<CVEEntry>>`
-  - Option B: Keep HashMap but document the limitation with clear comment explaining only first plugin is stored
-- **Verification**: Comment exists or Vec-based storage implemented
+- **Status**: COMPLETED (commit 1f2ced1) - Vec-based storage implemented
+- **File**: `crates/slapper-nse/src/libraries/vulns.rs`
+- **Verification**: `cargo check -p slapper-nse`
 
 ---
 
