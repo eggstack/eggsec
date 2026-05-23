@@ -124,7 +124,7 @@ Skills are located in:
 - `.opencode/skills/slapper-fuzzer/` - Fuzzer module workflows
 - `.opencode/skills/slapper-output/` - Output module workflows
 - `.opencode/skills/slapper-proxy/` - Proxy module workflows
-- `.opencode/skills/slapper-recon/` - Recon module workflows
+- `.opencode/skills/slapper-recon/` - Reconnaissance module workflows
 - `.opencode/skills/slapper-scanner/` - Scanner module workflows
 - `.opencode/skills/slapper-security/` - Security testing skill workflows
 - `.opencode/skills/slapper-stress/` - Stress module workflows
@@ -136,6 +136,7 @@ Skills are located in:
 - `.opencode/skills/slapper-tui/` - TUI module workflows
 - `.opencode/skills/slapper-waf/` - WAF module workflows
 - `.opencode/skills/slapper-architecture-review/` - Architecture document review workflows
+- `.opencode/skills/slapper-wave-implementation/` - Multi-wave plan execution patterns
 - `.opencode/skills/tui-testing/` - TUI testing patterns and guides
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
