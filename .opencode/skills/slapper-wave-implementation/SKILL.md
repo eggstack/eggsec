@@ -138,5 +138,37 @@ use rustc_hash::FxHashSet;
 ## Resources
 
 - `plans/plan.md` - Full implementation plan with line numbers and exact fixes
+- `architecture/review_plan.md` - Architecture review execution plan with waves
 - `AGENTS.md` - General guidelines for all agents
 - `AGENTS.override.md` - Module-specific guidance (in each module directory)
+
+## Architecture Review Wave Pattern
+
+When executing architecture reviews from `architecture/review_plan.md`:
+
+1. **Review Phase**: Run subagents to review each module's architecture document and produce `plans/{module}_review.md`
+
+2. **Consolidation Phase**: Aggregate all findings into waves by priority:
+   - Wave 1: Production-critical bugs (high severity, affects correctness)
+   - Wave 2: High-priority issues (medium severity, known bugs)
+   - Wave 3: Medium-priority improvements (performance, code quality)
+   - Wave 4: Documentation and low-priority fixes
+
+3. **Implementation Phase**: Execute waves sequentially:
+   - Use subagents for independent fixes
+   - Each subagent on its own branch
+   - Verify with `cargo check --lib -p slapper` after each fix
+   - Commit wave together after verification
+
+4. **Documentation Phase**: Update files:
+   - Update `AGENTS.md` with new bug fixes in Recent Bug Fixes section
+   - Update relevant module `AGENTS.override.md` if needed
+   - Update `architecture/review_plan.md` to mark completed waves
+
+### Key Verification Commands
+```bash
+cargo check --lib -p slapper
+cargo check -p slapper-nse
+cargo test --lib -p slapper
+cargo clippy --lib -p slapper
+```

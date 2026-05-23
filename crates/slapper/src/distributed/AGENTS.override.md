@@ -64,6 +64,13 @@ fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
 }
 ```
 
+## Bugs Fixed (2026-05-28)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `queue.rs:150-154` | `QueueError` missing Display and Error traits | Added `impl Display` and `impl Error` for `?` operator support |
+| `mod.rs`, `worker.rs`, `remote.rs` | Worker and coordinator used different capability naming schemes | Created shared `CAPABILITIES` constant in `mod.rs` |
+
 ## Bugs Fixed (2026-05-22)
 
 | File | Issue | Fix |

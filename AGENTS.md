@@ -166,6 +166,48 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ## Recent Bug Fixes
 
+### 2026-05-28 (Architecture Review Wave 4)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| WAF | `detect.rs:81` - magic number 256 for header value length | Added `HEADER_VALUE_MAX_LEN` constant |
+| Scanner | `spoofed.rs:285,303` - silent errors in spoofed scan | Added `tracing::debug` for failed packet builds |
+
+### 2026-05-28 (Architecture Review Wave 3)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| AI | `cache.rs:276` - AiCache persist() silently failed | Added `tracing::warn` for persist failures |
+| Scanner | `fingerprint.rs:347-391` - Vec allocation in hot path | Changed to static slice references |
+
+### 2026-05-28 (Architecture Review Wave 2)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| AI Agents | `skills.rs:202`, `portfolio.rs:112` - HashMap | Replaced with FxHashMap |
+| AI | `script_gen.rs:97,141,185,272` - unwrap_or_default | Replaced with explicit error handling |
+| AI | `client.rs:241` - silent fallback for Anthropic messages | Added `tracing::debug` for missing messages |
+| CLI | `fuzz.rs:292` - WafStressArgs output discarded | Preserved `args.output` in From impl |
+| Fuzzer | `execution.rs:267` - rate==0 causes early stop | Changed to `rate <= 1` |
+| Loadtest | `runner.rs:336` - metrics lock held during async | Moved body consumption outside lock |
+| Loadtest | `runner.rs:360` - JoinSet panic handling | Added panic-aware error handling |
+| Output | `diff.rs:139` - has_regressions only checked Critical | Now checks `severity >= Severity::High` |
+| WAF | `patterns.rs:656` - get_waf_signatures clones | Returns `&'static FxHashMap` instead |
+| WAF | `detector/mod.rs:33` - signatures clone on creation | Stores static reference |
+
+### 2026-05-28 (Architecture Review Wave 1)
+
+| Component | Issue | Fix |
+|-----------|-------|-----|
+| Distributed | `queue.rs:150` - QueueError missing traits | Added Display and Error impl |
+| Distributed | `worker.rs:32`, `remote.rs:105` - capability mismatch | Unified via shared CAPABILITIES constant |
+| Networking | `stress/udp.rs:98` - UDP checksum missing payload | Added `pseudo[16..].copy_from_slice(payload)` |
+| Networking | `craft.rs:247` - TCP checksum set to 0 | Added `compute_tcp_checksum()` function |
+| Tool | `registry.rs:2,24` - HashMap instead of FxHashMap | Replaced with FxHashMap |
+| Pipeline | `executor.rs:138`, `session.rs:13` - spoof_config not persisted | Added `spoof_config` to PipelineSession |
+| NSE | `vulns.rs:209,232` - duplicate CVE-2024-27956 | Added comment documenting limitation |
+| Scanner | `fingerprint.rs:347` - Vec allocation per port | Changed to `&'static [&str]` slice |
+
 ### 2026-05-28 (Implementation Session)
 
 | Component | Issue | Fix |
