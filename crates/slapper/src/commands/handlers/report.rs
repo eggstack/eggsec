@@ -16,8 +16,9 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
             let output = match convert_args.format {
                 ReportFormat::Json => serde_json::to_string_pretty(&report)?,
                 ReportFormat::Csv => convert::convert_to_csv(&report),
-                ReportFormat::Junit => convert::convert_to_junit(&report)
-                    .map_err(|e| anyhow::anyhow!(e))?,
+ReportFormat::Junit => {
+                    convert::convert_to_junit(&report).map_err(|e| anyhow::anyhow!(e))?
+                }
                 ReportFormat::Sarif => {
                     convert::convert_to_sarif(&report).map_err(|e| anyhow::anyhow!(e))?
                 }
@@ -27,8 +28,9 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
                         report.findings.iter().map(Into::into).collect();
                     crate::output::html::HtmlReport::new(summary, findings).generate()
                 }
-                ReportFormat::Markdown => convert::convert_to_markdown(&report)
-                    .map_err(|e| anyhow::anyhow!(e))?,
+                ReportFormat::Markdown => {
+                    convert::convert_to_markdown(&report).map_err(|e| anyhow::anyhow!(e))?
+                }
             };
 
             if let Some(output_file) = &convert_args.output {
