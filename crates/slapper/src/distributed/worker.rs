@@ -108,7 +108,7 @@ impl Worker {
 
         let (host, port) = parse_coordinator_url(&self.config.coordinator_url)?;
 
-        let client = RemoteClient::new_plaintext(self.psk.clone());
+        let mut client = RemoteClient::new_plaintext(self.psk.clone());
 
         client
             .register_worker(
@@ -137,6 +137,9 @@ async fn start_heartbeat_loop(&mut self) {
             }
         };
 
+        let host = host.to_string();
+        let port = port;
+
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval));
 
@@ -154,24 +157,6 @@ async fn start_heartbeat_loop(&mut self) {
                 });
 
                 if let Err(e) = client.send_heartbeat(&host, port, worker_id.clone(), status.to_string()).await {
-                    tracing::warn!("Heartbeat failed: {}", e);
-                }
-            }
-        });
-        self.heartbeat_handle = Some(handle);
-    }
-                };
-
-                let status = serde_json::json!({
-                    "worker_id": worker_id,
-                    "status": "idle",
-                    "current_jobs": 0,
-                    "completed_jobs": 0,
-                    "failed_jobs": 0,
-                });
-
-                let client = RemoteClient::new_plaintext(psk.clone());
-                if let Err(e) = client.send_heartbeat(host, port, worker_id.clone(), status.to_string()).await {
                     tracing::warn!("Heartbeat failed: {}", e);
                 }
             }

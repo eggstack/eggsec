@@ -382,11 +382,22 @@ struct AuthMessage {
 pub struct RemoteClient {
     psk: String,
     tls: Option<TlsClient>,
+    cached_addr: Option<(SocketAddr, Instant)>,
+}
+
+impl Drop for RemoteClient {
+    fn drop(&mut self) {
+        tracing::debug!("RemoteClient dropped, cleaning up connection");
+    }
 }
 
 impl RemoteClient {
     pub fn new(psk: String) -> Self {
-        Self { psk, tls: None }
+        Self {
+            psk,
+            tls: None,
+            cached_addr: None,
+        }
     }
 
     pub fn with_tls(psk: String, domain: &str) -> Result<Self> {
@@ -396,6 +407,7 @@ impl RemoteClient {
         Ok(Self {
             psk,
             tls: Some(tls),
+            cached_addr: None,
         })
     }
 
@@ -407,13 +419,34 @@ impl RemoteClient {
         self.tls.is_some()
     }
 
-    async fn connect_to_coordinator(&self, host: &str, port: u16) -> Result<LineWriter> {
+    fn resolve_cached(&self, _host: &str, _port: u16) -> Option<SocketAddr> {
+        let now = Instant::now();
+        if let Some((addr, cached_at)) = self.cached_addr {
+            if now.duration_since(cached_at) < Duration::from_secs(60) {
+                return Some(addr);
+            }
+        }
+        None
+    }
+
+    fn cache_resolution(&mut self, addr: SocketAddr) {
+        self.cached_addr = Some((addr, Instant::now()));
+    }
+
+    async fn connect_to_coordinator(&mut self, host: &str, port: u16) -> Result<LineWriter> {
         let host_port = format!("{}:{}", host, port);
-        let addr = tokio::net::lookup_host(&host_port)
-            .await
-            .map_err(|e| SlapperError::Network(format!("Failed to resolve host: {}", e)))?
-            .next()
-            .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
+
+        let addr = if let Some(cached) = self.resolve_cached(host, port) {
+            cached
+        } else {
+            let resolved: SocketAddr = tokio::net::lookup_host(&host_port)
+                .await
+                .map_err(|e| SlapperError::Network(format!("Failed to resolve host: {}", e)))?
+                .next()
+                .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
+            self.cache_resolution(resolved);
+            resolved
+        };
 
         let connect_timeout = std::time::Duration::from_secs(5);
         let stream = connect_with_nodelay_timeout(&addr, connect_timeout)
@@ -487,7 +520,7 @@ impl RemoteClient {
     }
 
     pub async fn register_worker(
-        &self,
+        &mut self,
         host: &str,
         port: u16,
         worker_id: String,
@@ -529,7 +562,7 @@ impl RemoteClient {
     }
 
     pub async fn send_heartbeat(
-        &self,
+        &mut self,
         host: &str,
         port: u16,
         _worker_id: String,
@@ -561,18 +594,25 @@ impl RemoteClient {
     }
 
     pub async fn execute(
-        &self,
+        &mut self,
         host: &str,
         port: u16,
         command: Vec<String>,
         timeout_secs: Option<u64>,
     ) -> Result<crate::distributed::command::RemoteResult> {
         let host_port = format!("{}:{}", host, port);
-        let addr = tokio::net::lookup_host(&host_port)
-            .await
-            .map_err(|e| SlapperError::Network(format!("Failed to resolve host: {}", e)))?
-            .next()
-            .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
+
+        let addr = if let Some(cached) = self.resolve_cached(host, port) {
+            cached
+        } else {
+            let resolved: SocketAddr = tokio::net::lookup_host(&host_port)
+                .await
+                .map_err(|e| SlapperError::Network(format!("Failed to resolve host: {}", e)))?
+                .next()
+                .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
+            self.cache_resolution(resolved);
+            resolved
+        };
 
         let connect_timeout = std::time::Duration::from_secs(5);
         let stream = connect_with_nodelay_timeout(&addr, connect_timeout)
