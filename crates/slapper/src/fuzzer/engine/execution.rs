@@ -237,11 +237,31 @@ impl FuzzEngine {
         &mut self,
         payloads: Vec<Payload>,
     ) -> Result<Vec<FuzzResult>> {
+        let progress = if self.tui_mode {
+            None
+        } else {
+            let pb = Arc::new(ProgressBar::new(payloads.len() as u64));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} payloads ({eta})")
+                    .unwrap_or_else(|_| ProgressStyle::default_bar())
+                    .progress_chars("#>-"),
+            );
+            Some(pb)
+        };
+
         let mut results = Vec::with_capacity(payloads.len());
 
         for payload in payloads {
             let result = self.send_payload(&payload).await?;
             results.push(result);
+            if let Some(ref pb) = progress {
+                pb.inc(1);
+            }
+        }
+
+        if let Some(ref pb) = progress {
+            pb.finish_and_clear();
         }
 
         if self.args.session {
