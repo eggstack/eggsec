@@ -1,6 +1,6 @@
 # Slapper Implementation Plan
 
-**Status**: Wave 1 COMPLETED (2026-05-29), Wave 2 PENDING
+**Status**: Wave 1 COMPLETED, Wave 2 COMPLETED, Wave 3 PENDING
 
 ## Overview
 
@@ -45,53 +45,44 @@ This plan consolidates findings from 14 architecture review documents. Items mar
 ## Wave 2 - Medium Priority (8 items, can run in parallel)
 
 ### 7. [PERF] WAF HTTP/2 smuggling bypass not implemented
+- **Status**: COMPLETED (commit 9c48b12) - Documented limitation
 - **File**: `crates/slapper/src/waf/bypass/smuggling.rs:298-300`
-- **Issue**: `supports_http2_probes()` hardcoded to return `false`. H2CUpgrade, Http2Frame techniques never execute
-- **Fix**: Implement actual HTTP/2 detection and smuggling techniques, OR document as limitation
-- **Verification**: Test with HTTP/2-enabled server
+- **Verification**: Documentation added
 
 ### 8. [PERF] Config: Add Scope.validate() method
+- **Status**: COMPLETED (commit 9ffe10c)
 - **File**: `crates/slapper/src/config/scope.rs`
-- **Issue**: `Scope` struct lacks a `validate()` method like other config types (`ScanConfig`, `WebhookConfig`)
-- **Fix**: Add `pub fn validate(&self) -> Result<(), ScopeError>` for consistency
-- **Verification**: Scope implements similar validation pattern
+- **Verification**: `cargo check --lib -p slapper`
 
 ### 9. [PERF] Scanner: Add progress bar error handling wrapper around join_all
+- **Status**: COMPLETED (commit cee1e19) - catch_unwind wrapper added
 - **File**: `crates/slapper/src/scanner/ports/mod.rs:590-593`
-- **Issue**: Progress bar finished before all results processed; `join_all` panic leaves progress bar in wrong state
-- **Fix**: Add error handling wrapper around `join_all` to properly finalize progress bar
 - **Verification**: `cargo test --lib -p slapper -- scanner`
 
 ### 10. [PERF] Distributed: TaskResult collection in coordinator
-- **File**: `crates/slapper/src/distributed/remote.rs` - `RemoteListener`
-- **Issue**: `TaskQueue::complete()` exists but coordinator never calls it. Results not collected
-- **Fix**: Add `TaskQueue` instance to `RemoteListener` and call `complete()` when results arrive
-- **Verification**: Task results appear in `completed` queue
+- **Status**: COMPLETED (commit bb7858a)
+- **File**: `crates/slapper/src/distributed/remote.rs`
+- **Verification**: Task results collected in completed queue
 
 ### 11. [PERF] Distributed: send_heartbeat cached connection
+- **Status**: COMPLETED (commit aca8355)
 - **File**: `crates/slapper/src/distributed/remote.rs:564-594`
-- **Issue**: `send_heartbeat()` calls `connect_to_coordinator()` directly without using `cached_addr` mechanism
-- **Fix**: Use the same pattern as `execute()` - check `resolve_cached()` first
-- **Reference**: `execute()` at `remote.rs:605-615` uses `resolve_cached()` properly
-- **Verification**: Heartbeat uses cached DNS and connection
+- **Verification**: Heartbeat uses cached DNS
 
 ### 12. [BUG] Pipeline: Session save errors not propagated
+- **Status**: COMPLETED (commit dad29fa) - checkpoint_error field added
 - **File**: `crates/slapper/src/pipeline/executor.rs:223-226`
-- **Issue**: Session save failure only logs warning, doesn't return error to caller
-- **Fix**: Change from `tracing::warn!()` to `tracing::error!()` with return value
-- **Verification**: Session save failures are reported, not silently ignored
+- **Verification**: Session save failures reported in PipelineReport
 
 ### 13. [PERF] Pipeline: run_fingerprint() hardcoded port list
+- **Status**: COMPLETED (commit 2fef76f)
 - **File**: `crates/slapper/src/pipeline/executor.rs:318-324`
-- **Issue**: Uses hardcoded port list instead of `EXTENDED_SCAN_PORTS` constant
-- **Fix**: Use `EXTENDED_SCAN_PORTS` constant for consistency with other scanner code
-- **Verification**: Port constants centralized in one location
+- **Verification**: Uses EXTENDED_SCAN_PORTS constant
 
 ### 14. [PERF] Pipeline: run_waf() ignores config parameter
+- **Status**: COMPLETED (already using self.common.clone() for TLS)
 - **File**: `crates/slapper/src/pipeline/executor.rs:536`
-- **Issue**: WAF doesn't receive config, missing TLS verification settings
-- **Fix**: Pass config to `run_waf()` so WAF respects TLS settings
-- **Verification**: TLS verification settings respected by WAF
+- **Verification**: WafArgs includes common (TLS settings) via self.common.clone()
 
 ---
 
