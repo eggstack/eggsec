@@ -93,6 +93,15 @@ Added `continue` after `failed_attempts >= 3` check to properly skip non-matchin
 ### planner.rs:record_outcome
 Fixed `ExecutionStage` field reference - changed `s.target.contains()` to `s.name.to_lowercase().contains()` since `ExecutionStage` has `name`, not `target`.
 
+### planner.rs:cache.rs Clock Skew Fix (2026-05-23)
+Fixed clock skew panic prevention in `AiPlanner` - changed `SystemTime::now().duration_since(UNIX_EPOCH).unwrap()` to `unwrap_or_else(|_| Duration::from_secs(0))` at 3 locations (lines 206-209, 467-470, 480-483). Prevents panic if system clock moves backwards (NTP correction).
+
+### cache.rs Eviction Loop Fix (2026-05-23)
+Changed cache eviction from single-pass `if` to `while` loop to remove ALL excess entries when over capacity.
+
+### waf_bypass.rs Persist Error Logging (2026-05-23)
+Added error logging to `SmartWafBypass::persist()` - previously file operation failures were silently ignored with `let _ = ...`. Now uses `tracing::warn` for failures.
+
 ### cache.rs and planner.rs Performance Fixes
 Changed `std::collections::HashMap` to `rustc_hash::FxHashMap` for:
 - `AiCache.entries` - Thread-safe async cache storage
