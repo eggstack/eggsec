@@ -9,7 +9,7 @@ use tokio::sync::Mutex;
 use super::context::PipelineContext;
 use super::report::PipelineReport;
 use super::session::{save, PipelineSession};
-use super::stage::{parse_stages, Stage};
+use super::stage::{parse_stages, Stage, EXTENDED_SCAN_PORTS};
 use crate::cli::{CommonHttpArgs, ScanArgs, ScanProfile};
 use crate::config::SlapperConfig;
 use crate::scanner::endpoints::EndpointScanConfig;
@@ -573,7 +573,7 @@ pub async fn run(&self) -> Result<PipelineReport> {
 }
 
 fn get_extended_ports() -> String {
-    "21,22,23,25,53,80,110,143,443,445,993,995,1433,1521,3306,3389,5432,5900,6379,8080,8443,27017,9092,9200,5672,2181,2375,2376,6443,10250,3000,5000,8000,9000,4200,5601,9090".to_string()
+    EXTENDED_SCAN_PORTS.to_string()
 }
 
 fn get_default_endpoints() -> Vec<String> {

@@ -115,6 +115,27 @@ pub fn parse_stages(s: &str) -> Vec<Stage> {
         .collect()
 }
 
+pub const DEFAULT_SCAN_PORTS: &str = "80,443";
+
+pub const EXTENDED_SCAN_PORTS: &str = "21,22,23,25,53,80,110,143,443,445,993,995,1433,1521,3306,3389,5432,5900,6379,8080,8443,27017,9092,9200,5672,2181,2375,2376,6443,10250,3000,5000,8000,9000,4200,5601,9090";
+
+pub fn profile_from_str(s: &str) -> Option<crate::cli::ScanProfile> {
+    match s.to_lowercase().as_str() {
+        "quick" => Some(crate::cli::ScanProfile::Quick),
+        "endpoint" => Some(crate::cli::ScanProfile::Endpoint),
+        "web" => Some(crate::cli::ScanProfile::Web),
+        "waf" => Some(crate::cli::ScanProfile::Waf),
+        "full" => Some(crate::cli::ScanProfile::Full),
+        "api" => Some(crate::cli::ScanProfile::Api),
+        "recon" => Some(crate::cli::ScanProfile::Recon),
+        "stealth" => Some(crate::cli::ScanProfile::Stealth),
+        "deep" => Some(crate::cli::ScanProfile::Deep),
+        "vuln" => Some(crate::cli::ScanProfile::Vuln),
+        "auth" => Some(crate::cli::ScanProfile::Auth),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

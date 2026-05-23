@@ -5,6 +5,7 @@ use chrono::Utc;
 
 use crate::error::SlapperError;
 use crate::output::AgentSeverity;
+use crate::pipeline::stage::profile_from_str;
 use crate::tool::response::Finding;
 use crate::tool::traits::{
     AttackSurface, CapabilityExample, ParameterDef, ParameterType, SecurityTool, ToolCapability,
@@ -61,20 +62,7 @@ impl SecurityTool for PipelineTool {
             .unwrap_or("quick")
             .to_string();
 
-        let profile_enum = match profile.as_str() {
-            "quick" => crate::cli::ScanProfile::Quick,
-            "endpoint" => crate::cli::ScanProfile::Endpoint,
-            "web" => crate::cli::ScanProfile::Web,
-            "waf" => crate::cli::ScanProfile::Waf,
-            "full" => crate::cli::ScanProfile::Full,
-            "api" => crate::cli::ScanProfile::Api,
-            "recon" => crate::cli::ScanProfile::Recon,
-            "stealth" => crate::cli::ScanProfile::Stealth,
-            "deep" => crate::cli::ScanProfile::Deep,
-            "vuln" => crate::cli::ScanProfile::Vuln,
-            "auth" => crate::cli::ScanProfile::Auth,
-            _ => crate::cli::ScanProfile::Quick,
-        };
+        let profile_enum = profile_from_str(&profile).unwrap_or(crate::cli::ScanProfile::Quick);
 
         let args = crate::cli::ScanArgs {
             target: target.clone(),
