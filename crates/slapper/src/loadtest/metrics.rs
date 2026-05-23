@@ -98,7 +98,7 @@ impl Metrics {
             self.successful += 1;
         } else {
             self.failed += 1;
-            if self.errors.len() < 100 {
+            if self.errors.len() < 1000 {
                 self.errors.push(format!("HTTP {}", status_code));
             }
         }
@@ -106,7 +106,7 @@ impl Metrics {
 
     pub fn record_failure(&mut self, error: String) {
         self.failed += 1;
-        if self.errors.len() < 100 {
+        if self.errors.len() < 1000 {
             self.errors.push(error);
         }
     }
