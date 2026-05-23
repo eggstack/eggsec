@@ -63,12 +63,14 @@ impl CloudScanner {
             }
         };
 
-        let s3_buckets = self.enumerate_s3_buckets(&domain_name).await;
-        let azure_blobs = self.enumerate_azure_blobs(&domain_name).await;
-        let gcp_storage = self.enumerate_gcp_storage(&domain_name).await;
-        let firebase = self.enumerate_firebase(&domain_name).await;
-        let heroku = self.enumerate_heroku(&domain_name).await;
-        let github_repos = self.enumerate_github(&domain_name).await;
+        let (s3_buckets, azure_blobs, gcp_storage, firebase, heroku, github_repos) = tokio::join!(
+            self.enumerate_s3_buckets(&domain_name),
+            self.enumerate_azure_blobs(&domain_name),
+            self.enumerate_gcp_storage(&domain_name),
+            self.enumerate_firebase(&domain_name),
+            self.enumerate_heroku(&domain_name),
+            self.enumerate_github(&domain_name),
+        );
 
         Ok(CloudDiscovery {
             domain: domain.to_string(),
