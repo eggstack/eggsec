@@ -153,7 +153,13 @@ async fn check_user_enumeration(target: &CmsTarget, client: &Client) -> bool {
 
     match client.get(&test_url).send().await {
         Ok(resp) => {
-            let text = resp.text().await.unwrap_or_default();
+            let text = match resp.text().await {
+                Ok(text) => text,
+                Err(e) => {
+                    tracing::debug!("Failed to read response body: {}", e);
+                    String::new()
+                }
+            };
             text.contains("/author/") || resp.url().to_string().contains("/author/")
         }
         Err(_) => false,

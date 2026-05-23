@@ -32,7 +32,13 @@ pub async fn enumerate_extensions(url: &str) -> Option<Vec<String>> {
 
     match client.get(&extensions_url).send().await {
         Ok(resp) => {
-            let text = resp.text().await.unwrap_or_default();
+            let text = match resp.text().await {
+                Ok(text) => text,
+                Err(e) => {
+                    tracing::debug!("Failed to read response body: {}", e);
+                    String::new()
+                }
+            };
             if text.contains("Index of") || text.contains("[To Parent Directory]") {
                 let extensions: Vec<String> = text
                     .lines()
