@@ -24,7 +24,7 @@ The Reconnaissance module focuses on passive and active information gathering ab
 ### Vulnerability Mapping
 
 - **CVE Lookup (`cve.rs`)**: Mapping identified software versions to known CVEs using built-in database + NVD API.
-- **Secret Detection (`secrets.rs`)**: Detecting API keys, tokens, and credentials via 25+ regex patterns.
+- **Secret Detection (`secrets.rs`)**: Detecting API keys, tokens, and credentials via 25+ regex patterns. Standalone module (not part of `FULL_RECON_PIPELINE_MODULES`).
 - **Git Secrets (`git_secrets.rs`)**: Scanning git repositories for committed secrets (feature-gated).
 - **Threat Intelligence (`threatintel.rs`)**: Checking targets against VirusTotal, Shodan, and AlienVault OTX.
 
@@ -80,7 +80,7 @@ content_analysis, cors_check, email_discovery
 
 ## Performance Optimizations
 
-The recon module uses `rustc_hash::FxHashMap` and `FxHashSet` instead of `std::collections` equivalents for improved performance:
+The recon module uses `rustc_hash::FxHashMap` and `FxHashSet` instead of `std::collections` equivalents for improved performance (55 total collections across 14 components):
 
 | Component | File | Type |
 |-----------|------|------|

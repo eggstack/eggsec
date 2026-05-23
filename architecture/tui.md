@@ -29,7 +29,7 @@ Manages the overall application state, event loop, and rendering.
 | Scan Ports | `scan_ports.rs` | TCP port scanning |
 | Scan Endpoints | `scan_endpoints.rs` | Sensitive endpoint discovery |
 | Fingerprint | `fingerprint.rs` | Service fingerprinting (AMAP-style) |
-| Fuzz | `fuzz.rs` | Security fuzzing with 30 payload types |
+| Fuzz | `fuzz.rs` | Security fuzzing with 31 payload types |
 | WAF | `waf.rs` | WAF detection and bypass |
 | WAF Stress | `waf_stress.rs` | Comprehensive WAF stress testing |
 | Load | `load.rs` | HTTP load testing |
