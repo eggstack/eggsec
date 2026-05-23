@@ -40,6 +40,7 @@ pub struct Pipeline {
     stages: Vec<Stage>,
     profile: ScanProfile,
     concurrency: usize,
+    concurrent_stages: bool,
     common: CommonHttpArgs,
     spoof_config: SpoofConfig,
     context: Arc<Mutex<PipelineContext>>,
@@ -55,6 +56,7 @@ impl Pipeline {
             stages: Vec::new(),
             profile: ScanProfile::Quick,
             concurrency: 10,
+            concurrent_stages: false,
             common: CommonHttpArgs::default(),
             spoof_config: SpoofConfig::default(),
             context: Arc::new(Mutex::new(PipelineContext::new(target))),
@@ -122,6 +124,7 @@ impl Pipeline {
             stages,
             profile: args.profile,
             concurrency,
+            concurrent_stages: false,
             common: args.common,
             spoof_config,
             context: Arc::new(Mutex::new(PipelineContext::new(&args.target))),
@@ -154,6 +157,11 @@ impl Pipeline {
         self
     }
 
+    pub fn with_concurrent_stages(mut self, enabled: bool) -> Self {
+        self.concurrent_stages = enabled;
+        self
+    }
+
     pub fn has_stages(&self) -> bool {
         !self.stages.is_empty()
     }
@@ -162,8 +170,13 @@ impl Pipeline {
         &self.stages
     }
 
-    pub async fn run(&self) -> Result<PipelineReport> {
+pub async fn run(&self) -> Result<PipelineReport> {
         let start = Instant::now();
+
+        if self.concurrent_stages {
+            return self.run_concurrent().await;
+        }
+
         let mut stage_results = Vec::new();
 
         let progress = if self.tui_mode || self.stages.is_empty() {
@@ -217,6 +230,34 @@ impl Pipeline {
             pb.finish_and_clear();
         }
 
+        let context = self.context.lock().await.clone();
+
+        Ok(PipelineReport {
+            target: self.target.clone(),
+            total_duration_ms: start.elapsed().as_millis() as u64,
+            stage_results,
+            open_ports: context.port_results,
+            services: context.services.into_values().collect(),
+            endpoints: context.endpoints,
+        })
+    }
+
+    async fn run_concurrent(&self) -> Result<PipelineReport> {
+        let start = Instant::now();
+
+        let stage_futures: Vec<_> = self.stages.iter().map(|stage| async {
+            let stage_start = Instant::now();
+            let result = self.execute_stage(stage).await;
+            let stage_result = StageResult {
+                stage: *stage,
+                duration_ms: stage_start.elapsed().as_millis() as u64,
+                success: result.is_ok(),
+                error: result.as_ref().err().map(|e| e.to_string()),
+            };
+            stage_result
+        }).collect();
+
+        let stage_results = futures::future::join_all(stage_futures).await;
         let context = self.context.lock().await.clone();
 
         Ok(PipelineReport {
