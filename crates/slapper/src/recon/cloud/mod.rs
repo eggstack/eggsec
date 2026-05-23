@@ -52,7 +52,16 @@ impl CloudScanner {
     }
 
     pub async fn scan(&self, domain: &str) -> Result<CloudDiscovery> {
-        let domain_name = extract_target_from_url(domain).unwrap_or_else(|| domain.to_string());
+        let domain_name = match extract_target_from_url(domain) {
+            Some(extracted) => extracted,
+            None => {
+                tracing::warn!(
+                    domain = %domain,
+                    "Failed to extract domain from URL, using input as-is"
+                );
+                domain.to_string()
+            }
+        };
 
         let s3_buckets = self.enumerate_s3_buckets(&domain_name).await;
         let azure_blobs = self.enumerate_azure_blobs(&domain_name).await;
