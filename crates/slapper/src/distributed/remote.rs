@@ -10,7 +10,7 @@ use tokio::sync::{broadcast, RwLock};
 
 use crate::distributed::command::{CommandExecutor, CommandMessage, ResponseMessage};
 use crate::distributed::io::{LineWriter, StreamWrapper, TlsClient, TlsServer};
-use crate::distributed::CAPABILITIES;
+use crate::distributed::{queue::TaskQueue, CAPABILITIES};
 use crate::error::{Result, SlapperError};
 use crate::utils::connect_with_nodelay_timeout;
 
@@ -33,6 +33,7 @@ pub struct RemoteListener {
     rate_limit: u32,
     ip_allowlist: Option<Vec<String>>,
     tls_server: Option<Arc<TlsServer>>,
+    task_queue: Arc<TaskQueue>,
 }
 
 impl RemoteListener {
@@ -47,6 +48,7 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
             tls_server: None,
+            task_queue: Arc::new(TaskQueue::new(10000)),
         }
     }
 
@@ -61,6 +63,7 @@ impl RemoteListener {
             rate_limit,
             ip_allowlist: None,
             tls_server: None,
+            task_queue: Arc::new(TaskQueue::new(10000)),
         }
     }
 
@@ -75,6 +78,7 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: Some(allowlist),
             tls_server: None,
+            task_queue: Arc::new(TaskQueue::new(10000)),
         }
     }
 
@@ -92,6 +96,7 @@ impl RemoteListener {
             rate_limit: RATE_LIMIT_PER_MINUTE,
             ip_allowlist: None,
             tls_server: Some(Arc::new(tls_server)),
+            task_queue: Arc::new(TaskQueue::new(10000)),
         })
     }
 
@@ -198,8 +203,9 @@ impl RemoteListener {
                             let psk = self.psk.clone();
                             let connections = Arc::clone(&self.connections);
                             let tls_acceptor = tls_acceptor.clone();
+                            let task_queue = Arc::clone(&self.task_queue);
                             tokio::spawn(async move {
-                                if let Err(e) = Self::handle_connection(stream, addr, psk, connections, tls_acceptor).await {
+                                if let Err(e) = Self::handle_connection(stream, addr, psk, connections, tls_acceptor, task_queue).await {
                                     tracing::error!("Connection error: {}", e);
                                 }
                             });
@@ -225,6 +231,7 @@ impl RemoteListener {
         psk: String,
         connections: Arc<RwLock<Vec<String>>>,
         tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
+        task_queue: Arc<TaskQueue>,
     ) -> Result<()> {
         tracing::info!("Connection from {}", addr);
 
@@ -351,6 +358,22 @@ impl RemoteListener {
                         msg_type: "heartbeat_ack".to_string(),
                         success: true,
                         output: Some(status),
+                        error: None,
+                        duration_ms: None,
+                        hostname: None,
+                        capabilities: None,
+                    };
+                    line_writer
+                        .write_line(&serde_json::to_string(&response)?)
+                        .await?;
+                }
+                CommandMessage::Result { id, result } => {
+                    task_queue.complete(result).await;
+                    let response = ResponseMessage {
+                        id,
+                        msg_type: "result_ack".to_string(),
+                        success: true,
+                        output: Some("Result received".to_string()),
                         error: None,
                         duration_ms: None,
                         hostname: None,
