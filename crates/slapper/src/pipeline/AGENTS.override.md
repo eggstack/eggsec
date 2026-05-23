@@ -30,14 +30,17 @@ let mut services: FxHashMap<u16, ServiceFingerprint> = FxHashMap::default();
 | `mod.rs:240-248` | `resume_cli()` didn't return error on failed stages | Now returns `ScanFailed` error like `run_cli()` |
 | `executor.rs:444-445` | `run_load_test()` ignored config, used default TLS settings | Changed to `LoadTestRunner::from_args_with_config()` |
 
-## Additional Fixes (2026-05-27)
+## Additional Fixes (2026-05-27 through 2026-05-29)
 
 | File | Issue | Fix |
 |------|-------|-----|
 | `mod.rs:77-238` | `run_cli()` and `run_cli_with_callback()` had duplicated output writing code | Extracted to `write_output()` helper function |
 | `executor.rs:19-24` | `StageResult.duration_ms` was serialized to JSON (unnecessary, causes bloat) | Added `#[serde(skip)]` to `duration_ms` field |
 | `executor.rs:19-30` | `StageResult` lacked constructor for cleaner object creation | Added `StageResult::new()` constructor |
-| `executor.rs:157` | Progress bar created even for empty stage list | Changed condition to `self.tui_mode || self.stages.is_empty()` to skip progress for empty runs |
+| `executor.rs:157` | Progress bar created even for empty stage list | Changed condition to `self.tui_mode \|\| self.stages.is_empty()` to skip progress for empty runs |
+| `stage.rs` | Hardcoded ports duplicated in executor.rs | Added `DEFAULT_SCAN_PORTS` and `EXTENDED_SCAN_PORTS` constants |
+| `stage.rs` | Profile mapping duplicated between stage.rs and tool/implementations/pipeline.rs | Created `profile_from_str()` shared function |
+| `executor.rs:575-577` | `get_extended_ports()` hardcoded string | Now uses `EXTENDED_SCAN_PORTS.to_string()` constant |
 
 ## Key Patterns
 
