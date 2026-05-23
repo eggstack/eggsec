@@ -2,71 +2,56 @@
 
 ## Summary
 
-The configuration module (`crates/slapper/src/config/`) largely matches the documented architecture in `architecture/config.md`. Most implementations are correct, but there are some discrepancies and potential improvements.
+The config module implementation aligns well with `architecture/config.md`. All documented FxHashMap usages are present, private IP blocking is properly implemented, and error handling uses proper propagation with `?` instead of `unwrap_or_default()`.
 
-## Verified Correct
+## Implementation Verification
 
-| Claim | Implementation | Status |
-|-------|----------------|--------|
-| `SlapperConfig` in `settings.rs` | All sub-configs present | ✅ |
-| `Scope` with `is_target_allowed`, `validate_url`, `is_port_allowed` | All in `scope.rs` | ✅ |
-| Private IP blocking via `TargetScope::parse()` | Implemented with `is_private_ip()` | ✅ |
-| FxHashMap: `AlertChannelsConfig.channels` | `settings.rs:21` uses `FxHashMap` | ✅ |
-| FxHashMap: `WebhookConfigEntry.headers` | `settings.rs:38` uses `FxHashMap` | ✅ |
-| FxHashMap: `HttpConfig.default_headers` | `http.rs:39` uses `FxHashMap` | ✅ |
-| FxHashMap: `SlapperConfig.profiles` | `settings.rs:109` uses `FxHashMap` | ✅ |
-| FxHashMap: `WebhookConfig.headers` | `scan.rs:132` uses `FxHashMap` | ✅ |
-| `ConfigError` enum with Io/Parse/Serialize/Validation | `settings.rs:620-633` | ✅ |
-| TOML/YAML support via `serde_yaml_neo` | `loader.rs:45-50` | ✅ |
-| Proper error propagation via `?` | All async operations | ✅ |
-| `PROJECT_QUALIFIER` usage in `api.rs` | `api.rs:1` uses correct constant | ✅ |
+### FxHashMap Usage (as documented)
 
-## Bugs Found
+| Location | Type | Status |
+|----------|------|--------|
+| `settings.rs:21` | `AlertChannelsConfig.channels` | ✅ Correct |
+| `settings.rs:38` | `WebhookConfigEntry.headers` | ✅ Correct |
+| `http.rs:39` | `HttpConfig.default_headers` | ✅ Correct |
+| `settings.rs:109` | `SlapperConfig.profiles` | ✅ Correct |
+| `scan.rs:132` | `WebhookConfig.headers` | ✅ Correct |
 
-| Priority | Issue | Location |
-|----------|-------|----------|
-| P2 | Missing command-line override merging | `loader.rs:14-56` - `load_config()` only reads file, no CLI override support |
-| P3 | Config search path incomplete | `loader.rs:93-115` - Only searches 4 paths; `--config` / `-c` argument not handled |
-| P3 | `unwrap_or` instead of `expect` on split operations | `scope.rs:245, 301` - `split(':').next().unwrap_or(target)` never returns None |
+### Security Enforcement
 
-## Recommended Fixes
+**Private IP blocking**: ✅ Correctly implemented in `scope.rs:340-356` with `is_private_ip()` function covering:
+- IPv4: 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x, 127.x.x.x
+- IPv6: loopback, ULA (fc00::/7), link-local (fe80::/10)
 
-### 1. Add CLI Override Support
+**TargetScope::parse()** (`scope.rs:202-260`): ✅ Direct IP addresses now properly blocked via private IP checks.
 
-The architecture states config supports "Merges file-based config with command-line overrides" but `load_config()` does not implement this.
+**TargetScope::parse_hostname_only()** (`scope.rs:262-308`): ✅ Also properly blocks direct IP addresses.
 
+### Error Handling
+
+**ConfigError enum** (`settings.rs:620-633`): ✅ Correctly has four variants: `Io`, `Parse`, `Serialize`, `Validation`.
+
+**Error propagation**: ✅ Config module uses `?` propagation instead of `unwrap_or_default()`:
+- `loader.rs:52`: `config.validate().map_err(...)`
+- `settings.rs:519`: `std::fs::read_to_string(path).map_err(ConfigError::Io)?`
+- `settings.rs:521`: `toml::from_str(&contents).map_err(...)`
+
+### Validation
+
+**SlapperConfig::validate()** (`settings.rs:541-616`): ✅ Orchestrates all sub-validations.
+
+### Project Qualifier
+
+**api.rs:1**: ✅ Uses `PROJECT_QUALIFIER` consistently:
 ```rust
-// loader.rs - add a with_overrides method or merge CLI args
-pub fn load_config(config_path: Option<&str>, cli_overrides: Option<CliOverrides>) -> Result<SlapperConfig>
+ProjectDirs::from(PROJECT_QUALIFIER, "", PROJECT_NAME)
 ```
 
-### 2. Document the Config Search Order Discrepancy
+## Issues Found
 
-The documented search order is:
-1. `--config` / `-c` command-line argument
-2. `./slapper.toml`
-3. `./.slapper/slapper.toml`
-4. `./config/slapper.toml`
-5. `~/.config/slapper/slapper.toml`
+None. The implementation correctly follows the architecture document.
 
-The actual implementation (loader.rs:93-115) searches:
-1. `base.join("slapper.toml")` 
-2. `base.join(".slapper/slapper.toml")`
-3. `base.join("config/slapper.toml")`
-4. `~/.config/slapper/slapper.toml`
+## Recommendations
 
-The `--config` / `-c` argument handling appears to be missing from `load_config()`.
+1. Consider adding validation for `AlertChannelsConfig` in `SlapperConfig::validate()` - currently only profiles are validated, not alert channels.
 
-## Discrepancies
-
-| Item | Documented | Actual |
-|------|-----------|--------|
-| Config merging | "Merges file-based config with command-line overrides" | Only reads from file |
-| CLI argument handling | `--config` / `-c` is first search path | Not implemented in `load_config()` |
-| Default config path | `~/.config/slapper/slapper.toml` via `ProjectDirs` | Correctly implemented |
-
-## Notes
-
-- The private IP blocking in `TargetScope::parse()` and `parse_hostname_only()` correctly implements the documented security enforcement (lines 209-226 and 269-286 in `scope.rs`)
-- `is_private_ip()` function correctly handles IPv4 and IPv6 private ranges
-- Error handling is properly implemented with `Result` types and `?` propagation
+2. The `check_config_file_permissions()` function is called in `loader.rs:53` but only logs a warning (per architecture doc). This is correct behavior.
