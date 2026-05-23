@@ -3,8 +3,29 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 use tokio::task;
+
+static KNOWN_VULNERABLE_PATTERNS: LazyLock<Vec<String>> = LazyLock::new(|| {
+    vec![
+        "(.+)+".to_string(),
+        "(.*)*".to_string(),
+        "(a+)+".to_string(),
+        "(a*)a*".to_string(),
+        "([a-zA-Z]+)*".to_string(),
+        "(x+x+)+y".to_string(),
+        "(x?x?)+".to_string(),
+        "(a{1,100})+".to_string(),
+        "(a|a|a)+".to_string(),
+        "(.*a){10}".to_string(),
+        "(\\d+\\.?\\d*)+".to_string(),
+        "(\\w+\\s?)*".to_string(),
+        "(a+)+b".to_string(),
+        "(?:a|a)+".to_string(),
+        "^(.*?)*$".to_string(),
+    ]
+});
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,33 +238,13 @@ impl ReDosDetector {
     pub fn new() -> Self {
         Self {
             executor: RegexExecutor::new(),
-            known_vulnerable_patterns: Self::default_vulnerable_patterns(),
+            known_vulnerable_patterns: KNOWN_VULNERABLE_PATTERNS.clone(),
         }
     }
 
     pub fn with_executor(mut self, executor: RegexExecutor) -> Self {
         self.executor = executor;
         self
-    }
-
-    fn default_vulnerable_patterns() -> Vec<String> {
-        vec![
-            r"(.+)+".to_string(),
-            r"(.*)*".to_string(),
-            r"(a+)+".to_string(),
-            r"(a*)a*".to_string(),
-            r"([a-zA-Z]+)*".to_string(),
-            r"(x+x+)+y".to_string(),
-            r"(x?x?)+".to_string(),
-            r"(a{1,100})+".to_string(),
-            r"(a|a|a)+".to_string(),
-            r"(.*a){10}".to_string(),
-            r"(\d+\.?\d*)+".to_string(),
-            r"(\w+\s?)*".to_string(),
-            r"(a+)+b".to_string(),
-            r"(?:a|a)+".to_string(),
-            r"^(.*?)*$".to_string(),
-        ]
     }
 
     pub fn detect(&self, pattern: &str) -> ReDosResult {

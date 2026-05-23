@@ -191,6 +191,33 @@ impl Grammar {
     }
 }
 
+/// Fuzzer for grammar-based payload generation supporting JSON, GraphQL, XML, JWT, and SSTI formats.
+///
+/// # Deterministic Fuzzing
+///
+/// For reproducible fuzzing results, use [`GrammarFuzzer::with_seed()`] instead of [`GrammarFuzzer::new()`]:
+///
+/// ```
+/// use slapper::fuzzer::grammar::{Grammar, GrammarKind, GrammarFuzzer};
+///
+/// let grammar = Grammar::json();
+/// let mut fuzzer = GrammarFuzzer::with_seed(grammar, GrammarKind::Json, 42);
+/// let payload = fuzzer.generate();
+/// // Same seed (42) always produces the same payload
+/// ```
+///
+/// # Example
+///
+/// ```
+/// use slapper::fuzzer::grammar::{Grammar, GrammarKind, GrammarFuzzer};
+///
+/// let grammar = Grammar::json();
+/// let mut fuzzer = GrammarFuzzer::new(grammar, GrammarKind::Json);
+/// for _ in 0..10 {
+///     let payload = fuzzer.generate();
+///     println!("{}", payload);
+/// }
+/// ```
 pub struct GrammarFuzzer {
     grammar: Grammar,
     rng: rand::rngs::SmallRng,
