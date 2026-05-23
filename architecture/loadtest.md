@@ -52,6 +52,23 @@ pub struct LoadTestRunner {
 
 Collects and processes performance data in real-time.
 
+### CLI Entry Point (`mod.rs`)
+
+The `mod.rs` file provides the `run_cli()` function which serves as the CLI entry point for the load test module.
+
+- **Argument Parsing**: Uses `clap` to parse `LoadArgs` from command-line arguments.
+- **Runner Instantiation**: Creates `LoadTestRunner` via `from_args()` or `from_args_with_config()`.
+- **Execution**: Runs the load test and handles results output.
+- **Error Handling**: Returns a `TabError` for UI integration or exits with appropriate error code on failure.
+
+#### `run_cli()` Function
+
+```rust
+pub fn run_cli(args: LoadArgs) -> Result<(), TabError>
+```
+
+Parses CLI arguments, instantiates a runner, executes the load test, and outputs results. Used by the main CLI dispatcher.
+
 - **Latency Tracking**: Records response times and calculates percentiles (p50, p90, p95, p99) using `hdrhistogram`.
 - **Throughput**: Measures requests per second (RPS).
 - **Error Rates**: Tracks non-2xx/3xx status codes and transport failures.

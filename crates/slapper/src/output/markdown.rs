@@ -130,7 +130,7 @@ impl MarkdownReport {
     }
 }
 
-pub fn generate_markdown_report(summary: ScanSummary, findings: Vec<Finding>) -> String {
+pub fn generate_markdown_report(summary: ScanSummary, findings: Vec<Finding>) -> Result<String, std::fmt::Error> {
     let report = MarkdownReport::new(summary, findings);
-    report.generate().unwrap_or_else(|_| String::new())
+    report.generate()
 }

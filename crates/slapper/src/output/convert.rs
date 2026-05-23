@@ -55,7 +55,7 @@ pub fn load_scan_report(path: &str) -> Result<ScanReportData, String> {
     serde_json::from_str(&content).map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
-pub fn convert_to_junit(report: &ScanReportData) -> String {
+pub fn convert_to_junit(report: &ScanReportData) -> Result<String, String> {
     use super::junit::{JUnitBuilder, JUnitTestResult};
 
     let mut builder = JUnitBuilder::new("Slapper Security Scan");
@@ -86,7 +86,7 @@ pub fn convert_to_junit(report: &ScanReportData) -> String {
     let junit_report = builder.build();
     junit_report
         .to_xml()
-        .unwrap_or_else(|_| "<error>Failed to generate JUnit XML</error>".to_string())
+        .map_err(|e| format!("Failed to generate JUnit XML: {}", e))
 }
 
 pub fn convert_to_sarif(report: &ScanReportData) -> Result<String, String> {
