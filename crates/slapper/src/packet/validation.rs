@@ -1,3 +1,5 @@
+use smallvec::SmallVec;
+
 pub fn format_ipv6(bytes: &[u8]) -> String {
     let parts: Vec<String> = (0..8)
         .map(|i| format!("{:x}", u16::from_be_bytes([bytes[i * 2], bytes[i * 2 + 1]])))
@@ -6,7 +8,7 @@ pub fn format_ipv6(bytes: &[u8]) -> String {
 }
 
 pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
-    let mut name = String::new();
+    let mut name = SmallVec::<[u8; 128]>::new();
     let mut pos = offset;
     let mut jumped = false;
     let mut jumps = 0;
@@ -16,10 +18,7 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
         let length = data[pos] as usize;
 
         if length == 0 {
-            if !jumped {
-                return Some((name, pos + 1));
-            }
-            return Some((name, original_offset));
+            return Some((String::from_utf8_lossy(&name).to_string(), if !jumped { pos + 1 } else { original_offset }));
         }
 
         if (length & 0xc0) == 0xc0 {
@@ -40,7 +39,7 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
         }
 
         if !name.is_empty() {
-            name.push('.');
+            name.push(b'.');
         }
 
         let label_start = pos + 1;
@@ -49,12 +48,11 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
             return None;
         }
 
-        let label = String::from_utf8_lossy(&data[label_start..label_end]).to_string();
-        name.push_str(&label);
+        name.extend_from_slice(&data[label_start..label_end]);
         pos = label_end;
     }
 
-    Some((name, pos + 1))
+    Some((String::from_utf8_lossy(&name).to_string(), pos + 1))
 }
 
 pub fn parse_dns_rdata(data: &[u8], offset: usize, rtype: u16, _rdlen: usize) -> String {

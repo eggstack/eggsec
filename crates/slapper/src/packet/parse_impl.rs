@@ -131,6 +131,15 @@ impl IpPacket {
             }
 
             let len = data[i + 1] as usize;
+
+            if len < 2 {
+                break;
+            }
+
+            if i + len > data.len() {
+                break;
+            }
+
             let name = match code {
                 7 => "RR".to_string(),
                 68 => "TS".to_string(),
@@ -140,11 +149,7 @@ impl IpPacket {
                 _ => format!("Unknown({})", code),
             };
 
-            let opt_data = if len > 2 && i + len <= data.len() {
-                Some(data[i + 2..i + len].to_vec())
-            } else {
-                None
-            };
+            let opt_data = Some(data[i + 2..i + len].to_vec());
 
             options.push(IpOption {
                 code,

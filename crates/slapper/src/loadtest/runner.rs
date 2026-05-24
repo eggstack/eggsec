@@ -336,11 +336,12 @@ impl LoadTestRunner {
                     match result {
                         Ok(response) => {
                             let status = response.status();
-                            if !status.is_success() {
+                            let status_code = status.as_u16();
+                            if status_code >= 400 {
                                 let _ = response.bytes().await;
                             }
                             let mut metrics = metrics.lock().await;
-                            metrics.record_http_response(latency, status.as_u16());
+                            metrics.record_http_response(latency, status_code);
                         }
                         Err(e) => {
                             let mut metrics = metrics.lock().await;

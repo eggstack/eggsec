@@ -339,7 +339,7 @@ The following modules lack dedicated architecture documentation (candidates for 
 | TUI tabs | 29 |
 | Pipeline profiles | 11 |
 | Feature flags | 20+ |
-| NSE libraries | 164 (in `slapper-nse/src/libraries/`) |
+| NSE libraries | 169 (in `crates/slapper-nse/src/libraries/`) |
 
 ---
 
