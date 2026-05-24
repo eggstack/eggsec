@@ -86,6 +86,10 @@ impl AsyncNseExecutor {
         self.core.lua()
     }
 
+    pub fn get_sandbox_metrics(&self) -> SandboxMetrics {
+        self.core.get_sandbox_metrics()
+    }
+
     /// Get access to the tokio runtime, if available.
     pub fn runtime(&self) -> Option<&Runtime> {
         self.runtime.as_ref()
