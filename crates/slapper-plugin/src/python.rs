@@ -5,7 +5,7 @@ use pyo3::types::{PyDict, PyList};
 use pyo3::IntoPyObjectExt;
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use super::security::validate_python_plugin;
@@ -20,7 +20,7 @@ use tokio::time::timeout;
 const MAX_JSON_SIZE_BYTES: usize = 100_000;
 
 pub struct PythonPluginManager {
-    plugins: Mutex<Vec<LoadedPlugin>>,
+    plugins: RwLock<Vec<LoadedPlugin>>,
     info: PluginInfo,
     block_suspicious_plugins: bool,
     checks_cache: std::sync::OnceLock<Vec<PluginCheck>>,
@@ -72,7 +72,7 @@ fn py_value_to_json(_py: Python<'_>, val: &pyo3::Bound<'_, pyo3::PyAny>) -> serd
 impl PythonPluginManager {
     pub fn new() -> Self {
         Self {
-            plugins: Mutex::new(Vec::new()),
+            plugins: RwLock::new(Vec::new()),
             info: PluginInfo {
                 name: "python-plugin-manager".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
@@ -88,7 +88,7 @@ impl PythonPluginManager {
 
     pub fn from_config(config: &PluginConfig) -> Self {
         Self {
-            plugins: Mutex::new(Vec::new()),
+            plugins: RwLock::new(Vec::new()),
             info: PluginInfo {
                 name: "python-plugin-manager".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
@@ -104,7 +104,7 @@ impl PythonPluginManager {
 
     pub fn with_block_suspicious_plugins(block: bool) -> Self {
         Self {
-            plugins: Mutex::new(Vec::new()),
+            plugins: RwLock::new(Vec::new()),
             info: PluginInfo {
                 name: "python-plugin-manager".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
@@ -358,7 +358,7 @@ impl PythonPluginManager {
     fn get_checks_impl(this: &PythonPluginManager, py: Python<'_>) -> Result<Vec<PluginCheck>> {
         let mut checks = Vec::new();
 
-        let plugins = this.plugins.lock().unwrap_or_else(|e| e.into_inner());
+        let plugins = this.plugins.read().unwrap_or_else(|e| e.into_inner());
         for plugin in plugins.iter() {
             if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
                 if let Ok(register_func) = module.getattr("register_checks") {
@@ -441,7 +441,7 @@ impl PythonPluginManager {
     ) -> Result<Vec<serde_json::Value>> {
         let mut all_results = Vec::new();
 
-        let plugins = this.plugins.lock().unwrap_or_else(|e| e.into_inner());
+        let plugins = this.plugins.read().unwrap_or_else(|e| e.into_inner());
         for plugin in plugins.iter() {
             let supports_function_check =
                 if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
