@@ -9,8 +9,11 @@ mod tests;
 pub use types::{ResponseDiff, WafDetectionResult};
 
 use crate::error::Result;
+use crate::utils::circuit_breaker::CircuitBreaker;
 use crate::utils::create_insecure_client_with_options;
 use rustc_hash::FxHashMap;
+use std::sync::Arc;
+use std::time::Duration;
 
 use super::waf_patterns::{get_waf_signatures, WafSignature};
 use types::WafSignatureLower;
@@ -19,6 +22,7 @@ pub struct WafDetector {
     client: reqwest::Client,
     signatures: &'static FxHashMap<String, WafSignature>,
     signatures_lower: FxHashMap<String, WafSignatureLower>,
+    circuit_breaker: Arc<CircuitBreaker>,
 }
 
 impl WafDetector {
@@ -49,6 +53,7 @@ impl WafDetector {
             client,
             signatures,
             signatures_lower,
+            circuit_breaker: Arc::new(CircuitBreaker::new(5, 3, Duration::from_secs(30))),
         })
     }
 }

@@ -11,11 +11,25 @@ const HEADER_VALUE_MAX_LEN: usize = 256;
 
 impl WafDetector {
     pub async fn detect(&self, url: &str) -> Result<WafDetectionResult> {
+        if !self.circuit_breaker.is_available() {
+            return Ok(WafDetectionResult {
+                waf_name: None,
+                confidence: 0,
+                request_error: Some("Circuit breaker open".to_string()),
+                matched_headers: vec![],
+                matched_cookies: vec![],
+                matched_patterns: vec![],
+                server_header: None,
+                status_code: 0,
+            });
+        }
+
         let normalized_url = Self::normalize_url_static(url);
 
         let response = match self.client.get(&normalized_url).send().await {
             Ok(r) => r,
             Err(e) => {
+                self.circuit_breaker.record_failure();
                 return Ok(WafDetectionResult {
                     waf_name: None,
                     confidence: 0,
@@ -180,6 +194,8 @@ impl WafDetector {
             }
             None => (None, 0),
         };
+
+        self.circuit_breaker.record_success();
 
         Ok(WafDetectionResult {
             waf_name,
