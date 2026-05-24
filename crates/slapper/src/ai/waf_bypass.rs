@@ -16,6 +16,8 @@ pub struct WafBypassEntry {
     pub success: bool,
     #[serde(default)]
     pub failed_attempts: usize,
+    #[serde(default)]
+    pub last_accessed: u64,
 }
 
 pub struct SmartWafBypass {
@@ -79,11 +81,16 @@ impl SmartWafBypass {
 
     fn evict_knowledge_base_if_needed(&mut self) {
         if self.knowledge_base.len() >= self.max_knowledge_base_size {
-            self.knowledge_base.retain(|e| e.success);
-            if self.knowledge_base.len() >= self.max_knowledge_base_size {
-                self.knowledge_base.sort_by_key(|e| e.failed_attempts);
-                self.knowledge_base.truncate(self.max_knowledge_base_size / 2);
-            }
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+
+            self.knowledge_base.sort_by_key(|e| {
+                (e.failed_attempts > 0, now.saturating_sub(e.last_accessed))
+            });
+            let keep_count = self.max_knowledge_base_size / 2;
+            self.knowledge_base.truncate(keep_count);
         }
     }
 
@@ -99,8 +106,14 @@ impl SmartWafBypass {
             return Err(AiError::invalid_config("blocked_payload cannot be empty"));
         }
 
-        for entry in &self.knowledge_base {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        for entry in &mut self.knowledge_base {
             if entry.waf_name == waf && entry.original_payload == blocked_payload {
+                entry.last_accessed = now;
                 if entry.success {
                     return Ok(Some(entry.bypass_payload.clone()));
                 }
@@ -165,6 +178,11 @@ impl SmartWafBypass {
     }
 
     pub fn record_success(&mut self, waf: &str, original: &str, bypass: &str, technique: &str) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
         if let Some(entry) = self
             .knowledge_base
             .iter_mut()
@@ -174,6 +192,7 @@ impl SmartWafBypass {
             entry.technique = technique.to_string();
             entry.success = true;
             entry.failed_attempts = 0;
+            entry.last_accessed = now;
         } else {
             self.evict_knowledge_base_if_needed();
             self.knowledge_base.push(WafBypassEntry {
@@ -183,12 +202,18 @@ impl SmartWafBypass {
                 technique: technique.to_string(),
                 success: true,
                 failed_attempts: 0,
+                last_accessed: now,
             });
         }
         self.persist();
     }
 
     pub fn record_failure(&mut self, waf: &str, original: &str) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
         if let Some(entry) = self
             .knowledge_base
             .iter_mut()
@@ -196,6 +221,7 @@ impl SmartWafBypass {
         {
             entry.failed_attempts += 1;
             entry.success = false;
+            entry.last_accessed = now;
         } else {
             self.evict_knowledge_base_if_needed();
             self.knowledge_base.push(WafBypassEntry {
@@ -205,6 +231,7 @@ impl SmartWafBypass {
                 technique: String::new(),
                 success: false,
                 failed_attempts: 1,
+                last_accessed: now,
             });
         }
         self.persist();
