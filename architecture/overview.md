@@ -1,6 +1,16 @@
 # Slapper Architecture Overview
 
-Slapper is a high-performance, async-first security testing toolkit built in Rust. Designed for penetration testers and security researchers, it offers capabilities from reconnaissance to advanced fuzzing, distributed scanning, and autonomous agent-driven assessments.
+Slapper is a high-performance, async-first security testing toolkit built in Rust. It provides capabilities from reconnaissance to advanced fuzzing, distributed scanning, and autonomous agent-driven assessments.
+
+**Quick Facts:**
+- 41 modules in `crates/slapper/src/`
+- 743 source files
+- 1324 base tests (1469+ with full features)
+- 31 payload types for fuzzing
+- 29 TUI tabs
+- 20+ feature flags
+
+---
 
 ## System Architecture
 
@@ -22,58 +32,51 @@ Slapper is a high-performance, async-first security testing toolkit built in Rus
 │                    Command Dispatch Layer                                   │
 └─────────────────────────────┬───────────────────────────────────────────────┘
                                 │
-            ┌───────────────────┼───────────────────┬────────────────────┐
-            ▼                   ▼                   ▼                    ▼
-     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐      ┌─────────────┐
-     │   cli/      │     │ commands/   │     │    tui/     │      │  tool/      │
-     │  Parsing    │     │  Handlers   │     │   (TUI)     │      │   MCP/API   │
-     └─────────────┘     └──────┬──────┘     └─────────────┘      └─────────────┘
+             ┌─────────────────┼─────────────────┬────────────────────┐
+             ▼                 ▼                  ▼                    ▼
+      ┌─────────────┐   ┌─────────────┐    ┌─────────────┐     ┌─────────────┐
+      │   cli/      │   │ commands/   │    │    tui/     │     │    tool/    │
+      │  Parsing    │   │  Handlers   │    │   (TUI)     │     │    MCP      │
+      └─────────────┘   └──────┬──────┘    └─────────────┘     └─────────────┘
                                │
-            ┌──────────────────┼──────────────────┬──────────────────┐
-            ▼                  ▼                  ▼                  ▼
-     ┌─────────────┐    ┌─────────────┐   ┌─────────────┐    ┌─────────────┐
-     │   scanner/  │    │   fuzzer/   │   │    recon/   │    │   pipeline/ │
-     │ Port scan   │    │  Fuzzing    │   │  DNS,WHOIS  │    │   Stages    │
-     │ Fingerprint │    │  Payloads   │   │             │    │             │
-     └─────────────┘    └─────────────┘   └─────────────┘    └─────────────┘
-            │                  │                  │                  │
-            │                  │                  │                  │
-            ▼                  ▼                  ▼                  ▼
-     ┌─────────────┐    ┌─────────────┐   ┌─────────────┐    ┌─────────────┐
-     │    waf/     │    │  loadtest/  │   │  output/    │    │ distributed/│
-     │  Detection  │    │  Benchmark  │   │  Reporting  │    │   Cluster   │
-     │   Bypass    │    │             │   │ SARIF,PDF   │    │             │
-     └─────────────┘    └─────────────┘   └─────────────┘    └─────────────┘
-            │                  │                  │                  │
-            └──────────────────┼──────────────────┼──────────────────┘
-                               │                  │
-                               ▼                  ▼
-                      ┌────────────────┐   ┌────────────────┐
-                      │    notify/    │   │    storage/    │
-                      │   Webhooks    │   │   SQLx DB      │
-                      └────────────────┘   └────────────────┘
+             ┌─────────────────┼─────────────────┬────────────────┐
+             ▼                 ▼                  ▼                ▼
+      ┌─────────────┐   ┌─────────────┐   ┌─────────────┐  ┌─────────────┐
+      │   scanner/  │   │   fuzzer/   │   │    recon/   │  │  pipeline/  │
+      │ Port scan   │   │  Fuzzing    │   │   (intel)   │  │  Stages    │
+      └─────────────┘   └─────────────┘   └─────────────┘  └─────────────┘
+             │                 │                  │                │
+             │                 │                  │                │
+             ▼                 ▼                  ▼                ▼
+      ┌─────────────┐   ┌─────────────┐   ┌─────────────┐  ┌─────────────┐
+      │    waf/     │   │  loadtest/  │   │   output/    │  │ distributed/│
+      │  Detection  │   │  Benchmark  │   │   Reports    │  │   Cluster   │
+      │   Bypass    │   │             │   │              │  │             │
+      └─────────────┘   └─────────────┘   └─────────────┘  └─────────────┘
 ```
 
-## Module Map
+---
 
-This document provides a bird's-eye view of Slapper's architecture and serves as an index to detailed component documentation. Each major area with a dedicated `.md` file is linked.
+## Module Index (Deep Dives)
 
-### Core Modules
+Each major area links to a detailed `.md` file in this directory. Modules without links are candidates for future documentation.
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
-| `cli/` | `crates/slapper/src/cli/` | Clap-based argument parsing; `Commands` enum (35+ variants), per-command args | [cli_commands.md](cli_commands.md) |
-| `commands/` | `crates/slapper/src/commands/` | Command dispatch via `handle_command()`; handlers in `handlers/` | [cli_commands.md](cli_commands.md) |
-| `config/` | `crates/slapper/src/config/` | TOML/YAML config loading, scope enforcement, validation | [config.md](config.md) |
-| `types.rs` | `crates/slapper/src/types.rs` | Canonical `Severity` enum; shared types re-exported project-wide | - |
-| `error/` | `crates/slapper/src/error/` | Central error types (`SlapperError`, `Result`) | - |
+### Core Infrastructure
 
-### Security Testing Modules
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
+| `cli/` | `crates/slapper/src/cli/` | Clap-based argument parsing; `Commands` enum (35+ variants) | [cli_commands.md](cli_commands.md) |
+| `commands/` | `crates/slapper/src/commands/` | Command dispatch via `handle_command()`; handlers | [cli_commands.md](cli_commands.md) |
+| `config/` | `crates/slapper/src/config/` | TOML/YAML config loading, scope enforcement | [config.md](config.md) |
+| `types.rs` | `crates/slapper/src/types.rs` | Canonical `Severity` enum (Critical/High/Medium/Low/Info) | - |
+| `error/` | `crates/slapper/src/error/` | Core error types (`SlapperError`, `Result`) | - |
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
-| `scanner/` | `crates/slapper/src/scanner/` | Port scanning (TCP/SYN), service fingerprinting, endpoint discovery, CMS detection | [scanner.md](scanner.md) |
-| `fuzzer/` | `crates/slapper/src/fuzzer/` | Security fuzzing engine with 31 payload types, mutation, grammar, diffing | [fuzzer.md](fuzzer.md) |
+### Security Testing
+
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
+| `scanner/` | `crates/slapper/src/scanner/` | Port scanning (TCP/SYN), service fingerprinting, endpoint discovery | [scanner.md](scanner.md) |
+| `fuzzer/` | `crates/slapper/src/fuzzer/` | Security fuzzing engine with 31 payload types, mutation, grammar | [fuzzer.md](fuzzer.md) |
 | `recon/` | `crates/slapper/src/recon/` | Passive/active recon: DNS, WHOIS, SSL, subdomain, CVE mapping, cloud | [recon.md](recon.md) |
 | `waf/` | `crates/slapper/src/waf/` | WAF detection (34 products) and bypass techniques | [waf.md](waf.md) |
 | `auth/` | `crates/slapper/src/auth/` | Authentication testing: brute force, credential stuffing, MFA, SSH, SMTP | - |
@@ -84,111 +87,95 @@ This document provides a bird's-eye view of Slapper's architecture and serves as
 
 ### Assessment Orchestration
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
-| `pipeline/` | `crates/slapper/src/pipeline/` | Stage-based chained assessment orchestration with pause/resume | [pipeline.md](pipeline.md) |
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
+| `pipeline/` | `crates/slapper/src/pipeline/` | Stage-based chained assessment with pause/resume (11 profiles) | [pipeline.md](pipeline.md) |
 | `workflow/` | `crates/slapper/src/workflow/` | Finding management and SLA tracking | - |
 | `vuln/` | `crates/slapper/src/vuln/` | Vulnerability triage and lifecycle management | - |
 
-### AI & Intelligence
+### AI & Autonomous Agents
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
-| `ai/` | `crates/slapper/src/ai/` | AI/LLM integration: adaptive fuzzing, payload generation, WAF bypass, planning | [ai_agents.md](ai_agents.md) |
-| `agent/` | `crates/slapper/src/agent/` | Autonomous security agent with scheduled scans, memory, and alert routing | [ai_agents.md](ai_agents.md) |
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
+| `ai/` | `crates/slapper/src/ai/` | AI/LLM integration: adaptive fuzzing, WAF bypass, payload generation, planning | [ai_agents.md](ai_agents.md) |
+| `agent/` | `crates/slapper/src/agent/` | Autonomous security agent with scheduled scans, memory, alert routing | [ai_agents.md](ai_agents.md) |
+| `tool/` | `crates/slapper/src/tool/` | SecurityTool trait, ToolRegistry, MCP/REST/gRPC integration | [ai_agents.md](ai_agents.md) |
 
 ### Performance & Load
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
 | `loadtest/` | `crates/slapper/src/loadtest/` | HTTP load testing with HDR histogram metrics | [loadtest.md](loadtest.md) |
-| `stress/` | `crates/slapper/src/stress/` | SYN/UDP/HTTP/ICMP flood testing (feature-gated `stress-testing`) | [networking.md](networking.md) |
+| `stress/` | `crates/slapper/src/stress/` | SYN/UDP/HTTP/ICMP flood testing (feature-gated) | [networking.md](networking.md) |
 
 ### Networking & Packets
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
 | `packet/` | `crates/slapper/src/packet/` | Packet capture (libpcap), crafting (pnet), parsing | [networking.md](networking.md) |
 | `proxy/` | `crates/slapper/src/proxy/` | SOCKS/HTTP/Tor proxy pool with health checks | - |
 
 ### Data & Reporting
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
 | `output/` | `crates/slapper/src/output/` | Report generation: JSON, HTML, CSV, SARIF, JUnit, PDF, Markdown | [output.md](output.md) |
 | `storage/` | `crates/slapper/src/storage/` | SQLx-based persistence for findings, history, configuration | - |
 
 ### Integration & Compliance
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
 | `integrations/` | `crates/slapper/src/integrations/` | Jira, GitHub, GitLab connectors | - |
 | `compliance/` | `crates/slapper/src/compliance/` | OWASP, PCI-DSS, HIPAA, SOC2 scanning and reporting | - |
 | `container/` | `crates/slapper/src/container/` | Kubernetes and Docker security checks | - |
 | `supply_chain/` | `crates/slapper/src/supply_chain/` | SBOM generation and analysis | - |
 
-### Tool Abstraction Layer
-
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
-| `tool/` | `crates/slapper/src/tool/` | REST API / MCP / gRPC integration; `SecurityTool` trait, `ToolRegistry` | [ai_agents.md](ai_agents.md) |
-
 ### User Interface
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
 | `tui/` | `crates/slapper/src/tui/` | Interactive Terminal UI (ratatui + crossterm), 29 tabs | [tui.md](tui.md) |
 
 ### Notifications & Utilities
 
-| Module | Source Location | Description | Doc |
-|--------|---------------|-------------|-----|
+| Module | Source | Description | Doc |
+|--------|--------|-------------|-----|
 | `notify/` | `crates/slapper/src/notify/` | Webhook notifications: Slack, Discord, Teams, email | - |
 | `logging/` | `crates/slapper/src/logging/` | Structured logging with tracing | - |
 | `utils/` | `crates/slapper/src/utils/` | Circuit breaker, formatting, rate limiting, regex caching | - |
 | `constants.rs` | `crates/slapper/src/constants.rs` | Centralized magic number elimination | - |
 
-## Workspace Crates
-
-| Crate | Location | Purpose |
-|-------|----------|---------|
-| `slapper` | `crates/slapper/` | Core toolkit |
-| `slapper-plugin` | `crates/slapper-plugin/` | Python plugin system via `pyo3` |
-| `slapper-nse` | `crates/slapper-nse/` | Full Nmap Scripting Engine (NSE) via `mlua` |
-| `slapper-ruby` | `crates/slapper-ruby/` | Ruby bridge and Metasploit RPC integration |
-
-**NSE Integration**: Full Lua VM with 164 NSE-style library modules (stdnse, nmap, http, socket, dns, ssl, ssh, mysql, postgres, redis, mongodb, ldap, snmp, smb, vulns, etc.). Supports sandboxed execution with path canonicalization and network allowlisting. See [plugins_nse.md](plugins_nse.md) for details.
+---
 
 ## Module Interconnections
-
-Understanding how modules work together is essential for effective security assessments:
 
 ### Typical Assessment Flow
 
 ```
 ┌──────────┐     ┌───────────┐     ┌───────────┐     ┌─────────┐
 │  Recon   │────▶│  Scanner  │────▶│ Endpoint  │────▶│  Fuzzer │
-│ (intel)  │     │ (ports)   │     │ (paths)   │     │ (bugs)  │
+│ (intel)  │     │ (ports)   │     │  (paths)  │     │  (bugs) │
 └──────────┘     └───────────┘     └───────────┘     └─────────┘
-     │               │                  │                 │
-     │               │                  │                 │
-     ▼               ▼                  ▼                 ▼
+     │               │                  │                  │
+     │               │                  │                  │
+     ▼               ▼                  ▼                  ▼
 ┌──────────┐     ┌───────────┐     ┌───────────┐     ┌─────────┐
-│   WAF    │◀────│  Pipeline  │────▶│  LoadTest │     │   AI    │
-│ (bypass) │     │(orchestra.)│     │ (perf)    │     │(adapt)  │
+│   WAF    │◀────│  Pipeline │────▶│  LoadTest │     │   AI    │
+│ (bypass) │     │(orchestra)│     │   (perf)  │     │ (adapt) │
 └──────────┘     └───────────┘     └───────────┘     └─────────┘
-                       │
-                       ▼
-                 ┌───────────┐
-                 │  Output   │
-                 │ (reports) │
-                 └───────────┘
+                        │
+                        ▼
+                  ┌───────────┐
+                  │  Output   │
+                  │ (reports) │
+                  └───────────┘
 ```
 
-### Key Module Dependencies
+### Key Dependencies
 
 | From | To | Purpose |
-|------|-----|---------|
+|------|----|---------|
 | `cli/` | `commands/` | Parsed args → handler dispatch |
 | `commands/handlers/` | `pipeline/` | Pipeline execution |
 | `pipeline/` | `scanner/`, `fuzzer/`, `recon/`, `waf/`, `loadtest/` | Stage orchestration |
@@ -199,69 +186,32 @@ Understanding how modules work together is essential for effective security asse
 | `tool/` | All modules | MCP/REST API exposure |
 | `output/` | All modules | Report generation from any findings |
 
-## Design Principles
+---
 
-- **Async-First**: Built on `tokio` for high concurrency across all network operations
-- **Modular & Extensible**: Feature flags gate modules; robust plugin system via Python/Ruby/NSE
-- **Security-Focused**: Built-in WAF bypass, 31 payload types, scope enforcement
-- **Standardized Output**: SARIF, SPDX, JUnit for CI/CD integration
-- **Performance-Conscious**: Uses `rustc_hash::FxHashMap`/`FxHashSet` instead of std collections
-
-## Key Architectural Patterns
+## Design Patterns
 
 ### 1. Feature-Gated Compilation
 
-`#[cfg(feature = "...")]` gates modules, commands, and dependencies:
-
-| Feature | Enables |
-|---------|---------|
-| `stress-testing` | Raw sockets, IP spoofing, DoS tools |
-| `packet-inspection` | Packet capture, traceroute |
-| `python-plugins` / `ruby-plugins` | Plugin language support |
-| `nse` | Nmap NSE script support |
-| `ai-integration` | AI planner, script generation, autonomous agent skills |
-| `rest-api` / `grpc-api` | API server integration |
-| `ws-api` | WebSocket pub/sub |
-| `database` | SQLx-based persistence |
-| `cloud` | Cloud security scanning (AWS, GCP, Azure) |
-| `container` | Kubernetes/Docker security checks |
-| `advanced-hunting` | Advanced threat hunting |
-| `compliance` | OWASP, PCI-DSS, HIPAA, SOC2 reporting |
-| `pdf` | PDF report generation |
-| `full` | All features combined |
-
-### 2. Consistent Command Pattern
-
-Every command follows this flow:
-
-```
-main.rs
-  → Cli::parse()
-  → load_config()
-  → load_scope()
-  → CommandContext::new()
-  → handle_command()
-    → handler (e.g., handle_fuzz)
-      → scope check (ensure_scope_url)
-      → module::run_cli(args, config)
-        → e.g., FuzzEngine::new(args).run()
+```rust
+#[cfg(feature = "stress-testing")]  // Raw sockets, IP spoofing, DoS
+#[cfg(feature = "packet-inspection")]  // Packet capture
+#[cfg(feature = "python-plugins")]  // Python plugins via pyo3
+#[cfg(feature = "nse")]  // Nmap Scripting Engine
+#[cfg(feature = "ai-integration")]  // AI planner, autonomous agents
+#[cfg(feature = "full")]  // All features
 ```
 
-### 3. Builder Pattern
-
-Used throughout for fluent initialization:
+### 2. Builder Pattern
 
 ```rust
 Pipeline::from_args(args)
 FuzzEngine::new(args)
-SarifBuilder::new()
 LoadTestRunner::new(url, total, concurrency, timeout)
 SmartWafBypass::new(client, config)
+SarifBuilder::new()
 ```
 
-### 4. Trait-Based Tool Abstraction
-
-`SecurityTool` trait enables polymorphic registration for API/MCP integration:
+### 3. Trait-Based Tool Abstraction
 
 ```rust
 pub trait SecurityTool: Send + Sync {
@@ -271,31 +221,44 @@ pub trait SecurityTool: Send + Sync {
 }
 ```
 
-`ToolRegistry` manages dynamic registration and lookup. See [ai_agents.md](ai_agents.md) for MCP/OpenAI protocol adapters.
+`ToolRegistry` manages dynamic registration for MCP/REST/gRPC exposure.
 
-### 5. Scope Enforcement
+### 4. Scope Enforcement
 
 `Scope` struct in `config/scope.rs` enforces target restrictions:
+- `is_target_allowed(target)` - checks allow/block rules
+- `validate_url(url)` - validates URL's host
+- `is_port_allowed(port)` - port allowlist/blocklist
+- **Private IP blocking**: Direct IPs (`127.0.0.1`, `169.254.169.254`) blocked via `TargetScope::parse()`
 
-- `is_target_allowed(target)` - checks if target passes scope rules
-- `validate_url(url)` - validates URL's host via scope rules
-- `is_port_allowed(port)` - checks port allowlist/blocklist
-- **Private IP blocking**: Direct IP addresses (e.g., `127.0.0.1`) blocked via `TargetScope::parse()`
-- CIDR notation supported for range-based scope rules
+### 5. Performance Collections
 
-See [config.md](config.md) for detailed scope rule evaluation.
+Use `rustc_hash::FxHashMap` and `FxHashSet` instead of std collections for hot paths:
+- Scanner results, fuzzing state, recon caches, WAF signatures
+- All 14 architecture documents confirm this pattern
 
-### 6. Session Persistence
+### 6. Async-First Concurrency
 
-Scans can be saved/resumed via JSON session files:
+Built on `tokio` for high concurrency:
+- `tokio::join!` for parallel recon tasks
+- `tokio::sync::Semaphore` for concurrency control
+- `JoinSet` for load test workers
+- `DashMap` for lock-free concurrent collection
 
-- `PipelineSession` in `pipeline/session.rs`
-- Checkpoints written only when output path matches `*.session` or `*.session.json`
-- `PipelineContext` serialization preserves inter-stage data
+---
 
-### 7. Centralized Constants
+## Workspace Crates
 
-`constants.rs` eliminates magic numbers across modules, providing named constants for thresholds, timeouts, buffer sizes, and scoring weights.
+| Crate | Location | Purpose |
+|-------|----------|---------|
+| `slapper` | `crates/slapper/` | Core toolkit |
+| `slapper-plugin` | `crates/slapper-plugin/` | Python plugin system via `pyo3` |
+| `slapper-nse` | `crates/slapper-nse/` | Full Nmap Scripting Engine (NSE) via `mlua` |
+| `slapper-ruby` | `crates/slapper-ruby/` | Ruby bridge and Metasploit RPC integration |
+
+**NSE Integration**: Full Lua VM with 164 NSE-style library modules (stdnse, nmap, http, socket, dns, ssl, ssh, mysql, postgres, redis, mongodb, ldap, snmp, smb, vulns, etc.). See [plugins_nse.md](plugins_nse.md).
+
+---
 
 ## Key Data Types
 
@@ -303,10 +266,10 @@ Scans can be saved/resumed via JSON session files:
 |------|----------|---------|
 | `SlapperConfig` | `config/settings.rs` | Main configuration struct |
 | `Scope` | `config/scope.rs` | Target allow/block enforcement |
-| `Severity` | `types.rs` | Unified severity enum (Critical, High, Medium, Low, Info) |
-| `PayloadType` | `fuzzer/payloads/mod.rs` | 31 payload categories for fuzzing |
-| `SlapperError` | `error/mod.rs` | Unified error type via `thiserror` |
-| `TabError` | `tui/app/tab_error.rs` | Structured error type with recovery categories |
+| `Severity` | `types.rs` | Unified severity (Critical, High, Medium, Low, Info) |
+| `PayloadType` | `fuzzer/payloads/mod.rs` | 31 payload categories |
+| `SlapperError` | `error/mod.rs` | Unified error via `thiserror` |
+| `TabError` | `tui/app/tab_error.rs` | Structured error with recovery categories |
 | `SecurityTool` | `tool/traits.rs` | Trait for tool abstraction |
 | `ToolRegistry` | `tool/registry.rs` | Dynamic tool registration |
 | `AiClient` | `ai/client.rs` | LLM client with provider abstraction |
@@ -314,54 +277,62 @@ Scans can be saved/resumed via JSON session files:
 | `AiPlanner` | `ai/planner.rs` | AI-driven execution planning |
 | `FuzzEngine` | `fuzzer/engine/mod.rs` | Core fuzzing orchestration |
 | `PipelineContext` | `pipeline/context.rs` | Inter-stage data passing |
-| `Stage` | `pipeline/stage.rs` | Pipeline stage enum with 11 profiles |
+| `Stage` | `pipeline/stage.rs` | Pipeline stage enum (11 profiles) |
+| `WafDetector` | `waf/detector/mod.rs` | 34 WAF product detection |
+| `LoadTestRunner` | `loadtest/runner.rs` | HTTP benchmarking |
+
+---
 
 ## Index of Detailed Documentation
 
-| Document | Area | Modules Covered |
-|----------|------|-----------------|
-| [ai_agents.md](ai_agents.md) | AI/LLM integration and autonomous agents | `ai/`, `agent/`, `tool/` |
-| [cli_commands.md](cli_commands.md) | CLI parsing and command dispatch | `cli/`, `commands/` |
-| [config.md](config.md) | Configuration system and scope enforcement | `config/` |
-| [distributed.md](distributed.md) | Worker/coordinator cluster architecture | `distributed/` |
-| [fuzzer.md](fuzzer.md) | Fuzzing engine and payload types | `fuzzer/` |
-| [loadtest.md](loadtest.md) | HTTP load testing and benchmarking | `loadtest/` |
-| [networking.md](networking.md) | Packet capture/crafting and stress testing | `packet/`, `stress/` |
-| [output.md](output.md) | Reporting formats and deduplication | `output/` |
-| [pipeline.md](pipeline.md) | Stage orchestration and session management | `pipeline/` |
-| [plugins_nse.md](plugins_nse.md) | Python/Ruby plugins and NSE integration | `slapper-plugin/`, `slapper-nse/`, `slapper-ruby/` |
-| [recon.md](recon.md) | Reconnaissance modules and runner | `recon/` |
-| [scanner.md](scanner.md) | Port scanning and fingerprinting | `scanner/` |
-| [tui.md](tui.md) | Terminal UI, 29 tabs, components, workers | `tui/` |
-| [waf.md](waf.md) | WAF detection and bypass techniques | `waf/` |
+| Document | Modules Covered |
+|----------|-----------------|
+| [ai_agents.md](ai_agents.md) | `ai/`, `agent/`, `tool/` - AI/LLM integration and autonomous agents |
+| [cli_commands.md](cli_commands.md) | `cli/`, `commands/` - CLI parsing and command dispatch |
+| [config.md](config.md) | `config/` - Configuration system and scope enforcement |
+| [distributed.md](distributed.md) | `distributed/` - Worker/coordinator cluster architecture |
+| [fuzzer.md](fuzzer.md) | `fuzzer/` - Fuzzing engine and payload types |
+| [loadtest.md](loadtest.md) | `loadtest/` - HTTP load testing and benchmarking |
+| [networking.md](networking.md) | `packet/`, `stress/` - Packet capture/crafting and stress testing |
+| [output.md](output.md) | `output/` - Reporting formats and deduplication |
+| [pipeline.md](pipeline.md) | `pipeline/` - Stage orchestration and session management |
+| [plugins_nse.md](plugins_nse.md) | `slapper-plugin/`, `slapper-nse/`, `slapper-ruby/` - Plugin systems and NSE |
+| [recon.md](recon.md) | `recon/` - Reconnaissance modules and runner |
+| [scanner.md](scanner.md) | `scanner/` - Port scanning and fingerprinting |
+| [tui.md](tui.md) | `tui/` - Terminal UI, 29 tabs, components, workers |
+| [waf.md](waf.md) | `waf/` - WAF detection and bypass techniques |
 
-## Modules Without Detailed Docs
+---
 
-The following modules currently lack dedicated architecture documentation (candidates for future deep dives):
+## Undocumented Modules
 
-| Module | Purpose |
-|--------|---------|
-| `auth/` | Authentication testing (brute force, credential stuffing, MFA, SSH, SMTP) |
-| `browser/` | Headless Chrome for DOM XSS and SPA crawling |
-| `compliance/` | Compliance scanning and reporting (OWASP, PCI-DSS, HIPAA, SOC2) |
-| `container/` | Kubernetes and Docker security checks |
-| `hunt/` | Intelligent vulnerability hunting |
-| `integrations/` | Issue tracker connectors (Jira, GitHub, GitLab) |
-| `notify/` | Webhook notifications (Slack, Discord, Teams, email) |
-| `proxy/` | SOCKS/HTTP/Tor proxy pool with health checks |
-| `storage/` | SQLx-based persistence for findings, history, configuration |
-| `supply_chain/` | SBOM generation and analysis |
-| `vuln/` | Vulnerability triage and lifecycle management |
-| `websocket/` | WebSocket security testing |
-| `wireless/` | Wireless security testing |
-| `workflow/` | Finding management and SLA tracking |
+The following modules lack dedicated architecture documentation (candidates for future deep dives):
+
+| Module | Purpose | Priority |
+|--------|---------|----------|
+| `auth/` | Authentication testing (brute force, credential stuffing, MFA, SSH, SMTP) | Medium |
+| `browser/` | Headless Chrome for DOM XSS and SPA crawling | Medium |
+| `compliance/` | Compliance scanning (OWASP, PCI-DSS, HIPAA, SOC2) | Low |
+| `container/` | Kubernetes and Docker security checks | Medium |
+| `hunt/` | Intelligent vulnerability hunting | Medium |
+| `integrations/` | Issue tracker connectors (Jira, GitHub, GitLab) | Low |
+| `notify/` | Webhook notifications (Slack, Discord, Teams, email) | Low |
+| `proxy/` | SOCKS/HTTP/Tor proxy pool with health checks | Medium |
+| `storage/` | SQLx-based persistence for findings, history, configuration | Medium |
+| `supply_chain/` | SBOM generation and analysis | Low |
+| `vuln/` | Vulnerability triage and lifecycle management | Medium |
+| `websocket/` | WebSocket security testing | Medium |
+| `wireless/` | Wireless security testing | Low |
+| `workflow/` | Finding management and SLA tracking | Low |
+
+---
 
 ## Quick Reference
 
-| Item | Value |
-|------|-------|
+| Metric | Value |
+|-------|-------|
 | Total modules | 41 modules in `crates/slapper/src/` |
-| Detailed docs | 14 architecture documents in `architecture/` |
+| Architecture docs | 14 documents in `architecture/` |
 | Workspace crates | 4 (slapper, slapper-plugin, slapper-nse, slapper-ruby) |
 | Payload types | 31 (defined in `fuzzer/payloads/mod.rs`) |
 | WAF products | 34 (defined in `waf/data/patterns.rs`) |
@@ -372,4 +343,4 @@ The following modules currently lack dedicated architecture documentation (candi
 
 ---
 
-*This overview serves as the entry point to the architecture documentation. See individual `.md` files for deep dives into each component.*
+*This overview serves as the entry point to the architecture documentation. Each linked document provides a deep dive into a specific component or domain.*
