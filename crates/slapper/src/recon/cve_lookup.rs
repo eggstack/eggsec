@@ -138,7 +138,7 @@ impl CveEngine {
                     .collect()
             })
             .unwrap_or_else(|| {
-                tracing::debug!("CVE references field missing or invalid");
+                tracing!().debug("CVE references field missing or invalid");
                 Vec::new()
             });
 
