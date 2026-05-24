@@ -65,6 +65,10 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             let proxies = ProxyEntry::load_from_file(&add_args.file)?;
             let count = proxies.len();
 
+            for proxy in &proxies {
+                ctx.ensure_scope(&proxy.address)?;
+            }
+
             let mut config = ctx.config.clone();
             let new_entries: Vec<ProxyConfigEntry> = proxies
                 .iter()
