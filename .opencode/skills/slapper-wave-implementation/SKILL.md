@@ -50,26 +50,30 @@ When merging multiple branches:
 3. Update relevant `AGENTS.override.md` files if module-specific guidance changed
 4. Update skills in `.opencode/skills/` if new patterns need documenting
 
-## Plan Completion (2026-05-29)
+## Plan Completion (2026-05-24)
 
-As of 2026-05-29, all implementation items have been verified and completed (20/20 completed). The plan file has been pruned to a summary with future considerations only.
+As of 2026-05-24, all implementation items from Waves 1-3 have been verified and completed. The plan file has been pruned to contain only:
+- Verification fixes that were applied during the review
+- Deferred items (feature enhancements not yet implemented)
 
-### Implementation Summary (2026-05-29)
-- **Wave 1**: All 6 items completed (PluginManager FxHashMap, Ruby timeout, CMS error handling, CacheKeyBuilder, AI HashMap, NSE CVE Vec storage)
-- **Wave 2**: All 8 items completed (WAF HTTP/2 docs, Scope.validate(), Scanner progress, Distributed TaskResult, heartbeat cached, Pipeline errors, fingerprint ports, WAF config)
-- **Wave 3**: All 7 implementation items completed (TUI dispatcher cache, CLI output flag, docs module counts, fuzzer progress, CSV streaming, TUI theme restore, recon secrets)
-- **Deferred items pruned** (no longer needed):
-  - TUI unwrap_or_default: Low value, high refactoring risk, async-safe
-  - NSE DNS rebinding: Architecture already validates IPs at connection time
-  - NSE OSV/CISA KEV: Already fully implemented in slapper-nse/src/cve/
+### Key Verification Findings (2026-05-24)
+- **2.5 Loadtest response check**: Fixed inconsistent response body consumption (was using `!status.is_success()`, now uses `status_code >= 400`)
+- **2.10 IPv4 options bounds**: Restored bounds checks that were reverted
+- **2.11 DNS name parsing SmallVec**: Restored SmallVec optimization that was reverted
+- **3.1 NSE library count**: Updated overview.md from 164 to 169
 
-### Future Considerations
-The pruned plan in `plans/plan.md` contains lower priority items identified during architecture reviews. When starting a new wave of fixes:
+### Deferred Items
+| # | Item | Reason |
+|---|------|--------|
+| 2.1 | TUI auto-save interval | Feature enhancement - auto-save works but interval not configurable through UI |
 
-1. Create a new plan document in `plans/` directory (e.g., `plans/plan-YYYY-MM-DD.md`)
-2. Use the wave-based parallelization approach demonstrated in this skill
-3. Mark items as COMPLETED only after verifying in code with subagents
-4. Use `cargo test --lib -p slapper` to verify changes don't break existing functionality
+### Verification Pattern Used
+When verifying plan items, use subagents to check each item independently:
+1. Find the file(s) mentioned in the implementation
+2. Verify key evidence (function name, line numbers)
+3. Report "VERIFIED" or "ISSUE FOUND" for each item
+
+If issues are found, implement fixes in a separate worktree/branch, then merge.
 
 ## Key Implementation Patterns
 
