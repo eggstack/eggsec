@@ -68,6 +68,16 @@ impl PdfGenerator {
             &font,
         );
 
+        if findings.len() > 30 {
+            current_layer.use_text(
+                &format!("Warning: {} findings truncated to 30 (PDF page limit)", findings.len() - 30),
+                10.0,
+                Mm(20.0),
+                Mm(228.0),
+                &font,
+            );
+        }
+
         let mut y_position = 220.0;
         let severity_colors: &[(&str, Color)] = &[
             ("Critical", Color::new(0.83, 0.18, 0.18)),
