@@ -273,7 +273,12 @@ pub async fn handle_auth_test(
 
 fn load_passwords(wordlist_path: &Option<String>) -> Result<Vec<String>> {
     if let Some(path) = wordlist_path {
-        let content = std::fs::read_to_string(path)?;
+        if path.contains("..") {
+            return Err(anyhow::anyhow!("Path traversal detected in wordlist path"));
+        }
+        let canonical = std::fs::canonicalize(path)
+            .map_err(|e| anyhow::anyhow!("Failed to resolve wordlist path: {}", e))?;
+        let content = std::fs::read_to_string(canonical)?;
         Ok(content
             .lines()
             .map(|l| l.trim().to_string())
