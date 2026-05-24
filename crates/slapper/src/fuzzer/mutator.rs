@@ -1,5 +1,5 @@
 use crate::utils::urlencoding;
-use rand::rngs::SmallRng;
+use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ pub enum MutationType {
 #[derive(Debug, Clone)]
 pub struct Mutator {
     mutation_types: Vec<MutationType>,
-    rng: SmallRng,
+    rng: StdRng,
 }
 
 impl Default for Mutator {
@@ -47,14 +47,14 @@ impl Mutator {
                 MutationType::Comment,
                 MutationType::Whitespace,
             ],
-            rng: SmallRng::from_entropy(),
+            rng: StdRng::from_entropy(),
         }
     }
 
     pub fn with_mutation_types(types: Vec<MutationType>) -> Self {
         Self {
             mutation_types: types,
-            rng: SmallRng::from_entropy(),
+            rng: StdRng::from_entropy(),
         }
     }
 

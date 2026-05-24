@@ -220,7 +220,7 @@ impl Grammar {
 /// ```
 pub struct GrammarFuzzer {
     grammar: Grammar,
-    rng: rand::rngs::SmallRng,
+    rng: rand::rngs::StdRng,
     max_depth: usize,
     kind: GrammarKind,
 }
@@ -230,7 +230,7 @@ impl GrammarFuzzer {
         use rand::SeedableRng;
         Self {
             grammar,
-            rng: rand::rngs::SmallRng::from_entropy(),
+            rng: rand::rngs::StdRng::from_entropy(),
             max_depth: 10,
             kind,
         }
@@ -240,7 +240,7 @@ impl GrammarFuzzer {
         use rand::SeedableRng;
         Self {
             grammar,
-            rng: rand::rngs::SmallRng::seed_from_u64(seed),
+            rng: rand::rngs::StdRng::seed_from_u64(seed),
             max_depth: 10,
             kind,
         }
