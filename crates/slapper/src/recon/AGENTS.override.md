@@ -103,10 +103,6 @@ The recon module is organized as follows:
    - Cache `FxHashMap` never persists across calls
    - Fix: Add `persist()`/`load()` methods or use module-level `Arc<Mutex<>>`
 
-2. **query_alexa is stubbed** (`subdomain.rs:141-145`)
-   - Function returns empty results and is never called
-   - Fix: Implement or remove
-
 ### Low Priority
 
 3. **secrets module not in FULL_RECON_PIPELINE_MODULES** (`mod.rs:346-363`)
