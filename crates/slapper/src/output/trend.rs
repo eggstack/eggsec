@@ -1,5 +1,8 @@
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use lru::LruCache;
+
+const DEFAULT_MAX_HISTORY: usize = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResult {
@@ -140,19 +143,18 @@ pub enum TrendDirection {
 }
 
 pub struct TrendAnalyzer {
-    results: Vec<ScanResult>,
+    results: LruCache<String, ScanResult>,
 }
 
 impl TrendAnalyzer {
     pub fn new() -> Self {
         Self {
-            results: Vec::new(),
+            results: LruCache::new(std::num::NonZeroUsize::new(DEFAULT_MAX_HISTORY).unwrap()),
         }
     }
 
     pub fn add_result(&mut self, result: ScanResult) {
-        self.results.push(result);
-        self.results.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        self.results.put(result.id.clone(), result);
     }
 
     pub fn get_trend(&self) -> TrendAnalysis {
@@ -166,30 +168,29 @@ impl TrendAnalyzer {
             };
         }
 
-        let critical_trend: Vec<i32> = self
-            .results
+        let mut sorted_results: Vec<_> = self.results.iter().collect();
+        sorted_results.sort_by(|a, b| a.1.timestamp.cmp(&b.1.timestamp));
+
+        let critical_trend: Vec<i32> = sorted_results
             .windows(2)
-            .map(|w| w[1].summary.critical as i32 - w[0].summary.critical as i32)
+            .map(|w| w[1].1.summary.critical as i32 - w[0].1.summary.critical as i32)
             .collect();
 
-        let high_trend: Vec<i32> = self
-            .results
+        let high_trend: Vec<i32> = sorted_results
             .windows(2)
-            .map(|w| w[1].summary.high as i32 - w[0].summary.high as i32)
+            .map(|w| w[1].1.summary.high as i32 - w[0].1.summary.high as i32)
             .collect();
 
-        let medium_trend: Vec<i32> = self
-            .results
+        let medium_trend: Vec<i32> = sorted_results
             .windows(2)
-            .map(|w| w[1].summary.medium as i32 - w[0].summary.medium as i32)
+            .map(|w| w[1].1.summary.medium as i32 - w[0].1.summary.medium as i32)
             .collect();
 
-        let total_duration: u64 = self
-            .results
+        let total_duration: u64 = sorted_results
             .iter()
-            .map(|r| r.summary.scan_duration_ms)
+            .map(|r| r.1.summary.scan_duration_ms)
             .sum();
-        let average_scan_time_ms = total_duration / self.results.len() as u64;
+        let average_scan_time_ms = total_duration / sorted_results.len() as u64;
 
         let direction = if critical_trend.iter().any(|&x| x > 0) {
             TrendDirection::Worsening
@@ -210,8 +211,8 @@ impl TrendAnalyzer {
 
     pub fn get_findings_by_category(&self) -> FxHashMap<String, usize> {
         let mut categories: FxHashMap<String, usize> = FxHashMap::default();
-        for result in &self.results {
-            for finding in &result.details {
+        for result in self.results.iter() {
+            for finding in &result.1.details {
                 *categories.entry(finding.category.clone()).or_insert(0) += 1;
             }
         }
@@ -220,8 +221,8 @@ impl TrendAnalyzer {
 
     pub fn get_most_common_findings(&self, limit: usize) -> Vec<(String, usize)> {
         let mut counts: FxHashMap<String, usize> = FxHashMap::default();
-        for result in &self.results {
-            for finding in &result.details {
+        for result in self.results.iter() {
+            for finding in &result.1.details {
                 *counts.entry(finding.title.clone()).or_insert(0) += 1;
             }
         }
