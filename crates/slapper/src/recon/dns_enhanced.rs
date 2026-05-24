@@ -221,12 +221,6 @@ impl DnsEnumerator {
 
         results
     }
-
-    #[allow(dead_code)]
-    /// Zone transfer check - implementation incomplete, returns empty
-    pub fn check_zone_transfer(&self, domain: &str, nameserver: &str) -> Vec<DnsRecord> {
-        vec![]
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -138,12 +138,6 @@ impl SubdomainEnumerator {
         Ok(subdomains)
     }
 
-    #[allow(dead_code)]
-    /// Alexa ranking query - implementation incomplete, returns empty
-    async fn query_alexa(&self, _domain: &str) -> Result<FxHashSet<String>> {
-        Ok(FxHashSet::default())
-    }
-
     async fn query_threatminer(&self, domain: &str) -> Result<FxHashSet<String>> {
         let url = format!(
             "https://api.threatminer.org/v2/domain.php?q={}&rt=6",
