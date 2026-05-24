@@ -143,8 +143,11 @@ impl RateLimiter {
                 return;
             }
 
-            let sleep_ns = self.interval_ns.min(1_000_000);
-            tokio::time::sleep(Duration::from_nanos(sleep_ns)).await;
+            let last = *self.last_refill.lock();
+            let elapsed_ns = Instant::now().duration_since(last).as_nanos() as u64;
+            let elapsed_since_refill = elapsed_ns % self.interval_ns;
+            let wait_ns = self.interval_ns.saturating_sub(elapsed_since_refill);
+            tokio::time::sleep(Duration::from_nanos(wait_ns)).await;
         }
     }
 
