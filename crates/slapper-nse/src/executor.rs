@@ -122,6 +122,9 @@ impl NseExecutor {
     ) -> Result<(), String> {
         self.core.add_port(port, protocol, state, service)
     }
+    pub fn get_sandbox_metrics(&self) -> SandboxMetrics {
+        self.core.get_sandbox_metrics()
+    }
 
     // Executor-specific: rule execution
 

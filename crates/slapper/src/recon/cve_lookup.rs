@@ -285,12 +285,6 @@ impl CveEngine {
 
         cves
     }
-
-    #[allow(dead_code)]
-    /// ExploitDB lookup - implementation incomplete, returns empty
-    pub fn get_exploit_db_exploits(&self, cve_id: &str) -> Vec<ExploitDbEntry> {
-        vec![]
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

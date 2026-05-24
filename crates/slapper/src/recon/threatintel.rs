@@ -54,7 +54,6 @@ pub struct ThreatIntelClient {
     virustotal_key: Option<SensitiveString>,
     alienvault_key: Option<SensitiveString>,
     shodan_key: Option<SensitiveString>,
-    threatstream_key: Option<SensitiveString>,
 }
 
 impl ThreatIntelClient {
@@ -62,7 +61,6 @@ impl ThreatIntelClient {
         virustotal_key: Option<SensitiveString>,
         alienvault_key: Option<SensitiveString>,
         shodan_key: Option<SensitiveString>,
-        threatstream_key: Option<SensitiveString>,
     ) -> Result<Self> {
         let client = create_http_client(30)?;
 
@@ -71,7 +69,6 @@ impl ThreatIntelClient {
             virustotal_key,
             alienvault_key,
             shodan_key,
-            threatstream_key,
         })
     }
 
@@ -443,7 +440,6 @@ pub async fn check_threat_intel(
         virustotal_key.cloned(),
         alienvault_key.cloned(),
         shodan_key.cloned(),
-        None,
     )?;
 
     if is_ip {
@@ -522,11 +518,10 @@ mod tests {
 
     #[test]
     fn test_threat_intel_client_new() {
-        let client = ThreatIntelClient::new(None, None, None, None);
+        let client = ThreatIntelClient::new(None, None, None);
         assert!(client.is_ok());
         let client = ThreatIntelClient::new(
             Some(SensitiveString::new("vt-key".to_string())),
-            None,
             None,
             None,
         );

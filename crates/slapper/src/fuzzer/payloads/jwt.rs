@@ -172,8 +172,13 @@ impl JwtFuzzer {
         let mut results = Vec::new();
 
         if let Some(parts) = self.parse_token(token) {
-            let mut header: serde_json::Value =
-                serde_json::from_str(&parts.header).unwrap_or_default();
+            let mut header = match serde_json::from_str::<serde_json::Value>(&parts.header) {
+                Ok(h) => h,
+                Err(e) => {
+                    tracing::warn!("failed to parse JWT header: {}", e);
+                    continue;
+                }
+            };
 
             header["alg"] = serde_json::json!("HS256");
 
@@ -309,8 +314,13 @@ impl JwtFuzzer {
         if let Some(parts) = self.parse_token(token) {
             let jku_injections = vec![("jku", "https://evil.com/jwks.json")];
             for (key, value) in jku_injections {
-                let mut header: serde_json::Value =
-                    serde_json::from_str(&parts.header).unwrap_or_default();
+                let mut header = match serde_json::from_str::<serde_json::Value>(&parts.header) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        tracing::warn!("failed to parse JWT header: {}", e);
+                        continue;
+                    }
+                };
                 header[key] = serde_json::json!(value);
 
                 let token = format!(
@@ -330,8 +340,13 @@ impl JwtFuzzer {
 
             let x5u_injections = vec![("x5u", "https://evil.com/cert.pem")];
             for (key, value) in x5u_injections {
-                let mut header: serde_json::Value =
-                    serde_json::from_str(&parts.header).unwrap_or_default();
+                let mut header = match serde_json::from_str::<serde_json::Value>(&parts.header) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        tracing::warn!("failed to parse JWT header: {}", e);
+                        continue;
+                    }
+                };
                 header[key] = serde_json::json!(value);
 
                 let token = format!(
@@ -351,8 +366,13 @@ impl JwtFuzzer {
 
             let x5c_injections = vec![("x5c", "MIIBkTCB+wIJAKbO...")];
             for (key, value) in x5c_injections {
-                let mut header: serde_json::Value =
-                    serde_json::from_str(&parts.header).unwrap_or_default();
+                let mut header = match serde_json::from_str::<serde_json::Value>(&parts.header) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        tracing::warn!("failed to parse JWT header: {}", e);
+                        continue;
+                    }
+                };
                 header[key] = serde_json::json!([value]);
 
                 let token = format!(
@@ -376,8 +396,13 @@ impl JwtFuzzer {
                 ("kid", "12"),
             ];
             for (key, value) in kid_injections {
-                let mut header: serde_json::Value =
-                    serde_json::from_str(&parts.header).unwrap_or_default();
+                let mut header = match serde_json::from_str::<serde_json::Value>(&parts.header) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        tracing::warn!("failed to parse JWT header: {}", e);
+                        continue;
+                    }
+                };
                 header[key] = serde_json::json!(value);
 
                 let token = format!(

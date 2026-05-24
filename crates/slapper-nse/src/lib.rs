@@ -193,6 +193,8 @@ pub mod public_api;
 pub mod libraries;
 
 #[cfg(feature = "nse")]
+pub use executor_core::SandboxMetrics;
+#[cfg(feature = "nse")]
 pub use async_executor::AsyncNseExecutor;
 #[cfg(feature = "nse")]
 pub use executor::NseExecutor;
