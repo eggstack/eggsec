@@ -117,14 +117,14 @@ docs: review <module>.md architecture
 
 ## Known Issues from Past Reviews
 
-### HashMap/HashSet (All Fixed as of 2026-05-28)
+### HashMap/HashSet (All Fixed as of 2026-05-24)
 All `std::collections::HashMap`/`HashSet` instances in the NSE and slapper crates have been replaced with `FxHashMap`/`FxHashSet` for performance:
 - `slapper-nse/public_api/api.rs` - 8 HashMap instances replaced ✅
 - `slapper-nse/libraries/http.rs:143` - HashMap replaced ✅
 - `slapper-nse/libraries/datafiles.rs:31-33` - HashMap replaced ✅
 - `slapper-nse/libraries/creds.rs:102,123` - HashSet replaced ✅
 
-### unwrap_or_default() Issues (All Fixed as of 2026-05-28)
+### unwrap_or_default() Issues (All Fixed as of 2026-05-24)
 - `ai/waf_bypass.rs:44` - Now uses explicit match with tracing.warn ✅
 - `recon/` - 20 instances replaced with explicit match ✅
 
@@ -135,11 +135,11 @@ All `std::collections::HashMap`/`HashSet` instances in the NSE and slapper crate
 - `recon/recon.md` - secrets module documented, FxHashMap count updated to 55 ✅
 - `architecture/tui.md` - payload count updated to 31 ✅
 
-### Pre-existing Compilation Issues (Fixed 2026-05-28)
+### Pre-existing Compilation Issues (Fixed 2026-05-24)
 - `tool/planner.rs` - FxFxHashSet → FxHashSet, use default() not new() ✅
 - `tool/implementations/pipeline.rs` - Arc import added, Display fix for Arc<Mutex> ✅
 - `recon/mod.rs` - Removed unused FxHashMap import, use std HashMap for Finding.metadata ✅
 
 ### Previously Fixed (Verify if Regressions)
-- `waf/mod.rs` - Correctly lists 34 WAF products (fixed 2026-05-28) ✅
-- `scanner/` - All 2026-05-27 bug fixes verified applied ✅
+- `waf/mod.rs` - Correctly lists 34 WAF products (fixed 2026-05-24) ✅
+- `scanner/` - All bug fixes verified applied ✅
