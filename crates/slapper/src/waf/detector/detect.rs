@@ -96,7 +96,7 @@ impl WafDetector {
                                 value_lower.contains(header_pattern_lower.as_str())
                                     && value_lower.len() <= HEADER_VALUE_MAX_LEN;
                     if header_name_match || header_value_match {
-                        score += waf::HEADER_MATCH_SCORE;
+                        score = score.saturating_add(waf::HEADER_MATCH_SCORE);
                         sig_matched_headers.push(format!("{}: {}", name_lower, value_lower));
                         break;
                     }
@@ -114,7 +114,7 @@ impl WafDetector {
                         .unwrap_or("")
                         .trim();
                     if cookie_name == cookie_pattern_lower.as_str() {
-                        score += waf::COOKIE_MATCH_SCORE;
+                        score = score.saturating_add(waf::COOKIE_MATCH_SCORE);
                         sig_matched_cookies.push(
                             signature.cookies[sig_lower
                                 .cookies
@@ -130,14 +130,14 @@ impl WafDetector {
 
             for (i, body_pattern_lower) in sig_lower.body_patterns.iter().enumerate() {
                 if body_lower.contains(body_pattern_lower.as_str()) {
-                    score += waf::BODY_MATCH_SCORE;
+                    score = score.saturating_add(waf::BODY_MATCH_SCORE);
                     sig_matched_patterns.push(signature.body_patterns[i].clone());
                 }
             }
 
             if let Some(ip) = remote_ip {
                 if apply_remote_ip_match(ip, &signature.ip_ranges, &mut sig_matched_patterns) {
-                    score += waf::IP_MATCH_SCORE;
+                    score = score.saturating_add(waf::IP_MATCH_SCORE);
                 }
             }
 
