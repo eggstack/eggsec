@@ -422,8 +422,13 @@ impl JwtFuzzer {
 
             let jwk_injections = vec![("jwk", r#"{"kty":"oct","k":"test"}"#)];
             for (key, value) in jwk_injections {
-                let mut header: serde_json::Value =
-                    serde_json::from_str(&parts.header).unwrap_or_default();
+                let mut header = match serde_json::from_str::<serde_json::Value>(&parts.header) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        tracing::warn!("failed to parse JWT header: {}", e);
+                        continue;
+                    }
+                };
                 header[key] = serde_json::json!(value);
 
                 let token = format!(
