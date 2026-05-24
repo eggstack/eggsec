@@ -49,6 +49,7 @@ pub async fn run_pipeline(
         max_rate: None,
         ttl: None,
         verbose: false,
+        concurrent_stages: false,
     };
 
     let pipeline = Pipeline::from_args_with_tui_mode(args, None, true);

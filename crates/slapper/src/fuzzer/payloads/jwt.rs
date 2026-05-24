@@ -176,7 +176,7 @@ impl JwtFuzzer {
                 Ok(h) => h,
                 Err(e) => {
                     tracing::warn!("failed to parse JWT header: {}", e);
-                    continue;
+                    return results;
                 }
             };
 

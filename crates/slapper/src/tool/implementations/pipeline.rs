@@ -89,6 +89,7 @@ impl SecurityTool for PipelineTool {
             ttl: None,
             source_port: None,
             verbose: false,
+            concurrent_stages: false,
         };
 
         let config = crate::config::load_config(None::<&str>).unwrap_or_default();
