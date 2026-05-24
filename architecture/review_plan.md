@@ -1,100 +1,68 @@
 # Architecture Review Plan
 
-**Status:** COMPLETED - All review phases complete, implementation in progress
+**Status:** IN PROGRESS - Review batches dispatched
 
 This document outlines the plan for reviewing all architecture documents and verifying their claims against the codebase.
 
-## Review Status
+## Overview
 
-| Batch | Modules | Status |
-|-------|---------|--------|
-| Batch 1 | AI Agents, CLI Commands, Config, Distributed, Fuzzer | ✅ Reviews Complete |
-| Batch 2 | Loadtest, Networking, Output, Overview, Pipeline | ✅ Reviews Complete |
-| Batch 3 | Plugins/NSE, Recon, Scanner, TUI, WAF | ✅ Reviews Complete |
+For each architecture module, a subagent will:
+1. Read the architecture document
+2. Locate the corresponding implementation in the codebase
+3. Verify claims against actual implementation
+4. Identify bugs, discrepancies, and improvement opportunities
+5. Write findings to `plans/{module}_review.md`
 
-## Implementation Status
+## Architecture Modules to Review
 
-### Completed Fixes
+| # | Module | Document | Implementation Path |
+|---|--------|----------|---------------------|
+| 1 | AI Agents | `ai_agents.md` | `crates/slapper/src/agent/` |
+| 2 | CLI Commands | `cli_commands.md` | `crates/slapper/src/cli/` |
+| 3 | Config | `config.md` | `crates/slapper/src/config/` |
+| 4 | Distributed | `distributed.md` | `crates/slapper/src/distributed/` |
+| 5 | Fuzzer | `fuzzer.md` | `crates/slapper/src/fuzzer/` |
+| 6 | Loadtest | `loadtest.md` | `crates/slapper/src/loadtest/` |
+| 7 | Networking | `networking.md` | `crates/slapper/src/networking/` |
+| 8 | Output | `output.md` | `crates/slapper/src/output/` |
+| 9 | Overview | `overview.md` | N/A (high-level summary) |
+| 10 | Pipeline | `pipeline.md` | `crates/slapper/src/pipeline/` |
+| 11 | Plugins/NSE | `plugins_nse.md` | `slapper-nse/` |
+| 12 | Recon | `recon.md` | `crates/slapper/src/recon/` |
+| 13 | Scanner | `scanner.md` | `crates/slapper/src/scanner/` |
+| 14 | TUI | `tui.md` | `crates/slapper/src/tui/` |
+| 15 | WAF | `waf.md` | `crates/slapper/src/waf/` |
 
-| Branch | Fixes | Status |
-|--------|-------|--------|
-| `fix/ai-agents-hashmap-and-bugs` | AlertRoutingRules, ConstraintChecker, PortfolioData HashMap→FxHashMap; scope private IP bypass; WAF detector constant | ✅ Merged |
-| `fix/distributed-pipeline-bugs` | Queue race condition fix; Pipeline session save error logging | ✅ Merged |
-| `fix/scanner-fuzzer-improvements` | CMS error handling; Fuzzer adaptive rate limiter | ✅ Merged |
-| `fix/loadtest-recon-improvements` | Loadtest error cap 100→1000; Cloud parallelization with tokio::join | ✅ Merged |
+## Review Batches
 
-### Implementation Summary
+### Batch 1
+- AI Agents → `plans/ai_agents_review.md`
+- CLI Commands → `plans/cli_commands_review.md`
+- Config → `plans/config_review.md`
+- Distributed → `plans/distributed_review.md`
+- Fuzzer → `plans/fuzzer_review.md`
 
-| Issue | Module | Fix | Branch |
-|-------|--------|-----|--------|
-| AlertRoutingRules HashMap | agent/alerts | → FxHashMap | fix/ai-agents-hashmap-and-bugs |
-| ConstraintChecker HashMap | agent/constraints | → FxHashMap | fix/ai-agents-hashmap-and-bugs |
-| PortfolioData HashMap | agent/portfolio | → FxHashMap | fix/ai-agents-hashmap-and-bugs |
-| Private IP bypass in parse() | config/scope | is_private_ip check | fix/ai-agents-hashmap-and-bugs |
-| HEADER_VALUE_MAX_LEN in loop | waf/detector/detect | → module level | fix/ai-agents-hashmap-and-bugs |
-| Queue race condition | distributed/queue | Atomic lock acquisition | fix/distributed-pipeline-bugs |
-| Session save silent failure | pipeline/executor | warn→error | fix/distributed-pipeline-bugs |
-| CMS unwrap_or_default | scanner/cms | explicit error handling | fix/scanner-fuzzer-improvements |
-| rate ≤ 1 premature stop | fuzzer/engine/execution | rate < 1 | fix/scanner-fuzzer-improvements |
-| Error list cap 100 | loadtest/metrics | 100→1000 | fix/loadtest-recon-improvements |
-| Sequential cloud enum | recon/cloud | tokio::join! | fix/loadtest-recon-improvements |
+### Batch 2
+- Loadtest → `plans/loadtest_review.md`
+- Networking → `plans/networking_review.md`
+- Output → `plans/output_review.md`
+- Overview → `plans/overview_review.md`
+- Pipeline → `plans/pipeline_review.md`
 
-### Remaining Issues (Not Fixed)
-
-These issues were identified but not fixed due to scope constraints or needing further design:
-
-| Issue | Module | Priority | Notes |
-|-------|--------|----------|-------|
-| CVE duplicate entry | plugins_nse | Medium | Needs data structure change |
-| load_plugin_with_timeout unused | plugins_nse | Medium | API change needed |
-| Async CVE blocking HTTP | recon | Medium | Would require API redesign |
-| TUI unwrap_or_default (14 instances) | tui | Medium | Pre-existing, many files |
-| WAF HTTP/2 always disabled | waf | Medium | Feature flag needed |
-| Networking IPv4 options bounds | networking | Low | Edge case |
-| ReDoS patterns clone | fuzzer | Low | Arc::clone instead |
-
-## Modules Reviewed
-
-| # | Module | Document | Issues Found |
-|---|--------|----------|--------------|
-| 1 | AI Agents | `architecture/ai_agents.md` | HashMap usage, cache key collision |
-| 2 | CLI Commands | `architecture/cli_commands.md` | Missing CLI files in docs |
-| 3 | Config | `architecture/config.md` | Private IP bypass (HIGH) |
-| 4 | Distributed | `architecture/distributed.md` | Race condition (HIGH) |
-| 5 | Fuzzer | `architecture/fuzzer.md` | Adaptive rate limiter (MEDIUM) |
-| 6 | Loadtest | `architecture/loadtest.md` | Error list cap 100 |
-| 7 | Networking | `architecture/networking.md` | UDP checksum allocation |
-| 8 | Output | `architecture/output.md` | None critical |
-| 9 | Overview | `architecture/overview.md` | unwrap_or_default (pre-existing) |
-| 10 | Pipeline | `architecture/pipeline.md` | Session save error (MEDIUM) |
-| 11 | Plugins/NSE | `architecture/plugins_nse.md` | CVE duplicate, timeout unused |
-| 12 | Recon | `architecture/recon.md` | Cloud sequential (HIGH→fixed) |
-| 13 | Scanner | `architecture/scanner.md` | CMS unwrap_or_default |
-| 14 | TUI | `architecture/tui.md` | 14 unwrap_or_default instances |
-| 15 | WAF | `architecture/waf.md` | Constant in loop, HTTP/2 disabled |
-
-## Key Findings Summary
-
-- **High Priority Fixed:** 2 (Config private IP bypass, Distributed race condition)
-- **Medium Priority Fixed:** 4 (Fuzzer rate limiter, Scanner CMS, Loadtest errors, Recon cloud)
-- **Low Priority Fixed:** 2 (WAF constant, Cloud parallelization)
-
-## Review Workflow
-
-For each module, a subagent will:
-1. Read the architecture document for the designated module
-2. Search the codebase to locate the corresponding implementation module
-3. Verify claims against the actual codebase implementation
-4. Identify discrepancies, bugs, and improvement opportunities
-5. Write a structured improvement plan to the designated output file in `plans/`
+### Batch 3
+- Plugins/NSE → `plans/plugins_nse_review.md`
+- Recon → `plans/recon_review.md`
+- Scanner → `plans/scanner_review.md`
+- TUI → `plans/tui_review.md`
+- WAF → `plans/waf_review.md`
 
 ## Subagent Task Configuration
 
-Each subagent will be given this task:
+Each subagent should perform the following task for their designated module:
 
 > Review the architecture document at `architecture/{module}.md`.
 >
-> Locate the corresponding implementation in the codebase (likely in `crates/slapper/src/{module}/`).
+> Locate the corresponding implementation in the codebase (likely in `crates/slapper/src/{module}/` or `slapper-nse/` for NSE).
 >
 > For each section in the architecture document:
 > - Identify the key claims and design decisions
@@ -109,19 +77,22 @@ Each subagent will be given this task:
 > - **Bugs Found** - Actual bugs discovered (with file:line references)
 > - **Improvement Opportunities** - Refactoring and optimization suggestions
 > - **Priority** - High/Medium/Low for each finding
+> - **Summary Statistics** - Count of verified claims, discrepancies, bugs, and improvements
 
 ## Verification Criteria
 
-For each claim in the architecture document, subagents should verify:
+For each claim in the architecture document, verify:
 - Type definitions match documented structures
 - Function signatures match documented APIs
 - Constants and magic numbers are documented
 - Error handling matches documented behavior
 - Performance characteristics match documented expectations
+- Security considerations are properly implemented
 
 ## Output Format
 
-Each review file in `plans/` will contain:
+Each review file in `plans/` should follow this structure:
+
 ```markdown
 # {Module} Architecture Review
 
@@ -149,3 +120,45 @@ Each review file in `plans/` will contain:
 - Total Bugs: N
 - Total Improvements: N
 ```
+
+## Review Status
+
+| Batch | Modules | Status |
+|-------|---------|--------|
+| Batch 1 | AI Agents, CLI Commands, Config, Distributed, Fuzzer | ✅ Complete |
+| Batch 2 | Loadtest, Networking, Output, Overview, Pipeline | ✅ Complete |
+| Batch 3 | Plugins/NSE, Recon, Scanner, TUI, WAF | ✅ Complete |
+
+## Key Findings Summary
+
+### Critical Bugs Found
+
+| Module | Bug | Priority | File:Line |
+|--------|-----|----------|-----------|
+| Distributed | Task results processed but never sent to coordinator | CRITICAL | `worker.rs:169-183` |
+| Distributed | WorkerStats/heartbeat hardcoded to zero | HIGH | `worker.rs:78-82`, `worker.rs:151-157` |
+| AI Agents | MCP integration claimed but not implemented | HIGH | Documentation gap |
+| CLI Commands | Resume scope bypass | HIGH | `scan.rs:60` |
+| CLI Commands | Stress handler scope missing | HIGH | `stress.rs:9` |
+| Loadtest | Rate limiting initial burst issue | HIGH | `runner.rs:279` |
+| WAF | Cookie matching index fallback incorrect | MEDIUM | `unwrap_or(0)` |
+
+### Review Files Created
+
+| Module | Review File | Verified Claims | Bugs Found | Improvements |
+|--------|-------------|-----------------|------------|--------------|
+| AI Agents | `plans/ai_agents_review.md` | 32 | 3 | 8 |
+| CLI Commands | `plans/cli_commands_review.md` | 18 | 7 | 12 |
+| Config | `plans/config_review.md` | 24 | 0 | 1 |
+| Distributed | `plans/distributed_review.md` | 9 | 3 | 7 |
+| Fuzzer | `plans/fuzzer_review.md` | - | - | - |
+| Loadtest | `plans/loadtest_review.md` | 14 | 2 | 4 |
+| Networking | `plans/networking_review.md` | 15 | 4 | 8 |
+| Output | `plans/output_review.md` | 23 | 3 | 6 |
+| Overview | `plans/overview_review.md` | - | - | - |
+| Pipeline | `plans/pipeline_review.md` | - | - | - |
+| Plugins/NSE | `plans/plugins_nse_review.md` | - | - | - |
+| Recon | `plans/recon_review.md` | 28 | 4 | 8 |
+| Scanner | `plans/scanner_review.md` | 14 | 2 | 4 |
+| TUI | `plans/tui_review.md` | 18 | 2 | 7 |
+| WAF | `plans/waf_review.md` | 18 | 3 | 7 |
