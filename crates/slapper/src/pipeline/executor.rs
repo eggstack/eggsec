@@ -124,7 +124,7 @@ impl Pipeline {
             stages,
             profile: args.profile,
             concurrency,
-            concurrent_stages: false,
+            concurrent_stages: args.concurrent_stages,
             common: args.common,
             spoof_config,
             context: Arc::new(Mutex::new(PipelineContext::new(&args.target))),

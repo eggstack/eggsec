@@ -69,6 +69,7 @@ impl SecurityTool for PipelineTool {
             profile: profile_enum,
             stages: None,
             concurrency: 10,
+            concurrent_stages: false,
             json: true,
             output: None,
             format: None,
