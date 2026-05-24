@@ -3,10 +3,16 @@
 //! Executes match conditions from vulnerability templates against
 //! HTTP responses, DNS results, and other data sources.
 
+use std::sync::{LazyLock, Mutex};
+
 use super::models::{HttpMatcher, Matcher, SearchPattern, VulnerabilityTemplate};
 use crate::error::Result;
 use crate::types::Severity;
+use regex::{Regex, RegexBuilder};
 use rustc_hash::FxHashMap;
+
+static REGEX_CACHE: LazyLock<Mutex<FxHashMap<String, Regex>>> =
+    LazyLock::new(|| Mutex::new(FxHashMap::default()));
 
 #[derive(Debug, Clone)]
 pub struct MatchResult {
@@ -182,14 +188,30 @@ impl TemplateMatcher {
     fn search_pattern(&self, text: &str, search: &SearchPattern) -> bool {
         match search.mode {
             super::models::MatchMode::Word => text.contains(&search.pattern),
-            super::models::MatchMode::Regex => regex::RegexBuilder::new(&search.pattern)
-                .size_limit(100_000)
-                .build()
-                .map(|re| re.is_match(text))
-                .unwrap_or_else(|e| {
-                    tracing::debug!("invalid regex pattern '{}': {}", search.pattern, e);
-                    false
-                }),
+            super::models::MatchMode::Regex => {
+                let re = match REGEX_CACHE.lock().unwrap().get(&search.pattern) {
+                    Some(re) => re.clone(),
+                    None => {
+                        match RegexBuilder::new(&search.pattern)
+                            .size_limit(100_000)
+                            .build()
+                        {
+                            Ok(re) => {
+                                REGEX_CACHE
+                                    .lock()
+                                    .unwrap()
+                                    .insert(search.pattern.clone(), re.clone());
+                                re
+                            }
+                            Err(e) => {
+                                tracing::debug!("invalid regex pattern '{}': {}", search.pattern, e);
+                                return false;
+                            }
+                        }
+                    }
+                };
+                re.is_match(text)
+            }
             super::models::MatchMode::Binary => {
                 let decoded: Vec<u8> = if search.encoding == "base64" {
                     base64::Engine::decode(
