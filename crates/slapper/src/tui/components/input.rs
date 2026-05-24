@@ -527,6 +527,9 @@ impl InputGroup {
     }
 
     pub fn focus_next(&mut self) {
+        if self.fields.is_empty() {
+            return;
+        }
         if let Some(idx) = self.focused {
             self.fields[idx].focused = false;
             let next = (idx + 1) % self.fields.len();
@@ -539,6 +542,9 @@ impl InputGroup {
     }
 
     pub fn focus_prev(&mut self) {
+        if self.fields.is_empty() {
+            return;
+        }
         if let Some(idx) = self.focused {
             self.fields[idx].focused = false;
             let prev = if idx == 0 {
