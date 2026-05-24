@@ -120,92 +120,97 @@ impl PythonPluginManager {
 
     pub fn load_plugins(&mut self, plugin_dir: &Path) -> Result<()> {
         Python::attach(|py| {
-            if !plugin_dir.exists() {
-                return Ok(());
-            }
+            self.load_plugins_impl(plugin_dir, py)
+        })
+        .map_err(|e| anyhow::anyhow!("Python runtime is not available: {}. Ensure Python is installed and the python-plugins feature is enabled.", e))
+    }
 
-            let sys = py.import("sys")?;
-            let path = sys.getattr("path")?;
-            let dir_str = plugin_dir
-                .to_str()
-                .ok_or_else(|| anyhow::anyhow!("Plugin directory path is not valid UTF-8"))?;
-            if !path.contains(dir_str)? {
-                path.call_method1("insert", (0, dir_str))?;
-            }
+    fn load_plugins_impl(&mut self, plugin_dir: &Path, py: Python<'_>) -> Result<()> {
+        if !plugin_dir.exists() {
+            return Ok(());
+        }
 
-            for entry in std::fs::read_dir(plugin_dir)? {
-                let entry = entry?;
-                let file_path = entry.path();
+        let sys = py.import("sys")?;
+        let path = sys.getattr("path")?;
+        let dir_str = plugin_dir
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Plugin directory path is not valid UTF-8"))?;
+        if !path.contains(dir_str)? {
+            path.call_method1("insert", (0, dir_str))?;
+        }
 
-                if file_path.extension().map(|e| e == "py").unwrap_or(false) {
-                    if let Err(e) = validate_plugin_path(plugin_dir, &file_path) {
-                        tracing::warn!(path = %file_path.display(), error = %e, "Path validation failed");
-                        continue;
-                    }
+        for entry in std::fs::read_dir(plugin_dir)? {
+            let entry = entry?;
+            let file_path = entry.path();
 
-                    if let Some(stem) = file_path.file_stem() {
-                        if let Some(module_name) = stem.to_str() {
-                            let plugin_content = match std::fs::read_to_string(&file_path) {
-                                Ok(c) => c,
-                                Err(e) => {
-                                    tracing::warn!(
-                                        file = %file_path.display(),
-                                        error = %e,
-                                        "Failed to read plugin file"
-                                    );
-                                    continue;
-                                }
-                            };
+            if file_path.extension().map(|e| e == "py").unwrap_or(false) {
+                if let Err(e) = validate_plugin_path(plugin_dir, &file_path) {
+                    tracing::warn!(path = %file_path.display(), error = %e, "Path validation failed");
+                    continue;
+                }
 
-                            if let Err(e) = validate_python_plugin(
-                                &plugin_content,
-                                self.block_suspicious_plugins,
-                            ) {
+                if let Some(stem) = file_path.file_stem() {
+                    if let Some(module_name) = stem.to_str() {
+                        let plugin_content = match std::fs::read_to_string(&file_path) {
+                            Ok(c) => c,
+                            Err(e) => {
                                 tracing::warn!(
                                     file = %file_path.display(),
                                     error = %e,
-                                    "Plugin validation failed"
+                                    "Failed to read plugin file"
                                 );
                                 continue;
                             }
+                        };
 
-                            match Self::import_module_from_path(py, module_name, &file_path) {
-                                Ok(module) => {
-                                    let class_plugins =
-                                        Self::extract_class_plugins(py, &module, module_name);
+                        if let Err(e) = validate_python_plugin(
+                            &plugin_content,
+                            self.block_suspicious_plugins,
+                        ) {
+                            tracing::warn!(
+                                file = %file_path.display(),
+                                error = %e,
+                                "Plugin validation failed"
+                            );
+                            continue;
+                        }
 
-                                    if let Ok(mut plugins) = self.plugins.lock() {
-                                        if plugins.iter().any(|p| p.name == module_name) {
-                                            tracing::debug!(
-                                                module = %module_name,
-                                                "Skipping duplicate plugin module"
-                                            );
-                                            continue;
-                                        }
-                                        plugins.push(LoadedPlugin {
-                                            name: module_name.to_string(),
-                                            module: module.into(),
-                                            class_plugins,
-                                        });
+                        match Self::import_module_from_path(py, module_name, &file_path) {
+                            Ok(module) => {
+                                let class_plugins =
+                                    Self::extract_class_plugins(py, &module, module_name);
+
+                                if let Ok(mut plugins) = self.plugins.lock() {
+                                    if plugins.iter().any(|p| p.name == module_name) {
+                                        tracing::debug!(
+                                            module = %module_name,
+                                            "Skipping duplicate plugin module"
+                                        );
+                                        continue;
                                     }
+                                    plugins.push(LoadedPlugin {
+                                        name: module_name.to_string(),
+                                        module: module.into(),
+                                        class_plugins,
+                                    });
                                 }
-                                Err(e) => {
-                                    tracing::warn!(
-                                        module = %module_name,
-                                        path = %file_path.display(),
-                                        error = %e,
-                                        "Failed to import Python plugin"
-                                    );
-                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    module = %module_name,
+                                    path = %file_path.display(),
+                                    error = %e,
+                                    "Failed to import Python plugin"
+                                );
                             }
                         }
                     }
                 }
             }
+        }
 
-            let _ = self.checks_cache.take();
-            Ok(())
-        })
+        let _ = self.checks_cache.take();
+        Ok(())
     }
 
     fn import_module_from_path<'py>(
@@ -342,73 +347,77 @@ impl PythonPluginManager {
         self.checks_cache
             .get_or_init(|| {
                 Python::attach(|py| {
-                    let mut checks = Vec::new();
+                    Self::get_checks_impl(self, py)
+                })
+                .map_err(|e| anyhow::anyhow!("Python runtime is not available: {}. Ensure Python is installed and the python-plugins feature is enabled.", e))
+                .unwrap_or_default()
+            })
+            .clone()
+    }
 
-                    let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner());
-                    for plugin in plugins.iter() {
-                        // Collect checks from function-based plugins
-                        if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
-                            if let Ok(register_func) = module.getattr("register_checks") {
-                                if let Ok(result) = register_func.call0() {
-                                    if let Ok(list) = result.cast::<PyList>() {
-                                        for item in list.iter() {
-                                            if let Ok(dict) = item.cast::<PyDict>() {
-                                                let name = dict
-                                                    .get_item("name")
-                                                    .ok()
-                                                    .flatten()
-                                                    .and_then(|v| v.extract::<String>().ok())
-                                                    .unwrap_or_default();
-                                                let check_type = dict
-                                                    .get_item("type")
-                                                    .ok()
-                                                    .flatten()
-                                                    .and_then(|v| v.extract::<String>().ok())
-                                                    .unwrap_or_default();
-                                                let target = dict
-                                                    .get_item("target")
-                                                    .ok()
-                                                    .flatten()
-                                                    .and_then(|v| v.extract::<String>().ok());
-                                                let description = dict
-                                                    .get_item("description")
-                                                    .ok()
-                                                    .flatten()
-                                                    .and_then(|v| v.extract::<String>().ok());
-                                                let check = PluginCheck {
-                                                    name,
-                                                    check_type,
-                                                    target,
-                                                    description,
-                                                };
-                                                checks.push(check);
-                                            }
-                                        }
-                                    }
+    fn get_checks_impl(this: &PythonPluginManager, py: Python<'_>) -> Result<Vec<PluginCheck>> {
+        let mut checks = Vec::new();
+
+        let plugins = this.plugins.lock().unwrap_or_else(|e| e.into_inner());
+        for plugin in plugins.iter() {
+            if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
+                if let Ok(register_func) = module.getattr("register_checks") {
+                    if let Ok(result) = register_func.call0() {
+                        if let Ok(list) = result.cast::<PyList>() {
+                            for item in list.iter() {
+                                if let Ok(dict) = item.cast::<PyDict>() {
+                                    let name = dict
+                                        .get_item("name")
+                                        .ok()
+                                        .flatten()
+                                        .and_then(|v| v.extract::<String>().ok())
+                                        .unwrap_or_default();
+                                    let check_type = dict
+                                        .get_item("type")
+                                        .ok()
+                                        .flatten()
+                                        .and_then(|v| v.extract::<String>().ok())
+                                        .unwrap_or_default();
+                                    let target = dict
+                                        .get_item("target")
+                                        .ok()
+                                        .flatten()
+                                        .and_then(|v| v.extract::<String>().ok());
+                                    let description = dict
+                                        .get_item("description")
+                                        .ok()
+                                        .flatten()
+                                        .and_then(|v| v.extract::<String>().ok());
+                                    let check = PluginCheck {
+                                        name,
+                                        check_type,
+                                        target,
+                                        description,
+                                    };
+                                    checks.push(check);
                                 }
                             }
                         }
-
-                        // Collect checks from class-based plugins
-                        for class_plugin in &plugin.class_plugins {
-                            checks.push(PluginCheck {
-                                name: class_plugin.name.clone(),
-                                check_type: "class".to_string(),
-                                target: None,
-                                description: Some(format!(
-                                    "Class-based plugin from {}",
-                                    plugin.name
-                                )),
-                            });
-                        }
                     }
+                }
+            }
 
-                    let mut seen = HashSet::new();
-                    checks.retain(|c| seen.insert(c.name.clone()));
-                    checks
-                })
-            })
-            .clone()
+            for class_plugin in &plugin.class_plugins {
+                checks.push(PluginCheck {
+                    name: class_plugin.name.clone(),
+                    check_type: "class".to_string(),
+                    target: None,
+                    description: Some(format!(
+                        "Class-based plugin from {}",
+                        plugin.name
+                    )),
+                });
+            }
+        }
+
+        let mut seen = HashSet::new();
+        checks.retain(|c| seen.insert(c.name.clone()));
+        Ok(checks)
     }
 
     pub fn run_check_direct(
@@ -418,26 +427,35 @@ impl PythonPluginManager {
         config: &serde_json::Value,
     ) -> Result<Vec<serde_json::Value>> {
         Python::attach(|py| {
-            let mut all_results = Vec::new();
+            Self::run_check_impl(self, py, check_name, target, config)
+        })
+        .map_err(|e| anyhow::anyhow!("Python runtime is not available: {}", e))
+    }
 
-            let plugins = self.plugins.lock().unwrap_or_else(|e| e.into_inner());
-            for plugin in plugins.iter() {
-                let supports_function_check =
-                    if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
-                        if let Ok(register_checks) = module.getattr("register_checks") {
-                            if let Ok(check_values) = register_checks.call0() {
-                                if let Ok(checks) = check_values.cast::<PyList>() {
-                                    checks.iter().any(|item| {
-                                        item.cast::<PyDict>()
-                                            .ok()
-                                            .and_then(|dict| dict.get_item("name").ok().flatten())
-                                            .and_then(|name| name.extract::<String>().ok())
-                                            .map(|name| name == check_name)
-                                            .unwrap_or(false)
-                                    })
-                                } else {
-                                    false
-                                }
+    fn run_check_impl(
+        this: &PythonPluginManager,
+        py: Python<'_>,
+        check_name: &str,
+        target: &str,
+        config: &serde_json::Value,
+    ) -> Result<Vec<serde_json::Value>> {
+        let mut all_results = Vec::new();
+
+        let plugins = this.plugins.lock().unwrap_or_else(|e| e.into_inner());
+        for plugin in plugins.iter() {
+            let supports_function_check =
+                if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
+                    if let Ok(register_checks) = module.getattr("register_checks") {
+                        if let Ok(check_values) = register_checks.call0() {
+                            if let Ok(checks) = check_values.cast::<PyList>() {
+                                checks.iter().any(|item| {
+                                    item.cast::<PyDict>()
+                                        .ok()
+                                        .and_then(|dict| dict.get_item("name").ok().flatten())
+                                        .and_then(|name| name.extract::<String>().ok())
+                                        .map(|name| name == check_name)
+                                        .unwrap_or(false)
+                                })
                             } else {
                                 false
                             }
@@ -446,60 +464,60 @@ impl PythonPluginManager {
                         }
                     } else {
                         false
-                    };
+                    }
+                } else {
+                    false
+                };
 
-                // Try function-based plugins
-                if supports_function_check {
-                    if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
-                        if let Ok(run_func) = module.getattr("run_check") {
-                            let args = (check_name, target);
-                            if let Ok(result) = run_func.call1(args) {
-                                if let Ok(list) = result.cast::<PyList>() {
-                                    let mut truncated_count = 0;
-                                    for item in list.iter() {
-                                        if let Ok(json_str) = item.extract::<String>() {
-                                            if json_str.len() > MAX_JSON_SIZE_BYTES {
-                                                truncated_count += 1;
-                                                continue;
-                                            }
-                                            if let Ok(value) = serde_json::from_str(&json_str) {
-                                                all_results.push(value);
-                                            }
+            if supports_function_check {
+                if let Ok(module) = plugin.module.bind(py).cast::<PyModule>() {
+                    if let Ok(run_func) = module.getattr("run_check") {
+                        let args = (check_name, target);
+                        if let Ok(result) = run_func.call1(args) {
+                            if let Ok(list) = result.cast::<PyList>() {
+                                let mut truncated_count = 0;
+                                for item in list.iter() {
+                                    if let Ok(json_str) = item.extract::<String>() {
+                                        if json_str.len() > MAX_JSON_SIZE_BYTES {
+                                            truncated_count += 1;
+                                            continue;
+                                        }
+                                        if let Ok(value) = serde_json::from_str(&json_str) {
+                                            all_results.push(value);
                                         }
                                     }
-                                    if truncated_count > 0 {
-                                        tracing::warn!(
-                                            check = %check_name,
-                                            truncated = truncated_count,
-                                            "Python plugin returned {} findings exceeding max size, discarding",
-                                            truncated_count
-                                        );
-                                    }
                                 }
-                            }
-                        }
-                    }
-                }
-
-                // Try class-based plugins
-                for class_plugin in &plugin.class_plugins {
-                    if class_plugin.name == check_name {
-                        match Self::run_class_plugin(py, class_plugin, target, config) {
-                            Ok(results) => all_results.extend(results),
-                            Err(e) => {
-                                tracing::warn!(
-                                    plugin = %class_plugin.name,
-                                    error = %e,
-                                    "Class-based plugin check failed"
-                                );
+                                if truncated_count > 0 {
+                                    tracing::warn!(
+                                        check = %check_name,
+                                        truncated = truncated_count,
+                                        "Python plugin returned {} findings exceeding max size, discarding",
+                                        truncated_count
+                                    );
+                                }
                             }
                         }
                     }
                 }
             }
 
-            Ok(all_results)
-        })
+            for class_plugin in &plugin.class_plugins {
+                if class_plugin.name == check_name {
+                    match Self::run_class_plugin(py, class_plugin, target, config) {
+                        Ok(results) => all_results.extend(results),
+                        Err(e) => {
+                            tracing::warn!(
+                                plugin = %class_plugin.name,
+                                error = %e,
+                                "Class-based plugin check failed"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(all_results)
     }
 }
 
@@ -717,6 +735,9 @@ impl Plugin for PythonPluginManager {
     }
 
     fn health_check(&self) -> Result<HealthStatus> {
+        if !Self::is_python_available() {
+            return Ok(HealthStatus::Unhealthy);
+        }
         let plugin_count = self.plugins.lock().unwrap_or_else(|e| e.into_inner()).len();
         if plugin_count == 0 {
             Ok(HealthStatus::Degraded)
@@ -727,6 +748,12 @@ impl Plugin for PythonPluginManager {
 
     fn priority(&self) -> u32 {
         50
+    }
+}
+
+impl PythonPluginManager {
+    pub fn is_python_available() -> bool {
+        Python::attach(|_| Ok::<(), std::convert::Infallible>(())).is_ok()
     }
 }
 

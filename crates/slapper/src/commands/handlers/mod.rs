@@ -2,6 +2,7 @@ pub mod auth_test;
 pub mod ci;
 pub mod cluster;
 pub mod config;
+pub mod doctor;
 pub mod fuzz;
 pub mod load;
 pub mod network;
@@ -15,6 +16,7 @@ pub mod storage;
 pub mod stress;
 pub mod vuln;
 pub use config::*;
+pub use doctor::*;
 #[cfg(feature = "rest-api")]
 pub mod agent;
 #[cfg(feature = "grpc-api")]
@@ -115,6 +117,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Plan(args)) => handle_plan(ctx, args).await,
         Some(Commands::Ci(args)) => handle_ci(ctx, args).await,
         Some(Commands::Config(args)) => handle_config(ctx, args).await,
+        Some(Commands::Doctor) => handle_doctor(ctx).await,
         Some(Commands::Graphql(args)) => handle_graphql(ctx, args).await,
         Some(Commands::OAuth(args)) => handle_oauth(ctx, args).await,
         Some(Commands::AuthTest(args)) => handle_auth_test(ctx, args).await,

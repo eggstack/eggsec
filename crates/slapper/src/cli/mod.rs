@@ -115,6 +115,8 @@ pub enum Commands {
     Ci(CiArgs),
     #[command(about = "Validate configuration files", long_about = CONFIG_ABOUT)]
     Config(ConfigArgs),
+    #[command(about = "Check system and runtime dependencies", long_about = DOCTOR_ABOUT)]
+    Doctor,
     #[cfg(feature = "sbom")]
     #[command(about = "Generate SBOM and check supply chain security")]
     Sbom(SbomArgs),

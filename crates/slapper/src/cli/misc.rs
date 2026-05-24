@@ -19,6 +19,17 @@ Examples:
   slapper config validate --config /path/to/config.toml
   slapper config show";
 
+pub(crate) const DOCTOR_ABOUT: &str = "Check system and runtime dependencies
+
+Verifies that all required dependencies are available for the enabled features.
+Reports status of Python, Ruby, Lua, and other optional runtime dependencies.
+
+This command exits with code 0 if all checks pass, or a non-zero code if any check fails.
+
+Examples:
+  slapper doctor
+  slapper doctor --verbose";
+
 #[derive(clap::Args)]
 pub struct ConfigArgs {
     #[command(subcommand)]
