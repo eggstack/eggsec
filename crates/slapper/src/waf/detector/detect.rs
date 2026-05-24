@@ -26,8 +26,24 @@ impl WafDetector {
 
         let normalized_url = Self::normalize_url_static(url);
 
+        if !self.circuit_breaker.is_available() {
+            return Ok(WafDetectionResult {
+                waf_name: None,
+                confidence: 0,
+                request_error: Some("Circuit breaker open - external calls disabled".to_string()),
+                matched_headers: vec![],
+                matched_cookies: vec![],
+                matched_patterns: vec!["circuit-breaker-open".to_string()],
+                server_header: None,
+                status_code: 0,
+            });
+        }
+
         let response = match self.client.get(&normalized_url).send().await {
-            Ok(r) => r,
+            Ok(r) => {
+                self.circuit_breaker.record_success();
+                r
+            }
             Err(e) => {
                 self.circuit_breaker.record_failure();
                 return Ok(WafDetectionResult {
