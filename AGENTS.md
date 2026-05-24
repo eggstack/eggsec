@@ -211,7 +211,7 @@ Instead of `unwrap_or_default()`, use explicit match with tracing.
 
 - `CacheKeyBuilder` uses null byte separator (`\x00`) - no colon collision risk
 - AI Agents files use `FxHashMap`: `alerts/mod.rs`, `constraints/checker.rs`, `portfolio.rs`
-- `SmartWafBypass` knowledge base eviction may incorrectly wipe all failures on size limit
+- `SmartWafBypass` knowledge base eviction sorts by failed_attempts and last_accessed (fixed)
 
 ---
 
