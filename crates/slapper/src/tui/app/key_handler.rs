@@ -121,7 +121,7 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Char('G')) => app.handle_bottom(),
             (KeyModifiers::NONE, KeyCode::Char('g')) => app.pending_key = Some(KeyCode::Char('g')),
             (KeyModifiers::NONE, KeyCode::Char('w')) => app.handle_word_forward(),
-            (KeyModifiers::NONE, KeyCode::Char('b')) => app.handle_word_backward(),
+            (KeyModifiers::SHIFT, KeyCode::Char('B')) => app.handle_word_backward(),
             (KeyModifiers::NONE, KeyCode::Char('n')) => app.next_tab(),
             (KeyModifiers::NONE, KeyCode::Char('N')) => app.prev_tab(),
             (KeyModifiers::NONE, KeyCode::Char('p')) => app.prev_tab(),
