@@ -18,8 +18,6 @@ pub enum PopupKind {
     Destructive,
 }
 
-impl PopupKind {}
-
 pub struct Popup {
     pub title: String,
     pub content: Vec<String>,

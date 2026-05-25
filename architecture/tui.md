@@ -346,3 +346,19 @@ if self.lines.is_empty() {
     self.scroll_offset = self.lines.len() - 1;
 }
 ```
+
+### Vec::remove vs Vec::swap_remove
+
+When removing elements from a Vec in a loop where order doesn't matter, use `swap_remove` instead of `remove`:
+
+```rust
+// WRONG - O(n) shift for each removal
+while sessions.len() > max_sessions {
+    sessions.remove(0);
+}
+
+// CORRECT - O(1) swap and pop
+while sessions.len() > max_sessions {
+    sessions.swap_remove(0);
+}
+```

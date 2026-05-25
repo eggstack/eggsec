@@ -121,6 +121,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Arc::try_unwrap**: Use `map_err` instead of `.expect()` to avoid panic
 - **LazyLock regex**: Use `.expect()` with descriptive message instead of `.unwrap()`
 - **FxHashMap/FxHashSet**: Always use for performance in new code
+- **Vec removal in loop**: Use `swap_remove` instead of `remove` when order doesn't matter - `swap_remove` is O(1) vs `remove` which is O(n)
 
 ## Skills Directory
 

@@ -174,7 +174,7 @@ impl SessionManager {
         while sessions.len() > self.config.max_sessions {
             if let Some(oldest) = sessions.first() {
                 let _ = fs::remove_file(oldest.path());
-                sessions.remove(0);
+                sessions.swap_remove(0);
             }
         }
 

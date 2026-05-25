@@ -409,14 +409,19 @@ impl TabProgressUpdate for super::tabs::Tab {
             super::tabs::Tab::Fuzz => app.fuzz.update_progress(completed, total),
             super::tabs::Tab::Waf => app.waf.update_progress(completed, total),
             super::tabs::Tab::WafStress => app.waf_stress.update_progress(completed, total),
-            super::tabs::Tab::Scan => app.scan.update_progress(
-                app.scan
+            super::tabs::Tab::Scan => {
+                let total = app.scan.stages.len() as u64;
+                if total == 0 {
+                    return;
+                }
+                let completed = app
+                    .scan
                     .stages
                     .iter()
                     .filter(|s| matches!(s.status, super::tabs::StageStatus::Completed))
-                    .count() as u64,
-                app.scan.stages.len() as u64,
-            ),
+                    .count() as u64;
+                app.scan.update_progress(completed, total);
+            }
             _ => {}
         }
     }
