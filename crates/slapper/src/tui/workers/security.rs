@@ -224,7 +224,7 @@ pub async fn run_storage_task(
                 match db.list_findings(scan).await {
                     Ok(f) => f,
                     Err(e) => {
-                        tracing::debug!("Failed to list findings for scan {}: {}", scan, e);
+                        tracing::warn!("Failed to list findings for scan {}: {}", scan, e);
                         vec![]
                     }
                 }
@@ -232,7 +232,7 @@ pub async fn run_storage_task(
                 match db.list_findings("all").await {
                     Ok(f) => f,
                     Err(e) => {
-                        tracing::debug!("Failed to list all findings: {}", e);
+                        tracing::warn!("Failed to list all findings: {}", e);
                         vec![]
                     }
                 }

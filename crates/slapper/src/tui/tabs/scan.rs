@@ -303,8 +303,10 @@ impl TabRender for ScanTab {
             ])
             .split(config_area);
 
-        self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
-        self.inputs.fields[1].render(f, config_chunks[1], insert_mode);
+        if self.inputs.fields.len() >= 2 {
+            self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
+            self.inputs.fields[1].render(f, config_chunks[1], insert_mode);
+        }
 
         let mut profile_sel = self.profile_selector.clone();
         profile_sel.focused = self.focus_area == ScanFocusArea::ProfileSelector;

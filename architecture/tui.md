@@ -440,3 +440,5 @@ while sessions.len() > max_sessions {
     sessions.swap_remove(0);
 }
 ```
+
+**Exception**: VecDeque does not have `swap_remove`. Use `remove` for VecDeque or when the collection type is not Vec.

@@ -37,7 +37,6 @@ use crate::tui::workers;
 use crate::types::OutputFormat;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
-use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::path::PathBuf;
 use task_management::TabTaskConfigSource;

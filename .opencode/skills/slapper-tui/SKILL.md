@@ -36,6 +36,15 @@ crates/slapper/src/tui/
 └── ui.rs         # Main rendering, status bar with mode indicator
 ```
 
+## Recent Fixes (2026-05-29)
+
+- **workers/security.rs error logging**: Fixed `security.rs:227,235` to use `tracing::warn!` for operational failures
+- **tabs/load.rs reset() bounds**: Fixed `load.rs:367-374` to use bounds check before direct field access
+- **tabs/fuzz.rs reset() bounds**: Fixed `fuzz.rs:404-413` to use bounds check before direct field access
+- **tabs/scan.rs render() bounds**: Fixed `scan.rs:306-307` to use bounds check before direct field access
+- **components/input.rs can_move bounds**: Fixed `input.rs:680-694` to add bounds checks in navigation helpers
+- **app/mod.rs unused import**: Removed unused `FxHashMap` import
+
 ## Key Patterns
 
 ### Tab System

@@ -401,16 +401,18 @@ impl TabState for FuzzTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        self.inputs.fields[1].value = "GET".to_string();
-        self.inputs.fields[1].cursor_pos = 3;
-        self.inputs.fields[3].value = "0".to_string();
-        self.inputs.fields[3].cursor_pos = 1;
-        self.inputs.fields[4].value = "3".to_string();
-        self.inputs.fields[4].cursor_pos = 1;
-        self.inputs.fields[5].value = "10".to_string();
-        self.inputs.fields[5].cursor_pos = 2;
-        self.inputs.fields[6].value = "10".to_string();
-        self.inputs.fields[6].cursor_pos = 2;
+        if self.inputs.fields.len() > 6 {
+            self.inputs.fields[1].value = "GET".to_string();
+            self.inputs.fields[1].cursor_pos = 3;
+            self.inputs.fields[3].value = "0".to_string();
+            self.inputs.fields[3].cursor_pos = 1;
+            self.inputs.fields[4].value = "3".to_string();
+            self.inputs.fields[4].cursor_pos = 1;
+            self.inputs.fields[5].value = "10".to_string();
+            self.inputs.fields[5].cursor_pos = 2;
+            self.inputs.fields[6].value = "10".to_string();
+            self.inputs.fields[6].cursor_pos = 2;
+        }
         self.mutation_checkbox.checked = false;
         self.payload_selector.select(0);
         self.mode_selector.select(0);

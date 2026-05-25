@@ -364,14 +364,16 @@ impl TabState for LoadTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        self.inputs.fields[1].value = "GET".to_string();
-        self.inputs.fields[1].cursor_pos = 3;
-        self.inputs.fields[2].value = "100".to_string();
-        self.inputs.fields[2].cursor_pos = 3;
-        self.inputs.fields[3].value = "10".to_string();
-        self.inputs.fields[3].cursor_pos = 2;
-        self.inputs.fields[4].value = "30".to_string();
-        self.inputs.fields[4].cursor_pos = 2;
+        if self.inputs.fields.len() > 5 {
+            self.inputs.fields[1].value = "GET".to_string();
+            self.inputs.fields[1].cursor_pos = 3;
+            self.inputs.fields[2].value = "100".to_string();
+            self.inputs.fields[2].cursor_pos = 3;
+            self.inputs.fields[3].value = "10".to_string();
+            self.inputs.fields[3].cursor_pos = 2;
+            self.inputs.fields[4].value = "30".to_string();
+            self.inputs.fields[4].cursor_pos = 2;
+        }
         self.focus_area = LoadFocusArea::Selector;
     }
 

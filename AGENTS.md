@@ -191,7 +191,7 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 - Adding new security testing capabilities
 - Documentation updates as needed
 
-### TUI Bug Fixes (2026-05-25)
+### TUI Bug Fixes (2026-05-29)
 
 - **Bounds check for checkbox arrays**: Added bounds check in `waf.rs:519` for `technique_checkboxes` access to prevent panic. The waf tab now properly guards against out-of-bounds index when toggling technique checkboxes, matching the pattern used in `recon.rs:588-590`.
 - **Slice bounds for InputGroup fields**: Fixed `integrations.rs:329-338` to use `.get()` with fallback for slicing `issue_inputs.fields` instead of direct slice syntax `fields[..4]` which could panic if fewer than 4 fields exist.
@@ -201,6 +201,12 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 - **Bounds check in vuln.rs edge detection**: Fixed `vuln.rs:602,613` to use `.first().map(...).unwrap_or(true)` pattern for `is_at_left_edge()` and `is_at_right_edge()` instead of direct `fields[0]` indexing which could panic if fields is empty.
 - **ScrollableText scroll_down empty lines**: Fixed `scrollable.rs:57-59` to handle empty lines case explicitly. Previously `saturating_sub(1)` on empty len would result in `usize::MAX`, causing incorrect scroll offset.
 - **Worker error logging levels**: Fixed `api.rs:57,134` to use `tracing::warn!` instead of `tracing::debug!` for GraphQL request failures. Operational errors should be logged at warn level for proper visibility.
+- **Worker error logging in security.rs**: Fixed `security.rs:227,235` to use `tracing::warn!` for finding list operation failures.
+- **Bounds check in load.rs reset()**: Fixed `load.rs:367-374` to use `if self.inputs.fields.len() > 5` before direct field access to fields[1-4].
+- **Bounds check in fuzz.rs reset()**: Fixed `fuzz.rs:404-413` to use `if self.inputs.fields.len() > 6` before direct field access to fields[1,3-6].
+- **Bounds check in scan.rs render()**: Fixed `scan.rs:306-307` to use `if self.inputs.fields.len() >= 2` before direct field access to fields[0-1].
+- **Bounds check in input.rs can_move helpers**: Fixed `input.rs:680-694` to add `idx < self.fields.len()` check in `can_move_left()` and `can_move_right()`.
+- **Vec::swap_remove exception**: VecDeque does not have `swap_remove` - use `remove` for VecDeque or when the collection type is not Vec (`history.rs:145` uses VecDeque).
 
 ### Plugin/NSE Module
 

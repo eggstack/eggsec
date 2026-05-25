@@ -8,8 +8,18 @@ Specialized guidance for the terminal UI module.
 - **Theme restoration**: SessionManager now restores theme when loading sessions
 - **Settings save merge**: TUI settings now merge into the loaded config and preserve non-exposed sections
 - **waf.rs checkbox bounds check**: Fixed `waf.rs:519` to guard against out-of-bounds index when toggling technique checkboxes (matching `recon.rs:588-590` pattern)
+- **workers/security.rs error logging**: Fixed `security.rs:227,235` to use `tracing::warn!` instead of `tracing::debug!` for expected failure cases (finding list operations)
+- **tabs/load.rs reset() bounds**: Fixed `load.rs:367-374` to use bounds check `if self.inputs.fields.len() > 5` before direct field access
+- **tabs/fuzz.rs reset() bounds**: Fixed `fuzz.rs:404-413` to use bounds check `if self.inputs.fields.len() > 6` before direct field access
+- **tabs/scan.rs render() bounds**: Fixed `scan.rs:306-307` to use bounds check `if self.inputs.fields.len() >= 2` before direct field access
+- **components/input.rs can_move bounds**: Fixed `input.rs:680-694` to add `idx < self.fields.len()` check in `can_move_left()` and `can_move_right()`
+- **app/mod.rs unused import**: Removed unused `FxHashMap` import from `app/mod.rs:40`
 
 ## Recent Fixes (2026-05-25)
+
+- **vuln.rs edge detection bounds**: Fixed `vuln.rs:602,613` to use `.first().map(...).unwrap_or(true)` pattern for `is_at_left_edge()` and `is_at_right_edge()` instead of direct `fields[0]` indexing which could panic if fields is empty.
+- **scrollable.rs scroll_down empty lines**: Fixed `scrollable.rs:57-59` to handle empty lines case explicitly. Previously `saturating_sub(1)` on empty len would result in `usize::MAX`, causing incorrect scroll offset.
+- **api.rs worker error logging**: Fixed `api.rs:57,134` to use `tracing::warn!` instead of `tracing::debug!` for GraphQL request failures. Operational errors should be logged at warn level for proper visibility.
 
 - **vuln.rs edge detection bounds**: Fixed `vuln.rs:602,613` to use `.first().map(...).unwrap_or(true)` pattern for `is_at_left_edge()` and `is_at_right_edge()` instead of direct `fields[0]` indexing which could panic if fields is empty.
 - **scrollable.rs scroll_down empty lines**: Fixed `scrollable.rs:57-59` to handle empty lines case explicitly. Previously `saturating_sub(1)` on empty len would result in `usize::MAX`, causing incorrect scroll offset.
