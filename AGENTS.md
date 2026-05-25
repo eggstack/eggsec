@@ -194,6 +194,7 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 ### TUI Bug Fixes (2026-05-25)
 
 - **Bounds check for checkbox arrays**: Added bounds check in `waf.rs:519` for `technique_checkboxes` access to prevent panic. The waf tab now properly guards against out-of-bounds index when toggling technique checkboxes, matching the pattern used in `recon.rs:588-590`.
+- **Slice bounds for InputGroup fields**: Fixed `integrations.rs:329-338` to use `.get()` with fallback for slicing `issue_inputs.fields` instead of direct slice syntax `fields[..4]` which could panic if fewer than 4 fields exist.
 
 ### Plugin/NSE Module
 

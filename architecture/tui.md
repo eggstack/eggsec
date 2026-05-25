@@ -321,6 +321,16 @@ if self.inputs.fields.len() > 1 {
 }
 ```
 
+For slicing InputGroup.fields (e.g., accessing a range of fields), use bounds-checked patterns:
+
+```rust
+// WRONG - panics if fewer than 4 fields
+let fields = &self.issue_inputs.fields[..4];
+
+// CORRECT - safe slicing with .get()
+let fields = self.issue_inputs.fields.get(..4).unwrap_or(&self.issue_inputs.fields);
+```
+
 For option checkbox arrays (like ReconOptions), use `.get()` with fallback:
 
 ```rust

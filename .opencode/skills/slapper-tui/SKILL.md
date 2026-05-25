@@ -499,3 +499,24 @@ let is_retryable = error_str.contains("timeout")
 ```
 
 This is intentional but fragile. It catches common retryable error messages from various sources. Add more patterns as needed rather than creating new error variants.
+
+## InputGroup Field Slice Bounds
+
+When accessing slices of `InputGroup.fields`, always use bounds-checked slice patterns:
+
+```rust
+// WRONG - panics if fewer than 4 fields
+let fields = &self.issue_inputs.fields[..4];
+
+// CORRECT - safe slicing with .get()
+let fields = match self.current_mode {
+    IntegrationsMode::CreateIssue => {
+        self.issue_inputs.fields.get(..4).unwrap_or(&self.issue_inputs.fields)
+    }
+    IntegrationsMode::SearchIssues => {
+        self.issue_inputs.fields.get(4..).unwrap_or(&[])
+    }
+};
+```
+
+This pattern was fixed in `integrations.rs:329-338` (2026-05-25).

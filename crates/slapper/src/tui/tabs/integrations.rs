@@ -326,10 +326,14 @@ impl TabRender for IntegrationsTab {
             ..input_area
         };
 
-        let fields = match self.current_mode {
+        let fields: &[InputField] = match self.current_mode {
             IntegrationsMode::Configure => &self.config_inputs.fields,
-            IntegrationsMode::CreateIssue => &self.issue_inputs.fields[..4],
-            IntegrationsMode::SearchIssues => &self.issue_inputs.fields[4..],
+            IntegrationsMode::CreateIssue => {
+                self.issue_inputs.fields.get(..4).map(|s| s).unwrap_or(&self.issue_inputs.fields)
+            }
+            IntegrationsMode::SearchIssues => {
+                self.issue_inputs.fields.get(4..).map(|s| s).unwrap_or(&[])
+            }
         };
 
         let field_chunks = Layout::default()
