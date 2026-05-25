@@ -84,9 +84,9 @@ impl BrowserTab {
 
     pub fn get_config(&self) -> BrowserConfig {
         BrowserConfig {
-            check_dom_xss: self.option_checkboxes[0].checked,
-            discover_spa_routes: self.option_checkboxes[1].checked,
-            check_client_security: self.option_checkboxes[2].checked,
+            check_dom_xss: self.option_checkboxes.get(0).map(|cb| cb.checked).unwrap_or(false),
+            discover_spa_routes: self.option_checkboxes.get(1).map(|cb| cb.checked).unwrap_or(false),
+            check_client_security: self.option_checkboxes.get(2).map(|cb| cb.checked).unwrap_or(false),
             crawl_depth: self.crawl_depth(),
             timeout_ms: self.timeout_ms(),
         }

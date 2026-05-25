@@ -268,12 +268,13 @@ pub bookmarks: std::collections::HashSet<String>,
 
 // CORRECT
 use rustc_hash::{FxHashMap, FxHashSet};
-pub tabs: FxHashMap<Tab, Box<dyn TabInput>>,
 pub bookmarks: FxHashSet<String>,
 ```
 
+**Note**: Tab dispatch is done via exhaustive enum match in `Tab::as_tab_input()`, etc., NOT via HashMap lookup. The `Tab` enum provides stable IDs for session persistence. See `tabs/mod.rs` for the dispatch pattern.
+
 Files using FxHashMap/FxHashSet in TUI module:
-- `app/mod.rs` - App.tabs, App.bookmarks
+- `app/mod.rs` - App.bookmarks (FxHashSet)
 - `app/bookmarks.rs` - Bookmark functions
 - `app/help_config.rs` - StaticHelpData.sections
 - `help.rs` - HelpManager.sections

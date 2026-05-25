@@ -339,7 +339,9 @@ This pattern was missing in `waf.rs:519` and was fixed to match the pattern alre
 | Tab | Checkbox Field | Bounds Check Location | Status |
 |-----|---------------|---------------------|--------|
 | `recon.rs` | `option_checkboxes` | 588-590 | ✅ Safe |
-| `waf.rs` | `technique_checkboxes` | 519 (fixed) | ✅ Safe |
+| `waf.rs` | `technique_checkboxes` | 519, 311-316 (fixed) | ✅ Safe |
+| `hunt.rs` | `option_checkboxes` | get_config() (fixed 2026-05-25) | ✅ Safe |
+| `browser.rs` | `option_checkboxes` | get_config() (fixed 2026-05-25) | ✅ Safe |
 | `fuzz.rs` | Individual checkboxes (not array) | N/A | ✅ Safe |
 
 For option checkbox arrays, use `.get()` with fallback when constructing options:
@@ -350,6 +352,20 @@ no_tech: self.option_checkboxes[0].checked,
 
 // CORRECT - returns false if index invalid
 no_tech: self.option_checkboxes.get(0).map(|cb| cb.checked).unwrap_or(false),
+```
+
+For mutable access (e.g., in reset methods), use `.get_mut()`:
+
+```rust
+// WRONG - panics if index out of bounds and cannot assign to & reference
+if let Some(cb) = self.technique_checkboxes.get(1) {
+    cb.checked = true; // ERROR: cannot assign to `cb.checked`, which is behind a `&` reference
+}
+
+// CORRECT - use get_mut for mutable access
+if let Some(cb) = self.technique_checkboxes.get_mut(1) {
+    cb.checked = true;
+}
 ```
 
 ## Mode Indicator

@@ -308,8 +308,12 @@ impl TabState for WafTab {
         for cb in &mut self.technique_checkboxes {
             cb.checked = false;
         }
-        self.technique_checkboxes[1].checked = true;
-        self.technique_checkboxes[2].checked = true;
+        if let Some(cb) = self.technique_checkboxes.get_mut(1) {
+            cb.checked = true;
+        }
+        if let Some(cb) = self.technique_checkboxes.get_mut(2) {
+            cb.checked = true;
+        }
     }
 
     fn set_error(&mut self, error: TabError) {

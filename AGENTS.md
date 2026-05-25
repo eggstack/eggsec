@@ -195,6 +195,9 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 
 - **Bounds check for checkbox arrays**: Added bounds check in `waf.rs:519` for `technique_checkboxes` access to prevent panic. The waf tab now properly guards against out-of-bounds index when toggling technique checkboxes, matching the pattern used in `recon.rs:588-590`.
 - **Slice bounds for InputGroup fields**: Fixed `integrations.rs:329-338` to use `.get()` with fallback for slicing `issue_inputs.fields` instead of direct slice syntax `fields[..4]` which could panic if fewer than 4 fields exist.
+- **Bounds check in hunt.rs get_config()**: Fixed `hunt.rs:89-93` to use `.get(index).map(|cb| cb.checked).unwrap_or(false)` for `option_checkboxes` access instead of direct indexing.
+- **Bounds check in browser.rs get_config()**: Fixed `browser.rs:87-89` to use `.get(index).map(|cb| cb.checked).unwrap_or(false)` for `option_checkboxes` access instead of direct indexing.
+- **Mutable bounds check in waf.rs reset()**: Fixed `waf.rs:311-316` to use `.get_mut()` for mutable access when setting default checkbox states in reset(), since `.get()` returns `&` reference which cannot be assigned to.
 
 ### Plugin/NSE Module
 

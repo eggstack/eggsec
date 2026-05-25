@@ -86,11 +86,11 @@ impl HuntTab {
 
     pub fn get_config(&self) -> HuntConfig {
         HuntConfig {
-            check_attack_chains: self.option_checkboxes[0].checked,
-            check_business_logic: self.option_checkboxes[1].checked,
-            check_race_conditions: self.option_checkboxes[2].checked,
-            check_authz_bypass: self.option_checkboxes[3].checked,
-            check_session: self.option_checkboxes[4].checked,
+            check_attack_chains: self.option_checkboxes.get(0).map(|cb| cb.checked).unwrap_or(false),
+            check_business_logic: self.option_checkboxes.get(1).map(|cb| cb.checked).unwrap_or(false),
+            check_race_conditions: self.option_checkboxes.get(2).map(|cb| cb.checked).unwrap_or(false),
+            check_authz_bypass: self.option_checkboxes.get(3).map(|cb| cb.checked).unwrap_or(false),
+            check_session: self.option_checkboxes.get(4).map(|cb| cb.checked).unwrap_or(false),
             concurrency: self.concurrency(),
             timeout_ms: self.timeout_ms(),
         }
