@@ -191,25 +191,9 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 - Adding new security testing capabilities
 - Documentation updates as needed
 
-### Division by zero guard
+### TUI Bug Fixes (2026-05-25)
 
-Always check `if self.stages.is_empty()` before division to avoid panic.
-
-### Scroll offset bounds
-
-Use `self.lines.is_empty()` check before calculating scroll_offset.
-
-### Arc::try_unwrap error handling
-
-Use `map_err` instead of `.expect()` to avoid panic.
-
-### LazyLock regex initialization
-
-Use `.expect()` with descriptive message instead of `.unwrap()`.
-
-### Error handling pattern
-
-Instead of `unwrap_or_default()`, use explicit match with tracing.
+- **Bounds check for checkbox arrays**: Added bounds check in `waf.rs:519` for `technique_checkboxes` access to prevent panic. The waf tab now properly guards against out-of-bounds index when toggling technique checkboxes, matching the pattern used in `recon.rs:588-590`.
 
 ### Plugin/NSE Module
 

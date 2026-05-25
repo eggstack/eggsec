@@ -143,3 +143,23 @@ let body = match response.text().await {
 - `crates/slapper/src/waf/bypass/profiles.rs` - WAF-specific bypass profiles (cached via LazyLock)
 - `AGENTS.md` - General project guidelines
 - `architecture/waf.md` - Architecture documentation
+
+## TUI Integration (WafTab)
+
+When working with WafTab in the TUI (`crates/slapper/src/tui/tabs/waf.rs`):
+
+### Checkbox Bounds Check (Fixed 2026-05-25)
+
+The `technique_checkboxes` array in WafTab requires bounds checking before access:
+
+```rust
+// WRONG - could panic if index >= len
+self.technique_checkboxes[self.focused_checkbox_index].toggle();
+
+// CORRECT - bounds check prevents panic
+if self.focused_checkbox_index < self.technique_checkboxes.len() {
+    self.technique_checkboxes[self.focused_checkbox_index].toggle();
+}
+```
+
+This pattern is now correctly implemented at `waf.rs:519`. Compare with `recon.rs:588-590` for the same pattern.

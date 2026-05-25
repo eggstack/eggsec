@@ -516,7 +516,9 @@ impl TabInput for WafTab {
         }
 
         if self.focus_area == WafFocusArea::Techniques {
-            self.technique_checkboxes[self.focused_checkbox_index].toggle();
+            if self.focused_checkbox_index < self.technique_checkboxes.len() {
+                self.technique_checkboxes[self.focused_checkbox_index].toggle();
+            }
             return;
         }
 

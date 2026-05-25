@@ -7,6 +7,7 @@ Specialized guidance for the terminal UI module.
 - **handle_enter() dispatcher caching**: `dispatcher_mut()` now cached to reduce 4 calls to 1 per Enter keypress
 - **Theme restoration**: SessionManager now restores theme when loading sessions
 - **Settings save merge**: TUI settings now merge into the loaded config and preserve non-exposed sections
+- **waf.rs checkbox bounds check**: Fixed `waf.rs:519` to guard against out-of-bounds index when toggling technique checkboxes (matching `recon.rs:588-590` pattern)
 
 ## Recent Features (2026-05-25)
 

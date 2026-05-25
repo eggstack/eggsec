@@ -318,6 +318,40 @@ InputField uses theme colors for focus states:
 - `focus_input` - Input field when focused
 - `focus_results` - Results area highlight
 
+## Bounds Check for Checkbox Arrays (Critical)
+
+When accessing checkbox arrays via index in handle_enter, always validate bounds:
+
+```rust
+// WRONG - could panic if index >= len
+self.technique_checkboxes[self.focused_checkbox_index].toggle();
+
+// CORRECT - bounds check prevents panic
+if self.focused_checkbox_index < self.technique_checkboxes.len() {
+    self.technique_checkboxes[self.focused_checkbox_index].toggle();
+}
+```
+
+This pattern was missing in `waf.rs:519` and was fixed to match the pattern already correctly used in `recon.rs:588-590`.
+
+## Checkbox Array Patterns by Tab
+
+| Tab | Checkbox Field | Bounds Check Location | Status |
+|-----|---------------|---------------------|--------|
+| `recon.rs` | `option_checkboxes` | 588-590 | ✅ Safe |
+| `waf.rs` | `technique_checkboxes` | 519 (fixed) | ✅ Safe |
+| `fuzz.rs` | Individual checkboxes (not array) | N/A | ✅ Safe |
+
+For option checkbox arrays, use `.get()` with fallback when constructing options:
+
+```rust
+// WRONG - panics if index out of bounds
+no_tech: self.option_checkboxes[0].checked,
+
+// CORRECT - returns false if index invalid
+no_tech: self.option_checkboxes.get(0).map(|cb| cb.checked).unwrap_or(false),
+```
+
 ## Mode Indicator
 
 Status bar shows current input mode:
