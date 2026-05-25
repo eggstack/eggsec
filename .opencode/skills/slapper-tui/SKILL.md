@@ -266,7 +266,8 @@ if self.inputs.fields.len() > 1 {
 
 ## Resources
 - `crates/slapper/src/tui/AGENTS.override.md` - Detailed TUI patterns
-- `ARCHITECTURE.md` - Overall design
+- `architecture/tui.md` - TUI architecture, event loop, overlays, and session handling
+- `architecture/config.md` - Config loading and TUI settings save semantics
 
 ## Focus Indicators
 
@@ -285,9 +286,9 @@ Use `app.mode` to check current mode (`InputMode::Normal` / `InputMode::Insert`)
 
 ## Quick Switch Panel
 
-Ctrl+G opens bookmarked tabs with fuzzy search:
+Ctrl+X opens all tabs with fuzzy search:
 - `toggle_quick_switch()` / `close_quick_switch()` methods
-- `get_quick_switch_results()` filters bookmarks by query
+- `get_quick_switch_results()` filters by title, stable ID, or description
 
 ## Overlay Precedence
 
@@ -355,12 +356,7 @@ let buf = terminal.backend().buffer();
 
 ## Settings Tab (tabs/settings/main.rs)
 
-**Important**: The Settings tab's `to_config()` only preserves a subset of config fields. When saving via TUI, the following fields will be LOST:
-- `profiles`, `schedule`, `remote`, `ai`, `search`, `alert_channels`
-- `notifications`, `recon`, `proxies`
-- `jitter_ms`, `exclude_ports`, `exclude_hosts`, `save_session`, `session_dir`
-
-The Settings tab should be considered a "quick settings" interface, not a full config editor.
+The Settings tab is a "quick settings" interface, but saving now merges the exposed fields into the loaded config instead of rebuilding from defaults. Non-exposed sections are preserved, including `profiles`, `schedule`, `remote`, `ai`, `search`, `alert_channels`, and other untouched fields.
 
 ### Settings Input Fields
 - Timeout (s) - maps to `http.timeout_secs`

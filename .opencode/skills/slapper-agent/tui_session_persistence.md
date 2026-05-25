@@ -15,7 +15,7 @@ metadata:
 
 ## Overview
 
-Slapper's TUI includes session persistence that automatically saves and restores UI state using stable string IDs for tabs and bookmarks. This enables crash recovery and preserves user preferences across sessions.
+Slapper's TUI includes session persistence that automatically saves and restores UI state using stable string IDs for tabs and bookmarks. This enables crash recovery and preserves user preferences across sessions, including the active theme.
 
 **Key Change (Phase 12R):** Session state now uses stable IDs (`HashSet<String>`) for bookmarks and `Option<String>` for current tab, not numeric indexes. This ensures bookmarks and tab state persist correctly across feature-gated builds.
 
@@ -35,7 +35,7 @@ let state = manager.capture_state(&app);
 
 // Load saved session
 if let Some(saved) = manager.load_quick() {
-    manager.restore_session(&mut app, &saved);
+    manager.restore_session(&mut app, &saved); // also restores theme
 }
 
 // Save current session
@@ -47,7 +47,7 @@ let path = manager.save_quick(&app)?;
 The `SessionState` captures:
 - Current tab stable ID (`current_tab_id: Option<String>`)
 - Bookmarked tab stable IDs (`bookmarks: Vec<String>`)
-- Active theme name
+- Active theme name, restored via `ThemeManager::set_theme()`
 - Legacy numeric fields for backward compatibility
 
 ## Implementation

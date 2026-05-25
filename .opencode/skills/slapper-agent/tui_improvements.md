@@ -83,9 +83,9 @@ impl TabWindow {
 
 ### Keyboard Navigation
 
-**Key bindings** (verified 2026-04-30):
-- `n` / `N` or `p` - next/prev tab (cycles through all available tabs)
-- `Shift+H` / `Shift+L` - previous/next tab
+**Key bindings** (verified 2026-05-25):
+- `n` / `Shift+L` - next tab
+- `N` / `p` / `Shift+H` - previous tab
 - `1-9`, `0` - direct tab selection (limited to single digit)
 - Mouse click on tab - selects that tab if visible
 

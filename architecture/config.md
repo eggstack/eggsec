@@ -48,6 +48,19 @@ Handles the mechanics of finding and parsing configuration files.
 - Merges file-based config with command-line overrides
 - Provides default values for all settings
 
+## TUI Settings Tab
+
+The TUI settings editor in `tui/tabs/settings/main.rs` applies exposed fields on top of an existing config instead of rebuilding from defaults. Non-exposed sections are preserved, including:
+- `profiles`
+- `schedule`
+- `remote`
+- `ai`
+- `search`
+- `alert_channels`
+- Other fields not shown in the UI
+
+The editor is still a quick-settings surface, but saving it is no longer destructive for untouched config sections.
+
 ## Configuration Files
 
 Slapper looks for config in this order:

@@ -53,6 +53,14 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 | `pipeline/` | `crates/slapper/src/pipeline/AGENTS.override.md` |
 | `nse/` | `slapper-nse/` (Lua VM, NSE libraries, sandbox, CVE integration) |
 
+### Architecture Index
+
+Use these sections as the canonical reference points when updating guidance or skills:
+
+- `architecture/tui.md` - TUI event loop, key handling, overlays, tab routing, session persistence, and quick switch behavior
+- `architecture/config.md` - config loading, scope enforcement, and TUI settings save semantics
+- `architecture/output.md` - report formatting, exports, and rendering integration
+
 ### Feature Flags
 
 - `stress-testing` - Raw sockets, IP spoofing
@@ -103,7 +111,7 @@ For specialized guidance on specific modules, see `AGENTS.override.md` in each m
 ### Security Notes
 
 - **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are blocked via private IP checks in `TargetScope::parse()`. However, scope rule evaluation happens AFTER private IP check - so targets like `10.255.255.255` are rejected even with scope rules like `allow 10.0.0.0/8`.
-- **TUI Settings Tab**: Only exposes a subset of config fields. Saving via the TUI will cause data loss for `profiles`, `schedule`, `remote`, `ai`, `search`, `alert_channels`, and other fields not shown in the UI.
+- **TUI Settings Tab**: The settings editor applies exposed fields on top of an existing config and preserves non-exposed sections such as `profiles`, `schedule`, `remote`, `ai`, `search`, and `alert_channels`. See `architecture/config.md` for the current save semantics.
 
 ### Key Patterns
 

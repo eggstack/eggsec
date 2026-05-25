@@ -116,7 +116,7 @@ let style = Style::default().fg(tc!(text));
 
 ### Session Management (`session.rs`)
 
-`SessionManager` auto-saves every 30 seconds to JSON in `~/.slapper/sessions/`.
+`SessionManager` auto-saves at the configured interval (default 30 seconds) to JSON in `~/.slapper/sessions/`, writes a quick-save on exit, and restores the saved theme name when loading sessions.
 
 ## Entry Point
 
@@ -136,6 +136,9 @@ This happens via `handle_no_command()` in `commands/handlers/mod.rs`, which call
 | `Ctrl+P` | Command palette |
 | `Ctrl+X` | Quick switch (tab search) |
 | `Ctrl+F` | Global search |
+| `Ctrl+T` | Toggle light/dark theme |
+| `Ctrl+Z` | Pause/resume active task updates |
+| `Ctrl+Y` | Resume when paused, otherwise copy |
 | `Space` | Toggle help |
 | `hjkl` / Arrows | Navigation |
 | `i` | Enter insert mode |
@@ -143,6 +146,7 @@ This happens via `handle_no_command()` in `commands/handlers/mod.rs`, which call
 | `q` | Quit (when no active task) |
 | `g/G` | Go to top/bottom |
 | `n/N` | Next/prev tab |
+| `p` | Previous tab |
 | `e` | Export results |
 | `s` | Save settings |
 

@@ -127,18 +127,11 @@ This prevents SSRF against cloud metadata endpoints (e.g., `169.254.169.254`).
 - `ScanConfig.profiles` (`settings.rs:109`)
 - `WebhookConfig.headers` (`scan.rs:132`)
 
-## TUI Settings Tab Limitation
+## TUI Settings Tab
 
-The TUI Settings Tab (`tui/tabs/settings.rs`) only exposes a subset of config fields. Saving via the TUI will cause data loss for:
-- `profiles`
-- `schedule`
-- `remote`
-- `ai`
-- `search`
-- `alert_channels`
-- Other fields not shown in the UI
+The TUI Settings tab (`tui/tabs/settings/main.rs`) exposes only a subset of config fields, but saving now merges those changes into the loaded config instead of rebuilding from defaults. Non-exposed sections are preserved, including `profiles`, `schedule`, `remote`, `ai`, `search`, `alert_channels`, and other untouched fields.
 
-For full config management, use CLI commands or edit config files directly.
+For full config management, use CLI commands or edit config files directly when you need to inspect or change the hidden sections explicitly.
 
 ## Related Documentation
 

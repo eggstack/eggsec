@@ -288,44 +288,70 @@ impl SettingsTab {
         self.config = Some(config.clone());
     }
 
-    pub fn to_config(&self) -> SlapperConfig {
-        let timeout_secs = self.http_inputs.fields[0].value.parse().unwrap_or(30);
-        let max_retries = self.http_inputs.fields[1].value.parse().unwrap_or(3);
-        let retry_delay_ms = self.http_inputs.fields[2].value.parse().unwrap_or(1000);
-        let max_redirects = self.http_inputs.fields[3].value.parse().unwrap_or(10);
-        let default_concurrency = self.scan_inputs.fields[0].value.parse().unwrap_or(50);
+    fn apply_to_config(&self, config: &mut SlapperConfig) {
+        config.http.timeout_secs = self.http_inputs.fields[0].value.parse().unwrap_or(30);
+        config.http.max_retries = self.http_inputs.fields[1].value.parse().unwrap_or(3);
+        config.http.retry_delay_ms = self.http_inputs.fields[2].value.parse().unwrap_or(1000);
+        config.http.max_redirects = self.http_inputs.fields[3].value.parse().unwrap_or(10);
+        config.http.follow_redirects = self.follow_redirects.checked;
+        config.http.verify_tls = self.verify_tls.checked;
+        config.http.proxy = if self.proxy_inputs.fields[0].value.is_empty() {
+            None
+        } else {
+            Some(self.proxy_inputs.fields[0].value.clone())
+        };
+        config.http.proxy_auth = if self.proxy_inputs.fields[1].value.is_empty() {
+            None
+        } else {
+            Some(crate::types::SensitiveString::new(
+                self.proxy_inputs.fields[1].value.clone(),
+            ))
+        };
 
-        SlapperConfig {
+        config.scan.default_concurrency = self.scan_inputs.fields[0].value.parse().unwrap_or(50);
+        config.scan.rate_limit_per_second = self.scan_inputs.fields[1].value.parse().ok();
+        config.scan.port_timeout_secs = self.scan_inputs.fields[2].value.parse().unwrap_or(2);
+        config.scan.stealth_mode = self.stealth_mode.checked;
+
+        config.paths.export_dir = if self.report_inputs.fields[3].value.is_empty()
+            || self.report_inputs.fields[3].value == "./exports"
+        {
+            None
+        } else {
+            Some(self.report_inputs.fields[3].value.clone())
+        };
+
+        config.auto_save_interval_secs = self.session_inputs.fields[0].value.parse().unwrap_or(30);
+    }
+
+    fn load_base_config_from_disk(&self) -> Option<SlapperConfig> {
+        let config_path = self.config_path.as_deref().unwrap_or("slapper.toml");
+        let content = std::fs::read_to_string(config_path).ok()?;
+        toml::from_str(&content).ok()
+    }
+
+    pub fn to_config(&self) -> SlapperConfig {
+        let mut config = self.config.clone().unwrap_or_else(|| SlapperConfig {
             http: HttpConfig {
-                timeout_secs,
-                max_retries,
-                follow_redirects: self.follow_redirects.checked,
-                verify_tls: self.verify_tls.checked,
-                max_redirects,
-                proxy: if self.proxy_inputs.fields[0].value.is_empty() {
-                    None
-                } else {
-                    Some(self.proxy_inputs.fields[0].value.clone())
-                },
-                proxy_auth: if self.proxy_inputs.fields[1].value.is_empty() {
-                    None
-                } else {
-                    Some(crate::types::SensitiveString::new(
-                        self.proxy_inputs.fields[1].value.clone(),
-                    ))
-                },
+                timeout_secs: 30,
+                max_retries: 3,
+                follow_redirects: true,
+                verify_tls: true,
+                max_redirects: 10,
+                proxy: None,
+                proxy_auth: None,
                 default_headers: rustc_hash::FxHashMap::default(),
                 default_user_agent: None,
-                retry_delay_ms,
+                retry_delay_ms: 1000,
             },
             scan: ScanConfig {
-                default_concurrency,
-                rate_limit_per_second: self.scan_inputs.fields[1].value.parse().ok(),
-                stealth_mode: self.stealth_mode.checked,
+                default_concurrency: 50,
+                rate_limit_per_second: None,
+                stealth_mode: false,
                 jitter_ms: None,
                 exclude_ports: Vec::new(),
                 exclude_hosts: Vec::new(),
-                port_timeout_secs: self.scan_inputs.fields[2].value.parse().unwrap_or(2),
+                port_timeout_secs: 2,
                 save_session: false,
                 session_dir: None,
             },
@@ -335,13 +361,7 @@ impl SettingsTab {
                 custom_payloads_dir: None,
                 plugins_dir: None,
                 wordlists_dir: None,
-                export_dir: if self.report_inputs.fields[3].value.is_empty()
-                    || self.report_inputs.fields[3].value == "./exports"
-                {
-                    None
-                } else {
-                    Some(self.report_inputs.fields[3].value.clone())
-                },
+                export_dir: None,
             },
             profiles: rustc_hash::FxHashMap::default(),
             recon: crate::config::ReconConfig::default(),
@@ -351,12 +371,19 @@ impl SettingsTab {
             ai: None,
             search: None,
             alert_channels: crate::config::AlertChannelsConfig::default(),
-            auto_save_interval_secs: self.session_inputs.fields[0].value.parse().unwrap_or(30),
-        }
+            auto_save_interval_secs: 30,
+        });
+        self.apply_to_config(&mut config);
+        config
     }
 
     pub fn save_config(&mut self) {
-        let config = self.to_config();
+        let mut config = self
+            .config
+            .clone()
+            .or_else(|| self.load_base_config_from_disk())
+            .unwrap_or_else(|| self.to_config());
+        self.apply_to_config(&mut config);
 
         let toml = toml::to_string_pretty(&config)
             .map_err(|e| format!("Failed to serialize config: {}", e));
@@ -404,7 +431,7 @@ impl SettingsTab {
     pub fn reset(&mut self) {
         self.http_inputs.fields[0].value = "30".to_string();
         self.http_inputs.fields[1].value = "3".to_string();
-        self.http_inputs.fields[2].value = "10".to_string();
+        self.http_inputs.fields[2].value = "1000".to_string();
         self.scan_inputs.fields[0].value = "50".to_string();
         self.scan_inputs.fields[1].value = "0".to_string();
         self.scan_inputs.fields[2].value = "2".to_string();

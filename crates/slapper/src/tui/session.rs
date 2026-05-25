@@ -152,7 +152,7 @@ impl SessionManager {
         SessionState {
             current_tab_id: Some(app.current_tab.stable_id().to_string()),
             bookmarks: app.get_bookmarked_tab_ids(),
-            theme_name: "dark".to_string(),
+            theme_name: app.theme_manager.current().name.to_string(),
             legacy_current_tab: current_tab_visible,
             legacy_bookmarks: app
                 .get_bookmarked_tab_ids()

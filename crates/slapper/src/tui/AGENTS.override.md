@@ -6,6 +6,7 @@ Specialized guidance for the terminal UI module.
 
 - **handle_enter() dispatcher caching**: `dispatcher_mut()` now cached to reduce 4 calls to 1 per Enter keypress
 - **Theme restoration**: SessionManager now restores theme when loading sessions
+- **Settings save merge**: TUI settings now merge into the loaded config and preserve non-exposed sections
 
 ## Recent Features (2026-05-25)
 
@@ -55,7 +56,7 @@ crates/slapper/src/tui/
 
 ## Quick Switch Panel
 
-Ctrl+X shows ALL tabs with fuzzy search (not just bookmarked):
+Ctrl+X shows ALL tabs with fuzzy search:
 
 ```rust
 // Toggle quick switch
