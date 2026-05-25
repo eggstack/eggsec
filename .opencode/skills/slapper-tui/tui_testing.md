@@ -184,3 +184,38 @@ fn test_execute_command_navigates_to_cluster() {
     assert_eq!(app.current_tab, Tab::Cluster);
 }
 ```
+
+### Testing ScrollableText with Empty Lines
+
+```rust
+#[test]
+fn test_scroll_to_bottom_handles_empty_lines() {
+    let mut scrollable = ScrollableText::new("Test");
+    // Empty case should not panic
+    scrollable.scroll_to_bottom();
+    assert_eq!(scrollable.scroll_offset, 0);
+}
+
+#[test]
+fn test_scroll_offset_with_empty_lines() {
+    let mut scrollable = ScrollableText::new("Test");
+    scrollable.scroll_offset = 100; // Set past bounds
+    scrollable.scroll_down(1);
+    // Should clamp to valid range, not overflow
+    assert!(scrollable.scroll_offset <= scrollable.lines.len().saturating_sub(1));
+}
+```
+
+### Testing Checkbox Array Bounds
+
+```rust
+#[test]
+fn test_get_options_handles_empty_checkboxes() {
+    let tab = ReconTab::new();
+    // Should not panic even if option_checkboxes is empty or small
+    let options = tab.get_options();
+    // All values should be false (default) if array access fails
+    assert!(!options.no_tech);
+    assert!(!options.no_dns);
+}
+```

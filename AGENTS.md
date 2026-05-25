@@ -117,6 +117,7 @@ Use these sections as the canonical reference points when updating guidance or s
 
 - **Division by zero guard**: Always check `if self.stages.is_empty()` before division
 - **Scroll offset bounds**: Use `self.lines.is_empty()` check before calculating scroll_offset
+- **Option checkbox array bounds**: Use `.get()` with fallback when accessing checkbox arrays by index
 - **Arc::try_unwrap**: Use `map_err` instead of `.expect()` to avoid panic
 - **LazyLock regex**: Use `.expect()` with descriptive message instead of `.unwrap()`
 - **FxHashMap/FxHashSet**: Always use for performance in new code

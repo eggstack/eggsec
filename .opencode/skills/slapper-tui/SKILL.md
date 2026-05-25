@@ -264,6 +264,48 @@ if self.inputs.fields.len() > 1 {
 }
 ```
 
+### Bounds Check for Option Checkbox Arrays
+
+When accessing checkbox arrays by index, use `.get()` with fallback:
+
+```rust
+// WRONG - panics if index out of bounds
+no_tech: self.option_checkboxes[0].checked,
+
+// CORRECT - returns false if index invalid
+no_tech: self.option_checkboxes.get(0).map(|cb| cb.checked).unwrap_or(false),
+```
+
+### ScrollableText Empty Lines Handling
+
+When implementing `scroll_to_bottom()` or calculating max scroll offset:
+
+```rust
+// WRONG - scroll_offset becomes usize::MAX when lines is empty
+self.scroll_offset = self.lines.len().saturating_sub(1);
+
+// CORRECT - explicitly handle empty case
+if self.lines.is_empty() {
+    self.scroll_offset = 0;
+} else {
+    self.scroll_offset = self.lines.len() - 1;
+}
+```
+
+In render, calculate scroll_offset safely:
+
+```rust
+// WRONG - usize::MAX when lines is empty
+let scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1));
+
+// CORRECT - explicit empty check
+let scroll_offset = if self.lines.is_empty() {
+    0
+} else {
+    self.scroll_offset.min(self.lines.len() - 1)
+};
+```
+
 ## Resources
 - `crates/slapper/src/tui/AGENTS.override.md` - Detailed TUI patterns
 - `architecture/tui.md` - TUI architecture, event loop, overlays, and session handling

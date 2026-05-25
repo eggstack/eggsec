@@ -320,3 +320,29 @@ if self.inputs.fields.len() > 1 {
     self.inputs.fields[1].value = "report.json".to_string();
 }
 ```
+
+For option checkbox arrays (like ReconOptions), use `.get()` with fallback:
+
+```rust
+// WRONG - panics if index out of bounds
+no_tech: self.option_checkboxes[0].checked,
+
+// CORRECT - returns false if index invalid
+no_tech: self.option_checkboxes.get(0).map(|cb| cb.checked).unwrap_or(false),
+```
+
+### ScrollableText scroll_to_bottom
+
+When implementing or modifying `scroll_to_bottom()`, always handle empty lines:
+
+```rust
+// WRONG - scroll_offset becomes incorrect when lines is empty
+self.scroll_offset = self.lines.len().saturating_sub(1);
+
+// CORRECT - explicit empty check
+if self.lines.is_empty() {
+    self.scroll_offset = 0;
+} else {
+    self.scroll_offset = self.lines.len() - 1;
+}
+```
