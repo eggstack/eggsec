@@ -34,6 +34,7 @@ impl TabRender for super::SettingsTab {
         let nav_items = vec![
             ("HTTP Settings", SettingsSection::Http),
             ("Scan Settings", SettingsSection::Scan),
+            ("Session Settings", SettingsSection::Session),
             ("Proxy Settings", SettingsSection::Proxy),
             ("Scope Settings", SettingsSection::Scope),
             ("Report", SettingsSection::Report),
@@ -62,6 +63,7 @@ impl TabRender for super::SettingsTab {
                 .title(match self.current_section {
                     SettingsSection::Http => "HTTP Settings",
                     SettingsSection::Scan => "Scan Settings",
+                    SettingsSection::Session => "Session Settings",
                     SettingsSection::Proxy => "Proxy Settings",
                     SettingsSection::Scope => "Scope Settings",
                     SettingsSection::Report => "Report Conversion",
@@ -90,6 +92,13 @@ impl TabRender for super::SettingsTab {
                     builder = builder.add_input(field.clone());
                 }
                 builder = builder.add_checkbox(self.stealth_mode.clone());
+                builder.render(f, inner, insert_mode);
+            }
+            SettingsSection::Session => {
+                let mut builder = FormBuilder::new("Session Settings").row_height(3);
+                for field in &self.session_inputs.fields {
+                    builder = builder.add_input(field.clone());
+                }
                 builder.render(f, inner, insert_mode);
             }
             SettingsSection::Proxy => {

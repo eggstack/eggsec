@@ -131,6 +131,13 @@ pub struct SlapperConfig {
 
     #[serde(default)]
     pub alert_channels: AlertChannelsConfig,
+
+    #[serde(default = "default_auto_save_interval")]
+    pub auto_save_interval_secs: u64,
+}
+
+fn default_auto_save_interval() -> u64 {
+    30
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

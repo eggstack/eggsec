@@ -36,6 +36,7 @@ impl TabInput for SettingsTab {
         match self.current_section {
             SettingsSection::Http => self.http_inputs.insert(c),
             SettingsSection::Scan => self.scan_inputs.insert(c),
+            SettingsSection::Session => self.session_inputs.insert(c),
             SettingsSection::Proxy => self.proxy_inputs.insert(c),
             SettingsSection::Scope => self.scope_inputs.insert(c),
             SettingsSection::Report => self.report_inputs.insert(c),
@@ -49,6 +50,7 @@ impl TabInput for SettingsTab {
         match self.current_section {
             SettingsSection::Http => self.http_inputs.backspace(),
             SettingsSection::Scan => self.scan_inputs.backspace(),
+            SettingsSection::Session => self.session_inputs.backspace(),
             SettingsSection::Proxy => self.proxy_inputs.backspace(),
             SettingsSection::Scope => self.scope_inputs.backspace(),
             SettingsSection::Report => self.report_inputs.backspace(),
@@ -62,6 +64,7 @@ impl TabInput for SettingsTab {
         match self.current_section {
             SettingsSection::Http => self.http_inputs.paste(text),
             SettingsSection::Scan => self.scan_inputs.paste(text),
+            SettingsSection::Session => self.session_inputs.paste(text),
             SettingsSection::Proxy => self.proxy_inputs.paste(text),
             SettingsSection::Scope => self.scope_inputs.paste(text),
             SettingsSection::Report => self.report_inputs.paste(text),
@@ -75,6 +78,7 @@ impl TabInput for SettingsTab {
         match self.current_section {
             SettingsSection::Http => self.http_inputs.get_focused_value(),
             SettingsSection::Scan => self.scan_inputs.get_focused_value(),
+            SettingsSection::Session => self.session_inputs.get_focused_value(),
             SettingsSection::Proxy => self.proxy_inputs.get_focused_value(),
             SettingsSection::Scope => self.scope_inputs.get_focused_value(),
             SettingsSection::Report => self.report_inputs.get_focused_value(),
@@ -88,6 +92,7 @@ impl TabInput for SettingsTab {
         match self.current_section {
             SettingsSection::Http => self.http_inputs.move_word_forward(),
             SettingsSection::Scan => self.scan_inputs.move_word_forward(),
+            SettingsSection::Session => self.session_inputs.move_word_forward(),
             SettingsSection::Proxy => self.proxy_inputs.move_word_forward(),
             SettingsSection::Scope => self.scope_inputs.move_word_forward(),
             SettingsSection::Report => self.report_inputs.move_word_forward(),
@@ -101,6 +106,7 @@ impl TabInput for SettingsTab {
         match self.current_section {
             SettingsSection::Http => self.http_inputs.move_word_backward(),
             SettingsSection::Scan => self.scan_inputs.move_word_backward(),
+            SettingsSection::Session => self.session_inputs.move_word_backward(),
             SettingsSection::Proxy => self.proxy_inputs.move_word_backward(),
             SettingsSection::Scope => self.scope_inputs.move_word_backward(),
             SettingsSection::Report => self.report_inputs.move_word_backward(),
@@ -114,6 +120,7 @@ impl TabInput for SettingsTab {
         match self.current_section {
             SettingsSection::Http => self.http_inputs.move_home(),
             SettingsSection::Scan => self.scan_inputs.move_home(),
+            SettingsSection::Session => self.session_inputs.move_home(),
             SettingsSection::Proxy => self.proxy_inputs.move_home(),
             SettingsSection::Scope => self.scope_inputs.move_home(),
             SettingsSection::Report => self.report_inputs.move_home(),
@@ -127,6 +134,7 @@ impl TabInput for SettingsTab {
         match self.current_section {
             SettingsSection::Http => self.http_inputs.move_end(),
             SettingsSection::Scan => self.scan_inputs.move_end(),
+            SettingsSection::Session => self.session_inputs.move_end(),
             SettingsSection::Proxy => self.proxy_inputs.move_end(),
             SettingsSection::Scope => self.scope_inputs.move_end(),
             SettingsSection::Report => self.report_inputs.move_end(),
@@ -169,6 +177,9 @@ impl TabInput for SettingsTab {
                 } else {
                     self.stealth_mode.toggle();
                 }
+            }
+            SettingsSection::Session => {
+                self.session_inputs.blur();
             }
             SettingsSection::Proxy => {
                 if idx < 2 {

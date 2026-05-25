@@ -7,6 +7,10 @@ Specialized guidance for the terminal UI module.
 - **handle_enter() dispatcher caching**: `dispatcher_mut()` now cached to reduce 4 calls to 1 per Enter keypress
 - **Theme restoration**: SessionManager now restores theme when loading sessions
 
+## Recent Features (2026-05-25)
+
+- **Configurable auto-save interval**: Settings > Session panel now allows configuring auto-save interval (previously hardcoded to 30s)
+
 ## Module Structure
 
 ```

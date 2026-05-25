@@ -19,6 +19,7 @@ pub struct SettingsTab {
     pub report_inputs: InputGroup,
     pub schedule_inputs: InputGroup,
     pub notify_inputs: InputGroup,
+    pub session_inputs: InputGroup,
     pub follow_redirects: Checkbox,
     pub verify_tls: Checkbox,
     pub stealth_mode: Checkbox,
@@ -41,6 +42,7 @@ pub struct SettingsTab {
 pub enum SettingsSection {
     Http,
     Scan,
+    Session,
     Proxy,
     Scope,
     Report,
@@ -88,6 +90,9 @@ impl SettingsTab {
             .add(InputField::new("Teams Webhook URL"))
             .add(InputField::new("Custom Webhook URL"));
 
+        let session_inputs = InputGroup::new()
+            .add(InputField::new("Auto-save Interval (seconds)").with_value("30"));
+
         let proxy_rotation_selector = Selector::new("Proxy Rotation").items(vec![
             SelectorItem::new("None", "none"),
             SelectorItem::new("Round Robin", "round-robin"),
@@ -122,6 +127,7 @@ impl SettingsTab {
             report_inputs,
             schedule_inputs,
             notify_inputs,
+            session_inputs,
             follow_redirects: Checkbox::new("Follow Redirects").checked(true),
             verify_tls: Checkbox::new("Verify TLS").checked(true),
             stealth_mode: Checkbox::new("Stealth Mode").checked(false),
@@ -149,6 +155,7 @@ impl SettingsTab {
         match self.current_section {
             SettingsSection::Http => 5,
             SettingsSection::Scan => 3,
+            SettingsSection::Session => 0,
             SettingsSection::Proxy => 2,
             SettingsSection::Scope => 1,
             SettingsSection::Report => 3,
@@ -176,6 +183,7 @@ impl SettingsTab {
         self.report_inputs.blur();
         self.schedule_inputs.blur();
         self.notify_inputs.blur();
+        self.session_inputs.blur();
         self.follow_redirects.focused = false;
         self.verify_tls.focused = false;
         self.stealth_mode.focused = false;
@@ -215,6 +223,9 @@ impl SettingsTab {
                 } else {
                     self.stealth_mode.focused = true;
                 }
+            }
+            SettingsSection::Session => {
+                self.session_inputs.focus(idx);
             }
             SettingsSection::Proxy => {
                 if idx < 2 {
@@ -263,6 +274,8 @@ impl SettingsTab {
 
         self.scan_inputs.fields[0].value = config.scan.default_concurrency.to_string();
         self.stealth_mode.checked = config.scan.stealth_mode;
+
+        self.session_inputs.fields[0].value = config.auto_save_interval_secs.to_string();
 
         if let Some(ref proxy_url) = config.http.proxy {
             self.proxy_inputs.fields[0].value = proxy_url.clone();
@@ -338,6 +351,7 @@ impl SettingsTab {
             ai: None,
             search: None,
             alert_channels: crate::config::AlertChannelsConfig::default(),
+            auto_save_interval_secs: self.session_inputs.fields[0].value.parse().unwrap_or(30),
         }
     }
 
@@ -558,6 +572,7 @@ impl SettingsTab {
         match self.current_section {
             SettingsSection::Http => self.http_inputs.is_focused(),
             SettingsSection::Scan => self.scan_inputs.is_focused(),
+            SettingsSection::Session => self.session_inputs.is_focused(),
             SettingsSection::Proxy => self.proxy_inputs.is_focused(),
             SettingsSection::Scope => self.scope_inputs.is_focused(),
             SettingsSection::Report => self.report_inputs.is_focused(),
