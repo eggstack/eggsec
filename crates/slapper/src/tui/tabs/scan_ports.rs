@@ -164,6 +164,11 @@ impl ScanPortsTab {
         }
 
         for t in self.targets() {
+            if self.inputs.fields.is_empty() {
+                self.state = AppState::Error("Input fields not initialized".to_string());
+                self.error = Some(TabError::Config("Input fields not initialized".to_string()));
+                return;
+            }
             let old_value = std::mem::take(&mut self.inputs.fields[0].value);
             self.inputs.fields[0].value = t.clone();
             let validation = self.inputs.fields[0].validate_ip();
@@ -180,6 +185,11 @@ impl ScanPortsTab {
             }
         }
 
+        if self.inputs.fields.len() < 2 {
+            self.state = AppState::Error("Input fields not initialized".to_string());
+            self.error = Some(TabError::Config("Input fields not initialized".to_string()));
+            return;
+        }
         let port_validation = self.inputs.fields[1].validate_port_range();
         if !port_validation.valid {
             self.state =
@@ -270,12 +280,18 @@ impl TabState for ScanPortsTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        self.inputs.fields[1].value = "1-1024".to_string();
-        self.inputs.fields[1].cursor_pos = 6;
-        self.inputs.fields[2].value = "100".to_string();
-        self.inputs.fields[2].cursor_pos = 3;
-        self.inputs.fields[3].value = "2".to_string();
-        self.inputs.fields[3].cursor_pos = 1;
+        if self.inputs.fields.len() > 1 {
+            self.inputs.fields[1].value = "1-1024".to_string();
+            self.inputs.fields[1].cursor_pos = 6;
+        }
+        if self.inputs.fields.len() > 2 {
+            self.inputs.fields[2].value = "100".to_string();
+            self.inputs.fields[2].cursor_pos = 3;
+        }
+        if self.inputs.fields.len() > 3 {
+            self.inputs.fields[3].value = "2".to_string();
+            self.inputs.fields[3].cursor_pos = 1;
+        }
         self.focus_area = ScanPortsFocusArea::Inputs;
     }
 
@@ -308,7 +324,9 @@ impl TabRender for ScanPortsTab {
             .split(input_area);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
-            field.render(f, input_chunks[i], insert_mode);
+            if let Some(chunk) = input_chunks.get(i) {
+                field.render(f, *chunk, insert_mode);
+            }
         }
 
         let udp_cb = self.udp_checkbox.clone();

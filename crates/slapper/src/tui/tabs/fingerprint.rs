@@ -209,10 +209,14 @@ impl TabState for FingerprintTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        self.inputs.fields[1].value = "80,443,22,21,25,3306,5432,6379,27017".to_string();
-        self.inputs.fields[1].cursor_pos = 35;
-        self.inputs.fields[2].value = "5".to_string();
-        self.inputs.fields[2].cursor_pos = 1;
+        if self.inputs.fields.len() > 1 {
+            self.inputs.fields[1].value = "80,443,22,21,25,3306,5432,6379,27017".to_string();
+            self.inputs.fields[1].cursor_pos = 35;
+        }
+        if self.inputs.fields.len() > 2 {
+            self.inputs.fields[2].value = "5".to_string();
+            self.inputs.fields[2].cursor_pos = 1;
+        }
         self.focus_area = FingerprintFocusArea::Inputs;
     }
 

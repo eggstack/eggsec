@@ -530,7 +530,9 @@ impl TabState for PacketTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        self.inputs.fields[2].value = "100".to_string();
+        if self.inputs.fields.len() > 2 {
+            self.inputs.fields[2].value = "100".to_string();
+        }
     }
 
     fn set_error(&mut self, error: TabError) {

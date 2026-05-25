@@ -329,7 +329,9 @@ impl TabRender for WorkflowTab {
                     st.focused = self.focus_area == WorkflowFocusArea::Inputs;
                     st.render(f, field_chunks[i]);
                 } else {
-                    self.inputs.fields[idx].render(f, field_chunks[i], insert_mode);
+                    if idx < self.inputs.fields.len() {
+                        self.inputs.fields[idx].render(f, field_chunks[i], insert_mode);
+                    }
                 }
             }
         }

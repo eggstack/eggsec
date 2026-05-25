@@ -417,7 +417,9 @@ impl TabRender for VulnTab {
                 .split(fields_area);
 
             for (i, &idx) in field_indices.iter().enumerate() {
-                self.inputs.fields[idx].render(f, field_chunks[i], insert_mode);
+                if idx < self.inputs.fields.len() {
+                    self.inputs.fields[idx].render(f, field_chunks[i], insert_mode);
+                }
             }
         }
 

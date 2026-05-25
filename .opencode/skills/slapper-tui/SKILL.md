@@ -545,3 +545,76 @@ let fields = match self.current_mode {
 ```
 
 This pattern was fixed in `integrations.rs:329-338` (2026-05-25).
+
+## Session Fixes (2026-05-25)
+
+### Tokio Spawn Error Handling
+
+Workers now properly check JoinHandle results to detect panics:
+
+**network.rs:159-170** - Packet capture task result handling:
+```rust
+match handle_result {
+    Err(e) => {
+        tracing::warn!("Packet capture handle timed out: {}", e);
+    }
+    Ok(Err(e)) => {
+        if e.is_panic() {
+            tracing::warn!("Packet capture task panicked: {:?}", e);
+        } else {
+            tracing::warn!("Packet capture task failed: {}", e);
+        }
+    }
+    Ok(Ok(())) => {
+        tracing::debug!("Packet capture task completed successfully");
+    }
+}
+```
+
+**recon.rs:176-215** - Progress handle checked in all match arms:
+```rust
+if let Err(e) = progress_handle.await {
+    if e.is_panic() {
+        tracing::warn!("Progress tracking task panicked: {:?}", e);
+    }
+}
+```
+
+### Bounds Checks Added (2026-05-25)
+
+| File | Line(s) | Fix |
+|------|---------|-----|
+| `tabs/fuzz.rs` | 128-134 | Replaced `.expect()` with `if let Some(s) = ...` + warn |
+| `tabs/fuzz.rs` | 471-473 | Added `if self.inputs.fields.len() > 2` guard |
+| `tabs/scan_ports.rs` | 167-192 | Added `is_empty()` and `len() < 2` guards |
+| `tabs/scan_endpoints.rs` | 255-258 | Added `if len > 1` / `if len > 2` guards |
+| `tabs/fingerprint.rs` | 212-215 | Added `if len > 1` / `if len > 2` guards |
+| `tabs/waf_stress.rs` | 148-151 | Added `if len > 1` / `if len > 2` guards |
+| `tabs/packet.rs` | 533 | Added `if len > 2` guard |
+| `tabs/settings/main.rs` | 267-289, 291-325, 431-446 | Replaced direct indexing with `.get().map().unwrap_or()` |
+| `tabs/workflow.rs` | 332 | Added `if idx < self.inputs.fields.len()` guard |
+| `tabs/vuln.rs` | 420 | Added `if idx < self.inputs.fields.len()` guard |
+| `tabs/integrations.rs` | 3 | Removed duplicate `use crate::tc;` |
+
+### to_lowercase() Caching
+
+**security.rs:115-121** - Avoid redundant allocations:
+```rust
+if let Some(v) = headers.get("cache-control").and_then(|v| v.to_str().ok()) {
+    let lower = v.to_lowercase();
+    if lower.contains("no-cache") || lower.contains("no-store") {
+    }
+}
+```
+
+**history.rs:168-179** - Cache lowercase comparison value:
+```rust
+if scan_type.is_empty() {
+    return self.entries.iter().collect();
+}
+let scan_type_lower = scan_type.to_lowercase();
+self.entries
+    .iter()
+    .filter(|e| e.scan_type.to_lowercase().contains(&scan_type_lower))
+    .collect()
+```

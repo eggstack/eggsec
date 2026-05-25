@@ -112,12 +112,13 @@ pub async fn run_compliance_task(
             findings.push(Severity::Info);
         }
 
-        if headers
+        if let Some(v) = headers
             .get("cache-control")
             .and_then(|v| v.to_str().ok())
-            .map(|v| v.to_lowercase().contains("no-cache") || v.to_lowercase().contains("no-store"))
-            .unwrap_or(false)
         {
+            let lower = v.to_lowercase();
+            if lower.contains("no-cache") || lower.contains("no-store") {
+            }
         } else if target.to_lowercase().contains("login")
             || target.to_lowercase().contains("auth")
             || target.to_lowercase().contains("account")

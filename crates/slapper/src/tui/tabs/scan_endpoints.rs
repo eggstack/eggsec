@@ -252,10 +252,14 @@ impl TabState for ScanEndpointsTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        self.inputs.fields[1].value = "20".to_string();
-        self.inputs.fields[1].cursor_pos = 2;
-        self.inputs.fields[2].value = "10".to_string();
-        self.inputs.fields[2].cursor_pos = 2;
+        if self.inputs.fields.len() > 1 {
+            self.inputs.fields[1].value = "20".to_string();
+            self.inputs.fields[1].cursor_pos = 2;
+        }
+        if self.inputs.fields.len() > 2 {
+            self.inputs.fields[2].value = "10".to_string();
+            self.inputs.fields[2].cursor_pos = 2;
+        }
         self.focus_area = ScanEndpointsFocusArea::Inputs;
     }
 

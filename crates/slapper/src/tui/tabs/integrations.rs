@@ -1,6 +1,5 @@
 use crate::integrations::{IntegrationConfig, Issue};
 use crate::tc;
-use crate::tc;
 use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
     empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem,

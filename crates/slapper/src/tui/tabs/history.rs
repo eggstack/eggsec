@@ -55,7 +55,7 @@ impl HistoryTab {
         match serde_json::to_string_pretty(&export_data) {
             Ok(s) => s,
             Err(e) => {
-                tracing::debug!("Failed to serialize history export: {}", e);
+                tracing::warn!("Failed to serialize history export: {}", e);
                 String::new()
             }
         }
@@ -168,13 +168,10 @@ impl HistoryTab {
         if scan_type.is_empty() {
             return self.entries.iter().collect();
         }
+        let scan_type_lower = scan_type.to_lowercase();
         self.entries
             .iter()
-            .filter(|e| {
-                e.scan_type
-                    .to_lowercase()
-                    .contains(&scan_type.to_lowercase())
-            })
+            .filter(|e| e.scan_type.to_lowercase().contains(&scan_type_lower))
             .collect()
     }
 
@@ -182,9 +179,10 @@ impl HistoryTab {
         if target.is_empty() {
             return self.entries.iter().collect();
         }
+        let target_lower = target.to_lowercase();
         self.entries
             .iter()
-            .filter(|e| e.target.to_lowercase().contains(&target.to_lowercase()))
+            .filter(|e| e.target.to_lowercase().contains(&target_lower))
             .collect()
     }
 

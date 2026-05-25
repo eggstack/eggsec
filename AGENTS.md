@@ -208,6 +208,20 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 - **Bounds check in input.rs can_move helpers**: Fixed `input.rs:680-694` to add `idx < self.fields.len()` check in `can_move_left()` and `can_move_right()`.
 - **Vec::swap_remove exception**: VecDeque does not have `swap_remove` - use `remove` for VecDeque or when the collection type is not Vec (`history.rs:145` uses VecDeque).
 
+### Additional TUI Bug Fixes (2026-05-25 Session)
+
+- **Tokio spawn error handling in network.rs:159-170**: Replaced double-unwrap pattern with proper `match` on `handle_result` (Timeout, JoinError, Ok). Added `tracing::warn!` for task failures and `tracing::debug!` for success.
+- **Tokio spawn error handling in recon.rs:176-215**: Added `progress_handle.await` checks with `is_panic()` detection in all match arms after `progress_handle.abort()`.
+- **Worker error logging in history.rs:58**: Changed `tracing::debug!` to `tracing::warn!` for history export serialization failures.
+- **Bounds check in fuzz.rs:128-134**: Replaced `.expect()` with `if let Some(s) = ...` pattern + warn logging.
+- **Bounds check in fuzz.rs:471-473**: Added `if self.inputs.fields.len() > 2` guard before rendering fields[0-2].
+- **Bounds check in scan_ports.rs:167-192**: Added `is_empty()` and `len() < 2` guards + `.get(i)` for chunks access.
+- **Bounds check in scan_endpoints.rs, fingerprint.rs, waf_stress.rs, packet.rs**: Added `if len > N` guards in reset() methods.
+- **Bounds check in settings/main.rs:267-325, 431-446**: Replaced direct field indexing with `.get().map().unwrap_or()` pattern.
+- **Bounds check in workflow.rs:332 and vuln.rs:420**: Added `if idx < self.inputs.fields.len()` guard.
+- **Duplicate import in integrations.rs:3**: Removed duplicate `use crate::tc;`.
+- **Redundant to_lowercase() calls**: Fixed `security.rs:115-121` and `history.rs:168-186` to cache lowercase values.
+
 ### Plugin/NSE Module
 
 - PluginManager uses `FxHashMap` at `lib.rs:296-297`

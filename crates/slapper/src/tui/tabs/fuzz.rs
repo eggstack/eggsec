@@ -125,7 +125,13 @@ impl FuzzTab {
         self.state = AppState::Completed;
         self.results_view.clear();
 
-        let s = &self.session.as_ref().expect("session set two lines above");
+        let s = match self.session.as_ref() {
+            Some(s) => s,
+            None => {
+                tracing::warn!("set_results called but session is None");
+                return;
+            }
+        };
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("Fuzzing Complete: {}", s.target_url),
@@ -468,9 +474,11 @@ impl TabRender for FuzzTab {
             .constraints(config_constraints)
             .split(config_area);
 
-        self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
-        self.inputs.fields[1].render(f, config_chunks[1], insert_mode);
-        self.inputs.fields[2].render(f, config_chunks[2], insert_mode);
+        if self.inputs.fields.len() > 2 {
+            self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
+            self.inputs.fields[1].render(f, config_chunks[1], insert_mode);
+            self.inputs.fields[2].render(f, config_chunks[2], insert_mode);
+        }
 
         let mut payload_sel = self.payload_selector.clone();
         payload_sel.focused = self.focus_area == FuzzFocusArea::PayloadSelector;

@@ -90,7 +90,7 @@ pub async fn run_graphql(
                     let response_text = match response.text().await {
                         Ok(text) => text,
                         Err(e) => {
-                            tracing::debug!("Failed to read GraphQL response body: {}", e);
+                            tracing::warn!("Failed to read GraphQL response body: {}", e);
                             String::new()
                         }
                     };

@@ -176,6 +176,11 @@ pub async fn run_recon(
                 progress_handle.abort();
                 let _ = progress_tx.send((100, 100)).await;
                 let _ = result_tx.send(TaskResult::Recon(r)).await;
+                if let Err(e) = progress_handle.await {
+                    if e.is_panic() {
+                        tracing::warn!("Progress tracking task panicked: {:?}", e);
+                    }
+                }
                 return Ok(());
             }
             Ok(Err(e)) => {
@@ -199,12 +204,22 @@ pub async fn run_recon(
                     tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
                 } else {
                     tracing::error!("Recon failed after {} attempts: {:?}", max_retries, e);
+                    if let Err(e) = progress_handle.await {
+                        if e.is_panic() {
+                            tracing::warn!("Progress tracking task panicked: {:?}", e);
+                        }
+                    }
                     return Err(e.into());
                 }
             }
             Err(_) => {
                 progress_handle.abort();
                 tracing::error!("Recon timed out after 120 seconds");
+                if let Err(e) = progress_handle.await {
+                    if e.is_panic() {
+                        tracing::warn!("Progress tracking task panicked: {:?}", e);
+                    }
+                }
                 return Err(anyhow::anyhow!("Recon timed out after 120 seconds"));
             }
         }

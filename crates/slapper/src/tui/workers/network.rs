@@ -156,7 +156,22 @@ pub async fn run_packet_capture(
     }
 
     running.store(false, std::sync::atomic::Ordering::SeqCst);
-    let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    let handle_result = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    match handle_result {
+        Err(e) => {
+            tracing::warn!("Packet capture handle timed out: {}", e);
+        }
+        Ok(Err(e)) => {
+            if e.is_panic() {
+                tracing::warn!("Packet capture task panicked: {:?}", e);
+            } else {
+                tracing::warn!("Packet capture task failed: {}", e);
+            }
+        }
+        Ok(Ok(())) => {
+            tracing::debug!("Packet capture task completed successfully");
+        }
+    }
 
     let _ = result_tx
         .send(TaskResult::PacketCapture {

@@ -442,3 +442,45 @@ while sessions.len() > max_sessions {
 ```
 
 **Exception**: VecDeque does not have `swap_remove`. Use `remove` for VecDeque or when the collection type is not Vec.
+
+### Tokio Spawn Error Handling
+
+When awaiting `tokio::spawn` JoinHandle results, use proper pattern matching to detect panics:
+
+```rust
+// WRONG - double unwrap can panic
+let handle_result = tokio::time::timeout(Duration::from_secs(2), handle).await;
+if let Err(e) = handle_result {
+    tracing::warn!("Handle timed out: {}", e);
+} else if let Err(e) = handle_result.unwrap() {  // double unwrap!
+    // ...
+}
+
+// CORRECT - proper nested match
+let handle_result = tokio::time::timeout(Duration::from_secs(2), handle).await;
+match handle_result {
+    Err(e) => {
+        tracing::warn!("Handle timed out: {}", e);
+    }
+    Ok(Err(e)) => {
+        if e.is_panic() {
+            tracing::warn!("Task panicked: {:?}", e);
+        } else {
+            tracing::warn!("Task failed: {}", e);
+        }
+    }
+    Ok(Ok(())) => {
+        tracing::debug!("Task completed successfully");
+    }
+}
+```
+
+For progress tracking tasks that are aborted on completion, also check the join result:
+
+```rust
+if let Err(e) = progress_handle.await {
+    if e.is_panic() {
+        tracing::warn!("Progress tracking task panicked: {:?}", e);
+    }
+}
+```
