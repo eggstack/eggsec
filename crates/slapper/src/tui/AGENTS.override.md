@@ -572,6 +572,46 @@ self.inputs.fields[1].value = "report.json".to_string();
 // CORRECT - check length first
 if self.inputs.fields.len() > 1 {
     self.inputs.fields[1].value = "report.json".to_string();
-    self.inputs.fields[1].cursor_pos = 11;
+self.inputs.fields[1].cursor_pos = 11;
+    }
 }
 ```
+
+## Worker Patterns
+
+### Silent Send Error Handling
+
+Workers use `let _ = channel.send(...).await` for progress and result sending. This is intentional because:
+
+1. If the main loop has been dropped (app closed), there's no point propagating the error
+2. Progress updates that fail don't affect the final result
+3. Result sending failures are logged at error level before return
+
+```rust
+// Worker send pattern - intentional silent suppression
+let results = runner.run().await?;
+let _ = result_tx.send(TaskResult::LoadTest(results)).await;
+let _ = progress_tx.send((requests, requests)).await;
+Ok(())
+```
+
+For critical failures that should be visible, workers return `Err(...)` which propagates to `run()` and is handled at the TaskRunner level.
+
+### Error String Matching in Retry Logic
+
+The retry logic in `workers/recon.rs` uses string matching to determine if an error is retryable:
+
+```rust
+let is_retryable = error_str.contains("timeout")
+    || error_str.contains("connection")
+    || error_str.contains("temporary")
+    || error_str.contains("reset")
+    || error_str.contains("broken pipe");
+```
+
+This pattern is fragile but intentional because:
+- It catches common retryable error messages from various sources
+- Lowercase conversion handles different error casing
+- Adding more patterns is straightforward if needed
+
+When adding new error types, prefer adding to this list rather than creating new error variants.

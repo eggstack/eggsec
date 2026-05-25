@@ -469,3 +469,33 @@ Key behaviors:
 - Esc closes without committing
 - Up/Down only move selection when open (no-op when closed)
 - Left/Right navigation does NOT mutate closed selector selection
+
+## Worker Patterns
+
+### Silent Send Error Handling
+
+Workers use `let _ = channel.send(...).await` for progress and result channels. This is intentional:
+
+```rust
+// Worker send pattern - intentional silent suppression
+let results = runner.run().await?;
+let _ = result_tx.send(TaskResult::LoadTest(results)).await;
+let _ = progress_tx.send((requests, requests)).await;
+Ok(())
+```
+
+If the main loop has been dropped (app closed), there's no point propagating the error. Progress updates that fail don't affect the final result. For critical failures, workers return `Err(...)` which is handled at the TaskRunner level.
+
+### Error String Matching in Retry Logic
+
+The retry logic in `workers/recon.rs` uses string matching to determine retryable errors:
+
+```rust
+let is_retryable = error_str.contains("timeout")
+    || error_str.contains("connection")
+    || error_str.contains("temporary")
+    || error_str.contains("reset")
+    || error_str.contains("broken pipe");
+```
+
+This is intentional but fragile. It catches common retryable error messages from various sources. Add more patterns as needed rather than creating new error variants.
