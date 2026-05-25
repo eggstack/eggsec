@@ -9,6 +9,12 @@ Specialized guidance for the terminal UI module.
 - **Settings save merge**: TUI settings now merge into the loaded config and preserve non-exposed sections
 - **waf.rs checkbox bounds check**: Fixed `waf.rs:519` to guard against out-of-bounds index when toggling technique checkboxes (matching `recon.rs:588-590` pattern)
 
+## Recent Fixes (2026-05-25)
+
+- **vuln.rs edge detection bounds**: Fixed `vuln.rs:602,613` to use `.first().map(...).unwrap_or(true)` pattern for `is_at_left_edge()` and `is_at_right_edge()` instead of direct `fields[0]` indexing which could panic if fields is empty.
+- **scrollable.rs scroll_down empty lines**: Fixed `scrollable.rs:57-59` to handle empty lines case explicitly. Previously `saturating_sub(1)` on empty len would result in `usize::MAX`, causing incorrect scroll offset.
+- **api.rs worker error logging**: Fixed `api.rs:57,134` to use `tracing::warn!` instead of `tracing::debug!` for GraphQL request failures. Operational errors should be logged at warn level for proper visibility.
+
 ## Recent Features (2026-05-25)
 
 - **Configurable auto-save interval**: Settings > Session panel now allows configuring auto-save interval (previously hardcoded to 30s)

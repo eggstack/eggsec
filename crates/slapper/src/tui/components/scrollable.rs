@@ -55,8 +55,12 @@ impl ScrollableText {
     }
 
     pub fn scroll_down(&mut self, amount: usize) {
-        let max_scroll = self.lines.len().saturating_sub(1);
-        self.scroll_offset = (self.scroll_offset + amount).min(max_scroll);
+        if self.lines.is_empty() {
+            self.scroll_offset = 0;
+        } else {
+            let max_scroll = self.lines.len() - 1;
+            self.scroll_offset = (self.scroll_offset + amount).min(max_scroll);
+        }
     }
 
     pub fn scroll_left(&mut self, amount: usize) {

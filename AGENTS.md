@@ -198,6 +198,9 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 - **Bounds check in hunt.rs get_config()**: Fixed `hunt.rs:89-93` to use `.get(index).map(|cb| cb.checked).unwrap_or(false)` for `option_checkboxes` access instead of direct indexing.
 - **Bounds check in browser.rs get_config()**: Fixed `browser.rs:87-89` to use `.get(index).map(|cb| cb.checked).unwrap_or(false)` for `option_checkboxes` access instead of direct indexing.
 - **Mutable bounds check in waf.rs reset()**: Fixed `waf.rs:311-316` to use `.get_mut()` for mutable access when setting default checkbox states in reset(), since `.get()` returns `&` reference which cannot be assigned to.
+- **Bounds check in vuln.rs edge detection**: Fixed `vuln.rs:602,613` to use `.first().map(...).unwrap_or(true)` pattern for `is_at_left_edge()` and `is_at_right_edge()` instead of direct `fields[0]` indexing which could panic if fields is empty.
+- **ScrollableText scroll_down empty lines**: Fixed `scrollable.rs:57-59` to handle empty lines case explicitly. Previously `saturating_sub(1)` on empty len would result in `usize::MAX`, causing incorrect scroll offset.
+- **Worker error logging levels**: Fixed `api.rs:57,134` to use `tracing::warn!` instead of `tracing::debug!` for GraphQL request failures. Operational errors should be logged at warn level for proper visibility.
 
 ### Plugin/NSE Module
 

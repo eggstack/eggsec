@@ -599,7 +599,12 @@ impl TabInput for VulnTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             VulnFocusArea::Mode => self.mode_selector.selected == 0,
-            VulnFocusArea::Inputs => self.inputs.fields[0].cursor_pos == 0,
+            VulnFocusArea::Inputs => self
+                .inputs
+                .fields
+                .first()
+                .map(|f| f.cursor_pos == 0)
+                .unwrap_or(true),
             _ => true,
         }
     }
@@ -609,10 +614,12 @@ impl TabInput for VulnTab {
             VulnFocusArea::Mode => {
                 self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)
             }
-            VulnFocusArea::Inputs => {
-                let f = &self.inputs.fields[0];
-                f.cursor_pos >= f.value.len()
-            }
+            VulnFocusArea::Inputs => self
+                .inputs
+                .fields
+                .first()
+                .map(|f| f.cursor_pos >= f.value.len())
+                .unwrap_or(true),
             _ => true,
         }
     }

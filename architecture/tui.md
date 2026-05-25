@@ -358,6 +358,73 @@ if self.lines.is_empty() {
 }
 ```
 
+### ScrollableText scroll_down
+
+When implementing `scroll_down()`, handle empty lines to prevent `usize::MAX`:
+
+```rust
+// WRONG - max_scroll becomes usize::MAX when lines is empty
+pub fn scroll_down(&mut self, amount: usize) {
+    let max_scroll = self.lines.len().saturating_sub(1);
+    self.scroll_offset = (self.scroll_offset + amount).min(max_scroll);
+}
+
+// CORRECT - explicit empty check
+pub fn scroll_down(&mut self, amount: usize) {
+    if self.lines.is_empty() {
+        self.scroll_offset = 0;
+    } else {
+        let max_scroll = self.lines.len() - 1;
+        self.scroll_offset = (self.scroll_offset + amount).min(max_scroll);
+    }
+}
+```
+
+### InputGroup Field Access in Edge Detection
+
+When accessing InputGroup fields in `is_at_left_edge()` or `is_at_right_edge()`, use safe accessors:
+
+```rust
+// WRONG - direct indexing can panic if fields is empty
+fn is_at_left_edge(&self) -> bool {
+    match self.focus_area {
+        VulnFocusArea::Inputs => self.inputs.fields[0].cursor_pos == 0,
+        _ => true,
+    }
+}
+
+// CORRECT - use first() with map and unwrap_or
+fn is_at_left_edge(&self) -> bool {
+    match self.focus_area {
+        VulnFocusArea::Inputs => self
+            .inputs
+            .fields
+            .first()
+            .map(|f| f.cursor_pos == 0)
+            .unwrap_or(true),
+        _ => true,
+    }
+}
+```
+
+### Worker Error Logging Levels
+
+Workers should use `tracing::warn!` for expected failure cases, not `debug!`:
+
+```rust
+// WRONG - errors at debug level may be missed in production
+Err(e) => {
+    tracing::debug!("GraphQL introspection request failed: {}", e);
+    errors += 1;
+}
+
+// CORRECT - use warn for operational errors that may indicate issues
+Err(e) => {
+    tracing::warn!("GraphQL introspection request failed: {}", e);
+    errors += 1;
+}
+```
+
 ### Vec::remove vs Vec::swap_remove
 
 When removing elements from a Vec in a loop where order doesn't matter, use `swap_remove` instead of `remove`:
