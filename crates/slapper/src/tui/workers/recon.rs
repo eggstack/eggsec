@@ -130,6 +130,7 @@ pub async fn run_recon(
                             current.contains(s) || (s == "done" && current.is_empty())
                         })
                         .count() as u64;
+                    let total_stages = total_stages.max(1);
                     let pct = (completed.min(total_stages) * 90) / total_stages + 5;
                     let _ = ptx.send((pct, 100)).await;
                 } else {

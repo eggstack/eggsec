@@ -126,41 +126,44 @@ impl Popup {
             .map(|line| Line::from(line.as_str()))
             .collect();
 
-        let paragraph = Paragraph::new(content_lines).wrap(Wrap { trim: true });
-        f.render_widget(paragraph, chunks[0]);
+        if let Some(content_chunk) = chunks.get(0) {
+            let paragraph = Paragraph::new(content_lines).wrap(Wrap { trim: true });
+            f.render_widget(paragraph, *content_chunk);
+        }
 
         if !self.buttons.is_empty() {
-            let button_area = chunks[1];
-            let button_widths: Vec<u16> =
-                self.buttons.iter().map(|b| (b.len() + 4) as u16).collect();
-            let total_width: u16 = button_widths.iter().sum();
-            let spacing = (button_area.width.saturating_sub(total_width))
-                / (self.buttons.len().saturating_sub(1).max(1) as u16);
+            if let Some(button_area) = chunks.get(1) {
+                let button_widths: Vec<u16> =
+                    self.buttons.iter().map(|b| (b.len() + 4) as u16).collect();
+                let total_width: u16 = button_widths.iter().sum();
+                let spacing = (button_area.width.saturating_sub(total_width))
+                    / (self.buttons.len().saturating_sub(1).max(1) as u16);
 
-            let mut x_offset = button_area.x;
-            for (i, (button, width)) in self.buttons.iter().zip(button_widths.iter()).enumerate() {
-                let is_active = i == self.active_button;
-                let style = if is_active {
-                    Style::default()
-                        .fg(tc!(selected_text))
-                        .bg(color)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(color)
-                };
+                let mut x_offset = button_area.x;
+                for (i, (button, width)) in self.buttons.iter().zip(button_widths.iter()).enumerate() {
+                    let is_active = i == self.active_button;
+                    let style = if is_active {
+                        Style::default()
+                            .fg(tc!(selected_text))
+                            .bg(color)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(color)
+                    };
 
-                let btn_area = Rect {
-                    x: x_offset,
-                    y: button_area.y,
-                    width: *width,
-                    height: 1,
-                };
+                    let btn_area = Rect {
+                        x: x_offset,
+                        y: button_area.y,
+                        width: *width,
+                        height: 1,
+                    };
 
-                let btn_text = format!(" {} ", button);
-                let btn_span = Span::styled(btn_text, style);
-                f.render_widget(Paragraph::new(Line::from(btn_span)), btn_area);
+                    let btn_text = format!(" {} ", button);
+                    let btn_span = Span::styled(btn_text, style);
+                    f.render_widget(Paragraph::new(Line::from(btn_span)), btn_area);
 
-                x_offset += width + spacing;
+                    x_offset += width + spacing;
+                }
             }
         }
     }

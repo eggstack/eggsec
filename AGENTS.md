@@ -207,6 +207,9 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 
 ### TUI Bug Fixes (2026-05-29)
 
+- **popup.rs render() bounds**: Fixed `popup.rs:129-167` to use `if let Some(chunk) = chunks.get(0)` and `if let Some(button_area) = chunks.get(1)` instead of direct indexing.
+- **api.rs double map_err**: Fixed `api.rs:339` - removed duplicate `??` after `.map_err()` which caused unreachable error handling code.
+- **recon.rs division guard**: Fixed `recon.rs:133` - added `total_stages.max(1)` guard for progress calculation.
 - **Bounds check for checkbox arrays**: Added bounds check in `waf.rs:519` for `technique_checkboxes` access to prevent panic. The waf tab now properly guards against out-of-bounds index when toggling technique checkboxes, matching the pattern used in `recon.rs:588-590`.
 - **Slice bounds for InputGroup fields**: Fixed `integrations.rs:329-338` to use `.get()` with fallback for slicing `issue_inputs.fields` instead of direct slice syntax `fields[..4]` which could panic if fewer than 4 fields exist.
 - **Bounds check in hunt.rs get_config()**: Fixed `hunt.rs:89-93` to use `.get(index).map(|cb| cb.checked).unwrap_or(false)` for `option_checkboxes` access instead of direct indexing.
@@ -247,6 +250,20 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 - `CacheKeyBuilder` uses null byte separator (`\x00`) - no colon collision risk
 - AI Agents files use `FxHashMap`: `alerts/mod.rs`, `constraints/checker.rs`, `portfolio.rs`
 - `SmartWafBypass` knowledge base eviction sorts by failed_attempts and last_accessed (fixed)
+
+### AI Module Fixes (2026-05-29)
+
+- **cache.rs serialization losing entries**: Fixed `cache.rs:122-130` - `From<AiCache> for AiCacheSerialized` now correctly copies entries instead of using empty `FxHashMap::default()`. Cache entries are now properly persisted to disk.
+- **planner.rs cache key collision**: Fixed `planner.rs:63-71` - `request_cache_key()` now sanitizes input by removing null bytes to prevent collisions when goal/target contain colons.
+
+### TUI Components Fixes (2026-05-29)
+
+- **popup.rs render() bounds**: Fixed `popup.rs:129-167` to use `if let Some(chunk) = chunks.get(0)` and `if let Some(button_area) = chunks.get(1)` instead of direct indexing `chunks[0]` and `chunks[1]`.
+
+### TUI Workers Fixes (2026-05-29)
+
+- **api.rs double map_err**: Fixed `api.rs:339` - removed duplicate `??` after `.map_err()` which caused unreachable error handling code. Now uses single `?` properly.
+- **recon.rs division guard**: Fixed `recon.rs:133` - added `total_stages.max(1)` guard for progress calculation to prevent division by zero if stages collection were empty.
 
 ---
 

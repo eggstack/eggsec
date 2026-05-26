@@ -63,8 +63,8 @@ impl AiPlanner {
     fn request_cache_key(request: &PlanRequest) -> String {
         format!(
             "{}:{}:{}:{}",
-            request.goal,
-            request.target,
+            request.goal.replace('\x00', ""),
+            request.target.replace('\x00', ""),
             request.attack_surfaces.len(),
             request.max_duration_ms.unwrap_or(0)
         )

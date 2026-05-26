@@ -108,6 +108,12 @@ Changed `std::collections::HashMap` to `rustc_hash::FxHashMap` for:
 - `AiPlanner.learning_cache` - Learning cache for plan outcomes
 - `PlanOutcome.severity_distribution` - Severity distribution tracking
 
+### cache.rs Serialization Fix (2026-05-29)
+Fixed `cache.rs:122-130` - `From<AiCache> for AiCacheSerialized` now correctly copies cache entries instead of using empty `FxHashMap::default()`. This prevents data loss when persisting cache to disk.
+
+### planner.rs Cache Key Collision Fix (2026-05-29)
+Fixed `planner.rs:63-71` - `request_cache_key()` now sanitizes input by removing null bytes to prevent cache key collisions when goal/target contain colons.
+
 ## Agent Module FxHashMap Migration (2026-05-22)
 
 The agent module also migrated to FxHashMap for performance:

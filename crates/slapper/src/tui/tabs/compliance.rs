@@ -109,7 +109,7 @@ impl ComplianceTab {
             "Passed: {} | Failed: {} | N/A: {} | Review: {}",
             report.passed,
             report.failed,
-            report.total_requirements - report.passed - report.failed,
+            report.total_requirements.saturating_sub(report.passed).saturating_sub(report.failed),
             report.findings.len()
         )));
         self.results_view.add_line(Line::from(""));
@@ -222,7 +222,9 @@ impl TabRender for ComplianceTab {
             .split(input_area);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
-            field.render(f, input_chunks[i], insert_mode);
+            if let Some(chunk) = input_chunks.get(i) {
+                field.render(f, *chunk, insert_mode);
+            }
         }
 
         let mut sel = self.framework_selector.clone();

@@ -256,7 +256,9 @@ impl TabRender for BrowserTab {
             let mut checkbox = cb.clone();
             checkbox.focused =
                 self.focus_area == BrowserFocusArea::Options && i == self.focused_checkbox_index;
-            checkbox.render(f, cb_chunks[i]);
+            if let Some(area) = cb_chunks.get(i) {
+                checkbox.render(f, *area);
+            }
         }
 
         if self.state == AppState::Running {

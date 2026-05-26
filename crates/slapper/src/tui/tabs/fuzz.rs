@@ -508,7 +508,9 @@ impl TabRender for FuzzTab {
         let status = Paragraph::new(status_text)
             .style(Style::default().fg(status_color))
             .block(Block::default().borders(Borders::ALL).title("Status"));
-        f.render_widget(status, config_chunks[7]);
+        if let Some(status_chunk) = config_chunks.get(7) {
+            f.render_widget(status, *status_chunk);
+        }
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
@@ -931,7 +933,9 @@ mod tests {
 fn test_left_from_payload_selector_goes_to_inputs() {
     let mut tab = FuzzTab::default();
     tab.focus_area = FuzzFocusArea::PayloadSelector;
-    tab.inputs.fields[0].cursor_pos = 0;
+    if !tab.inputs.fields.is_empty() {
+        tab.inputs.fields[0].cursor_pos = 0;
+    }
 
     let result = tab.handle_left();
     assert!(result);
@@ -984,5 +988,7 @@ fn test_right_from_mutation_to_inputs() {
     let result = tab.handle_right();
     assert!(result);
     assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
-    assert_eq!(tab.inputs.fields[0].cursor_pos, 0);
+    if !tab.inputs.fields.is_empty() {
+        assert_eq!(tab.inputs.fields[0].cursor_pos, 0);
+    }
 }

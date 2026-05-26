@@ -189,6 +189,17 @@ impl TabState for StressTab {
         self.results_view.clear();
         self.progress.current = 0;
         self.error = None;
+        for field in &mut self.inputs.fields {
+            field.clear();
+        }
+        if self.inputs.fields.len() > 3 {
+            self.inputs.fields[1].value = "100".to_string();
+            self.inputs.fields[1].cursor_pos = 3;
+            self.inputs.fields[2].value = "30".to_string();
+            self.inputs.fields[2].cursor_pos = 2;
+            self.inputs.fields[3].value = "10".to_string();
+            self.inputs.fields[3].cursor_pos = 2;
+        }
     }
 
     fn set_error(&mut self, error: TabError) {

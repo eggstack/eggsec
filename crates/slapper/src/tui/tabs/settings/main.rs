@@ -301,6 +301,9 @@ impl SettingsTab {
             }
         }
 
+        self.notify_on_complete.checked = config.notifications.notify_on_complete;
+        self.notify_on_findings.checked = config.notifications.notify_on_findings;
+
         self.config = Some(config.clone());
     }
 
@@ -322,6 +325,9 @@ impl SettingsTab {
         config.paths.export_dir = self.report_inputs.fields.get(3).map(|f| if f.value.is_empty() || f.value == "./exports" { None } else { Some(f.value.clone()) }).unwrap_or(None);
 
         config.auto_save_interval_secs = self.session_inputs.fields.get(0).map(|f| f.value.parse().unwrap_or(30)).unwrap_or(30);
+
+        config.notifications.notify_on_complete = self.notify_on_complete.checked;
+        config.notifications.notify_on_findings = self.notify_on_findings.checked;
     }
 
     fn load_base_config_from_disk(&self) -> Option<SlapperConfig> {

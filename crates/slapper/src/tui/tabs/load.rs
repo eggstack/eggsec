@@ -431,7 +431,9 @@ impl TabRender for LoadTab {
             .split(input_area);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
-            field.render(f, input_chunks[i], insert_mode);
+            if let Some(chunk) = input_chunks.get(i) {
+                field.render(f, *chunk, insert_mode);
+            }
         }
 
         if self.state == AppState::Running {

@@ -640,9 +640,12 @@ impl TabInput for ProxyTab {
     }
 
     fn is_at_left_edge(&self) -> bool {
-        // At left edge if selector is not focused or at first item
         if self.view_selector.is_focused() {
-            self.view_selector.selected == 0
+            if self.view_selector.is_open() {
+                self.view_selector.selected == 0
+            } else {
+                true
+            }
         } else if self.inputs.is_focused() {
             self.inputs.is_at_left_edge()
         } else {

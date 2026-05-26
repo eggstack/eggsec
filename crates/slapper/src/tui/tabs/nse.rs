@@ -393,7 +393,9 @@ impl TabInput for NseTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             NseFocusArea::Inputs => self.inputs.is_at_left_edge(),
-            NseFocusArea::ScriptSelector => self.script_selector.selected == 0,
+            NseFocusArea::ScriptSelector => {
+                self.script_selector.selected <= self.script_selector.items.len().saturating_sub(1)
+            }
             _ => true,
         }
     }

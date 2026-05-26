@@ -297,14 +297,18 @@ impl TabRender for HuntTab {
             let mut checkbox = cb.clone();
             checkbox.focused =
                 self.focus_area == HuntFocusArea::Options && i == self.focused_checkbox_index;
-            checkbox.render(f, left[i]);
+            if let Some(area) = left.get(i) {
+                checkbox.render(f, *area);
+            }
         }
 
         for (i, cb) in self.option_checkboxes.iter().enumerate().skip(3) {
             let mut checkbox = cb.clone();
             checkbox.focused =
                 self.focus_area == HuntFocusArea::Options && i == self.focused_checkbox_index;
-            checkbox.render(f, right[i - 3]);
+            if let Some(area) = right.get(i.saturating_sub(3)) {
+                checkbox.render(f, *area);
+            }
         }
 
         if self.state == AppState::Running {

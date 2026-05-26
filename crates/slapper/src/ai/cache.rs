@@ -121,8 +121,26 @@ impl From<AiCacheSerialized> for AiCache {
 
 impl From<AiCache> for AiCacheSerialized {
     fn from(cache: AiCache) -> Self {
+        let entries: FxHashMap<String, CacheEntrySer> = cache
+            .entries
+            .read()
+            .blocking_read()
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    CacheEntrySer {
+                        value: v.value.clone(),
+                        created_at: v.created_at,
+                        ttl_nanos: v.ttl.as_nanos() as u64,
+                        hit_count: v.hit_count,
+                    },
+                )
+            })
+            .collect();
+
         AiCacheSerialized {
-            entries: FxHashMap::default(),
+            entries,
             max_entries: cache.max_entries,
             default_ttl_nanos: cache.default_ttl.as_nanos() as u64,
         }

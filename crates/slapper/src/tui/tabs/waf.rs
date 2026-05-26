@@ -356,7 +356,9 @@ impl TabRender for WafTab {
         let mut builder = FormBuilder::new(" WAF Configuration ").row_height(3);
 
         // Target URL
-        builder = builder.add_input(self.inputs.fields[0].clone());
+        if let Some(field) = self.inputs.fields.first() {
+            builder = builder.add_input(field.clone());
+        }
 
         // Mode
         let mut mode = self.mode_radio.clone();

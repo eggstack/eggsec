@@ -38,8 +38,12 @@ crates/slapper/src/tui/
 
 ## Recent Fixes (2026-05-29)
 
+- **popup.rs render() bounds**: Fixed `popup.rs:129-167` to use `if let Some(chunk) = chunks.get(0)` and `if let Some(button_area) = chunks.get(1)` instead of direct indexing
+- **workers/api.rs double map_err**: Fixed `api.rs:339` - removed duplicate `??` that caused unreachable error handling
+- **workers/recon.rs division guard**: Fixed `recon.rs:133` - added `total_stages.max(1)` guard for progress calculation
 - **workers/security.rs error logging**: Fixed `security.rs:227,235` to use `tracing::warn!` for operational failures
 - **tabs/load.rs reset() bounds**: Fixed `load.rs:367-374` to use bounds check before direct field access
+- **tabs/fuzz.rs bounds**: Fixed `fuzz.rs:511` config_chunks[7] to use `.get()` pattern; fixed tests at 934,987,991
 - **tabs/fuzz.rs reset() bounds**: Fixed `fuzz.rs:404-413` to use bounds check before direct field access
 - **tabs/scan.rs render() bounds**: Fixed `scan.rs:306-307` to use bounds check before direct field access
 - **components/input.rs can_move bounds**: Fixed `input.rs:680-694` to add bounds checks in navigation helpers

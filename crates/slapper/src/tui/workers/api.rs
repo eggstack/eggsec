@@ -336,7 +336,7 @@ pub async fn run_nse(
         Ok::<_, anyhow::Error>((output, String::new(), true))
     })
     .await
-    .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))??;
+    .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
 
     let _ = progress_tx.send((100, 100)).await;
 
