@@ -6,7 +6,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::recon::techdetect::TechStack;
 use crate::utils::create_http_client;
 
-static CVE_CACHE: OnceLock<Arc<Mutex<FxHashMap<String, Vec<VulnerabilityInfo>>>>> =
+type CveCacheMap = FxHashMap<String, Vec<VulnerabilityInfo>>;
+
+static CVE_CACHE: OnceLock<Arc<Mutex<CveCacheMap>>> =
     OnceLock::new();
 
 fn get_cache() -> Arc<Mutex<FxHashMap<String, Vec<VulnerabilityInfo>>>> {

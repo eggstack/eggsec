@@ -271,8 +271,8 @@ impl TabRender for OAuthTab {
         // Dynamic layout based on terminal height
         let (input_height, options_height, results_min) = if area.height < 30 {
             // Small terminal: use percentages
-            let ih = ((area.height as f32 * 0.6) as u16).max(8).min(16);
-            let oh = ((area.height as f32 * 0.2) as u16).max(4).min(6);
+            let ih = ((area.height as f32 * 0.6) as u16).clamp(8, 16);
+            let oh = ((area.height as f32 * 0.2) as u16).clamp(4, 6);
             (ih, oh, 2)
         } else {
             (16, 6, 5)

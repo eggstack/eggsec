@@ -99,8 +99,7 @@ impl CommandPalette {
             self.scroll_offset = self
                 .selected_index
                 .saturating_sub(vis)
-                .min(max_scroll)
-                .max(0);
+                .min(max_scroll);
         }
         if self.selected_index < self.scroll_offset {
             self.scroll_offset = self.selected_index.min(max_scroll);
@@ -262,7 +261,7 @@ impl HelpManager {
                 }
             })
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|b| std::cmp::Reverse(b.0));
         scored.into_iter().map(|(_, cmd)| cmd).collect()
     }
 }

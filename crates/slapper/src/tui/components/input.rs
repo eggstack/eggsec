@@ -452,7 +452,7 @@ impl InputField {
                 let start = if cursor_char_pos <= available / 2 {
                     0
                 } else if cursor_char_pos >= char_count - available / 2 {
-                    (char_count.saturating_sub(available)).max(0)
+                    char_count.saturating_sub(available)
                 } else {
                     cursor_char_pos.saturating_sub(available / 2)
                 };
@@ -479,7 +479,7 @@ impl InputField {
                     let start = if cursor_char_pos <= available / 2 {
                         0
                     } else if cursor_char_pos >= char_count - available / 2 {
-                        (char_count.saturating_sub(available)).max(0)
+                        char_count.saturating_sub(available)
                     } else {
                         cursor_char_pos.saturating_sub(available / 2)
                     };

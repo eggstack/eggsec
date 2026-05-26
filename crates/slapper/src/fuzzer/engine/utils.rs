@@ -175,6 +175,7 @@ impl FuzzEngine {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn build_fuzz_url(&self, payload: &str) -> String {
         let url = &self.args.url;
         if let Some(param) = &self.args.param {

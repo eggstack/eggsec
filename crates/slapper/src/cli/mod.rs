@@ -77,6 +77,7 @@ pub struct Cli {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum Commands {
     // --- Scan operations ---
     #[command(about = "Scan ports on target host", long_about = SCAN_PORTS_ABOUT)]

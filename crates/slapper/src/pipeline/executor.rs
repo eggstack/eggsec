@@ -323,7 +323,7 @@ pub async fn run(&self) -> Result<PipelineReport> {
     async fn run_fingerprint(&self) -> Result<()> {
         let context = self.context.lock().await;
         let ports: Vec<u16> = if context.open_ports.is_empty() {
-            crate::utils::parsing::parse_ports(&EXTENDED_SCAN_PORTS)?
+            crate::utils::parsing::parse_ports(EXTENDED_SCAN_PORTS)?
         } else {
             context.open_ports.clone()
         };

@@ -126,7 +126,7 @@ impl Popup {
             .map(|line| Line::from(line.as_str()))
             .collect();
 
-        if let Some(content_chunk) = chunks.get(0) {
+        if let Some(content_chunk) = chunks.first() {
             let paragraph = Paragraph::new(content_lines).wrap(Wrap { trim: true });
             f.render_widget(paragraph, *content_chunk);
         }

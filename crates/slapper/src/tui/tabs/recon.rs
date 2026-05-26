@@ -111,7 +111,7 @@ impl ReconTab {
 
     pub fn get_options(&self) -> ReconOptions {
         ReconOptions {
-            no_tech: self.option_checkboxes.get(0).map(|cb| cb.checked).unwrap_or(false),
+            no_tech: self.option_checkboxes.first().map(|cb| cb.checked).unwrap_or(false),
             no_dns: self.option_checkboxes.get(1).map(|cb| cb.checked).unwrap_or(false),
             no_geo: self.option_checkboxes.get(2).map(|cb| cb.checked).unwrap_or(false),
             no_whois: self.option_checkboxes.get(3).map(|cb| cb.checked).unwrap_or(false),

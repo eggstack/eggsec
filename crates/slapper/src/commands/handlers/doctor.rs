@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub(crate) const DOCTOR_SUCCESS: &str = "All checks passed";
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]

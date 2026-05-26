@@ -552,27 +552,24 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
             let socket_addr = std::net::SocketAddr::new(addr, port);
             let result = connect_with_nodelay_timeout(&socket_addr, timeout_dur).await;
 
-            match result {
-                Ok(_) => {
-                    let should_insert = match config.max_results {
-                        Some(limit) => {
-                            let old = results_count.fetch_add(1, Ordering::Relaxed);
-                            old < limit as u64
-                        }
-                        None => true,
-                    };
-                    if should_insert {
-                        results.insert(
-                            port,
-                            PortResult {
-                                port,
-                                status: "open".to_string(),
-                                service: get_service_name(port).to_string(),
-                            },
-                        );
+            if result.is_ok() {
+                let should_insert = match config.max_results {
+                    Some(limit) => {
+                        let old = results_count.fetch_add(1, Ordering::Relaxed);
+                        old < limit as u64
                     }
+                    None => true,
+                };
+                if should_insert {
+                    results.insert(
+                        port,
+                        PortResult {
+                            port,
+                            status: "open".to_string(),
+                            service: get_service_name(port).to_string(),
+                        },
+                    );
                 }
-                Err(_) => {}
             }
             if let Some(ref pb) = progress {
                 pb.inc(1);

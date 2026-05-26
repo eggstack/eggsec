@@ -708,7 +708,7 @@ impl App {
             })
             .collect();
 
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|b| std::cmp::Reverse(b.0));
         scored.into_iter().map(|(_, tab)| tab).collect()
     }
 
@@ -742,7 +742,7 @@ impl App {
     /// 4. Search
     /// 5. HTTP options
     /// 6. Help
-    /// Returns None if no overlay is active
+    ///    Returns None if no overlay is active
     pub fn topmost_overlay(&self) -> Option<OverlayType> {
         if self.is_confirm_popup_visible() {
             Some(OverlayType::ConfirmPopup)

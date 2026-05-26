@@ -251,7 +251,7 @@ impl DashboardTab {
         let sum: usize = numbers.iter().sum();
         let count = numbers.len();
 
-        let base_score = if count > 0 { sum / count } else { 1 };
+        let base_score = sum.checked_div(count).unwrap_or(1);
 
         base_score.clamp(1, 100)
     }

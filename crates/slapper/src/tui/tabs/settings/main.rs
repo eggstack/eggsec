@@ -265,7 +265,7 @@ impl SettingsTab {
     }
 
     pub fn load_config(&mut self, config: &SlapperConfig) {
-        if self.http_inputs.fields.len() > 0 {
+        if !self.http_inputs.fields.is_empty() {
             self.http_inputs.fields[0].value = config.http.timeout_secs.to_string();
         }
         if self.http_inputs.fields.len() > 1 {
@@ -280,12 +280,12 @@ impl SettingsTab {
         self.follow_redirects.checked = config.http.follow_redirects;
         self.verify_tls.checked = config.http.verify_tls;
 
-        if self.scan_inputs.fields.len() > 0 {
+        if !self.scan_inputs.fields.is_empty() {
             self.scan_inputs.fields[0].value = config.scan.default_concurrency.to_string();
         }
         self.stealth_mode.checked = config.scan.stealth_mode;
 
-        if self.session_inputs.fields.len() > 0 {
+        if !self.session_inputs.fields.is_empty() {
             self.session_inputs.fields[0].value = config.auto_save_interval_secs.to_string();
         }
 
@@ -308,23 +308,23 @@ impl SettingsTab {
     }
 
     fn apply_to_config(&self, config: &mut SlapperConfig) {
-        config.http.timeout_secs = self.http_inputs.fields.get(0).map(|f| f.value.parse().unwrap_or(30)).unwrap_or(30);
+        config.http.timeout_secs = self.http_inputs.fields.first().map(|f| f.value.parse().unwrap_or(30)).unwrap_or(30);
         config.http.max_retries = self.http_inputs.fields.get(1).map(|f| f.value.parse().unwrap_or(3)).unwrap_or(3);
         config.http.retry_delay_ms = self.http_inputs.fields.get(2).map(|f| f.value.parse().unwrap_or(1000)).unwrap_or(1000);
         config.http.max_redirects = self.http_inputs.fields.get(3).map(|f| f.value.parse().unwrap_or(10)).unwrap_or(10);
         config.http.follow_redirects = self.follow_redirects.checked;
         config.http.verify_tls = self.verify_tls.checked;
-        config.http.proxy = self.proxy_inputs.fields.get(0).map(|f| if f.value.is_empty() { None } else { Some(f.value.clone()) }).unwrap_or(None);
+        config.http.proxy = self.proxy_inputs.fields.first().map(|f| if f.value.is_empty() { None } else { Some(f.value.clone()) }).unwrap_or(None);
         config.http.proxy_auth = self.proxy_inputs.fields.get(1).map(|f| if f.value.is_empty() { None } else { Some(crate::types::SensitiveString::new(f.value.clone())) }).unwrap_or(None);
 
-        config.scan.default_concurrency = self.scan_inputs.fields.get(0).map(|f| f.value.parse().unwrap_or(50)).unwrap_or(50);
+        config.scan.default_concurrency = self.scan_inputs.fields.first().map(|f| f.value.parse().unwrap_or(50)).unwrap_or(50);
         config.scan.rate_limit_per_second = self.scan_inputs.fields.get(1).and_then(|f| f.value.parse().ok());
         config.scan.port_timeout_secs = self.scan_inputs.fields.get(2).map(|f| f.value.parse().unwrap_or(2)).unwrap_or(2);
         config.scan.stealth_mode = self.stealth_mode.checked;
 
         config.paths.export_dir = self.report_inputs.fields.get(3).map(|f| if f.value.is_empty() || f.value == "./exports" { None } else { Some(f.value.clone()) }).unwrap_or(None);
 
-        config.auto_save_interval_secs = self.session_inputs.fields.get(0).map(|f| f.value.parse().unwrap_or(30)).unwrap_or(30);
+        config.auto_save_interval_secs = self.session_inputs.fields.first().map(|f| f.value.parse().unwrap_or(30)).unwrap_or(30);
 
         config.notifications.notify_on_complete = self.notify_on_complete.checked;
         config.notifications.notify_on_findings = self.notify_on_findings.checked;
@@ -435,7 +435,7 @@ impl SettingsTab {
     }
 
     pub fn reset(&mut self) {
-        if self.http_inputs.fields.len() > 0 {
+        if !self.http_inputs.fields.is_empty() {
             self.http_inputs.fields[0].value = "30".to_string();
         }
         if self.http_inputs.fields.len() > 1 {
@@ -444,7 +444,7 @@ impl SettingsTab {
         if self.http_inputs.fields.len() > 2 {
             self.http_inputs.fields[2].value = "1000".to_string();
         }
-        if self.scan_inputs.fields.len() > 0 {
+        if !self.scan_inputs.fields.is_empty() {
             self.scan_inputs.fields[0].value = "50".to_string();
         }
         if self.scan_inputs.fields.len() > 1 {

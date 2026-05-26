@@ -446,7 +446,7 @@ impl TabRender for FuzzTab {
         // Dynamic config height: use at most 27 lines, but leave at least 3 lines for results
         let config_height = if area.height <= 30 {
             // Small terminal: use 80% of height, min 10, max 27
-            ((area.height as f32 * 0.8) as u16).max(10).min(27)
+            ((area.height as f32 * 0.8) as u16).clamp(10, 27)
         } else {
             27
         };
@@ -555,7 +555,7 @@ impl TabRender for FuzzTab {
     fn render_overlays(&self, f: &mut Frame, area: Rect) {
         // Match render() - use same dynamic height
         let config_height = if area.height <= 30 {
-            ((area.height as f32 * 0.8) as u16).max(10).min(27)
+            ((area.height as f32 * 0.8) as u16).clamp(10, 27)
         } else {
             27
         };

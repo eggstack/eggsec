@@ -228,7 +228,7 @@ impl TrendAnalyzer {
         }
 
         let mut findings: Vec<_> = counts.into_iter().collect();
-        findings.sort_by(|a, b| b.1.cmp(&a.1));
+        findings.sort_by_key(|b| std::cmp::Reverse(b.1));
         findings.into_iter().take(limit).collect()
     }
 }

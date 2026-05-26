@@ -23,7 +23,7 @@ impl super::App {
             self.tab_scroll_offset = tab_index as u16;
         } else if tab_index >= window.end {
             self.tab_scroll_offset =
-                (tab_index.saturating_sub(window.max_visible) + 1).max(0) as u16;
+                (tab_index.saturating_sub(window.max_visible) + 1) as u16;
         }
     }
 

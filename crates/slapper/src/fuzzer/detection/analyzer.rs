@@ -257,7 +257,7 @@ impl TimingAnalyzer {
             let total_time = self.total_response_time.load(Ordering::Relaxed);
             let min = self.min_response_time.load(Ordering::Relaxed);
             let max = self.max_response_time.load(Ordering::Relaxed);
-            let avg = if total > 0 { total_time / total } else { 0 };
+            let avg = total_time.checked_div(total).unwrap_or(0);
             TimingStats {
                 min: min as f64,
                 max: max as f64,

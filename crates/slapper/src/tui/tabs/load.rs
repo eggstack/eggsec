@@ -388,7 +388,7 @@ impl TabRender for LoadTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         // Use dynamic height for input section based on terminal height
         let input_height = if area.height <= 24 {
-            ((area.height as f32 * 0.6) as u16).max(6).min(15)
+            ((area.height as f32 * 0.6) as u16).clamp(6, 15)
         } else {
             15
         };
@@ -518,10 +518,8 @@ impl TabInput for LoadTab {
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() {
-            if !self.test_type_selector.is_focused() {
-                self.inputs.paste(text);
-            }
+        if !self.is_running() && !self.test_type_selector.is_focused() {
+            self.inputs.paste(text);
         }
     }
 

@@ -407,16 +407,14 @@ impl KeyHandler {
                 }
                 app.close_quick_switch();
             }
-            (KeyModifiers::NONE, KeyCode::Up) => {
-                if app.quick_switch_selected > 0 {
+            (KeyModifiers::NONE, KeyCode::Up)
+                if app.quick_switch_selected > 0 => {
                     app.quick_switch_selected -= 1;
                 }
-            }
-            (KeyModifiers::NONE, KeyCode::Down) => {
-                if app.quick_switch_selected < results.len().saturating_sub(1) {
+            (KeyModifiers::NONE, KeyCode::Down)
+                if app.quick_switch_selected < results.len().saturating_sub(1) => {
                     app.quick_switch_selected += 1;
                 }
-            }
             (KeyModifiers::CONTROL, KeyCode::Char('u')) | (KeyModifiers::NONE, KeyCode::PageUp) => {
                 if app.quick_switch_selected >= 10 {
                     app.quick_switch_selected -= 10;

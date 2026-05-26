@@ -210,8 +210,7 @@ impl FuzzEngine {
                 tracing::error!("Failed to unwrap results - workers still holding references");
                 return Err(crate::error::SlapperError::Runtime(
                     "Fuzz engine state inconsistent: workers still running".into(),
-                )
-                .into());
+                ));
             }
         };
         ordered_results.sort_by_key(|(k, _)| *k);

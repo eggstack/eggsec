@@ -80,7 +80,7 @@ impl PatternMatcher {
             }
         }
 
-        matches.sort_by(|a, b| b.severity.ordinal().cmp(&a.severity.ordinal()));
+        matches.sort_by_key(|b| std::cmp::Reverse(b.severity.ordinal()));
 
         matches
     }

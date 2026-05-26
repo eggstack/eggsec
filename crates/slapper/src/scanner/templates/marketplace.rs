@@ -7,7 +7,7 @@ use crate::error::{Result, SlapperError};
 use crate::scanner::templates::verify::{SignedTemplate, TemplateVerifier};
 use crate::scanner::templates::{TemplateLoader, VulnerabilityTemplate};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,7 +227,7 @@ impl TemplateMarketplace {
         Ok(())
     }
 
-    pub async fn sync_templates(&self, template_dir: &PathBuf) -> Result<Vec<String>> {
+    pub async fn sync_templates(&self, template_dir: &Path) -> Result<Vec<String>> {
         let listing = self.list_templates(1, 100, None).await?;
         let mut synced = Vec::new();
 

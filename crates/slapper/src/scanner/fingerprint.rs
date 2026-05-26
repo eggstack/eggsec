@@ -273,7 +273,6 @@ pub async fn fingerprint_services(
 
     for port in ports {
         let permit = semaphore.clone().acquire_owned().await?;
-        let resolved_ip = resolved_ip;
         let results = results.clone();
         let progress = progress.clone();
         let timeout_dur = timeout_duration;

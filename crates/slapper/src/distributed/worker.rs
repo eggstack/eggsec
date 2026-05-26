@@ -138,7 +138,6 @@ async fn start_heartbeat_loop(&mut self) {
         };
 
         let host = host.to_string();
-        let port = port;
 
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval));

@@ -476,7 +476,7 @@ impl RemoteClient {
 
     async fn connect_to_coordinator_with_addr(&mut self, addr: &SocketAddr) -> Result<LineWriter> {
         let connect_timeout = std::time::Duration::from_secs(5);
-        let stream = connect_with_nodelay_timeout(&addr, connect_timeout)
+        let stream = connect_with_nodelay_timeout(addr, connect_timeout)
             .await
             .map_err(|e| SlapperError::Network(format!("Failed to connect: {}", e)))?;
 

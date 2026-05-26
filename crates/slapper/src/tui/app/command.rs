@@ -113,10 +113,8 @@ impl super::App {
         }
 
         match command {
-            "quit" | "exit" => {
-                if !self.is_running() {
-                    self.should_quit = true;
-                }
+            "quit" | "exit" if !self.is_running() => {
+                self.should_quit = true;
             }
             "stop" => {
                 self.stop();

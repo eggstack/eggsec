@@ -122,7 +122,7 @@ impl ProxyPool {
 
     pub fn get_sorted_by_priority(&self) -> Vec<ProxyEntry> {
         let mut proxies: Vec<_> = self.get_healthy();
-        proxies.sort_by(|a, b| b.priority.cmp(&a.priority));
+        proxies.sort_by_key(|b| std::cmp::Reverse(b.priority));
         proxies
     }
 

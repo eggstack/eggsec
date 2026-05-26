@@ -240,9 +240,9 @@ impl ContainerScanner {
         ))
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, unused_variables)]
     /// Docker image scanning - implementation incomplete
-    pub fn scan_docker_image(&self, image: &str) -> Result<ContainerScanResult> {
+    pub fn scan_docker_image(&self, _image: &str) -> Result<ContainerScanResult> {
         Err(SlapperError::Config(
             "Docker image scanning requires full implementation".to_string(),
         ))
