@@ -616,7 +616,9 @@ impl TabInput for VulnTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             VulnFocusArea::Mode => {
-                self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)
+                self.mode_selector.items.is_empty()
+                    || self.mode_selector.selected
+                        >= self.mode_selector.items.len().saturating_sub(1)
             }
             VulnFocusArea::Inputs => self
                 .inputs

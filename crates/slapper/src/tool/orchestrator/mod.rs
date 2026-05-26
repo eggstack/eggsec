@@ -4,7 +4,7 @@ use crate::tool::planner::{ExecutionPlan, ToolExecution};
 use crate::tool::request::ToolRequest;
 use crate::tool::response::ToolResponse;
 use futures::future::join_all;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
@@ -18,7 +18,7 @@ pub struct Orchestrator {
 #[derive(Debug)]
 pub struct ExecutionState {
     pub execution_id: Uuid,
-    pub stage_results: HashMap<String, StageResult>,
+    pub stage_results: FxHashMap<String, StageResult>,
     pub completed_count: usize,
     pub failed_count: usize,
 }
@@ -47,7 +47,7 @@ impl Orchestrator {
             dispatcher,
             execution_state: Arc::new(RwLock::new(ExecutionState {
                 execution_id: Uuid::new_v4(),
-                stage_results: HashMap::new(),
+                stage_results: FxHashMap::default(),
                 completed_count: 0,
                 failed_count: 0,
             })),
@@ -81,12 +81,12 @@ impl Orchestrator {
 
     fn resolve_stage_order(&self, plan: &ExecutionPlan) -> Result<Vec<String>, SlapperError> {
         let mut resolved: Vec<String> = Vec::new();
-        let mut available: HashMap<String, bool> = plan
+        let mut available: FxHashMap<String, bool> = plan
             .stages
             .iter()
             .map(|s| (s.name.clone(), false))
             .collect();
-        let mut visiting: HashSet<String> = HashSet::new();
+        let mut visiting: FxHashSet<String> = FxHashSet::default();
 
         while available.values().any(|v| !*v) {
             let mut made_progress = false;
@@ -299,7 +299,7 @@ pub struct StageProgress {
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
     pub execution_id: Uuid,
-    pub stage_results: HashMap<String, StageResult>,
+    pub stage_results: FxHashMap<String, StageResult>,
     pub total_duration_ms: u64,
     pub overall_success: bool,
 }

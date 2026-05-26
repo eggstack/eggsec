@@ -7,8 +7,8 @@
 use crate::types::SensitiveString;
 use crate::utils::create_insecure_http_client;
 use regex::Regex;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -229,7 +229,7 @@ pub enum LoginStep {
     Request {
         url: String,
         method: String,
-        headers: HashMap<String, String>,
+        headers: FxHashMap<String, String>,
         body: Option<String>,
     },
     /// Extract a field from the response
@@ -285,8 +285,8 @@ pub enum Condition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginResult {
     pub success: bool,
-    pub session_cookies: HashMap<String, String>,
-    pub extracted_values: HashMap<String, String>,
+    pub session_cookies: FxHashMap<String, String>,
+    pub extracted_values: FxHashMap<String, String>,
     pub error_message: Option<String>,
     pub final_url: Option<String>,
     pub response_code: Option<u16>,
@@ -296,8 +296,8 @@ impl Default for LoginResult {
     fn default() -> Self {
         Self {
             success: false,
-            session_cookies: HashMap::new(),
-            extracted_values: HashMap::new(),
+            session_cookies: FxHashMap::default(),
+            extracted_values: FxHashMap::default(),
             error_message: None,
             final_url: None,
             response_code: None,
@@ -313,9 +313,9 @@ pub struct SessionState {
     pub csrf_tokens: Vec<CsrfToken>,
     pub login_sequence: Option<LoginSequence>,
     pub login_result: Option<LoginResult>,
-    pub cookies: HashMap<String, String>,
-    pub headers: HashMap<String, String>,
-    pub custom_data: HashMap<String, serde_json::Value>,
+    pub cookies: FxHashMap<String, String>,
+    pub headers: FxHashMap<String, String>,
+    pub custom_data: FxHashMap<String, serde_json::Value>,
     /// URL used for last successful authentication
     pub authenticated_url: Option<String>,
     /// Last time session was verified as active
@@ -332,9 +332,9 @@ impl Default for SessionState {
             csrf_tokens: Vec::new(),
             login_sequence: None,
             login_result: None,
-            cookies: HashMap::new(),
-            headers: HashMap::new(),
-            custom_data: HashMap::new(),
+            cookies: FxHashMap::default(),
+            headers: FxHashMap::default(),
+            custom_data: FxHashMap::default(),
             authenticated_url: None,
             last_verified: None,
             auth_token: None,
@@ -458,12 +458,12 @@ impl LoginExecutor {
         sequence: &LoginSequence,
         _auth_method: &AuthMethod,
     ) -> crate::error::Result<LoginResult> {
-        let mut variables: HashMap<String, String> = HashMap::new();
-        let session_cookies: HashMap<String, String> = HashMap::new();
+        let mut variables: FxHashMap<String, String> = FxHashMap::default();
+        let session_cookies: FxHashMap<String, String> = FxHashMap::default();
         let final_url: Option<String> = None;
         let mut response_code: Option<u16> = None;
-        let mut response_headers: std::collections::HashMap<String, String> =
-            std::collections::HashMap::new();
+        let mut response_headers: FxHashMap<String, String> =
+            FxHashMap::default();
 
         for step in &sequence.steps {
             match step {
@@ -1073,7 +1073,7 @@ pub struct SessionVerification {
 
 /// Session manager with re-authentication support
 pub struct AuthenticatedSessionManager {
-    sessions: Arc<RwLock<HashMap<String, SessionState>>>,
+    sessions: Arc<RwLock<FxHashMap<String, SessionState>>>,
     default_ttl_seconds: i64,
     verification_url: Option<String>,
 }
@@ -1081,7 +1081,7 @@ pub struct AuthenticatedSessionManager {
 impl AuthenticatedSessionManager {
     pub fn new() -> Self {
         Self {
-            sessions: Arc::new(RwLock::new(HashMap::new())),
+            sessions: Arc::new(RwLock::new(FxHashMap::default())),
             default_ttl_seconds: 3600,
             verification_url: None,
         }

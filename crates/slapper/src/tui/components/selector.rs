@@ -225,7 +225,9 @@ impl Selector {
 
     pub fn handle_enter(&mut self) {
         if self.expanded {
-            let _ = self.confirm();
+            if self.confirm().is_none() {
+                tracing::warn!("selector confirm returned None");
+            }
         } else {
             self.open();
         }

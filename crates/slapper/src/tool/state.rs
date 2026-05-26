@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,7 +19,7 @@ pub struct AgentSession {
     pub context: ScanContext,
     pub findings: Vec<AgentFinding>,
     pub scope: Option<Scope>,
-    pub metadata: HashMap<String, serde_json::Value>,
+    pub metadata: FxHashMap<String, serde_json::Value>,
     pub status: SessionStatus,
 }
 
@@ -57,7 +57,7 @@ impl Default for AgentSession {
             context: ScanContext::default(),
             findings: Vec::new(),
             scope: None,
-            metadata: HashMap::new(),
+            metadata: FxHashMap::default(),
             status: SessionStatus::Active,
         }
     }
@@ -121,8 +121,8 @@ impl AgentSession {
         Utc::now() - self.updated_at > ttl
     }
 
-    pub fn severity_summary(&self) -> HashMap<String, usize> {
-        let mut summary = HashMap::new();
+    pub fn severity_summary(&self) -> FxHashMap<String, usize> {
+        let mut summary = FxHashMap::default();
         for finding in &self.findings {
             let severity = format!("{:?}", finding.severity).to_lowercase();
             *summary.entry(severity).or_insert(0) += 1;
@@ -133,7 +133,7 @@ impl AgentSession {
 
 #[derive(Debug, Clone)]
 pub struct SessionManager {
-    sessions: Arc<RwLock<HashMap<String, AgentSession>>>,
+    sessions: Arc<RwLock<FxHashMap<String, AgentSession>>>,
     storage_path: Arc<PathBuf>,
     default_ttl_seconds: i64,
     max_sessions: usize,
@@ -142,7 +142,7 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn new(storage_path: PathBuf) -> Self {
         Self {
-            sessions: Arc::new(RwLock::new(HashMap::new())),
+            sessions: Arc::new(RwLock::new(FxHashMap::default())),
             storage_path: Arc::new(storage_path),
             default_ttl_seconds: 3600,
             max_sessions: 100,

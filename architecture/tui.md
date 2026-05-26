@@ -749,3 +749,48 @@ fn clamp_quick_switch_selection(&self, app: &mut App) {
     };
 }
 ```
+
+## Additional Fixes (2026-06-01 Session)
+
+### Edge Detection for Checkbox Arrays
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `graphql.rs` | 490-502 | Options checkbox bounds missing | Added explicit `GraphQlFocusArea::Options` case |
+| `oauth.rs` | 534-546 | Options checkbox bounds missing | Added explicit `OAuthFocusArea::Options` case |
+| `vuln.rs` | 618-619 | `is_at_right_edge()` missing `is_empty()` guard | Added `self.mode_selector.items.is_empty() \|\|` guard |
+
+### handle_enter() is_running() Guards
+
+| File | Line | Status |
+|------|-------|--------|
+| `report.rs` | 457-460 | `handle_enter()` guarded | ✅ Fixed |
+| `nse.rs` | 312-314 | `handle_enter()` guarded | ✅ Fixed |
+| `plugin.rs` | 357-359 | `handle_enter()` guarded | ✅ Fixed |
+
+### Other Tab-Specific Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `workflow.rs` | 411 | `handle_copy()` missing guard | Added `!self.is_running()` guard |
+| `workflow.rs` | 257 | `reset()` doesn't clear `current_mode` | Set `current_mode = WorkflowMode::ListFindings` |
+| `integrations.rs` | 280 | `reset()` doesn't clear selector | Added `self.tracker_selector.selected = 0;` |
+| `storage.rs` | 250-251 | `reset()` doesn't clear `query_inputs.fields` | Added fields.clear() loop |
+
+### Components Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `selector.rs` | 228 | Silent `let _ =` on confirm() | `if .is_none() { warn }` |
+| `palette.rs` | 60 | Direct array access | `.get()` with bounds check |
+| `session.rs` | 113 | `debug!` vs `warn!` | Changed to `tracing::warn!` |
+| `session.rs` | 174 | Silent `filter_map(\|e\| e.ok())` | Explicit match with warn |
+
+### FxHashMap Performance Updates
+
+| File | Lines | Change |
+|------|-------|--------|
+| `orchestrator/mod.rs` | 21, 50, 84, 89, 302 | HashMap/HashSet → FxHashMap/FxHashSet |
+| `tool/session.rs` | 232, 288, 316, 461, 465, 1076 | HashMap → FxHashMap |
+| `tool/state.rs` | 124, 136 | HashMap → FxHashMap |
+| `recon/mod.rs` | 222, 254 | HashMap → FxHashMap |

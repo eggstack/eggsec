@@ -490,6 +490,7 @@ impl TabInput for GraphQlTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             GraphQlFocusArea::Inputs => !self.inputs.can_move_left(),
+            GraphQlFocusArea::Options => self.checkbox_focus_index == 0,
             _ => true,
         }
     }
@@ -497,6 +498,7 @@ impl TabInput for GraphQlTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             GraphQlFocusArea::Inputs => !self.inputs.can_move_right(),
+            GraphQlFocusArea::Options => self.checkbox_focus_index == 3,
             _ => true,
         }
     }

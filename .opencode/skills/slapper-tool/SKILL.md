@@ -41,29 +41,35 @@ Tool abstraction layer workflows and patterns for security tool integration.
 `tool/implementations/` - Recon, scanner, fuzzer, waf, search, etc.
 
 ### Pipeline Orchestrator
-`tool/orchestrator/mod.rs` handles parallel and sequential tool execution:
+`tool/orchestrator/mod.rs` handles parallel and sequential tool execution with `FxHashMap` for stage results.
 
-**Parallel Execution** (correct pattern):
-```rust
-use futures::future::join_all;
+### FxHashMap Usage (Performance)
 
-let handles: Vec<_> = stage.tools.iter().map(|tool| {
-    async move { /* dispatch tool */ }
-}).collect();
+For performance in hot paths, these modules use `rustc_hash::FxHashMap`/`FxHashSet`:
 
-let results = join_all(handles).await;
-```
+| Module | Location | Purpose |
+|--------|----------|---------|
+| `orchestrator/mod.rs` | Lines 21, 50, 84, 89, 302 | Stage results, enabled stages |
+| `tool/session.rs` | Lines 288, 316, 461, 465, 1076 | Session cookies, variables |
+| `tool/state.rs` | Lines 124, 136 | Severity summary, sessions |
+| `recon/mod.rs` | Lines 221, 253 | Technology metadata, takeover metadata |
 
-**Sequential Execution**:
-```rust
-for tool in &stage.tools {
-    let request = Self::build_request(tool, target);
-    let result = self.dispatcher.dispatch(request).await;
-    // process result
-}
-```
+## Recent Fixes (2026-06-01)
 
-**Result Passing**: Previous stage results are passed via `request.params["results"] = previous_output`.
+### Silent Error Suppression Fixed
+
+| File | Line | Issue |
+|------|------|-------|
+| `lifecycle.rs` | 337 | Silent `update_status` |
+| `lifecycle.rs` | 381,416,429,434,447 | Silent `event_tx.send()` |
+| `mcp/routes.rs` | 216-252 | Silent write/flush errors |
+
+### FxHashMap Replaced
+
+- `orchestrator/mod.rs`: HashMap/HashSet → FxHashMap/FxHashSet
+- `tool/session.rs`: HashMap → FxHashMap
+- `tool/state.rs`: HashMap → FxHashMap
+- `recon/mod.rs`: std HashMap → FxHashMap
 
 ## Testing
 

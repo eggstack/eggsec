@@ -109,7 +109,7 @@ impl SessionManager {
             .filter_map(|e| match e {
                 Ok(entry) => Some(entry),
                 Err(e) => {
-                    tracing::debug!("Skipping unreadable directory entry: {:?}", e);
+                    tracing::warn!("Skipping unreadable directory entry: {:?}", e);
                     None
                 }
             })
@@ -171,7 +171,13 @@ impl SessionManager {
     fn cleanup_old_sessions(&self) -> anyhow::Result<()> {
         let entries = fs::read_dir(&self.config.session_dir)?;
         let mut sessions: Vec<_> = entries
-            .filter_map(|e| e.ok())
+            .filter_map(|e| match e {
+                Ok(entry) => Some(entry),
+                Err(e) => {
+                    tracing::warn!("Skipping unreadable directory entry: {:?}", e);
+                    None
+                }
+            })
             .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
             .collect();
 

@@ -354,6 +354,9 @@ impl TabInput for PluginTab {
     }
 
     fn handle_enter(&mut self) {
+        if !self.is_running() {
+            return;
+        }
         match self.focus_area {
             PluginFocusArea::Inputs => {
                 self.inputs.blur();

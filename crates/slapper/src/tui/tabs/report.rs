@@ -455,6 +455,9 @@ impl TabInput for ReportTab {
     }
 
     fn handle_enter(&mut self) {
+        if !self.is_running() {
+            return;
+        }
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {

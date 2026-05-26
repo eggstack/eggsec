@@ -253,6 +253,7 @@ impl TabState for WorkflowTab {
 
     fn reset(&mut self) {
         self.state = AppState::Idle;
+        self.current_mode = WorkflowMode::ListFindings;
         self.findings.clear();
         self.report = None;
         self.results_view.clear();
@@ -409,9 +410,9 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
-        if self.focus_area == WorkflowFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.get_focused_value()
-        } else if self.focus_area == WorkflowFocusArea::Results {
+        } else if !self.is_running() && self.focus_area == WorkflowFocusArea::Results {
             Some(self.results_view.get_content())
         } else {
             None

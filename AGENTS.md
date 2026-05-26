@@ -507,6 +507,59 @@ handle_char (36), handle_backspace (53), handle_paste (70), handle_enter (165), 
 
 - **network.rs:172**: Changed `tracing::info!` to `tracing::debug!` for successful packet capture completion
 
+### Additional Investigation Fixes (2026-05-26 Evening)
+
+#### TUI Components Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `selector.rs` | 228 | Silent `let _ =` on confirm() | Changed to `if .is_none() { warn }` pattern |
+| `palette.rs` | 60 | Direct array access | Changed to `.get()` with bounds check |
+
+#### TUI session.rs Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `session.rs` | 113 | `debug!` instead of `warn!` | Changed to `tracing::warn!` |
+| `session.rs` | 174 | Silent `filter_map(\|e\| e.ok())` | Changed to explicit match with warn |
+
+#### tool/agents/lifecycle.rs Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `lifecycle.rs` | 337 | Silent `update_status` | Added `if let Err(e) = ...` with warn |
+| `lifecycle.rs` | 381,416,429,434,447 | Silent `event_tx.send()` | Added `if let Err(e) = ...` with warn |
+
+#### tool/protocol/mcp/routes.rs Fixes
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `routes.rs` | 216-252 | Silent write/flush errors | Added `if let Err(e) = ...` with warn |
+
+#### FxHashMap Performance Fixes
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `orchestrator/mod.rs` | 21,50,84,89,302 | HashMap/HashSet | Changed to FxHashMap/FxHashSet |
+| `tool/session.rs` | 288,316,461,465,1076 | HashMap | Changed to FxHashMap |
+| `tool/state.rs` | 124,136 | HashMap | Changed to FxHashMap |
+| `recon/mod.rs` | 221,253 | std HashMap | Changed to FxHashMap |
+
+### Tab Bug Fixes (2026-05-26 Deep Dive)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `graphql.rs` | 490-502 | Options edge detection missing | Added explicit Options case |
+| `oauth.rs` | 534-546 | Options edge detection missing | Added explicit Options case |
+| `report.rs` | 457 | Missing is_running guard | Added guard to handle_enter |
+| `nse.rs` | 311 | Missing is_running guard | Added guard to handle_enter |
+| `plugin.rs` | 356 | Missing is_running guard | Added guard to handle_enter |
+| `vuln.rs` | 618-619 | Missing is_empty() guard | Added `items.is_empty() \|\|` guard |
+| `workflow.rs` | 411 | Missing is_running guard | Added guard to handle_copy |
+| `workflow.rs` | 257 | reset() doesn't clear mode | Added `current_mode` reset |
+| `integrations.rs` | 280 | reset() doesn't clear selector | Added selector reset |
+| `storage.rs` | 250 | reset() doesn't clear fields | Added fields.clear() loop |
+
 ---
 
 ## Verification Commands

@@ -213,9 +213,15 @@ pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>) {
                         error: Some(error),
                     };
                     if let Ok(response_json) = serde_json::to_string(&response) {
-                        let _ = writer.write_all(response_json.as_bytes()).await;
-                        let _ = writer.write_all(b"\n").await;
-                        let _ = writer.flush().await;
+                        if let Err(e) = writer.write_all(response_json.as_bytes()).await {
+                            tracing::warn!(error = %e, "Failed to write batch size error response");
+                        }
+                        if let Err(e) = writer.write_all(b"\n").await {
+                            tracing::warn!(error = %e, "Failed to write newline");
+                        }
+                        if let Err(e) = writer.flush().await {
+                            tracing::warn!(error = %e, "Failed to flush writer");
+                        }
                     }
                     continue;
                 }
@@ -233,9 +239,15 @@ pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>) {
                 }
 
                 if let Ok(response_json) = serde_json::to_string(&responses) {
-                    let _ = writer.write_all(response_json.as_bytes()).await;
-                    let _ = writer.write_all(b"\n").await;
-                    let _ = writer.flush().await;
+                    if let Err(e) = writer.write_all(response_json.as_bytes()).await {
+                        tracing::warn!(error = %e, "Failed to write responses");
+                    }
+                    if let Err(e) = writer.write_all(b"\n").await {
+                        tracing::warn!(error = %e, "Failed to write newline");
+                    }
+                    if let Err(e) = writer.flush().await {
+                        tracing::warn!(error = %e, "Failed to flush writer");
+                    }
                 }
             }
             Err(e) => {
@@ -247,10 +259,16 @@ pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>) {
                     error: Some(error),
                 };
                 if let Ok(response_json) = serde_json::to_string(&response) {
-                    let _ = writer.write_all(response_json.as_bytes()).await;
-                    let _ = writer.write_all(b"\n").await;
-                    let _ = writer.flush().await;
-                }
+                        if let Err(e) = writer.write_all(response_json.as_bytes()).await {
+                            tracing::warn!(error = %e, "Failed to write parse error response");
+                        }
+                        if let Err(e) = writer.write_all(b"\n").await {
+                            tracing::warn!(error = %e, "Failed to write newline");
+                        }
+                        if let Err(e) = writer.flush().await {
+                            tracing::warn!(error = %e, "Failed to flush writer");
+                        }
+                    }
             }
         }
     }

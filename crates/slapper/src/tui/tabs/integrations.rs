@@ -271,6 +271,7 @@ impl TabState for IntegrationsTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.error = None;
+        self.tracker_selector.selected = 0;
         for field in &mut self.config_inputs.fields {
             field.clear();
         }

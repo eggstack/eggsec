@@ -57,7 +57,10 @@ pub fn draw_command_palette(f: &mut Frame, area: Rect, palette: &mut CommandPale
     // Results (only visible items)
     let mut items: Vec<ListItem> = Vec::new();
     for global_idx in start..end {
-        let result = &palette.results[global_idx];
+        let result = match palette.results.get(global_idx) {
+            Some(r) => r,
+            None => continue,
+        };
         let style = if global_idx == palette.selected_index {
             Style::default()
                 .fg(tc!(background))

@@ -534,6 +534,7 @@ impl TabInput for OAuthTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             OAuthFocusArea::Inputs => !self.inputs.can_move_left(),
+            OAuthFocusArea::Options => self.checkbox_focus_index == 0,
             _ => true,
         }
     }
@@ -541,6 +542,7 @@ impl TabInput for OAuthTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             OAuthFocusArea::Inputs => !self.inputs.can_move_right(),
+            OAuthFocusArea::Options => self.checkbox_focus_index == 3,
             _ => true,
         }
     }

@@ -334,7 +334,9 @@ impl LifecycleManager {
         }
 
         for agent_id in mark_offline {
-            let _ = agent_registry.update_status(agent_id, AgentStatus::Offline).await;
+            if let Err(e) = agent_registry.update_status(agent_id, AgentStatus::Offline).await {
+                tracing::warn!("Failed to mark agent {} offline: {:?}", agent_id, e);
+            }
         }
 
         for event in pending_events {
@@ -378,7 +380,7 @@ impl LifecycleManager {
 
             if health.consecutive_failures >= self.config.max_consecutive_failures {
                 health.is_healthy = false;
-                let _ = self
+                if let Err(e) = self
                     .event_tx
                     .send(LifecycleEvent {
                         event_type: LifecycleEventType::HealthCheckFailed,
@@ -392,7 +394,10 @@ impl LifecycleManager {
                             self.config.max_consecutive_failures, reason
                         )),
                     })
-                    .await;
+                    .await
+                {
+                    tracing::warn!("Failed to send HealthCheckFailed event for agent {}: {:?}", agent_id, e);
+                }
             }
         }
     }
@@ -413,7 +418,7 @@ impl LifecycleManager {
     }
 
     pub async fn initiate_graceful_shutdown(&self, agent_id: Uuid) -> bool {
-        let _ = self
+        if let Err(e) = self
             .event_tx
             .send(LifecycleEvent {
                 event_type: LifecycleEventType::GracefulShutdown,
@@ -424,14 +429,19 @@ impl LifecycleManager {
                     .as_secs(),
                 details: None,
             })
-            .await;
+            .await
+        {
+            tracing::warn!("Failed to send GracefulShutdown event for agent {}: {:?}", agent_id, e);
+        }
 
-        let _ = self.agent_registry.unregister(agent_id).await;
+        if let Err(e) = self.agent_registry.unregister(agent_id).await {
+            tracing::warn!("Failed to unregister agent {} during graceful shutdown: {:?}", agent_id, e);
+        }
         true
     }
 
     pub async fn force_shutdown(&self, agent_id: Uuid) {
-        let _ = self
+        if let Err(e) = self
             .event_tx
             .send(LifecycleEvent {
                 event_type: LifecycleEventType::ForcedShutdown,
@@ -442,9 +452,14 @@ impl LifecycleManager {
                     .as_secs(),
                 details: Some("Agent force shutdown initiated".to_string()),
             })
-            .await;
+            .await
+        {
+            tracing::warn!("Failed to send ForcedShutdown event for agent {}: {:?}", agent_id, e);
+        }
 
-        let _ = self.agent_registry.unregister(agent_id).await;
+        if let Err(e) = self.agent_registry.unregister(agent_id).await {
+            tracing::warn!("Failed to unregister agent {} during force shutdown: {:?}", agent_id, e);
+        }
 
         let mut status = self.health_status.write().await;
         status.remove(&agent_id);

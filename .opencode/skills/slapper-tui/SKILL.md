@@ -841,6 +841,47 @@ pub fn is_at_left_edge(&self) -> bool {
 
 - **network.rs:172**: Changed `tracing::info!` to `tracing::debug!` for successful packet capture completion
 
+## Deep Dive Session (2026-06-01)
+
+### Additional TUI Component Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `selector.rs` | 228 | Silent `let _ =` on confirm() | `if .is_none() { warn }` pattern |
+| `palette.rs` | 60 | Direct array access | `.get()` with bounds check |
+
+### TUI session.rs Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `session.rs` | 113 | `debug!` instead of `warn!` | `tracing::warn!` |
+| `session.rs` | 174 | `filter_map(\|e\| e.ok())` | Explicit match with warn |
+
+### Tab Edge Detection Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `graphql.rs` | 490-502 | Options checkbox bounds missing | Added explicit Options case |
+| `oauth.rs` | 534-546 | Options checkbox bounds missing | Added explicit Options case |
+| `vuln.rs` | 618-619 | `is_at_right_edge()` missing `is_empty()` guard | Added `items.is_empty() \|\|` guard |
+
+### handle_enter() is_running() Guards
+
+| File | Line | Status |
+|------|-------|--------|
+| `report.rs` | 457 | ✅ Fixed |
+| `nse.rs` | 311 | ✅ Fixed |
+| `plugin.rs` | 356 | ✅ Fixed |
+
+### Other Tab Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `workflow.rs` | 411 | `handle_copy()` missing guard | Added `!self.is_running()` guard |
+| `workflow.rs` | 257 | `reset()` doesn't clear mode | Reset `current_mode` |
+| `integrations.rs` | 280 | `reset()` doesn't clear selector | Reset `tracker_selector.selected` |
+| `storage.rs` | 250 | `reset()` doesn't clear fields | Added fields.clear() loop |
+
 ## Session Fixes (2026-05-26 Session)
 
 ### TUI Edge Detection Fixes
