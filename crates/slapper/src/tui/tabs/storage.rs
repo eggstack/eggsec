@@ -575,7 +575,9 @@ impl TabInput for StorageTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             StorageFocusArea::Config => self.config_inputs.is_at_left_edge(),
-            StorageFocusArea::Mode => self.mode_selector.selected == 0,
+            StorageFocusArea::Mode => {
+                self.mode_selector.items.is_empty() || self.mode_selector.selected == 0
+            }
             StorageFocusArea::Query => self.query_inputs.is_at_left_edge(),
             _ => true,
         }
@@ -585,7 +587,9 @@ impl TabInput for StorageTab {
         match self.focus_area {
             StorageFocusArea::Config => self.config_inputs.is_at_right_edge(),
             StorageFocusArea::Mode => {
-                self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)
+                self.mode_selector.items.is_empty()
+                    || self.mode_selector.selected
+                        >= self.mode_selector.items.len().saturating_sub(1)
             }
             StorageFocusArea::Query => self.query_inputs.is_at_right_edge(),
             _ => true,

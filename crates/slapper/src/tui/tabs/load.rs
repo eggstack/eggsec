@@ -565,7 +565,9 @@ impl TabInput for LoadTab {
     fn handle_enter(&mut self) {
         if self.test_type_selector.is_focused() {
             if self.test_type_selector.is_open() {
-                let _ = self.test_type_selector.confirm();
+                if self.test_type_selector.confirm().is_none() {
+                    tracing::warn!("Failed to confirm load test type selector");
+                }
             } else {
                 self.test_type_selector.open();
             }

@@ -721,3 +721,48 @@ self.entries
     .filter(|e| e.scan_type.to_lowercase().contains(&scan_type_lower))
     .collect()
 ```
+
+## Recent Fixes (2026-05-31 Session)
+
+### Direct Array Access Fixed
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `compliance.rs` | 232 | `input_chunks[2]` direct access | `if let Some(framework_area) = input_chunks.get(2)` |
+| `recon.rs` | 404 | `input_chunks[2]` direct access | `let Some(options_area) = input_chunks.get(2) else { return; }` |
+| `browser.rs` | 247 | `input_chunks[2]` direct access | `let Some(cb_area) = input_chunks.get(2) else { return; }` |
+| `hunt.rs` | 282 | `input_chunks[3]` direct access | `let Some(cb_area) = input_chunks.get(3) else { return; }` |
+
+### is_running() Guards Added (Additional Tabs)
+
+| Tab | handle_char | handle_backspace | handle_paste |
+|-----|-------------|------------------|------------|
+| packet.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| cluster.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| proxy.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| nse.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| plugin.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| report.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+
+### is_at_*_edge Guards for Selectors
+
+| File | Lines | Fix |
+|------|-------|-----|
+| `nse.rs` | 396, 405 | `self.script_selector.items.is_empty() ||` guard added |
+| `storage.rs` | 578, 588 | `self.mode_selector.items.is_empty() ||` guard added |
+| `integrations.rs` | 555, 565 | `self.tracker_selector.items.is_empty() ||` guard added |
+
+### Silent Error Suppression Fixed
+
+| File | Line | Pattern Fixed |
+|------|-------|---------------|
+| `cluster.rs` | 436 | `let _ = view_selector.confirm()` → `if .is_none() { warn }` |
+| `packet.rs` | 749 | `let _ = view_selector.confirm()` → `if .is_none() { warn }` |
+| `load.rs` | 568 | `let _ = test_type_selector.confirm()` → `if .is_none() { warn }` |
+| `settings/input.rs` | 189, 213, 224 | proxy_rotation, severity, accent_color selectors |
+| `session.rs` | 109, 176 | read_dir and remove_file errors now logged |
+| `report.rs` | 461 | view_selector.confirm() now uses proper error handling |
+
+### Test Fix
+
+- **key_handler.rs:440-457**: `clamp_quick_switch_selection()` now re-fetches fresh results via `get_quick_switch_results()` instead of using stale parameter.

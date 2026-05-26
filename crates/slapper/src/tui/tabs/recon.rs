@@ -401,11 +401,13 @@ impl TabRender for ReconTab {
             }
         }
 
-        let options_area = input_chunks[2];
+        let Some(options_area) = input_chunks.get(2) else {
+            return;
+        };
         let option_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(options_area);
+            .split(*options_area);
 
         let visible_rows = options_area.height.min(CHECKBOX_ROWS_PER_COLUMN as u16) as usize;
         if visible_rows > 0 {

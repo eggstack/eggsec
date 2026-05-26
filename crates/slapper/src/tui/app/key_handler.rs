@@ -437,17 +437,18 @@ impl KeyHandler {
             }
             (KeyModifiers::NONE, KeyCode::Backspace) => {
                 app.quick_switch_query.pop();
-                self.clamp_quick_switch_selection(app, &results);
+                self.clamp_quick_switch_selection(app);
             }
             (KeyModifiers::NONE, KeyCode::Char(c)) => {
                 app.quick_switch_query.push(c);
-                self.clamp_quick_switch_selection(app, &results);
+                self.clamp_quick_switch_selection(app);
             }
             _ => {}
         }
     }
 
-    fn clamp_quick_switch_selection(&self, app: &mut App, results: &[&Tab]) {
+    fn clamp_quick_switch_selection(&self, app: &mut App) {
+        let results = app.get_quick_switch_results();
         let len = results.len();
         app.quick_switch_selected = if len == 0 {
             0

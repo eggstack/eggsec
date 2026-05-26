@@ -194,6 +194,59 @@ Detailed architecture documentation is in the `architecture/` directory:
 - **recon.rs:677-687**: Fixed `is_at_right_edge()` for Options - added `is_empty()` guard + `saturating_sub(1)`.
 - **oauth.rs:400-404**: Added `!self.is_running()` guard to `handle_backspace()`.
 
+### TUI Bug Fixes (2026-05-31 - Deep Dive Session)
+
+Fixed direct array access patterns without bounds checks:
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `compliance.rs` | 232 | `input_chunks[2]` direct access | Wrapped in `if let Some(framework_area) = input_chunks.get(2)` |
+| `recon.rs` | 404 | `input_chunks[2]` direct access | Wrapped in `let Some(options_area) = input_chunks.get(2) else { return; }` |
+| `browser.rs` | 247 | `input_chunks[2]` direct access | Wrapped in `let Some(cb_area) = input_chunks.get(2) else { return; }` |
+| `hunt.rs` | 282 | `input_chunks[3]` direct access | Wrapped in `let Some(cb_area) = input_chunks.get(3) else { return; }` |
+
+Added missing `!self.is_running()` guards on input handlers:
+
+| File | Lines | Handlers |
+|------|-------|-----------|
+| `packet.rs` | 675-695 | handle_char, handle_backspace, handle_paste |
+| `cluster.rs` | 327-358 | handle_char, handle_backspace, handle_paste |
+| `proxy.rs` | 508-528 | handle_char, handle_backspace, handle_paste |
+| `nse.rs` | 246-262 | handle_char, handle_backspace, handle_paste |
+| `plugin.rs` | 301-317 | handle_char, handle_backspace, handle_paste |
+| `report.rs` | 368-399 | handle_char, handle_backspace, handle_paste |
+
+Added `is_empty()` guards to `is_at_left_edge()`/`is_at_right_edge()` for selectors:
+
+| File | Lines | Fix |
+|------|-------|-----|
+| `nse.rs` | 393-409 | Added `self.script_selector.items.is_empty() ||` before selector checks |
+| `storage.rs` | 575-593 | Added `self.mode_selector.items.is_empty() ||` before selector checks |
+| `integrations.rs` | 553-572 | Added `self.tracker_selector.items.is_empty() ||` before selector checks |
+
+Fixed silent error suppression on `selector.confirm()`:
+
+| File | Line | Fix |
+|------|-------|-----|
+| `report.rs` | 461 | `if self.view_selector.confirm().is_none() { tracing::warn!(...) }` |
+| `cluster.rs` | 436 | Same pattern |
+| `packet.rs` | 749 | Same pattern |
+| `load.rs` | 568 | Same pattern |
+| `settings/input.rs` | 189, 213, 224 | Same pattern for proxy_rotation, severity, accent_color selectors |
+
+Fixed session.rs silent errors:
+
+| File | Line | Fix |
+|------|-------|-----|
+| `session.rs` | 109 | Changed `filter_map(|e| e.ok())` to explicit match with `tracing::debug!` |
+| `session.rs` | 176 | Changed `let _ = fs::remove_file(...)` to `if let Err(e) = ... { tracing::warn!(...) }` |
+
+Fixed redundant `to_lowercase()` in dashboard.rs:195-208 - combined into single fold() iteration.
+
+### Pre-existing Test Fix (2026-05-31)
+
+- **key_handler.rs:440-457**: Fixed `test_quick_switch_clamps_selection_after_filter_input` by making `clamp_quick_switch_selection()` re-fetch fresh `get_quick_switch_results()` instead of using stale results passed as parameter.
+
 ### Scanner Module Fixes (2026-05-30)
 
 - **Silent error suppression in scanner/ports/mod.rs:582**: Changed `let _ = tx.send(...)` to proper error check with debug logging.

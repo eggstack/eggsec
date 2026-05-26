@@ -506,23 +506,27 @@ impl TabInput for ProxyTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.view_selector.is_focused() {
-            self.view_selector.handle_char(c);
-        } else if self.inputs.is_focused() {
-            self.inputs.insert(c);
+        if !self.is_running() {
+            if self.view_selector.is_focused() {
+                self.view_selector.handle_char(c);
+            } else if self.inputs.is_focused() {
+                self.inputs.insert(c);
+            }
         }
     }
 
     fn handle_backspace(&mut self) {
-        if self.view_selector.is_focused() {
-            self.view_selector.handle_backspace();
-        } else if self.inputs.is_focused() {
-            self.inputs.backspace();
+        if !self.is_running() {
+            if self.view_selector.is_focused() {
+                self.view_selector.handle_backspace();
+            } else if self.inputs.is_focused() {
+                self.inputs.backspace();
+            }
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.view_selector.is_focused() && self.inputs.is_focused() {
+        if !self.is_running() && !self.view_selector.is_focused() && self.inputs.is_focused() {
             self.inputs.paste(text);
         }
     }

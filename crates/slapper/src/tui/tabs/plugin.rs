@@ -299,19 +299,19 @@ impl TabInput for PluginTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == PluginFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == PluginFocusArea::Inputs {
             self.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
-        if self.focus_area == PluginFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == PluginFocusArea::Inputs {
             self.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if self.focus_area == PluginFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == PluginFocusArea::Inputs {
             self.inputs.paste(text);
         }
     }

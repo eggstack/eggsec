@@ -244,19 +244,19 @@ impl TabInput for NseTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == NseFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
             self.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
-        if self.focus_area == NseFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
             self.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if self.focus_area == NseFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == NseFocusArea::Inputs {
             self.inputs.paste(text);
         }
     }
@@ -393,7 +393,10 @@ impl TabInput for NseTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             NseFocusArea::Inputs => self.inputs.is_at_left_edge(),
-            NseFocusArea::ScriptSelector => self.script_selector.selected == 0,
+            NseFocusArea::ScriptSelector => {
+                self.script_selector.items.is_empty()
+                    || self.script_selector.selected == 0
+            }
             _ => true,
         }
     }
@@ -402,7 +405,9 @@ impl TabInput for NseTab {
         match self.focus_area {
             NseFocusArea::Inputs => self.inputs.is_at_right_edge(),
             NseFocusArea::ScriptSelector => {
-                self.script_selector.selected >= self.script_selector.items.len().saturating_sub(1)
+                self.script_selector.items.is_empty()
+                    || self.script_selector.selected
+                        >= self.script_selector.items.len().saturating_sub(1)
             }
             _ => true,
         }

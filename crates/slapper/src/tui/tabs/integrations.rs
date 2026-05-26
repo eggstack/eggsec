@@ -552,7 +552,10 @@ impl TabInput for IntegrationsTab {
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            IntegrationsFocusArea::Tracker => self.tracker_selector.selected == 0,
+            IntegrationsFocusArea::Tracker => {
+                self.tracker_selector.items.is_empty()
+                    || self.tracker_selector.selected == 0
+            }
             IntegrationsFocusArea::Config => self.config_inputs.is_at_left_edge(),
             IntegrationsFocusArea::Issue => !self.issue_inputs.can_move_left(),
             _ => true,
@@ -562,8 +565,9 @@ impl TabInput for IntegrationsTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             IntegrationsFocusArea::Tracker => {
-                self.tracker_selector.selected
-                    >= self.tracker_selector.items.len().saturating_sub(1)
+                self.tracker_selector.items.is_empty()
+                    || self.tracker_selector.selected
+                        >= self.tracker_selector.items.len().saturating_sub(1)
             }
             IntegrationsFocusArea::Config => self.config_inputs.is_at_right_edge(),
             IntegrationsFocusArea::Issue => !self.issue_inputs.can_move_right(),

@@ -229,7 +229,9 @@ impl TabRender for ComplianceTab {
 
         let mut sel = self.framework_selector.clone();
         sel.focused = self.focus_area == ComplianceFocusArea::Framework;
-        sel.render(f, input_chunks[2]);
+        if let Some(framework_area) = input_chunks.get(2) {
+            sel.render(f, *framework_area);
+        }
 
         if self.state == AppState::Running {
             use ratatui::widgets::{Block, Borders, Gauge};

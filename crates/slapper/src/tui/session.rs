@@ -106,7 +106,13 @@ impl SessionManager {
     pub fn load_latest_session(&self) -> anyhow::Result<Option<SessionState>> {
         let entries = fs::read_dir(&self.config.session_dir)?;
         let mut sessions: Vec<_> = entries
-            .filter_map(|e| e.ok())
+            .filter_map(|e| match e {
+                Ok(entry) => Some(entry),
+                Err(e) => {
+                    tracing::debug!("Skipping unreadable directory entry: {:?}", e);
+                    None
+                }
+            })
             .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
             .collect();
 
@@ -173,7 +179,13 @@ impl SessionManager {
 
         while sessions.len() > self.config.max_sessions {
             if let Some(oldest) = sessions.first() {
-                let _ = fs::remove_file(oldest.path());
+                if let Err(e) = fs::remove_file(oldest.path()) {
+                    tracing::warn!(
+                        "Failed to cleanup old session {:?}: {:?}",
+                        oldest.path(),
+                        e
+                    );
+                }
                 sessions.swap_remove(0);
             }
         }

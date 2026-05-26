@@ -621,3 +621,66 @@ fn is_at_right_edge(&self) -> bool {
 ```
 
 This pattern applies to all tabs with checkbox arrays: `hunt.rs`, `browser.rs`, `compliance.rs`, `graphql.rs`, `oauth.rs`.
+
+### Selector confirm() Return Value
+
+Selector's `confirm()` returns `Option<&SelectorItem>`, not `Result`. Handle appropriately:
+
+```rust
+// WRONG - treating Option as Result
+if let Err(e) = self.profile_selector.confirm() {
+    tracing::warn!("Confirm failed: {}", e);
+}
+
+// CORRECT - handle Option properly
+if self.profile_selector.confirm().is_none() {
+    tracing::warn!("Confirm failed: selector returned None");
+}
+```
+
+### Session Error Handling
+
+When loading sessions or cleaning up old sessions, avoid silent error suppression:
+
+```rust
+// WRONG - silently ignores read errors
+.filter_map(|e| e.ok())
+
+// CORRECT - log errors at debug level
+.filter_map(|e| match e {
+    Ok(entry) => Some(entry),
+    Err(e) => {
+        tracing::debug!("Skipping unreadable directory entry: {:?}", e);
+        None
+    }
+})
+
+// WRONG - silently ignores removal errors
+let _ = fs::remove_file(oldest.path());
+
+// CORRECT - log errors at warn level
+if let Err(e) = fs::remove_file(oldest.path()) {
+    tracing::warn!("Failed to cleanup old session {:?}: {:?}", oldest.path(), e);
+}
+```
+
+### Quick Switch Selection Clamping
+
+When filtering quick switch results, the clamping function must re-fetch fresh results:
+
+```rust
+// WRONG - uses stale results passed as parameter
+fn clamp_quick_switch_selection(&self, app: &mut App, results: &[&Tab]) {
+    app.quick_switch_selected = app.quick_switch_selected.min(results.len().saturating_sub(1));
+}
+
+// CORRECT - re-fetches fresh results after query change
+fn clamp_quick_switch_selection(&self, app: &mut App) {
+    let results = app.get_quick_switch_results();
+    app.quick_switch_selected = if results.is_empty() {
+        0
+    } else {
+        app.quick_switch_selected.min(results.len() - 1)
+    };
+}
+```

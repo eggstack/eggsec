@@ -325,7 +325,7 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == ClusterFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == ClusterFocusArea::Inputs {
             let current_inputs = match self.current_view {
                 ClusterView::Worker => &mut self.worker_inputs,
                 ClusterView::Coordinator => &mut self.coordinator_inputs,
@@ -336,7 +336,7 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_backspace(&mut self) {
-        if self.focus_area == ClusterFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == ClusterFocusArea::Inputs {
             let current_inputs = match self.current_view {
                 ClusterView::Worker => &mut self.worker_inputs,
                 ClusterView::Coordinator => &mut self.coordinator_inputs,
@@ -347,7 +347,7 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if self.focus_area == ClusterFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == ClusterFocusArea::Inputs {
             let current_inputs = match self.current_view {
                 ClusterView::Worker => &mut self.worker_inputs,
                 ClusterView::Coordinator => &mut self.coordinator_inputs,
@@ -433,7 +433,9 @@ impl TabInput for ClusterTab {
         match self.focus_area {
             ClusterFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
-                    let _ = self.view_selector.confirm();
+                    if self.view_selector.confirm().is_none() {
+                        tracing::warn!("Failed to confirm cluster view selector");
+                    }
                     self.current_view = match self.view_selector.selected {
                         0 => ClusterView::Worker,
                         1 => ClusterView::Coordinator,

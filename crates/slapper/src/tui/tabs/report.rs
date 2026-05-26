@@ -366,7 +366,7 @@ impl TabInput for ReportTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == ReportFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == ReportFocusArea::Inputs {
             let current_inputs = match self.current_view {
                 ReportView::Convert => &mut self.convert_inputs,
                 ReportView::Trend => &mut self.trend_inputs,
@@ -377,7 +377,7 @@ impl TabInput for ReportTab {
     }
 
     fn handle_backspace(&mut self) {
-        if self.focus_area == ReportFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == ReportFocusArea::Inputs {
             let current_inputs = match self.current_view {
                 ReportView::Convert => &mut self.convert_inputs,
                 ReportView::Trend => &mut self.trend_inputs,
@@ -388,7 +388,7 @@ impl TabInput for ReportTab {
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if self.focus_area == ReportFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == ReportFocusArea::Inputs {
             let current_inputs = match self.current_view {
                 ReportView::Convert => &mut self.convert_inputs,
                 ReportView::Trend => &mut self.trend_inputs,
@@ -458,7 +458,9 @@ impl TabInput for ReportTab {
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
-                    let _ = self.view_selector.confirm();
+                    if self.view_selector.confirm().is_none() {
+                        tracing::warn!("Failed to confirm view selector selection");
+                    }
                     self.current_view = match self.view_selector.selected {
                         0 => ReportView::Convert,
                         1 => ReportView::Trend,

@@ -192,20 +192,15 @@ impl DashboardTab {
         self.today_scans = 0;
 
         self.total_scans = history.len();
-        self.successful_scans = history
-            .iter()
-            .filter(|e| {
-                let lower = e.summary.to_lowercase();
-                lower.contains("complete") || lower.contains("found")
-            })
-            .count();
-        self.failed_scans = history
-            .iter()
-            .filter(|e| {
-                let lower = e.summary.to_lowercase();
-                lower.contains("failed") || lower.contains("error")
-            })
-            .count();
+
+        let (success, failed) = history.iter().fold((0usize, 0usize), |(s, f), e| {
+            let lower = e.summary.to_lowercase();
+            let is_success = lower.contains("complete") || lower.contains("found");
+            let is_failed = lower.contains("failed") || lower.contains("error");
+            (s + is_success as usize, f + is_failed as usize)
+        });
+        self.successful_scans = success;
+        self.failed_scans = failed;
 
         if let Some(last) = history.first() {
             self.last_scan_type = last.scan_type.clone();

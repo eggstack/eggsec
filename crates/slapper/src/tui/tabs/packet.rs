@@ -673,23 +673,27 @@ impl TabInput for PacketTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.view_selector.is_focused() {
-            self.view_selector.handle_char(c);
-        } else {
-            self.inputs.insert(c);
+        if !self.is_running() {
+            if self.view_selector.is_focused() {
+                self.view_selector.handle_char(c);
+            } else {
+                self.inputs.insert(c);
+            }
         }
     }
 
     fn handle_backspace(&mut self) {
-        if self.view_selector.is_focused() {
-            self.view_selector.handle_backspace();
-        } else {
-            self.inputs.backspace();
+        if !self.is_running() {
+            if self.view_selector.is_focused() {
+                self.view_selector.handle_backspace();
+            } else {
+                self.inputs.backspace();
+            }
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.view_selector.is_focused() {
+        if !self.is_running() && !self.view_selector.is_focused() {
             self.inputs.paste(text);
         }
     }
@@ -742,7 +746,9 @@ impl TabInput for PacketTab {
     fn handle_enter(&mut self) {
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
-                let _ = self.view_selector.confirm();
+                if self.view_selector.confirm().is_none() {
+                    tracing::warn!("Failed to confirm packet view selector");
+                }
                 self.current_view = match self.view_selector.selected {
                     0 => PacketView::Capture,
                     1 => PacketView::Send,

@@ -244,7 +244,9 @@ impl TabRender for BrowserTab {
             }
         }
 
-        let cb_area = input_chunks[2];
+        let Some(cb_area) = input_chunks.get(2) else {
+            return;
+        };
         let cb_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -252,7 +254,7 @@ impl TabRender for BrowserTab {
                 Constraint::Percentage(33),
                 Constraint::Percentage(34),
             ])
-            .split(cb_area);
+            .split(*cb_area);
 
         for (i, cb) in self.option_checkboxes.iter().enumerate() {
             let mut checkbox = cb.clone();

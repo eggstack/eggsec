@@ -279,11 +279,13 @@ impl TabRender for HuntTab {
             }
         }
 
-        let cb_area = input_chunks[3];
+        let Some(cb_area) = input_chunks.get(3) else {
+            return;
+        };
         let cb_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(cb_area);
+            .split(*cb_area);
 
         let left = Layout::default()
             .direction(Direction::Vertical)

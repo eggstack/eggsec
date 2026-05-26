@@ -186,7 +186,9 @@ impl TabInput for SettingsTab {
                     self.proxy_inputs.blur();
                 } else {
                     if self.proxy_rotation_selector.is_open() {
-                        let _ = self.proxy_rotation_selector.confirm();
+                        if self.proxy_rotation_selector.confirm().is_none() {
+                            tracing::warn!("Failed to confirm proxy rotation selector");
+                        }
                     } else {
                         self.proxy_rotation_selector.open();
                     }
@@ -210,7 +212,9 @@ impl TabInput for SettingsTab {
                     self.notify_on_findings.toggle();
                 } else {
                     if self.severity_selector.is_open() {
-                        let _ = self.severity_selector.confirm();
+                        if self.severity_selector.confirm().is_none() {
+                            tracing::warn!("Failed to confirm severity selector");
+                        }
                     } else {
                         self.severity_selector.open();
                     }
@@ -221,7 +225,9 @@ impl TabInput for SettingsTab {
                     self.dark_mode.toggle();
                 } else {
                     if self.accent_color.is_open() {
-                        let _ = self.accent_color.confirm();
+                        if self.accent_color.confirm().is_none() {
+                            tracing::warn!("Failed to confirm accent color selector");
+                        }
                     } else {
                         self.accent_color.open();
                     }
