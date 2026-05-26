@@ -185,6 +185,14 @@ Detailed architecture documentation is in the `architecture/` directory:
 - **Redundant identity map in integrations.rs:334**: Removed `.map(|s| s)` identity map.
 - **Inconsistent bounds in workflow.rs:326,330**: Added `field_chunks.get(i)` bounds check for `idx==5` and `idx==6` branches.
 - **Dead code in scan_ports.rs:167-171**: Moved `is_empty()` check outside loop - was unreachable since targets() returns non-empty for non-empty input.
+- **stress.rs:195-206**: Fixed missing bounds check in reset() - added individual `if len > N` guards for fields[1-3].
+- **scan_ports.rs:172-186**: Fixed validation to check ALL targets (not just first) and validate port range per target.
+- **waf.rs:598-606**: Fixed `is_at_right_edge()` for empty checkboxes - added `is_empty()` guard + `saturating_sub(1)`.
+- **waf.rs:588-596**: Fixed `is_at_left_edge()` for empty checkboxes - added `is_empty()` guard.
+- **fuzz.rs:128-134**: Refactored redundant `match` to `let...else` syntax for session None check.
+- **vuln.rs:419-423**: Fixed `field_chunks[i]` bounds - use `if let Some(chunk) = field_chunks.get(i)`.
+- **recon.rs:677-687**: Fixed `is_at_right_edge()` for Options - added `is_empty()` guard + `saturating_sub(1)`.
+- **oauth.rs:400-404**: Added `!self.is_running()` guard to `handle_backspace()`.
 
 ### Scanner Module Fixes (2026-05-30)
 

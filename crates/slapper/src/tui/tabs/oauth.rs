@@ -398,7 +398,7 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_backspace(&mut self) {
-        if self.focus_area == OAuthFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == OAuthFocusArea::Inputs {
             self.inputs.backspace();
         }
     }

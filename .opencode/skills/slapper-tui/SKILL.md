@@ -50,6 +50,17 @@ crates/slapper/src/tui/
 - **workflow.rs:322-337**: Added `field_chunks.get(i)` bounds check for idx==5/6 branches
 - **scan_ports.rs:166-171**: Moved `is_empty()` check outside loop - was unreachable dead code
 
+## Additional Fixes (2026-05-26 Session)
+
+- **stress.rs:195-206**: Fixed missing bounds check in reset() - added individual `if len > N` guards for fields[1-3]
+- **scan_ports.rs:172-186**: Fixed validation to check ALL targets (not just first) and validate port range per target
+- **waf.rs:598-606**: Fixed `is_at_right_edge()` - added `is_empty()` guard + `saturating_sub(1)` for empty checkboxes
+- **waf.rs:588-596**: Fixed `is_at_left_edge()` - added `is_empty()` guard for empty checkboxes
+- **fuzz.rs:128-134**: Refactored redundant `match` to `let...else` syntax for session None check
+- **vuln.rs:419-423**: Fixed `field_chunks[i]` bounds - use `if let Some(chunk) = field_chunks.get(i)`
+- **recon.rs:677-687**: Fixed `is_at_right_edge()` for Options - added `is_empty()` guard + `saturating_sub(1)`
+- **oauth.rs:400-404**: Added `!self.is_running()` guard to `handle_backspace()`
+
 ## Recent Fixes (2026-05-29 Evening Session)
 
 - **tabs/scan_ports.rs:333**: Fixed `input_chunks[4]` direct indexing - use `.get(4)` for UDP checkbox

@@ -195,8 +195,12 @@ impl TabState for StressTab {
         if self.inputs.fields.len() > 3 {
             self.inputs.fields[1].value = "100".to_string();
             self.inputs.fields[1].cursor_pos = 3;
+        }
+        if self.inputs.fields.len() > 2 {
             self.inputs.fields[2].value = "30".to_string();
             self.inputs.fields[2].cursor_pos = 2;
+        }
+        if self.inputs.fields.len() > 3 {
             self.inputs.fields[3].value = "10".to_string();
             self.inputs.fields[3].cursor_pos = 2;
         }

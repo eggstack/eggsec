@@ -678,7 +678,8 @@ impl TabInput for ReconTab {
         if self.focus_area == ReconFocusArea::Inputs {
             self.inputs.is_at_right_edge()
         } else if self.focus_area == ReconFocusArea::Options {
-            self.focused_checkbox_index == self.option_checkboxes.len() - 1
+            self.option_checkboxes.is_empty()
+                || self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1)
         } else if self.focus_area == ReconFocusArea::Results {
             self.results_view.is_at_right_edge()
         } else {

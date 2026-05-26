@@ -66,7 +66,8 @@ impl TabInput for WafTab {
     }
 
     fn is_at_right_edge(&self) -> bool {
-        self.focused_checkbox_index == self.technique_checkboxes.len() - 1
+        self.technique_checkboxes.is_empty()
+            || self.focused_checkbox_index >= self.technique_checkboxes.len().saturating_sub(1)
     }
 }
 ```

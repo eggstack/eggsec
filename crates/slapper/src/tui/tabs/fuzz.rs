@@ -125,12 +125,9 @@ impl FuzzTab {
         self.state = AppState::Completed;
         self.results_view.clear();
 
-        let s = match self.session.as_ref() {
-            Some(s) => s,
-            None => {
-                tracing::warn!("set_results called but session is None");
-                return;
-            }
+        let Some(s) = self.session.as_ref() else {
+            tracing::warn!("set_results called but session is None");
+            return;
         };
 
         self.results_view.add_line(Line::from(Span::styled(

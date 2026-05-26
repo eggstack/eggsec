@@ -169,37 +169,43 @@ impl ScanPortsTab {
             return;
         }
 
-        for t in self.targets() {
-            let old_value = std::mem::take(&mut self.inputs.fields[0].value);
-            self.inputs.fields[0].value = t.clone();
-            let validation = self.inputs.fields[0].validate_ip();
-            self.inputs.fields[0].value = old_value;
-
-            if !validation.valid && !t.contains('.') && !t.contains(':') {
-                self.state =
-                    AppState::Error(format!("Invalid target: {} - {}", t, validation.message));
-                self.error = Some(TabError::Target(format!(
-                    "Invalid target: {} - {}",
-                    t, validation.message
-                )));
-                return;
-            }
-        }
-
         if self.inputs.fields.len() < 2 {
             self.state = AppState::Error("Input fields not initialized".to_string());
             self.error = Some(TabError::Config("Input fields not initialized".to_string()));
             return;
         }
-        let port_validation = self.inputs.fields[1].validate_port_range();
-        if !port_validation.valid {
-            self.state =
-                AppState::Error(format!("Invalid port range: {}", port_validation.message));
-            self.error = Some(TabError::Config(format!(
-                "Invalid port range: {}",
-                port_validation.message
-            )));
-            return;
+
+        let port_value = self.inputs.fields[1].value.clone();
+        for t in self.targets() {
+            let old_target = std::mem::take(&mut self.inputs.fields[0].value);
+            self.inputs.fields[0].value = t.clone();
+            let target_validation = self.inputs.fields[0].validate_ip();
+            self.inputs.fields[0].value = old_target;
+
+            if !target_validation.valid && !t.contains('.') && !t.contains(':') {
+                self.state =
+                    AppState::Error(format!("Invalid target: {} - {}", t, target_validation.message));
+                self.error = Some(TabError::Target(format!(
+                    "Invalid target: {} - {}",
+                    t, target_validation.message
+                )));
+                return;
+            }
+
+            let old_port = std::mem::take(&mut self.inputs.fields[1].value);
+            self.inputs.fields[1].value = port_value.clone();
+            let port_validation = self.inputs.fields[1].validate_port_range();
+            self.inputs.fields[1].value = old_port;
+
+            if !port_validation.valid {
+                self.state =
+                    AppState::Error(format!("Invalid port range: {}", port_validation.message));
+                self.error = Some(TabError::Config(format!(
+                    "Invalid port range: {}",
+                    port_validation.message
+                )));
+                return;
+            }
         }
 
         self.state = AppState::Running;

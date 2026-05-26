@@ -418,7 +418,9 @@ impl TabRender for VulnTab {
 
             for (i, &idx) in field_indices.iter().enumerate() {
                 if idx < self.inputs.fields.len() {
-                    self.inputs.fields[idx].render(f, field_chunks[i], insert_mode);
+                    if let Some(chunk) = field_chunks.get(i) {
+                        self.inputs.fields[idx].render(f, *chunk, insert_mode);
+                    }
                 }
             }
         }
