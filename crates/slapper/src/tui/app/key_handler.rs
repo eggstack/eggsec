@@ -390,6 +390,7 @@ impl KeyHandler {
     }
 
     fn handle_quick_switch(&self, app: &mut App, key: &crossterm::event::KeyEvent) {
+        let results = app.get_quick_switch_results();
         match (key.modifiers, key.code) {
             (KeyModifiers::NONE, KeyCode::Esc) => {
                 app.close_quick_switch();
@@ -398,7 +399,6 @@ impl KeyHandler {
                 app.close_quick_switch();
             }
             (KeyModifiers::NONE, KeyCode::Enter) => {
-                let results = app.get_quick_switch_results();
                 if !results.is_empty() && app.quick_switch_selected < results.len() {
                     if let Some(tab) = results.get(app.quick_switch_selected) {
                         app.current_tab = **tab;
@@ -413,7 +413,6 @@ impl KeyHandler {
                 }
             }
             (KeyModifiers::NONE, KeyCode::Down) => {
-                let results = app.get_quick_switch_results();
                 if app.quick_switch_selected < results.len().saturating_sub(1) {
                     app.quick_switch_selected += 1;
                 }
@@ -427,7 +426,6 @@ impl KeyHandler {
             }
             (KeyModifiers::CONTROL, KeyCode::Char('d'))
             | (KeyModifiers::NONE, KeyCode::PageDown) => {
-                let results = app.get_quick_switch_results();
                 app.quick_switch_selected =
                     (app.quick_switch_selected + 10).min(results.len().saturating_sub(1));
             }
@@ -435,23 +433,22 @@ impl KeyHandler {
                 app.quick_switch_selected = 0;
             }
             (KeyModifiers::NONE, KeyCode::End) => {
-                let results = app.get_quick_switch_results();
                 app.quick_switch_selected = results.len().saturating_sub(1);
             }
             (KeyModifiers::NONE, KeyCode::Backspace) => {
                 app.quick_switch_query.pop();
-                self.clamp_quick_switch_selection(app);
+                self.clamp_quick_switch_selection(app, &results);
             }
             (KeyModifiers::NONE, KeyCode::Char(c)) => {
                 app.quick_switch_query.push(c);
-                self.clamp_quick_switch_selection(app);
+                self.clamp_quick_switch_selection(app, &results);
             }
             _ => {}
         }
     }
 
-    fn clamp_quick_switch_selection(&self, app: &mut App) {
-        let len = app.get_quick_switch_results().len();
+    fn clamp_quick_switch_selection(&self, app: &mut App, results: &[&Tab]) {
+        let len = results.len();
         app.quick_switch_selected = if len == 0 {
             0
         } else {
