@@ -19,7 +19,23 @@ pub async fn run_load_test(
     let runner =
         LoadTestRunner::new_with_tui_mode(target.clone(), requests, concurrency, timeout, true)?;
 
-    let results = runner.run().await?;
+    if let Err(e) = progress_tx.send((0, requests)).await {
+        tracing::warn!("Failed to send initial progress: {}", e);
+    }
+
+    let load_test_timeout = Duration::from_secs(300);
+    let results = match tokio::time::timeout(load_test_timeout, runner.run()).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
+            tracing::error!("Load test failed: {}", e);
+            return Err(anyhow::anyhow!("{}", e));
+        }
+        Err(_) => {
+            tracing::error!("Load test timed out after {:?}", load_test_timeout);
+            return Err(anyhow::anyhow!("Load test timed out after 300 seconds"));
+        }
+    };
+
     if let Err(e) = result_tx.send(TaskResult::LoadTest(results)).await {
         tracing::warn!("Failed to send load test results: {}", e);
     }
@@ -67,7 +83,19 @@ pub async fn run_stress_test(
     };
 
     let test = StressTest::new(config)?;
-    let stats = test.run_non_interactive().await?;
+
+    let stress_test_timeout = Duration::from_secs(600);
+    let stats = match tokio::time::timeout(stress_test_timeout, test.run_non_interactive()).await {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => {
+            tracing::error!("Stress test failed: {}", e);
+            return Err(anyhow::anyhow!("{}", e));
+        }
+        Err(_) => {
+            tracing::error!("Stress test timed out after {:?}", stress_test_timeout);
+            return Err(anyhow::anyhow!("Stress test timed out after 600 seconds"));
+        }
+    };
 
     if let Err(e) = result_tx
         .send(TaskResult::StressTest {

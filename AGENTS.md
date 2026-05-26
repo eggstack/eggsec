@@ -440,6 +440,25 @@ Fixed silent error suppression and logging level issues:
 - **api.rs double map_err**: Fixed `api.rs:339` - removed duplicate `??` after `.map_err()` which caused unreachable error handling code. Now uses single `?` properly.
 - **recon.rs division guard**: Fixed `recon.rs:133` - added `total_stages.max(1)` guard for progress calculation to prevent division by zero if stages collection were empty.
 
+### Load Tab Fixes (2026-05-26 Evening Session)
+
+#### TUI Tab Edge Detection is_empty() Guards
+
+| File | Lines | Selector/Field |
+|------|-------|----------------|
+| `load.rs` | 652-665, 667-681 | `test_type_selector` (is_empty guards added) |
+
+#### load.rs update_progress validation
+
+- **load.rs:321-324**: Fixed validation in `update_progress()` - added `completed.min(total)` and `total.max(1)` guards to prevent invalid progress values.
+
+#### network.rs Worker Timeout Wrappers (2026-05-26 Evening)
+
+- **network.rs:9-46**: Added timeout wrapper (300s) to `run_load_test()` - `tokio::time::timeout()` with proper error handling
+- **network.rs:85-98**: Added timeout wrapper (600s) to `run_stress_test()` - `tokio::time::timeout()` with proper error handling
+- **network.rs:22-37**: Added initial progress send `(0, requests)` at start of load test
+- **network.rs:87-96**: Restructured error handling to convert `SlapperError` to `anyhow::Error` for compatibility
+
 ### Deep Dive Session Fixes (2026-05-31 Evening)
 
 #### TUI Tab Edge Detection is_empty() Guards
@@ -505,4 +524,4 @@ cargo clippy --lib -p slapper-plugin
 cargo clippy --lib -p slapper-ruby
 ```
 
-(End file - ends around line 290)
+(End of file - total 527 lines)

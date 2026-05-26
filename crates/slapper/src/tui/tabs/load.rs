@@ -319,8 +319,8 @@ impl LoadTab {
     }
 
     pub fn update_progress(&mut self, completed: u64, total: u64) {
-        self.progress.current = completed;
-        self.progress.total = total;
+        self.progress.current = completed.min(total);
+        self.progress.total = total.max(1);
     }
 
     pub fn scroll_results_up(&mut self) {
@@ -652,7 +652,8 @@ impl TabInput for LoadTab {
     fn is_at_left_edge(&self) -> bool {
         if self.test_type_selector.is_focused() {
             if self.test_type_selector.is_open() {
-                self.test_type_selector.selected == 0
+                self.test_type_selector.items.is_empty()
+                    || self.test_type_selector.selected == 0
             } else {
                 true
             }
@@ -666,8 +667,9 @@ impl TabInput for LoadTab {
     fn is_at_right_edge(&self) -> bool {
         if self.test_type_selector.is_focused() {
             if self.test_type_selector.is_open() {
-                self.test_type_selector.selected
-                    >= self.test_type_selector.items.len().saturating_sub(1)
+                self.test_type_selector.items.is_empty()
+                    || self.test_type_selector.selected
+                        >= self.test_type_selector.items.len().saturating_sub(1)
             } else {
                 true
             }

@@ -867,3 +867,23 @@ pub fn is_at_left_edge(&self) -> bool {
 ### key_handler.rs Ctrl+x Guard
 
 - **key_handler.rs:48**: Added `if !app.has_active_task(")` guard to Ctrl+x (quick switch) to prevent activation during running tasks
+
+## Load Tab Fixes (2026-05-26 Evening Session)
+
+### Edge Detection is_empty() Guards
+
+| File | Lines | Selector/Field |
+|------|-------|----------------|
+| `load.rs` | 652-665, 667-681 | `test_type_selector` (is_empty guards added) |
+
+### load.rs update_progress validation
+
+- **load.rs:321-324**: Fixed validation in `update_progress()` - added `completed.min(total)` and `total.max(1)` guards to prevent invalid progress values.
+
+### network.rs Worker Timeout Wrappers
+
+- **network.rs:9-46**: Added timeout wrapper (300s) to `run_load_test()` - `tokio::time::timeout()` with proper error handling
+- **network.rs:85-98**: Added timeout wrapper (600s) to `run_stress_test()` - `tokio::time::timeout()` with proper error handling
+- **network.rs:22-24**: Added initial progress send `(0, requests)` at start of load test
+- **network.rs:27-36**: Restructured error handling to convert `SlapperError` to `anyhow::Error` for compatibility
+(End file - total      888 lines)
