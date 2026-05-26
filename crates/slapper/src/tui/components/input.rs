@@ -682,16 +682,24 @@ impl InputGroup {
     }
 
     pub fn can_move_left(&self) -> bool {
-        if let Some(idx) = self.focused {
-            idx < self.fields.len() && self.fields[idx].cursor_pos > 0
+        if !self.fields.is_empty() {
+            if let Some(idx) = self.focused {
+                idx < self.fields.len() && self.fields[idx].cursor_pos > 0
+            } else {
+                false
+            }
         } else {
             false
         }
     }
 
     pub fn can_move_right(&self) -> bool {
-        if let Some(idx) = self.focused {
-            idx < self.fields.len() && self.fields[idx].cursor_pos < self.fields[idx].value.len()
+        if !self.fields.is_empty() {
+            if let Some(idx) = self.focused {
+                idx < self.fields.len() && self.fields[idx].cursor_pos < self.fields[idx].value.len()
+            } else {
+                false
+            }
         } else {
             false
         }

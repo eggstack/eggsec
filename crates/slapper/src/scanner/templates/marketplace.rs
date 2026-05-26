@@ -206,7 +206,13 @@ impl TemplateMarketplace {
             .map_err(|e| SlapperError::Config(format!("Failed to read cache directory: {}", e)))?;
 
         let templates: Vec<PathBuf> = entries
-            .filter_map(|e| e.ok())
+            .filter_map(|e| match e {
+                Ok(entry) => Some(entry),
+                Err(e) => {
+                    tracing::debug!("Skipping unreadable cache entry: {:?}", e);
+                    None
+                }
+            })
             .filter(|e| {
                 e.path()
                     .extension()

@@ -170,10 +170,14 @@ pub async fn run_recon(
                 let current = stage_for_thread.lock().clone();
                 if current != last {
                     last = current.clone();
-                    let _ = watch_sender.send(current);
+                    if let Err(e) = watch_sender.send(current) {
+                        tracing::warn!("Failed to send stage update: {}", e);
+                    }
                 }
                 if start_time.elapsed().as_secs() > 120 {
-                    let _ = watch_sender.send("timeout".to_string());
+                    if let Err(e) = watch_sender.send("timeout".to_string()) {
+                        tracing::warn!("Failed to send timeout signal: {}", e);
+                    }
                     break;
                 }
             }

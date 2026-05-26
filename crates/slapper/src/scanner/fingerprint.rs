@@ -303,7 +303,7 @@ pub async fn fingerprint_services(
                     *c
                 };
                 if tx.send((count, total_ports)).await.is_err() {
-                    tracing::debug!("Progress receiver dropped");
+                    tracing::warn!("Progress receiver dropped");
                 }
             }
             drop(permit);

@@ -840,3 +840,30 @@ pub fn is_at_left_edge(&self) -> bool {
 ### network.rs Log Level Fix
 
 - **network.rs:172**: Changed `tracing::info!` to `tracing::debug!` for successful packet capture completion
+
+## Session Fixes (2026-05-26 Session)
+
+### TUI Edge Detection Fixes
+
+| File | Lines | Fix |
+|------|-------|-----|
+| `plugin.rs` | 419-435 | Added `self.plugin_selector.items.is_empty() \|\|` to both `is_at_left_edge()` and `is_at_right_edge()` |
+| `input.rs` | 684-698 | Wrapped `can_move_left()` and `can_move_right()` in `if !self.fields.is_empty()` check |
+
+### Non-TUI Module Fixes
+
+| File | Line | Fix |
+|------|------|-----|
+| `tool/protocol/rest.rs` | 260 | Silent WS channel send fixed |
+| `tool/agents/lifecycle.rs` | 341 | Silent event send fixed |
+| `distributed/remote.rs` | 116 | Silent shutdown send fixed |
+| `scanner/ports/mod.rs` | 580 | `debug!` → `warn!` for progress dropped |
+| `scanner/fingerprint.rs` | 306 | `debug!` → `warn!` for progress dropped |
+| `scanner/endpoints.rs` | 828 | `debug!` → `warn!` for progress dropped |
+| `scanner/ports/spoofed.rs` | 451 | `debug!` → `warn!` for progress dropped |
+| `scanner/templates/marketplace.rs` | 208-209 | Silent filter_map fixed |
+| `recon/git_secrets.rs` | 287 | Silent filter_map fixed |
+
+### key_handler.rs Ctrl+x Guard
+
+- **key_handler.rs:48**: Added `if !app.has_active_task(")` guard to Ctrl+x (quick switch) to prevent activation during running tasks

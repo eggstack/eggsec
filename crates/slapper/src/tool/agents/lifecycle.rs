@@ -338,7 +338,9 @@ impl LifecycleManager {
         }
 
         for event in pending_events {
-            let _ = event_tx.send(event).await;
+            if let Err(e) = event_tx.send(event).await {
+                tracing::warn!("Failed to send pending event: {:?}", e);
+            }
         }
     }
 

@@ -419,7 +419,10 @@ impl TabInput for PluginTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             PluginFocusArea::Inputs => self.inputs.is_at_left_edge(),
-            PluginFocusArea::PluginSelector => self.plugin_selector.selected == 0,
+            PluginFocusArea::PluginSelector => {
+                self.plugin_selector.items.is_empty()
+                    || self.plugin_selector.selected == 0
+            }
             _ => true,
         }
     }
@@ -428,7 +431,8 @@ impl TabInput for PluginTab {
         match self.focus_area {
             PluginFocusArea::Inputs => self.inputs.is_at_right_edge(),
             PluginFocusArea::PluginSelector => {
-                self.plugin_selector.selected >= self.plugin_selector.items.len().saturating_sub(1)
+                self.plugin_selector.items.is_empty()
+                    || self.plugin_selector.selected >= self.plugin_selector.items.len().saturating_sub(1)
             }
             _ => true,
         }

@@ -319,6 +319,32 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 - Adding new security testing capabilities
 - Documentation updates as needed
 
+### TUI Bug Fixes (2026-05-26 Evening Session)
+
+Fixed bounds/edge detection issues across multiple files:
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `plugin.rs` | 419-435 | Missing `is_empty()` guards on `PluginSelector` edge detection | Added `self.plugin_selector.items.is_empty() \|\|` before selector checks |
+| `input.rs` | 684-698 | `can_move_left/right()` missing `is_empty()` guard | Wrapped in `if !self.fields.is_empty()` check |
+| `key_handler.rs` | 48 | `Ctrl+x` (quick switch) missing `is_running()` guard | Added `if !app.has_active_task()` guard |
+
+### Non-TUI Module Fixes (2026-05-26 Evening Session)
+
+Fixed silent error suppression and logging level issues:
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `tool/protocol/rest.rs` | 260 | Silent WS channel send | Changed to `if let Err(e) = tx.send(...).await` with `tracing::warn!` |
+| `tool/agents/lifecycle.rs` | 341 | Silent event send | Same fix pattern |
+| `distributed/remote.rs` | 116 | Silent shutdown send | Same fix pattern |
+| `scanner/ports/mod.rs` | 580 | `debug!` instead of `warn!` for progress dropped | Changed to `tracing::warn!` |
+| `scanner/fingerprint.rs` | 306 | Same logging level issue | Changed to `tracing::warn!` |
+| `scanner/endpoints.rs` | 828 | Same logging level issue | Changed to `tracing::warn!` |
+| `scanner/ports/spoofed.rs` | 451 | Same logging level issue | Changed to `tracing::warn!` |
+| `scanner/templates/marketplace.rs` | 208-209 | Silent `filter_map(\|e\| e.ok())` | Changed to explicit match with `tracing::debug!` |
+| `recon/git_secrets.rs` | 287 | Same silent filter_map issue | Same fix pattern |
+
 ### TUI Bug Fixes (2026-05-26)
 
 - **Bounds check in scan_endpoints.rs render()**: Fixed `scan_endpoints.rs:294-299` to use `input_chunks.get(i)` pattern instead of direct indexing `input_chunks[i]` which could panic if chunks < fields. Also fixed `input_chunks.get(4)` for the checkbox render.

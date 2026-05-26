@@ -118,3 +118,28 @@ fn handle_left(&mut self) {
     }
 }
 ```
+
+## PluginSelector Edge Detection
+
+Tabs using `Selector` (not checkbox arrays) must guard against empty selector items:
+
+```rust
+// WRONG - items could be empty causing incorrect edge detection
+PluginFocusArea::PluginSelector => self.plugin_selector.selected == 0,
+
+// CORRECT - guard against empty selector
+PluginFocusArea::PluginSelector => {
+    self.plugin_selector.items.is_empty()
+        || self.plugin_selector.selected == 0
+}
+
+fn is_at_right_edge(&self) -> bool {
+    match self.focus_area {
+        PluginFocusArea::PluginSelector => {
+            self.plugin_selector.items.is_empty()
+                || self.plugin_selector.selected >= self.plugin_selector.items.len().saturating_sub(1)
+        }
+        _ => true,
+    }
+}
+```

@@ -284,7 +284,13 @@ impl GitSecretsScanner {
         base_path: &Path,
     ) -> Result<()> {
         let entries = std::fs::read_dir(dir)?;
-        for entry in entries.filter_map(|e| e.ok()) {
+        for entry in entries.filter_map(|e| match e {
+            Ok(entry) => Some(entry),
+            Err(e) => {
+                tracing::debug!("Skipping unreadable directory entry: {:?}", e);
+                None
+            }
+        }) {
             let path = entry.path();
             let name = entry.file_name();
             let name_str = name.to_string_lossy();

@@ -407,6 +407,49 @@ fn is_at_left_edge(&self) -> bool {
 }
 ```
 
+### InputGroup can_move_left/can_move_right Empty Guard
+
+The `can_move_left()` and `can_move_right()` methods should also guard against empty fields for consistency:
+
+```rust
+// WRONG - no empty guard
+pub fn can_move_left(&self) -> bool {
+    if let Some(idx) = self.focused {
+        idx < self.fields.len() && self.fields[idx].cursor_pos > 0
+    } else {
+        false
+    }
+}
+
+// CORRECT - explicit empty check
+pub fn can_move_left(&self) -> bool {
+    if !self.fields.is_empty() {
+        if let Some(idx) = self.focused {
+            idx < self.fields.len() && self.fields[idx].cursor_pos > 0
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+```
+
+### PluginSelector Edge Detection Empty Guard
+
+Tabs with `PluginSelector` or similar selectors must guard against empty selector items:
+
+```rust
+// WRONG - items could be empty causing incorrect edge detection
+PluginFocusArea::PluginSelector => self.plugin_selector.selected == 0,
+
+// CORRECT - guard against empty selector
+PluginFocusArea::PluginSelector => {
+    self.plugin_selector.items.is_empty()
+        || self.plugin_selector.selected == 0
+}
+```
+
 ### Worker Error Logging Levels
 
 Workers should use `tracing::warn!` for expected failure cases, not `debug!`:

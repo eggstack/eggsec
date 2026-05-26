@@ -825,7 +825,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
                     *c
                 };
                 if tx.send((count, total_endpoints)).await.is_err() {
-                    tracing::debug!("Progress receiver dropped");
+                    tracing::warn!("Progress receiver dropped");
                 }
             }
             drop(permit);

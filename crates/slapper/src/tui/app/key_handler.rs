@@ -45,7 +45,11 @@ impl KeyHandler {
     fn handle_global_shortcuts(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
         match (key.modifiers, key.code) {
             (KeyModifiers::CONTROL, KeyCode::Char('c')) => self.handle_ctrl_c(app),
-            (KeyModifiers::CONTROL, KeyCode::Char('x')) => app.toggle_quick_switch(),
+            (KeyModifiers::CONTROL, KeyCode::Char('x')) => {
+                if !app.has_active_task() {
+                    app.toggle_quick_switch();
+                }
+            }
             (KeyModifiers::CONTROL, KeyCode::Char('u')) => app.page_up(),
             (KeyModifiers::CONTROL, KeyCode::Char('d')) => app.page_down(),
             (KeyModifiers::NONE, KeyCode::PageUp) => app.page_up(),

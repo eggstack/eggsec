@@ -257,7 +257,9 @@ pub fn create_router(
             while let Some(Ok(msg)) = receiver.next().await {
                 if let Message::Text(text) = msg {
                     tracing::debug!("WS received: {}", text);
-                    let _ = tx.send(text.to_string());
+                    if let Err(e) = tx.send(text.to_string()).await {
+                        tracing::warn!("WS channel send failed: {}", e);
+                    }
                 }
             }
         }

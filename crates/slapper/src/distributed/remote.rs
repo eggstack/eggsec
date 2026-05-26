@@ -113,7 +113,9 @@ impl RemoteListener {
     }
 
     pub fn shutdown(&self) {
-        let _ = self.shutdown_tx.send(());
+        if let Err(e) = self.shutdown_tx.send(()) {
+            tracing::warn!("Failed to send shutdown signal: {:?}", e);
+        }
     }
 
     async fn check_rate_limit(
