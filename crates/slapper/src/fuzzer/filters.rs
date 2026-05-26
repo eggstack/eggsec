@@ -135,7 +135,7 @@ impl FilterChain {
                 let words = if let Some(ref body) = result.response_body {
                     body.split_whitespace().count() as u64
                 } else {
-                    result.response_length.unwrap_or(0) / 5
+                    result.response_length.unwrap_or(1).saturating_sub(1) / 5
                 };
                 counts.contains(&words)
             }
@@ -143,7 +143,7 @@ impl FilterChain {
                 let words = if let Some(ref body) = result.response_body {
                     body.split_whitespace().count() as u64
                 } else {
-                    result.response_length.unwrap_or(0) / 5
+                    result.response_length.unwrap_or(1).saturating_sub(1) / 5
                 };
                 words >= *min && words <= *max
             }
@@ -151,7 +151,7 @@ impl FilterChain {
                 let lines = if let Some(ref body) = result.response_body {
                     body.lines().count() as u64
                 } else {
-                    result.response_length.unwrap_or(0) / 30
+                    result.response_length.unwrap_or(1).saturating_sub(1) / 30
                 };
                 counts.contains(&lines)
             }
@@ -159,7 +159,7 @@ impl FilterChain {
                 let lines = if let Some(ref body) = result.response_body {
                     body.lines().count() as u64
                 } else {
-                    result.response_length.unwrap_or(0) / 30
+                    result.response_length.unwrap_or(1).saturating_sub(1) / 30
                 };
                 lines >= *min && lines <= *max
             }

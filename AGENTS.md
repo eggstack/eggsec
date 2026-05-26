@@ -191,6 +191,20 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 - Adding new security testing capabilities
 - Documentation updates as needed
 
+### TUI Bug Fixes (2026-05-26)
+
+- **Bounds check in scan_endpoints.rs render()**: Fixed `scan_endpoints.rs:294-299` to use `input_chunks.get(i)` pattern instead of direct indexing `input_chunks[i]` which could panic if chunks < fields. Also fixed `input_chunks.get(4)` for the checkbox render.
+- **Bounds check in fingerprint.rs render()**: Fixed `fingerprint.rs:249-251` to use `input_chunks.get(i)` pattern instead of direct indexing.
+- **Bounds check in waf_stress.rs render()**: Fixed `waf_stress.rs:186-188` to use `input_chunks.get(i)` pattern instead of direct indexing.
+- **Bounds check in packet.rs render()**: Fixed `packet.rs:596-598` to use `input_chunks.get(i)` pattern instead of direct indexing.
+- **to_lowercase() redundancy in input.rs**: Fixed `input.rs:96` to cache `self.value.to_lowercase()` before the filter closure instead of calling it repeatedly for each completion candidate.
+- **to_lowercase() redundancy in security.rs**: Fixed `security.rs:122-127` to cache `target.to_lowercase()` before the three `contains()` checks.
+- **Worker success log level in network.rs**: Changed `network.rs:172` from `tracing::debug!` to `tracing::info!` for packet capture task completion.
+
+### Fuzzer Bug Fixes (2026-05-26)
+
+- **Division by zero in filters.rs**: Fixed `filters.rs:138,146,154,162` to use `result.response_length.unwrap_or(1).saturating_sub(1)` instead of `unwrap_or(0)` to prevent division by zero when calculating word/line counts from response length.
+
 ### TUI Bug Fixes (2026-05-29)
 
 - **Bounds check for checkbox arrays**: Added bounds check in `waf.rs:519` for `technique_checkboxes` access to prevent panic. The waf tab now properly guards against out-of-bounds index when toggling technique checkboxes, matching the pattern used in `recon.rs:588-590`.

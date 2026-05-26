@@ -7,7 +7,7 @@ Fuzzing engine module workflows and patterns for security testing.
 ### Core Types
 - `FuzzEngine` - Main fuzzing engine (returns `Result`)
 - `FuzzResult` - Fuzzing result in `fuzzer/engine/types.rs` with `response_body: Option<String>` for regex matching
-- `PayloadType` - Enum of 30 payload categories
+- `PayloadType` - Enum of 31 payload categories
 
 ### payload_vec! Macro
 `fuzzer/payloads/macros.rs` defines `payload_vec!` for building payload vectors from inline data, reducing repetitive `for` loops.

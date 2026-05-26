@@ -292,11 +292,15 @@ impl TabRender for ScanEndpointsTab {
             .split(input_area);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
-            field.render(f, input_chunks[i], insert_mode);
+            if let Some(chunk) = input_chunks.get(i) {
+                field.render(f, *chunk, insert_mode);
+            }
         }
 
         let include_404 = self.include_404_checkbox.clone();
-        include_404.render(f, input_chunks[4]);
+        if let Some(chunk) = input_chunks.get(4) {
+            include_404.render(f, *chunk);
+        }
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);

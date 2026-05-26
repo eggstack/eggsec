@@ -594,7 +594,9 @@ impl TabRender for PacketTab {
             .split(input_area);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
-            field.render(f, input_chunks[i], false);
+            if let Some(chunk) = input_chunks.get(i) {
+                field.render(f, *chunk, false);
+            }
         }
 
         if !self.is_root {

@@ -91,9 +91,10 @@ impl InputField {
             if self.value.is_empty() {
                 return completions.iter().map(|s| s.to_string()).collect();
             }
+            let value_lower = self.value.to_lowercase();
             completions
                 .iter()
-                .filter(|s| s.to_lowercase().starts_with(&self.value.to_lowercase()))
+                .filter(|s| s.to_lowercase().starts_with(&value_lower))
                 .map(|s| s.to_string())
                 .collect()
         } else {

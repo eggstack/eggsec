@@ -169,7 +169,7 @@ pub async fn run_packet_capture(
             }
         }
         Ok(Ok(())) => {
-            tracing::debug!("Packet capture task completed successfully");
+            tracing::info!("Packet capture task completed successfully");
         }
     }
 

@@ -1,81 +1,21 @@
 # Wave Implementation Skill
 
-Guidelines for executing multi-wave implementation plans in this codebase.
+**Status**: HISTORICAL - All 20 implementation items from Waves 1-3 have been completed (2026-05-25)
+
+This skill documented the multi-wave implementation pattern used for executing large sets of related fixes across multiple modules. Since all items are now complete, this is kept for historical reference.
 
 ## Overview
 
-This codebase uses a "Wave" pattern for implementing large sets of related fixes across multiple modules. Waves are organized by priority:
+The "Wave" pattern organized implementation by priority:
 - **Wave 1**: Production safety and critical performance fixes
 - **Wave 2**: Error handling improvements within specific modules
 - **Wave 3**: Cleanup, documentation, and optional enhancements
 
-## Wave Execution Pattern
+All items have been verified and completed. See `plans/plan.md` for details.
 
-### Pre-Execution Checklist
-1. Read the full plan (`plans/plan.md`)
-2. Identify items that can be executed in parallel
-3. Create separate git branches for each parallel work item (branch naming: `fix/<module>-<issue>`)
-4. Ensure each subagent works on a separate branch to avoid merge conflicts
+## Key Implementation Patterns (Historical)
 
-### Branch Naming Convention
-```bash
-fix/<module>-<specific-issue>
-# Examples:
-fix/ai-planner-clock-skew
-fix/tool-planner-fxhashset
-fix/fuzzer-api-fxhashmap
-fix/nse-smbauth-duplicates
-fix/recon-regex-expect
-fix/networking-capture-error-propagation
-```
-
-### Execution Steps
-1. Launch subagents for parallel Wave 1 items
-2. Verify each branch compiles (`cargo check --lib -p <package>`)
-3. Push branches to origin
-4. Fetch and merge branches to main sequentially (avoid race conditions)
-5. Verify compilation after each merge
-6. Repeat for Wave 2 and Wave 3
-
-### Merge Strategy
-When merging multiple branches:
-1. Always fetch origin/main before merging
-2. Use `--no-edit` for automatic merge commits
-3. If conflicts occur, resolve by keeping the cleaner version (usually the incoming branch)
-4. Push after each successful merge to avoid stale state
-
-### Post-Wave Checklist
-1. Update `plans/plan.md` with completion status and commit hashes
-2. Update `AGENTS.md` with bug fix summary
-3. Update relevant `AGENTS.override.md` files if module-specific guidance changed
-4. Update skills in `.opencode/skills/` if new patterns need documenting
-
-## Plan Completion (2026-05-24)
-
-As of 2026-05-24, all implementation items from Waves 1-3 have been verified and completed. The plan file has been pruned to contain only:
-- Verification fixes that were applied during the review
-- Deferred items (feature enhancements not yet implemented)
-
-### Key Verification Findings (2026-05-24)
-- **2.5 Loadtest response check**: Fixed inconsistent response body consumption (was using `!status.is_success()`, now uses `status_code >= 400`)
-- **2.10 IPv4 options bounds**: Restored bounds checks that were reverted
-- **2.11 DNS name parsing SmallVec**: Restored SmallVec optimization that was reverted
-- **3.1 NSE library count**: Updated overview.md from 164 to 169
-
-### Deferred Items
-| # | Item | Reason |
-|---|------|--------|
-| 2.1 | TUI auto-save interval | Feature enhancement - auto-save works but interval not configurable through UI |
-
-### Verification Pattern Used
-When verifying plan items, use subagents to check each item independently:
-1. Find the file(s) mentioned in the implementation
-2. Verify key evidence (function name, line numbers)
-3. Report "VERIFIED" or "ISSUE FOUND" for each item
-
-If issues are found, implement fixes in a separate worktree/branch, then merge.
-
-## Key Implementation Patterns
+The following patterns were established during the wave implementation:
 
 ### Clock Skew Panic Prevention
 ```rust
@@ -165,34 +105,3 @@ use rustc_hash::FxHashSet;
 - `plans/plan.md` - Implementation plan (all items completed, contains future considerations)
 - `AGENTS.md` - General guidelines for all agents
 - `AGENTS.override.md` - Module-specific guidance (in each module directory)
-
-## Architecture Review Wave Pattern
-
-When executing architecture reviews from `architecture/review_plan.md`:
-
-1. **Review Phase**: Run subagents to review each module's architecture document and produce `plans/{module}_review.md`
-
-2. **Consolidation Phase**: Aggregate all findings into waves by priority:
-   - Wave 1: Production-critical bugs (high severity, affects correctness)
-   - Wave 2: High-priority issues (medium severity, known bugs)
-   - Wave 3: Medium-priority improvements (performance, code quality)
-   - Wave 4: Documentation and low-priority fixes
-
-3. **Implementation Phase**: Execute waves sequentially:
-   - Use subagents for independent fixes
-   - Each subagent on its own branch
-   - Verify with `cargo check --lib -p slapper` after each fix
-   - Commit wave together after verification
-
-4. **Documentation Phase**: Update files:
-   - Update `AGENTS.md` with new bug fixes in Recent Bug Fixes section
-   - Update relevant module `AGENTS.override.md` if needed
-   - Update `architecture/review_plan.md` to mark completed waves
-
-### Key Verification Commands
-```bash
-cargo check --lib -p slapper
-cargo check -p slapper-nse
-cargo test --lib -p slapper
-cargo clippy --lib -p slapper
-```

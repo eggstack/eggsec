@@ -119,11 +119,14 @@ pub async fn run_compliance_task(
             let lower = v.to_lowercase();
             if lower.contains("no-cache") || lower.contains("no-store") {
             }
-        } else if target.to_lowercase().contains("login")
-            || target.to_lowercase().contains("auth")
-            || target.to_lowercase().contains("account")
-        {
-            findings.push(Severity::Medium);
+        } else {
+            let target_lower = target.to_lowercase();
+            if target_lower.contains("login")
+                || target_lower.contains("auth")
+                || target_lower.contains("account")
+            {
+                findings.push(Severity::Medium);
+            }
         }
 
         let set_cookie = headers.get_all("set-cookie");
