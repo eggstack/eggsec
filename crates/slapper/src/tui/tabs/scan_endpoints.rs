@@ -327,7 +327,9 @@ impl TabRender for ScanEndpointsTab {
 
 impl TabInput for ScanEndpointsTab {
     fn handle_focus_next(&mut self) {
-        self.inputs.focus_next();
+        if !self.inputs.fields.is_empty() {
+            self.inputs.focus_next();
+        }
     }
 
     fn handle_focus_prev(&mut self) {

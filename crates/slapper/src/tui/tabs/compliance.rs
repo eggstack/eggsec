@@ -415,7 +415,7 @@ impl TabInput for ComplianceTab {
         if self.focus_area == ComplianceFocusArea::Inputs {
             self.inputs.is_at_left_edge()
         } else if self.focus_area == ComplianceFocusArea::Framework {
-            self.framework_selector.selected == 0
+            self.framework_selector.items.is_empty() || self.framework_selector.selected == 0
         } else {
             true
         }
@@ -425,8 +425,8 @@ impl TabInput for ComplianceTab {
         if self.focus_area == ComplianceFocusArea::Inputs {
             self.inputs.is_at_right_edge()
         } else if self.focus_area == ComplianceFocusArea::Framework {
-            self.framework_selector.selected
-                >= self.framework_selector.items.len().saturating_sub(1)
+            self.framework_selector.items.is_empty()
+                || self.framework_selector.selected >= self.framework_selector.items.len().saturating_sub(1)
         } else {
             true
         }

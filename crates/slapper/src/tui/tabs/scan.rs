@@ -515,7 +515,9 @@ impl TabInput for ScanTab {
 
         if self.focus_area == ScanFocusArea::ProfileSelector {
             if self.profile_selector.is_open() {
-                let _ = self.profile_selector.confirm();
+                if self.profile_selector.confirm().is_none() {
+                    tracing::warn!("Profile selector confirm failed");
+                }
                 self.update_stages_for_profile();
             } else {
                 self.profile_selector.open();
@@ -525,7 +527,9 @@ impl TabInput for ScanTab {
 
         if self.focus_area == ScanFocusArea::OutputSelector {
             if self.output_selector.is_open() {
-                let _ = self.output_selector.confirm();
+                if self.output_selector.confirm().is_none() {
+                    tracing::warn!("Output selector confirm failed");
+                }
             } else {
                 self.output_selector.open();
             }

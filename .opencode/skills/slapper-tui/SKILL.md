@@ -36,6 +36,34 @@ crates/slapper/src/tui/
 └── ui.rs         # Main rendering, status bar with mode indicator
 ```
 
+## is_at_left_edge Checkbox Guard (Critical - 2026-05-26 Session)
+
+Always add `is_empty()` guard for checkbox arrays in `is_at_left_edge()` and `is_at_right_edge()`:
+
+```rust
+// WRONG - if checkboxes is empty, focused_checkbox_index==0 still evaluates incorrectly
+fn is_at_left_edge(&self) -> bool {
+    self.focused_checkbox_index == 0
+}
+
+// CORRECT - guards against empty checkbox array
+fn is_at_left_edge(&self) -> bool {
+    self.checkbox_array.is_empty() || self.focused_checkbox_index == 0
+}
+
+fn is_at_right_edge(&self) -> bool {
+    self.checkbox_array.is_empty()
+        || self.focused_checkbox_index >= self.checkbox_array.len().saturating_sub(1)
+}
+```
+
+Files fixed with this pattern:
+- `waf.rs:588-596` (2026-05-26)
+- `recon.rs:677-687` (2026-05-26)
+- `hunt.rs:514,524` (2026-05-26)
+- `browser.rs:473,483` (2026-05-26)
+- `compliance.rs:417,428` (2026-05-26)
+
 ## Recent Fixes (2026-05-30 Session)
 
 - **fingerprint.rs:290-298**: Fixed `handle_focus_prev()` integer underflow - added `is_empty()` check before `fields.len() - 1`

@@ -62,7 +62,7 @@ impl TabInput for WafTab {
     }
 
     fn is_at_left_edge(&self) -> bool {
-        self.focused_checkbox_index == 0
+        self.technique_checkboxes.is_empty() || self.focused_checkbox_index == 0
     }
 
     fn is_at_right_edge(&self) -> bool {

@@ -511,7 +511,7 @@ impl TabInput for HuntTab {
         if self.focus_area == HuntFocusArea::Inputs {
             self.inputs.is_at_left_edge()
         } else if self.focus_area == HuntFocusArea::Options {
-            self.focused_checkbox_index == 0
+            self.option_checkboxes.is_empty() || self.focused_checkbox_index == 0
         } else {
             true
         }
@@ -521,7 +521,8 @@ impl TabInput for HuntTab {
         if self.focus_area == HuntFocusArea::Inputs {
             self.inputs.is_at_right_edge()
         } else if self.focus_area == HuntFocusArea::Options {
-            self.focused_checkbox_index == self.option_checkboxes.len().saturating_sub(1)
+            self.option_checkboxes.is_empty()
+                || self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1)
         } else {
             true
         }

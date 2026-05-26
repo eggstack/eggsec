@@ -205,6 +205,27 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 - **Silent error suppression in proxy/health.rs:158-162**: Changed `filter_map(|r| r.ok())` to explicit `match` with `is_panic()` detection and warn logging.
 
+### TUI Bug Fixes (2026-05-26 Session)
+
+- **Silent error suppression in scan.rs:518,528**: Changed `let _ = selector.confirm()` to proper error check with `is_none()` and warn logging.
+- **Dead code in scan_ports.rs:166-171**: Removed unreachable `is_empty()` check - fields are guaranteed non-empty after InputGroup construction.
+- **Silent error suppression in fuzz.rs:713,722,731**: Changed `let _ = selector.confirm()` to proper error check.
+- **Options edge detection in graphql.rs:490-502**: Added explicit `GraphQlFocusArea::Options` handling with `is_empty()` guard - was swallowed by `_ => true`.
+- **handle_paste guard in oauth.rs:406-409**: Added missing `!self.is_running()` guard to match `handle_backspace()`.
+- **Options edge detection in oauth.rs:534-546**: Added explicit `OAuthFocusArea::Options` handling with `is_empty()` guard.
+- **One-directional bounds in report.rs:299-303**: Changed to `if let Some(chunk) = input_chunks.get(i)` pattern.
+- **to_lowercase redundancy in history.rs:194-206**: Pre-compute `details_lower` vector before filter closure to avoid calling `to_lowercase()` per detail per entry.
+- **Missing is_empty guard in hunt.rs:514,524**: Added `is_empty()` guard to `is_at_left_edge()` and `is_at_right_edge()`.
+- **Missing is_empty guard in browser.rs:473,483**: Same fix as hunt.rs.
+- **Missing is_empty guard in compliance.rs:417,428**: Added `framework_selector.items.is_empty()` guard.
+- **Inconsistent guard in scan_endpoints.rs:333**: Added same `!fields.is_empty()` guard to `handle_focus_next()` for consistency.
+- **FormBuilder bounds in input.rs:784-788**: Changed direct `chunks[i]` indexing to `if let Some(chunk) = chunks.get(i)` pattern.
+
+### TUI Components Fixes (2026-05-26 Session)
+
+- **scrollable.rs:150**: Fixed use of unbounded `self.scroll_offset` - now uses bounded `scroll_offset` variable calculated with explicit empty lines check.
+- **selector.rs:247**: Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `handle_right()`.
+
 ---
 
 ## Current Focus

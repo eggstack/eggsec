@@ -163,12 +163,6 @@ impl ScanPortsTab {
             return;
         }
 
-        if self.inputs.fields.is_empty() {
-            self.state = AppState::Error("Input fields not initialized".to_string());
-            self.error = Some(TabError::Config("Input fields not initialized".to_string()));
-            return;
-        }
-
         if self.inputs.fields.len() < 2 {
             self.state = AppState::Error("Input fields not initialized".to_string());
             self.error = Some(TabError::Config("Input fields not initialized".to_string()));

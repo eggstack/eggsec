@@ -484,3 +484,140 @@ if let Err(e) = progress_handle.await {
     }
 }
 ```
+
+### Selector confirm() Return Value
+
+Selector's `confirm()` returns `Option<&SelectorItem>`, not `Result`. Handle appropriately:
+
+```rust
+// WRONG - treating Option as Result
+if let Err(e) = self.profile_selector.confirm() {
+    tracing::warn!("Confirm failed: {}", e);
+}
+
+// CORRECT - handle Option properly
+if self.profile_selector.confirm().is_none() {
+    tracing::warn!("Confirm failed: selector returned None");
+}
+```
+
+### ScrollableText render() scroll_offset
+
+In ScrollableText render(), ensure the bounded scroll_offset is used:
+
+```rust
+// WRONG - uses unbounded self.scroll_offset instead of bounded value
+let scroll_offset = if self.lines.is_empty() {
+    0
+} else {
+    self.scroll_offset.min(self.lines.len() - 1)
+};
+// ... later ...
+f.render_stateful_widget(paragraph, area);  // Uses self.scroll_offset, not bounded value
+
+// CORRECT - pass bounded scroll_offset to scroll
+let scroll_offset = if self.lines.is_empty() {
+    0
+} else {
+    self.scroll_offset.min(self.lines.len() - 1)
+};
+f.render_stateful_widget(
+    Paragraph::new(self.lines.clone())
+        .block(block)
+        .scroll((scroll_offset as u16, self.horizontal_offset as u16)),
+    area,
+);
+```
+
+### Selector handle_left() Empty Items Guard
+
+Always add `is_empty()` guard to `handle_left()` for consistency with `handle_right()`:
+
+```rust
+// WRONG - doesn't check if items is empty
+pub fn handle_left(&mut self) {
+    if self.expanded && self.selected > 0 {
+        self.selected -= 1;
+    }
+}
+
+// CORRECT - guards against empty items
+pub fn handle_left(&mut self) {
+    if self.expanded && !self.items.is_empty() && self.selected > 0 {
+        self.selected -= 1;
+    }
+}
+```
+
+### FormBuilder render() Bounds Check
+
+FormBuilder's render loop must use `.get()` for safe array access:
+
+```rust
+// WRONG - direct indexing can panic
+for (i, field) in self.fields.iter().enumerate() {
+    match field {
+        FieldVariant::Input(input) => input.render(f, chunks[i], insert_mode),
+        // ...
+    }
+}
+
+// CORRECT - bounds-checked access
+for (i, field) in self.fields.iter().enumerate() {
+    if let Some(chunk) = chunks.get(i) {
+        match field {
+            FieldVariant::Input(input) => input.render(f, *chunk, insert_mode),
+            // ...
+        }
+    }
+}
+```
+
+### to_lowercase() Caching in Search Methods
+
+Cache lowercase values before filter closures to avoid repeated allocation:
+
+```rust
+// WRONG - to_lowercase() called 4+ times per entry in filter
+.filter(|e| {
+    e.target.to_lowercase()
+    || e.scan_type.to_lowercase()
+    || e.summary.to_lowercase()
+    || e.details.iter().any(|d| d.to_lowercase().contains(&query_lower))
+})
+
+// CORRECT - pre-compute all lowercased values
+.filter(|e| {
+    let target_lower = e.target.to_lowercase();
+    let scan_type_lower = e.scan_type.to_lowercase();
+    let summary_lower = e.summary.to_lowercase();
+    let details_lower: Vec<String> = e.details.iter().map(|d| d.to_lowercase()).collect();
+    target_lower.contains(&query_lower)
+        || scan_type_lower.contains(&query_lower)
+        || summary_lower.contains(&query_lower)
+        || details_lower.iter().any(|d| d.contains(&query_lower))
+})
+```
+
+### is_at_left_edge/is_at_right_edge Checkbox Array Guards
+
+Always guard checkbox array access with `is_empty()` checks:
+
+```rust
+// WRONG - doesn't guard against empty checkboxes
+fn is_at_left_edge(&self) -> bool {
+    self.focused_checkbox_index == 0
+}
+
+// CORRECT - guards against empty array
+fn is_at_left_edge(&self) -> bool {
+    self.checkbox_array.is_empty() || self.focused_checkbox_index == 0
+}
+
+fn is_at_right_edge(&self) -> bool {
+    self.checkbox_array.is_empty()
+        || self.focused_checkbox_index >= self.checkbox_array.len().saturating_sub(1)
+}
+```
+
+This pattern applies to all tabs with checkbox arrays: `hunt.rs`, `browser.rs`, `compliance.rs`, `graphql.rs`, `oauth.rs`.

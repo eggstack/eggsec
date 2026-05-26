@@ -404,7 +404,7 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if self.focus_area == OAuthFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == OAuthFocusArea::Inputs {
             self.inputs.paste(text);
         }
     }

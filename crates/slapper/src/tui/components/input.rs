@@ -780,11 +780,13 @@ impl FormBuilder {
             .split(inner);
 
         for (i, field) in self.fields.iter().enumerate() {
-            match field {
-                FieldVariant::Input(input) => input.render(f, chunks[i], insert_mode),
-                FieldVariant::Checkbox(cb) => cb.render(f, chunks[i]),
-                FieldVariant::Selector(sel) => sel.render(f, chunks[i]),
-                FieldVariant::RadioGroup(rg) => rg.render(f, chunks[i]),
+            if let Some(chunk) = chunks.get(i) {
+                match field {
+                    FieldVariant::Input(input) => input.render(f, *chunk, insert_mode),
+                    FieldVariant::Checkbox(cb) => cb.render(f, *chunk),
+                    FieldVariant::Selector(sel) => sel.render(f, *chunk),
+                    FieldVariant::RadioGroup(rg) => rg.render(f, *chunk),
+                }
             }
         }
     }

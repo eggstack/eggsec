@@ -710,7 +710,9 @@ impl TabInput for FuzzTab {
 
         if self.focus_area == FuzzFocusArea::PayloadSelector {
             if self.payload_selector.is_open() {
-                let _ = self.payload_selector.confirm();
+                if self.payload_selector.confirm().is_none() {
+                    tracing::warn!("Payload selector confirm failed");
+                }
             } else {
                 self.payload_selector.open();
             }
@@ -719,7 +721,9 @@ impl TabInput for FuzzTab {
 
         if self.focus_area == FuzzFocusArea::ModeSelector {
             if self.mode_selector.is_open() {
-                let _ = self.mode_selector.confirm();
+                if self.mode_selector.confirm().is_none() {
+                    tracing::warn!("Mode selector confirm failed");
+                }
             } else {
                 self.mode_selector.open();
             }
@@ -728,7 +732,9 @@ impl TabInput for FuzzTab {
 
         if self.focus_area == FuzzFocusArea::TargetSelector {
             if self.target_selector.is_open() {
-                let _ = self.target_selector.confirm();
+                if self.target_selector.confirm().is_none() {
+                    tracing::warn!("Target selector confirm failed");
+                }
             } else {
                 self.target_selector.open();
             }

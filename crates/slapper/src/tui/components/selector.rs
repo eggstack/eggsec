@@ -244,7 +244,7 @@ impl Selector {
     }
 
     pub fn handle_left(&mut self) {
-        if self.expanded && self.selected > 0 {
+        if self.expanded && !self.items.is_empty() && self.selected > 0 {
             self.selected -= 1;
         }
     }
