@@ -331,7 +331,7 @@ impl TabRender for IntegrationsTab {
                 self.issue_inputs.fields.get(..4).unwrap_or(&self.issue_inputs.fields)
             }
             IntegrationsMode::SearchIssues => {
-                self.issue_inputs.fields.get(4..).map(|s| s).unwrap_or(&[])
+                self.issue_inputs.fields.get(4..).unwrap_or(&[])
             }
         };
 

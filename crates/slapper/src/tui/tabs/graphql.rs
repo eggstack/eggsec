@@ -294,10 +294,12 @@ impl TabRender for GraphQlTab {
             .split(options_block.inner(chunks[1]));
 
         f.render_widget(options_block, chunks[1]);
-        self.introspection_checkbox.render(f, options_chunks[0]);
-        self.inject_checkbox.render(f, options_chunks[1]);
-        self.depth_bypass_checkbox.render(f, options_chunks[2]);
-        self.alias_overload_checkbox.render(f, options_chunks[3]);
+        if options_chunks.len() >= 4 {
+            self.introspection_checkbox.render(f, options_chunks[0]);
+            self.inject_checkbox.render(f, options_chunks[1]);
+            self.depth_bypass_checkbox.render(f, options_chunks[2]);
+            self.alias_overload_checkbox.render(f, options_chunks[3]);
+        }
 
         // Results
         self.results_view.render(f, chunks[2], None);

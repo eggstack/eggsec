@@ -289,7 +289,9 @@ impl TabInput for FingerprintTab {
 
     fn handle_focus_prev(&mut self) {
         if self.focus_area == FingerprintFocusArea::Results {
-            self.inputs.focus(self.inputs.fields.len() - 1);
+            if !self.inputs.fields.is_empty() {
+                self.inputs.focus(self.inputs.fields.len() - 1);
+            }
             self.focus_area = FingerprintFocusArea::Inputs;
         } else {
             self.inputs.focus_prev();

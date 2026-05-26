@@ -579,7 +579,9 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
             }
             if let Some(ref tx) = progress_tx {
                 let count = scanned_count.fetch_add(1, Ordering::Relaxed) + 1;
-                let _ = tx.send((count, total_ports)).await;
+                if tx.send((count, total_ports)).await.is_err() {
+                    tracing::debug!("Progress receiver dropped");
+                }
             }
             drop(permit);
         });

@@ -339,10 +339,12 @@ impl TabRender for OAuthTab {
             .split(options_block.inner(chunks[1]));
 
         f.render_widget(options_block, chunks[1]);
-        self.redirect_test_checkbox.render(f, options_chunks[0]);
-        self.scope_test_checkbox.render(f, options_chunks[1]);
-        self.state_test_checkbox.render(f, options_chunks[2]);
-        self.grant_test_checkbox.render(f, options_chunks[3]);
+        if options_chunks.len() >= 4 {
+            self.redirect_test_checkbox.render(f, options_chunks[0]);
+            self.scope_test_checkbox.render(f, options_chunks[1]);
+            self.state_test_checkbox.render(f, options_chunks[2]);
+            self.grant_test_checkbox.render(f, options_chunks[3]);
+        }
 
         // Results
         self.results_view.render(f, chunks[2], None);

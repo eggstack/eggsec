@@ -89,6 +89,15 @@ cargo test --test scanner_tests -p slapper
 - Duplicate `HttpMatcher` removed, `DnsMatcher` properly ordered before `Matcher` enum
 - HashMap → FxHashMap in templates/matcher.rs, templates/models.rs, cms/mod.rs
 
+## Bug Fixes (2026-05-30)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `scanner/ports/mod.rs:582` | Silent error suppression on progress send | Changed to explicit `is_err()` check with debug logging |
+| `scanner/ports/spoofed.rs:450` | Silent error suppression on progress send | Same fix |
+| `scanner/fingerprint.rs:306` | Silent error suppression on progress send | Same fix |
+| `scanner/endpoints.rs:827` | Silent error suppression on progress send | Same fix |
+
 ## Bug Fixes (2026-05-27)
 
 | File | Issue | Fix |

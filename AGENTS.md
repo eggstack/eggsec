@@ -172,17 +172,32 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/plugins_nse.md` | Plugin system (Python/Ruby) and NSE integration |
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |
 
+### TUI Bug Fixes (2026-05-30)
+
+- **Integer underflow in fingerprint.rs:292**: Fixed `handle_focus_prev()` to check `is_empty()` before `fields.len() - 1` to prevent panic when fields is empty.
+- **Integer underflow in scan_endpoints.rs:334**: Fixed `handle_focus_prev()` to use `focus_prev()` with `is_empty()` guard instead of direct subtraction.
+- **Bounds check in fuzz.rs render():485-497**: Added `config_chunks.len() >= 7` guard before accessing `config_chunks[3-6]`.
+- **Bounds check in fuzz.rs render_overlays():583-589**: Added `config_chunks.len() >= 6` guard and `.get()` pattern for dropdown info access.
+- **Bounds check in plugin.rs:251**: Added `input_chunks.first()` check before accessing `input_chunks[0]`.
+- **Bounds check in graphql.rs:297-300**: Added `options_chunks.len() >= 4` guard for checkbox renders.
+- **Bounds check in oauth.rs:342-345**: Added `options_chunks.len() >= 4` guard for checkbox renders.
+- **Logic error in nse.rs:396-398**: Fixed `is_at_left_edge()` to use `== 0` instead of `<=` for left edge detection.
+- **Redundant identity map in integrations.rs:334**: Removed `.map(|s| s)` identity map.
+- **Inconsistent bounds in workflow.rs:326,330**: Added `field_chunks.get(i)` bounds check for `idx==5` and `idx==6` branches.
+- **Dead code in scan_ports.rs:167-171**: Moved `is_empty()` check outside loop - was unreachable since targets() returns non-empty for non-empty input.
+
+### Scanner Module Fixes (2026-05-30)
+
+- **Silent error suppression in scanner/ports/mod.rs:582**: Changed `let _ = tx.send(...)` to proper error check with debug logging.
+- **Silent error suppression in scanner/ports/spoofed.rs:450**: Same fix for progress channel send.
+- **Silent error suppression in scanner/fingerprint.rs:306**: Same fix for progress channel send.
+- **Silent error suppression in scanner/endpoints.rs:827**: Same fix for progress channel send.
+
+### Proxy Module Fixes (2026-05-30)
+
+- **Silent error suppression in proxy/health.rs:158-162**: Changed `filter_map(|r| r.ok())` to explicit `match` with `is_panic()` detection and warn logging.
+
 ---
-
-## Implementation Notes
-
-- **NSE module** (`slapper-nse/`) is a separate crate - use `cargo check -p slapper-nse` for validation
-- **Test code** can use `.unwrap()` and `.expect()` - the architecture guidelines about these apply only to production code
-- **Networking DNS parsing** is in `packet/parse_impl.rs` (packet module), not `networking/` module
-
-## Implementation Plan
-
-The implementation plan is in `plans/plan.md`. All 20 implementation items have been completed and verified. See the plan for details on completed items and future considerations.
 
 ## Current Focus
 

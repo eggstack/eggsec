@@ -158,7 +158,17 @@ impl HealthChecker {
         let results = join_all(handles)
             .await
             .into_iter()
-            .filter_map(|r| r.ok())
+            .filter_map(|r| match r {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    if e.is_panic() {
+                        tracing::warn!("Health check task panicked");
+                    } else {
+                        tracing::warn!("Health check task failed: {:?}", e);
+                    }
+                    None
+                }
+            })
             .collect::<Vec<_>>();
 
         let healthy = results.iter().filter(|r| r.is_healthy).count();

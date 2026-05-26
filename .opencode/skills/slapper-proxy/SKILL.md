@@ -31,6 +31,10 @@ Follow existing test patterns in `proxy/` modules, testing interception and safe
 1. Update `proxy/intercept/` with certificate generation logic
 2. Test certificate handling
 
+## Bug Fixes (2026-05-30)
+
+- **health.rs:158-170**: Changed `filter_map(|r| r.ok())` to explicit `match` with `is_panic()` detection and `tracing::warn!` for JoinErrors. Previously, panics in health check tasks were silently dropped.
+
 ## Resources
 - `crates/slapper/src/proxy/AGENTS.override.md` - Detailed proxy patterns
 - `AGENTS.md` - General project guidelines

@@ -248,7 +248,9 @@ impl TabRender for PluginTab {
 
         f.render_widget(input_block, chunks[0]);
         if let Some(field) = self.inputs.fields.first() {
-            field.render(f, input_chunks[0], insert_mode);
+            if let Some(chunk) = input_chunks.first() {
+                field.render(f, *chunk, insert_mode);
+            }
         }
 
         // Plugin selector

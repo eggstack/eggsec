@@ -331,7 +331,9 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        self.inputs.focus_prev();
+        if !self.inputs.fields.is_empty() {
+            self.inputs.focus_prev();
+        }
     }
 
     fn handle_char(&mut self, c: char) {

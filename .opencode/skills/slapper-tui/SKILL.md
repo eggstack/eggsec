@@ -36,6 +36,20 @@ crates/slapper/src/tui/
 └── ui.rs         # Main rendering, status bar with mode indicator
 ```
 
+## Recent Fixes (2026-05-30 Session)
+
+- **fingerprint.rs:290-298**: Fixed `handle_focus_prev()` integer underflow - added `is_empty()` check before `fields.len() - 1`
+- **scan_endpoints.rs:333-335**: Fixed `handle_focus_prev()` to use `focus_prev()` with `is_empty()` guard
+- **fuzz.rs:477-497**: Added `config_chunks.len() >= 7` guard before accessing config_chunks[3-6]
+- **fuzz.rs:583-591**: Added `config_chunks.len() >= 6` guard and `.get()` pattern for dropdown info
+- **plugin.rs:250-252**: Added `input_chunks.first()` check before accessing `input_chunks[0]`
+- **graphql.rs:296-300**: Added `options_chunks.len() >= 4` guard for checkbox renders
+- **oauth.rs:341-345**: Added `options_chunks.len() >= 4` guard for checkbox renders
+- **nse.rs:393-401**: Fixed `is_at_left_edge()` - changed `<=` to `==` for left edge detection
+- **integrations.rs:334**: Removed redundant `.map(|s| s)` identity map
+- **workflow.rs:322-337**: Added `field_chunks.get(i)` bounds check for idx==5/6 branches
+- **scan_ports.rs:166-171**: Moved `is_empty()` check outside loop - was unreachable dead code
+
 ## Recent Fixes (2026-05-29 Evening Session)
 
 - **tabs/scan_ports.rs:333**: Fixed `input_chunks[4]` direct indexing - use `.get(4)` for UDP checkbox

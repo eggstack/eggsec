@@ -480,21 +480,23 @@ impl TabRender for FuzzTab {
             self.inputs.fields[2].render(f, config_chunks[2], insert_mode);
         }
 
-        let mut payload_sel = self.payload_selector.clone();
-        payload_sel.focused = self.focus_area == FuzzFocusArea::PayloadSelector;
-        payload_sel.render(f, config_chunks[3]);
+        if config_chunks.len() >= 7 {
+            let mut payload_sel = self.payload_selector.clone();
+            payload_sel.focused = self.focus_area == FuzzFocusArea::PayloadSelector;
+            payload_sel.render(f, config_chunks[3]);
 
-        let mut mode_sel = self.mode_selector.clone();
-        mode_sel.focused = self.focus_area == FuzzFocusArea::ModeSelector;
-        mode_sel.render(f, config_chunks[4]);
+            let mut mode_sel = self.mode_selector.clone();
+            mode_sel.focused = self.focus_area == FuzzFocusArea::ModeSelector;
+            mode_sel.render(f, config_chunks[4]);
 
-        let mut target_sel = self.target_selector.clone();
-        target_sel.focused = self.focus_area == FuzzFocusArea::TargetSelector;
-        target_sel.render(f, config_chunks[5]);
+            let mut target_sel = self.target_selector.clone();
+            target_sel.focused = self.focus_area == FuzzFocusArea::TargetSelector;
+            target_sel.render(f, config_chunks[5]);
 
-        let mut mutation_cb = self.mutation_checkbox.clone();
-        mutation_cb.focused = self.focus_area == FuzzFocusArea::MutationCheckbox;
-        mutation_cb.render(f, config_chunks[6]);
+            let mut mutation_cb = self.mutation_checkbox.clone();
+            mutation_cb.focused = self.focus_area == FuzzFocusArea::MutationCheckbox;
+            mutation_cb.render(f, config_chunks[6]);
+        }
 
         let (status_text, status_color) = match &self.state {
             AppState::Idle => (
@@ -580,14 +582,16 @@ impl TabRender for FuzzTab {
             .constraints(config_constraints)
             .split(config_area);
 
-        if let Some(info) = self.payload_selector.dropdown_info(config_chunks[3]) {
-            info.render(f);
-        }
-        if let Some(info) = self.mode_selector.dropdown_info(config_chunks[4]) {
-            info.render(f);
-        }
-        if let Some(info) = self.target_selector.dropdown_info(config_chunks[5]) {
-            info.render(f);
+        if config_chunks.len() >= 6 {
+            if let Some(info) = self.payload_selector.dropdown_info(config_chunks[3]) {
+                info.render(f);
+            }
+            if let Some(info) = self.mode_selector.dropdown_info(config_chunks[4]) {
+                info.render(f);
+            }
+            if let Some(info) = self.target_selector.dropdown_info(config_chunks[5]) {
+                info.render(f);
+            }
         }
     }
 }

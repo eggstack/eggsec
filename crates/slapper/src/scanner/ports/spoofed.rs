@@ -447,7 +447,9 @@ pub(crate) async fn scan_ports_spoofed(
                     *c += 1;
                     *c
                 };
-                let _ = tx.send((count, total_ports)).await;
+                if tx.send((count, total_ports)).await.is_err() {
+                    tracing::debug!("Progress receiver dropped");
+                }
             }
             drop(permit);
         });
