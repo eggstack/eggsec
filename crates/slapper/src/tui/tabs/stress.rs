@@ -192,7 +192,7 @@ impl TabState for StressTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        if self.inputs.fields.len() > 3 {
+        if self.inputs.fields.len() > 1 {
             self.inputs.fields[1].value = "100".to_string();
             self.inputs.fields[1].cursor_pos = 3;
         }
@@ -322,19 +322,19 @@ impl TabInput for StressTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == StressFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
             self.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
-        if self.focus_area == StressFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
             self.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if self.focus_area == StressFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == StressFocusArea::Inputs {
             self.inputs.paste(text);
         }
     }

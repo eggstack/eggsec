@@ -399,26 +399,33 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == IntegrationsFocusArea::Config {
-            self.config_inputs.insert(c);
-        } else if self.focus_area == IntegrationsFocusArea::Issue {
-            self.issue_inputs.insert(c);
+        if !self.is_running() {
+            #[allow(clippy::single_char_pattern)]
+            if self.focus_area == IntegrationsFocusArea::Config {
+                self.config_inputs.insert(c);
+            } else if self.focus_area == IntegrationsFocusArea::Issue {
+                self.issue_inputs.insert(c);
+            }
         }
     }
 
     fn handle_backspace(&mut self) {
-        if self.focus_area == IntegrationsFocusArea::Config {
-            self.config_inputs.backspace();
-        } else if self.focus_area == IntegrationsFocusArea::Issue {
-            self.issue_inputs.backspace();
+        if !self.is_running() {
+            if self.focus_area == IntegrationsFocusArea::Config {
+                self.config_inputs.backspace();
+            } else if self.focus_area == IntegrationsFocusArea::Issue {
+                self.issue_inputs.backspace();
+            }
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if self.focus_area == IntegrationsFocusArea::Config {
-            self.config_inputs.paste(text);
-        } else if self.focus_area == IntegrationsFocusArea::Issue {
-            self.issue_inputs.paste(text);
+        if !self.is_running() {
+            if self.focus_area == IntegrationsFocusArea::Config {
+                self.config_inputs.paste(text);
+            } else if self.focus_area == IntegrationsFocusArea::Issue {
+                self.issue_inputs.paste(text);
+            }
         }
     }
 

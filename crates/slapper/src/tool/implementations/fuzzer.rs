@@ -172,9 +172,13 @@ impl SecurityTool for FuzzerTool {
             f.push(finding);
         })
         .await;
-        let findings = std::sync::Arc::try_unwrap(findings)
-            .expect("Arc should have single owner")
-            .into_inner();
+        let findings = match std::sync::Arc::try_unwrap(findings) {
+            Ok(inner) => inner.into_inner(),
+            Err(e) => {
+                tracing::warn!("Callback still referenced, using empty result: Arc still has {} references", Arc::strong_count(&e));
+                Vec::new()
+            }
+        };
 
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;

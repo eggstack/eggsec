@@ -364,7 +364,7 @@ impl TabState for LoadTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        if self.inputs.fields.len() > 5 {
+        if self.inputs.fields.len() >= 5 {
             self.inputs.fields[1].value = "GET".to_string();
             self.inputs.fields[1].cursor_pos = 3;
             self.inputs.fields[2].value = "100".to_string();

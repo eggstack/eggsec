@@ -392,7 +392,7 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == OAuthFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == OAuthFocusArea::Inputs {
             self.inputs.insert(c);
         }
     }

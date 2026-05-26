@@ -143,20 +143,26 @@ impl TabInput for AuthTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if let Some(idx) = self.current_input_index() {
-            self.inputs.fields[idx].insert(c);
+        if !self.is_running() {
+            if let Some(idx) = self.current_input_index() {
+                self.inputs.fields[idx].insert(c);
+            }
         }
     }
 
     fn handle_backspace(&mut self) {
-        if let Some(idx) = self.current_input_index() {
-            self.inputs.fields[idx].backspace();
+        if !self.is_running() {
+            if let Some(idx) = self.current_input_index() {
+                self.inputs.fields[idx].backspace();
+            }
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if let Some(idx) = self.current_input_index() {
-            self.inputs.fields[idx].paste(text);
+        if !self.is_running() {
+            if let Some(idx) = self.current_input_index() {
+                self.inputs.fields[idx].paste(text);
+            }
         }
     }
 

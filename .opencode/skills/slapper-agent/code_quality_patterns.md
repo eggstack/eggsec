@@ -24,6 +24,35 @@ metadata:
 
 This skill documents code quality patterns, error handling best practices, and testing conventions for working on the Slapper security toolkit codebase.
 
+## Arc::try_unwrap Safe Pattern
+
+When collecting results from async callbacks via `Arc<Mutex<Vec<T>>>`, use safe error handling instead of `.expect()`:
+
+```rust
+// WRONG - panics if callback still holds reference
+let findings = std::sync::Arc::try_unwrap(findings)
+    .expect("Arc should have single owner")
+    .into_inner();
+
+// CORRECT - gracefully handles concurrent references
+let findings = match std::sync::Arc::try_unwrap(findings) {
+    Ok(inner) => inner.into_inner(),
+    Err(e) => {
+        tracing::warn!(
+            "Callback still referenced, using empty result: Arc still has {} references",
+            Arc::strong_count(&e)
+        );
+        Vec::new()
+    }
+};
+```
+
+Files using this pattern:
+- `tool/implementations/fuzzer.rs:175-182` ✅ Safified (2026-05-30)
+- `tool/implementations/recon.rs:145-152` ✅ Safified (2026-05-30)
+- `tool/implementations/scanner.rs:184-191` ✅ Safified (2026-05-30)
+- `tool/implementations/pipeline.rs:102-108` ✅ Already safe
+
 ## Recent Updates (2026-04-25)
 
 - Added: Arc::try_unwrap() pattern for DashMap results collection

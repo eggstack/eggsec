@@ -197,9 +197,40 @@ Detailed architecture documentation is in the `architecture/` directory:
 ### Scanner Module Fixes (2026-05-30)
 
 - **Silent error suppression in scanner/ports/mod.rs:582**: Changed `let _ = tx.send(...)` to proper error check with debug logging.
-- **Silent error suppression in scanner/ports/spoofed.rs:450**: Same fix for progress channel send.
+- **Silent error suppression in scanner/ports/spoofed.rs:450**: Changed `let _ = tx.send(...)` to proper error check with debug logging.
 - **Silent error suppression in scanner/fingerprint.rs:306**: Same fix for progress channel send.
 - **Silent error suppression in scanner/endpoints.rs:827**: Same fix for progress channel send.
+
+### TUI is_running() Guards (2026-05-30 Continuation Session)
+
+All 29 tabs now properly guard input handlers (`handle_char`, `handle_backspace`, `handle_paste`) with `!self.is_running()`:
+
+| Tab | Status |
+|-----|--------|
+| stress.rs | ✅ All 3 handlers fixed |
+| compliance.rs | ✅ All 3 handlers fixed |
+| storage.rs | ✅ All 3 handlers fixed |
+| integrations.rs | ✅ All 3 handlers fixed |
+| workflow.rs | ✅ All 3 handlers fixed |
+| vuln.rs | ✅ All 3 handlers fixed |
+| oauth.rs | ✅ handle_char fixed |
+| auth.rs | ✅ All 3 handlers fixed |
+| cluster.rs | ✅ All 3 handlers fixed |
+| graphql.rs | ✅ handle_char fixed |
+
+### Core Tool Implementation Fixes (2026-05-30)
+
+- **tool/implementations/fuzzer.rs:175-182**: Fixed `Arc::try_unwrap()` from `.expect()` panic to graceful fallback with `match`
+- **tool/implementations/recon.rs:145-152**: Same fix - gracefully handles concurrent callback references
+- **tool/implementations/scanner.rs:184-191**: Same fix
+- **ai/cache.rs:160-183**: Fixed race condition in `with_persistence()` - now merges entries properly with async block
+
+### Additional Fixes (2026-05-30 Continuation)
+
+- **scanner/udp_fingerprint.rs:201-204**: Added timeout to UDP probe send operation
+- **stress.rs:195-206**: Fixed bounds check from `>3` to `>1` for fields[1]
+- **load.rs:367-376**: Fixed bounds check from `>5` to `>=5` for fields[4]
+- **recon.rs:309-318**: Removed dead code path `visible_rows == 0` from `options_window_start()`
 
 ### Proxy Module Fixes (2026-05-30)
 

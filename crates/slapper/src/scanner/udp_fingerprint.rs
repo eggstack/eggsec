@@ -199,7 +199,10 @@ async fn fingerprint_udp_port(
     }
 
     for (service, probe_data, expected_response) in probes_to_try {
-        let _ = socket.send_to(probe_data, addr).await;
+        let send_result = timeout(timeout_duration, socket.send_to(probe_data, addr)).await;
+        if send_result.is_err() {
+            continue;
+        }
 
         let mut buf = vec![0u8; 4096];
         match timeout(timeout_duration, socket.recv_from(&mut buf)).await {

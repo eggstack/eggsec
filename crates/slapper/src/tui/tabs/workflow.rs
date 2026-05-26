@@ -391,19 +391,19 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == WorkflowFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
-        if self.focus_area == WorkflowFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if self.focus_area == WorkflowFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.paste(text);
         }
     }

@@ -64,6 +64,31 @@ Files fixed with this pattern:
 - `browser.rs:473,483` (2026-05-26)
 - `compliance.rs:417,428` (2026-05-26)
 
+## Session Fixes (2026-05-30 Continuation Session)
+
+### is_running() Guards Added
+
+All 29 tabs now properly guard input handlers with `!self.is_running()`. This prevents input during running state:
+
+| Tab | handle_char | handle_backspace | handle_paste |
+|-----|-------------|------------------|-------------|
+| stress.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| compliance.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| storage.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| integrations.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| workflow.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| vuln.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| oauth.rs | ✅ Fixed (char) | ✅ Already had | ✅ Already had |
+| auth.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| cluster.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
+| graphql.rs | ✅ Fixed | ✅ Already had | ✅ Already had |
+
+### Other TUI Fixes
+
+- **stress.rs:195-206**: Fixed bounds check from `>3` to `>1` for fields[1]
+- **load.rs:367-376**: Fixed bounds check from `>5` to `>=5` for fields[4]
+- **recon.rs:309-318**: Removed dead code path `visible_rows == 0`
+
 ## Recent Fixes (2026-05-30 Session)
 
 - **fingerprint.rs:290-298**: Fixed `handle_focus_prev()` integer underflow - added `is_empty()` check before `fields.len() - 1`

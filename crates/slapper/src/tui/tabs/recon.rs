@@ -308,7 +308,7 @@ impl ReconTab {
 
     fn options_window_start(&self, visible_rows: usize) -> usize {
         let row_count = self.options_row_count();
-        if visible_rows == 0 || visible_rows >= row_count {
+        if visible_rows >= row_count {
             return 0;
         }
 

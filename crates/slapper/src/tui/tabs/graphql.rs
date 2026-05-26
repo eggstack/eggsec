@@ -347,7 +347,7 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == GraphQlFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == GraphQlFocusArea::Inputs {
             self.inputs.insert(c);
         }
     }

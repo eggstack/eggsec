@@ -415,29 +415,35 @@ impl TabInput for StorageTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
-        {
-            self.config_inputs.insert(c);
-        } else if self.focus_area == StorageFocusArea::Query {
-            self.query_inputs.insert(c);
+        if !self.is_running() {
+            if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
+            {
+                self.config_inputs.insert(c);
+            } else if self.focus_area == StorageFocusArea::Query {
+                self.query_inputs.insert(c);
+            }
         }
     }
 
     fn handle_backspace(&mut self) {
-        if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
-        {
-            self.config_inputs.backspace();
-        } else if self.focus_area == StorageFocusArea::Query {
-            self.query_inputs.backspace();
+        if !self.is_running() {
+            if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
+            {
+                self.config_inputs.backspace();
+            } else if self.focus_area == StorageFocusArea::Query {
+                self.query_inputs.backspace();
+            }
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
-        {
-            self.config_inputs.paste(text);
-        } else if self.focus_area == StorageFocusArea::Query {
-            self.query_inputs.paste(text);
+        if !self.is_running() {
+            if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
+            {
+                self.config_inputs.paste(text);
+            } else if self.focus_area == StorageFocusArea::Query {
+                self.query_inputs.paste(text);
+            }
         }
     }
 

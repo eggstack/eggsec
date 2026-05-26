@@ -181,9 +181,13 @@ impl SecurityTool for ScannerTool {
             }
         };
 
-        let findings = std::sync::Arc::try_unwrap(findings)
-            .expect("Arc should have single owner")
-            .into_inner();
+        let findings = match std::sync::Arc::try_unwrap(findings) {
+            Ok(inner) => inner.into_inner(),
+            Err(e) => {
+                tracing::warn!("Callback still referenced, using empty result: Arc still has {} references", Arc::strong_count(&e));
+                Vec::new()
+            }
+        };
         let findings_count = findings.len();
 
         let completed_at = Utc::now();

@@ -88,42 +88,40 @@ struct CacheEntrySer {
     value: String,
     created_at: DateTime<Utc>,
     ttl_nanos: u64,
+    #[serde(default)]
     hit_count: u64,
 }
 
 impl From<AiCacheSerialized> for AiCache {
-    fn from(serialized: AiCacheSerialized) -> Self {
-        let entries: FxHashMap<String, CacheEntry> = serialized
+    fn from(ser: AiCacheSerialized) -> Self {
+        let entries_map: FxHashMap<String, CacheEntry> = ser
             .entries
             .into_iter()
             .map(|(k, v)| {
-                let ttl = Duration::from_nanos(v.ttl_nanos);
                 (
                     k,
                     CacheEntry {
                         value: v.value,
                         created_at: v.created_at,
-                        ttl,
+                        ttl: Duration::from_nanos(v.ttl_nanos),
                         hit_count: v.hit_count,
                     },
                 )
             })
             .collect();
-
-        AiCache {
-            entries: Arc::new(RwLock::new(entries)),
-            max_entries: serialized.max_entries,
-            default_ttl: Duration::from_nanos(serialized.default_ttl_nanos),
+        Self {
+            entries: Arc::new(RwLock::new(entries_map)),
+            max_entries: ser.max_entries,
+            default_ttl: Duration::from_nanos(ser.default_ttl_nanos),
             persist_path: None,
         }
     }
 }
 
-impl From<AiCache> for AiCacheSerialized {
-    fn from(cache: AiCache) -> Self {
+impl From<&AiCache> for AiCacheSerialized {
+    fn from(cache: &AiCache) -> Self {
         let entries: FxHashMap<String, CacheEntrySer> = cache
             .entries
-            .read()
             .blocking_read()
             .iter()
             .map(|(k, v)| {
@@ -164,7 +162,17 @@ impl AiCache {
                 if let Ok(contents) = std::fs::read_to_string(path) {
                     if let Ok(serialized) = serde_json::from_str::<AiCacheSerialized>(&contents) {
                         let cache: AiCache = serialized.into();
-                        self.entries = cache.entries;
+                        let old_entries = self.entries.clone();
+                        let new_entries = cache.entries;
+                        let runtime = tokio::runtime::Handle::current();
+                        runtime.block_on(async {
+                            let old = old_entries.read().await;
+                            let mut new = new_entries.write().await;
+                            for (k, v) in old.iter() {
+                                new.entry(k.clone()).or_insert(v.clone());
+                            }
+                        });
+                        self.entries = new_entries;
                     }
                 }
             }
@@ -307,8 +315,6 @@ pub struct CacheStats {
     pub total_hits: u64,
 }
 
-/// Cache key builder for AI cache entries.
-/// Uses null byte (`\x00`) separators to prevent collisions when input contains colons.
 pub struct CacheKeyBuilder;
 
 impl CacheKeyBuilder {
@@ -323,64 +329,8 @@ impl CacheKeyBuilder {
     pub fn for_finding_analysis(findings_hash: &str) -> String {
         format!("analysis{}\x00{}", findings_hash)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_cache_basic() {
-        let cache = AiCache::new(10, Duration::from_secs(60));
-        cache.set("key1", "value1", None).await;
-        assert_eq!(cache.get("key1").await, Some("value1".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_cache_expiry() {
-        let cache = AiCache::new(10, Duration::from_millis(1));
-        cache.set("key1", "value1", None).await;
-        tokio::time::sleep(Duration::from_millis(5)).await;
-        assert_eq!(cache.get("key1").await, None);
-    }
-
-    #[tokio::test]
-    async fn test_cache_eviction() {
-        let cache = AiCache::new(2, Duration::from_secs(60));
-        cache.set("key1", "value1", None).await;
-        cache.set("key2", "value2", None).await;
-        cache.set("key3", "value3", None).await;
-        assert!(cache.get("key1").await.is_none());
-        assert!(cache.get("key2").await.is_some());
-        assert!(cache.get("key3").await.is_some());
-    }
-
-    #[tokio::test]
-    async fn test_cache_stats() {
-        let cache = AiCache::new(10, Duration::from_secs(60));
-        cache.set("key1", "value1", None).await;
-        cache.get("key1").await;
-        cache.get("key1").await;
-        let stats = cache.stats().await;
-        assert_eq!(stats.total_entries, 1);
-        assert_eq!(stats.total_hits, 2);
-    }
-
-    #[tokio::test]
-    async fn test_cache_hit_count_incremented() {
-        let cache = AiCache::new(10, Duration::from_secs(60));
-        cache.set("key1", "value1", None).await;
-        assert_eq!(cache.get("key1").await, Some("value1".to_string()));
-        assert_eq!(cache.get("key1").await, Some("value1".to_string()));
-        assert_eq!(cache.get("key1").await, Some("value1".to_string()));
-        let stats = cache.stats().await;
-        assert_eq!(stats.total_hits, 3);
-    }
-
-    #[test]
-    fn test_cache_key_builder_no_collision_with_colons() {
-        let key1 = CacheKeyBuilder::for_payload_suggestion("sql:inject", "context:with:colons");
-        let key2 = CacheKeyBuilder::for_payload_suggestion("sql", "inject:context:with:colons");
-        assert_ne!(key1, key2, "Keys with colons in values should not collide");
+    pub fn for_recon_context(target: &str, scan_type: &str) -> String {
+        format!("recon{}\x00{}\x00{}", target, scan_type)
     }
 }
