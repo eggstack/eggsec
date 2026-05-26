@@ -693,9 +693,12 @@ impl App {
         let mut scored: Vec<(u32, &'static Tab)> = Tab::all()
             .iter()
             .filter_map(|tab| {
-                let score = fuzzy_score(&tab.title().to_lowercase(), &query)
-                    .max(fuzzy_score(&tab.stable_id().to_lowercase(), &query))
-                    .max(fuzzy_score(&tab.description().to_lowercase(), &query));
+                let title_lower = tab.title().to_lowercase();
+                let stable_id_lower = tab.stable_id().to_lowercase();
+                let desc_lower = tab.description().to_lowercase();
+                let score = fuzzy_score(&title_lower, &query)
+                    .max(fuzzy_score(&stable_id_lower, &query))
+                    .max(fuzzy_score(&desc_lower, &query));
 
                 if score > 0 {
                     Some((score, tab))

@@ -256,7 +256,8 @@ impl TabState for ScanTab {
             .iter()
             .filter(|s| matches!(s.status, StageStatus::Completed))
             .count();
-        (completed as f64 / self.stages.len() as f64) * 100.0
+        let total = self.stages.len().max(1);
+        (completed as f64 / total as f64) * 100.0
     }
 
     fn reset(&mut self) {

@@ -194,9 +194,12 @@ impl HistoryTab {
         self.entries
             .iter()
             .filter(|e| {
-                e.target.to_lowercase().contains(&query_lower)
-                    || e.scan_type.to_lowercase().contains(&query_lower)
-                    || e.summary.to_lowercase().contains(&query_lower)
+                let target_lower = e.target.to_lowercase();
+                let scan_type_lower = e.scan_type.to_lowercase();
+                let summary_lower = e.summary.to_lowercase();
+                target_lower.contains(&query_lower)
+                    || scan_type_lower.contains(&query_lower)
+                    || summary_lower.contains(&query_lower)
                     || e.details
                         .iter()
                         .any(|d| d.to_lowercase().contains(&query_lower))

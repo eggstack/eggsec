@@ -66,14 +66,14 @@ impl super::App {
             self.task_tab = Some(self.current_tab);
 
             self.task_handle = Some(tokio::spawn(async move {
-                match runner.run().await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        let friendly_error = super::make_friendly_error(&e);
-                        tracing::error!("Task failed: {}", friendly_error);
-                        let _ = error_tx
-                            .send(workers::TaskResult::Error(friendly_error))
-                            .await;
+                if let Err(e) = runner.run().await {
+                    let friendly_error = super::make_friendly_error(&e);
+                    tracing::error!("Task failed: {}", friendly_error);
+                    if let Err(_e) = error_tx
+                        .send(workers::TaskResult::Error(friendly_error))
+                        .await
+                    {
+                        tracing::warn!("Failed to send task error result: receiver dropped");
                     }
                 }
             }));

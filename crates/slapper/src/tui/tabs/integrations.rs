@@ -328,7 +328,7 @@ impl TabRender for IntegrationsTab {
         let fields: &[InputField] = match self.current_mode {
             IntegrationsMode::Configure => &self.config_inputs.fields,
             IntegrationsMode::CreateIssue => {
-                self.issue_inputs.fields.get(..4).map(|s| s).unwrap_or(&self.issue_inputs.fields)
+                self.issue_inputs.fields.get(..4).unwrap_or(&self.issue_inputs.fields)
             }
             IntegrationsMode::SearchIssues => {
                 self.issue_inputs.fields.get(4..).map(|s| s).unwrap_or(&[])
@@ -341,7 +341,9 @@ impl TabRender for IntegrationsTab {
             .split(fields_area);
 
         for (i, field) in fields.iter().enumerate() {
-            field.render(f, field_chunks[i], insert_mode);
+            if let Some(chunk) = field_chunks.get(i) {
+                field.render(f, *chunk, insert_mode);
+            }
         }
 
         if self.state == AppState::Running {

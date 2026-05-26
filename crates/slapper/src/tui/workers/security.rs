@@ -118,6 +118,7 @@ pub async fn run_compliance_task(
         {
             let lower = v.to_lowercase();
             if lower.contains("no-cache") || lower.contains("no-store") {
+                findings.push(Severity::Info);
             }
         } else {
             let target_lower = target.to_lowercase();

@@ -195,15 +195,15 @@ impl DashboardTab {
         self.successful_scans = history
             .iter()
             .filter(|e| {
-                e.summary.to_lowercase().contains("complete")
-                    || e.summary.to_lowercase().contains("found")
+                let lower = e.summary.to_lowercase();
+                lower.contains("complete") || lower.contains("found")
             })
             .count();
         self.failed_scans = history
             .iter()
             .filter(|e| {
-                e.summary.to_lowercase().contains("failed")
-                    || e.summary.to_lowercase().contains("error")
+                let lower = e.summary.to_lowercase();
+                lower.contains("failed") || lower.contains("error")
             })
             .count();
 

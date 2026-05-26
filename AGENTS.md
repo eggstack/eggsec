@@ -205,6 +205,27 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 
 - **Division by zero in filters.rs**: Fixed `filters.rs:138,146,154,162` to use `result.response_length.unwrap_or(1).saturating_sub(1)` instead of `unwrap_or(0)` to prevent division by zero when calculating word/line counts from response length.
 
+### TUI Bug Fixes (2026-05-29 Evening)
+
+- **Bounds check in scan_ports.rs:333**: Fixed `input_chunks[4]` direct indexing to use `.get(4)` for UDP checkbox render.
+- **Bounds check in recon.rs:399**: Fixed field render loop to use `input_chunks.get(i)` pattern.
+- **Bounds check in fuzz.rs:477**: Added `config_chunks.len() >= 3` check before accessing config_chunks[0-2].
+- **Bounds check in hunt.rs:277**: Fixed field render loop to use `input_chunks.get(i)` pattern.
+- **Bounds check in browser.rs:242**: Fixed field render loop to use `input_chunks.get(i)` pattern.
+- **Bounds check in storage.rs:320,337**: Fixed `config_chunks[i+1]` and `query_chunks[i+1]` to use `.get(i+1)` pattern.
+- **Bounds check in integrations.rs:344**: Fixed `field_chunks[i]` to use `.get(i)` pattern.
+- **Bounds check in workflow.rs:333**: Fixed `field_chunks[i]` to use `.get(i)` pattern (only fields[idx] was checked).
+- **to_lowercase() redundancy in dashboard.rs:198-206**: Cached `e.summary.to_lowercase()` per entry instead of calling twice.
+- **to_lowercase() redundancy in history.rs:197-202**: Cached lowercased fields per entry in search().
+- **to_lowercase() redundancy in app/mod.rs:696-698**: Cached tab title/stable_id/description lowercase in get_quick_switch_results().
+- **to_lowercase() redundancy in components/input.rs:97**: Cached `s.to_lowercase()` per candidate instead of calling twice.
+- **Division guard in scan.rs:259**: Added `.max(1)` guard for progress calculation.
+- **Identity map in integrations.rs:331**: Removed redundant `.map(|s| s)`.
+- **Empty if body in workers/security.rs:121**: Fixed empty if block to push `Severity::Info` finding for no-cache/no-store directives.
+- **Task error logging in app/task_runtime.rs:74**: Changed from silent `let _ = error_tx.send()` to proper error check with warn logging.
+- **Unreachable code pattern in app/task_runtime.rs:68-79**: Refactored from `match runner.run()` with empty Ok arm to `if let Err(e)` pattern.
+- **Log level in app/state_update.rs:68**: Changed from `tracing::debug!` to `tracing::warn!` for unhandled TaskResult variants.
+
 ### TUI Bug Fixes (2026-05-29)
 
 - **popup.rs render() bounds**: Fixed `popup.rs:129-167` to use `if let Some(chunk) = chunks.get(0)` and `if let Some(button_area) = chunks.get(1)` instead of direct indexing.

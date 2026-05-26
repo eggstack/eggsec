@@ -36,7 +36,28 @@ crates/slapper/src/tui/
 └── ui.rs         # Main rendering, status bar with mode indicator
 ```
 
-## Recent Fixes (2026-05-29)
+## Recent Fixes (2026-05-29 Evening Session)
+
+- **tabs/scan_ports.rs:333**: Fixed `input_chunks[4]` direct indexing - use `.get(4)` for UDP checkbox
+- **tabs/recon.rs:399**: Fixed field render loop to use `input_chunks.get(i)` pattern
+- **tabs/fuzz.rs:477**: Added `config_chunks.len() >= 3` check before accessing fields
+- **tabs/hunt.rs:277**: Fixed field render loop to use `input_chunks.get(i)` pattern
+- **tabs/browser.rs:242**: Fixed field render loop to use `input_chunks.get(i)` pattern
+- **tabs/storage.rs:320,337**: Fixed `config_chunks[i+1]` and `query_chunks[i+1]` to use `.get(i+1)`
+- **tabs/integrations.rs:344**: Fixed `field_chunks[i]` to use `.get(i)` pattern
+- **tabs/workflow.rs:333**: Fixed `field_chunks[i]` bounds check
+- **tabs/dashboard.rs:198-206**: Cached `e.summary.to_lowercase()` per entry in filter
+- **tabs/history.rs:197-202**: Cached lowercased fields per entry in search()
+- **app/mod.rs:696-698**: Cached tab title/stable_id/description lowercase in quick switch
+- **components/input.rs:97**: Cached `s.to_lowercase()` per candidate in autocomplete
+- **tabs/scan.rs:259**: Added `.max(1)` guard for progress calculation
+- **tabs/integrations.rs:331**: Removed redundant `.map(|s| s)` identity map
+- **workers/security.rs:119-121**: Fixed empty if block - added `findings.push(Severity::Info)`
+- **app/task_runtime.rs:74**: Changed from silent `let _ = send()` to proper error check with warn
+- **app/task_runtime.rs:68-79**: Refactored empty Ok arm match to `if let Err(e)` pattern
+- **app/state_update.rs:68**: Changed log level from `debug!` to `warn!` for unhandled variants
+
+## Earlier Fixes (2026-05-29)
 
 - **popup.rs render() bounds**: Fixed `popup.rs:129-167` to use `if let Some(chunk) = chunks.get(0)` and `if let Some(button_area) = chunks.get(1)` instead of direct indexing
 - **workers/api.rs double map_err**: Fixed `api.rs:339` - removed duplicate `??` that caused unreachable error handling

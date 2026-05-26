@@ -317,7 +317,9 @@ impl TabRender for StorageTab {
             );
 
             for (i, field) in self.config_inputs.fields.iter().enumerate() {
-                field.render(f, config_chunks[i + 1], insert_mode);
+                if let Some(chunk) = config_chunks.get(i + 1) {
+                    field.render(f, *chunk, insert_mode);
+                }
             }
         } else {
             let query_chunks = Layout::default()
@@ -334,7 +336,9 @@ impl TabRender for StorageTab {
             sel.render(f, query_chunks[0]);
 
             for (i, field) in self.query_inputs.fields.iter().enumerate() {
-                field.render(f, query_chunks[i + 1], insert_mode);
+                if let Some(chunk) = query_chunks.get(i + 1) {
+                    field.render(f, *chunk, insert_mode);
+                }
             }
         }
 

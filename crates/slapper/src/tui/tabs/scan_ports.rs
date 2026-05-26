@@ -330,7 +330,9 @@ impl TabRender for ScanPortsTab {
         }
 
         let udp_cb = self.udp_checkbox.clone();
-        udp_cb.render(f, input_chunks[4]);
+        if let Some(chunk) = input_chunks.get(4) {
+            udp_cb.render(f, *chunk);
+        }
 
         if self.state == AppState::Running {
             self.progress.render(f, results_area);

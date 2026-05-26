@@ -65,7 +65,7 @@ impl super::App {
             None => return,
         };
         if self.handle_feature_result(result).is_none() {
-            tracing::debug!("Unhandled TaskResult variant");
+            tracing::warn!("Unhandled TaskResult variant");
         }
     }
 

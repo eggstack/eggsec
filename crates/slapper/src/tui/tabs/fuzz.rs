@@ -474,7 +474,7 @@ impl TabRender for FuzzTab {
             .constraints(config_constraints)
             .split(config_area);
 
-        if self.inputs.fields.len() > 2 {
+        if self.inputs.fields.len() > 2 && config_chunks.len() >= 3 {
             self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
             self.inputs.fields[1].render(f, config_chunks[1], insert_mode);
             self.inputs.fields[2].render(f, config_chunks[2], insert_mode);
