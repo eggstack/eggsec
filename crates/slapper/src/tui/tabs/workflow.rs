@@ -261,6 +261,9 @@ impl TabState for WorkflowTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        self.mode_selector.select(0);
+        self.severity_selector.select(0);
+        self.status_selector.select(0);
     }
 
     fn set_error(&mut self, error: TabError) {

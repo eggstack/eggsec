@@ -204,6 +204,7 @@ impl TabState for StressTab {
             self.inputs.fields[3].value = "10".to_string();
             self.inputs.fields[3].cursor_pos = 2;
         }
+        self.type_selector.select(0);
     }
 
     fn set_error(&mut self, error: TabError) {

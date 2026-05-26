@@ -278,7 +278,10 @@ pub(crate) async fn scan_ports_spoofed(
                     Ok(packets) => {
                         let mut tx_guard = tx.lock();
                         for pkt in &packets {
-                            let _ = tx_guard.send_to(pkt, Some(interface.clone()));
+                            let _Ignored = tx_guard.send_to(pkt, Some(interface.clone()));
+                            if _Ignored.is_none() {
+                                tracing::warn!("Failed to send spoofed packet");
+                            }
                             packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
@@ -345,7 +348,10 @@ pub(crate) async fn scan_ports_spoofed(
                                 scan_type,
                                 ttl,
                             ) {
-                                let _ = tx_guard.send_to(&packet, Some(interface.clone()));
+                                    let _Ignored = tx_guard.send_to(&packet, Some(interface.clone()));
+                                    if _Ignored.is_none() {
+                                        tracing::warn!("Failed to send staggered decoy packet");
+                                    }
                                 packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             }
                         }
@@ -381,7 +387,10 @@ pub(crate) async fn scan_ports_spoofed(
                             ) {
                                 {
                                     let mut tx_guard = tx.lock();
-                                    let _ = tx_guard.send_to(&packet, Some(interface.clone()));
+                            let _Ignored = tx_guard.send_to(&packet, Some(interface.clone()));
+                            if _Ignored.is_none() {
+                                tracing::warn!("Failed to send decoy packet");
+                            }
                                     packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 }
                                 if use_staggered {

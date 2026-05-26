@@ -755,7 +755,9 @@ impl McpServer {
                         session.context.target = Some(t);
                     }
 
-                    let _ = manager.update_session(&session).await;
+                    if let Err(e) = manager.update_session(&session).await {
+                        tracing::debug!("Failed to update session: {}", e);
+                    }
 
                     let result = serde_json::json!({
                         "session_id": session.session_id,

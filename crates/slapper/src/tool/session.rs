@@ -516,7 +516,7 @@ impl LoginExecutor {
                     let _final_url = response.url().to_string();
 
                     // Store response for extraction steps
-                    let headers_map: std::collections::HashMap<String, String> = response
+                    let headers_map: FxHashMap<String, String> = response
                         .headers()
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))

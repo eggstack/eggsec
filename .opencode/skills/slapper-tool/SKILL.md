@@ -63,13 +63,37 @@ For performance in hot paths, these modules use `rustc_hash::FxHashMap`/`FxHashS
 | `lifecycle.rs` | 337 | Silent `update_status` |
 | `lifecycle.rs` | 381,416,429,434,447 | Silent `event_tx.send()` |
 | `mcp/routes.rs` | 216-252 | Silent write/flush errors |
+| `state.rs` | 216 | Silent `fs::remove_file()` - now uses tracing::debug! |
+| `mcp/handlers/server.rs` | 758 | Silent `manager.update_session()` - now uses tracing::debug! |
 
 ### FxHashMap Replaced
 
 - `orchestrator/mod.rs`: HashMap/HashSet → FxHashMap/FxHashSet
-- `tool/session.rs`: HashMap → FxHashMap
+- `tool/session.rs`: HashMap → FxHashMap (line 519 - response headers)
 - `tool/state.rs`: HashMap → FxHashMap
 - `recon/mod.rs`: std HashMap → FxHashMap
+- `tool/agents/lifecycle.rs`: HashMap → FxHashMap (health_status)
+- `tool/agents/communication.rs`: HashMap → FxHashMap (subscriptions)
+
+### SystemTime unw() Panic Prevention (2026-06-01)
+
+Locations in `tool/agents/lifecycle.rs` replaced `.unwrap()` with `.unwrap_or_else(|_| Duration::from_secs(0))` to prevent panic if system clock goes backwards:
+
+- Line 179: `check_stale_agents()` now calculation
+- Line 357: `update_health()` last_health_check
+- Line 390: `record_task_failure()` HealthCheckFailed event
+- Line 428: `initiate_graceful_shutdown()` event
+- Line 451: `force_shutdown()` event
+- (also at lines 497, 510, 555, 597, 620, 644, 698, 822 - same pattern)
+
+### Spoofed Packet Send Error Handling (2026-06-01)
+
+Added proper error handling for spoofed packet sends in `scanner/ports/spoofed.rs`:
+- Line 281: Fragmented UDP packets send
+- Line 348: Decoy TCP packets send
+- Line 384: Staggered decoy packets send
+
+Previously used silent `let _ = tx_guard.send_to(...)` - now logs warning when send fails.
 
 ## Testing
 

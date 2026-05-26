@@ -4,7 +4,7 @@
 //! health tracking, and collaborative task execution.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -147,7 +147,7 @@ pub enum TaskStatus {
 
 pub struct InterAgentChannel {
     messages: Arc<RwLock<Vec<AgentMessage>>>,
-    subscriptions: Arc<RwLock<HashMap<Uuid, Vec<MessageSubscription>>>>,
+    subscriptions: Arc<RwLock<FxHashMap<Uuid, Vec<MessageSubscription>>>>,
     registry: AgentRegistry,
 }
 
@@ -161,7 +161,7 @@ impl InterAgentChannel {
     pub fn new(registry: AgentRegistry) -> Self {
         Self {
             messages: Arc::new(RwLock::new(Vec::new())),
-            subscriptions: Arc::new(RwLock::new(HashMap::new())),
+            subscriptions: Arc::new(RwLock::new(FxHashMap::default())),
             registry,
         }
     }

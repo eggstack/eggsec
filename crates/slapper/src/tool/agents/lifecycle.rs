@@ -1,6 +1,6 @@
 use crate::tool::agents::registry::{AgentRegistry, AgentStatus};
 use reqwest::Client;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
@@ -70,7 +70,7 @@ pub enum LifecycleEventType {
 pub struct LifecycleManager {
     config: LifecycleConfig,
     agent_registry: AgentRegistry,
-    health_status: Arc<RwLock<HashMap<Uuid, AgentHealth>>>,
+    health_status: Arc<RwLock<FxHashMap<Uuid, AgentHealth>>>,
     event_tx: mpsc::Sender<LifecycleEvent>,
     client: Client,
 }
@@ -92,7 +92,7 @@ impl LifecycleManager {
             Self {
                 config,
                 agent_registry,
-                health_status: Arc::new(RwLock::new(HashMap::new())),
+                health_status: Arc::new(RwLock::new(FxHashMap::default())),
                 event_tx,
                 client,
             },
@@ -168,7 +168,7 @@ impl LifecycleManager {
     }
 
     async fn perform_health_check(
-        health_status: &Arc<RwLock<HashMap<Uuid, AgentHealth>>>,
+        health_status: &Arc<RwLock<FxHashMap<Uuid, AgentHealth>>>,
         agent_registry: &AgentRegistry,
         config: &LifecycleConfig,
         event_tx: &mpsc::Sender<LifecycleEvent>,
@@ -177,7 +177,7 @@ impl LifecycleManager {
         let agents = agent_registry.list().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
 
         #[derive(Debug)]
@@ -354,7 +354,7 @@ impl LifecycleManager {
             consecutive_failures: 0,
             last_health_check: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs(),
             issues: Vec::new(),
         });
@@ -387,7 +387,7 @@ impl LifecycleManager {
                         agent_id,
                         timestamp: std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
+                            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                             .as_secs(),
                         details: Some(format!(
                             "Agent exceeded max failures ({}) due to: {}",
@@ -425,7 +425,7 @@ impl LifecycleManager {
                 agent_id,
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                     .as_secs(),
                 details: None,
             })
@@ -448,7 +448,7 @@ impl LifecycleManager {
                 agent_id,
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                     .as_secs(),
                 details: Some("Agent force shutdown initiated".to_string()),
             })
@@ -495,7 +495,7 @@ mod lifecycle_tests {
             consecutive_failures: 0,
             last_health_check: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs(),
             issues: vec![HealthIssue::CallbackUnhealthy("test".to_string())],
         }
@@ -508,7 +508,7 @@ mod lifecycle_tests {
             consecutive_failures: 0,
             last_health_check: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs(),
             issues: vec![],
         }
@@ -553,7 +553,7 @@ mod lifecycle_tests {
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
 
         registry
@@ -595,7 +595,7 @@ mod lifecycle_tests {
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
 
         registry
@@ -618,7 +618,7 @@ mod lifecycle_tests {
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
 
         registry
@@ -642,7 +642,7 @@ mod lifecycle_tests {
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
 
         registry
@@ -696,7 +696,7 @@ mod lifecycle_tests {
         let agent_id = Uuid::new_v4();
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
 
         registry
@@ -820,7 +820,7 @@ mod lifecycle_tests {
         let agent_id = Uuid::new_v4();
         let old_heartbeat = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs()
             .saturating_sub(config.stale_threshold_secs + 100);
 

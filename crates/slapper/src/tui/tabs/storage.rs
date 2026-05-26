@@ -248,7 +248,7 @@ impl TabState for StorageTab {
         self.findings.clear();
         self.results_view.clear();
         self.error = None;
-        for field in &mut self.query_inputs.fields {
+        for field in &mut self.config_inputs.fields {
             field.clear();
         }
     }

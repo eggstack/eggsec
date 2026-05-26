@@ -213,7 +213,9 @@ impl SessionManager {
         for id in &expired {
             sessions.remove(id);
             let path = storage_path.join(format!("{}.json", id));
-            let _ = fs::remove_file(path);
+            if let Err(e) = fs::remove_file(path) {
+                tracing::debug!("Failed to remove expired session file {:?}: {}", path, e);
+            }
         }
 
         Ok(())

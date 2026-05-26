@@ -374,6 +374,7 @@ impl TabState for LoadTab {
             self.inputs.fields[4].value = "30".to_string();
             self.inputs.fields[4].cursor_pos = 2;
         }
+        self.test_type_selector.select(0);
         self.focus_area = LoadFocusArea::Selector;
     }
 

@@ -602,7 +602,8 @@ impl TabInput for VulnTab {
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            VulnFocusArea::Mode => self.mode_selector.selected == 0,
+            VulnFocusArea::Mode => self.mode_selector.items.is_empty()
+                || self.mode_selector.selected == 0,
             VulnFocusArea::Inputs => self
                 .inputs
                 .fields

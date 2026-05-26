@@ -470,7 +470,7 @@ impl AiPlanner {
                     .as_secs();
             }
         } else {
-            let fallback_key = format!("observed:{}:{}", plan.total_tools, outcome.target);
+            let fallback_key = format!("observed:{}:{}", plan.total_tools, outcome.target.replace('\x00', ""));
             cache.insert(
                 fallback_key,
                 CachedPlan {

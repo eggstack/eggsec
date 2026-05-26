@@ -623,8 +623,12 @@ impl TabInput for ProxyTab {
 
     fn handle_left(&mut self) -> bool {
         if self.view_selector.is_focused() {
-            self.view_selector.handle_left();
-            true
+            if self.view_selector.is_open() {
+                self.view_selector.move_prev();
+                true
+            } else {
+                false
+            }
         } else {
             self.inputs.move_left()
         }
@@ -632,8 +636,12 @@ impl TabInput for ProxyTab {
 
     fn handle_right(&mut self) -> bool {
         if self.view_selector.is_focused() {
-            self.view_selector.handle_right();
-            true
+            if self.view_selector.is_open() {
+                self.view_selector.move_next();
+                true
+            } else {
+                false
+            }
         } else {
             self.inputs.move_right()
         }
@@ -659,8 +667,12 @@ impl TabInput for ProxyTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.view_selector.is_focused() {
-            self.view_selector.items.is_empty()
-                || self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+            if self.view_selector.is_open() {
+                self.view_selector.items.is_empty()
+                    || self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+            } else {
+                true
+            }
         } else if self.inputs.is_focused() {
             self.inputs.is_at_right_edge()
         } else {

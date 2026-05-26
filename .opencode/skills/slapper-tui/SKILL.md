@@ -855,7 +855,7 @@ pub fn is_at_left_edge(&self) -> bool {
 | File | Line | Issue | Fix |
 |------|------|-------|-----|
 | `session.rs` | 113 | `debug!` instead of `warn!` | `tracing::warn!` |
-| `session.rs` | 174 | `filter_map(\|e\| e.ok())` | Explicit match with warn |
+| `session.rs` | 174 | `filter_map(\e\| e.ok())` | Explicit match with warn |
 
 ### Tab Edge Detection Fixes
 
@@ -864,14 +864,15 @@ pub fn is_at_left_edge(&self) -> bool {
 | `graphql.rs` | 490-502 | Options checkbox bounds missing | Added explicit Options case |
 | `oauth.rs` | 534-546 | Options checkbox bounds missing | Added explicit Options case |
 | `vuln.rs` | 618-619 | `is_at_right_edge()` missing `is_empty()` guard | Added `items.is_empty() \|\|` guard |
+| **`vuln.rs`** | **603-614** | **`is_at_left_edge()` missing `is_empty()` guard** | **Added `items.is_empty() \|\|` guard for Mode selector** |
 
 ### handle_enter() is_running() Guards
 
 | File | Line | Status |
 |------|-------|--------|
 | `report.rs` | 457 | ✅ Fixed |
-| `nse.rs` | 311 | ✅ Fixed |
-| `plugin.rs` | 356 | ✅ Fixed |
+| `nse.rs` | 311 | ✅ Fixed (removed inverted guard) |
+| `plugin.rs` | 356 | ✅ Fixed (rewrote to stop when running, start when idle) |
 
 ### Other Tab Fixes
 
@@ -881,6 +882,14 @@ pub fn is_at_left_edge(&self) -> bool {
 | `workflow.rs` | 257 | `reset()` doesn't clear mode | Reset `current_mode` |
 | `integrations.rs` | 280 | `reset()` doesn't clear selector | Reset `tracker_selector.selected` |
 | `storage.rs` | 250 | `reset()` doesn't clear fields | Added fields.clear() loop |
+| `load.rs` | 377 | `reset()` doesn't clear selector | Added `test_type_selector.select(0)` |
+| `stress.rs` | 206 | `reset()` doesn't clear selector | Added `type_selector.select(0)` |
+| `proxy.rs` | 660-669 | `is_at_right_edge()` missing `is_open()` guard | Added `is_open()` check |
+| `proxy.rs` | 624-640 | `handle_left/right()` missing `is_open()` check | Added `is_open()` guard |
+
+### selector.rs handle_left Empty Items Guard
+
+Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `handle_right()` (line 247).
 
 ## Session Fixes (2026-05-26 Session)
 

@@ -309,9 +309,6 @@ impl TabInput for NseTab {
     }
 
     fn handle_enter(&mut self) {
-        if !self.is_running() {
-            return;
-        }
         let mut should_start = false;
         match self.focus_area {
             NseFocusArea::Inputs => {

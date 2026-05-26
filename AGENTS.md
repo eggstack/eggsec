@@ -560,6 +560,45 @@ handle_char (36), handle_backspace (53), handle_paste (70), handle_enter (165), 
 | `integrations.rs` | 280 | reset() doesn't clear selector | Added selector reset |
 | `storage.rs` | 250 | reset() doesn't clear fields | Added fields.clear() loop |
 
+## Bug Fixes (2026-06-01 Session)
+
+### TUI Tab Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `vuln.rs` | 603-614 | `is_at_left_edge()` missing `is_empty()` guard | Added `items.is_empty() \|\|` guard for Mode selector |
+| `nse.rs` | 311-343 | `handle_enter()` inverted guard logic | Removed early `return` when not running |
+| `plugin.rs` | 356-369 | `handle_enter()` didn't stop/start properly | Rewrote to `if is_running() { stop } else { start }` |
+| `proxy.rs` | 660-669 | `is_at_right_edge()` missing `is_open()` guard | Added `is_open()` check matching `is_at_left_edge()` |
+| `proxy.rs` | 624-640 | `handle_left/right()` missing `is_open()` check | Added `is_open()` guard before selector methods |
+| `load.rs` | 377 | `reset()` missing selector reset | Added `test_type_selector.select(0)` |
+| `stress.rs` | 206 | `reset()` missing selector reset | Added `type_selector.select(0)` |
+| `storage.rs` | 253 | `reset()` missing config_inputs clear | Added `for field in config_inputs.fields` loop |
+
+### Tool Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `tool/agents/lifecycle.rs` | 178-181, etc. | SystemTime `unwrap()` panic risk | Changed to `unwrap_or_else(\|_\| Duration::from_secs(0))` |
+| `tool/agents/lifecycle.rs` | 3, 73, 95, 171 | HashMap performance | Changed to `FxHashMap` |
+| `tool/agents/communication.rs` | 7, 150, 164 | HashMap performance | Changed to `FxHashMap` |
+| `tool/session.rs` | 519 | HashMap performance | Changed to `FxHashMap` for response headers |
+| `tool/state.rs` | 216 | Silent file remove error | Changed to `if let Err(e) = ...` with debug logging |
+| `tool/protocol/mcp/handlers/server.rs` | 758 | Silent session update error | Changed to `if let Err(e) = ...` with debug logging |
+
+### Scanner Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scanner/ports/spoofed.rs` | 281, 348, 384 | Silent packet send errors | Changed to check send result and log warning |
+
+### AI Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `ai/cache.rs` | 277 | Silent directory creation error | Changed to `if let Err(e) = ...` with debug logging |
+| `ai/planner.rs` | 473 | fallback_key cache key collision | Added `.replace('\x00)', "")` sanitization |
+
 ---
 
 ## Verification Commands
