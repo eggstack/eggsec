@@ -1,5 +1,5 @@
 use super::{SettingsFocusArea, SettingsSection, SettingsTab};
-use crate::tui::tabs::TabInput;
+use crate::tui::tabs::{TabInput, TabState};
 
 impl TabInput for SettingsTab {
     fn handle_focus_next(&mut self) {
@@ -33,6 +33,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_char(&mut self, c: char) {
+        if self.is_running() {
+            return;
+        }
         match self.current_section {
             SettingsSection::Http => self.http_inputs.insert(c),
             SettingsSection::Scan => self.scan_inputs.insert(c),
@@ -47,6 +50,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_backspace(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.current_section {
             SettingsSection::Http => self.http_inputs.backspace(),
             SettingsSection::Scan => self.scan_inputs.backspace(),
@@ -61,6 +67,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_paste(&mut self, text: &str) {
+        if self.is_running() {
+            return;
+        }
         match self.current_section {
             SettingsSection::Http => self.http_inputs.paste(text),
             SettingsSection::Scan => self.scan_inputs.paste(text),
@@ -153,6 +162,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == SettingsFocusArea::SectionList {
             self.focus_area = SettingsFocusArea::SectionDetail;
             self.detail_focus_index = 0;
@@ -254,6 +266,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == SettingsFocusArea::SectionList {
             let sections = [
                 SettingsSection::Http,
@@ -298,6 +313,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == SettingsFocusArea::SectionList {
             let sections = [
                 SettingsSection::Http,
@@ -343,6 +361,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == SettingsFocusArea::SectionDetail {
             if self.is_input_focused() {
                 if self.is_at_left_edge() {
@@ -372,6 +393,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == SettingsFocusArea::SectionList {
             self.focus_area = SettingsFocusArea::SectionDetail;
             self.sync_component_focus();

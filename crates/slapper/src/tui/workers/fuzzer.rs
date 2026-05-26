@@ -88,8 +88,12 @@ pub async fn run_fuzz(
     let mut engine = FuzzEngine::new_with_tui_mode(args, true)?;
     let session = engine.run_return_session().await?;
 
-    let _ = result_tx.send(TaskResult::Fuzz(session)).await;
-    let _ = progress_tx.send((1, 1)).await;
+    if let Err(e) = result_tx.send(TaskResult::Fuzz(session)).await {
+        tracing::warn!("Failed to send fuzz results: {}", e);
+    }
+    if let Err(e) = progress_tx.send((1, 1)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
     Ok(())
 }
 
@@ -139,17 +143,24 @@ pub async fn run_waf(
 
         let bypass_engine = BypassEngine::new(&args, Some(get_auto_profile()), TestType::All)?;
         let bypasses = bypass_engine.run_bypasses(&detection).await?;
-        let _ = result_tx
+        if let Err(e) = result_tx
             .send(TaskResult::WafBypass {
                 detection,
                 bypasses,
             })
-            .await;
+            .await
+        {
+            tracing::warn!("Failed to send WAF bypass results: {}", e);
+        }
     } else {
-        let _ = result_tx.send(TaskResult::WafDetection(detection)).await;
+        if let Err(e) = result_tx.send(TaskResult::WafDetection(detection)).await {
+            tracing::warn!("Failed to send WAF detection results: {}", e);
+        }
     }
 
-    let _ = progress_tx.send((1, 1)).await;
+    if let Err(e) = progress_tx.send((1, 1)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
     Ok(())
 }
 
@@ -175,7 +186,11 @@ pub async fn run_waf_stress(
     };
 
     fuzzer_run_waf_stress(args).await?;
-    let _ = progress_tx.send((1, 1)).await;
-    let _ = result_tx.send(TaskResult::WafStress(vec![])).await;
+    if let Err(e) = progress_tx.send((1, 1)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
+    if let Err(e) = result_tx.send(TaskResult::WafStress(vec![])).await {
+        tracing::warn!("Failed to send WAF stress results: {}", e);
+    }
     Ok(())
 }

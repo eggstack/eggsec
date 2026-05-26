@@ -600,19 +600,25 @@ Key behaviors:
 
 ## Worker Patterns
 
-### Silent Send Error Handling
+### Send Error Handling
 
-Workers use `let _ = channel.send(...).await` for progress and result channels. This is intentional:
+Workers must properly handle send errors on progress and result channels:
 
 ```rust
-// Worker send pattern - intentional silent suppression
-let results = runner.run().await?;
+// WRONG - silent error suppression
 let _ = result_tx.send(TaskResult::LoadTest(results)).await;
 let _ = progress_tx.send((requests, requests)).await;
-Ok(())
+
+// CORRECT - proper error handling with warn logging
+if let Err(e) = result_tx.send(TaskResult::LoadTest(results)).await {
+    tracing::warn!("Failed to send load test results: {}", e);
+}
+if let Err(e) = progress_tx.send((requests, requests)).await {
+    tracing::warn!("Failed to send progress: {}", e);
+}
 ```
 
-If the main loop has been dropped (app closed), there's no point propagating the error. Progress updates that fail don't affect the final result. For critical failures, workers return `Err(...)` which is handled at the TaskRunner level.
+Files fixed (2026-05-31 session): api.rs (15), fuzzer.rs (8), network.rs (13), plugin.rs (10), recon.rs (12), scanner.rs (9), security.rs (27)
 
 ### Error String Matching in Retry Logic
 
@@ -766,3 +772,71 @@ self.entries
 ### Test Fix
 
 - **key_handler.rs:440-457**: `clamp_quick_switch_selection()` now re-fetches fresh results via `get_quick_switch_results()` instead of using stale parameter.
+
+## Deep Dive Session Fixes (2026-05-31 Evening)
+
+### settings/input.rs - is_running() Guards
+
+All 8 input handlers now properly guard with `!self.is_running()`:
+
+| Handler | Line |
+|---------|------|
+| handle_char | 36 |
+| handle_backspace | 53 |
+| handle_paste | 70 |
+| handle_enter | 165 |
+| handle_up | 269 |
+| handle_down | 316 |
+| handle_left | 364 |
+| handle_right | 396 |
+
+### Edge Detection is_empty() Guards
+
+| File | Lines | Selector |
+|------|-------|----------|
+| `stress.rs` | 455, 464 | `type_selector` |
+| `workflow.rs` | 524, 533 | `mode_selector` |
+| `packet.rs` | 840, 855 | `view_selector` |
+| `proxy.rs` | 649, 663 | `view_selector` |
+| `cluster.rs` | 552, 570 | `view_selector` |
+| `scan_ports.rs` | 491, 500 | InputGroup delegation |
+| `scan_endpoints.rs` | 458, 467 | InputGroup delegation |
+| `fingerprint.rs` | 405, 414 | InputGroup delegation |
+
+### history.rs is_running() Guard
+
+- **history.rs:431**: Added `is_running()` guard to `handle_char` for hotkeys 'd' (delete) and 'C' (clear all)
+
+### components/input.rs InputGroup Edge Guards
+
+Fixed `InputGroup::is_at_left_edge()` and `is_at_right_edge()` to have proper `is_empty()` guards:
+
+```rust
+pub fn is_at_left_edge(&self) -> bool {
+    if let Some(idx) = self.focused {
+        !self.fields.is_empty() && idx < self.fields.len() && self.fields[idx].is_at_left_edge()
+    } else {
+        true
+    }
+}
+```
+
+### key_handler.rs Ctrl+V Guard
+
+- **key_handler.rs:65-72**: Added `!app.has_active_task()` guard to Ctrl+V paste handler
+
+### Worker Silent Error Suppression Fixed (88 occurrences)
+
+| File | Count |
+|------|-------|
+| api.rs | 15 |
+| security.rs | 27 |
+| recon.rs | 12 |
+| network.rs | 13 |
+| plugin.rs | 10 |
+| scanner.rs | 9 |
+| fuzzer.rs | 8 |
+
+### network.rs Log Level Fix
+
+- **network.rs:172**: Changed `tracing::info!` to `tracing::debug!` for successful packet capture completion

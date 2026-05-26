@@ -17,10 +17,16 @@ pub async fn run_hunt_task(
 ) -> anyhow::Result<()> {
     use crate::hunt::run_hunt;
 
-    let _ = progress_tx.send((0, 5)).await;
+    if let Err(e) = progress_tx.send((0, 5)).await {
+        tracing::warn!("Failed to send hunt progress: {}", e);
+    }
     let report = run_hunt(&target, config).await?;
-    let _ = progress_tx.send((5, 5)).await;
-    let _ = result_tx.send(TaskResult::Hunt(report)).await;
+    if let Err(e) = progress_tx.send((5, 5)).await {
+        tracing::warn!("Failed to send hunt progress: {}", e);
+    }
+    if let Err(e) = result_tx.send(TaskResult::Hunt(report)).await {
+        tracing::warn!("Failed to send hunt result: {}", e);
+    }
     Ok(())
 }
 
@@ -33,10 +39,16 @@ pub async fn run_browser_task(
 ) -> anyhow::Result<()> {
     use crate::browser::run_browser_scan;
 
-    let _ = progress_tx.send((0, 3)).await;
+    if let Err(e) = progress_tx.send((0, 3)).await {
+        tracing::warn!("Failed to send browser progress: {}", e);
+    }
     let report = run_browser_scan(&target, config).await?;
-    let _ = progress_tx.send((3, 3)).await;
-    let _ = result_tx.send(TaskResult::Browser(report)).await;
+    if let Err(e) = progress_tx.send((3, 3)).await {
+        tracing::warn!("Failed to send browser progress: {}", e);
+    }
+    if let Err(e) = result_tx.send(TaskResult::Browser(report)).await {
+        tracing::warn!("Failed to send browser result: {}", e);
+    }
     Ok(())
 }
 
@@ -50,7 +62,9 @@ pub async fn run_compliance_task(
     use crate::compliance::generate_compliance_report;
     use crate::types::Severity;
 
-    let _ = progress_tx.send((0, 3)).await;
+    if let Err(e) = progress_tx.send((0, 3)).await {
+        tracing::warn!("Failed to send compliance progress: {}", e);
+    }
 
     let mut findings = Vec::new();
 
@@ -176,11 +190,17 @@ pub async fn run_compliance_task(
         findings.push(Severity::Info);
     }
 
-    let _ = progress_tx.send((2, 3)).await;
+    if let Err(e) = progress_tx.send((2, 3)).await {
+        tracing::warn!("Failed to send compliance progress: {}", e);
+    }
 
     let report = generate_compliance_report(&target, framework, &findings).await?;
-    let _ = progress_tx.send((3, 3)).await;
-    let _ = result_tx.send(TaskResult::Compliance(report)).await;
+    if let Err(e) = progress_tx.send((3, 3)).await {
+        tracing::warn!("Failed to send compliance progress: {}", e);
+    }
+    if let Err(e) = result_tx.send(TaskResult::Compliance(report)).await {
+        tracing::warn!("Failed to send compliance result: {}", e);
+    }
     Ok(())
 }
 
@@ -197,29 +217,39 @@ pub async fn run_storage_task(
     use crate::storage::init_storage;
     use crate::storage::models::{ScanStatus, StoredFinding, StoredScan};
 
-    let _ = progress_tx.send((0, 3)).await;
+    if let Err(e) = progress_tx.send((0, 3)).await {
+        tracing::warn!("Failed to send storage progress: {}", e);
+    }
 
     let db = match init_storage(&config).await {
         Ok(db) => db,
         Err(e) => {
-            let _ = result_tx.send(TaskResult::Error(format!(
+            if let Err(e) = result_tx.send(TaskResult::Error(format!(
                 "Storage connection failed: {}. Ensure the database is running and credentials are correct.",
                 e
-            ))).await;
+            ))).await {
+                tracing::warn!("Failed to send storage error: {}", e);
+            }
             return Ok(());
         }
     };
 
-    let _ = progress_tx.send((1, 3)).await;
+    if let Err(e) = progress_tx.send((1, 3)).await {
+        tracing::warn!("Failed to send storage progress: {}", e);
+    }
 
     let result_data = match mode.as_str() {
         "connect" => {
-            let _ = result_tx.send(TaskResult::Storage).await;
+            if let Err(e) = result_tx.send(TaskResult::Storage).await {
+                tracing::warn!("Failed to send storage result: {}", e);
+            }
             None
         }
         "list_scans" => match db.list_scans(50).await {
             Ok(scans) => {
-                let _ = result_tx.send(TaskResult::StorageListScans { scans }).await;
+                if let Err(e) = result_tx.send(TaskResult::StorageListScans { scans }).await {
+                    tracing::warn!("Failed to send storage scans: {}", e);
+                }
                 None
             }
             Err(e) => Some(format!("Failed to list scans: {}", e)),
@@ -242,9 +272,12 @@ pub async fn run_storage_task(
                     }
                 }
             };
-            let _ = result_tx
+            if let Err(e) = result_tx
                 .send(TaskResult::StorageListFindings { findings })
-                .await;
+                .await
+            {
+                tracing::warn!("Failed to send storage findings: {}", e);
+            }
             None
         }
         "search_cve" => {
@@ -254,32 +287,45 @@ pub async fn run_storage_task(
                     &format!("CVE search: {}", cve),
                     crate::types::Severity::Medium,
                 );
-                let _ = result_tx
+                if let Err(e) = result_tx
                     .send(TaskResult::StorageListFindings {
                         findings: vec![finding],
                     })
-                    .await;
+                    .await
+                {
+                    tracing::warn!("Failed to send CVE search result: {}", e);
+                }
             } else {
-                let _ = result_tx
+                if let Err(e) = result_tx
                     .send(TaskResult::Error(
                         "No CVE ID provided for search".to_string(),
                     ))
-                    .await;
+                    .await
+                {
+                    tracing::warn!("Failed to send CVE search error: {}", e);
+                }
             }
             None
         }
         _ => {
-            let _ = result_tx
+            if let Err(e) = result_tx
                 .send(TaskResult::Error(format!("Unknown storage mode: {}", mode)))
-                .await;
+                .await
+            {
+                tracing::warn!("Failed to send unknown mode error: {}", e);
+            }
             None
         }
     };
 
-    let _ = progress_tx.send((3, 3)).await;
+    if let Err(e) = progress_tx.send((3, 3)).await {
+        tracing::warn!("Failed to send storage progress: {}", e);
+    }
 
     if let Some(error) = result_data {
-        let _ = result_tx.send(TaskResult::Error(error)).await;
+        if let Err(e) = result_tx.send(TaskResult::Error(error)).await {
+            tracing::warn!("Failed to send storage error: {}", e);
+        }
     }
 
     Ok(())
@@ -298,11 +344,15 @@ pub async fn run_integrations_task(
 ) -> anyhow::Result<()> {
     use crate::integrations::Issue;
 
-    let _ = progress_tx.send((0, 3)).await;
+    if let Err(e) = progress_tx.send((0, 3)).await {
+        tracing::warn!("Failed to send integrations progress: {}", e);
+    }
 
     match mode.as_str() {
         "configure" => {
-            let _ = result_tx.send(TaskResult::Integrations).await;
+            if let Err(e) = result_tx.send(TaskResult::Integrations).await {
+                tracing::warn!("Failed to send integrations result: {}", e);
+            }
         }
         "create_issue" => {
             if let (Some(t), Some(d)) = (&title, &description) {
@@ -313,33 +363,47 @@ pub async fn run_integrations_task(
                     severity: None,
                     assignees: assignees.clone(),
                 };
-                let _ = result_tx
+                if let Err(e) = result_tx
                     .send(TaskResult::IntegrationsCreateIssue { issue })
-                    .await;
+                    .await
+                {
+                    tracing::warn!("Failed to send issue creation result: {}", e);
+                }
             } else {
-                let _ = result_tx
+                if let Err(e) = result_tx
                     .send(TaskResult::Error(
                         "Title and description required for creating an issue".to_string(),
                     ))
-                    .await;
+                    .await
+                {
+                    tracing::warn!("Failed to send issue error: {}", e);
+                }
             }
         }
         "search_issues" => {
-            let _ = result_tx
+            if let Err(e) = result_tx
                 .send(TaskResult::IntegrationsSearchIssues { issues: vec![] })
-                .await;
+                .await
+            {
+                tracing::warn!("Failed to send issue search result: {}", e);
+            }
         }
         _ => {
-            let _ = result_tx
+            if let Err(e) = result_tx
                 .send(TaskResult::Error(format!(
                     "Unknown integrations mode: {}",
                     mode
                 )))
-                .await;
+                .await
+            {
+                tracing::warn!("Failed to send unknown mode error: {}", e);
+            }
         }
     }
 
-    let _ = progress_tx.send((3, 3)).await;
+    if let Err(e) = progress_tx.send((3, 3)).await {
+        tracing::warn!("Failed to send integrations progress: {}", e);
+    }
     Ok(())
 }
 
@@ -353,15 +417,23 @@ pub async fn run_workflow_task(
 ) -> anyhow::Result<()> {
     use crate::workflow::WorkflowReport;
 
-    let _ = progress_tx.send((0, 3)).await;
+    if let Err(e) = progress_tx.send((0, 3)).await {
+        tracing::warn!("Failed to send workflow progress: {}", e);
+    }
 
     let mut report = WorkflowReport::new();
     report.total_findings = finding_ids.len();
     report.open_findings = finding_ids.len();
 
-    let _ = progress_tx.send((2, 3)).await;
-    let _ = result_tx.send(TaskResult::Workflow(report)).await;
-    let _ = progress_tx.send((3, 3)).await;
+    if let Err(e) = progress_tx.send((2, 3)).await {
+        tracing::warn!("Failed to send workflow progress: {}", e);
+    }
+    if let Err(e) = result_tx.send(TaskResult::Workflow(report)).await {
+        tracing::warn!("Failed to send workflow result: {}", e);
+    }
+    if let Err(e) = progress_tx.send((3, 3)).await {
+        tracing::warn!("Failed to send workflow progress: {}", e);
+    }
     Ok(())
 }
 
@@ -375,7 +447,9 @@ pub async fn run_vuln_task(
 ) -> anyhow::Result<()> {
     use crate::vuln::VulnAssessment;
 
-    let _ = progress_tx.send((0, 3)).await;
+    if let Err(e) = progress_tx.send((0, 3)).await {
+        tracing::warn!("Failed to send vuln progress: {}", e);
+    }
 
     match mode.as_str() {
         "cvss_calc" | "exploit_check" | "asset_assess" | "prioritize" | "triage"
@@ -394,15 +468,22 @@ pub async fn run_vuln_task(
                 results,
                 assessed_at: chrono::Utc::now(),
             };
-            let _ = result_tx.send(TaskResult::Vuln(assessment)).await;
+            if let Err(e) = result_tx.send(TaskResult::Vuln(assessment)).await {
+                tracing::warn!("Failed to send vuln result: {}", e);
+            }
         }
         _ => {
-            let _ = result_tx
+            if let Err(e) = result_tx
                 .send(TaskResult::Error(format!("Unknown vuln mode: {}", mode)))
-                .await;
+                .await
+            {
+                tracing::warn!("Failed to send unknown vuln mode error: {}", e);
+            }
         }
     }
 
-    let _ = progress_tx.send((3, 3)).await;
+    if let Err(e) = progress_tx.send((3, 3)).await {
+        tracing::warn!("Failed to send vuln progress: {}", e);
+    }
     Ok(())
 }

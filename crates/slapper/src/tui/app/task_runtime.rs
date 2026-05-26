@@ -65,7 +65,7 @@ impl super::App {
 
             self.task_tab = Some(self.current_tab);
 
-            self.task_handle = Some(tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 if let Err(e) = runner.run().await {
                     let friendly_error = super::make_friendly_error(&e);
                     tracing::error!("Task failed: {}", friendly_error);
@@ -76,7 +76,8 @@ impl super::App {
                         tracing::warn!("Failed to send task error result: receiver dropped");
                     }
                 }
-            }));
+            });
+            self.task_handle = Some(handle);
         }
     }
 }

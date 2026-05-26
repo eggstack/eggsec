@@ -55,12 +55,18 @@ pub async fn run_pipeline(
     let pipeline = Pipeline::from_args_with_tui_mode(args, None, true);
     let stages_count = pipeline.get_stages().len() as u64;
 
-    let _ = progress_tx.send((0, stages_count.max(1))).await;
+    if let Err(e) = progress_tx.send((0, stages_count.max(1))).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let report = pipeline.run().await?;
 
-    let _ = result_tx.send(TaskResult::Pipeline(report)).await;
-    let _ = progress_tx.send((stages_count, stages_count.max(1))).await;
+    if let Err(e) = result_tx.send(TaskResult::Pipeline(report)).await {
+        tracing::warn!("Failed to send pipeline result: {}", e);
+    }
+    if let Err(e) = progress_tx.send((stages_count, stages_count.max(1))).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
     Ok(())
 }
 
@@ -75,7 +81,9 @@ pub async fn run_recon(
     use crate::config::SlapperConfig;
     use crate::recon::run_full_recon;
 
-    let _ = progress_tx.send((0, 100)).await;
+    if let Err(e) = progress_tx.send((0, 100)).await {
+        tracing::warn!("Failed to send initial progress: {}", e);
+    }
 
     let args = ReconArgs {
         target: target.clone(),
@@ -104,7 +112,9 @@ pub async fn run_recon(
 
     let config = SlapperConfig::default();
 
-    let _ = progress_tx.send((5, 100)).await;
+    if let Err(e) = progress_tx.send((5, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let max_retries = 3;
     let base_delay_secs = 2u64;
@@ -132,11 +142,15 @@ pub async fn run_recon(
                         .count() as u64;
                     let total_stages = total_stages.max(1);
                     let pct = (completed.min(total_stages) * 90) / total_stages + 5;
-                    let _ = ptx.send((pct, 100)).await;
+                    if let Err(e) = ptx.send((pct, 100)).await {
+                        tracing::warn!("Failed to send progress: {}", e);
+                    }
                 } else {
                     stalled_count += 1;
                     if stalled_count > 200 {
-                        let _ = ptx.send((95, 100)).await;
+                        if let Err(e) = ptx.send((95, 100)).await {
+                            tracing::warn!("Failed to send stalled progress: {}", e);
+                        }
                         break;
                     }
                 }
@@ -175,8 +189,12 @@ pub async fn run_recon(
         match recon_result {
             Ok(Ok(r)) => {
                 progress_handle.abort();
-                let _ = progress_tx.send((100, 100)).await;
-                let _ = result_tx.send(TaskResult::Recon(r)).await;
+                if let Err(e) = progress_tx.send((100, 100)).await {
+                    tracing::warn!("Failed to send progress: {}", e);
+                }
+                if let Err(e) = result_tx.send(TaskResult::Recon(r)).await {
+                    tracing::warn!("Failed to send recon result: {}", e);
+                }
                 if let Err(e) = progress_handle.await {
                     if e.is_panic() {
                         tracing::warn!("Progress tracking task panicked: {:?}", e);
@@ -201,7 +219,9 @@ pub async fn run_recon(
                         attempt,
                         delay
                     );
-                    let _ = progress_tx.send(((attempt as u64) * 20, 100)).await;
+                    if let Err(e) = progress_tx.send(((attempt as u64) * 20, 100)).await {
+                        tracing::warn!("Failed to send retry progress: {}", e);
+                    }
                     tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
                 } else {
                     tracing::error!("Recon failed after {} attempts: {:?}", max_retries, e);

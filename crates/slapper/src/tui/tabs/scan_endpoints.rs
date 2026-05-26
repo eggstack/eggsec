@@ -455,7 +455,7 @@ impl TabInput for ScanEndpointsTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.is_at_left_edge()
+            self.inputs.fields.is_empty() || self.inputs.is_at_left_edge()
         } else {
             true
         }
@@ -463,7 +463,7 @@ impl TabInput for ScanEndpointsTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.is_at_right_edge()
+            self.inputs.fields.is_empty() || self.inputs.is_at_right_edge()
         } else {
             true
         }

@@ -63,8 +63,10 @@ impl KeyHandler {
             (KeyModifiers::CONTROL, KeyCode::Char('z')) => app.toggle_pause(),
             (KeyModifiers::CONTROL, KeyCode::Char('t')) => app.toggle_theme(),
             (KeyModifiers::CONTROL, KeyCode::Char('v')) => {
-                if let Some(text) = Clipboard::get() {
-                    app.dispatcher_mut().handle_paste(&text);
+                if !app.has_active_task() {
+                    if let Some(text) = Clipboard::get() {
+                        app.dispatcher_mut().handle_paste(&text);
+                    }
                 }
             }
             (KeyModifiers::CONTROL, KeyCode::Char('y')) => {

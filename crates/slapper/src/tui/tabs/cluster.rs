@@ -549,7 +549,7 @@ impl TabInput for ClusterTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             ClusterFocusArea::ViewSelector if self.view_selector.is_open() => {
-                self.view_selector.selected == 0
+                self.view_selector.items.is_empty() || self.view_selector.selected == 0
             }
             ClusterFocusArea::ViewSelector => true,
             ClusterFocusArea::Inputs => {
@@ -567,7 +567,8 @@ impl TabInput for ClusterTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             ClusterFocusArea::ViewSelector if self.view_selector.is_open() => {
-                self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+                self.view_selector.items.is_empty()
+                    || self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
             }
             ClusterFocusArea::ViewSelector => true,
             ClusterFocusArea::Inputs => {

@@ -11,7 +11,9 @@ pub async fn run_load_plugins(
 
     let plugins = discover_all_plugins(config_plugins_dir);
 
-    let _ = result_tx.send(TaskResult::PluginsLoaded(plugins)).await;
+    if let Err(e) = result_tx.send(TaskResult::PluginsLoaded(plugins)).await {
+        tracing::warn!("Failed to send plugins loaded result: {}", e);
+    }
 
     Ok(())
 }
@@ -29,7 +31,9 @@ pub async fn run_plugin_check(
     use slapper_plugin::Plugin;
     use std::time::Instant;
 
-    let _ = progress_tx.send((0, 3)).await;
+    if let Err(e) = progress_tx.send((0, 3)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     #[cfg(feature = "python-plugins")]
     {
@@ -48,14 +52,18 @@ pub async fn run_plugin_check(
             .any(|check| check.name == plugin_name);
 
         if has_python_check {
-            let _ = progress_tx.send((1, 3)).await;
+            if let Err(e) = progress_tx.send((1, 3)).await {
+                tracing::warn!("Failed to send progress: {}", e);
+            }
             let results = tokio::time::timeout(
                 std::time::Duration::from_secs(timeout_secs),
                 python_mgr.run_check(&plugin_name, &target),
             )
             .await
             .map_err(|_| anyhow::anyhow!("Plugin execution timed out after {} seconds", timeout_secs))??;
-            let _ = progress_tx.send((2, 3)).await;
+            if let Err(e) = progress_tx.send((2, 3)).await {
+                tracing::warn!("Failed to send progress: {}", e);
+            }
 
             let mapped = PluginResults {
                 plugin_name: plugin_name.clone(),
@@ -75,8 +83,12 @@ pub async fn run_plugin_check(
                 execution_time_ms: results.execution_time_ms,
             };
 
-            let _ = progress_tx.send((3, 3)).await;
-            let _ = result_tx.send(TaskResult::PluginResult(mapped)).await;
+            if let Err(e) = progress_tx.send((3, 3)).await {
+                tracing::warn!("Failed to send progress: {}", e);
+            }
+            if let Err(e) = result_tx.send(TaskResult::PluginResult(mapped)).await {
+                tracing::warn!("Failed to send plugin result: {}", e);
+            }
             return Ok(());
         }
     }
@@ -87,10 +99,14 @@ pub async fn run_plugin_check(
         if let Ok(mut loader) = crate::ruby::PluginLoader::new(plugin_dirs) {
             let _ = loader.discover_plugins();
             if loader.list_plugins().iter().any(|p| p.name == plugin_name) {
-                let _ = progress_tx.send((1, 3)).await;
+                if let Err(e) = progress_tx.send((1, 3)).await {
+                    tracing::warn!("Failed to send progress: {}", e);
+                }
                 let started = Instant::now();
                 let result = loader.run_plugin(&plugin_name, &target, timeout_secs)?;
-                let _ = progress_tx.send((2, 3)).await;
+                if let Err(e) = progress_tx.send((2, 3)).await {
+                    tracing::warn!("Failed to send progress: {}", e);
+                }
 
                 let mapped = PluginResults {
                     plugin_name: plugin_name.clone(),
@@ -110,8 +126,12 @@ pub async fn run_plugin_check(
                     execution_time_ms: started.elapsed().as_millis() as u64,
                 };
 
-                let _ = progress_tx.send((3, 3)).await;
-                let _ = result_tx.send(TaskResult::PluginResult(mapped)).await;
+                if let Err(e) = progress_tx.send((3, 3)).await {
+                    tracing::warn!("Failed to send progress: {}", e);
+                }
+                if let Err(e) = result_tx.send(TaskResult::PluginResult(mapped)).await {
+                    tracing::warn!("Failed to send plugin result: {}", e);
+                }
                 return Ok(());
             }
         }

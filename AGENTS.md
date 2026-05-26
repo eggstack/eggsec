@@ -414,6 +414,54 @@ The codebase is in a healthy state with all major planned fixes implemented. Ong
 - **api.rs double map_err**: Fixed `api.rs:339` - removed duplicate `??` after `.map_err()` which caused unreachable error handling code. Now uses single `?` properly.
 - **recon.rs division guard**: Fixed `recon.rs:133` - added `total_stages.max(1)` guard for progress calculation to prevent division by zero if stages collection were empty.
 
+### Deep Dive Session Fixes (2026-05-31 Evening)
+
+#### TUI Tab Edge Detection is_empty() Guards
+
+| File | Lines | Selector/Field |
+|------|-------|----------------|
+| `stress.rs` | 455, 464 | `type_selector` |
+| `workflow.rs` | 524, 533 | `mode_selector` |
+| `packet.rs` | 840, 855 | `view_selector` |
+| `proxy.rs` | 649, 663 | `view_selector` |
+| `cluster.rs` | 552, 570 | `view_selector` |
+| `scan_ports.rs` | 491, 500 | InputGroup delegation |
+| `scan_endpoints.rs` | 458, 467 | InputGroup delegation |
+| `fingerprint.rs` | 405, 414 | InputGroup delegation |
+
+#### settings/input.rs is_running() Guards
+
+All 8 input handlers now properly guard with `!self.is_running()`:
+handle_char (36), handle_backspace (53), handle_paste (70), handle_enter (165), handle_up (269), handle_down (316), handle_left (364), handle_right (396)
+
+#### history.rs is_running() Guard
+
+- **history.rs:431**: Added `is_running()` guard to `handle_char` for hotkeys 'd' and 'C'
+
+#### components/input.rs InputGroup Edge Guards
+
+- **input.rs:668-682**: Fixed `is_at_left_edge()` and `is_at_right_edge()` to add `!self.fields.is_empty() && idx < self.fields.len()` guards
+
+#### key_handler.rs Ctrl+V Guard
+
+- **key_handler.rs:65-72**: Added `!app.has_active_task()` guard to Ctrl+V paste handler
+
+#### Worker Silent Error Suppression (88 occurrences fixed)
+
+| File | Count | Lines |
+|------|-------|-------|
+| `api.rs` | 15 | 22,63,140,146,159,160,200,220,231,245,292,293,310,341,351 |
+| `security.rs` | 27 | 20,22,23,36,38,39,53,179,182,183,200,205-208,213,217,222,245-247,257-261,263-267,272-274,279,282,301,305,316-318,320-324,328-330,333-338,342,356,362-364,378,397,400-402,406 |
+| `recon.rs` | 12 | 58,62,63,78,107,135,139,159,162,178,179,204 |
+| `network.rs` | 13 | 23,24,68-74,124,137-139,176-181,226,244-246,335,344,348-353 |
+| `plugin.rs` | 10 | 14,32,51,58,78,79,90,93,113,114 |
+| `scanner.rs` | 9 | 14,19,36,37,51,80,96,113,114 |
+| `fuzzer.rs` | 8 | 91,92,142,147,149,152,178,179 |
+
+#### network.rs Log Level Fix
+
+- **network.rs:172**: Changed `tracing::info!` to `tracing::debug!` for successful packet capture completion
+
 ---
 
 ## Verification Commands

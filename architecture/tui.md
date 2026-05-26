@@ -485,6 +485,28 @@ if let Err(e) = progress_handle.await {
 }
 ```
 
+### Worker Channel Send Error Handling
+
+Workers send progress and results via channels. Always handle send errors properly:
+
+```rust
+// WRONG - silent error suppression
+let _ = result_tx.send(TaskResult::LoadTest(results)).await;
+let _ = progress_tx.send((requests, requests)).await;
+
+// CORRECT - proper error handling with warn logging
+if let Err(e) = result_tx.send(TaskResult::LoadTest(results)).await {
+    tracing::warn!("Failed to send load test results: {}", e);
+}
+if let Err(e) = progress_tx.send((requests, requests)).await {
+    tracing::warn!("Failed to send progress: {}", e);
+}
+```
+
+This pattern was fixed across all 7 worker files (94 total occurrences) in the 2026-05-31 session:
+- `api.rs` (15), `security.rs` (27), `recon.rs` (12), `network.rs` (13)
+- `plugin.rs` (10), `scanner.rs` (9), `fuzzer.rs` (8)
+
 ### Selector confirm() Return Value
 
 Selector's `confirm()` returns `Option<&SelectorItem>`, not `Result`. Handle appropriately:

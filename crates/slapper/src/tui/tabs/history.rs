@@ -429,6 +429,9 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_char(&mut self, c: char) {
+        if self.is_running() {
+            return;
+        }
         match c {
             'd' => self.delete_selected(),
             'C' => self.clear_all(),

@@ -19,7 +19,9 @@ pub async fn run_graphql(
     use std::time::Instant;
 
     let start = Instant::now();
-    let _ = progress_tx.send((0, 100)).await;
+    if let Err(e) = progress_tx.send((0, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let client = crate::utils::get_shared_insecure_http_client();
 
@@ -60,7 +62,9 @@ pub async fn run_graphql(
         }
     }
 
-    let _ = progress_tx.send((25, 100)).await;
+    if let Err(e) = progress_tx.send((25, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let test_queries = fuzzer.generate_injection_queries(do_depth_bypass, do_alias_overload);
     let batch_queries = fuzzer.generate_batch_queries(do_alias_overload);
@@ -137,13 +141,17 @@ pub async fn run_graphql(
             }
 
             let progress = 25 + ((idx as u64 * 70) / total_queries as u64);
-            let _ = progress_tx.send((progress.min(95), 100)).await;
+            if let Err(e) = progress_tx.send((progress.min(95), 100)).await {
+                tracing::warn!("Failed to send progress: {}", e);
+            }
         }
     } else {
         total_requests += batch_count;
     }
 
-    let _ = progress_tx.send((98, 100)).await;
+    if let Err(e) = progress_tx.send((98, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let results = GraphQlResults {
         target: url.clone(),
@@ -156,8 +164,12 @@ pub async fn run_graphql(
         duration_ms: start.elapsed().as_millis() as u64,
     };
 
-    let _ = progress_tx.send((100, 100)).await;
-    let _ = result_tx.send(TaskResult::GraphQl(results)).await;
+    if let Err(e) = progress_tx.send((100, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
+    if let Err(e) = result_tx.send(TaskResult::GraphQl(results)).await {
+        tracing::warn!("Failed to send GraphQL results: {}", e);
+    }
 
     Ok(())
 }
@@ -197,7 +209,9 @@ pub async fn run_oauth(
     use crate::fuzzer::payloads::oauth::{OAuthFuzzer, OAuthTestResult};
     use crate::tui::tabs::oauth::OAuthResults;
 
-    let _ = progress_tx.send((0, 100)).await;
+    if let Err(e) = progress_tx.send((0, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let start_time = std::time::Instant::now();
     let client = crate::utils::get_shared_insecure_http_client();
@@ -217,7 +231,9 @@ pub async fn run_oauth(
         .with_state_test(state_test)
         .with_grant_test(grant_test);
 
-    let _ = progress_tx.send((20, 100)).await;
+    if let Err(e) = progress_tx.send((20, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let mut all_results: Vec<OAuthTestResult> = fuzzer.test_issuer().await;
     let mut total_requests = all_results.len();
@@ -228,7 +244,9 @@ pub async fn run_oauth(
         all_results.extend(redirect_results);
     }
 
-    let _ = progress_tx.send((50, 100)).await;
+    if let Err(e) = progress_tx.send((50, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     if scope_test {
         let scope_results = fuzzer.test_scope_escalation(&format!("{}/authorize", url));
@@ -242,7 +260,9 @@ pub async fn run_oauth(
         all_results.extend(state_results);
     }
 
-    let _ = progress_tx.send((75, 100)).await;
+    if let Err(e) = progress_tx.send((75, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     if grant_test {
         let grant_results = fuzzer.test_grant_type_mixing(&format!("{}/token", url));
@@ -289,8 +309,12 @@ pub async fn run_oauth(
         duration_ms,
     };
 
-    let _ = progress_tx.send((100, 100)).await;
-    let _ = result_tx.send(TaskResult::OAuth(results)).await;
+    if let Err(e) = progress_tx.send((100, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
+    if let Err(e) = result_tx.send(TaskResult::OAuth(results)).await {
+        tracing::warn!("Failed to send OAuth results: {}", e);
+    }
 
     Ok(())
 }
@@ -307,7 +331,9 @@ pub async fn run_nse(
     use crate::tui::tabs::nse::NseResults;
     use slapper_nse::NseExecutor;
 
-    let _ = progress_tx.send((0, 100)).await;
+    if let Err(e) = progress_tx.send((0, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let target_clone = target.clone();
     let script_clone = script.clone();
@@ -338,7 +364,9 @@ pub async fn run_nse(
     .await
     .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
 
-    let _ = progress_tx.send((100, 100)).await;
+    if let Err(e) = progress_tx.send((100, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let results = NseResults {
         target,
@@ -348,7 +376,9 @@ pub async fn run_nse(
         success,
     };
 
-    let _ = result_tx.send(TaskResult::Nse(results)).await;
+    if let Err(e) = result_tx.send(TaskResult::Nse(results)).await {
+        tracing::warn!("Failed to send NSE results: {}", e);
+    }
 
     Ok(())
 }

@@ -667,7 +667,7 @@ impl InputGroup {
 
     pub fn is_at_left_edge(&self) -> bool {
         if let Some(idx) = self.focused {
-            self.fields[idx].is_at_left_edge()
+            !self.fields.is_empty() && idx < self.fields.len() && self.fields[idx].is_at_left_edge()
         } else {
             true
         }
@@ -675,7 +675,7 @@ impl InputGroup {
 
     pub fn is_at_right_edge(&self) -> bool {
         if let Some(idx) = self.focused {
-            self.fields[idx].is_at_right_edge()
+            !self.fields.is_empty() && idx < self.fields.len() && self.fields[idx].is_at_right_edge()
         } else {
             true
         }

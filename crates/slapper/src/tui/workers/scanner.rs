@@ -11,12 +11,16 @@ pub async fn run_port_scan(
 ) -> anyhow::Result<()> {
     use crate::scanner::ports::scan_ports;
 
-    let _ = progress_tx.send((0, 100)).await;
+    if let Err(e) = progress_tx.send((0, 100)).await {
+        tracing::warn!("Failed to send initial progress: {}", e);
+    }
 
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
 
-    let _ = progress_tx.send((10, 100)).await;
+    if let Err(e) = progress_tx.send((10, 100)).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
 
     let results = scan_ports(
         &target,
@@ -33,8 +37,12 @@ pub async fn run_port_scan(
     .await?;
 
     let total = results.ports_scanned as u64;
-    let _ = result_tx.send(TaskResult::PortScan(results)).await;
-    let _ = progress_tx.send((total.max(1), total_ports.max(1))).await;
+    if let Err(e) = result_tx.send(TaskResult::PortScan(results)).await {
+        tracing::warn!("Failed to send port scan result: {}", e);
+    }
+    if let Err(e) = progress_tx.send((total.max(1), total_ports.max(1))).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
     Ok(())
 }
 
@@ -48,7 +56,9 @@ pub async fn run_endpoint_scan(
 ) -> anyhow::Result<()> {
     use crate::scanner::endpoints::{scan_endpoints, EndpointScanConfig, DEFAULT_ENDPOINTS};
 
-    let _ = progress_tx.send((0, 100)).await;
+    if let Err(e) = progress_tx.send((0, 100)).await {
+        tracing::warn!("Failed to send initial progress: {}", e);
+    }
 
     let endpoints: Vec<String> = if let Some(ref wl) = wordlist {
         tokio::fs::read_to_string(wl)
@@ -77,10 +87,15 @@ pub async fn run_endpoint_scan(
     .await?;
 
     let total = results.endpoints_scanned as u64;
-    let _ = result_tx.send(TaskResult::EndpointScan(results)).await;
-    let _ = progress_tx
+    if let Err(e) = result_tx.send(TaskResult::EndpointScan(results)).await {
+        tracing::warn!("Failed to send endpoint scan result: {}", e);
+    }
+    if let Err(e) = progress_tx
         .send((total.max(1), total_endpoints.max(1)))
-        .await;
+        .await
+    {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
     Ok(())
 }
 
@@ -93,7 +108,9 @@ pub async fn run_fingerprint(
 ) -> anyhow::Result<()> {
     use crate::scanner::fingerprint::fingerprint_services;
 
-    let _ = progress_tx.send((0, 100)).await;
+    if let Err(e) = progress_tx.send((0, 100)).await {
+        tracing::warn!("Failed to send initial progress: {}", e);
+    }
 
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
@@ -110,7 +127,11 @@ pub async fn run_fingerprint(
     .await?;
 
     let total = results.ports_scanned as u64;
-    let _ = result_tx.send(TaskResult::Fingerprint(results)).await;
-    let _ = progress_tx.send((total.max(1), total_ports.max(1))).await;
+    if let Err(e) = result_tx.send(TaskResult::Fingerprint(results)).await {
+        tracing::warn!("Failed to send fingerprint result: {}", e);
+    }
+    if let Err(e) = progress_tx.send((total.max(1), total_ports.max(1))).await {
+        tracing::warn!("Failed to send progress: {}", e);
+    }
     Ok(())
 }

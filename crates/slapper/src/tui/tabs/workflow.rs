@@ -521,7 +521,9 @@ impl TabInput for WorkflowTab {
 
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
-            WorkflowFocusArea::Mode => self.mode_selector.selected == 0,
+            WorkflowFocusArea::Mode => {
+                self.mode_selector.items.is_empty() || self.mode_selector.selected == 0
+            }
             WorkflowFocusArea::Inputs => self.inputs.is_at_left_edge(),
             _ => true,
         }
@@ -530,7 +532,8 @@ impl TabInput for WorkflowTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             WorkflowFocusArea::Mode => {
-                self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)
+                self.mode_selector.items.is_empty()
+                    || self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)
             }
             WorkflowFocusArea::Inputs => self.inputs.is_at_right_edge(),
             _ => true,
