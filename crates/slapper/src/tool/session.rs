@@ -522,7 +522,10 @@ impl LoginExecutor {
                         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                         .collect();
                     response_headers = headers_map.clone();
-                    let body = response.text().await.unwrap_or_default();
+                    let body = response.text().await.unwrap_or_else(|e| {
+                        tracing::warn!("Failed to read login response body: {}", e);
+                        String::new()
+                    });
 
                     // Store response body for extraction
                     variables.insert("_response_body".to_string(), body.clone());
@@ -1013,7 +1016,10 @@ impl SessionVerifier {
             })?;
 
         let status = response.status();
-        let body = response.text().await.unwrap_or_default();
+        let body = response.text().await.unwrap_or_else(|e| {
+            tracing::warn!("Failed to read verification response body: {}", e);
+            String::new()
+        });
 
         // Check for logged in indicators
         let logged_in = self.logged_in_patterns.iter().any(|p| p.is_match(&body));

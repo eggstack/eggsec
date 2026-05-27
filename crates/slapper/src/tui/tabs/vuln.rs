@@ -493,10 +493,15 @@ impl TabInput for VulnTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if self.focus_area == VulnFocusArea::Inputs {
             self.inputs.get_focused_value()
-        } else {
+        } else if self.focus_area == VulnFocusArea::Results {
             Some(self.results_view.get_content())
+        } else {
+            None
         }
     }
 

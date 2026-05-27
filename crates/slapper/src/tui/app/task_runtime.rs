@@ -69,11 +69,11 @@ impl super::App {
                 if let Err(e) = runner.run().await {
                     let friendly_error = super::make_friendly_error(&e);
                     tracing::error!("Task failed: {}", friendly_error);
-                    if let Err(_e) = error_tx
+                    if let Err(e) = error_tx
                         .send(workers::TaskResult::Error(friendly_error))
                         .await
                     {
-                        tracing::warn!("Failed to send task error result: receiver dropped");
+                        tracing::warn!("Failed to send task error result: {:?}", e);
                     }
                 }
             });

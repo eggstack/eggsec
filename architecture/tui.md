@@ -794,3 +794,57 @@ fn clamp_quick_switch_selection(&self, app: &mut App) {
 | `tool/session.rs` | 232, 288, 316, 461, 465, 1076 | HashMap → FxHashMap |
 | `tool/state.rs` | 124, 136 | HashMap → FxHashMap |
 | `recon/mod.rs` | 222, 254 | HashMap → FxHashMap |
+
+## Bug Fixes (2026-06-01 Session - Additional)
+
+### settings/main.rs Fixes
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `settings/main.rs` | 311-347 | `apply_to_config()` unsafe direct field access | Changed to safe `.get()` pattern with bounds checks |
+| `settings/main.rs` | 400,523,595 | Silent file write errors | Added `if let Err(e) = ...` with status_message |
+
+### Tab handle_enter() Fixes
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `report.rs` | 457-487 | `handle_enter()` returns early when not running | Restructured to allow selector interaction when idle |
+| `nse.rs` | 311-340 | `handle_enter()` logic issue with Results + is_running | Restructured to properly handle blur/selector |
+| `plugin.rs` | 356-388 | Missing `start()` method | Added `start()` method, restructured `handle_enter()` |
+| `graphql.rs` | 415-432 | Missing `is_running()` guard on `handle_enter()` | Added `!self.is_running()` guard |
+| `oauth.rs` | 459-476 | Missing `is_running()` guard on `handle_enter()` | Added `!self.is_running()` guard |
+| `recon.rs` | 591-596 | Missing `is_running()` guard on Options toggle | Added `!self.is_running()` guard |
+
+### Edge Detection Fixes
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `recon.rs` | 670-671 | Missing `is_empty()` guard on `is_at_left_edge()` | Added `self.option_checkboxes.is_empty() \|\|` |
+| `scrollable.rs` | 99-106 | `is_at_left_edge/is_at_right_edge` inconsistent | Added `is_empty()` guards to both methods |
+
+### Input/Render Fixes
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `stress.rs` | 263-267 | Direct array access `input_chunks[i]` | Changed to `.get(i)` pattern |
+| `stress.rs` | 390-404 | `handle_enter()` result not captured | Changed to `confirm().is_none()` pattern |
+| `storage.rs` | 339 | Direct array access `query_chunks[0]` | Changed to `.get(0)` pattern |
+| `integrations.rs` | 335 | Suspicious fallback `&[]` in slice access | Changed to `&self.issue_inputs.fields` |
+
+### Other Tab Fixes
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `vuln.rs` | 495-505 | `handle_copy()` missing `is_running()` guard | Added `!self.is_running()` guard |
+| `history.rs` | 441,443 | Empty handlers missing `is_running()` guards | Added `!self.is_running()` guards |
+| `auth.rs` | 227-229 | `fields.len() - 1` underflow risk | Added `!self.inputs.fields.is_empty()` guard |
+
+### Worker/App Fixes
+
+| File | Lines | Issue | Fix |
+|------|-------|-------|-----|
+| `plugin.rs` | 100 | Silent `discover_plugins()` call | Changed to `if let Err(e) = ...` with debug |
+| `task_runtime.rs` | 72-76 | Silent error suppression `Err(_e)` | Changed to `if let Err(e) = ...` using actual error |
+| `session.rs` | 525, 1016 | Silent error suppression `unwrap_or_default()` | Changed to `unwrap_or_else(\|e\| { warn!; String::new() })` |
+| `state.rs` | 217 | `debug!` instead of `warn!` for file removal | Changed to `tracing::warn!` |
+| `cache.rs` | 278 | `debug!` instead of `warn!` for cache dir creation | Changed to `tracing::warn!`

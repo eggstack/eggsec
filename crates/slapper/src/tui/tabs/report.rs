@@ -455,9 +455,6 @@ impl TabInput for ReportTab {
     }
 
     fn handle_enter(&mut self) {
-        if !self.is_running() {
-            return;
-        }
         match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {
@@ -483,6 +480,12 @@ impl TabInput for ReportTab {
                 current_inputs.blur();
             }
             ReportFocusArea::Results => {}
+        }
+
+        if self.is_running() {
+            self.stop();
+        } else {
+            self.start();
         }
     }
 
@@ -612,6 +615,12 @@ impl TabInput for ReportTab {
 }
 
 impl ReportTab {
+    pub fn start(&mut self) {
+        if self.state != AppState::Running {
+            self.state = AppState::Running;
+        }
+    }
+
     pub fn stop(&mut self) {
         if self.state == AppState::Running {
             self.state = AppState::Idle;

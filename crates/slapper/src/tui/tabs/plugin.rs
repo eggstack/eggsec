@@ -354,18 +354,22 @@ impl TabInput for PluginTab {
     }
 
     fn handle_enter(&mut self) {
-        if self.is_running() {
-            self.stop();
+        if self.focus_area == PluginFocusArea::Inputs {
+            self.inputs.blur();
             return;
         }
-        match self.focus_area {
-            PluginFocusArea::Inputs => {
-                self.inputs.blur();
-            }
-            PluginFocusArea::PluginSelector => {
+
+        if self.focus_area == PluginFocusArea::PluginSelector {
+            if self.plugin_selector.focused {
                 self.plugin_selector.handle_enter();
             }
-            PluginFocusArea::Results => {}
+            return;
+        }
+
+        if self.is_running() {
+            self.stop();
+        } else {
+            self.start();
         }
     }
 
@@ -444,6 +448,12 @@ impl TabInput for PluginTab {
 }
 
 impl PluginTab {
+    pub fn start(&mut self) {
+        if self.state != AppState::Running {
+            self.state = AppState::Running;
+        }
+    }
+
     pub fn stop(&mut self) {
         if self.state == AppState::Running {
             self.state = AppState::Idle;

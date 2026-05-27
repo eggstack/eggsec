@@ -214,7 +214,7 @@ impl SessionManager {
             sessions.remove(id);
             let path = storage_path.join(format!("{}.json", id));
             if let Err(e) = fs::remove_file(path) {
-                tracing::debug!("Failed to remove expired session file {:?}: {}", path, e);
+                tracing::warn!("Failed to remove expired session file {:?}: {}", path, e);
             }
         }
 

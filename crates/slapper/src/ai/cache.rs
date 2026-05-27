@@ -275,7 +275,7 @@ impl AiCache {
         if let Some(ref path) = self.persist_path {
             if let Some(parent) = path.parent() {
                 if let Err(e) = std::fs::create_dir_all(parent) {
-                    tracing::debug!("Failed to create cache directory: {}", e);
+                    tracing::warn!("Failed to create cache directory: {}", e);
                 }
             }
 

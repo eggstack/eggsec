@@ -413,6 +413,9 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             GraphQlFocusArea::Inputs => {
                 self.inputs.blur();

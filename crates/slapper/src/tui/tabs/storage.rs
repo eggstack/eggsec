@@ -336,7 +336,9 @@ impl TabRender for StorageTab {
 
             let mut sel = self.mode_selector.clone();
             sel.focused = self.focus_area == StorageFocusArea::Mode;
-            sel.render(f, query_chunks[0]);
+            if let Some(chunk) = query_chunks.get(0) {
+                sel.render(f, *chunk);
+            }
 
             for (i, field) in self.query_inputs.fields.iter().enumerate() {
                 if let Some(chunk) = query_chunks.get(i + 1) {

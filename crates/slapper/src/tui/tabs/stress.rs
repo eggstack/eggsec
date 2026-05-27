@@ -261,8 +261,8 @@ impl TabRender for StressTab {
         f.render_widget(input_block, chunks[0]);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
-            if i < input_chunks.len() {
-                field.render(f, input_chunks[i], insert_mode);
+            if let Some(chunk) = input_chunks.get(i) {
+                field.render(f, *chunk, insert_mode);
             }
         }
 
@@ -393,7 +393,13 @@ impl TabInput for StressTab {
                 self.inputs.blur();
             }
             StressFocusArea::TypeSelector => {
-                self.type_selector.handle_enter();
+                if self.type_selector.is_open() {
+                    if self.type_selector.confirm().is_none() {
+                        tracing::warn!("Failed to confirm stress type selector");
+                    }
+                } else {
+                    self.type_selector.open();
+                }
             }
             StressFocusArea::Results => {}
         }

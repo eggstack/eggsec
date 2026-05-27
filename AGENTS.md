@@ -596,8 +596,65 @@ handle_char (36), handle_backspace (53), handle_paste (70), handle_enter (165), 
 
 | File | Line | Issue | Fix |
 |------|------|-------|-----|
-| `ai/cache.rs` | 277 | Silent directory creation error | Changed to `if let Err(e) = ...` with debug logging |
+| `ai/cache.rs` | 277 | Silent directory creation error | Changed to `if let Err(e) = ...` with warn logging |
 | `ai/planner.rs` | 473 | fallback_key cache key collision | Added `.replace('\x00)', "")` sanitization |
+
+---
+
+## Bug Fixes (2026-06-01 Session - Deep Dive)
+
+### TUI Tab Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `settings/main.rs` | 311-347 | `apply_to_config()` unsafe direct field access | Changed to safe `.get()` pattern with bounds checks |
+| `settings/main.rs` | 400,523,595 | Silent file write errors | Added `if let Err(e) = ...` with status_message |
+| `report.rs` | 457-487 | `handle_enter()` returns early when not running | Restructured to allow selector interaction when idle |
+| `nse.rs` | 311-340 | `handle_enter()` logic issue with Results + is_running | Restructured to properly handle blur/selector |
+| `plugin.rs` | 356-388 | Missing `start()` method | Added `start()` method, restructured `handle_enter()` |
+| `graphql.rs` | 415-432 | Missing `is_running()` guard on `handle_enter()` | Added `!self.is_running()` guard |
+| `oauth.rs` | 459-476 | Missing `is_running()` guard on `handle_enter()` | Added `!self.is_running()` guard |
+| `recon.rs` | 591-596 | Missing `is_running()` guard on Options toggle | Added `!self.is_running()` guard |
+| `recon.rs` | 670-671 | Missing `is_empty()` guard on `is_at_left_edge()` | Added `self.option_checkboxes.is_empty() \|\|` |
+| `stress.rs` | 263-267 | Direct array access `input_chunks[i]` | Changed to `.get(i)` pattern |
+| `stress.rs` | 390-404 | `handle_enter()` uses `handle_enter()` result not captured | Changed to `confirm().is_none()` pattern |
+| `storage.rs` | 339 | Direct array access `query_chunks[0]` | Changed to `.get(0)` pattern |
+| `integrations.rs` | 335 | Suspicious fallback `&[]` in slice access | Changed to `&self.issue_inputs.fields` |
+| `vuln.rs` | 495-505 | `handle_copy()` missing `is_running()` guard | Added `!self.is_running()` guard |
+| `history.rs` | 441,443 | Empty handlers missing `is_running()` guards | Added `!self.is_running()` guards |
+| `auth.rs` | 227-229 | `fields.len() - 1` underflow risk | Added `!self.inputs.fields.is_empty()` guard |
+
+### TUI Component Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scrollable.rs` | 99-106 | `is_at_left_edge/is_at_right_edge` inconsistent with empty lines | Added `is_empty()` guards to both methods |
+
+### TUI Worker Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `plugin.rs` | 100 | Silent `discover_plugins()` call with `let _` | Changed to `if let Err(e) = ...` with debug logging |
+
+### TUI App Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `task_runtime.rs` | 72-76 | Silent error suppression with `Err(_e)` | Changed to `if let Err(e) = ...` using actual error value |
+
+### Tool Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `session.rs` | 525 | Silent error suppression `unwrap_or_default()` | Changed to `unwrap_or_else(\|e\| { warn!; String::new() })` |
+| `session.rs` | 1016 | Silent error suppression `unwrap_or_default()` | Same fix pattern |
+| `state.rs` | 217 | `debug!` instead of `warn!` for file removal | Changed to `tracing::warn!` |
+
+### AI Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `cache.rs` | 278 | `debug!` instead of `warn!` for cache dir creation | Changed to `tracing::warn!` |
 
 ---
 

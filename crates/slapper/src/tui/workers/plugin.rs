@@ -97,7 +97,9 @@ pub async fn run_plugin_check(
     {
         let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(config_plugins_dir);
         if let Ok(mut loader) = crate::ruby::PluginLoader::new(plugin_dirs) {
-            let _ = loader.discover_plugins();
+            if let Err(e) = loader.discover_plugins() {
+                tracing::debug!("Failed to discover Ruby plugins: {}", e);
+            }
             if loader.list_plugins().iter().any(|p| p.name == plugin_name) {
                 if let Err(e) = progress_tx.send((1, 3)).await {
                     tracing::warn!("Failed to send progress: {}", e);

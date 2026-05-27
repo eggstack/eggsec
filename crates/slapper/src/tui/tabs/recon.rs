@@ -589,7 +589,7 @@ impl TabInput for ReconTab {
         }
 
         if self.focus_area == ReconFocusArea::Options {
-            if self.focused_checkbox_index < self.option_checkboxes.len() {
+            if !self.is_running() && self.focused_checkbox_index < self.option_checkboxes.len() {
                 self.option_checkboxes[self.focused_checkbox_index].toggle();
             }
             return;
@@ -668,7 +668,7 @@ impl TabInput for ReconTab {
         if self.focus_area == ReconFocusArea::Inputs {
             self.inputs.is_at_left_edge()
         } else if self.focus_area == ReconFocusArea::Options {
-            self.focused_checkbox_index == 0
+            self.option_checkboxes.is_empty() || self.focused_checkbox_index == 0
         } else if self.focus_area == ReconFocusArea::Results {
             self.results_view.is_at_left_edge()
         } else {
