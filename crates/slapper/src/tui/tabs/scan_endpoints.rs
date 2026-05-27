@@ -431,15 +431,15 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_enter(&mut self) {
-        if !self.is_running() && self.inputs.is_focused() {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
+        if self.inputs.is_focused() {
             self.inputs.blur();
             return;
         }
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
-        }
+        self.start();
     }
 
     fn handle_escape(&mut self) {

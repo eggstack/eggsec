@@ -525,7 +525,7 @@ impl TabInput for StorageTab {
     }
 
     fn handle_top(&mut self) {
-        if !self.is_running() {
+        if self.is_running() {
             return;
         }
         self.focus_area = StorageFocusArea::Config;
@@ -533,7 +533,7 @@ impl TabInput for StorageTab {
     }
 
     fn handle_bottom(&mut self) {
-        if !self.is_running() {
+        if self.is_running() {
             return;
         }
         self.focus_area = StorageFocusArea::Results;

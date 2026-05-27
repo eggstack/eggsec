@@ -437,6 +437,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if self.focus_area == OAuthFocusArea::Inputs {
             self.inputs.get_focused_value()
         } else if self.focus_area == OAuthFocusArea::Results {

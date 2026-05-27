@@ -555,18 +555,24 @@ impl TabInput for WafTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.inputs.is_focused() && !self.detection_view.is_empty() {
-            self.scroll_detection_up();
-        } else {
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == WafFocusArea::Inputs {
             self.inputs.focus_prev();
+        } else if self.focus_area == WafFocusArea::Results {
+            self.scroll_detection_up();
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.inputs.is_focused() && !self.detection_view.is_empty() {
-            self.scroll_detection_down();
-        } else {
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == WafFocusArea::Inputs {
             self.inputs.focus_next();
+        } else if self.focus_area == WafFocusArea::Results {
+            self.scroll_detection_down();
         }
     }
 

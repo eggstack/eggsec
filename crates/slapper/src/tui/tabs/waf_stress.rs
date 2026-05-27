@@ -145,13 +145,13 @@ impl TabState for WafStressTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        if self.inputs.fields.len() > 1 {
-            self.inputs.fields[1].value = "20".to_string();
-            self.inputs.fields[1].cursor_pos = 2;
+        if let Some(field) = self.inputs.fields.get_mut(1) {
+            field.value = "20".to_string();
+            field.cursor_pos = 2;
         }
-        if self.inputs.fields.len() > 2 {
-            self.inputs.fields[2].value = "10".to_string();
-            self.inputs.fields[2].cursor_pos = 2;
+        if let Some(field) = self.inputs.fields.get_mut(2) {
+            field.value = "10".to_string();
+            field.cursor_pos = 2;
         }
         self.focus_area = WafStressFocusArea::Inputs;
     }

@@ -492,6 +492,9 @@ impl SettingsTab {
         for field in self.notify_inputs.fields.iter_mut() {
             field.value.clear();
         }
+        for field in self.session_inputs.fields.iter_mut() {
+            field.value.clear();
+        }
         self.follow_redirects.checked = true;
         self.verify_tls.checked = true;
         self.stealth_mode.checked = false;

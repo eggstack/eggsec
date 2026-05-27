@@ -509,22 +509,23 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_top(&mut self) {
-        if !self.is_running() {
-            self.focus_area = IntegrationsFocusArea::Tracker;
-            self.tracker_selector.focus();
+        if self.is_running() {
+            return;
         }
+        self.focus_area = IntegrationsFocusArea::Tracker;
+        self.tracker_selector.focus();
     }
 
     fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            self.focus_area = IntegrationsFocusArea::Results;
+        if self.is_running() {
+            return;
         }
+        self.focus_area = IntegrationsFocusArea::Results;
     }
 
     fn handle_enter(&mut self) {
         if self.is_running() {
             self.stop();
-            return;
         }
         match self.focus_area {
             IntegrationsFocusArea::Tracker => {

@@ -187,7 +187,8 @@ impl HuntTab {
     pub fn start(&mut self) {
         if !self.target().is_empty() {
             self.state = AppState::Running;
-            self.progress.current = 0;
+self.progress.current = 0;
+        self.progress.total = 0;
             self.report = None;
             self.results_view.clear();
         }
@@ -230,6 +231,7 @@ impl TabState for HuntTab {
         self.state = AppState::Idle;
         self.report = None;
         self.progress.current = 0;
+        self.progress.total = 0;
         self.results_view.clear();
         self.error = None;
         for field in &mut self.inputs.fields {
@@ -447,8 +449,10 @@ impl TabInput for HuntTab {
         }
 
         if self.focus_area == HuntFocusArea::Options {
-            if let Some(checkbox) = self.option_checkboxes.get_mut(self.focused_checkbox_index) {
-                checkbox.toggle();
+            if !self.is_running() {
+                if let Some(checkbox) = self.option_checkboxes.get_mut(self.focused_checkbox_index) {
+                    checkbox.toggle();
+                }
             }
             return;
         }

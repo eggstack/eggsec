@@ -371,14 +371,18 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return;
         }
-        self.inputs.focus_next();
+        if !self.inputs.fields.is_empty() {
+            self.inputs.focus_next();
+        }
     }
 
     fn handle_focus_prev(&mut self) {
         if self.is_running() {
             return;
         }
-        self.inputs.focus_prev();
+        if !self.inputs.fields.is_empty() {
+            self.inputs.focus_prev();
+        }
     }
 
     fn handle_up(&mut self) {

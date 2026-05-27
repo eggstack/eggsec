@@ -272,6 +272,9 @@ impl TabRender for PluginTab {
 
 impl TabInput for PluginTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             PluginFocusArea::Inputs => {
                 self.inputs.blur();
@@ -289,6 +292,9 @@ impl TabInput for PluginTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             PluginFocusArea::Inputs => {
                 self.inputs.blur();

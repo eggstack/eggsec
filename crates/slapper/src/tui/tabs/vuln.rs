@@ -562,7 +562,6 @@ impl TabInput for VulnTab {
     fn handle_enter(&mut self) {
         if self.is_running() {
             self.stop();
-            return;
         }
         match self.focus_area {
             VulnFocusArea::Mode => {
@@ -580,6 +579,9 @@ impl TabInput for VulnTab {
                 self.inputs.blur();
             }
             VulnFocusArea::Results => {}
+        }
+        if !self.is_running() {
+            self.start();
         }
     }
 

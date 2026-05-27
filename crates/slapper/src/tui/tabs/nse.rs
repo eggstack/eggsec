@@ -1,6 +1,6 @@
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
-use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
+use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -13,7 +13,7 @@ use ratatui::{
 pub struct NseTab {
     pub inputs: InputGroup,
     pub script_selector: Selector,
-    pub progress: f64,
+    pub progress: ProgressGauge,
     pub state: AppState,
     pub results_view: ScrollableText,
     pub focus_area: NseFocusArea,
@@ -47,7 +47,7 @@ impl NseTab {
         Self {
             inputs,
             script_selector,
-            progress: 0.0,
+            progress: ProgressGauge::new("NSE Scan"),
             state: AppState::Idle,
             results_view: ScrollableText::new("NSE Results"),
             focus_area: NseFocusArea::Inputs,
@@ -134,13 +134,14 @@ impl TabState for NseTab {
     }
 
     fn progress(&self) -> f64 {
-        self.progress
+        self.progress.percent() as f64
     }
 
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.results_view.clear();
-        self.progress = 0.0;
+        self.progress.current = 0;
+        self.progress.total = 0;
         self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();

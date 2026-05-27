@@ -142,7 +142,9 @@ impl HistoryTab {
 
     pub fn delete_selected(&mut self) {
         if let Some(idx) = self.selected {
-            self.entries.remove(idx);
+            if idx < self.entries.len() {
+                self.entries.remove(idx);
+            }
             if self.entries.is_empty() {
                 self.selected = None;
                 self.details_view.clear();
@@ -608,6 +610,9 @@ impl TabInput for HistoryTab {
 
     fn is_at_left_edge(&self) -> bool {
         if self.focus_area == HistoryFocusArea::Details {
+            if self.details_view.is_empty() {
+                return true;
+            }
             self.details_view.is_at_left_edge()
         } else {
             true
@@ -616,6 +621,9 @@ impl TabInput for HistoryTab {
 
     fn is_at_right_edge(&self) -> bool {
         if self.focus_area == HistoryFocusArea::Details {
+            if self.details_view.is_empty() {
+                return true;
+            }
             self.details_view.is_at_right_edge()
         } else {
             true

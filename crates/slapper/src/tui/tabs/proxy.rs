@@ -595,7 +595,7 @@ impl TabInput for ProxyTab {
     }
 
     fn handle_enter(&mut self) {
-        if !self.is_running() {
+        if self.is_running() {
             return;
         }
         if self.view_selector.is_focused() {

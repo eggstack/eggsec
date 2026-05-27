@@ -325,25 +325,19 @@ impl TabRender for WorkflowTab {
                 .split(fields_area);
 
             for (i, &idx) in fields.iter().enumerate() {
-                if idx == 5 {
+                if let Some(chunk) = field_chunks.get(i) {
                     if idx < self.inputs.fields.len() {
-                        if let Some(chunk) = field_chunks.get(i) {
+                        if idx == 5 {
                             let mut sev = self.severity_selector.clone();
                             sev.focused = self.focus_area == WorkflowFocusArea::Inputs;
                             sev.render(f, *chunk);
-                        }
-                    }
-                } else if idx == 6 {
-                    if idx < self.inputs.fields.len() {
-                        if let Some(chunk) = field_chunks.get(i) {
+                        } else if idx == 6 {
                             let mut st = self.status_selector.clone();
                             st.focused = self.focus_area == WorkflowFocusArea::Inputs;
                             st.render(f, *chunk);
+                        } else {
+                            self.inputs.fields[idx].render(f, *chunk, insert_mode);
                         }
-                    }
-                } else if idx < self.inputs.fields.len() {
-                    if let Some(chunk) = field_chunks.get(i) {
-                        self.inputs.fields[idx].render(f, *chunk, insert_mode);
                     }
                 }
             }
@@ -479,28 +473,28 @@ impl TabInput for WorkflowTab {
     fn handle_enter(&mut self) {
         if self.is_running() {
             self.stop();
-            return;
-        }
-        match self.focus_area {
-            WorkflowFocusArea::Mode => {
-                self.mode_selector.handle_enter();
-                self.current_mode = match self.mode_selector.selected {
-                    0 => WorkflowMode::ListFindings,
-                    1 => WorkflowMode::CreateFinding,
-                    2 => WorkflowMode::AssignFinding,
-                    3 => WorkflowMode::AddComment,
-                    _ => WorkflowMode::ChangeStatus,
-                };
-                return;
+        } else {
+            match self.focus_area {
+                WorkflowFocusArea::Mode => {
+                    self.mode_selector.handle_enter();
+                    self.current_mode = match self.mode_selector.selected {
+                        0 => WorkflowMode::ListFindings,
+                        1 => WorkflowMode::CreateFinding,
+                        2 => WorkflowMode::AssignFinding,
+                        3 => WorkflowMode::AddComment,
+                        _ => WorkflowMode::ChangeStatus,
+                    };
+                    return;
+                }
+                WorkflowFocusArea::Inputs => {
+                    self.inputs.blur();
+                    return;
+                }
+                WorkflowFocusArea::Results => {}
             }
-            WorkflowFocusArea::Inputs => {
-                self.inputs.blur();
-                return;
-            }
-            WorkflowFocusArea::Results => {}
-        }
 
-        self.start();
+            self.start();
+        }
     }
 
     fn handle_escape(&mut self) {

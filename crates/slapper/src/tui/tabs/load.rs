@@ -152,7 +152,10 @@ impl LoadTab {
                     .filter(|s| !s.is_empty())
                     .collect()
             })
-            .unwrap_or_default()
+            .unwrap_or_else(|| {
+                tracing::warn!("Failed to parse headers");
+                Vec::new()
+            })
     }
 
     pub fn set_results(&mut self, results: LoadTestResults) {
