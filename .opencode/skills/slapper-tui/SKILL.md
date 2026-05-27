@@ -1164,3 +1164,33 @@ Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `ha
 | `tool/protocol/mcp/handlers/server.rs` | 35-36, 58-59 | HashMap vs FxHashMap | Low |
 | `fuzzer/detection/analyzer.rs` | 231-234 | Empty vector panic risk | Medium (guarded) |
 | `recon/subdomain.rs` | 178,240,262 | Silent ok() | Low |
+
+
+## Session Fixes (2026-06-04)
+
+### App Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `task_runtime.rs` | 83-91 | Timeout case did not abort JoinHandle | Added `handle.abort()` after timeout error |
+| `state_update.rs` | 68 | Unhandled TaskResult warning missing context | Changed to `tracing::warn!("Unhandled TaskResult variant: {:?}", result);` |
+
+### TUI Deep Dive Audit (2026-06-04)
+
+Completed comprehensive audit of all 29 TUI tabs across 6 groups. Fixed ~100+ issues:
+
+| Group | Tabs | Fixes |
+|-------|------|-------|
+| Group 1 | recon, scan, scan_ports, scan_endpoints, fingerprint | 21 navigation guards + handle_enter logic + reset() |
+| Group 2 | fuzz, waf, waf_stress, load, stress | 40 navigation guards |
+| Group 3 | packet, graphql, oauth, cluster, proxy | 13 fixes (bounds, guards, logic) |
+| Group 4 | nse, plugin, hunt, browser, compliance | 15+ fixes |
+| Group 5 | storage, integrations, workflow, vuln, report | 8 major fixes |
+| Group 6 | history, settings | 18 navigation guards + reset fields |
+
+Key patterns fixed:
+- **handle_enter() logic**: 8 tabs where blur happened BEFORE stop (should be stop → blur → start)
+- **Navigation handlers**: ~97 missing `!self.is_running()` guards across 17 tabs
+- **reset() methods**: 11 tabs now properly reset checkbox/selector state
+- **Edge detection**: 5 tabs added missing `is_empty()` guards
+

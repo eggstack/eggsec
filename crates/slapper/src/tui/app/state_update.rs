@@ -64,7 +64,14 @@ impl super::App {
             Some(r) => r,
             None => return,
         };
-        if self.handle_feature_result(result).is_none() {
+        let unhandled = match self.handle_security_result(result) {
+            Some(r) => match self.handle_protocol_result(r) {
+                Some(r) => self.handle_feature_result(r).is_none(),
+                None => true,
+            },
+            None => true,
+        };
+        if unhandled {
             tracing::warn!("Unhandled TaskResult variant");
         }
     }

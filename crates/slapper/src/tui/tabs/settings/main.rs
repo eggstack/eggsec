@@ -489,6 +489,12 @@ impl SettingsTab {
         self.follow_redirects.checked = true;
         self.verify_tls.checked = true;
         self.stealth_mode.checked = false;
+        self.notify_on_complete.checked = false;
+        self.notify_on_findings.checked = false;
+        self.proxy_rotation_selector.select(0);
+        self.severity_selector.select(0);
+        self.dark_mode.checked = false;
+        self.accent_color.select(0);
         self.status_message = "Settings reset to defaults".to_string();
     }
 

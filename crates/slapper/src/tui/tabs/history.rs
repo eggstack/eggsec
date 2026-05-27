@@ -416,12 +416,18 @@ impl TabRender for HistoryTab {
 
 impl TabInput for HistoryTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             HistoryFocusArea::List => HistoryFocusArea::Details,
             HistoryFocusArea::Details => HistoryFocusArea::List,
         };
     }
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             HistoryFocusArea::List => HistoryFocusArea::Details,
             HistoryFocusArea::Details => HistoryFocusArea::List,
@@ -464,18 +470,27 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_word_forward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == HistoryFocusArea::Details {
             self.details_view.scroll_right(5);
         }
     }
 
     fn handle_word_backward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == HistoryFocusArea::Details {
             self.details_view.scroll_left(5);
         }
     }
 
     fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             HistoryFocusArea::List => {
                 if !self.entries.is_empty() {
@@ -489,6 +504,9 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             HistoryFocusArea::List => {
                 if !self.entries.is_empty() {
@@ -503,10 +521,16 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.handle_home();
     }
 
     fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.handle_end();
     }
 
@@ -517,6 +541,9 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             HistoryFocusArea::List => self.select_prev(),
             HistoryFocusArea::Details => self.details_view.scroll_up(1),
@@ -524,6 +551,9 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             HistoryFocusArea::List => self.select_next(),
             HistoryFocusArea::Details => self.details_view.scroll_down(1),
@@ -531,6 +561,9 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == HistoryFocusArea::Details {
             self.details_view.scroll_left(5);
             true
@@ -540,6 +573,9 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == HistoryFocusArea::Details {
             self.details_view.scroll_right(5);
             true
