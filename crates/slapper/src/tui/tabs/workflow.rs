@@ -423,30 +423,34 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == WorkflowFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == WorkflowFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
-        if self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.move_home();
-        } else if self.focus_area == WorkflowFocusArea::Results {
-            self.results_view.scroll_to_top();
+        if !self.is_running() {
+            if self.focus_area == WorkflowFocusArea::Inputs {
+                self.inputs.move_home();
+            } else if self.focus_area == WorkflowFocusArea::Results {
+                self.results_view.scroll_to_top();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if self.focus_area == WorkflowFocusArea::Inputs {
-            self.inputs.move_end();
-        } else if self.focus_area == WorkflowFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+        if !self.is_running() {
+            if self.focus_area == WorkflowFocusArea::Inputs {
+                self.inputs.move_end();
+            } else if self.focus_area == WorkflowFocusArea::Results {
+                self.results_view.scroll_to_bottom();
+            }
         }
     }
 
@@ -492,34 +496,38 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_up(&mut self) {
-        match self.focus_area {
-            WorkflowFocusArea::Mode => self.mode_selector.handle_up(),
-            WorkflowFocusArea::Inputs => self.inputs.focus_prev(),
-            WorkflowFocusArea::Results => self.results_view.scroll_up(1),
+        if !self.is_running() {
+            match self.focus_area {
+                WorkflowFocusArea::Mode => self.mode_selector.handle_up(),
+                WorkflowFocusArea::Inputs => self.inputs.focus_prev(),
+                WorkflowFocusArea::Results => self.results_view.scroll_up(1),
+            }
         }
     }
 
     fn handle_down(&mut self) {
-        match self.focus_area {
-            WorkflowFocusArea::Mode => self.mode_selector.handle_down(),
-            WorkflowFocusArea::Inputs => self.inputs.focus_next(),
-            WorkflowFocusArea::Results => self.results_view.scroll_down(1),
+        if !self.is_running() {
+            match self.focus_area {
+                WorkflowFocusArea::Mode => self.mode_selector.handle_down(),
+                WorkflowFocusArea::Inputs => self.inputs.focus_next(),
+                WorkflowFocusArea::Results => self.results_view.scroll_down(1),
+            }
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        if self.focus_area == WorkflowFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.move_left()
         } else {
-            true
+            false
         }
     }
 
     fn handle_right(&mut self) -> bool {
-        if self.focus_area == WorkflowFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == WorkflowFocusArea::Inputs {
             self.inputs.move_right()
         } else {
-            true
+            false
         }
     }
 

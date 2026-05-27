@@ -466,38 +466,46 @@ impl TabInput for StorageTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == StorageFocusArea::Config {
-            self.config_inputs.move_word_forward();
-        } else if self.focus_area == StorageFocusArea::Query {
-            self.query_inputs.move_word_forward();
+        if !self.is_running() {
+            if self.focus_area == StorageFocusArea::Config {
+                self.config_inputs.move_word_forward();
+            } else if self.focus_area == StorageFocusArea::Query {
+                self.query_inputs.move_word_forward();
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == StorageFocusArea::Config {
-            self.config_inputs.move_word_backward();
-        } else if self.focus_area == StorageFocusArea::Query {
-            self.query_inputs.move_word_backward();
+        if !self.is_running() {
+            if self.focus_area == StorageFocusArea::Config {
+                self.config_inputs.move_word_backward();
+            } else if self.focus_area == StorageFocusArea::Query {
+                self.query_inputs.move_word_backward();
+            }
         }
     }
 
     fn handle_home(&mut self) {
-        if self.focus_area == StorageFocusArea::Config {
-            self.config_inputs.move_home();
-        } else if self.focus_area == StorageFocusArea::Query {
-            self.query_inputs.move_home();
-        } else if self.focus_area == StorageFocusArea::Results {
-            self.results_view.scroll_to_top();
+        if !self.is_running() {
+            if self.focus_area == StorageFocusArea::Config {
+                self.config_inputs.move_home();
+            } else if self.focus_area == StorageFocusArea::Query {
+                self.query_inputs.move_home();
+            } else if self.focus_area == StorageFocusArea::Results {
+                self.results_view.scroll_to_top();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if self.focus_area == StorageFocusArea::Config {
-            self.config_inputs.move_end();
-        } else if self.focus_area == StorageFocusArea::Query {
-            self.query_inputs.move_end();
-        } else if self.focus_area == StorageFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+        if !self.is_running() {
+            if self.focus_area == StorageFocusArea::Config {
+                self.config_inputs.move_end();
+            } else if self.focus_area == StorageFocusArea::Query {
+                self.query_inputs.move_end();
+            } else if self.focus_area == StorageFocusArea::Results {
+                self.results_view.scroll_to_bottom();
+            }
         }
     }
 
@@ -544,36 +552,48 @@ impl TabInput for StorageTab {
     }
 
     fn handle_up(&mut self) {
-        match self.focus_area {
-            StorageFocusArea::Config => self.config_inputs.focus_prev(),
-            StorageFocusArea::Mode => self.mode_selector.handle_up(),
-            StorageFocusArea::Query => self.query_inputs.focus_prev(),
-            StorageFocusArea::Results => self.results_view.scroll_up(1),
+        if !self.is_running() {
+            match self.focus_area {
+                StorageFocusArea::Config => self.config_inputs.focus_prev(),
+                StorageFocusArea::Mode => self.mode_selector.handle_up(),
+                StorageFocusArea::Query => self.query_inputs.focus_prev(),
+                StorageFocusArea::Results => self.results_view.scroll_up(1),
+            }
         }
     }
 
     fn handle_down(&mut self) {
-        match self.focus_area {
-            StorageFocusArea::Config => self.config_inputs.focus_next(),
-            StorageFocusArea::Mode => self.mode_selector.handle_down(),
-            StorageFocusArea::Query => self.query_inputs.focus_next(),
-            StorageFocusArea::Results => self.results_view.scroll_down(1),
+        if !self.is_running() {
+            match self.focus_area {
+                StorageFocusArea::Config => self.config_inputs.focus_next(),
+                StorageFocusArea::Mode => self.mode_selector.handle_down(),
+                StorageFocusArea::Query => self.query_inputs.focus_next(),
+                StorageFocusArea::Results => self.results_view.scroll_down(1),
+            }
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        match self.focus_area {
-            StorageFocusArea::Config => self.config_inputs.move_left(),
-            StorageFocusArea::Query => self.query_inputs.move_left(),
-            _ => false,
+        if !self.is_running() {
+            match self.focus_area {
+                StorageFocusArea::Config => self.config_inputs.move_left(),
+                StorageFocusArea::Query => self.query_inputs.move_left(),
+                _ => false,
+            }
+        } else {
+            false
         }
     }
 
     fn handle_right(&mut self) -> bool {
-        match self.focus_area {
-            StorageFocusArea::Config => self.config_inputs.move_right(),
-            StorageFocusArea::Query => self.query_inputs.move_right(),
-            _ => false,
+        if !self.is_running() {
+            match self.focus_area {
+                StorageFocusArea::Config => self.config_inputs.move_right(),
+                StorageFocusArea::Query => self.query_inputs.move_right(),
+                _ => false,
+            }
+        } else {
+            false
         }
     }
 

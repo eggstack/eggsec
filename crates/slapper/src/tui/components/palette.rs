@@ -32,13 +32,19 @@ pub fn draw_command_palette(f: &mut Frame, area: Rect, palette: &mut CommandPale
         ])
         .split(inner);
 
+    if chunks.len() < 3 {
+        return;
+    }
+
     let content_height = chunks[2].height;
     palette.update_content_height(content_height);
 
     // Query input
     let query_paragraph = Paragraph::new(format!("Query: {}", palette.query))
         .style(Style::default().fg(tc!(text)).bg(tc!(surface)));
-    f.render_widget(query_paragraph, chunks[0]);
+    if let Some(chunk) = chunks.get(0) {
+        f.render_widget(query_paragraph, *chunk);
+    }
 
     // Pagination
     let visible_height = palette.visible_results_height();
@@ -52,7 +58,9 @@ pub fn draw_command_palette(f: &mut Frame, area: Rect, palette: &mut CommandPale
     };
     let status_paragraph =
         Paragraph::new(status_text.as_str()).style(Style::default().fg(tc!(text_dim)));
-    f.render_widget(status_paragraph, chunks[1]);
+    if let Some(chunk) = chunks.get(1) {
+        f.render_widget(status_paragraph, *chunk);
+    }
 
     // Results (only visible items)
     let mut items: Vec<ListItem> = Vec::new();
@@ -91,5 +99,7 @@ pub fn draw_command_palette(f: &mut Frame, area: Rect, palette: &mut CommandPale
                 .border_style(Style::default().fg(tc!(border))),
         )
         .style(Style::default().fg(tc!(text)));
-    f.render_widget(list, chunks[2]);
+    if let Some(chunk) = chunks.get(2) {
+        f.render_widget(list, *chunk);
+    }
 }

@@ -658,6 +658,51 @@ handle_char (36), handle_backspace (53), handle_paste (70), handle_enter (165), 
 
 ---
 
+## Bug Fixes (2026-06-02 Session)
+
+### TUI Tab Fixes - Missing is_running() Guards
+
+All navigation handlers (`handle_word_forward`, `handle_word_backward`, `handle_home`, `handle_end`, `handle_up`, `handle_down`, `handle_left`, `handle_right`) now properly guard with `!self.is_running()` in these tabs:
+
+| File | Issue |
+|------|-------|
+| `compliance.rs` | Missing guards on 8 handlers - all fixed |
+| `vuln.rs` | Missing guards on 8 handlers - all fixed |
+| `storage.rs` | Missing guards + incorrect `true` fallback in handle_left/right - fixed |
+| `integrations.rs` | Missing guards + incorrect `true` fallback - fixed |
+| `workflow.rs` | Missing guards + incorrect `true` fallback - fixed |
+| `graphql.rs` | Missing guards on handle_left/right + field name fix (`focused_checkbox_index` → `checkbox_focus_index`) |
+| `oauth.rs` | Missing guards on handle_left/right - fixed |
+
+### TUI Tab Fixes - Empty Checkbox Array Underflow
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `hunt.rs` | handle_up/down could underflow when `option_checkboxes` is empty | Added `is_empty()` guard before manipulation |
+| `browser.rs` | Same issue | Added `is_empty()` guard before manipulation |
+
+### TUI Tab Fixes - Edge Detection
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `report.rs` | ViewSelector edge detection missing `is_empty()` guard | Added `view_selector.items.is_empty()` check |
+| `stress.rs` | TypeSelector edge detection missing `is_open()` guard | Added `if self.type_selector.is_open()` check |
+
+### TUI Component Fixes
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `palette.rs` | Direct array access on layout chunks could panic with small terminal | Added `chunks.len() < 3` guard and `.get()` pattern |
+
+### Worker Fixes
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `network.rs` | JoinHandle abandoned without abort on timeout | Added `handle.abort()` in timeout case |
+| `api.rs` | Missing `is_panic()` check on spawned task result | Added explicit match to detect panic |
+
+---
+
 ## Verification Commands
 
 ```bash

@@ -848,3 +848,46 @@ fn clamp_quick_switch_selection(&self, app: &mut App) {
 | `session.rs` | 525, 1016 | Silent error suppression `unwrap_or_default()` | Changed to `unwrap_or_else(\|e\| { warn!; String::new() })` |
 | `state.rs` | 217 | `debug!` instead of `warn!` for file removal | Changed to `tracing::warn!` |
 | `cache.rs` | 278 | `debug!` instead of `warn!` for cache dir creation | Changed to `tracing::warn!`
+
+## Session Fixes (2026-06-02)
+
+### TUI Tab Fixes - Missing is_running() Guards
+
+All navigation handlers (`handle_word_forward`, `handle_word_backward`, `handle_home`, `handle_end`, `handle_up`, `handle_down`, `handle_left`, `handle_right`) now properly guard with `!self.is_running()` in these tabs:
+
+| Tab | Issue |
+|-----|-------|
+| `compliance.rs` | Missing guards on 8 handlers - all fixed |
+| `vuln.rs` | Missing guards on 8 handlers - all fixed |
+| `storage.rs` | Missing guards + incorrect `true` fallback in handle_left/right - fixed |
+| `integrations.rs` | Missing guards + incorrect `true` fallback - fixed |
+| `workflow.rs` | Missing guards + incorrect `true` fallback - fixed |
+| `graphql.rs` | Missing guards on handle_left/right + field name fix |
+| `oauth.rs` | Missing guards on handle_left/right - fixed |
+
+### TUI Tab Fixes - Empty Checkbox Array Underflow
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `hunt.rs` | handle_up/down could underflow when `option_checkboxes` is empty | Added `is_empty()` guard before manipulation |
+| `browser.rs` | Same issue | Added `is_empty()` guard before manipulation |
+
+### TUI Tab Fixes - Edge Detection
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `report.rs` | ViewSelector edge detection missing `is_empty()` guard | Added `view_selector.items.is_empty()` check |
+| `stress.rs` | TypeSelector edge detection missing `is_open()` guard | Added `if self.type_selector.is_open()` check |
+
+### TUI Component Fixes
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `palette.rs` | Direct array access on layout chunks could panic with small terminal | Added `chunks.len() < 3` guard and `.get()` pattern |
+
+### Worker Fixes
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `network.rs` | JoinHandle abandoned without abort on timeout | Added `handle.abort()` in timeout case |
+| `api.rs` | Missing `is_panic()` check on spawned task result | Added explicit match to detect panic

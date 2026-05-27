@@ -460,7 +460,11 @@ impl TabInput for StressTab {
         match self.focus_area {
             StressFocusArea::Inputs => self.inputs.is_at_left_edge(),
             StressFocusArea::TypeSelector => {
-                self.type_selector.items.is_empty() || self.type_selector.selected == 0
+                if self.type_selector.is_open() {
+                    self.type_selector.items.is_empty() || self.type_selector.selected == 0
+                } else {
+                    true
+                }
             }
             _ => true,
         }
@@ -470,8 +474,12 @@ impl TabInput for StressTab {
         match self.focus_area {
             StressFocusArea::Inputs => self.inputs.is_at_right_edge(),
             StressFocusArea::TypeSelector => {
-                self.type_selector.items.is_empty()
-                    || self.type_selector.selected >= self.type_selector.items.len().saturating_sub(1)
+                if self.type_selector.is_open() {
+                    self.type_selector.items.is_empty()
+                        || self.type_selector.selected >= self.type_selector.items.len().saturating_sub(1)
+                } else {
+                    true
+                }
             }
             _ => true,
         }

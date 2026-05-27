@@ -463,6 +463,9 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         match self.focus_area {
             GraphQlFocusArea::Inputs => self.inputs.move_left(),
             GraphQlFocusArea::Options => {
@@ -476,10 +479,16 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         match self.focus_area {
             GraphQlFocusArea::Inputs => self.inputs.move_right(),
             GraphQlFocusArea::Options => {
-                self.checkbox_focus_index = (self.checkbox_focus_index + 1).min(3);
+                let max_idx = 3;
+                if self.checkbox_focus_index < max_idx {
+                    self.checkbox_focus_index += 1;
+                }
                 true
             }
             _ => false,

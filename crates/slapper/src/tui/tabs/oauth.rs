@@ -507,6 +507,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         match self.focus_area {
             OAuthFocusArea::Inputs => self.inputs.move_left(),
             OAuthFocusArea::Options => {
@@ -520,10 +523,16 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         match self.focus_area {
             OAuthFocusArea::Inputs => self.inputs.move_right(),
             OAuthFocusArea::Options => {
-                self.checkbox_focus_index = (self.checkbox_focus_index + 1).min(3);
+                let max_idx = 3;
+                if self.checkbox_focus_index < max_idx {
+                    self.checkbox_focus_index += 1;
+                }
                 true
             }
             _ => false,
@@ -537,7 +546,11 @@ impl TabInput for OAuthTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             OAuthFocusArea::Inputs => !self.inputs.can_move_left(),
-            OAuthFocusArea::Options => self.checkbox_focus_index == 0,
+            OAuthFocusArea::Options => {
+                let checkboxes = [&self.redirect_test_checkbox, &self.scope_test_checkbox,
+                    &self.state_test_checkbox, &self.grant_test_checkbox];
+                checkboxes.is_empty() || self.checkbox_focus_index == 0
+            }
             _ => true,
         }
     }
@@ -545,7 +558,11 @@ impl TabInput for OAuthTab {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             OAuthFocusArea::Inputs => !self.inputs.can_move_right(),
-            OAuthFocusArea::Options => self.checkbox_focus_index == 3,
+            OAuthFocusArea::Options => {
+                let checkboxes = [&self.redirect_test_checkbox, &self.scope_test_checkbox,
+                    &self.state_test_checkbox, &self.grant_test_checkbox];
+                checkboxes.is_empty() || self.checkbox_focus_index >= checkboxes.len().saturating_sub(1)
+            }
             _ => true,
         }
     }

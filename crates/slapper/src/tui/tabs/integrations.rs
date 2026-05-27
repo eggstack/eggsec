@@ -443,38 +443,46 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == IntegrationsFocusArea::Config {
-            self.config_inputs.move_word_forward();
-        } else if self.focus_area == IntegrationsFocusArea::Issue {
-            self.issue_inputs.move_word_forward();
+        if !self.is_running() {
+            if self.focus_area == IntegrationsFocusArea::Config {
+                self.config_inputs.move_word_forward();
+            } else if self.focus_area == IntegrationsFocusArea::Issue {
+                self.issue_inputs.move_word_forward();
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == IntegrationsFocusArea::Config {
-            self.config_inputs.move_word_backward();
-        } else if self.focus_area == IntegrationsFocusArea::Issue {
-            self.issue_inputs.move_word_backward();
+        if !self.is_running() {
+            if self.focus_area == IntegrationsFocusArea::Config {
+                self.config_inputs.move_word_backward();
+            } else if self.focus_area == IntegrationsFocusArea::Issue {
+                self.issue_inputs.move_word_backward();
+            }
         }
     }
 
     fn handle_home(&mut self) {
-        if self.focus_area == IntegrationsFocusArea::Config {
-            self.config_inputs.move_home();
-        } else if self.focus_area == IntegrationsFocusArea::Issue {
-            self.issue_inputs.move_home();
-        } else if self.focus_area == IntegrationsFocusArea::Results {
-            self.results_view.scroll_to_top();
+        if !self.is_running() {
+            if self.focus_area == IntegrationsFocusArea::Config {
+                self.config_inputs.move_home();
+            } else if self.focus_area == IntegrationsFocusArea::Issue {
+                self.issue_inputs.move_home();
+            } else if self.focus_area == IntegrationsFocusArea::Results {
+                self.results_view.scroll_to_top();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if self.focus_area == IntegrationsFocusArea::Config {
-            self.config_inputs.move_end();
-        } else if self.focus_area == IntegrationsFocusArea::Issue {
-            self.issue_inputs.move_end();
-        } else if self.focus_area == IntegrationsFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+        if !self.is_running() {
+            if self.focus_area == IntegrationsFocusArea::Config {
+                self.config_inputs.move_end();
+            } else if self.focus_area == IntegrationsFocusArea::Issue {
+                self.issue_inputs.move_end();
+            } else if self.focus_area == IntegrationsFocusArea::Results {
+                self.results_view.scroll_to_bottom();
+            }
         }
     }
 
@@ -518,36 +526,48 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_up(&mut self) {
-        match self.focus_area {
-            IntegrationsFocusArea::Tracker => self.tracker_selector.handle_up(),
-            IntegrationsFocusArea::Config => self.config_inputs.focus_prev(),
-            IntegrationsFocusArea::Issue => self.issue_inputs.focus_prev(),
-            IntegrationsFocusArea::Results => self.results_view.scroll_up(1),
+        if !self.is_running() {
+            match self.focus_area {
+                IntegrationsFocusArea::Tracker => self.tracker_selector.handle_up(),
+                IntegrationsFocusArea::Config => self.config_inputs.focus_prev(),
+                IntegrationsFocusArea::Issue => self.issue_inputs.focus_prev(),
+                IntegrationsFocusArea::Results => self.results_view.scroll_up(1),
+            }
         }
     }
 
     fn handle_down(&mut self) {
-        match self.focus_area {
-            IntegrationsFocusArea::Tracker => self.tracker_selector.handle_down(),
-            IntegrationsFocusArea::Config => self.config_inputs.focus_next(),
-            IntegrationsFocusArea::Issue => self.issue_inputs.focus_next(),
-            IntegrationsFocusArea::Results => self.results_view.scroll_down(1),
+        if !self.is_running() {
+            match self.focus_area {
+                IntegrationsFocusArea::Tracker => self.tracker_selector.handle_down(),
+                IntegrationsFocusArea::Config => self.config_inputs.focus_next(),
+                IntegrationsFocusArea::Issue => self.issue_inputs.focus_next(),
+                IntegrationsFocusArea::Results => self.results_view.scroll_down(1),
+            }
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        match self.focus_area {
-            IntegrationsFocusArea::Config => self.config_inputs.move_left(),
-            IntegrationsFocusArea::Issue => self.issue_inputs.move_left(),
-            _ => true,
+        if !self.is_running() {
+            match self.focus_area {
+                IntegrationsFocusArea::Config => self.config_inputs.move_left(),
+                IntegrationsFocusArea::Issue => self.issue_inputs.move_left(),
+                _ => false,
+            }
+        } else {
+            false
         }
     }
 
     fn handle_right(&mut self) -> bool {
-        match self.focus_area {
-            IntegrationsFocusArea::Config => self.config_inputs.move_right(),
-            IntegrationsFocusArea::Issue => self.issue_inputs.move_right(),
-            _ => true,
+        if !self.is_running() {
+            match self.focus_area {
+                IntegrationsFocusArea::Config => self.config_inputs.move_right(),
+                IntegrationsFocusArea::Issue => self.issue_inputs.move_right(),
+                _ => false,
+            }
+        } else {
+            false
         }
     }
 

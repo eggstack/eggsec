@@ -362,7 +362,21 @@ pub async fn run_nse(
         Ok::<_, anyhow::Error>((output, String::new(), true))
     })
     .await
-    .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))?;
+    .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))
+    .and_then(|result| {
+        match result {
+            Ok((output, errors, success)) => Ok((output, errors, success)),
+            Err(e) => {
+                if e.is_panic() {
+                    tracing::warn!("NSE task panicked: {:?}", e);
+                    Err(anyhow::anyhow!("NSE task panicked"))
+                } else {
+                    tracing::warn!("NSE task failed: {:?}", e);
+                    Err(anyhow::anyhow!("NSE task failed: {}", e))
+                }
+            }
+        }
+    })?;
 
     if let Err(e) = progress_tx.send((100, 100)).await {
         tracing::warn!("Failed to send progress: {}", e);

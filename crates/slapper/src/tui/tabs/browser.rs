@@ -412,6 +412,9 @@ impl TabInput for BrowserTab {
 
     fn handle_up(&mut self) {
         if self.focus_area == BrowserFocusArea::Options {
+            if self.option_checkboxes.is_empty() {
+                return;
+            }
             if self.focused_checkbox_index == 0 {
                 self.focused_checkbox_index = self.option_checkboxes.len().saturating_sub(1);
             } else {
@@ -426,6 +429,9 @@ impl TabInput for BrowserTab {
 
     fn handle_down(&mut self) {
         if self.focus_area == BrowserFocusArea::Options {
+            if self.option_checkboxes.is_empty() {
+                return;
+            }
             if self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1) {
                 self.focused_checkbox_index = 0;
             } else {
