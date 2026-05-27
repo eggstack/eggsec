@@ -92,7 +92,9 @@ impl SecurityTool for PipelineTool {
             concurrent_stages: false,
         };
 
-        let config = crate::config::load_config(None::<&str>).unwrap_or_default();
+        let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
+            tracing::warn!(error = %e, "Failed to load config for pipeline, using defaults");
+        }).unwrap_or_default();
         let result = crate::pipeline::run_cli_with_callback(args, &config, move |f| {
             let mut findings = findings_clone.lock();
             findings.push(f);

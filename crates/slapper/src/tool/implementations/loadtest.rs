@@ -72,7 +72,9 @@ impl SecurityTool for LoadTestTool {
             common: crate::cli::CommonHttpArgs::default(),
         };
 
-        let config = crate::config::load_config(None::<&str>).unwrap_or_default();
+        let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
+            tracing::warn!(error = %e, "Failed to load config for loadtest, using defaults");
+        }).unwrap_or_default();
         let result = crate::loadtest::run_cli(args, &config).await;
 
         let completed_at = Utc::now();

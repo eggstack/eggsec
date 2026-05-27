@@ -84,7 +84,8 @@ impl MarkdownReport {
             writeln!(md, "## Findings\n")?;
 
             for (i, finding) in self.findings.iter().enumerate() {
-                let severity_icon = match finding.severity.to_lowercase().as_str() {
+                let severity_lower = finding.severity.to_lowercase();
+                let severity_icon = match severity_lower.as_str() {
                     "critical" => "🔴",
                     "high" => "🟠",
                     "medium" => "🟡",

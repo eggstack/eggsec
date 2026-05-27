@@ -701,6 +701,48 @@ All navigation handlers (`handle_word_forward`, `handle_word_backward`, `handle_
 | `network.rs` | JoinHandle abandoned without abort on timeout | Added `handle.abort()` in timeout case |
 | `api.rs` | Missing `is_panic()` check on spawned task result | Added explicit match to detect panic |
 
+## Bug Fixes (2026-06-03 Session - Deep Dive Audit)
+
+### TUI Tab Navigation Handler Guards (~97 handlers across 17 tabs)
+
+| Group | Tabs Fixed |
+|-------|-----------|
+| Group 1 | recon, scan, scan_ports, scan_endpoints, fingerprint |
+| Group 2 | load, stress, cluster, proxy |
+| Group 3 | hunt, browser, compliance, vuln |
+| Group 4 | dashboard, resume, history |
+
+### reset() Methods Fixed (17 tabs)
+
+| Group | Tabs Fixed |
+|-------|-----------|
+| Group 1 | packet, graphql, oauth, cluster, proxy, nse, plugin |
+| Group 2 | hunt, browser, compliance, storage, integrations, workflow, vuln |
+| Group 3 | report, settings, auth |
+
+### App Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `app/mod.rs` | 452, 459 | Silent `let _ =` on dispatcher | Changed to `if !bool { warn }` |
+| `key_handler.rs` | 407-414 | Stale quick switch results | Re-fetch fresh results on Enter |
+| `task_runtime.rs` | 68-80 | No timeout on spawn | Added `tokio::time::timeout(300s, ...)` |
+
+### Other Module Fixes
+
+| Module | File | Line | Issue | Fix |
+|--------|------|------|-------|-----|
+| Workers | `api.rs` | 143 | Division by zero | Added `.max(1)` guard |
+| Config | `loader.rs` | 18 instances | Silent file operations | Changed to `if let Err(e) = ...` with warn |
+| Output | `markdown.rs` | 87 | to_lowercase() in loop | Cached before loop |
+| Output | `dedup.rs` | 16 | to_lowercase() in parse | Changed to eq_ignore_ascii_case |
+| Tool | `scripting.rs`, `finding.rs`, etc. | Multiple | HashMap → FxHashMap | Changed to FxHashMap |
+| Tool | `routes.rs` | 28, 118 | unwrap_or_default | Added warn logging |
+| Tool | `implementations/*.rs` | Various | load_config unwrap | Added inspect_err with warn |
+| Scanner | `matcher.rs` | 262, 268 | Silent socket ops | Added warn logging |
+| Scanner | `fingerprint.rs` | 432 | Silent probe write | Added warn logging |
+| Recon | `whois.rs` | 171 | Silent timeout | Added warn logging |
+
 ---
 
 ## Verification Commands

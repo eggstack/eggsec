@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::tool::ToolRegistry;
@@ -7,14 +8,16 @@ pub struct OpenApiSpec {
     pub openapi: String,
     pub info: Info,
     pub servers: Vec<Server>,
-    pub paths: std::collections::HashMap<String, PathItem>,
+    pub paths: FxHashMap<String, PathItem>,
     pub components: Components,
     pub tags: Vec<Tag>,
 }
 
 impl OpenApiSpec {
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).unwrap_or_default()
+        serde_json::to_string_pretty(self).inspect_err(|e| {
+            tracing::warn!(error = %e, "Failed to serialize OpenAPI spec to JSON");
+        }).unwrap_or_default()
     }
 
     pub fn to_yaml(&self) -> String {
@@ -56,7 +59,7 @@ pub struct Operation {
     pub operation_id: String,
     pub parameters: Vec<Parameter>,
     pub request_body: Option<RequestBody>,
-    pub responses: std::collections::HashMap<String, Response>,
+    pub responses: FxHashMap<String, Response>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,7 +96,7 @@ pub enum Schema {
 pub struct SchemaObject {
     #[serde(rename = "type")]
     pub schema_type: String,
-    pub properties: Option<std::collections::HashMap<String, Box<Schema>>>,
+    pub properties: Option<FxHashMap<String, Box<Schema>>>,
     pub required: Option<Vec<String>>,
 }
 
@@ -117,7 +120,7 @@ impl Schema {
     pub fn array(items: Schema) -> Self {
         Schema::Object(SchemaObject {
             schema_type: "array".to_string(),
-            properties: Some(std::collections::HashMap::from([(
+            properties: Some(FxHashMap::from([(
                 "items".to_string(),
                 Box::new(items),
             )])),
@@ -126,7 +129,7 @@ impl Schema {
     }
 
     pub fn object(properties: Vec<(&str, Schema)>, required: Vec<&str>) -> Self {
-        let props: std::collections::HashMap<String, Box<Schema>> = properties
+        let props: FxHashMap<String, Box<Schema>> = properties
             .into_iter()
             .map(|(k, v)| (k.to_string(), Box::new(v)))
             .collect();
@@ -141,7 +144,7 @@ impl Schema {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestBody {
     pub description: Option<String>,
-    pub content: std::collections::HashMap<String, MediaType>,
+    pub content: FxHashMap<String, MediaType>,
     pub required: bool,
 }
 
@@ -153,13 +156,13 @@ pub struct MediaType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
     pub description: String,
-    pub content: Option<std::collections::HashMap<String, MediaType>>,
+    pub content: Option<FxHashMap<String, MediaType>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Components {
-    pub schemas: std::collections::HashMap<String, Schema>,
-    pub security_schemes: Option<std::collections::HashMap<String, SecurityScheme>>,
+    pub schemas: FxHashMap<String, Schema>,
+    pub security_schemes: Option<FxHashMap<String, SecurityScheme>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -195,8 +198,8 @@ impl OpenApiGenerator {
     pub fn generate(&self, registry: &ToolRegistry) -> OpenApiSpec {
         let tools = registry.list();
 
-        let mut paths = std::collections::HashMap::new();
-        let mut schemas = std::collections::HashMap::new();
+        let mut paths = FxHashMap::default();
+        let mut schemas = FxHashMap::default();
         let mut tags: Vec<Tag> = Vec::new();
 
         let mut categories: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -215,8 +218,8 @@ impl OpenApiGenerator {
         for tool in &tools {
             let category = format!("{:?}", tool.category);
 
-            let mut properties: std::collections::HashMap<String, Box<Schema>> =
-                std::collections::HashMap::new();
+            let mut properties: FxHashMap<String, Box<Schema>> =
+                FxHashMap::default();
             properties.insert("target".to_string(), Box::new(Schema::string()));
             properties.insert("target_type".to_string(), Box::new(Schema::string()));
             properties.insert("api_key".to_string(), Box::new(Schema::string()));
@@ -256,7 +259,7 @@ impl OpenApiGenerator {
                 format!("{}Response", tool.id),
                 Schema::Object(SchemaObject {
                     schema_type: "object".to_string(),
-                    properties: Some(std::collections::HashMap::from([
+                    properties: Some(FxHashMap::from([
                         ("request_id".to_string(), Box::new(Schema::string())),
                         ("tool_id".to_string(), Box::new(Schema::string())),
                         ("status".to_string(), Box::new(Schema::string())),
@@ -300,12 +303,12 @@ impl OpenApiGenerator {
                 Parameter::new("api_key", "query", false, Schema::string()),
             ];
 
-            let responses = std::collections::HashMap::from([
+            let responses = FxHashMap::from([
                 (
                     "200".to_string(),
                     Response {
                         description: "Successful response".to_string(),
-                        content: Some(std::collections::HashMap::from([(
+                        content: Some(FxHashMap::from([(
                             "application/json".to_string(),
                             MediaType {
                                 schema_: Schema::Ref(format!(
@@ -350,12 +353,12 @@ impl OpenApiGenerator {
                         parameters: vec![],
                         request_body: Some(RequestBody {
                             description: Some("Tool execution parameters".to_string()),
-                            content: std::collections::HashMap::from([(
+                            content: FxHashMap::from([(
                                 "application/json".to_string(),
                                 MediaType {
                                     schema_: Schema::Object(SchemaObject {
                                         schema_type: "object".to_string(),
-                                        properties: Some(std::collections::HashMap::from([
+properties: Some(FxHashMap::from([
                                             ("name".to_string(), Box::new(Schema::string())),
                                             (
                                                 "arguments".to_string(),
@@ -388,7 +391,7 @@ impl OpenApiGenerator {
                         operation_id: "list_tools".to_string(),
                         parameters: vec![],
                         request_body: None,
-                        responses: std::collections::HashMap::from([(
+                        responses: FxHashMap::from([(
                             "200".to_string(),
                             Response {
                                 description: "List of tools".to_string(),
@@ -403,7 +406,7 @@ impl OpenApiGenerator {
                         operation_id: "execute_tool".to_string(),
                         parameters: tool_params,
                         request_body: None,
-                        responses: std::collections::HashMap::from([(
+                        responses: FxHashMap::from([(
                             "200".to_string(),
                             Response {
                                 description: "Tool execution result".to_string(),
@@ -415,7 +418,7 @@ impl OpenApiGenerator {
             );
         }
 
-        let mut security_schemes = std::collections::HashMap::new();
+        let mut security_schemes = FxHashMap::default();
         security_schemes.insert(
             "ApiKeyAuth".to_string(),
             SecurityScheme {
@@ -436,7 +439,7 @@ impl OpenApiGenerator {
                     operation_id: "health_check".to_string(),
                     parameters: vec![],
                     request_body: None,
-                    responses: std::collections::HashMap::from([(
+                    responses: FxHashMap::from([(
                         "200".to_string(),
                         Response {
                             description: "Service is healthy".to_string(),
@@ -460,11 +463,11 @@ impl OpenApiGenerator {
                     operation_id: "stream_events".to_string(),
                     parameters: vec![Parameter::new("request_id", "path", true, Schema::string())],
                     request_body: None,
-                    responses: std::collections::HashMap::from([(
+                    responses: FxHashMap::from([(
                         "200".to_string(),
                         Response {
                             description: "SSE stream".to_string(),
-                            content: Some(std::collections::HashMap::from([(
+                            content: Some(FxHashMap::from([(
                                 "text/event-stream".to_string(),
                                 MediaType {
                                     schema_: Schema::Object(SchemaObject {
@@ -506,7 +509,9 @@ impl OpenApiGenerator {
     }
 
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(&self).unwrap_or_default()
+        serde_json::to_string_pretty(&self).inspect_err(|e| {
+            tracing::warn!(error = %e, "Failed to serialize OpenApiGenerator to JSON");
+        }).unwrap_or_default()
     }
 
     pub fn to_yaml(&self) -> String {

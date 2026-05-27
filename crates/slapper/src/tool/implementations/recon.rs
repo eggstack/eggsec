@@ -134,7 +134,9 @@ impl SecurityTool for ReconTool {
             output: None,
         };
 
-        let config = crate::config::load_config(None::<&str>).unwrap_or_default();
+        let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
+            tracing::warn!(error = %e, "Failed to load config for recon, using defaults");
+        }).unwrap_or_default();
 
         let result = crate::recon::run_cli_with_callback(args, &config, move |f| {
             let mut findings = findings_clone.lock();

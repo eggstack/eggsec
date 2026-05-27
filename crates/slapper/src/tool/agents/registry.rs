@@ -1,5 +1,6 @@
+use rustc_hash::FxHashMap;
+
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -25,13 +26,13 @@ pub struct AgentInfo {
 
 #[derive(Clone)]
 pub struct AgentRegistry {
-    agents: Arc<RwLock<HashMap<Uuid, AgentInfo>>>,
+    agents: Arc<RwLock<FxHashMap<Uuid, AgentInfo>>>,
 }
 
 impl AgentRegistry {
     pub fn new() -> Self {
         Self {
-            agents: Arc::new(RwLock::new(HashMap::new())),
+            agents: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
 

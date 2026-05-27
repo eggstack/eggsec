@@ -449,14 +449,18 @@ impl App {
         if self.show_help {
             return;
         }
-        let _ = self.dispatcher_mut().handle_left();
+        if !self.dispatcher_mut().handle_left() {
+            tracing::warn!("handle_left returned false");
+        }
     }
 
     pub fn handle_right(&mut self) {
         if self.show_help {
             return;
         }
-        let _ = self.dispatcher_mut().handle_right();
+        if !self.dispatcher_mut().handle_right() {
+            tracing::warn!("handle_right returned false");
+        }
     }
 
     pub fn handle_focus_next(&mut self) {

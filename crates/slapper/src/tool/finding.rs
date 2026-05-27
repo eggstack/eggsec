@@ -243,7 +243,9 @@ impl From<FuzzResult> for Finding {
         );
         metadata.insert(
             "payload".to_string(),
-            serde_json::to_value(&result.payload).unwrap_or_default(),
+            serde_json::to_value(&result.payload).inspect_err(|e| {
+                tracing::debug!(error = %e, "Failed to serialize payload metadata");
+            }).unwrap_or_default(),
         );
 
         Finding {
@@ -346,11 +348,15 @@ impl From<crate::scanner::fingerprint::ServiceFingerprint> for Finding {
                 );
                 m.insert(
                     "product".to_string(),
-                    serde_json::to_value(&fp.product).unwrap_or_default(),
+                    serde_json::to_value(&fp.product).inspect_err(|e| {
+                        tracing::debug!(error = %e, "Failed to serialize product metadata");
+                    }).unwrap_or_default(),
                 );
                 m.insert(
                     "version".to_string(),
-                    serde_json::to_value(&fp.version).unwrap_or_default(),
+                    serde_json::to_value(&fp.version).inspect_err(|e| {
+                        tracing::debug!(error = %e, "Failed to serialize version metadata");
+                    }).unwrap_or_default(),
                 );
                 m.insert(
                     "confidence".to_string(),
@@ -358,7 +364,9 @@ impl From<crate::scanner::fingerprint::ServiceFingerprint> for Finding {
                 );
                 m.insert(
                     "banner".to_string(),
-                    serde_json::to_value(&fp.banner).unwrap_or_default(),
+                    serde_json::to_value(&fp.banner).inspect_err(|e| {
+                        tracing::debug!(error = %e, "Failed to serialize banner metadata");
+                    }).unwrap_or_default(),
                 );
                 m
             },
@@ -397,11 +405,15 @@ impl From<crate::scanner::udp_fingerprint::UdpServiceFingerprint> for Finding {
                 m.insert("service".to_string(), serde_json::Value::String(fp.service));
                 m.insert(
                     "response".to_string(),
-                    serde_json::to_value(&fp.response).unwrap_or_default(),
+                    serde_json::to_value(&fp.response).inspect_err(|e| {
+                        tracing::debug!(error = %e, "Failed to serialize response metadata");
+                    }).unwrap_or_default(),
                 );
                 m.insert(
                     "banner".to_string(),
-                    serde_json::to_value(&fp.banner).unwrap_or_default(),
+                    serde_json::to_value(&fp.banner).inspect_err(|e| {
+                        tracing::debug!(error = %e, "Failed to serialize banner metadata");
+                    }).unwrap_or_default(),
                 );
                 m.insert(
                     "confidence".to_string(),
@@ -465,7 +477,9 @@ impl From<crate::scanner::endpoints::EndpointResult> for Finding {
                 );
                 m.insert(
                     "content_length".to_string(),
-                    serde_json::to_value(result.content_length).unwrap_or_default(),
+                    serde_json::to_value(result.content_length).inspect_err(|e| {
+                        tracing::debug!(error = %e, "Failed to serialize content_length metadata");
+                    }).unwrap_or_default(),
                 );
                 m.insert(
                     "response_time_ms".to_string(),
@@ -525,7 +539,9 @@ impl From<crate::recon::cve::VulnerabilityInfo> for Finding {
                 );
                 m.insert(
                     "published_date".to_string(),
-                    serde_json::to_value(&v.published_date).unwrap_or_default(),
+                    serde_json::to_value(&v.published_date).inspect_err(|e| {
+                        tracing::debug!(error = %e, "Failed to serialize published_date metadata");
+                    }).unwrap_or_default(),
                 );
                 m
             },

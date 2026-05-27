@@ -417,7 +417,9 @@ impl McpServer {
                     "content": [
                         {
                             "type": "text",
-                            "text": serde_json::to_string_pretty(&response).unwrap_or_default()
+                            "text": serde_json::to_string_pretty(&response).inspect_err(|e| {
+                                tracing::warn!(error = %e, "Failed to serialize tool response");
+                            }).unwrap_or_default()
                         }
                     ],
                     "isError": !response.is_success()
@@ -494,7 +496,9 @@ impl McpServer {
                         {
                             "uri": "slapper://tools",
                             "mimeType": "application/json",
-                            "text": serde_json::to_string(&tools).unwrap_or_default()
+                            "text": serde_json::to_string(&tools).inspect_err(|e| {
+                                tracing::warn!(error = %e, "Failed to serialize tools list");
+                            }).unwrap_or_default()
                         }
                     ]
                 });
@@ -507,7 +511,9 @@ impl McpServer {
                         {
                             "uri": "slapper://manifest",
                             "mimeType": "application/json",
-                            "text": serde_json::to_string_pretty(&manifest).unwrap_or_default()
+                            "text": serde_json::to_string_pretty(&manifest).inspect_err(|e| {
+                                tracing::warn!(error = %e, "Failed to serialize manifest");
+                            }).unwrap_or_default()
                         }
                     ]
                 });
@@ -520,7 +526,9 @@ impl McpServer {
                         {
                             "uri": "slapper://vulnerabilities",
                             "mimeType": "application/json",
-                            "text": serde_json::to_string_pretty(&vulns).unwrap_or_default()
+                            "text": serde_json::to_string_pretty(&vulns).inspect_err(|e| {
+                                tracing::warn!(error = %e, "Failed to serialize vulnerabilities catalog");
+                            }).unwrap_or_default()
                         }
                     ]
                 });

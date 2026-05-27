@@ -891,3 +891,59 @@ All navigation handlers (`handle_word_forward`, `handle_word_backward`, `handle_
 |------|-------|-----|
 | `network.rs` | JoinHandle abandoned without abort on timeout | Added `handle.abort()` in timeout case |
 | `api.rs` | Missing `is_panic()` check on spawned task result | Added explicit match to detect panic
+
+## Session Fixes (2026-06-03)
+
+### TUI Tab Fixes - Navigation Handlers (~97 handlers across 17 tabs)
+
+All `!self.is_running()` guards added to navigation handlers:
+
+| Group | Tabs Fixed |
+|-------|-----------|
+| Group 1 | recon.rs (word_forward/backward), scan.rs (6 handlers), scan_ports.rs (4), scan_endpoints.rs (4), fingerprint.rs (6) |
+| Group 2 | load.rs (6), stress.rs (6), cluster.rs (handle_enter), proxy.rs (handle_enter) |
+| Group 3 | hunt.rs (3), browser.rs (3), compliance.rs (4), vuln.rs (2) |
+| Group 4 | dashboard.rs (17), resume.rs (11), history.rs (10) |
+
+### reset() Methods Fixed (17 tabs)
+
+| Tab | Added Reset |
+|-----|------------|
+| `packet.rs` | view_selector.select(0) |
+| `graphql.rs`, `oauth.rs` | checkbox reset, focused_checkbox_index |
+| `cluster.rs` | view_selector, worker/coordinator/status_inputs |
+| `proxy.rs` | view_selector |
+| `nse.rs` | input fields |
+| `plugin.rs` | input fields, plugin_selector, plugins_loaded, plugin_list |
+| `hunt.rs`, `browser.rs` | checkbox reset, focused_checkbox_index, focus_area |
+| `compliance.rs` | framework_selector.select(0), focus_area |
+| `storage.rs` | mode_selector, query_inputs, focus_area, current_mode |
+| `integrations.rs` | config_inputs, issue_inputs |
+| `workflow.rs` | focus_area |
+| `vuln.rs` | mode_selector, focus_area, current_mode |
+| `report.rs` | view_selector, format_selector, current_view |
+| `settings/main.rs` | proxy_rotation_selector, severity_selector, accent_color |
+| `auth.rs` | results.clear() |
+
+### App Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `app/mod.rs` | 452, 459 | Silent `let _ =` on dispatcher | Changed to `if !bool { warn }` |
+| `key_handler.rs` | 407-414 | Stale quick switch results | Re-fetch fresh results on Enter |
+| `task_runtime.rs` | 68-80 | No timeout on spawn | Added `tokio::time::timeout(300s, ...)` |
+
+### Other Module Fixes
+
+| Module | File | Line | Issue | Fix |
+|--------|------|------|-------|-----|
+| Workers | `api.rs` | 143 | Division by zero | Added `.max(1)` guard |
+| Config | `loader.rs` | 18 instances | Silent file operations | `if let Err(e) = ...` with warn |
+| Output | `markdown.rs` | 87 | to_lowercase() in loop | Cached before loop |
+| Output | `dedup.rs` | 16 | to_lowercase() in parse | eq_ignore_ascii_case |
+| Tool | `script/*.rs` | Multiple | HashMap → FxHashMap | Changed to FxHashMap |
+| Tool | `routes.rs` | 28, 118 | unwrap_or_default | Added warn logging |
+| Tool | `implementations/*.rs` | Various | load_config unwrap | Added inspect_err with warn |
+| Scanner | `matcher.rs` | 262, 268 | Silent socket ops | Added warn logging |
+| Scanner | `fingerprint.rs` | 432 | Silent probe write | Added warn logging |
+| Recon | `whois.rs` | 171 | Silent timeout | Added warn logging |

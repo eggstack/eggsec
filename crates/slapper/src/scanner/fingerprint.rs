@@ -428,9 +428,11 @@ async fn probe_service(
     port: u16,
     timeout_duration: Duration,
 ) -> Option<ServiceFingerprint> {
-    if !probe_data.is_empty() {
-        let _ = stream.write_all(probe_data).await;
-    }
+if !probe_data.is_empty() {
+            if let Err(e) = stream.write_all(probe_data).await {
+                tracing::warn!(target: "scanner", "Probe write failed for {}: {}", probe_name, e);
+            }
+        }
 
     let mut buffer: SmallVec<[u8; 256]> = SmallVec::new();
     buffer.resize(4096, 0);

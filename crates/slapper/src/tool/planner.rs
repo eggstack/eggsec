@@ -525,7 +525,9 @@ pub struct PlanValidation {
 
 impl ExecutionPlan {
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).unwrap_or_default()
+        serde_json::to_string_pretty(self).inspect_err(|e| {
+            tracing::debug!(error = %e, "Failed to serialize execution plan");
+        }).unwrap_or_default()
     }
 
     pub fn total_tools(&self) -> usize {

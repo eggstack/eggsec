@@ -6,8 +6,8 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use reqwest::Client;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -256,7 +256,7 @@ impl SecurityTool for OastTool {
         for payload in &payloads {
             if payload.contains("$OAST$") {
                 let modified_payload = payload.replace("$OAST$", &oast_url);
-                let mut metadata = HashMap::new();
+                let mut metadata = FxHashMap::default();
                 metadata.insert("oast_url".to_string(), serde_json::json!(oast_url));
                 metadata.insert("session_id".to_string(), serde_json::json!(session_id));
                 metadata.insert("payload".to_string(), serde_json::json!(payload));
@@ -291,7 +291,7 @@ impl SecurityTool for OastTool {
                     for interaction in &interactions {
                         for payload in &payloads {
                             if interaction.full_url.contains(payload) {
-                                let mut metadata = HashMap::new();
+                                let mut metadata = FxHashMap::default();
                                 metadata.insert(
                                     "interaction".to_string(),
                                     serde_json::json!(interaction.full_url),

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::tui::workers;
 
 impl super::App {
@@ -66,14 +68,26 @@ impl super::App {
             self.task_tab = Some(self.current_tab);
 
             let handle = tokio::spawn(async move {
-                if let Err(e) = runner.run().await {
-                    let friendly_error = super::make_friendly_error(&e);
-                    tracing::error!("Task failed: {}", friendly_error);
-                    if let Err(e) = error_tx
-                        .send(workers::TaskResult::Error(friendly_error))
-                        .await
-                    {
-                        tracing::warn!("Failed to send task error result: {:?}", e);
+                match tokio::time::timeout(Duration::from_secs(300), runner.run()).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => {
+                        let friendly_error = super::make_friendly_error(&e);
+                        tracing::error!("Task failed: {}", friendly_error);
+                        if let Err(e) = error_tx
+                            .send(workers::TaskResult::Error(friendly_error))
+                            .await
+                        {
+                            tracing::warn!("Failed to send task error result: {:?}", e);
+                        }
+                    }
+                    Err(_) => {
+                        tracing::error!("Task timed out after 300s");
+                        if let Err(e) = error_tx
+                            .send(workers::TaskResult::Error("Task timed out after 300 seconds".to_string()))
+                            .await
+                        {
+                            tracing::warn!("Failed to send task error result: {:?}", e);
+                        }
                     }
                 }
             });

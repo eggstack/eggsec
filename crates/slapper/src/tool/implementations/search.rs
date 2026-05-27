@@ -2,6 +2,7 @@
 //!
 //! Provides unified search across SearXNG, OSV.dev, NVD, and GitHub Advisories.
 
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -17,7 +18,7 @@ use crate::tool::{ToolRequest, ToolResponse};
 pub struct SearchTool {
     searxng_url: String,
     #[allow(dead_code)]
-    cache: Arc<tokio::sync::RwLock<std::collections::HashMap<String, SearchResult>>>,
+    cache: Arc<tokio::sync::RwLock<FxHashMap<String, SearchResult>>>,
     client: reqwest::Client,
 }
 
@@ -52,7 +53,7 @@ impl SearchTool {
     pub fn new(searxng_url: Option<String>) -> Self {
         Self {
             searxng_url: searxng_url.unwrap_or_else(|| "http://localhost:8888".to_string()),
-            cache: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+            cache: Arc::new(tokio::sync::RwLock::new(FxHashMap::default())),
             client: SEARCH_CLIENT.clone(),
         }
     }

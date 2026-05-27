@@ -1,5 +1,6 @@
+use rustc_hash::FxHashMap;
+
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -241,7 +242,7 @@ pub struct RequestOptions {
     pub concurrency: Option<usize>,
     pub rate_limit: Option<f64>,
     pub proxy: Option<String>,
-    pub headers: Option<HashMap<String, String>>,
+    pub headers: Option<FxHashMap<String, String>>,
     pub auth: Option<AuthConfig>,
     pub stealth: bool,
     pub follow_redirects: bool,
@@ -299,12 +300,12 @@ impl RequestOptions {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     pub auth_type: AuthType,
-    pub credentials: HashMap<String, String>,
+    pub credentials: FxHashMap<String, String>,
 }
 
 impl AuthConfig {
     pub fn basic(username: impl Into<String>, password: impl Into<String>) -> Self {
-        let mut creds = HashMap::new();
+        let mut creds = FxHashMap::default();
         creds.insert("username".to_string(), username.into());
         creds.insert("password".to_string(), password.into());
         Self {
@@ -314,7 +315,7 @@ impl AuthConfig {
     }
 
     pub fn bearer(token: impl Into<String>) -> Self {
-        let mut creds = HashMap::new();
+        let mut creds = FxHashMap::default();
         creds.insert("token".to_string(), token.into());
         Self {
             auth_type: AuthType::Bearer,
@@ -323,7 +324,7 @@ impl AuthConfig {
     }
 
     pub fn api_key(key: impl Into<String>, header: impl Into<String>) -> Self {
-        let mut creds = HashMap::new();
+        let mut creds = FxHashMap::default();
         creds.insert("key".to_string(), key.into());
         creds.insert("header".to_string(), header.into());
         Self {

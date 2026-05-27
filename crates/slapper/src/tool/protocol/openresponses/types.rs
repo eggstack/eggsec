@@ -1,5 +1,6 @@
+use rustc_hash::FxHashMap;
+
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponsesRequest {
@@ -22,7 +23,7 @@ pub struct ResponsesRequest {
     #[serde(default)]
     pub previous_response_id: Option<String>,
     #[serde(default)]
-    pub metadata: Option<HashMap<String, String>>,
+    pub metadata: Option<FxHashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,7 +70,7 @@ pub struct ResponsesResponse {
     pub output: Vec<OutputItem>,
     pub model: String,
     pub incomplete_details: Option<IncompleteDetails>,
-    pub metadata: Option<HashMap<String, String>>,
+    pub metadata: Option<FxHashMap<String, String>>,
     pub usage: Option<Usage>,
     pub error: Option<ErrorResponse>,
 }

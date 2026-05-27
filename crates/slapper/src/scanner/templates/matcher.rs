@@ -259,13 +259,17 @@ mod tests {
         tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut buf = [0u8; 1024];
-            let _ = socket.read(&mut buf).await;
+            let _ = socket.read(&mut buf).await.map_err(|e| {
+                tracing::warn!(target: "scanner", "Socket read failed: {}", e);
+            });
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body_owned.len(),
                 body_owned
             );
-            let _ = socket.write_all(response.as_bytes()).await;
+            let _ = socket.write_all(response.as_bytes()).await.map_err(|e| {
+                tracing::warn!(target: "scanner", "Socket write failed: {}", e);
+            });
         });
 
         let url = format!("http://{}", addr);

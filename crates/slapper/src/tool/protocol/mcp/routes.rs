@@ -25,7 +25,9 @@ struct AppState {
 
 async fn handle_openapi_json(State(state): State<Arc<AppState>>) -> axum::Json<serde_json::Value> {
     let spec = state.openapi_generator.generate(&state.mcp_server.registry);
-    axum::Json(serde_json::from_str(&spec.to_json()).unwrap_or_default())
+    axum::Json(serde_json::from_str(&spec.to_json()).inspect_err(|e| {
+        tracing::warn!(error = %e, "Failed to parse OpenAPI JSON spec");
+    }).unwrap_or_default())
 }
 
 async fn handle_openapi_yaml(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -115,7 +117,9 @@ async fn handle_sse_stream(
                     if event.request_id == current_request_id || event.request_id == "*" {
                         yield Ok::<_, axum::Error>(SseEvent::default()
                             .event(&event.event_type)
-                            .data(serde_json::to_string(&event.data).unwrap_or_default()));
+                            .data(serde_json::to_string(&event.data).inspect_err(|e| {
+                                tracing::warn!(error = %e, "Failed to serialize SSE event data");
+                            }).unwrap_or_default()));
                     }
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {

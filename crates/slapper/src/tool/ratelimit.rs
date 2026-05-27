@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -14,7 +14,7 @@ pub struct RateLimitConfig {
     pub concurrent_scans: u32,
     pub burst_size: u32,
     #[serde(default)]
-    pub per_endpoint_limits: HashMap<String, EndpointLimit>,
+    pub per_endpoint_limits: FxHashMap<String, EndpointLimit>,
     #[serde(default)]
     pub global_rate_limit: Option<u32>,
     #[serde(default)]
@@ -33,7 +33,7 @@ impl Default for RateLimitConfig {
             requests_per_minute: 60,
             concurrent_scans: 5,
             burst_size: 10,
-            per_endpoint_limits: HashMap::new(),
+            per_endpoint_limits: FxHashMap::default(),
             global_rate_limit: None,
             enable_ip_based_limiting: false,
         }
@@ -50,7 +50,7 @@ impl RateLimitConfig {
             requests_per_minute: 300,
             concurrent_scans: 10,
             burst_size: 25,
-            per_endpoint_limits: HashMap::new(),
+            per_endpoint_limits: FxHashMap::default(),
             global_rate_limit: None,
             enable_ip_based_limiting: false,
         }
@@ -61,7 +61,7 @@ impl RateLimitConfig {
             requests_per_minute: 20,
             concurrent_scans: 2,
             burst_size: 5,
-            per_endpoint_limits: HashMap::new(),
+            per_endpoint_limits: FxHashMap::default(),
             global_rate_limit: None,
             enable_ip_based_limiting: false,
         }
@@ -81,7 +81,7 @@ impl RateLimitConfig {
         let burst_size = value.get("burst_size")?.as_integer()?.try_into().ok()?;
 
         let per_endpoint_limits = if let Some(ep) = value.get("per_endpoint_limits") {
-            let mut map = HashMap::new();
+            let mut map = FxHashMap::default();
             if let Some(table) = ep.as_table() {
                 for (key, val) in table {
                     if let Some(ep_val) = val.as_table() {
@@ -106,7 +106,7 @@ impl RateLimitConfig {
             }
             map
         } else {
-            HashMap::new()
+            FxHashMap::default()
         };
 
         let global_rate_limit = value
@@ -551,7 +551,7 @@ mod tests {
             requests_per_minute: 100,
             concurrent_scans: 2,
             burst_size: 10,
-            per_endpoint_limits: HashMap::new(),
+            per_endpoint_limits: FxHashMap::default(),
             global_rate_limit: None,
             enable_ip_based_limiting: false,
         };
@@ -591,7 +591,7 @@ mod tests {
             requests_per_minute: 100,
             concurrent_scans: 2,
             burst_size: 10,
-            per_endpoint_limits: HashMap::new(),
+            per_endpoint_limits: FxHashMap::default(),
             global_rate_limit: None,
             enable_ip_based_limiting: false,
         };

@@ -13,10 +13,10 @@ pub enum DedupStrategy {
 impl std::str::FromStr for DedupStrategy {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "strict" => Ok(DedupStrategy::Strict),
-            "fuzzy" => Ok(DedupStrategy::Fuzzy),
-            "disabled" => Ok(DedupStrategy::Disabled),
+        match s {
+            s if s.eq_ignore_ascii_case("strict") => Ok(DedupStrategy::Strict),
+            s if s.eq_ignore_ascii_case("fuzzy") => Ok(DedupStrategy::Fuzzy),
+            s if s.eq_ignore_ascii_case("disabled") => Ok(DedupStrategy::Disabled),
             _ => Err(format!("Unknown dedup strategy: {}", s)),
         }
     }

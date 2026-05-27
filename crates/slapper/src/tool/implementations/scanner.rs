@@ -126,7 +126,9 @@ impl SecurityTool for ScannerTool {
                     quiet: false,
                     output: None,
                 };
-                let config = crate::config::load_config(None::<&str>).unwrap_or_default();
+                let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
+                    tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
+                }).unwrap_or_default();
                 crate::scanner::ports::run_cli_with_callback(args, &config, move |f| {
                     let mut findings = findings_clone.lock();
                     findings.push(f);
@@ -145,7 +147,9 @@ impl SecurityTool for ScannerTool {
                     output: None,
                     concurrency: 20,
                 };
-                let config = crate::config::load_config(None::<&str>).unwrap_or_default();
+                let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
+                    tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
+                }).unwrap_or_default();
                 crate::scanner::fingerprint::run_cli_with_callback(args, &config, move |f| {
                     let mut findings = findings_clone.lock();
                     findings.push(f);
@@ -172,7 +176,9 @@ impl SecurityTool for ScannerTool {
                     output: None,
                     common: crate::cli::CommonHttpArgs::default(),
                 };
-                let config = crate::config::load_config(None::<&str>).unwrap_or_default();
+                let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
+                    tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
+                }).unwrap_or_default();
                 crate::scanner::endpoints::run_cli_with_callback(args, &config, move |f| {
                     let mut findings = findings_clone.lock();
                     findings.push(f);

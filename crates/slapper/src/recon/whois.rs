@@ -168,7 +168,9 @@ async fn lookup_whois(domain: &str, server: &str) -> Result<String> {
         }
     });
 
-    let _ = read_timeout.await;
+    if let Err(e) = read_timeout.await {
+        tracing::warn!(target: "recon", "WHOIS read timeout: {}", e);
+    }
 
     let response_str = String::from_utf8_lossy(&response).to_string();
 

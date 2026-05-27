@@ -1067,3 +1067,100 @@ Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `ha
 | `fuzzer/detection/analyzer.rs` | 231-234 | Potential panic on empty/single-element vector | Medium - guarded by earlier is_empty check at line 212 |
 | `recon/subdomain.rs` | 178, 240, 262 | Silent `ok()` on semaphore/acquire/join | Low - test/fallback code |
 (End file - total 1003 lines)
+
+## Session Fixes (2026-06-03 - Additional Audit)
+
+### Additional Tabs Fixed (Second Wave)
+
+| Tab | Handlers Fixed |
+|-----|---------------|
+| `recon.rs` | word_forward, word_backward (lines 549-558) |
+| `scan.rs` | word_forward, word_backward, home, end, top, bottom (lines 472-507) |
+| `scan_ports.rs` | word_forward, word_backward, home, end (lines 426-451) |
+| `scan_endpoints.rs` | word_forward, word_backward, home, end (lines 369-394) |
+| `fingerprint.rs` | word_forward, word_backward, home, end, top, bottom (lines 323-370) |
+| `load.rs` | word_forward, word_backward, home, end, top, bottom (lines 527-561) |
+| `stress.rs` | word_forward, word_backward, home, end, top, bottom (lines 353-387) |
+| `cluster.rs` | handle_enter (line 440) |
+| `proxy.rs` | handle_enter (line 591) |
+| `hunt.rs` | handle_enter (Options), handle_up/down (Options) (lines 444-488) |
+| `browser.rs` | handle_enter (Options), handle_up/down (Options) (lines 407-451) |
+| `compliance.rs` | handle_top, handle_bottom, handle_left, handle_right (lines 343-421) |
+| `vuln.rs` | handle_top, handle_bottom (lines 540-551) |
+| `dashboard.rs` | All 17 TabInput handlers (lines 492-562) |
+| `resume.rs` | 12 navigation handlers (lines 195-272) |
+| `history.rs` | 10 navigation handlers (lines 418-517) |
+
+### reset() Methods Fixed (17 tabs)
+
+| Tab | Added Reset |
+|-----|------------|
+| `packet.rs` | view_selector |
+| `graphql.rs` | checkbox reset, focused_checkbox_index |
+| `oauth.rs` | checkbox reset, focused_checkbox_index |
+| `cluster.rs` | view_selector, worker/coordinator/status_inputs |
+| `proxy.rs` | view_selector |
+| `nse.rs` | input fields |
+| `plugin.rs` | input fields, plugin_selector, plugins_loaded, plugin_list |
+| `hunt.rs` | checkbox reset, focused_checkbox_index, focus_area |
+| `browser.rs` | checkbox reset, focused_checkbox_index, focus_area |
+| `compliance.rs` | framework_selector.select(0), focus_area |
+| `storage.rs` | mode_selector, query_inputs, focus_area, current_mode |
+| `integrations.rs` | config_inputs, issue_inputs |
+| `workflow.rs` | focus_area |
+| `vuln.rs` | mode_selector, focus_area, current_mode |
+| `report.rs` | view_selector, format_selector, current_view |
+| `settings/main.rs` | proxy_rotation_selector, severity_selector, accent_color |
+| `auth.rs` | results.clear() |
+
+### App Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `mod.rs` | 452, 459 | Silent `let _ =` on dispatcher | Changed to `if !bool { warn }` |
+| `key_handler.rs` | 407-414 | Stale quick switch results | Re-fetch fresh results on Enter |
+| `task_runtime.rs` | 68-80 | No timeout on spawn | Added `tokio::time::timeout(300s, ...)` |
+
+### Workers/Config Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `workers/api.rs` | 143 | Division by zero | Added `.max(1)` guard |
+| `config/loader.rs` | 18 instances | Silent file operations | Changed to `if let Err(e) = ...` with warn |
+
+### Output Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `output/markdown.rs` | 87 | to_lowercase() in loop | Cached before loop |
+| `output/dedup.rs` | 16 | to_lowercase() in parse | Changed to eq_ignore_ascii_case |
+
+### Tool Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `tool/scripting.rs` | 23,24,68 | HashMap → FxHashMap | Changed to FxHashMap |
+| `tool/finding.rs` | 19 | HashMap → FxHashMap | Changed to FxHashMap |
+| `tool/agents/aggregator.rs` | Multiple | HashMap → FxHashMap | Changed to FxHashMap |
+| `tool/agents/registry.rs` | 28 | HashMap → FxHashMap | Changed to FxHashMap |
+| `tool/openapi.rs` | Multiple | HashMap → FxHashMap | Changed to FxHashMap |
+| `tool/ratelimit.rs` | Multiple | HashMap → FxHashMap | Changed to FxHashMap |
+| `tool/implementations/*.rs` | Various | HashMap → FxHashMap | Changed to FxHashMap |
+| `routes.rs` | 28, 118 | unwrap_or_default | Added warn logging |
+| `implementations/scanner.rs` | 129,148,175 | load_config unwrap | Added inspect_err with warn |
+
+### Scanner Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scanner/templates/matcher.rs` | 262, 268 | Silent socket ops | Added warn logging |
+| `scanner/fingerprint.rs` | 432 | Silent probe write | Added warn logging |
+| `recon/whois.rs` | 171 | Silent timeout | Added warn logging |
+
+### Additional Audit Findings (Low Priority)
+
+| File | Line | Issue | Severity |
+|------|------|-------|----------|
+| `tool/protocol/mcp/handlers/server.rs` | 35-36, 58-59 | HashMap vs FxHashMap | Low |
+| `fuzzer/detection/analyzer.rs` | 231-234 | Empty vector panic risk | Medium (guarded) |
+| `recon/subdomain.rs` | 178,240,262 | Silent ok() | Low |

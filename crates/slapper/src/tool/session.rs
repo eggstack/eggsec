@@ -1051,12 +1051,24 @@ impl SessionVerifier {
 
     /// Update verification patterns
     pub fn with_logged_in_patterns(mut self, patterns: Vec<String>) -> Self {
-        self.logged_in_patterns = patterns.iter().filter_map(|p| Regex::new(p).ok()).collect();
+        self.logged_in_patterns = patterns.iter().filter_map(|p| match Regex::new(p) {
+            Ok(r) => Some(r),
+            Err(e) => {
+                tracing::warn!(target: "tool", "Invalid logged-in regex pattern '{}': {}", p, e);
+                None
+            }
+        }).collect();
         self
     }
 
     pub fn with_logged_out_patterns(mut self, patterns: Vec<String>) -> Self {
-        self.logged_out_patterns = patterns.iter().filter_map(|p| Regex::new(p).ok()).collect();
+        self.logged_out_patterns = patterns.iter().filter_map(|p| match Regex::new(p) {
+            Ok(r) => Some(r),
+            Err(e) => {
+                tracing::warn!(target: "tool", "Invalid logged-out regex pattern '{}': {}", p, e);
+                None
+            }
+        }).collect();
         self
     }
 }
