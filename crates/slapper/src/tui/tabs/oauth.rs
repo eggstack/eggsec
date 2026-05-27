@@ -502,7 +502,7 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_enter(&mut self) {
-        if !self.is_running() {
+        if self.is_running() {
             return;
         }
         match self.focus_area {

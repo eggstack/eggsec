@@ -108,7 +108,9 @@ impl super::App {
 
     pub(super) fn execute_command(&mut self, command: &str) {
         if let Some(tab) = command_to_tab(command) {
-            let _ = self.set_current_tab_if_available(tab);
+            if !self.set_current_tab_if_available(tab) {
+                tracing::debug!("Command target tab not available: {:?}", tab);
+            }
             return;
         }
 

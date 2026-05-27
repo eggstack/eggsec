@@ -433,7 +433,9 @@ impl TabInput for ScanEndpointsTab {
     fn handle_enter(&mut self) {
         if !self.is_running() && self.inputs.is_focused() {
             self.inputs.blur();
-        } else if self.is_running() {
+            return;
+        }
+        if self.is_running() {
             self.stop();
         } else {
             self.start();

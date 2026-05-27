@@ -134,7 +134,9 @@ impl SessionManager {
             .and_then(|id| Tab::from_stable_id(id))
             .or_else(|| state.legacy_current_tab.and_then(Tab::from_index))
             .unwrap_or(Tab::Recon);
-        let _ = app.set_current_tab_if_available(tab_to_restore);
+        if !app.set_current_tab_if_available(tab_to_restore) {
+            tracing::debug!("Restored tab not available in current feature set");
+        }
 
         for bookmark_id in &state.bookmarks {
             if let Some(tab) = Tab::from_stable_id(bookmark_id) {

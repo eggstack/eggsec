@@ -332,6 +332,9 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == WafStressFocusArea::Inputs {
             if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_results_up();
@@ -344,6 +347,9 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == WafStressFocusArea::Inputs {
             if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_results_down();

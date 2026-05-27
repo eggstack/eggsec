@@ -716,6 +716,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if !self.view_selector.is_focused() && self.inputs.is_focused() {
             self.inputs.get_focused_value()
         } else {

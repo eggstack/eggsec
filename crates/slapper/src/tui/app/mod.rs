@@ -450,7 +450,7 @@ impl App {
             return;
         }
         if !self.dispatcher_mut().handle_left() {
-            tracing::debug!("handle_left returned false");
+            tracing::trace!("handle_left at left edge");
         }
     }
 
@@ -459,7 +459,7 @@ impl App {
             return;
         }
         if !self.dispatcher_mut().handle_right() {
-            tracing::debug!("handle_right returned false");
+            tracing::trace!("handle_right at right edge");
         }
     }
 
@@ -468,7 +468,8 @@ impl App {
             return;
         }
         self.dispatcher_mut().handle_focus_next();
-        if self.dispatcher_mut().is_input_focused() {
+        let input_focused = self.dispatcher_mut().is_input_focused();
+        if input_focused {
             self.mode = InputMode::Insert;
         } else {
             self.mode = InputMode::Normal;
@@ -480,7 +481,8 @@ impl App {
             return;
         }
         self.dispatcher_mut().handle_focus_prev();
-        if self.dispatcher_mut().is_input_focused() {
+        let input_focused = self.dispatcher_mut().is_input_focused();
+        if input_focused {
             self.mode = InputMode::Insert;
         } else {
             self.mode = InputMode::Normal;
