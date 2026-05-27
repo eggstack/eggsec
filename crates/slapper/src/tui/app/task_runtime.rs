@@ -100,7 +100,7 @@ impl super::App {
                         }
                     }
                     Err(_) => {
-                        tracing::error!("Task timed out after 300s - task will continue until completion but result will be ignored");
+                        tracing::error!("Task timed out after 300s - aborting task");
                         handle_to_abort.abort();
                         if let Err(e) = error_tx
                             .send(workers::TaskResult::Error("Task timed out after 300 seconds".to_string()))

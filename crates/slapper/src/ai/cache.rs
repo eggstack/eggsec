@@ -161,18 +161,14 @@ impl AiCache {
             if path.exists() {
                 if let Ok(contents) = std::fs::read_to_string(path) {
                     if let Ok(serialized) = serde_json::from_str::<AiCacheSerialized>(&contents) {
-                        let cache: AiCache = serialized.into();
-                        let old_entries = self.entries.clone();
-                        let new_entries = cache.entries;
+                        let disk_cache: AiCache = serialized.into();
                         let runtime = tokio::runtime::Handle::current();
                         runtime.block_on(async {
-                            let mut new = new_entries.write().await;
-                            let old = old_entries.read().await;
-                            for (k, v) in old.iter() {
-                                new.entry(k.clone()).or_insert_with(|| v.clone());
+                            let mut entries = self.entries.write().await;
+                            for (k, v) in disk_cache.entries.iter() {
+                                entries.entry(k.clone()).or_insert_with(|| v.clone());
                             }
                         });
-                        self.entries = new_entries;
                     }
                 }
             }

@@ -450,7 +450,7 @@ impl App {
             return;
         }
         if !self.dispatcher_mut().handle_left() {
-            tracing::warn!("handle_left returned false");
+            tracing::debug!("handle_left returned false");
         }
     }
 
@@ -459,7 +459,7 @@ impl App {
             return;
         }
         if !self.dispatcher_mut().handle_right() {
-            tracing::warn!("handle_right returned false");
+            tracing::debug!("handle_right returned false");
         }
     }
 

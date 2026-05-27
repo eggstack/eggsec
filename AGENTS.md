@@ -990,3 +990,28 @@ See `architecture/tui.md` for complete bug fix history.
 | `integrations.rs` | 334 | Suspicious `&[]` fallback | Added warn logging on fallback |
 | `auth.rs` | 50-56 | reset() missing focus_area | Added `focus_area` reset |
 | `history.rs` | 167-187 | to_lowercase() in loops | Pre-compute before filter
+
+
+## Bug Fixes (2026-06-09 Session)
+
+### AI Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `cache.rs` | 158-180 | Cache merge logic broken | Fixed merge to preserve existing entries |
+| `cache.rs` | 158-180 | Unnecessary complexity | Simplified to direct iteration |
+
+### App Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `task_runtime.rs` | 103 | Misleading timeout message | Changed to "aborting task" |
+| `mod.rs` | 452-463 | Misleading warn logs | Changed to debug level |
+
+### Skills Added
+
+| Skill | Purpose |
+|-------|---------|
+| `slapper-auth/` | Authentication security testing |
+| `slapper-hunt/` | Vulnerability hunting |
+| `slapper-browser/` | Browser security testing |
