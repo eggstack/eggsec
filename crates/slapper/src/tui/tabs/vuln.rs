@@ -538,12 +538,16 @@ impl TabInput for VulnTab {
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = VulnFocusArea::Inputs;
-        self.inputs.focus(0);
+        if !self.is_running() {
+            self.focus_area = VulnFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = VulnFocusArea::Results;
+        if !self.is_running() {
+            self.focus_area = VulnFocusArea::Results;
+        }
     }
 
     fn handle_enter(&mut self) {

@@ -358,22 +358,26 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
-        if self.focus_area == ClusterFocusArea::Inputs {
-            let current_inputs = match self.current_view {
-                ClusterView::Worker => &self.worker_inputs,
-                ClusterView::Coordinator => &self.coordinator_inputs,
-                ClusterView::Status => &self.status_inputs,
-            };
-            current_inputs.get_focused_value()
-        } else if self.focus_area == ClusterFocusArea::Results {
-            Some(self.results_view.get_content())
+        if !self.is_running() {
+            if self.focus_area == ClusterFocusArea::Inputs {
+                let current_inputs = match self.current_view {
+                    ClusterView::Worker => &self.worker_inputs,
+                    ClusterView::Coordinator => &self.coordinator_inputs,
+                    ClusterView::Status => &self.status_inputs,
+                };
+                current_inputs.get_focused_value()
+            } else if self.focus_area == ClusterFocusArea::Results {
+                Some(self.results_view.get_content())
+            } else {
+                None
+            }
         } else {
             None
         }
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == ClusterFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == ClusterFocusArea::Inputs {
             let current_inputs = match self.current_view {
                 ClusterView::Worker => &mut self.worker_inputs,
                 ClusterView::Coordinator => &mut self.coordinator_inputs,
@@ -384,7 +388,7 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == ClusterFocusArea::Inputs {
+        if !self.is_running() && self.focus_area == ClusterFocusArea::Inputs {
             let current_inputs = match self.current_view {
                 ClusterView::Worker => &mut self.worker_inputs,
                 ClusterView::Coordinator => &mut self.coordinator_inputs,
@@ -395,28 +399,32 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_home(&mut self) {
-        if self.focus_area == ClusterFocusArea::Inputs {
-            let current_inputs = match self.current_view {
-                ClusterView::Worker => &mut self.worker_inputs,
-                ClusterView::Coordinator => &mut self.coordinator_inputs,
-                ClusterView::Status => &mut self.status_inputs,
-            };
-            current_inputs.move_home();
-        } else if self.focus_area == ClusterFocusArea::Results {
-            self.results_view.scroll_to_top();
+        if !self.is_running() {
+            if self.focus_area == ClusterFocusArea::Inputs {
+                let current_inputs = match self.current_view {
+                    ClusterView::Worker => &mut self.worker_inputs,
+                    ClusterView::Coordinator => &mut self.coordinator_inputs,
+                    ClusterView::Status => &mut self.status_inputs,
+                };
+                current_inputs.move_home();
+            } else if self.focus_area == ClusterFocusArea::Results {
+                self.results_view.scroll_to_top();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if self.focus_area == ClusterFocusArea::Inputs {
-            let current_inputs = match self.current_view {
-                ClusterView::Worker => &mut self.worker_inputs,
-                ClusterView::Coordinator => &mut self.coordinator_inputs,
-                ClusterView::Status => &mut self.status_inputs,
-            };
-            current_inputs.move_end();
-        } else if self.focus_area == ClusterFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+        if !self.is_running() {
+            if self.focus_area == ClusterFocusArea::Inputs {
+                let current_inputs = match self.current_view {
+                    ClusterView::Worker => &mut self.worker_inputs,
+                    ClusterView::Coordinator => &mut self.coordinator_inputs,
+                    ClusterView::Status => &mut self.status_inputs,
+                };
+                current_inputs.move_end();
+            } else if self.focus_area == ClusterFocusArea::Results {
+                self.results_view.scroll_to_bottom();
+            }
         }
     }
 
@@ -473,72 +481,84 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_up(&mut self) {
-        match self.focus_area {
-            ClusterFocusArea::ViewSelector => {
-                if self.view_selector.is_open() {
-                    self.view_selector.move_prev();
+        if !self.is_running() {
+            match self.focus_area {
+                ClusterFocusArea::ViewSelector => {
+                    if self.view_selector.is_open() {
+                        self.view_selector.move_prev();
+                    }
                 }
-            }
-            ClusterFocusArea::Inputs => {
-                let current_inputs = match self.current_view {
-                    ClusterView::Worker => &mut self.worker_inputs,
-                    ClusterView::Coordinator => &mut self.coordinator_inputs,
-                    ClusterView::Status => &mut self.status_inputs,
-                };
-                current_inputs.focus_prev();
-            }
-            ClusterFocusArea::Results => {
-                self.results_view.scroll_up(1);
+                ClusterFocusArea::Inputs => {
+                    let current_inputs = match self.current_view {
+                        ClusterView::Worker => &mut self.worker_inputs,
+                        ClusterView::Coordinator => &mut self.coordinator_inputs,
+                        ClusterView::Status => &mut self.status_inputs,
+                    };
+                    current_inputs.focus_prev();
+                }
+                ClusterFocusArea::Results => {
+                    self.results_view.scroll_up(1);
+                }
             }
         }
     }
 
     fn handle_down(&mut self) {
-        match self.focus_area {
-            ClusterFocusArea::ViewSelector => {
-                if self.view_selector.is_open() {
-                    self.view_selector.move_next();
+        if !self.is_running() {
+            match self.focus_area {
+                ClusterFocusArea::ViewSelector => {
+                    if self.view_selector.is_open() {
+                        self.view_selector.move_next();
+                    }
                 }
-            }
-            ClusterFocusArea::Inputs => {
-                let current_inputs = match self.current_view {
-                    ClusterView::Worker => &mut self.worker_inputs,
-                    ClusterView::Coordinator => &mut self.coordinator_inputs,
-                    ClusterView::Status => &mut self.status_inputs,
-                };
-                current_inputs.focus_next();
-            }
-            ClusterFocusArea::Results => {
-                self.results_view.scroll_down(1);
+                ClusterFocusArea::Inputs => {
+                    let current_inputs = match self.current_view {
+                        ClusterView::Worker => &mut self.worker_inputs,
+                        ClusterView::Coordinator => &mut self.coordinator_inputs,
+                        ClusterView::Status => &mut self.status_inputs,
+                    };
+                    current_inputs.focus_next();
+                }
+                ClusterFocusArea::Results => {
+                    self.results_view.scroll_down(1);
+                }
             }
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        match self.focus_area {
-            ClusterFocusArea::Inputs => {
-                let current_inputs = match self.current_view {
-                    ClusterView::Worker => &mut self.worker_inputs,
-                    ClusterView::Coordinator => &mut self.coordinator_inputs,
-                    ClusterView::Status => &mut self.status_inputs,
-                };
-                current_inputs.move_left()
+        if !self.is_running() {
+            match self.focus_area {
+                ClusterFocusArea::Inputs => {
+                    let current_inputs = match self.current_view {
+                        ClusterView::Worker => &mut self.worker_inputs,
+                        ClusterView::Coordinator => &mut self.coordinator_inputs,
+                        ClusterView::Status => &mut self.status_inputs,
+                    };
+                    current_inputs.move_left()
+                }
+                _ => false,
             }
-            _ => false,
+        } else {
+            false
         }
     }
 
     fn handle_right(&mut self) -> bool {
-        match self.focus_area {
-            ClusterFocusArea::Inputs => {
-                let current_inputs = match self.current_view {
-                    ClusterView::Worker => &mut self.worker_inputs,
-                    ClusterView::Coordinator => &mut self.coordinator_inputs,
-                    ClusterView::Status => &mut self.status_inputs,
-                };
-                current_inputs.move_right()
+        if !self.is_running() {
+            match self.focus_area {
+                ClusterFocusArea::Inputs => {
+                    let current_inputs = match self.current_view {
+                        ClusterView::Worker => &mut self.worker_inputs,
+                        ClusterView::Coordinator => &mut self.coordinator_inputs,
+                        ClusterView::Status => &mut self.status_inputs,
+                    };
+                    current_inputs.move_right()
+                }
+                _ => false,
             }
-            _ => false,
+        } else {
+            false
         }
     }
 

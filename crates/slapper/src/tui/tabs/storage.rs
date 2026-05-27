@@ -314,10 +314,12 @@ impl TabRender for StorageTab {
                 format!("Status: {}", status_text),
                 Style::default().fg(status_color),
             ));
-            f.render_widget(
-                ratatui::widgets::Paragraph::new(status_line),
-                config_chunks[0],
-            );
+            if let Some(chunk) = config_chunks.first() {
+                f.render_widget(
+                    ratatui::widgets::Paragraph::new(status_line),
+                    *chunk,
+                );
+            }
 
             for (i, field) in self.config_inputs.fields.iter().enumerate() {
                 if let Some(chunk) = config_chunks.get(i + 1) {

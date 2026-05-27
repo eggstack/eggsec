@@ -431,12 +431,16 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
-        if self.focus_area == IntegrationsFocusArea::Config {
-            self.config_inputs.get_focused_value()
-        } else if self.focus_area == IntegrationsFocusArea::Issue {
-            self.issue_inputs.get_focused_value()
-        } else if self.focus_area == IntegrationsFocusArea::Results {
-            Some(self.results_view.get_content())
+        if !self.is_running() {
+            if self.focus_area == IntegrationsFocusArea::Config {
+                self.config_inputs.get_focused_value()
+            } else if self.focus_area == IntegrationsFocusArea::Issue {
+                self.issue_inputs.get_focused_value()
+            } else if self.focus_area == IntegrationsFocusArea::Results {
+                Some(self.results_view.get_content())
+            } else {
+                None
+            }
         } else {
             None
         }

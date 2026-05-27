@@ -536,13 +536,14 @@ impl TabInput for ReconTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
-        if self.focus_area == ReconFocusArea::Results {
-            Some(self.results_view.get_content())
-        } else if self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.get_focused_value()
-        } else {
-            None
+        if !self.is_running() {
+            if self.focus_area == ReconFocusArea::Results {
+                return Some(self.results_view.get_content());
+            } else if self.focus_area == ReconFocusArea::Inputs {
+                return self.inputs.get_focused_value();
+            }
         }
+        None
     }
 
     fn handle_word_forward(&mut self) {
@@ -558,28 +559,36 @@ impl TabInput for ReconTab {
     }
 
     fn handle_home(&mut self) {
-        if self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.move_home();
-        } else if self.focus_area == ReconFocusArea::Results {
-            self.results_view.scroll_to_top();
+        if !self.is_running() {
+            if self.focus_area == ReconFocusArea::Inputs {
+                self.inputs.move_home();
+            } else if self.focus_area == ReconFocusArea::Results {
+                self.results_view.scroll_to_top();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.move_end();
-        } else if self.focus_area == ReconFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+        if !self.is_running() {
+            if self.focus_area == ReconFocusArea::Inputs {
+                self.inputs.move_end();
+            } else if self.focus_area == ReconFocusArea::Results {
+                self.results_view.scroll_to_bottom();
+            }
         }
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = ReconFocusArea::Inputs;
-        self.inputs.focus(0);
+        if !self.is_running() {
+            self.focus_area = ReconFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = ReconFocusArea::Results;
+        if !self.is_running() {
+            self.focus_area = ReconFocusArea::Results;
+        }
     }
 
     fn handle_enter(&mut self) {

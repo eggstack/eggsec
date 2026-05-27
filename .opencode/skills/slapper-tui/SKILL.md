@@ -1000,4 +1000,70 @@ Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `ha
 | `session.rs` | 525, 1016 | Silent error suppression `unwrap_or_default()` | Changed to `unwrap_or_else(\|e\| { warn!; String::new() })` |
 | `state.rs` | 217 | `debug!` instead of `warn!` for file removal | Changed to `tracing::warn!` |
 | `cache.rs` | 278 | `debug!` instead of `warn!` for cache dir creation | Changed to `tracing::warn!`
-(End file - total      888 lines)
+
+## Session Fixes (2026-06-03 - Deep Dive Audit)
+
+### fuzz.rs Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `fuzz.rs` | 419-425 | `reset()` didn't clear 7 checkboxes | Added graphql_introspection, graphql_depth_bypass, graphql_alias_overload, oauth_redirect_test, oauth_scope_test, oauth_state_test, oauth_grant_test resets |
+| `fuzz.rs` | 744-747 | `handle_enter()` MutationCheckbox toggle missing guard | Added `!self.is_running()` guard |
+
+### hunt.rs and browser.rs Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `hunt.rs` | 229-243 | `reset()` didn't clear option_checkboxes, focused_checkbox_index, focus_area | Added loop to reset checkboxes, reset index and focus_area |
+| `browser.rs` | 195-209 | Same issue | Same fix pattern |
+
+### stress.rs Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `stress.rs` | 390-406 | `handle_enter()` missing `is_running()` guard | Added guard at start to stop running tasks |
+| `stress.rs` | 459-471 | `is_at_left_edge()` `true` fallback without `is_empty()` check | Changed to check `items.is_empty()` even when selector closed |
+| `stress.rs` | 473-486 | `is_at_right_edge()` `true` fallback without `is_empty()` check | Same fix pattern |
+
+### scan_ports.rs Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scan_ports.rs` | 463-471 | `handle_enter()` early return when inputs focused skipped `is_running()` check | Restructured to check `is_running()` even when inputs were focused |
+
+### Navigation Handler Guards (16 tabs fixed via subagents)
+
+| Tab | Handlers Fixed |
+|-----|---------------|
+| `scan.rs` | 8 handlers |
+| `scan_ports.rs` | 8 handlers |
+| `fingerprint.rs` | 10 handlers |
+| `waf.rs` | 12 handlers |
+| `waf_stress.rs` | 11 handlers |
+| `graphql.rs` | 8 handlers |
+| `oauth.rs` | 8 handlers |
+| `cluster.rs` | 9 handlers |
+| `proxy.rs` | 13 handlers |
+| `nse.rs` | 8 handlers |
+| `plugin.rs` | 8 handlers |
+| `hunt.rs` | 6 handlers |
+| `browser.rs` | 6 handlers |
+| `report.rs` | 12 handlers |
+| `vuln.rs` | 2 handlers |
+| `integrations.rs` | 1 handler (handle_copy) |
+| `recon.rs` | 5 handlers |
+
+### storage.rs Bounds Fix
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `storage.rs` | 317-322 | Direct `config_chunks[0]` access without bounds check | Changed to `if let Some(chunk) = config_chunks.first()` pattern |
+
+### Additional Audit Findings (Not Fixed - Low Priority)
+
+| File | Line | Issue | Severity |
+|------|------|-------|----------|
+| `tool/protocol/mcp/handlers/server.rs` | 35-36, 58-59 | Uses HashMap instead of FxHashMap | Low - hot path but not critical |
+| `fuzzer/detection/analyzer.rs` | 231-234 | Potential panic on empty/single-element vector | Medium - guarded by earlier is_empty check at line 212 |
+| `recon/subdomain.rs` | 178, 240, 262 | Silent `ok()` on semaphore/acquire/join | Low - test/fallback code |
+(End file - total 1003 lines)

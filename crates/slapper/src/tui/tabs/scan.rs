@@ -558,56 +558,68 @@ impl TabInput for ScanTab {
     }
 
     fn handle_up(&mut self) {
-        if self.profile_selector.is_open() {
-            self.profile_selector.move_prev();
-            self.update_stages_for_profile();
-        } else if self.output_selector.is_open() {
-            self.output_selector.move_prev();
-        } else if !self.inputs.is_focused() && !self.current_stage_output.is_empty() {
-            self.scroll_output_up();
-        } else if self.focus_area != ScanFocusArea::Inputs {
-            self.focus_area = ScanFocusArea::Inputs;
-            self.inputs.focus(0);
-        } else {
-            self.inputs.focus_prev();
+        if !self.is_running() {
+            if self.profile_selector.is_open() {
+                self.profile_selector.move_prev();
+                self.update_stages_for_profile();
+            } else if self.output_selector.is_open() {
+                self.output_selector.move_prev();
+            } else if !self.inputs.is_focused() && !self.current_stage_output.is_empty() {
+                self.scroll_output_up();
+            } else if self.focus_area != ScanFocusArea::Inputs {
+                self.focus_area = ScanFocusArea::Inputs;
+                self.inputs.focus(0);
+            } else {
+                self.inputs.focus_prev();
+            }
         }
     }
 
     fn handle_down(&mut self) {
-        if self.profile_selector.is_open() {
-            self.profile_selector.move_next();
-            self.update_stages_for_profile();
-        } else if self.output_selector.is_open() {
-            self.output_selector.move_next();
-        } else if !self.inputs.is_focused() && !self.current_stage_output.is_empty() {
-            self.scroll_output_down();
-        } else if self.focus_area == ScanFocusArea::Inputs && !self.inputs.is_focused() {
-            self.focus_area = ScanFocusArea::ProfileSelector;
-        } else if self.focus_area == ScanFocusArea::ProfileSelector {
-            self.focus_area = ScanFocusArea::OutputSelector;
-        } else if self.focus_area == ScanFocusArea::OutputSelector {
-            self.focus_area = ScanFocusArea::Inputs;
-            self.inputs.focus(0);
-        } else {
-            self.inputs.focus_next();
+        if !self.is_running() {
+            if self.profile_selector.is_open() {
+                self.profile_selector.move_next();
+                self.update_stages_for_profile();
+            } else if self.output_selector.is_open() {
+                self.output_selector.move_next();
+            } else if !self.inputs.is_focused() && !self.current_stage_output.is_empty() {
+                self.scroll_output_down();
+            } else if self.focus_area == ScanFocusArea::Inputs && !self.inputs.is_focused() {
+                self.focus_area = ScanFocusArea::ProfileSelector;
+            } else if self.focus_area == ScanFocusArea::ProfileSelector {
+                self.focus_area = ScanFocusArea::OutputSelector;
+            } else if self.focus_area == ScanFocusArea::OutputSelector {
+                self.focus_area = ScanFocusArea::Inputs;
+                self.inputs.focus(0);
+            } else {
+                self.inputs.focus_next();
+            }
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        if self.focus_area == ScanFocusArea::Inputs {
-            self.inputs.move_left()
+        if !self.is_running() {
+            if self.focus_area == ScanFocusArea::Inputs {
+                self.inputs.move_left()
+            } else {
+                self.current_stage_output.scroll_left(5);
+                true
+            }
         } else {
-            self.current_stage_output.scroll_left(5);
-            true
+            false
         }
     }
 
     fn handle_right(&mut self) -> bool {
-        if self.focus_area == ScanFocusArea::Inputs {
-            self.inputs.move_right()
+        if !self.is_running() {
+            if self.focus_area == ScanFocusArea::Inputs {
+                self.inputs.move_right()
+            } else {
+                self.current_stage_output.scroll_right(5);
+                true
+            }
         } else {
-            self.current_stage_output.scroll_right(5);
-            true
+            false
         }
     }
 

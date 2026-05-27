@@ -417,6 +417,13 @@ impl TabState for FuzzTab {
             self.inputs.fields[6].cursor_pos = 2;
         }
         self.mutation_checkbox.checked = false;
+        self.graphql_introspection.checked = false;
+        self.graphql_depth_bypass.checked = false;
+        self.graphql_alias_overload.checked = false;
+        self.oauth_redirect_test.checked = false;
+        self.oauth_scope_test.checked = false;
+        self.oauth_state_test.checked = false;
+        self.oauth_grant_test.checked = false;
         self.payload_selector.select(0);
         self.mode_selector.select(0);
         self.target_selector.select(0);
@@ -741,7 +748,7 @@ impl TabInput for FuzzTab {
             return;
         }
 
-        if self.focus_area == FuzzFocusArea::MutationCheckbox {
+        if self.focus_area == FuzzFocusArea::MutationCheckbox && !self.is_running() {
             self.mutation_checkbox.toggle();
             return;
         }

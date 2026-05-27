@@ -388,6 +388,10 @@ impl TabInput for StressTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         match self.focus_area {
             StressFocusArea::Inputs => {
                 self.inputs.blur();
@@ -460,11 +464,7 @@ impl TabInput for StressTab {
         match self.focus_area {
             StressFocusArea::Inputs => self.inputs.is_at_left_edge(),
             StressFocusArea::TypeSelector => {
-                if self.type_selector.is_open() {
-                    self.type_selector.items.is_empty() || self.type_selector.selected == 0
-                } else {
-                    true
-                }
+                self.type_selector.items.is_empty() || self.type_selector.selected == 0
             }
             _ => true,
         }
@@ -474,12 +474,8 @@ impl TabInput for StressTab {
         match self.focus_area {
             StressFocusArea::Inputs => self.inputs.is_at_right_edge(),
             StressFocusArea::TypeSelector => {
-                if self.type_selector.is_open() {
-                    self.type_selector.items.is_empty()
-                        || self.type_selector.selected >= self.type_selector.items.len().saturating_sub(1)
-                } else {
-                    true
-                }
+                self.type_selector.items.is_empty()
+                    || self.type_selector.selected >= self.type_selector.items.len().saturating_sub(1)
             }
             _ => true,
         }
