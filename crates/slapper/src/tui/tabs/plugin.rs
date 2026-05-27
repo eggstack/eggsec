@@ -197,6 +197,11 @@ impl TabState for PluginTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.error = None;
+        for field in &mut self.inputs.fields {
+            field.clear();
+        }
+        self.plugin_selector.select(0);
+        self.focus_area = PluginFocusArea::Inputs;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -349,31 +354,35 @@ impl TabInput for PluginTab {
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = PluginFocusArea::Inputs;
-        self.inputs.focus(0);
+        if !self.is_running() {
+            self.focus_area = PluginFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = PluginFocusArea::Results;
+        if !self.is_running() {
+            self.focus_area = PluginFocusArea::Results;
+        }
     }
 
     fn handle_enter(&mut self) {
-        if self.focus_area == PluginFocusArea::Inputs {
-            self.inputs.blur();
-            return;
-        }
-
-        if self.focus_area == PluginFocusArea::PluginSelector {
-            if self.plugin_selector.focused {
-                self.plugin_selector.handle_enter();
-            }
-            return;
-        }
-
         if self.is_running() {
             self.stop();
         } else {
-            self.start();
+            match self.focus_area {
+                PluginFocusArea::Inputs => {
+                    self.inputs.blur();
+                }
+                PluginFocusArea::PluginSelector => {
+                    if self.plugin_selector.focused {
+                        self.plugin_selector.handle_enter();
+                    }
+                }
+                PluginFocusArea::Results => {
+                    self.start();
+                }
+            }
         }
     }
 

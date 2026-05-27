@@ -172,6 +172,8 @@ impl TabState for ComplianceTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        self.framework_selector.select(0);
+        self.focus_area = ComplianceFocusArea::Inputs;
     }
 
     fn set_error(&mut self, error: TabError) {

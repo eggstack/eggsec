@@ -157,10 +157,16 @@ impl TabRender for ResumeTab {
 
 impl TabInput for ResumeTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.focus_next();
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.focus_prev();
     }
 
@@ -193,18 +199,27 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_word_forward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ResumeFocusArea::Inputs {
             self.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ResumeFocusArea::Inputs {
             self.inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ResumeFocusArea::Inputs {
             self.inputs.move_home();
         } else if self.focus_area == ResumeFocusArea::Results {
@@ -213,6 +228,9 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ResumeFocusArea::Inputs {
             self.inputs.move_end();
         } else if self.focus_area == ResumeFocusArea::Results {
@@ -221,11 +239,17 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = ResumeFocusArea::Inputs;
         self.inputs.focus(0);
     }
 
     fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = ResumeFocusArea::Results;
     }
 
@@ -244,6 +268,9 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ResumeFocusArea::Inputs {
             if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_results_up();
@@ -254,6 +281,9 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ResumeFocusArea::Inputs {
             if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_results_down();
@@ -264,10 +294,16 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         self.inputs.move_left()
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         self.inputs.move_right()
     }
 

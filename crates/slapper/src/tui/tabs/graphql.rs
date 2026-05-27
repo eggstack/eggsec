@@ -167,6 +167,8 @@ impl TabState for GraphQlTab {
         self.results_view.clear();
         self.progress.current = 0;
         self.error = None;
+        self.focus_area = GraphQlFocusArea::Inputs;
+        self.checkbox_focus_index = 0;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -439,6 +441,9 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             GraphQlFocusArea::Inputs => {
                 self.inputs.focus_prev();
@@ -451,6 +456,9 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             GraphQlFocusArea::Inputs => {
                 self.inputs.focus_next();

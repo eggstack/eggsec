@@ -253,6 +253,7 @@ impl TabState for WorkflowTab {
 
     fn reset(&mut self) {
         self.state = AppState::Idle;
+        self.focus_area = WorkflowFocusArea::Mode;
         self.current_mode = WorkflowMode::ListFindings;
         self.findings.clear();
         self.report = None;
@@ -464,6 +465,10 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         match self.focus_area {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.handle_enter();
@@ -483,11 +488,7 @@ impl TabInput for WorkflowTab {
             WorkflowFocusArea::Results => {}
         }
 
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
-        }
+        self.start();
     }
 
     fn handle_escape(&mut self) {

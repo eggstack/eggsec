@@ -235,6 +235,8 @@ impl TabState for HuntTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        self.focus_area = HuntFocusArea::Inputs;
+        self.focused_checkbox_index = 0;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -460,6 +462,9 @@ impl TabInput for HuntTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == HuntFocusArea::Options {
             if self.option_checkboxes.is_empty() {
                 return;
@@ -477,6 +482,9 @@ impl TabInput for HuntTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == HuntFocusArea::Options {
             if self.option_checkboxes.is_empty() {
                 return;

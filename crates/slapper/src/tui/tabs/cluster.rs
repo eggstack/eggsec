@@ -206,6 +206,9 @@ impl TabState for ClusterTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.error = None;
+        self.view_selector.select(0);
+        self.current_view = ClusterView::Worker;
+        self.focus_area = ClusterFocusArea::ViewSelector;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -438,6 +441,10 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         match self.focus_area {
             ClusterFocusArea::ViewSelector => {
                 if self.view_selector.is_open() {

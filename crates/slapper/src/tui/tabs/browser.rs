@@ -201,6 +201,8 @@ impl TabState for BrowserTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        self.focus_area = BrowserFocusArea::Inputs;
+        self.focused_checkbox_index = 0;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -423,6 +425,9 @@ impl TabInput for BrowserTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == BrowserFocusArea::Options {
             if self.option_checkboxes.is_empty() {
                 return;
@@ -440,6 +445,9 @@ impl TabInput for BrowserTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == BrowserFocusArea::Options {
             if self.option_checkboxes.is_empty() {
                 return;

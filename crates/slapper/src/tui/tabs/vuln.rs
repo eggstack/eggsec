@@ -355,6 +355,9 @@ impl TabState for VulnTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        self.mode_selector.select(0);
+        self.focus_area = VulnFocusArea::Mode;
+        self.current_mode = VulnMode::CvssCalc;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -551,6 +554,10 @@ impl TabInput for VulnTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.handle_enter();
@@ -567,12 +574,6 @@ impl TabInput for VulnTab {
                 self.inputs.blur();
             }
             VulnFocusArea::Results => {}
-        }
-
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
         }
     }
 

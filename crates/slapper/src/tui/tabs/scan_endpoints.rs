@@ -379,6 +379,9 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ScanEndpointsFocusArea::Inputs {
             self.inputs.move_home();
         } else if self.focus_area == ScanEndpointsFocusArea::Results {
@@ -387,6 +390,9 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ScanEndpointsFocusArea::Inputs {
             self.inputs.move_end();
         } else if self.focus_area == ScanEndpointsFocusArea::Results {
@@ -395,11 +401,17 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = ScanEndpointsFocusArea::Inputs;
         self.inputs.focus(0);
     }
 
     fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = ScanEndpointsFocusArea::Results;
     }
 
@@ -418,6 +430,9 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ScanEndpointsFocusArea::Inputs {
             if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_results_up();
@@ -430,6 +445,9 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == ScanEndpointsFocusArea::Inputs {
             if !self.inputs.is_focused() && !self.results_view.is_empty() {
                 self.scroll_results_down();

@@ -533,6 +533,7 @@ impl TabState for PacketTab {
         if self.inputs.fields.len() > 2 {
             self.inputs.fields[2].value = "100".to_string();
         }
+        self.view_selector.select(0);
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -744,6 +745,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 if self.view_selector.confirm().is_none() {
@@ -780,6 +784,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_prev();
@@ -792,6 +799,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_next();
@@ -804,6 +814,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_prev();
@@ -817,6 +830,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.move_next();

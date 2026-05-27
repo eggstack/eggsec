@@ -142,6 +142,11 @@ impl TabState for NseTab {
         self.results_view.clear();
         self.progress = 0.0;
         self.error = None;
+        for field in &mut self.inputs.fields {
+            field.clear();
+        }
+        self.script_selector.select(0);
+        self.focus_area = NseFocusArea::Inputs;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -304,15 +309,23 @@ impl TabInput for NseTab {
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = NseFocusArea::Inputs;
-        self.inputs.focus(0);
+        if !self.is_running() {
+            self.focus_area = NseFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = NseFocusArea::Results;
+        if !self.is_running() {
+            self.focus_area = NseFocusArea::Results;
+        }
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         if self.focus_area == NseFocusArea::Inputs {
             if self.inputs.is_focused() {
                 self.inputs.blur();
@@ -327,11 +340,7 @@ impl TabInput for NseTab {
             return;
         }
 
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
-        }
+        self.start();
     }
 
     fn handle_escape(&mut self) {

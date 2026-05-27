@@ -251,6 +251,11 @@ impl TabState for StorageTab {
         for field in &mut self.config_inputs.fields {
             field.clear();
         }
+        for field in &mut self.query_inputs.fields {
+            field.clear();
+        }
+        self.mode_selector.select(0);
+        self.focus_area = StorageFocusArea::Config;
     }
 
     fn set_error(&mut self, error: TabError) {

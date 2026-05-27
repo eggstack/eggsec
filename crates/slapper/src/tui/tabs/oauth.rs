@@ -202,6 +202,11 @@ impl TabState for OAuthTab {
         self.results_view.clear();
         self.progress.current = 0;
         self.error = None;
+        for field in &mut self.inputs.fields {
+            field.clear();
+        }
+        self.focus_area = OAuthFocusArea::Inputs;
+        self.checkbox_focus_index = 0;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -483,6 +488,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             OAuthFocusArea::Inputs => {
                 self.inputs.focus_prev();
@@ -495,6 +503,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.focus_area {
             OAuthFocusArea::Inputs => {
                 self.inputs.focus_next();

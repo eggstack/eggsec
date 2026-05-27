@@ -271,6 +271,8 @@ impl TabState for IntegrationsTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.error = None;
+        self.focus_area = IntegrationsFocusArea::Tracker;
+        self.current_mode = IntegrationsMode::Configure;
         self.tracker_selector.selected = 0;
         for field in &mut self.config_inputs.fields {
             field.clear();
@@ -500,27 +502,24 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.handle_enter();
-                return;
             }
             IntegrationsFocusArea::Config => {
                 self.config_inputs.blur();
-                return;
             }
             IntegrationsFocusArea::Issue => {
                 self.issue_inputs.blur();
-                return;
             }
             IntegrationsFocusArea::Results => {}
         }
 
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
-        }
+        self.start();
     }
 
     fn handle_escape(&mut self) {
@@ -582,7 +581,7 @@ impl TabInput for IntegrationsTab {
                     || self.tracker_selector.selected == 0
             }
             IntegrationsFocusArea::Config => self.config_inputs.is_at_left_edge(),
-            IntegrationsFocusArea::Issue => !self.issue_inputs.can_move_left(),
+            IntegrationsFocusArea::Issue => self.issue_inputs.is_at_left_edge(),
             _ => true,
         }
     }
@@ -595,7 +594,7 @@ impl TabInput for IntegrationsTab {
                         >= self.tracker_selector.items.len().saturating_sub(1)
             }
             IntegrationsFocusArea::Config => self.config_inputs.is_at_right_edge(),
-            IntegrationsFocusArea::Issue => !self.issue_inputs.can_move_right(),
+            IntegrationsFocusArea::Issue => self.issue_inputs.is_at_right_edge(),
             _ => true,
         }
     }
