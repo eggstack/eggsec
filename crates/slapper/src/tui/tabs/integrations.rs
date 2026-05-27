@@ -343,7 +343,7 @@ impl TabRender for IntegrationsTab {
                     fields
                 } else {
                     tracing::warn!("SearchIssues mode: expected at least 4 fields, got {}", self.issue_inputs.fields.len());
-                    &self.issue_inputs.fields[4..]
+                    &[]
                 }
             }
         };
@@ -384,6 +384,9 @@ impl TabRender for IntegrationsTab {
 
 impl TabInput for IntegrationsTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => {
                 self.tracker_selector.blur();
@@ -400,6 +403,9 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             IntegrationsFocusArea::Tracker => IntegrationsFocusArea::Results,
             IntegrationsFocusArea::Config => {

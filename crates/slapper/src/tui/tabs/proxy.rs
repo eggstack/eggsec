@@ -595,22 +595,23 @@ impl TabInput for ProxyTab {
     }
 
     fn handle_enter(&mut self) {
-        if !self.is_running() {
-            if self.view_selector.is_focused() {
-                self.view_selector.handle_enter();
-                self.current_view = match self.view_selector.selected {
-                    0 => ProxyView::List,
-                    1 => ProxyView::Add,
-                    2 => ProxyView::HealthCheck,
-                    3 => ProxyView::Test,
-                    _ => ProxyView::List,
-                };
-                if matches!(self.current_view, ProxyView::List) {
-                    self.update_list_view();
-                }
-            } else if self.inputs.is_focused() {
-                self.inputs.blur();
+        if self.is_running() {
+            return;
+        }
+        if self.view_selector.is_focused() {
+            self.view_selector.handle_enter();
+            self.current_view = match self.view_selector.selected {
+                0 => ProxyView::List,
+                1 => ProxyView::Add,
+                2 => ProxyView::HealthCheck,
+                3 => ProxyView::Test,
+                _ => ProxyView::List,
+            };
+            if matches!(self.current_view, ProxyView::List) {
+                self.update_list_view();
             }
+        } else if self.inputs.is_focused() {
+            self.inputs.blur();
         }
     }
 
@@ -624,26 +625,28 @@ impl TabInput for ProxyTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            if self.view_selector.is_focused() {
-                self.view_selector.handle_up();
-            } else if !self.inputs.is_focused() {
-                self.results_view.scroll_up(1);
-            } else {
-                self.inputs.focus_prev();
-            }
+        if self.is_running() {
+            return;
+        }
+        if self.view_selector.is_focused() && self.view_selector.is_open() {
+            self.view_selector.handle_up();
+        } else if !self.inputs.is_focused() {
+            self.results_view.scroll_up(1);
+        } else {
+            self.inputs.focus_prev();
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            if self.view_selector.is_focused() {
-                self.view_selector.handle_down();
-            } else if !self.inputs.is_focused() {
-                self.results_view.scroll_down(1);
-            } else {
-                self.inputs.focus_next();
-            }
+        if self.is_running() {
+            return;
+        }
+        if self.view_selector.is_focused() && self.view_selector.is_open() {
+            self.view_selector.handle_down();
+        } else if !self.inputs.is_focused() {
+            self.results_view.scroll_down(1);
+        } else {
+            self.inputs.focus_next();
         }
     }
 

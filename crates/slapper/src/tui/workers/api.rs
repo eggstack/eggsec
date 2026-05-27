@@ -337,7 +337,9 @@ pub async fn run_nse(
 
     let target_clone = target.clone();
     let script_clone = script.clone();
-    let (output, errors, success) = tokio::task::spawn_blocking(move || {
+    let (output, errors, success) = tokio::time::timeout(
+        tokio::time::Duration::from_secs(300),
+        tokio::task::spawn_blocking(move || {
         let mut executor = NseExecutor::with_target(&target_clone)
             .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
 
@@ -360,7 +362,7 @@ pub async fn run_nse(
             .map_err(|e| anyhow::anyhow!("Script execution failed: {}", e))?;
 
         Ok::<_, anyhow::Error>((output, String::new(), true))
-    })
+    }))
     .await
     .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))
     .and_then(|result| {

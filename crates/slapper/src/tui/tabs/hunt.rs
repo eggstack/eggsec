@@ -506,7 +506,7 @@ impl TabInput for HuntTab {
 
     fn handle_left(&mut self) -> bool {
         if self.is_running() {
-            return true;
+            return false;
         }
         if self.focus_area == HuntFocusArea::Inputs {
             self.inputs.move_left()
@@ -524,7 +524,7 @@ impl TabInput for HuntTab {
 
     fn handle_right(&mut self) -> bool {
         if self.is_running() {
-            return true;
+            return false;
         }
         if self.focus_area == HuntFocusArea::Inputs {
             self.inputs.move_right()

@@ -277,28 +277,30 @@ impl TabRender for FingerprintTab {
 
 impl TabInput for FingerprintTab {
     fn handle_focus_next(&mut self) {
-        if !self.is_running() {
-            if self.inputs.is_focused() {
-                self.inputs.focus_next();
-                if !self.inputs.is_focused() {
-                    self.focus_area = FingerprintFocusArea::Results;
-                }
-            } else {
+        if self.is_running() {
+            return;
+        }
+        if self.inputs.is_focused() {
+            self.inputs.focus_next();
+            if !self.inputs.is_focused() {
                 self.focus_area = FingerprintFocusArea::Results;
             }
+        } else {
+            self.focus_area = FingerprintFocusArea::Results;
         }
     }
 
     fn handle_focus_prev(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == FingerprintFocusArea::Results {
-                if !self.inputs.fields.is_empty() {
-                    self.inputs.focus(self.inputs.fields.len() - 1);
-                }
-                self.focus_area = FingerprintFocusArea::Inputs;
-            } else {
-                self.inputs.focus_prev();
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == FingerprintFocusArea::Results {
+            if !self.inputs.fields.is_empty() {
+                self.inputs.focus(self.inputs.fields.len() - 1);
             }
+            self.focus_area = FingerprintFocusArea::Inputs;
+        } else {
+            self.inputs.focus_prev();
         }
     }
 
@@ -385,26 +387,28 @@ impl TabInput for FingerprintTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == FingerprintFocusArea::Results {
-                self.scroll_results_up();
-            } else if self.inputs.is_focused() {
-                self.inputs.focus_prev();
-            } else if !self.results_view.is_empty() {
-                self.scroll_results_up();
-            }
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == FingerprintFocusArea::Results {
+            self.scroll_results_up();
+        } else if self.inputs.is_focused() {
+            self.inputs.focus_prev();
+        } else if !self.results_view.is_empty() {
+            self.scroll_results_up();
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == FingerprintFocusArea::Results {
-                self.scroll_results_down();
-            } else if self.inputs.is_focused() {
-                self.inputs.focus_next();
-            } else if !self.results_view.is_empty() {
-                self.scroll_results_down();
-            }
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == FingerprintFocusArea::Results {
+            self.scroll_results_down();
+        } else if self.inputs.is_focused() {
+            self.inputs.focus_next();
+        } else if !self.results_view.is_empty() {
+            self.scroll_results_down();
         }
     }
 

@@ -418,71 +418,77 @@ impl TabInput for ReportTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == ReportFocusArea::Inputs {
-                let current_inputs = match self.current_view {
-                    ReportView::Convert => &mut self.convert_inputs,
-                    ReportView::Trend => &mut self.trend_inputs,
-                    ReportView::Schedule => &mut self.schedule_inputs,
-                };
-                current_inputs.move_word_forward();
-            }
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == ReportFocusArea::Inputs {
+            let current_inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            current_inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == ReportFocusArea::Inputs {
-                let current_inputs = match self.current_view {
-                    ReportView::Convert => &mut self.convert_inputs,
-                    ReportView::Trend => &mut self.trend_inputs,
-                    ReportView::Schedule => &mut self.schedule_inputs,
-                };
-                current_inputs.move_word_backward();
-            }
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == ReportFocusArea::Inputs {
+            let current_inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            current_inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == ReportFocusArea::Inputs {
-                let current_inputs = match self.current_view {
-                    ReportView::Convert => &mut self.convert_inputs,
-                    ReportView::Trend => &mut self.trend_inputs,
-                    ReportView::Schedule => &mut self.schedule_inputs,
-                };
-                current_inputs.move_home();
-            } else if self.focus_area == ReportFocusArea::Results {
-                self.results_view.scroll_to_top();
-            }
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == ReportFocusArea::Inputs {
+            let current_inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            current_inputs.move_home();
+        } else if self.focus_area == ReportFocusArea::Results {
+            self.results_view.scroll_to_top();
         }
     }
 
     fn handle_end(&mut self) {
-        if !self.is_running() {
-            if self.focus_area == ReportFocusArea::Inputs {
-                let current_inputs = match self.current_view {
-                    ReportView::Convert => &mut self.convert_inputs,
-                    ReportView::Trend => &mut self.trend_inputs,
-                    ReportView::Schedule => &mut self.schedule_inputs,
-                };
-                current_inputs.move_end();
-            } else if self.focus_area == ReportFocusArea::Results {
-                self.results_view.scroll_to_bottom();
-            }
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == ReportFocusArea::Inputs {
+            let current_inputs = match self.current_view {
+                ReportView::Convert => &mut self.convert_inputs,
+                ReportView::Trend => &mut self.trend_inputs,
+                ReportView::Schedule => &mut self.schedule_inputs,
+            };
+            current_inputs.move_end();
+        } else if self.focus_area == ReportFocusArea::Results {
+            self.results_view.scroll_to_bottom();
         }
     }
 
     fn handle_top(&mut self) {
-        if !self.is_running() {
-            self.focus_area = ReportFocusArea::ViewSelector;
+        if self.is_running() {
+            return;
         }
+        self.focus_area = ReportFocusArea::ViewSelector;
     }
 
     fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            self.focus_area = ReportFocusArea::Results;
+        if self.is_running() {
+            return;
         }
+        self.focus_area = ReportFocusArea::Results;
     }
 
     fn handle_enter(&mut self) {
@@ -536,83 +542,85 @@ impl TabInput for ReportTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                ReportFocusArea::ViewSelector => {
-                    if self.view_selector.is_open() {
-                        self.view_selector.move_prev();
-                    }
+        if self.is_running() {
+            return;
+        }
+        match self.focus_area {
+            ReportFocusArea::ViewSelector => {
+                if self.view_selector.is_open() {
+                    self.view_selector.move_prev();
                 }
-                ReportFocusArea::Inputs => {
-                    let current_inputs = match self.current_view {
-                        ReportView::Convert => &mut self.convert_inputs,
-                        ReportView::Trend => &mut self.trend_inputs,
-                        ReportView::Schedule => &mut self.schedule_inputs,
-                    };
-                    current_inputs.focus_prev();
-                }
-                ReportFocusArea::Results => {
-                    self.results_view.scroll_up(1);
-                }
+            }
+            ReportFocusArea::Inputs => {
+                let current_inputs = match self.current_view {
+                    ReportView::Convert => &mut self.convert_inputs,
+                    ReportView::Trend => &mut self.trend_inputs,
+                    ReportView::Schedule => &mut self.schedule_inputs,
+                };
+                current_inputs.focus_prev();
+            }
+            ReportFocusArea::Results => {
+                self.results_view.scroll_up(1);
             }
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                ReportFocusArea::ViewSelector => {
-                    if self.view_selector.is_open() {
-                        self.view_selector.move_next();
-                    }
+        if self.is_running() {
+            return;
+        }
+        match self.focus_area {
+            ReportFocusArea::ViewSelector => {
+                if self.view_selector.is_open() {
+                    self.view_selector.move_next();
                 }
-                ReportFocusArea::Inputs => {
-                    let current_inputs = match self.current_view {
-                        ReportView::Convert => &mut self.convert_inputs,
-                        ReportView::Trend => &mut self.trend_inputs,
-                        ReportView::Schedule => &mut self.schedule_inputs,
-                    };
-                    current_inputs.focus_next();
-                }
-                ReportFocusArea::Results => {
-                    self.results_view.scroll_down(1);
-                }
+            }
+            ReportFocusArea::Inputs => {
+                let current_inputs = match self.current_view {
+                    ReportView::Convert => &mut self.convert_inputs,
+                    ReportView::Trend => &mut self.trend_inputs,
+                    ReportView::Schedule => &mut self.schedule_inputs,
+                };
+                current_inputs.focus_next();
+            }
+            ReportFocusArea::Results => {
+                self.results_view.scroll_down(1);
             }
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        if !self.is_running() {
-            match self.focus_area {
-                ReportFocusArea::Inputs => {
-                    let current_inputs = match self.current_view {
-                        ReportView::Convert => &mut self.convert_inputs,
-                        ReportView::Trend => &mut self.trend_inputs,
-                        ReportView::Schedule => &mut self.schedule_inputs,
-                    };
-                    return current_inputs.move_left();
-                }
-                _ => return false,
-            }
+        if self.is_running() {
+            return false;
         }
-        false
+        match self.focus_area {
+            ReportFocusArea::Inputs => {
+                let current_inputs = match self.current_view {
+                    ReportView::Convert => &mut self.convert_inputs,
+                    ReportView::Trend => &mut self.trend_inputs,
+                    ReportView::Schedule => &mut self.schedule_inputs,
+                };
+                return current_inputs.move_left();
+            }
+            _ => return false,
+        }
     }
 
     fn handle_right(&mut self) -> bool {
-        if !self.is_running() {
-            match self.focus_area {
-                ReportFocusArea::Inputs => {
-                    let current_inputs = match self.current_view {
-                        ReportView::Convert => &mut self.convert_inputs,
-                        ReportView::Trend => &mut self.trend_inputs,
-                        ReportView::Schedule => &mut self.schedule_inputs,
-                    };
-                    return current_inputs.move_right();
-                }
-                _ => return false,
-            }
+        if self.is_running() {
+            return false;
         }
-        false
+        match self.focus_area {
+            ReportFocusArea::Inputs => {
+                let current_inputs = match self.current_view {
+                    ReportView::Convert => &mut self.convert_inputs,
+                    ReportView::Trend => &mut self.trend_inputs,
+                    ReportView::Schedule => &mut self.schedule_inputs,
+                };
+                return current_inputs.move_right();
+            }
+            _ => return false,
+        }
     }
 
     fn is_input_focused(&self) -> bool {

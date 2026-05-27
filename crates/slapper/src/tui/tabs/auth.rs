@@ -242,7 +242,10 @@ impl TabInput for AuthTab {
                 self.inputs.focus(0);
             } else if self.focus_area == AuthFocusArea::Target {
                 self.inputs.focus_prev();
-                if !self.inputs.is_focused() && !self.inputs.fields.is_empty() {
+                if !self.inputs.is_focused() {
+                    if self.inputs.fields.is_empty() {
+                        return;
+                    }
                     self.inputs.focus(self.inputs.fields.len() - 1);
                 }
             }

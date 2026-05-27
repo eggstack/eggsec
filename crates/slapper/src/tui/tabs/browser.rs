@@ -469,7 +469,7 @@ impl TabInput for BrowserTab {
 
     fn handle_left(&mut self) -> bool {
         if self.is_running() {
-            return true;
+            return false;
         }
         if self.focus_area == BrowserFocusArea::Inputs {
             self.inputs.move_left()
@@ -487,7 +487,7 @@ impl TabInput for BrowserTab {
 
     fn handle_right(&mut self) -> bool {
         if self.is_running() {
-            return true;
+            return false;
         }
         if self.focus_area == BrowserFocusArea::Inputs {
             self.inputs.move_right()

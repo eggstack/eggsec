@@ -3,6 +3,9 @@ use crate::tui::tabs::{TabInput, TabState};
 
 impl TabInput for SettingsTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == SettingsFocusArea::SectionList {
             self.focus_area = SettingsFocusArea::SectionDetail;
             self.detail_focus_index = 0;
@@ -19,6 +22,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == SettingsFocusArea::SectionList {
             self.focus_area = SettingsFocusArea::SectionDetail;
             self.detail_focus_index = self.max_focus_index();

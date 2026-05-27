@@ -293,6 +293,9 @@ impl TabRender for ClusterTab {
 
 impl TabInput for ClusterTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ClusterFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -315,6 +318,9 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ClusterFocusArea::ViewSelector => {
                 self.view_selector.blur();

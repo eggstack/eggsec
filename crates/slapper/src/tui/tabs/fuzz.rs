@@ -401,6 +401,7 @@ impl TabState for FuzzTab {
         self.results_view.clear();
         self.session = None;
         self.error = None;
+        self.focus_area = FuzzFocusArea::Inputs;
         for field in &mut self.inputs.fields {
             field.clear();
         }
@@ -792,6 +793,9 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.payload_selector.is_open() {
             self.payload_selector.move_prev();
         } else if self.mode_selector.is_open() {
@@ -808,6 +812,9 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.payload_selector.is_open() {
             self.payload_selector.move_next();
         } else if self.mode_selector.is_open() {

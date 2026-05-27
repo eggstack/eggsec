@@ -309,10 +309,11 @@ impl TabInput for NseTab {
     }
 
     fn handle_top(&mut self) {
-        if !self.is_running() {
-            self.focus_area = NseFocusArea::Inputs;
-            self.inputs.focus(0);
+        if self.is_running() {
+            return;
         }
+        self.focus_area = NseFocusArea::Inputs;
+        self.inputs.focus(0);
     }
 
     fn handle_bottom(&mut self) {

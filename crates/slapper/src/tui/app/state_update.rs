@@ -64,11 +64,7 @@ impl super::App {
             Some(r) => r,
             None => return,
         };
-        let unhandled = match self.handle_feature_result(result) {
-            Some(r) => self.handle_feature_result(r).is_none(),
-            None => true,
-        };
-        if unhandled {
+        if self.handle_feature_result(result).is_some() {
             tracing::warn!("Unhandled TaskResult variant");
         }
     }

@@ -372,6 +372,9 @@ impl TabRender for WorkflowTab {
 
 impl TabInput for WorkflowTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.blur();
@@ -387,6 +390,9 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             WorkflowFocusArea::Mode => WorkflowFocusArea::Results,
             WorkflowFocusArea::Inputs => {

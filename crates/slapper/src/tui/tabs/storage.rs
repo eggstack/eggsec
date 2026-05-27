@@ -379,6 +379,9 @@ impl TabRender for StorageTab {
 
 impl TabInput for StorageTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             StorageFocusArea::Config => {
                 self.config_inputs.blur();
@@ -405,6 +408,9 @@ impl TabInput for StorageTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             StorageFocusArea::Config => StorageFocusArea::Results,
             StorageFocusArea::Mode => {

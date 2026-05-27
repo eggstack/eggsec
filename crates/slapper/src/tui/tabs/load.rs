@@ -471,6 +471,9 @@ impl TabRender for LoadTab {
 
 impl TabInput for LoadTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             LoadFocusArea::Selector => {
                 self.test_type_selector.blur();
@@ -489,6 +492,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             LoadFocusArea::Selector => {
                 self.inputs.blur();

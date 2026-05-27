@@ -172,6 +172,10 @@ impl TabState for GraphQlTab {
         }
         self.focus_area = GraphQlFocusArea::Inputs;
         self.checkbox_focus_index = 0;
+        self.inject_checkbox.checked = true;
+        self.introspection_checkbox.checked = true;
+        self.depth_bypass_checkbox.checked = true;
+        self.alias_overload_checkbox.checked = true;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -336,6 +340,9 @@ impl TabRender for GraphQlTab {
 
 impl TabInput for GraphQlTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             GraphQlFocusArea::Inputs => {
                 self.inputs.blur();
@@ -350,6 +357,9 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             GraphQlFocusArea::Inputs => {
                 self.inputs.blur();
