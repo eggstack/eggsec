@@ -1,5 +1,5 @@
 use chrono::Utc;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{Duration, Interval};
@@ -32,8 +32,8 @@ pub struct McpServer {
     api_key: Option<String>,
     rate_limiter: RateLimiter,
     session_manager: Option<SessionManager>,
-    pending_cancellations: Arc<RwLock<HashMap<String, CancellationToken>>>,
-    completed_results: Arc<RwLock<HashMap<String, ToolResponse>>>,
+    pending_cancellations: Arc<RwLock<FxHashMap<String, CancellationToken>>>,
+    completed_results: Arc<RwLock<FxHashMap<String, ToolResponse>>>,
     stream_events: Arc<tokio::sync::broadcast::Sender<StreamEvent>>,
     #[cfg(feature = "ai-integration")]
     ai_client: Option<AiClient>,
@@ -55,8 +55,8 @@ impl McpServer {
         let dispatcher = ToolDispatcher::new(registry.clone());
         let (stream_events, _) = tokio::sync::broadcast::channel(1000);
 
-        let pending_cancellations = Arc::new(RwLock::new(HashMap::new()));
-        let completed_results = Arc::new(RwLock::new(HashMap::new()));
+        let pending_cancellations = Arc::new(RwLock::new(FxHashMap::default()));
+        let completed_results = Arc::new(RwLock::new(FxHashMap::default()));
 
         let server = Self {
             registry,
@@ -301,7 +301,7 @@ impl McpServer {
         let tools = self.registry.list();
         let total_tools = tools.len();
 
-        let mut categorized: HashMap<String, Vec<McpTool>> = HashMap::new();
+        let mut categorized: FxHashMap<String, Vec<McpTool>> = FxHashMap::default();
 
         for info in tools {
             let input_schema = build_input_schema(&info);
@@ -570,7 +570,7 @@ impl McpServer {
     fn build_manifest(&self) -> serde_json::Value {
         let tools = self.registry.list();
 
-        let mut attack_surfaces: HashMap<String, Vec<String>> = HashMap::new();
+        let mut attack_surfaces: FxHashMap<String, Vec<String>> = FxHashMap::default();
 
         for tool in &tools {
             for cap in &tool.capabilities {
