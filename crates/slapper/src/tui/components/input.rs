@@ -468,7 +468,17 @@ impl InputField {
             self.value.clone()
         };
 
-        let paragraph = Paragraph::new(display_value.as_str()).block(block);
+        let text_style = if self.focused {
+            Style::default()
+                .add_modifier(ratatui::style::Modifier::BOLD)
+                .fg(tc!(focus_input))
+        } else {
+            Style::default().fg(tc!(text))
+        };
+
+        let paragraph = Paragraph::new(display_value.as_str())
+            .style(text_style)
+            .block(block);
         f.render_widget(paragraph, area);
 
         if self.focused && insert_mode {

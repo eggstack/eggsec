@@ -429,17 +429,15 @@ impl TabRender for LoadTab {
             dropdown.render(f);
         }
 
+        let num_fields = self.inputs.fields.len();
+        let field_height = (input_height / num_fields as u16).max(2);
+        let constraints: Vec<Constraint> = (0..num_fields)
+            .map(|_| Constraint::Length(field_height))
+            .collect();
+
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-            ])
+            .constraints(constraints)
             .split(input_area);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
@@ -468,6 +466,29 @@ impl TabRender for LoadTab {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");
             f.render_widget(placeholder, results_area);
+        }
+    }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        let input_height = if area.height <= 24 {
+            ((area.height as f32 * 0.6) as u16).clamp(6, 15)
+        } else {
+            15
+        };
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(6),
+                Constraint::Length(input_height),
+                Constraint::Min(0),
+            ])
+            .split(area);
+
+        let selector_area = chunks[0];
+
+        if let Some(dropdown) = self.test_type_selector.dropdown_info(selector_area) {
+            dropdown.render(f);
         }
     }
 }
