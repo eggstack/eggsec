@@ -191,18 +191,27 @@ impl HistoryTab {
             return self.entries.iter().collect();
         }
         let query_lower = query.to_lowercase();
+
+        let entry_lowers: Vec<_> = self.entries
+            .iter()
+            .map(|e| (
+                e.target.to_lowercase(),
+                e.scan_type.to_lowercase(),
+                e.summary.to_lowercase(),
+                e.details.iter().map(|d| d.to_lowercase()).collect::<Vec<String>>(),
+            ))
+            .collect();
+
         self.entries
             .iter()
-            .filter(|e| {
-                let target_lower = e.target.to_lowercase();
-                let scan_type_lower = e.scan_type.to_lowercase();
-                let summary_lower = e.summary.to_lowercase();
-                let details_lower: Vec<String> = e.details.iter().map(|d| d.to_lowercase()).collect();
+            .zip(entry_lowers.iter())
+            .filter(|(_, (target_lower, scan_type_lower, summary_lower, details_lower))| {
                 target_lower.contains(&query_lower)
                     || scan_type_lower.contains(&query_lower)
                     || summary_lower.contains(&query_lower)
                     || details_lower.iter().any(|d| d.contains(&query_lower))
             })
+            .map(|(e, _)| e)
             .collect()
     }
 

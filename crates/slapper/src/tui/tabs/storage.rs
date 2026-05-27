@@ -460,16 +460,17 @@ impl TabInput for StorageTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
-        if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
-        {
-            self.config_inputs.get_focused_value()
-        } else if self.focus_area == StorageFocusArea::Query {
-            self.query_inputs.get_focused_value()
-        } else if self.focus_area == StorageFocusArea::Results {
-            Some(self.results_view.get_content())
-        } else {
-            None
+        if !self.is_running() {
+            if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
+            {
+                return self.config_inputs.get_focused_value();
+            } else if self.focus_area == StorageFocusArea::Query {
+                return self.query_inputs.get_focused_value();
+            } else if self.focus_area == StorageFocusArea::Results {
+                return Some(self.results_view.get_content());
+            }
         }
+        None
     }
 
     fn handle_word_forward(&mut self) {
@@ -526,6 +527,11 @@ impl TabInput for StorageTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
+
         match self.focus_area {
             StorageFocusArea::Config => {
                 self.config_inputs.blur();
@@ -545,11 +551,7 @@ impl TabInput for StorageTab {
             StorageFocusArea::Results => {}
         }
 
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
-        }
+        self.start();
     }
 
     fn handle_escape(&mut self) {

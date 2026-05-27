@@ -138,11 +138,22 @@ impl SecurityTool for ReconTool {
             tracing::warn!(error = %e, "Failed to load config for recon, using defaults");
         }).unwrap_or_default();
 
-        let result = crate::recon::run_cli_with_callback(args, &config, move |f| {
-            let mut findings = findings_clone.lock();
-            findings.push(f);
-        })
-        .await;
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            crate::recon::run_cli_with_callback(args, &config, move |f| {
+                let mut findings = findings_clone.lock();
+                findings.push(f);
+            }),
+        )
+        .await
+        .map_err(|e| crate::error::SlapperError::Timeout(format!(
+            "Recon timed out after 60s: {}",
+            e
+        )))?
+        .map_err(|e| crate::error::SlapperError::Tool(format!(
+            "Recon failed: {}",
+            e
+        )))?;
 
         let findings = match std::sync::Arc::try_unwrap(findings) {
             Ok(inner) => inner.into_inner(),

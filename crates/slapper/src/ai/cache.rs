@@ -169,7 +169,7 @@ impl AiCache {
                             let old = old_entries.read().await;
                             let mut new = new_entries.write().await;
                             for (k, v) in old.iter() {
-                                new.entry(k.clone()).or_insert(v.clone());
+                                new.insert(k.clone(), v.clone());
                             }
                         });
                         self.entries = new_entries;

@@ -89,11 +89,33 @@ Locations in `tool/agents/lifecycle.rs` replaced `.unwrap()` with `.unwrap_or_el
 ### Spoofed Packet Send Error Handling (2026-06-01)
 
 Added proper error handling for spoofed packet sends in `scanner/ports/spoofed.rs`:
-- Line 281: Fragmented UDP packets send
-- Line 348: Decoy TCP packets send
-- Line 384: Staggered decoy packets send
+- Line 281: Fragmented UDP packets send - only increment counter on success
+- Line 348: Decoy TCP packets send - now logs warning on failure
+- Line 384: Staggered decoy packets send - now logs warning on failure
+- Line 454-458: Changed `Mutex<u64>` to `AtomicU64` for scanned_count
 
-Previously used silent `let _ = tx_guard.send_to(...)` - now logs warning when send fails.
+### Timeout Wrappers Added (2026-06-05)
+
+Added timeout wrappers to prevent indefinite hangs:
+
+| File | Line | Operation | Timeout |
+|------|------|-----------|---------|
+| `session.rs` | 511 | HTTP request | 30s |
+| `scanner.rs` | 136, 157, 186 | `run_cli_with_callback` (PortScan, Fingerprint, Endpoints) | 60s |
+| `fuzzer.rs` | 170 | `run_cli_with_callback` | 60s |
+| `recon.rs` | 141 | `run_cli_with_callback` | 60s |
+| `pipeline.rs` | 98 | `run_cli_with_callback` | 60s |
+| `loadtest.rs` | 78 | `run_cli` | 60s |
+| `routes.rs` | 182, 241 | `handle_request` (batch, stdio) | 30s |
+
+### FxHashMap Replacements (2026-06-05)
+
+Replaced `HashMap` with `FxHashMap` in performance-critical paths:
+
+| File | Lines | Fields |
+|------|-------|--------|
+| `finding.rs` | 2, 19, 39, 227, 284, 340, 400, 468, 524 | metadata, local vars |
+| `aggregator.rs` | 2, 52, 53, 61, 62, 91, 92, 103, 104 | results, in_progress, stage_results, tool_results |
 
 ## Testing
 

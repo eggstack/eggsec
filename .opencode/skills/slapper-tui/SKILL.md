@@ -1194,3 +1194,41 @@ Key patterns fixed:
 - **reset() methods**: 11 tabs now properly reset checkbox/selector state
 - **Edge detection**: 5 tabs added missing `is_empty()` guards
 
+## Session Fixes (2026-06-05 - Additional Audit)
+
+### Additional Bugs Fixed
+
+| Category | File | Line | Issue | Fix |
+|----------|------|------|-------|-----|
+| **Direct array access** | recon.rs:602 | Direct `[]` access | `.get_mut()` with is_empty guard |
+| **Direct array access** | scan.rs:307-309 | Direct `[]` access | `.get()` with len >= 2 guard |
+| **Direct array access** | scan_ports.rs:284-295 | Direct `[]` access | `.get_mut()` for fields 1-3 |
+| **Direct array access** | scan_endpoints.rs:255-262 | Direct `[]` access | `.get_mut()` for fields 1-2 |
+| **Direct array access** | fingerprint.rs:212-219 | Direct `[]` access | `.get_mut()` for fields 1-2 |
+| **Direct array access** | waf.rs:524-528 | Direct `[]` access | `.get_mut()` with is_empty guard |
+| **Direct array access** | stress.rs:195-206 | Improper bounds | `len() >= 4` before any field access |
+| **Direct array access** | settings/main.rs:267-307 | Direct `[]` access | `.get_mut()` for all field access |
+| **Direct array access** | settings/main.rs:458-488 | Direct `[]` access | `.get_mut()` for all field access |
+| **Edge detection** | graphql.rs:510-524 | Missing is_empty guard | Added `is_empty()` guard for Options |
+| **handle_enter() blur order** | compliance.rs:355-370 | blur → stop | stop → blur → start |
+| **handle_enter() blur order** | storage.rs:528-552 | blur → stop | stop → blur → start |
+| **handle_enter() blur order** | resume.rs:256-264 | blur → stop | stop → blur → start |
+| **handle_enter() blur order** | report.rs:469-503 | blur → stop | stop → blur → start |
+| **to_lowercase caching** | history.rs:197-200 | In filter closure | Pre-compute per entry before filter |
+| **to_lowercase caching** | dashboard.rs:197,228-229 | Called twice per entry | Cached once per entry in entry_lowers |
+| **Suspicious fallback** | integrations.rs:334-337 | Wrong fallback | Changed to `&[]` |
+
+### Components Fixed
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scrollable.rs` | 104 | `is_at_right_edge()` returns `true` when empty | Now returns `horizontal_offset == 0` for consistency |
+| `palette.rs` | 39 | Direct `chunks[2]` access | `.get()` pattern |
+| `popup.rs` | 39 | Direct `chunks[2]` access | `.get()` pattern |
+
+### Config Module Fixed
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scope.rs` | 45 | `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` |
+

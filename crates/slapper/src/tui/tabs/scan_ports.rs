@@ -281,17 +281,17 @@ impl TabState for ScanPortsTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        if self.inputs.fields.len() > 1 {
-            self.inputs.fields[1].value = "1-1024".to_string();
-            self.inputs.fields[1].cursor_pos = 6;
+        if let Some(field) = self.inputs.fields.get_mut(1) {
+            field.value = "1-1024".to_string();
+            field.cursor_pos = 6;
         }
-        if self.inputs.fields.len() > 2 {
-            self.inputs.fields[2].value = "100".to_string();
-            self.inputs.fields[2].cursor_pos = 3;
+        if let Some(field) = self.inputs.fields.get_mut(2) {
+            field.value = "100".to_string();
+            field.cursor_pos = 3;
         }
-        if self.inputs.fields.len() > 3 {
-            self.inputs.fields[3].value = "2".to_string();
-            self.inputs.fields[3].cursor_pos = 1;
+        if let Some(field) = self.inputs.fields.get_mut(3) {
+            field.value = "2".to_string();
+            field.cursor_pos = 1;
         }
         self.focus_area = ScanPortsFocusArea::Inputs;
     }
@@ -430,14 +430,18 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == ScanPortsFocusArea::Inputs {
-            self.inputs.move_word_forward();
+        if !self.is_running() {
+            if self.focus_area == ScanPortsFocusArea::Inputs {
+                self.inputs.move_word_forward();
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == ScanPortsFocusArea::Inputs {
-            self.inputs.move_word_backward();
+        if !self.is_running() {
+            if self.focus_area == ScanPortsFocusArea::Inputs {
+                self.inputs.move_word_backward();
+            }
         }
     }
 

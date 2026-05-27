@@ -254,17 +254,22 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
+
         if self.inputs.is_focused() {
             self.inputs.blur();
-        } else if self.is_running() {
-            self.stop();
         } else {
             self.start();
         }
     }
 
     fn handle_escape(&mut self) {
-        self.inputs.blur();
+        if !self.is_running() {
+            self.inputs.blur();
+        }
     }
 
     fn handle_up(&mut self) {

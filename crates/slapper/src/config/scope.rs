@@ -42,7 +42,7 @@ impl Scope {
         }
 
         if let Some(ref ports) = self.allowed_ports {
-            let mut seen = std::collections::HashSet::new();
+            let mut seen = rustc_hash::FxHashSet::default();
             for &port in ports {
                 if !seen.insert(port) {
                     return Err(ScopeError::Validation(format!(

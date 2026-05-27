@@ -67,10 +67,16 @@ impl super::App {
 
             self.task_tab = Some(self.current_tab);
 
+            let inner_handle = tokio::spawn(async move {
+                runner.run().await
+            });
+
+            let handle_to_abort = inner_handle.abort_handle();
+
             let handle = tokio::spawn(async move {
-                match tokio::time::timeout(Duration::from_secs(300), runner.run()).await {
-                    Ok(Ok(())) => {}
-                    Ok(Err(e)) => {
+                match tokio::time::timeout(Duration::from_secs(300), inner_handle).await {
+                    Ok(Ok(Ok(()))) => {}
+                    Ok(Ok(Err(e))) => {
                         let friendly_error = super::make_friendly_error(&e);
                         tracing::error!("Task failed: {}", friendly_error);
                         if let Err(e) = error_tx
@@ -80,8 +86,22 @@ impl super::App {
                             tracing::warn!("Failed to send task error result: {:?}", e);
                         }
                     }
+                    Ok(Err(join_error)) => {
+                        if join_error.is_panic() {
+                            tracing::error!("Task panicked");
+                        } else {
+                            tracing::error!("Task failed: {}", join_error);
+                        }
+                        if let Err(e) = error_tx
+                            .send(workers::TaskResult::Error("Task panicked or failed".to_string()))
+                            .await
+                        {
+                            tracing::warn!("Failed to send task error result: {:?}", e);
+                        }
+                    }
                     Err(_) => {
                         tracing::error!("Task timed out after 300s - task will continue until completion but result will be ignored");
+                        handle_to_abort.abort();
                         if let Err(e) = error_tx
                             .send(workers::TaskResult::Error("Task timed out after 300 seconds".to_string()))
                             .await

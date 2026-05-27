@@ -547,14 +547,18 @@ impl TabInput for ReconTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.move_word_forward();
+        if !self.is_running() {
+            if self.focus_area == ReconFocusArea::Inputs {
+                self.inputs.move_word_forward();
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.move_word_backward();
+        if !self.is_running() {
+            if self.focus_area == ReconFocusArea::Inputs {
+                self.inputs.move_word_backward();
+            }
         }
     }
 
@@ -598,8 +602,10 @@ impl TabInput for ReconTab {
         }
 
         if self.focus_area == ReconFocusArea::Options {
-            if !self.is_running() && self.focused_checkbox_index < self.option_checkboxes.len() {
-                self.option_checkboxes[self.focused_checkbox_index].toggle();
+            if !self.is_running() {
+                if let Some(cb) = self.option_checkboxes.get_mut(self.focused_checkbox_index) {
+                    cb.toggle();
+                }
             }
             return;
         }
@@ -616,60 +622,72 @@ impl TabInput for ReconTab {
     }
 
     fn handle_up(&mut self) {
-        if self.focus_area == ReconFocusArea::Options {
-            if self.focused_checkbox_index == 0 {
-                self.focused_checkbox_index = self.option_checkboxes.len() - 1;
+        if !self.is_running() {
+            if self.focus_area == ReconFocusArea::Options {
+                if self.focused_checkbox_index == 0 {
+                    self.focused_checkbox_index = self.option_checkboxes.len() - 1;
+                } else {
+                    self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                }
+            } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_up();
             } else {
-                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                self.inputs.focus_prev();
             }
-        } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_up();
-        } else {
-            self.inputs.focus_prev();
         }
     }
 
     fn handle_down(&mut self) {
-        if self.focus_area == ReconFocusArea::Options {
-            if self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
-                self.focused_checkbox_index = 0;
+        if !self.is_running() {
+            if self.focus_area == ReconFocusArea::Options {
+                if self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
+                    self.focused_checkbox_index = 0;
+                } else {
+                    self.focused_checkbox_index += 1;
+                }
+            } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
+                self.scroll_results_down();
             } else {
-                self.focused_checkbox_index += 1;
+                self.inputs.focus_next();
             }
-        } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
-            self.scroll_results_down();
-        } else {
-            self.inputs.focus_next();
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        if self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.move_left()
-        } else if self.focus_area == ReconFocusArea::Options {
-            if self.focused_checkbox_index == 0 {
-                false
+        if !self.is_running() {
+            if self.focus_area == ReconFocusArea::Inputs {
+                self.inputs.move_left()
+            } else if self.focus_area == ReconFocusArea::Options {
+                if self.focused_checkbox_index == 0 {
+                    false
+                } else {
+                    self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                    true
+                }
             } else {
-                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
                 true
             }
         } else {
-            true
+            false
         }
     }
 
     fn handle_right(&mut self) -> bool {
-        if self.focus_area == ReconFocusArea::Inputs {
-            self.inputs.move_right()
-        } else if self.focus_area == ReconFocusArea::Options {
-            if self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
-                false
+        if !self.is_running() {
+            if self.focus_area == ReconFocusArea::Inputs {
+                self.inputs.move_right()
+            } else if self.focus_area == ReconFocusArea::Options {
+                if self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
+                    false
+                } else {
+                    self.focused_checkbox_index += 1;
+                    true
+                }
             } else {
-                self.focused_checkbox_index += 1;
                 true
             }
         } else {
-            true
+            false
         }
     }
 

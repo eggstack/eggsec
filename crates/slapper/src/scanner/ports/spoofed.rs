@@ -4,8 +4,8 @@
 //! and packet fragmentation capabilities.
 
 use crate::error::{Result, SlapperError};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-
 #[cfg(all(feature = "stress-testing", unix))]
 use super::get_service_name;
 use super::PortScanResults;
@@ -152,7 +152,7 @@ pub(crate) async fn scan_ports_spoofed(
     let responses: Arc<DashMap<u16, String>> = Arc::new(DashMap::new());
     let stop_receiver = Arc::new(AtomicBool::new(false));
     let results: Arc<DashMap<u16, PortResult>> = Arc::new(DashMap::new());
-    let scanned_count = Arc::new(tokio::sync::Mutex::new(0u64));
+    let scanned_count = Arc::new(AtomicU64::new(0));
     let total_ports = ports.len() as u64;
     let progress = if tui_mode {
         None
@@ -278,11 +278,11 @@ pub(crate) async fn scan_ports_spoofed(
                     Ok(packets) => {
                         let mut tx_guard = tx.lock();
                         for pkt in &packets {
-                            let _Ignored = tx_guard.send_to(pkt, Some(interface.clone()));
-                            if _Ignored.is_none() {
+                            if tx_guard.send_to(pkt, Some(interface.clone())).is_none() {
                                 tracing::warn!("Failed to send spoofed packet");
+                            } else {
+                                packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             }
-                            packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
                     Err(e) => {
@@ -301,7 +301,9 @@ pub(crate) async fn scan_ports_spoofed(
                                 let src_ip_u32: u32 = u32::from(src_ip);
                                 sent_packets.insert(port, src_ip_u32);
                             }
-                            _ => {}
+                            _ => {
+                                tracing::warn!("Failed to send TCP packet for port {}", port);
+                            }
                         }
                     }
                     Err(e) => {
@@ -451,11 +453,7 @@ pub(crate) async fn scan_ports_spoofed(
                 pb.inc(1);
             }
             if let Some(ref tx) = progress_tx {
-                let count = {
-                    let mut c = scanned_count.lock().await;
-                    *c += 1;
-                    *c
-                };
+                let count = scanned_count.fetch_add(1, Ordering::Relaxed);
                 if tx.send((count, total_ports)).await.is_err() {
                     tracing::warn!("Progress receiver dropped");
                 }

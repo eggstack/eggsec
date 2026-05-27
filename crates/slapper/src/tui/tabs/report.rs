@@ -467,40 +467,39 @@ impl TabInput for ReportTab {
     }
 
     fn handle_enter(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                ReportFocusArea::ViewSelector => {
-                    if self.view_selector.is_open() {
-                        if self.view_selector.confirm().is_none() {
-                            tracing::warn!("Failed to confirm view selector selection");
-                        }
-                        self.current_view = match self.view_selector.selected {
-                            0 => ReportView::Convert,
-                            1 => ReportView::Trend,
-                            2 => ReportView::Schedule,
-                            _ => ReportView::Convert,
-                        };
-                    } else {
-                        self.view_selector.open();
-                    }
-                }
-                ReportFocusArea::Inputs => {
-                    let current_inputs = match self.current_view {
-                        ReportView::Convert => &mut self.convert_inputs,
-                        ReportView::Trend => &mut self.trend_inputs,
-                        ReportView::Schedule => &mut self.schedule_inputs,
-                    };
-                    current_inputs.blur();
-                }
-                ReportFocusArea::Results => {}
-            }
-
-            if self.is_running() {
-                self.stop();
-            } else {
-                self.start();
-            }
+        if self.is_running() {
+            self.stop();
+            return;
         }
+
+        match self.focus_area {
+            ReportFocusArea::ViewSelector => {
+                if self.view_selector.is_open() {
+                    if self.view_selector.confirm().is_none() {
+                        tracing::warn!("Failed to confirm view selector selection");
+                    }
+                    self.current_view = match self.view_selector.selected {
+                        0 => ReportView::Convert,
+                        1 => ReportView::Trend,
+                        2 => ReportView::Schedule,
+                        _ => ReportView::Convert,
+                    };
+                } else {
+                    self.view_selector.open();
+                }
+            }
+            ReportFocusArea::Inputs => {
+                let current_inputs = match self.current_view {
+                    ReportView::Convert => &mut self.convert_inputs,
+                    ReportView::Trend => &mut self.trend_inputs,
+                    ReportView::Schedule => &mut self.schedule_inputs,
+                };
+                current_inputs.blur();
+            }
+            ReportFocusArea::Results => {}
+        }
+
+        self.start();
     }
 
     fn handle_escape(&mut self) {

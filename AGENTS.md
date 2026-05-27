@@ -790,4 +790,65 @@ Key patterns fixed:
 
 See `architecture/tui.md` for complete bug fix history.
 
-(End of file - total 763 lines)
+## Bug Fixes (2026-06-05 Session)
+
+### Workers Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `api.rs` | 143 | Division by zero if `total_queries == 0` | Added `.max(1)` guard |
+| `recon.rs` | 127-168 | progress_handle spawn has no timeout | Added 300s timeout wrapper |
+| `plugin.rs` | 12 | Silent failure of `discover_all_plugins()` | Added `unwrap_or_default()` |
+| `plugin.rs` | 100 | Silent failure of Ruby plugin discovery | Added `is_err()` check |
+| `network.rs` | 168-170 | `capture.start()` spawn has no timeout | Added 300s timeout wrapper |
+
+### Tool Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `session.rs` | 511 | HTTP request has no timeout | Added 30s timeout wrapper |
+| `implementations/scanner.rs` | 136, 157, 186 | `run_cli_with_callback` no timeout | Added 60s timeout wrapper |
+| `implementations/fuzzer.rs` | 170 | `run_cli_with_callback` no timeout | Added 60s timeout wrapper |
+| `implementations/recon.rs` | 141 | `run_cli_with_callback` no timeout | Added 60s timeout wrapper |
+| `implementations/pipeline.rs` | 98 | `run_cli_with_callback` no timeout | Added 60s timeout wrapper |
+| `implementations/loadtest.rs` | 78 | `run_cli` no timeout | Added 60s timeout wrapper |
+| `routes.rs` | 182, 241 | `handle_request` no timeout | Added 30s timeout wrapper |
+| `finding.rs` | Multiple | HashMap → FxHashMap | Changed to FxHashMap |
+| `aggregator.rs` | Multiple | HashMap → FxHashMap | Changed to FxHashMap |
+
+### AI Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `cache.rs` | 171 | Cache merge logic inverted (kept new, not old) | Changed to `insert()` prefer old |
+| `planner.rs` | 456 | `to_lowercase()` in filter loop | Pre-compute before filter |
+
+### App Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `task_runtime.rs` | 83-91 | Timeout doesn't abort JoinHandle | Added `handle.abort()` call |
+
+### Scanner Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `spoofed.rs` | 281-285 | Counter increments even on send failure | Only increment on success |
+| `spoofed.rs` | 298-304 | Silent send failure | Added `tracing::warn!` |
+| `spoofed.rs` | 454-458 | Mutex for counter instead of AtomicU64 | Changed to `AtomicU64` |
+
+### Config Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scope.rs` | 45 | `HashSet` instead of `FxHashSet` | Changed to `FxHashSet` |
+
+### Components Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scrollable.rs` | 104 | `is_at_right_edge()` returns `true` when empty | Returns `horizontal_offset == 0` |
+| `palette.rs` | 39 | Direct `chunks[2]` access | Changed to `.get()` pattern |
+| `popup.rs` | 39 | Direct `chunks[2]` access | Changed to `.get()` pattern |
+
+(End file - total 872 lines)

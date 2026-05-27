@@ -102,7 +102,7 @@ impl ScrollableText {
 
     pub fn is_at_right_edge(&self) -> bool {
         if self.lines.is_empty() {
-            true
+            self.horizontal_offset == 0
         } else {
             let max_offset = self.lines.iter().map(|l| l.width()).max().unwrap_or(0);
             self.horizontal_offset >= max_offset

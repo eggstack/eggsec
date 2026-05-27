@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::fuzzer::FuzzResult;
 use crate::types::Severity;
@@ -16,7 +16,7 @@ pub struct Finding {
     pub cve_ids: Vec<String>,
     pub remediation: Option<String>,
     pub references: Vec<String>,
-    pub metadata: HashMap<String, serde_json::Value>,
+    pub metadata: FxHashMap<String, serde_json::Value>,
 }
 
 impl Finding {
@@ -36,7 +36,7 @@ impl Finding {
             cve_ids: vec![],
             remediation: None,
             references: vec![],
-            metadata: HashMap::new(),
+            metadata: FxHashMap::new(),
         }
     }
 
@@ -224,7 +224,7 @@ impl From<FuzzResult> for Finding {
             "{} - {}",
             result.payload.payload_type, result.payload.payload
         );
-        let mut metadata = HashMap::new();
+        let mut metadata = FxHashMap::default();
         metadata.insert(
             "status_code".to_string(),
             serde_json::Value::Number(result.status_code.into()),
@@ -281,7 +281,7 @@ impl From<crate::scanner::ports::PortResult> for Finding {
             remediation: None,
             references: vec![],
             metadata: {
-                let mut m = HashMap::new();
+                let mut m = FxHashMap::default();
                 m.insert(
                     "port".to_string(),
                     serde_json::Value::Number(result.port.into()),
@@ -337,7 +337,7 @@ impl From<crate::scanner::fingerprint::ServiceFingerprint> for Finding {
             remediation: None,
             references: vec![],
             metadata: {
-                let mut m = HashMap::new();
+                let mut m = FxHashMap::default();
                 m.insert(
                     "port".to_string(),
                     serde_json::Value::Number(fp.port.into()),
@@ -397,7 +397,7 @@ impl From<crate::scanner::udp_fingerprint::UdpServiceFingerprint> for Finding {
             remediation: None,
             references: vec![],
             metadata: {
-                let mut m = HashMap::new();
+                let mut m = FxHashMap::default();
                 m.insert(
                     "port".to_string(),
                     serde_json::Value::Number(fp.port.into()),
@@ -465,7 +465,7 @@ impl From<crate::scanner::endpoints::EndpointResult> for Finding {
             remediation: None,
             references: vec![],
             metadata: {
-                let mut m = HashMap::new();
+                let mut m = FxHashMap::default();
                 m.insert("path".to_string(), serde_json::Value::String(result.path));
                 m.insert(
                     "status_code".to_string(),
@@ -521,7 +521,7 @@ impl From<crate::recon::cve::VulnerabilityInfo> for Finding {
             remediation: None,
             references: v.references.clone(),
             metadata: {
-                let mut m = HashMap::new();
+                let mut m = FxHashMap::default();
                 m.insert(
                     "cvss_score".to_string(),
                     serde_json::Value::Number(

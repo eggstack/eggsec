@@ -120,6 +120,12 @@ Fixed `cache.rs:277` - Directory creation now properly logs errors instead of si
 ### planner.rs fallback_key Null Byte Fix (2026-06-01)
 Fixed `planner.rs:473` - `fallback_key` now sanitizes `outcome.target` with `.replace('\x00', "")` to match the `request_cache_key()` sanitization pattern.
 
+### cache.rs Merge Logic Inverted Fix (2026-06-05)
+Fixed `cache.rs:171` - Cache merge logic was keeping NEW (loaded) values when keys conflict instead of OLD (in-memory) values. Changed from `or_insert(v.clone())` (keeps new) to `insert(k.clone(), v.clone())` (prefers old). This prevents session data loss when cache is persisted and reloaded.
+
+### planner.rs to_lowercase in Loop Fix (2026-06-05)
+Fixed `planner.rs:456` - `outcome.target.to_lowercase()` was called inside filter closure for every stage. Now cached as `target_lower` before the filter to avoid redundant allocations.
+
 ## Agent Module FxHashMap Migration (2026-05-22)
 
 The agent module also migrated to FxHashMap for performance:

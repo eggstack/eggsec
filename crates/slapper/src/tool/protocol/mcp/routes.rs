@@ -179,7 +179,19 @@ async fn handle_mcp(
             continue;
         }
 
-        let response = state.mcp_server.handle_request(req).await;
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            state.mcp_server.handle_request(req),
+        )
+        .await
+        .map_err(|e| {
+            tracing::warn!(error = %e, "MCP request handler timed out after 30s");
+            crate::error::SlapperError::Timeout(format!("MCP request handler timed out: {}", e))
+        })?
+        .map_err(|e| {
+            tracing::warn!(error = %e, "MCP request handler failed");
+            crate::error::SlapperError::Tool(format!("MCP request handler failed: {}", e))
+        })?;
         responses.push(response);
     }
 
@@ -238,7 +250,19 @@ pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>) {
                         continue;
                     }
 
-                    let response = server.handle_request(req).await;
+                    let response = tokio::time::timeout(
+                        std::time::Duration::from_secs(30),
+                        server.handle_request(req),
+                    )
+                    .await
+                    .map_err(|e| {
+                        tracing::warn!(error = %e, "MCP request handler timed out after 30s");
+                        crate::error::SlapperError::Timeout(format!("MCP request handler timed out: {}", e))
+                    })?
+                    .map_err(|e| {
+                        tracing::warn!(error = %e, "MCP request handler failed");
+                        crate::error::SlapperError::Tool(format!("MCP request handler failed: {}", e))
+                    })?;
                     responses.push(response);
                 }
 

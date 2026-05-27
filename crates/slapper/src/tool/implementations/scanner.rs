@@ -129,11 +129,22 @@ impl SecurityTool for ScannerTool {
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
                     tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
                 }).unwrap_or_default();
-                crate::scanner::ports::run_cli_with_callback(args, &config, move |f| {
-                    let mut findings = findings_clone.lock();
-                    findings.push(f);
-                })
+                let result = tokio::time::timeout(
+                    std::time::Duration::from_secs(60),
+                    crate::scanner::ports::run_cli_with_callback(args, &config, move |f| {
+                        let mut findings = findings_clone.lock();
+                        findings.push(f);
+                    }),
+                )
                 .await
+                .map_err(|e| crate::error::SlapperError::Timeout(format!(
+                    "Port scan timed out after 60s: {}",
+                    e
+                )))?
+                .map_err(|e| crate::error::SlapperError::Tool(format!(
+                    "Port scan failed: {}",
+                    e
+                )))?;
             }
             ScanMode::Fingerprint => {
                 let args = crate::cli::FingerprintArgs {
@@ -150,11 +161,22 @@ impl SecurityTool for ScannerTool {
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
                     tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
                 }).unwrap_or_default();
-                crate::scanner::fingerprint::run_cli_with_callback(args, &config, move |f| {
-                    let mut findings = findings_clone.lock();
-                    findings.push(f);
-                })
+                let result = tokio::time::timeout(
+                    std::time::Duration::from_secs(60),
+                    crate::scanner::fingerprint::run_cli_with_callback(args, &config, move |f| {
+                        let mut findings = findings_clone.lock();
+                        findings.push(f);
+                    }),
+                )
                 .await
+                .map_err(|e| crate::error::SlapperError::Timeout(format!(
+                    "Fingerprint scan timed out after 60s: {}",
+                    e
+                )))?
+                .map_err(|e| crate::error::SlapperError::Tool(format!(
+                    "Fingerprint scan failed: {}",
+                    e
+                )))?;
             }
             ScanMode::Endpoints => {
                 let args = crate::cli::EndpointScanArgs {
@@ -179,11 +201,22 @@ impl SecurityTool for ScannerTool {
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
                     tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
                 }).unwrap_or_default();
-                crate::scanner::endpoints::run_cli_with_callback(args, &config, move |f| {
-                    let mut findings = findings_clone.lock();
-                    findings.push(f);
-                })
+                let result = tokio::time::timeout(
+                    std::time::Duration::from_secs(60),
+                    crate::scanner::endpoints::run_cli_with_callback(args, &config, move |f| {
+                        let mut findings = findings_clone.lock();
+                        findings.push(f);
+                    }),
+                )
                 .await
+                .map_err(|e| crate::error::SlapperError::Timeout(format!(
+                    "Endpoint scan timed out after 60s: {}",
+                    e
+                )))?
+                .map_err(|e| crate::error::SlapperError::Tool(format!(
+                    "Endpoint scan failed: {}",
+                    e
+                )))?;
             }
         };
 

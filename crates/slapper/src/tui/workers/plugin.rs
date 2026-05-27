@@ -9,7 +9,7 @@ pub async fn run_load_plugins(
 ) -> anyhow::Result<()> {
     use crate::commands::handlers::plugin::discover_all_plugins;
 
-    let plugins = discover_all_plugins(config_plugins_dir);
+    let plugins = discover_all_plugins(config_plugins_dir).unwrap_or_default();
 
     if let Err(e) = result_tx.send(TaskResult::PluginsLoaded(plugins)).await {
         tracing::warn!("Failed to send plugins loaded result: {}", e);
@@ -97,8 +97,8 @@ pub async fn run_plugin_check(
     {
         let plugin_dirs = crate::plugin::PluginManager::default_plugin_dirs(config_plugins_dir);
         if let Ok(mut loader) = crate::ruby::PluginLoader::new(plugin_dirs) {
-            if let Err(e) = loader.discover_plugins() {
-                tracing::debug!("Failed to discover Ruby plugins: {}", e);
+            if loader.discover_plugins().is_err() {
+                tracing::debug!("Failed to discover Ruby plugins");
             }
             if loader.list_plugins().iter().any(|p| p.name == plugin_name) {
                 if let Err(e) = progress_tx.send((1, 3)).await {

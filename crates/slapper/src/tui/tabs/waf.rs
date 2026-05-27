@@ -470,42 +470,54 @@ impl TabInput for WafTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.move_word_forward();
+        if !self.is_running() {
+            if self.focus_area == WafFocusArea::Inputs {
+                self.inputs.move_word_forward();
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.move_word_backward();
+        if !self.is_running() {
+            if self.focus_area == WafFocusArea::Inputs {
+                self.inputs.move_word_backward();
+            }
         }
     }
 
     fn handle_home(&mut self) {
-        if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.move_home();
-        } else if self.focus_area == WafFocusArea::Results {
-            self.detection_view.scroll_to_top();
-            self.bypass_view.scroll_to_top();
+        if !self.is_running() {
+            if self.focus_area == WafFocusArea::Inputs {
+                self.inputs.move_home();
+            } else if self.focus_area == WafFocusArea::Results {
+                self.detection_view.scroll_to_top();
+                self.bypass_view.scroll_to_top();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if self.focus_area == WafFocusArea::Inputs {
-            self.inputs.move_end();
-        } else if self.focus_area == WafFocusArea::Results {
-            self.detection_view.scroll_to_bottom();
-            self.bypass_view.scroll_to_bottom();
+        if !self.is_running() {
+            if self.focus_area == WafFocusArea::Inputs {
+                self.inputs.move_end();
+            } else if self.focus_area == WafFocusArea::Results {
+                self.detection_view.scroll_to_bottom();
+                self.bypass_view.scroll_to_bottom();
+            }
         }
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = WafFocusArea::Inputs;
-        self.inputs.focus(0);
+        if !self.is_running() {
+            self.focus_area = WafFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = WafFocusArea::Results;
+        if !self.is_running() {
+            self.focus_area = WafFocusArea::Results;
+        }
     }
 
     fn handle_enter(&mut self) {
@@ -522,8 +534,10 @@ impl TabInput for WafTab {
         }
 
         if self.focus_area == WafFocusArea::Techniques {
-            if self.focused_checkbox_index < self.technique_checkboxes.len() {
-                self.technique_checkboxes[self.focused_checkbox_index].toggle();
+            if !self.technique_checkboxes.is_empty() {
+                if let Some(cb) = self.technique_checkboxes.get_mut(self.focused_checkbox_index) {
+                    cb.toggle();
+                }
             }
             return;
         }

@@ -265,39 +265,39 @@ impl SettingsTab {
     }
 
     pub fn load_config(&mut self, config: &SlapperConfig) {
-        if !self.http_inputs.fields.is_empty() {
-            self.http_inputs.fields[0].value = config.http.timeout_secs.to_string();
+        if let Some(field) = self.http_inputs.fields.get_mut(0) {
+            field.value = config.http.timeout_secs.to_string();
         }
-        if self.http_inputs.fields.len() > 1 {
-            self.http_inputs.fields[1].value = config.http.max_retries.to_string();
+        if let Some(field) = self.http_inputs.fields.get_mut(1) {
+            field.value = config.http.max_retries.to_string();
         }
-        if self.http_inputs.fields.len() > 2 {
-            self.http_inputs.fields[2].value = config.http.retry_delay_ms.to_string();
+        if let Some(field) = self.http_inputs.fields.get_mut(2) {
+            field.value = config.http.retry_delay_ms.to_string();
         }
-        if self.http_inputs.fields.len() > 3 {
-            self.http_inputs.fields[3].value = config.http.max_redirects.to_string();
+        if let Some(field) = self.http_inputs.fields.get_mut(3) {
+            field.value = config.http.max_redirects.to_string();
         }
         self.follow_redirects.checked = config.http.follow_redirects;
         self.verify_tls.checked = config.http.verify_tls;
 
-        if !self.scan_inputs.fields.is_empty() {
-            self.scan_inputs.fields[0].value = config.scan.default_concurrency.to_string();
+        if let Some(field) = self.scan_inputs.fields.get_mut(0) {
+            field.value = config.scan.default_concurrency.to_string();
         }
         self.stealth_mode.checked = config.scan.stealth_mode;
 
-        if !self.session_inputs.fields.is_empty() {
-            self.session_inputs.fields[0].value = config.auto_save_interval_secs.to_string();
+        if let Some(field) = self.session_inputs.fields.get_mut(0) {
+            field.value = config.auto_save_interval_secs.to_string();
         }
 
         if let Some(ref proxy_url) = config.http.proxy {
-            if !self.proxy_inputs.fields.is_empty() {
-                self.proxy_inputs.fields[0].value = proxy_url.clone();
+            if let Some(field) = self.proxy_inputs.fields.get_mut(0) {
+                field.value = proxy_url.clone();
             }
         }
 
         if let Some(ref export_dir) = config.paths.export_dir {
-            if self.report_inputs.fields.len() > 3 {
-                self.report_inputs.fields[3].value = export_dir.clone();
+            if let Some(field) = self.report_inputs.fields.get_mut(3) {
+                field.value = export_dir.clone();
             }
         }
 
@@ -456,35 +456,35 @@ impl SettingsTab {
     }
 
     pub fn reset(&mut self) {
-        if !self.http_inputs.fields.is_empty() {
-            self.http_inputs.fields[0].value = "30".to_string();
+        if let Some(field) = self.http_inputs.fields.get_mut(0) {
+            field.value = "30".to_string();
         }
-        if self.http_inputs.fields.len() > 1 {
-            self.http_inputs.fields[1].value = "3".to_string();
+        if let Some(field) = self.http_inputs.fields.get_mut(1) {
+            field.value = "3".to_string();
         }
-        if self.http_inputs.fields.len() > 2 {
-            self.http_inputs.fields[2].value = "1000".to_string();
+        if let Some(field) = self.http_inputs.fields.get_mut(2) {
+            field.value = "1000".to_string();
         }
-        if !self.scan_inputs.fields.is_empty() {
-            self.scan_inputs.fields[0].value = "50".to_string();
+        if let Some(field) = self.scan_inputs.fields.get_mut(0) {
+            field.value = "50".to_string();
         }
-        if self.scan_inputs.fields.len() > 1 {
-            self.scan_inputs.fields[1].value = "0".to_string();
+        if let Some(field) = self.scan_inputs.fields.get_mut(1) {
+            field.value = "0".to_string();
         }
-        if self.scan_inputs.fields.len() > 2 {
-            self.scan_inputs.fields[2].value = "2".to_string();
+        if let Some(field) = self.scan_inputs.fields.get_mut(2) {
+            field.value = "2".to_string();
         }
-        if !self.proxy_inputs.fields.is_empty() {
-            self.proxy_inputs.fields[0].value.clear();
+        if let Some(field) = self.proxy_inputs.fields.get_mut(0) {
+            field.value.clear();
         }
-        if self.proxy_inputs.fields.len() > 1 {
-            self.proxy_inputs.fields[1].value.clear();
+        if let Some(field) = self.proxy_inputs.fields.get_mut(1) {
+            field.value.clear();
         }
-        if !self.scope_inputs.fields.is_empty() {
-            self.scope_inputs.fields[0].value.clear();
+        if let Some(field) = self.scope_inputs.fields.get_mut(0) {
+            field.value.clear();
         }
-        if self.scope_inputs.fields.len() > 1 {
-            self.scope_inputs.fields[1].value.clear();
+        if let Some(field) = self.scope_inputs.fields.get_mut(1) {
+            field.value.clear();
         }
         self.follow_redirects.checked = true;
         self.verify_tls.checked = true;

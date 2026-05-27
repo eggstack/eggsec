@@ -977,5 +977,40 @@ Key patterns fixed:
 - **reset() methods**: 11 tabs now properly reset checkbox/selector state
 - **Edge detection**: 5 tabs added missing `is_empty()` guards
 
-(End of file - total 1002 lines)
+## Session Fixes (2026-06-05)
+
+### TUI Tab Fixes (Additional Audit)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scan.rs` | 278 | reset() incomplete | Added `current_stage_output.clear()` |
+| `graphql.rs` | 510-524 | Options edge detection missing is_empty guard | Added `is_empty()` guard |
+
+### Workers Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `api.rs` | 143 | Division by zero | Added `.max(1)` guard |
+| `recon.rs` | 127-168 | progress_handle spawn no timeout | Added 300s timeout |
+| `plugin.rs` | 12, 100 | Silent plugin discovery failures | Added error checks |
+| `network.rs` | 168-170 | capture.start() no timeout | Added 300s timeout |
+
+### Tool/AI/App/Scanner/Config Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `ai/cache.rs` | 171 | Cache merge logic inverted | Changed to prefer old entries |
+| `ai/planner.rs` | 456 | to_lowercase in loop | Pre-compute before filter |
+| `tool/session.rs` | 511 | HTTP no timeout | Added 30s timeout |
+| `tool/finding.rs` | Multiple | HashMap performance | FxHashMap |
+| `tool/aggregator.rs` | Multiple | HashMap performance | FxHashMap |
+| `scanner/spoofed.rs` | 281-304 | Silent send failures | Warn logging + only increment on success |
+| `scanner/spoofed.rs` | 454-458 | Mutex vs AtomicU64 | Changed to AtomicU64 |
+| `config/scope.rs` | 45 | HashSet performance | FxHashSet |
+| `app/task_runtime.rs` | 83-91 | No abort on timeout | handle.abort() added |
+| `scrollable.rs` | 104 | is_at_right_edge inconsistency | Returns horizontal_offset == 0 when empty |
+| `palette.rs` | 39 | Direct chunks[2] access | .get() pattern |
+| `popup.rs` | 39 | Direct chunks[2] access | .get() pattern |
+
+(End of file - total 1020 lines)
 

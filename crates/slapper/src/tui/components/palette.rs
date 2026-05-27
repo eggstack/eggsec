@@ -36,7 +36,11 @@ pub fn draw_command_palette(f: &mut Frame, area: Rect, palette: &mut CommandPale
         return;
     }
 
-    let content_height = chunks[2].height;
+    let content_height = if let Some(chunk) = chunks.get(2) {
+        chunk.height
+    } else {
+        return;
+    };
     palette.update_content_height(content_height);
 
     // Query input

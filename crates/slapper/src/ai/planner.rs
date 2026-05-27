@@ -445,6 +445,7 @@ impl AiPlanner {
 
     pub fn record_outcome(&self, plan: &ExecutionPlan, outcome: &PlanOutcome) {
         let mut cache = self.learning_cache.write();
+        let target_lower = outcome.target.to_lowercase();
         let candidate_key = cache
             .iter()
             .filter(|(_, cached)| {
@@ -453,7 +454,7 @@ impl AiPlanner {
                         .plan
                         .stages
                         .iter()
-                        .any(|s| s.name.to_lowercase().contains(&outcome.target.to_lowercase()))
+                        .any(|s| s.name.to_lowercase().contains(&target_lower))
             })
             .max_by_key(|(_, cached)| cached.last_used)
             .map(|(k, _)| k.clone());

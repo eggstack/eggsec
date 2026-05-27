@@ -123,40 +123,47 @@ pub async fn run_recon(
         let stage = std::sync::Arc::new(parking_lot::Mutex::new(String::new()));
         let (stage_tx, mut stage_rx) = tokio::sync::watch::channel("initial".to_string());
         let ptx = progress_tx.clone();
+        let progress_tx_for_timeout = progress_tx.clone();
 
         let progress_handle = tokio::spawn(async move {
-            let mut last_stage = stage_rx.borrow().clone();
-            let stages = ["resolving", "recon (parallel)", "takeover", "cve", "done"];
-            let total_stages = stages.len() as u64;
-            let mut stalled_count = 0u32;
-            while stage_rx.changed().await.is_ok() {
-                let current = stage_rx.borrow().clone();
-                if current != last_stage {
-                    last_stage.clone_from(&current);
-                    stalled_count = 0;
-                    let completed = stages
-                        .iter()
-                        .take_while(|&&s| {
-                            current.contains(s) || (s == "done" && current.is_empty())
-                        })
-                        .count() as u64;
-                    let total_stages = total_stages.max(1);
-                    let pct = (completed.min(total_stages) * 90) / total_stages + 5;
-                    if let Err(e) = ptx.send((pct, 100)).await {
-                        tracing::warn!("Failed to send progress: {}", e);
-                    }
-                } else {
-                    stalled_count += 1;
-                    if stalled_count > 200 {
-                        if let Err(e) = ptx.send((95, 100)).await {
-                            tracing::warn!("Failed to send stalled progress: {}", e);
+            let result = tokio::time::timeout(std::time::Duration::from_secs(300), async move {
+                let mut last_stage = stage_rx.borrow().clone();
+                let stages = ["resolving", "recon (parallel)", "takeover", "cve", "done"];
+                let total_stages = stages.len() as u64;
+                let mut stalled_count = 0u32;
+                while stage_rx.changed().await.is_ok() {
+                    let current = stage_rx.borrow().clone();
+                    if current != last_stage {
+                        last_stage.clone_from(&current);
+                        stalled_count = 0;
+                        let completed = stages
+                            .iter()
+                            .take_while(|&&s| {
+                                current.contains(s) || (s == "done" && current.is_empty())
+                            })
+                            .count() as u64;
+                        let total_stages = total_stages.max(1);
+                        let pct = (completed.min(total_stages) * 90) / total_stages + 5;
+                        if let Err(e) = ptx.send((pct, 100)).await {
+                            tracing::warn!("Failed to send progress: {}", e);
                         }
+                    } else {
+                        stalled_count += 1;
+                        if stalled_count > 200 {
+                            if let Err(e) = ptx.send((95, 100)).await {
+                                tracing::warn!("Failed to send stalled progress: {}", e);
+                            }
+                            break;
+                        }
+                    }
+                    if current.is_empty() && !last_stage.is_empty() {
                         break;
                     }
                 }
-                if current.is_empty() && !last_stage.is_empty() {
-                    break;
-                }
+            }).await;
+            if result.is_err() {
+                tracing::warn!("Progress monitor task timed out after 300s");
+                let _ = progress_tx_for_timeout.send((95, 100)).await;
             }
         });
 

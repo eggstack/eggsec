@@ -95,11 +95,22 @@ impl SecurityTool for PipelineTool {
         let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
             tracing::warn!(error = %e, "Failed to load config for pipeline, using defaults");
         }).unwrap_or_default();
-        let result = crate::pipeline::run_cli_with_callback(args, &config, move |f| {
-            let mut findings = findings_clone.lock();
-            findings.push(f);
-        })
-        .await;
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            crate::pipeline::run_cli_with_callback(args, &config, move |f| {
+                let mut findings = findings_clone.lock();
+                findings.push(f);
+            }),
+        )
+        .await
+        .map_err(|e| crate::error::SlapperError::Timeout(format!(
+            "Pipeline timed out after 60s: {}",
+            e
+        )))?
+        .map_err(|e| crate::error::SlapperError::Tool(format!(
+            "Pipeline failed: {}",
+            e
+        )))?;
 
         let findings = match std::sync::Arc::try_unwrap(findings) {
             Ok(inner) => inner.into_inner(),

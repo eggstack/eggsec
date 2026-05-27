@@ -672,41 +672,53 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == FuzzFocusArea::Inputs {
-            self.inputs.move_word_forward();
+        if !self.is_running() {
+            if self.focus_area == FuzzFocusArea::Inputs {
+                self.inputs.move_word_forward();
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == FuzzFocusArea::Inputs {
-            self.inputs.move_word_backward();
+        if !self.is_running() {
+            if self.focus_area == FuzzFocusArea::Inputs {
+                self.inputs.move_word_backward();
+            }
         }
     }
 
     fn handle_home(&mut self) {
-        if self.focus_area == FuzzFocusArea::Inputs {
-            self.inputs.move_home();
-        } else if self.focus_area == FuzzFocusArea::Results {
-            self.results_view.scroll_to_top();
+        if !self.is_running() {
+            if self.focus_area == FuzzFocusArea::Inputs {
+                self.inputs.move_home();
+            } else if self.focus_area == FuzzFocusArea::Results {
+                self.results_view.scroll_to_top();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if self.focus_area == FuzzFocusArea::Inputs {
-            self.inputs.move_end();
-        } else if self.focus_area == FuzzFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+        if !self.is_running() {
+            if self.focus_area == FuzzFocusArea::Inputs {
+                self.inputs.move_end();
+            } else if self.focus_area == FuzzFocusArea::Results {
+                self.results_view.scroll_to_bottom();
+            }
         }
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = FuzzFocusArea::Inputs;
-        self.inputs.focus(0);
+        if !self.is_running() {
+            self.focus_area = FuzzFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = FuzzFocusArea::Results;
-        self.inputs.blur();
+        if !self.is_running() {
+            self.focus_area = FuzzFocusArea::Results;
+            self.inputs.blur();
+        }
     }
 
     fn handle_enter(&mut self) {

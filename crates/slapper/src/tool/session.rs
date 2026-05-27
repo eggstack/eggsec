@@ -508,7 +508,15 @@ impl LoginExecutor {
                             .body(body);
                     }
 
-                    let response = request.send().await.map_err(|e| {
+                    let response = tokio::time::timeout(
+                        std::time::Duration::from_secs(30),
+                        request.send(),
+                    )
+                    .await
+                    .map_err(|e| {
+                        crate::error::SlapperError::Network(format!("Login request timed out: {}", e))
+                    })?
+                    .map_err(|e| {
                         crate::error::SlapperError::Network(format!("Login request failed: {}", e))
                     })?;
 

@@ -331,10 +331,10 @@ impl TabRender for IntegrationsTab {
         let fields: &[InputField] = match self.current_mode {
             IntegrationsMode::Configure => &self.config_inputs.fields,
             IntegrationsMode::CreateIssue => {
-                self.issue_inputs.fields.get(..4).unwrap_or(&self.issue_inputs.fields)
+                self.issue_inputs.fields.get(..4).unwrap_or(&[])
             }
             IntegrationsMode::SearchIssues => {
-                self.issue_inputs.fields.get(4..).unwrap_or(&self.issue_inputs.fields)
+                self.issue_inputs.fields.get(4..).unwrap_or(&[])
             }
         };
 
@@ -493,12 +493,16 @@ impl TabInput for IntegrationsTab {
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = IntegrationsFocusArea::Tracker;
-        self.tracker_selector.focus();
+        if !self.is_running() {
+            self.focus_area = IntegrationsFocusArea::Tracker;
+            self.tracker_selector.focus();
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = IntegrationsFocusArea::Results;
+        if !self.is_running() {
+            self.focus_area = IntegrationsFocusArea::Results;
+        }
     }
 
     fn handle_enter(&mut self) {

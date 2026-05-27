@@ -165,7 +165,9 @@ pub async fn run_packet_capture(
     let mut capture = capture;
     let running = capture.running();
     let (pkt_tx, mut pkt_rx) = tokio::sync::mpsc::channel(100);
-    let handle = tokio::spawn(async move { capture.start(pkt_tx).await });
+    let handle = tokio::spawn(async move {
+        tokio::time::timeout(std::time::Duration::from_secs(300), capture.start(pkt_tx)).await
+    });
 
     loop {
         tokio::select! {

@@ -432,12 +432,16 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = ClusterFocusArea::ViewSelector;
-        self.view_selector.focus();
+        if !self.is_running() {
+            self.focus_area = ClusterFocusArea::ViewSelector;
+            self.view_selector.focus();
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = ClusterFocusArea::Results;
+        if !self.is_running() {
+            self.focus_area = ClusterFocusArea::Results;
+        }
     }
 
     fn handle_enter(&mut self) {

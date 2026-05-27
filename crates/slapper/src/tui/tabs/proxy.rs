@@ -466,42 +466,46 @@ impl TabRender for ProxyTab {
 
 impl TabInput for ProxyTab {
     fn handle_focus_next(&mut self) {
-        if self.view_selector.is_focused() {
-            self.view_selector.blur();
-            if matches!(
-                self.current_view,
-                ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
-            ) {
+        if !self.is_running() {
+            if self.view_selector.is_focused() {
+                self.view_selector.blur();
+                if matches!(
+                    self.current_view,
+                    ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
+                ) {
+                    self.inputs.focus_next();
+                }
+            } else if self.inputs.is_focused() {
                 self.inputs.focus_next();
-            }
-        } else if self.inputs.is_focused() {
-            self.inputs.focus_next();
-            if self.inputs.is_focused() {
-                self.inputs.blur();
+                if self.inputs.is_focused() {
+                    self.inputs.blur();
+                    self.view_selector.focus();
+                }
+            } else {
                 self.view_selector.focus();
             }
-        } else {
-            self.view_selector.focus();
         }
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.view_selector.is_focused() {
-            self.view_selector.blur();
-            if matches!(
-                self.current_view,
-                ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
-            ) {
+        if !self.is_running() {
+            if self.view_selector.is_focused() {
+                self.view_selector.blur();
+                if matches!(
+                    self.current_view,
+                    ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
+                ) {
+                    self.inputs.focus_prev();
+                }
+            } else if self.inputs.is_focused() {
                 self.inputs.focus_prev();
-            }
-        } else if self.inputs.is_focused() {
-            self.inputs.focus_prev();
-            if !self.inputs.is_focused() {
-                self.inputs.blur();
+                if !self.inputs.is_focused() {
+                    self.inputs.blur();
+                    self.view_selector.focus();
+                }
+            } else {
                 self.view_selector.focus();
             }
-        } else {
-            self.view_selector.focus();
         }
     }
 

@@ -275,6 +275,7 @@ impl TabState for ScanTab {
         }
         self.profile_selector.select(0);
         self.output_selector.select(0);
+        self.current_stage_output.clear();
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -305,8 +306,12 @@ impl TabRender for ScanTab {
             .split(config_area);
 
         if self.inputs.fields.len() >= 2 {
-            self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
-            self.inputs.fields[1].render(f, config_chunks[1], insert_mode);
+            if let Some(field) = self.inputs.fields.get(0) {
+                field.render(f, config_chunks[0], insert_mode);
+            }
+            if let Some(field) = self.inputs.fields.get(1) {
+                field.render(f, config_chunks[1], insert_mode);
+            }
         }
 
         let mut profile_sel = self.profile_selector.clone();
@@ -470,41 +475,53 @@ impl TabInput for ScanTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == ScanFocusArea::Inputs {
-            self.inputs.move_word_forward();
+        if !self.is_running() {
+            if self.focus_area == ScanFocusArea::Inputs {
+                self.inputs.move_word_forward();
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == ScanFocusArea::Inputs {
-            self.inputs.move_word_backward();
+        if !self.is_running() {
+            if self.focus_area == ScanFocusArea::Inputs {
+                self.inputs.move_word_backward();
+            }
         }
     }
 
     fn handle_home(&mut self) {
-        if self.focus_area == ScanFocusArea::Inputs {
-            self.inputs.move_home();
-        } else {
-            self.current_stage_output.scroll_to_top();
+        if !self.is_running() {
+            if self.focus_area == ScanFocusArea::Inputs {
+                self.inputs.move_home();
+            } else {
+                self.current_stage_output.scroll_to_top();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if self.focus_area == ScanFocusArea::Inputs {
-            self.inputs.move_end();
-        } else {
-            self.current_stage_output.scroll_to_bottom();
+        if !self.is_running() {
+            if self.focus_area == ScanFocusArea::Inputs {
+                self.inputs.move_end();
+            } else {
+                self.current_stage_output.scroll_to_bottom();
+            }
         }
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = ScanFocusArea::Inputs;
-        self.inputs.focus(0);
+        if !self.is_running() {
+            self.focus_area = ScanFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = ScanFocusArea::Inputs;
-        self.inputs.blur();
+        if !self.is_running() {
+            self.focus_area = ScanFocusArea::Inputs;
+            self.inputs.blur();
+        }
     }
 
     fn handle_enter(&mut self) {

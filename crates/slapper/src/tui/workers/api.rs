@@ -140,7 +140,7 @@ pub async fn run_graphql(
                 }
             }
 
-            let progress = 25 + ((idx as u64 * 70) / total_queries as u64);
+            let progress = 25 + ((idx as u64 * 70) / total_queries.max(1) as u64);
             if let Err(e) = progress_tx.send((progress.min(95), 100)).await {
                 tracing::warn!("Failed to send progress: {}", e);
             }

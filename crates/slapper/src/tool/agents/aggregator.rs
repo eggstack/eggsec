@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -49,8 +49,8 @@ pub struct AggregatedError {
 
 #[derive(Clone)]
 pub struct ResultAggregator {
-    results: Arc<RwLock<HashMap<Uuid, AggregatedResult>>>,
-    in_progress: Arc<RwLock<HashMap<Uuid, InProgressExecution>>>,
+    results: Arc<RwLock<FxHashMap<Uuid, AggregatedResult>>>,
+    in_progress: Arc<RwLock<FxHashMap<Uuid, InProgressExecution>>>,
 }
 
 struct InProgressExecution {
@@ -58,8 +58,8 @@ struct InProgressExecution {
     execution_id: Uuid,
     #[allow(dead_code)]
     started_at: DateTime<Utc>,
-    stage_results: HashMap<String, StageResultAccumulator>,
-    tool_results: HashMap<String, ToolResultAccumulator>,
+    stage_results: FxHashMap<String, StageResultAccumulator>,
+    tool_results: FxHashMap<String, ToolResultAccumulator>,
     errors: Vec<ErrorAccumulator>,
 }
 
@@ -88,8 +88,8 @@ struct ErrorAccumulator {
 impl ResultAggregator {
     pub fn new() -> Self {
         Self {
-            results: Arc::new(RwLock::new(HashMap::new())),
-            in_progress: Arc::new(RwLock::new(HashMap::new())),
+            results: Arc::new(RwLock::new(FxHashMap::default())),
+            in_progress: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
 
@@ -100,8 +100,8 @@ impl ResultAggregator {
             InProgressExecution {
                 execution_id,
                 started_at: Utc::now(),
-                stage_results: HashMap::new(),
-                tool_results: HashMap::new(),
+                stage_results: FxHashMap::default(),
+                tool_results: FxHashMap::default(),
                 errors: Vec::new(),
             },
         );

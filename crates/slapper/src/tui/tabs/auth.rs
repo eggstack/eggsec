@@ -123,23 +123,27 @@ impl TabRender for AuthTab {
 
 impl TabInput for AuthTab {
     fn handle_focus_next(&mut self) {
-        self.focus_area = match self.focus_area {
-            AuthFocusArea::Target => AuthFocusArea::Username,
-            AuthFocusArea::Username => AuthFocusArea::Password,
-            AuthFocusArea::Password => AuthFocusArea::Results,
-            AuthFocusArea::Results => AuthFocusArea::Target,
-        };
-        self.sync_input_focus();
+        if !self.is_running() {
+            self.focus_area = match self.focus_area {
+                AuthFocusArea::Target => AuthFocusArea::Username,
+                AuthFocusArea::Username => AuthFocusArea::Password,
+                AuthFocusArea::Password => AuthFocusArea::Results,
+                AuthFocusArea::Results => AuthFocusArea::Target,
+            };
+            self.sync_input_focus();
+        }
     }
 
     fn handle_focus_prev(&mut self) {
-        self.focus_area = match self.focus_area {
-            AuthFocusArea::Target => AuthFocusArea::Results,
-            AuthFocusArea::Username => AuthFocusArea::Target,
-            AuthFocusArea::Password => AuthFocusArea::Username,
-            AuthFocusArea::Results => AuthFocusArea::Password,
-        };
-        self.sync_input_focus();
+        if !self.is_running() {
+            self.focus_area = match self.focus_area {
+                AuthFocusArea::Target => AuthFocusArea::Results,
+                AuthFocusArea::Username => AuthFocusArea::Target,
+                AuthFocusArea::Password => AuthFocusArea::Username,
+                AuthFocusArea::Results => AuthFocusArea::Password,
+            };
+            self.sync_input_focus();
+        }
     }
 
     fn handle_char(&mut self, c: char) {
@@ -167,37 +171,49 @@ impl TabInput for AuthTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if let Some(idx) = self.current_input_index() {
-            self.inputs.fields[idx].move_word_forward();
+        if !self.is_running() {
+            if let Some(idx) = self.current_input_index() {
+                self.inputs.fields[idx].move_word_forward();
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if let Some(idx) = self.current_input_index() {
-            self.inputs.fields[idx].move_word_backward();
+        if !self.is_running() {
+            if let Some(idx) = self.current_input_index() {
+                self.inputs.fields[idx].move_word_backward();
+            }
         }
     }
 
     fn handle_home(&mut self) {
-        if let Some(idx) = self.current_input_index() {
-            self.inputs.fields[idx].move_home();
+        if !self.is_running() {
+            if let Some(idx) = self.current_input_index() {
+                self.inputs.fields[idx].move_home();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if let Some(idx) = self.current_input_index() {
-            self.inputs.fields[idx].move_end();
+        if !self.is_running() {
+            if let Some(idx) = self.current_input_index() {
+                self.inputs.fields[idx].move_end();
+            }
         }
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = AuthFocusArea::Target;
-        self.sync_input_focus();
+        if !self.is_running() {
+            self.focus_area = AuthFocusArea::Target;
+            self.sync_input_focus();
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = AuthFocusArea::Results;
-        self.sync_input_focus();
+        if !self.is_running() {
+            self.focus_area = AuthFocusArea::Results;
+            self.sync_input_focus();
+        }
     }
 
     fn handle_enter(&mut self) {
@@ -213,43 +229,55 @@ impl TabInput for AuthTab {
     }
 
     fn handle_up(&mut self) {
-        if self.focus_area == AuthFocusArea::Results {
-            self.focus_area = AuthFocusArea::Password;
-            self.inputs.focus(2);
-        } else if self.focus_area == AuthFocusArea::Password {
-            self.focus_area = AuthFocusArea::Username;
-            self.inputs.focus(1);
-        } else if self.focus_area == AuthFocusArea::Username {
-            self.focus_area = AuthFocusArea::Target;
-            self.inputs.focus(0);
-        } else if self.focus_area == AuthFocusArea::Target {
-            self.inputs.focus_prev();
-            if !self.inputs.is_focused() && !self.inputs.fields.is_empty() {
-                self.inputs.focus(self.inputs.fields.len() - 1);
+        if !self.is_running() {
+            if self.focus_area == AuthFocusArea::Results {
+                self.focus_area = AuthFocusArea::Password;
+                self.inputs.focus(2);
+            } else if self.focus_area == AuthFocusArea::Password {
+                self.focus_area = AuthFocusArea::Username;
+                self.inputs.focus(1);
+            } else if self.focus_area == AuthFocusArea::Username {
+                self.focus_area = AuthFocusArea::Target;
+                self.inputs.focus(0);
+            } else if self.focus_area == AuthFocusArea::Target {
+                self.inputs.focus_prev();
+                if !self.inputs.is_focused() && !self.inputs.fields.is_empty() {
+                    self.inputs.focus(self.inputs.fields.len() - 1);
+                }
             }
         }
     }
 
     fn handle_down(&mut self) {
-        if self.focus_area == AuthFocusArea::Target {
-            self.focus_area = AuthFocusArea::Username;
-            self.inputs.focus(1);
-        } else if self.focus_area == AuthFocusArea::Username {
-            self.focus_area = AuthFocusArea::Password;
-            self.inputs.focus(2);
-        } else if self.focus_area == AuthFocusArea::Password {
-            self.focus_area = AuthFocusArea::Results;
-            self.inputs.blur();
-        } else if self.focus_area == AuthFocusArea::Results {
+        if !self.is_running() {
+            if self.focus_area == AuthFocusArea::Target {
+                self.focus_area = AuthFocusArea::Username;
+                self.inputs.focus(1);
+            } else if self.focus_area == AuthFocusArea::Username {
+                self.focus_area = AuthFocusArea::Password;
+                self.inputs.focus(2);
+            } else if self.focus_area == AuthFocusArea::Password {
+                self.focus_area = AuthFocusArea::Results;
+                self.inputs.blur();
+            } else if self.focus_area == AuthFocusArea::Results {
+            }
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        self.inputs.move_left()
+        if !self.is_running() {
+            self.inputs.move_left()
+        } else {
+            false
+        }
     }
 
     fn handle_right(&mut self) -> bool {
-        self.inputs.move_right()
+        if !self.is_running() {
+            self.inputs.move_right()
+        } else {
+            false
+        }
     }
 
     fn is_at_left_edge(&self) -> bool {

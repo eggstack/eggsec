@@ -193,8 +193,9 @@ impl DashboardTab {
 
         self.total_scans = history.len();
 
-        let (success, failed) = history.iter().fold((0usize, 0usize), |(s, f), e| {
-            let lower = e.summary.to_lowercase();
+        let entry_lowers: Vec<_> = history.iter().map(|e| e.summary.to_lowercase()).collect();
+
+        let (success, failed) = entry_lowers.iter().fold((0usize, 0usize), |(s, f), lower| {
             let is_success = lower.contains("complete") || lower.contains("found");
             let is_failed = lower.contains("failed") || lower.contains("error");
             (s + is_success as usize, f + is_failed as usize)
@@ -218,14 +219,14 @@ impl DashboardTab {
         let mut critical_count = 0;
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-        for entry in history.iter() {
+        for (i, entry) in history.iter().enumerate() {
             targets.insert(entry.target.clone());
 
             if entry.timestamp.starts_with(&today) {
                 self.today_scans += 1;
             }
 
-            let summary_lower = entry.summary.to_lowercase();
+            let summary_lower = &entry_lowers[i];
             if summary_lower.contains("critical") || summary_lower.contains("critical findings") {
                 critical_count += 1;
             }
@@ -502,42 +503,58 @@ impl TabInput for DashboardTab {
     }
 
     fn handle_word_forward(&mut self) {
-        for _ in 0..5 {
-            self.view.scroll_right(1);
+        if !self.is_running() {
+            for _ in 0..5 {
+                self.view.scroll_right(1);
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        for _ in 0..5 {
-            self.view.scroll_left(1);
+        if !self.is_running() {
+            for _ in 0..5 {
+                self.view.scroll_left(1);
+            }
         }
     }
 
     fn handle_home(&mut self) {
-        self.view.scroll_to_top();
+        if !self.is_running() {
+            self.view.scroll_to_top();
+        }
     }
 
     fn handle_end(&mut self) {
-        self.view.scroll_to_bottom();
+        if !self.is_running() {
+            self.view.scroll_to_bottom();
+        }
     }
 
     fn handle_top(&mut self) {
-        self.view.scroll_to_top();
+        if !self.is_running() {
+            self.view.scroll_to_top();
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.view.scroll_to_bottom();
+        if !self.is_running() {
+            self.view.scroll_to_bottom();
+        }
     }
 
     fn handle_enter(&mut self) {}
     fn handle_escape(&mut self) {}
 
     fn handle_up(&mut self) {
-        self.view.scroll_up(1);
+        if !self.is_running() {
+            self.view.scroll_up(1);
+        }
     }
 
     fn handle_down(&mut self) {
-        self.view.scroll_down(1);
+        if !self.is_running() {
+            self.view.scroll_down(1);
+        }
     }
 
     fn handle_left(&mut self) -> bool {

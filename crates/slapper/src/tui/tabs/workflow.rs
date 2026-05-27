@@ -456,12 +456,16 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = WorkflowFocusArea::Inputs;
-        self.inputs.focus(0);
+        if !self.is_running() {
+            self.focus_area = WorkflowFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = WorkflowFocusArea::Results;
+        if !self.is_running() {
+            self.focus_area = WorkflowFocusArea::Results;
+        }
     }
 
     fn handle_enter(&mut self) {

@@ -353,6 +353,11 @@ impl TabInput for ComplianceTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
+
         match self.focus_area {
             ComplianceFocusArea::Inputs => {
                 self.inputs.blur();
@@ -363,9 +368,7 @@ impl TabInput for ComplianceTab {
             ComplianceFocusArea::Results => {}
         }
 
-        if self.is_running() {
-            self.stop();
-        } else if !self.target().is_empty() {
+        if !self.target().is_empty() {
             self.start();
         }
     }

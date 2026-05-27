@@ -192,17 +192,17 @@ impl TabState for StressTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        if self.inputs.fields.len() > 1 {
-            self.inputs.fields[1].value = "100".to_string();
-            self.inputs.fields[1].cursor_pos = 3;
+        if let Some(field) = self.inputs.fields.get_mut(1) {
+            field.value = "100".to_string();
+            field.cursor_pos = 3;
         }
-        if self.inputs.fields.len() > 2 {
-            self.inputs.fields[2].value = "30".to_string();
-            self.inputs.fields[2].cursor_pos = 2;
+        if let Some(field) = self.inputs.fields.get_mut(2) {
+            field.value = "30".to_string();
+            field.cursor_pos = 2;
         }
-        if self.inputs.fields.len() > 3 {
-            self.inputs.fields[3].value = "10".to_string();
-            self.inputs.fields[3].cursor_pos = 2;
+        if let Some(field) = self.inputs.fields.get_mut(3) {
+            field.value = "10".to_string();
+            field.cursor_pos = 2;
         }
         self.type_selector.select(0);
     }
@@ -351,40 +351,52 @@ impl TabInput for StressTab {
     }
 
     fn handle_word_forward(&mut self) {
-        if self.focus_area == StressFocusArea::Inputs {
-            self.inputs.move_word_forward();
+        if !self.is_running() {
+            if self.focus_area == StressFocusArea::Inputs {
+                self.inputs.move_word_forward();
+            }
         }
     }
 
     fn handle_word_backward(&mut self) {
-        if self.focus_area == StressFocusArea::Inputs {
-            self.inputs.move_word_backward();
+        if !self.is_running() {
+            if self.focus_area == StressFocusArea::Inputs {
+                self.inputs.move_word_backward();
+            }
         }
     }
 
     fn handle_home(&mut self) {
-        if self.focus_area == StressFocusArea::Inputs {
-            self.inputs.move_home();
-        } else if self.focus_area == StressFocusArea::Results {
-            self.results_view.scroll_to_top();
+        if !self.is_running() {
+            if self.focus_area == StressFocusArea::Inputs {
+                self.inputs.move_home();
+            } else if self.focus_area == StressFocusArea::Results {
+                self.results_view.scroll_to_top();
+            }
         }
     }
 
     fn handle_end(&mut self) {
-        if self.focus_area == StressFocusArea::Inputs {
-            self.inputs.move_end();
-        } else if self.focus_area == StressFocusArea::Results {
-            self.results_view.scroll_to_bottom();
+        if !self.is_running() {
+            if self.focus_area == StressFocusArea::Inputs {
+                self.inputs.move_end();
+            } else if self.focus_area == StressFocusArea::Results {
+                self.results_view.scroll_to_bottom();
+            }
         }
     }
 
     fn handle_top(&mut self) {
-        self.focus_area = StressFocusArea::Inputs;
-        self.inputs.focus(0);
+        if !self.is_running() {
+            self.focus_area = StressFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
     }
 
     fn handle_bottom(&mut self) {
-        self.focus_area = StressFocusArea::Results;
+        if !self.is_running() {
+            self.focus_area = StressFocusArea::Results;
+        }
     }
 
     fn handle_enter(&mut self) {
@@ -415,44 +427,56 @@ impl TabInput for StressTab {
     }
 
     fn handle_up(&mut self) {
-        match self.focus_area {
-            StressFocusArea::Inputs => {
-                self.inputs.focus_prev();
-            }
-            StressFocusArea::TypeSelector => {
-                self.type_selector.handle_up();
-            }
-            StressFocusArea::Results => {
-                self.results_view.scroll_up(1);
+        if !self.is_running() {
+            match self.focus_area {
+                StressFocusArea::Inputs => {
+                    self.inputs.focus_prev();
+                }
+                StressFocusArea::TypeSelector => {
+                    self.type_selector.handle_up();
+                }
+                StressFocusArea::Results => {
+                    self.results_view.scroll_up(1);
+                }
             }
         }
     }
 
     fn handle_down(&mut self) {
-        match self.focus_area {
-            StressFocusArea::Inputs => {
-                self.inputs.focus_next();
-            }
-            StressFocusArea::TypeSelector => {
-                self.type_selector.handle_down();
-            }
-            StressFocusArea::Results => {
-                self.results_view.scroll_down(1);
+        if !self.is_running() {
+            match self.focus_area {
+                StressFocusArea::Inputs => {
+                    self.inputs.focus_next();
+                }
+                StressFocusArea::TypeSelector => {
+                    self.type_selector.handle_down();
+                }
+                StressFocusArea::Results => {
+                    self.results_view.scroll_down(1);
+                }
             }
         }
     }
 
     fn handle_left(&mut self) -> bool {
-        match self.focus_area {
-            StressFocusArea::Inputs => self.inputs.move_left(),
-            _ => false,
+        if !self.is_running() {
+            match self.focus_area {
+                StressFocusArea::Inputs => self.inputs.move_left(),
+                _ => false,
+            }
+        } else {
+            false
         }
     }
 
     fn handle_right(&mut self) -> bool {
-        match self.focus_area {
-            StressFocusArea::Inputs => self.inputs.move_right(),
-            _ => false,
+        if !self.is_running() {
+            match self.focus_area {
+                StressFocusArea::Inputs => self.inputs.move_right(),
+                _ => false,
+            }
+        } else {
+            false
         }
     }
 
