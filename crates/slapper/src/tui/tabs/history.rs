@@ -315,6 +315,7 @@ impl TabState for HistoryTab {
     fn reset(&mut self) {
         self.clear_all();
         self.error = None;
+        self.focus_area = HistoryFocusArea::List;
     }
 
     fn set_error(&mut self, error: TabError) {

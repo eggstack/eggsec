@@ -480,10 +480,16 @@ impl SettingsTab {
         if let Some(field) = self.proxy_inputs.fields.get_mut(1) {
             field.value.clear();
         }
-        if let Some(field) = self.scope_inputs.fields.get_mut(0) {
+        for field in self.scope_inputs.fields.iter_mut() {
             field.value.clear();
         }
-        if let Some(field) = self.scope_inputs.fields.get_mut(1) {
+        for field in self.report_inputs.fields.iter_mut() {
+            field.value.clear();
+        }
+        for field in self.schedule_inputs.fields.iter_mut() {
+            field.value.clear();
+        }
+        for field in self.notify_inputs.fields.iter_mut() {
             field.value.clear();
         }
         self.follow_redirects.checked = true;

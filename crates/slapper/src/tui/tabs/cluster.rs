@@ -460,8 +460,7 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_enter(&mut self) {
-        if self.is_running() {
-            self.stop();
+        if !self.is_running() {
             return;
         }
         match self.focus_area {

@@ -255,6 +255,7 @@ impl TabState for StorageTab {
             field.clear();
         }
         self.mode_selector.select(0);
+        self.current_mode = StorageMode::Connect;
         self.focus_area = StorageFocusArea::Config;
     }
 
@@ -524,11 +525,17 @@ impl TabInput for StorageTab {
     }
 
     fn handle_top(&mut self) {
+        if !self.is_running() {
+            return;
+        }
         self.focus_area = StorageFocusArea::Config;
         self.config_inputs.focus(0);
     }
 
     fn handle_bottom(&mut self) {
+        if !self.is_running() {
+            return;
+        }
         self.focus_area = StorageFocusArea::Results;
     }
 

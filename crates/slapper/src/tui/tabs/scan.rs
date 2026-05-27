@@ -275,6 +275,7 @@ impl TabState for ScanTab {
         }
         self.profile_selector.select(0);
         self.output_selector.select(0);
+        self.focus_area = ScanFocusArea::Inputs;
         self.current_stage_output.clear();
     }
 
@@ -534,7 +535,9 @@ impl TabInput for ScanTab {
             return;
         }
         if self.focus_area == ScanFocusArea::Inputs && self.inputs.is_focused() {
-            self.inputs.blur();
+            if !self.is_running() {
+                self.inputs.blur();
+            }
             return;
         }
 

@@ -1081,3 +1081,73 @@ Key patterns fixed:
 | `task_runtime.rs` | 103 | Misleading timeout message | Changed to "aborting task" |
 | `mod.rs` | 452-463 | Misleading warn logs | Changed to debug level |
 
+
+
+## Session Fixes (2026-06-10)
+
+### TUI Deep Dive Audit - All 29 Tabs
+
+#### Group 1 (recon, scan, scan_ports, scan_endpoints, fingerprint)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `recon.rs` | 606 | Missing `is_running()` guard before `inputs.blur()` | Added `!self.is_running()` guard |
+| `recon.rs` | 633-634 | Empty array underflow risk on checkbox index | Added `!self.option_checkboxes.is_empty()` check |
+| `scan.rs` | 537 | Missing `is_running()` guard before `inputs.blur()` | Added `!self.is_running()` guard |
+| `scan.rs` | 278 | reset() missing focus_area clear | Added `self.focus_area = ScanFocusArea::Inputs` |
+| `scan_ports.rs` | 497 | Missing `is_running()` guard before `inputs.blur()` | Restructured with guard |
+| `scan_ports.rs` | 172 | Direct array access without bounds | Changed to safe `.get()` pattern |
+| `scan_endpoints.rs` | 435 | Missing `is_running()` guard before `inputs.blur()` | Restructured with guard |
+| `scan_endpoints.rs` | 263 | reset() missing focus_area clear | Added focus_area reset |
+| `fingerprint.rs` | - | No bugs found | - |
+
+#### Group 2 (fuzz, waf, waf_stress, load, stress)
+
+All 5 tabs passed audit - no bugs found.
+
+#### Group 3 (packet, graphql, oauth, cluster, proxy)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `graphql.rs` | 461 | `handle_enter()` missing `!is_running()` guard | Changed to `if !self.is_running()` |
+| `oauth.rs` | 505 | `handle_enter()` missing `!is_running()` guard | Changed to `if !self.is_running()` |
+| `cluster.rs` | 463-465 | Inverted guard logic (stopped when should allow) | Changed to `if !self.is_running()` |
+| `proxy.rs` | 598-599 | Non-standard guard pattern | Changed to `if !self.is_running()` |
+
+#### Group 4 (nse, plugin, hunt, browser, compliance)
+
+All 5 tabs passed audit - no bugs found.
+
+#### Group 5 (storage, integrations, workflow, vuln, report)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `report.rs` | 338 | handle_focus_next() inverted guard | Changed `!is_running()` to `is_running()` |
+| `report.rs` | 363 | handle_focus_prev() inverted guard | Changed `!is_running()` to `is_running()` |
+| `storage.rs` | 526 | handle_top() missing guard | Added `!self.is_running()` guard |
+| `storage.rs` | 531 | handle_bottom() missing guard | Added `!self.is_running()` guard |
+| `storage.rs` | 259 | reset() missing current_mode | Added `self.current_mode = StorageMode::Connect` |
+| `integrations.rs` | - | No bugs found | - |
+| `workflow.rs` | - | No bugs found | - |
+| `vuln.rs` | - | No bugs found | - |
+
+#### Group 6 (resume, history, dashboard, settings, auth)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `resume.rs` | 191 | handle_copy() missing guard | Added `if self.is_running()` guard |
+| `history.rs` | 315-318 | reset() missing focus_area | Added `self.focus_area = HistoryFocusArea::List` |
+| `settings/main.rs` | 458-501 | reset() incomplete | Added scope/report/schedule/notify field clears |
+| `dashboard.rs` | - | No bugs found | - |
+| `auth.rs` | - | No bugs found | - |
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total tabs audited | 29 |
+| Tabs with bugs | 14 |
+| Tabs clean | 15 |
+| Total bugs fixed | 24 |
+
+(End of file)

@@ -335,7 +335,7 @@ impl TabRender for ReportTab {
 
 impl TabInput for ReportTab {
     fn handle_focus_next(&mut self) {
-        if !self.is_running() {
+        if self.is_running() {
             return;
         }
         self.focus_area = match self.focus_area {
@@ -360,7 +360,7 @@ impl TabInput for ReportTab {
     }
 
     fn handle_focus_prev(&mut self) {
-        if !self.is_running() {
+        if self.is_running() {
             return;
         }
         self.focus_area = match self.focus_area {

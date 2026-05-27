@@ -603,7 +603,9 @@ impl TabInput for ReconTab {
 
     fn handle_enter(&mut self) {
         if self.focus_area == ReconFocusArea::Inputs && self.inputs.is_focused() {
-            self.inputs.blur();
+            if !self.is_running() {
+                self.inputs.blur();
+            }
             return;
         }
 
@@ -629,7 +631,7 @@ impl TabInput for ReconTab {
 
     fn handle_up(&mut self) {
         if !self.is_running() {
-            if self.focus_area == ReconFocusArea::Options {
+            if self.focus_area == ReconFocusArea::Options && !self.option_checkboxes.is_empty() {
                 if self.focused_checkbox_index == 0 {
                     self.focused_checkbox_index = self.option_checkboxes.len() - 1;
                 } else {
