@@ -632,7 +632,7 @@ impl LoginExecutor {
                     // Recursively execute nested steps
                     // (simplified - full implementation would need recursive execution)
                     for step in steps {
-                        // Execute each step...
+                        // Placeholder for future recursive step execution
                         let _ = step;
                     }
                 }
@@ -652,7 +652,7 @@ impl LoginExecutor {
         })
     }
 
-    fn substitute_variables(&self, template: &str, variables: &HashMap<String, String>) -> String {
+    fn substitute_variables(&self, template: &str, variables: &FxHashMap<String, String>) -> String {
         let mut result = template.to_string();
         for (key, value) in variables {
             result = result.replace(&format!("${{{}}}", key), value);
@@ -672,7 +672,7 @@ impl LoginExecutor {
     fn evaluate_condition(
         &self,
         condition: &Condition,
-        variables: &HashMap<String, String>,
+        variables: &FxHashMap<String, String>,
     ) -> bool {
         match condition {
             Condition::Contains(text) => variables
@@ -695,7 +695,7 @@ impl LoginExecutor {
     fn check_login_success(
         &self,
         indicators: &[String],
-        variables: &HashMap<String, String>,
+        variables: &FxHashMap<String, String>,
     ) -> bool {
         if let Some(body) = variables.get("_response_body") {
             for indicator in indicators {
@@ -1004,7 +1004,7 @@ impl SessionVerifier {
     pub async fn verify(
         &self,
         verification_url: &str,
-        cookies: &HashMap<String, String>,
+        cookies: &FxHashMap<String, String>,
     ) -> crate::error::Result<SessionVerification> {
         // Build cookie header
         let cookie_str: String = cookies

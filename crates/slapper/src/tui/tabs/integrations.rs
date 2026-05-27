@@ -331,10 +331,20 @@ impl TabRender for IntegrationsTab {
         let fields: &[InputField] = match self.current_mode {
             IntegrationsMode::Configure => &self.config_inputs.fields,
             IntegrationsMode::CreateIssue => {
-                self.issue_inputs.fields.get(..4).unwrap_or(&[])
+                if let Some(fields) = self.issue_inputs.fields.get(..4) {
+                    fields
+                } else {
+                    tracing::warn!("CreateIssue mode: expected at least 4 fields, got {}", self.issue_inputs.fields.len());
+                    &self.issue_inputs.fields
+                }
             }
             IntegrationsMode::SearchIssues => {
-                self.issue_inputs.fields.get(4..).unwrap_or(&[])
+                if let Some(fields) = self.issue_inputs.fields.get(4..) {
+                    fields
+                } else {
+                    tracing::warn!("SearchIssues mode: expected at least 4 fields, got {}", self.issue_inputs.fields.len());
+                    &self.issue_inputs.fields[4..]
+                }
             }
         };
 

@@ -64,7 +64,7 @@ impl super::App {
             Some(r) => r,
             None => return,
         };
-        let unhandled = match self.handle_protocol_result(result) {
+        let unhandled = match self.handle_feature_result(result) {
             Some(r) => self.handle_feature_result(r).is_none(),
             None => true,
         };

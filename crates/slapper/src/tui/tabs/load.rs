@@ -619,6 +619,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == LoadFocusArea::Selector {
             if self.test_type_selector.is_open() {
                 self.test_type_selector.move_prev();
@@ -633,6 +636,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == LoadFocusArea::Selector {
             if self.test_type_selector.is_open() {
                 self.test_type_selector.move_next();
@@ -647,6 +653,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.test_type_selector.is_focused() {
             if self.test_type_selector.is_open() {
                 self.test_type_selector.move_prev();
@@ -660,6 +669,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.test_type_selector.is_focused() {
             if self.test_type_selector.is_open() {
                 self.test_type_selector.move_next();

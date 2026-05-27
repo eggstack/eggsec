@@ -1319,4 +1319,55 @@ Key patterns fixed:
 
 | File | Line | Issue | Fix |
 |------|------|-------|-----|
-| `state_update.rs` | 67 | `handle_security_result` called twice in chain | Changed second to `handle_protocol_result` |
+| `state_update.rs` | 67 | `handle_security_result` called twice in chain | Changed second to `handle_feature_result` |
+
+
+## Session Fixes (2026-06-08 - Additional Audit)
+
+### App Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `state_update.rs` | 67 | Duplicate `handle_protocol_result` call | Fixed to call `handle_feature_result` |
+| `task_runtime.rs` | 102-104 | Timeout case aborts inner but not outer handle | Only inner needs abort; outer completes with error |
+
+### Workers Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `fuzzer.rs` | 200 | Silent timeout with `let _ =` | Proper match with warn logging |
+
+### Scanner Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `ports/mod.rs` | 589-591 | Silent `catch_unwind` without comment | Added comment explaining why + warn logging |
+
+### Tool Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `session.rs` | 655,675,698,1007 | HashMap in function signatures | Changed to `FxHashMap` |
+| `session.rs` | 636 | Dead code `let _ = step` | Added placeholder comment |
+
+### TUI Tab Fixes (Deep Dive Audit 2026-06-08)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `workflow.rs` | 313-318 | Hardcoded field indices without bounds | Added `idx < fields.len()` guards |
+| `settings/main.rs` | 458-499 | `reset()` incomplete | Added focus_area, current_section, detail_focus_index resets |
+| `load.rs` | 649-672 | handle_left/right missing guard | Added `is_running()` guard |
+| `hunt.rs` | 507-535 | handle_left/right missing guard | Added `is_running()` guard |
+| `browser.rs` | 470-498 | handle_left/right missing guard | Added `is_running()` guard |
+| `scan_ports.rs` | 507-512 | handle_left/right missing guard | Added `is_running()` guard |
+| `scan_ports.rs` | 364-370 | handle_focus_next/prev missing guard | Added `is_running()` guard |
+| `scan_endpoints.rs` | 471-476 | handle_left/right missing guard | Added `is_running()` guard |
+| `fingerprint.rs` | 411-416 | handle_left/right missing guard | Added `is_running()` guard |
+| `recon.rs` | 680 | Underflow risk `len() - 1` | Added `is_empty()` check |
+| `scan.rs` | 469 | handle_copy missing guard | Added `is_running()` guard |
+| `waf.rs` | 530 | ModeRadio case missing guard | Added `!self.is_running()` |
+| `report.rs` | 337-379 | handle_focus_next/prev missing guard | Added `is_running()` guard |
+| `report.rs` | 518-531 | handle_escape has unusual guard | Removed inappropriate guard |
+| `integrations.rs` | 334 | Suspicious `&[]` fallback | Added warn logging on fallback |
+| `auth.rs` | 50-56 | reset() missing focus_area | Added `focus_area` reset |
+| `history.rs` | 167-187 | to_lowercase() in loops | Pre-compute before filter |

@@ -362,10 +362,16 @@ impl TabRender for ScanPortsTab {
 
 impl TabInput for ScanPortsTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.focus_next();
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.focus_prev();
     }
 
@@ -505,10 +511,16 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         self.inputs.move_left()
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         self.inputs.move_right()
     }
 

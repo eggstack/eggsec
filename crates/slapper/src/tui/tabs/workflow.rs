@@ -326,22 +326,24 @@ impl TabRender for WorkflowTab {
 
             for (i, &idx) in fields.iter().enumerate() {
                 if idx == 5 {
-                    if let Some(chunk) = field_chunks.get(i) {
-                        let mut sev = self.severity_selector.clone();
-                        sev.focused = self.focus_area == WorkflowFocusArea::Inputs;
-                        sev.render(f, *chunk);
-                    }
-                } else if idx == 6 {
-                    if let Some(chunk) = field_chunks.get(i) {
-                        let mut st = self.status_selector.clone();
-                        st.focused = self.focus_area == WorkflowFocusArea::Inputs;
-                        st.render(f, *chunk);
-                    }
-                } else {
                     if idx < self.inputs.fields.len() {
                         if let Some(chunk) = field_chunks.get(i) {
-                            self.inputs.fields[idx].render(f, *chunk, insert_mode);
+                            let mut sev = self.severity_selector.clone();
+                            sev.focused = self.focus_area == WorkflowFocusArea::Inputs;
+                            sev.render(f, *chunk);
                         }
+                    }
+                } else if idx == 6 {
+                    if idx < self.inputs.fields.len() {
+                        if let Some(chunk) = field_chunks.get(i) {
+                            let mut st = self.status_selector.clone();
+                            st.focused = self.focus_area == WorkflowFocusArea::Inputs;
+                            st.render(f, *chunk);
+                        }
+                    }
+                } else if idx < self.inputs.fields.len() {
+                    if let Some(chunk) = field_chunks.get(i) {
+                        self.inputs.fields[idx].render(f, *chunk, insert_mode);
                     }
                 }
             }

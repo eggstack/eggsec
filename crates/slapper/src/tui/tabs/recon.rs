@@ -677,7 +677,7 @@ impl TabInput for ReconTab {
             if self.focus_area == ReconFocusArea::Inputs {
                 self.inputs.move_right()
             } else if self.focus_area == ReconFocusArea::Options {
-                if self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
+                if self.option_checkboxes.is_empty() || self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
                     false
                 } else {
                     self.focused_checkbox_index += 1;

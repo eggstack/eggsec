@@ -335,6 +335,9 @@ impl TabRender for ReportTab {
 
 impl TabInput for ReportTab {
     fn handle_focus_next(&mut self) {
+        if !self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -357,6 +360,9 @@ impl TabInput for ReportTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if !self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 self.view_selector.blur();
@@ -516,19 +522,17 @@ impl TabInput for ReportTab {
     }
 
     fn handle_escape(&mut self) {
-        if !self.is_running() {
-            if self.view_selector.is_open() {
-                self.view_selector.cancel();
-                return;
-            }
-            self.view_selector.blur();
-            let current_inputs = match self.current_view {
-                ReportView::Convert => &mut self.convert_inputs,
-                ReportView::Trend => &mut self.trend_inputs,
-                ReportView::Schedule => &mut self.schedule_inputs,
-            };
-            current_inputs.blur();
+        if self.view_selector.is_open() {
+            self.view_selector.cancel();
+            return;
         }
+        self.view_selector.blur();
+        let current_inputs = match self.current_view {
+            ReportView::Convert => &mut self.convert_inputs,
+            ReportView::Trend => &mut self.trend_inputs,
+            ReportView::Schedule => &mut self.schedule_inputs,
+        };
+        current_inputs.blur();
     }
 
     fn handle_up(&mut self) {

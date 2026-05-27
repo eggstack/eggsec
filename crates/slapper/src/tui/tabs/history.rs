@@ -169,9 +169,15 @@ impl HistoryTab {
             return self.entries.iter().collect();
         }
         let scan_type_lower = scan_type.to_lowercase();
+        let entry_lowers: Vec<_> = self.entries
+            .iter()
+            .map(|e| e.scan_type.to_lowercase())
+            .collect();
         self.entries
             .iter()
-            .filter(|e| e.scan_type.to_lowercase().contains(&scan_type_lower))
+            .zip(entry_lowers.iter())
+            .filter(|(_, scan_type_lower_e)| scan_type_lower_e.contains(&scan_type_lower))
+            .map(|(e, _)| e)
             .collect()
     }
 
@@ -180,9 +186,15 @@ impl HistoryTab {
             return self.entries.iter().collect();
         }
         let target_lower = target.to_lowercase();
+        let entry_lowers: Vec<_> = self.entries
+            .iter()
+            .map(|e| e.target.to_lowercase())
+            .collect();
         self.entries
             .iter()
-            .filter(|e| e.target.to_lowercase().contains(&target_lower))
+            .zip(entry_lowers.iter())
+            .filter(|(_, target_lower_e)| target_lower_e.contains(&target_lower))
+            .map(|(e, _)| e)
             .collect()
     }
 

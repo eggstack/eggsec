@@ -197,7 +197,15 @@ pub async fn run_waf_stress(
         common: Default::default(),
     };
 
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(60), fuzzer_run_waf_stress(args)).await;
+    match tokio::time::timeout(std::time::Duration::from_secs(60), fuzzer_run_waf_stress(args)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            tracing::warn!("WAF stress failed: {}", e);
+        }
+        Err(_) => {
+            tracing::warn!("WAF stress timed out after 60s");
+        }
+    }
     if let Err(e) = progress_tx.send((1, 1)).await {
         tracing::warn!("Failed to send progress: {}", e);
     }

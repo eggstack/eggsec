@@ -495,6 +495,9 @@ impl SettingsTab {
         self.severity_selector.select(0);
         self.dark_mode.checked = false;
         self.accent_color.select(0);
+        self.focus_area = SettingsFocusArea::SectionList;
+        self.current_section = SettingsSection::Http;
+        self.detail_focus_index = 0;
         self.status_message = "Settings reset to defaults".to_string();
     }
 

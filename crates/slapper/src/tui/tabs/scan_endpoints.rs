@@ -469,10 +469,16 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         self.inputs.move_left()
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         self.inputs.move_right()
     }
 

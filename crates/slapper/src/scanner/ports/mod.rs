@@ -586,9 +586,13 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
         handles.push(handle);
     }
 
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
+    // Catch panics from workers to prevent thread pool corruption
+    // Workers may panic on malformed packets or unexpected network conditions
+    if let Err(panic_info) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| async {
         join_all(handles).await;
-    }));
+    })) {
+        tracing::warn!("Worker pool panicked: {:?}", panic_info);
+    }
     if let Some(ref pb) = progress {
         pb.finish_and_clear();
     }

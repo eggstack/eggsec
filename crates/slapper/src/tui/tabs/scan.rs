@@ -467,10 +467,14 @@ impl TabInput for ScanTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
-        if self.focus_area == ScanFocusArea::Inputs {
-            self.inputs.get_focused_value()
+        if !self.is_running() {
+            if self.focus_area == ScanFocusArea::Inputs {
+                self.inputs.get_focused_value()
+            } else {
+                Some(self.current_stage_output.get_content())
+            }
         } else {
-            Some(self.current_stage_output.get_content())
+            None
         }
     }
 

@@ -50,6 +50,7 @@ impl AuthTab {
     pub fn reset(&mut self) {
         self.state = AppState::Idle;
         self.error = None;
+        self.focus_area = AuthFocusArea::Target;
         for field in &mut self.inputs.fields {
             field.clear();
         }
