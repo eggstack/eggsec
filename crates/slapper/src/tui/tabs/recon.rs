@@ -344,6 +344,9 @@ impl TabState for ReconTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        for cb in &mut self.option_checkboxes {
+            cb.checked = false;
+        }
     }
 
     fn set_error(&mut self, error: TabError) {

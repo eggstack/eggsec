@@ -216,6 +216,9 @@ impl TabRender for NseTab {
 
 impl TabInput for NseTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             NseFocusArea::Inputs => {
                 self.inputs.blur();
@@ -233,6 +236,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             NseFocusArea::Inputs => {
                 self.inputs.blur();
@@ -268,6 +274,9 @@ impl TabInput for NseTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if self.focus_area == NseFocusArea::Inputs {
             self.inputs.get_focused_value()
         } else if self.focus_area == NseFocusArea::Results {

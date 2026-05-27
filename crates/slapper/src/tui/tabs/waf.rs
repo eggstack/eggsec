@@ -534,7 +534,7 @@ impl TabInput for WafTab {
             return;
         }
 
-        if self.focus_area == WafFocusArea::Techniques {
+        if self.focus_area == WafFocusArea::Techniques && !self.is_running() {
             if !self.technique_checkboxes.is_empty() {
                 if let Some(cb) = self.technique_checkboxes.get_mut(self.focused_checkbox_index) {
                     cb.toggle();

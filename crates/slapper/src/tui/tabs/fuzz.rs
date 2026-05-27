@@ -663,6 +663,9 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if self.focus_area == FuzzFocusArea::Results {
             Some(self.results_view.get_content())
         } else if self.focus_area == FuzzFocusArea::Inputs {

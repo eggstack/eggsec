@@ -261,6 +261,9 @@ impl TabRender for ComplianceTab {
 
 impl TabInput for ComplianceTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ComplianceFocusArea::Inputs => {
                 self.inputs.blur();
@@ -279,6 +282,9 @@ impl TabInput for ComplianceTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ComplianceFocusArea::Inputs => ComplianceFocusArea::Results,
             ComplianceFocusArea::Framework => {

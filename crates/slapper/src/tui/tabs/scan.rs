@@ -423,6 +423,9 @@ pub enum ScanFocusArea {
 
 impl TabInput for ScanTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ScanFocusArea::Inputs => {
                 self.inputs.blur();
@@ -438,6 +441,9 @@ impl TabInput for ScanTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             ScanFocusArea::Inputs => ScanFocusArea::Results,
             ScanFocusArea::ProfileSelector => {

@@ -259,6 +259,9 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if self.focus_area == WafStressFocusArea::Inputs {
             self.inputs.get_focused_value()
         } else if self.focus_area == WafStressFocusArea::Results {

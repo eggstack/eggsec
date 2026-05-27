@@ -197,6 +197,7 @@ impl TabState for BrowserTab {
         self.state = AppState::Idle;
         self.report = None;
         self.progress.current = 0;
+        self.progress.total = 0;
         self.results_view.clear();
         self.error = None;
         for field in &mut self.inputs.fields {
@@ -298,6 +299,9 @@ impl TabRender for BrowserTab {
 
 impl TabInput for BrowserTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             BrowserFocusArea::Inputs => {
                 self.inputs.blur();
@@ -313,6 +317,9 @@ impl TabInput for BrowserTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             BrowserFocusArea::Inputs => BrowserFocusArea::Results,
             BrowserFocusArea::Options => {
@@ -345,6 +352,9 @@ impl TabInput for BrowserTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if self.focus_area == BrowserFocusArea::Inputs {
             self.inputs.get_focused_value()
         } else if self.focus_area == BrowserFocusArea::Results {
