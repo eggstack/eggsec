@@ -20,7 +20,11 @@ pub async fn run_hunt_task(
     if let Err(e) = progress_tx.send((0, 5)).await {
         tracing::warn!("Failed to send hunt progress: {}", e);
     }
-    let report = run_hunt(&target, config).await?;
+    let report = match tokio::time::timeout(std::time::Duration::from_secs(60), run_hunt(&target, config)).await {
+        Ok(Ok(report)) => report,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("Hunt timed out after 60s")),
+    }?;
     if let Err(e) = progress_tx.send((5, 5)).await {
         tracing::warn!("Failed to send hunt progress: {}", e);
     }
@@ -42,7 +46,11 @@ pub async fn run_browser_task(
     if let Err(e) = progress_tx.send((0, 3)).await {
         tracing::warn!("Failed to send browser progress: {}", e);
     }
-    let report = run_browser_scan(&target, config).await?;
+    let report = match tokio::time::timeout(std::time::Duration::from_secs(60), run_browser_scan(&target, config)).await {
+        Ok(Ok(report)) => report,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("Browser scan timed out after 60s")),
+    }?;
     if let Err(e) = progress_tx.send((3, 3)).await {
         tracing::warn!("Failed to send browser progress: {}", e);
     }
@@ -194,7 +202,11 @@ pub async fn run_compliance_task(
         tracing::warn!("Failed to send compliance progress: {}", e);
     }
 
-    let report = generate_compliance_report(&target, framework, &findings).await?;
+    let report = match tokio::time::timeout(std::time::Duration::from_secs(60), generate_compliance_report(&target, framework, &findings)).await {
+        Ok(Ok(report)) => report,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("Compliance report timed out after 60s")),
+    }?;
     if let Err(e) = progress_tx.send((3, 3)).await {
         tracing::warn!("Failed to send compliance progress: {}", e);
     }

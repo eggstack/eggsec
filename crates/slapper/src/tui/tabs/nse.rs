@@ -324,23 +324,18 @@ impl TabInput for NseTab {
     fn handle_enter(&mut self) {
         if self.is_running() {
             self.stop();
-            return;
         }
         if self.focus_area == NseFocusArea::Inputs {
             if self.inputs.is_focused() {
                 self.inputs.blur();
             }
-            return;
-        }
-
-        if self.focus_area == NseFocusArea::ScriptSelector {
+        } else if self.focus_area == NseFocusArea::ScriptSelector {
             if self.script_selector.focused {
                 self.script_selector.handle_enter();
             }
-            return;
+        } else {
+            self.start();
         }
-
-        self.start();
     }
 
     fn handle_escape(&mut self) {

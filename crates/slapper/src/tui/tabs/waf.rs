@@ -314,6 +314,7 @@ impl TabState for WafTab {
         if let Some(cb) = self.technique_checkboxes.get_mut(2) {
             cb.checked = true;
         }
+        self.mode_radio.select(0);
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -570,32 +571,38 @@ impl TabInput for WafTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == WafFocusArea::Inputs {
             self.inputs.move_left()
         } else if self.focus_area == WafFocusArea::Techniques {
-            if self.focused_checkbox_index == 0 {
+            if self.technique_checkboxes.is_empty() || self.focused_checkbox_index == 0 {
                 false
             } else {
                 self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
                 true
             }
         } else {
-            true
+            false
         }
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == WafFocusArea::Inputs {
             self.inputs.move_right()
         } else if self.focus_area == WafFocusArea::Techniques {
-            if self.focused_checkbox_index >= self.technique_checkboxes.len() - 1 {
+            if self.focused_checkbox_index >= self.technique_checkboxes.len().saturating_sub(1) {
                 false
             } else {
                 self.focused_checkbox_index += 1;
                 true
             }
         } else {
-            true
+            false
         }
     }
 

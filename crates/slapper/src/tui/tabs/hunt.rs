@@ -237,6 +237,9 @@ impl TabState for HuntTab {
         }
         self.focus_area = HuntFocusArea::Inputs;
         self.focused_checkbox_index = 0;
+        for cb in &mut self.option_checkboxes {
+            cb.checked = true;
+        }
     }
 
     fn set_error(&mut self, error: TabError) {

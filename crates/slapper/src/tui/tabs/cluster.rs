@@ -209,6 +209,15 @@ impl TabState for ClusterTab {
         self.view_selector.select(0);
         self.current_view = ClusterView::Worker;
         self.focus_area = ClusterFocusArea::ViewSelector;
+        for field in &mut self.worker_inputs.fields {
+            field.clear();
+        }
+        for field in &mut self.coordinator_inputs.fields {
+            field.clear();
+        }
+        for field in &mut self.status_inputs.fields {
+            field.clear();
+        }
     }
 
     fn set_error(&mut self, error: TabError) {

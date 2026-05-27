@@ -166,10 +166,10 @@ impl AiCache {
                         let new_entries = cache.entries;
                         let runtime = tokio::runtime::Handle::current();
                         runtime.block_on(async {
-                            let old = old_entries.read().await;
                             let mut new = new_entries.write().await;
+                            let old = old_entries.read().await;
                             for (k, v) in old.iter() {
-                                new.insert(k.clone(), v.clone());
+                                new.entry(k.clone()).or_insert_with(|| v.clone());
                             }
                         });
                         self.entries = new_entries;
@@ -321,18 +321,30 @@ pub struct CacheKeyBuilder;
 
 impl CacheKeyBuilder {
     pub fn for_payload_suggestion(vuln_type: &str, context: &str) -> String {
-        format!("payload{}\x00{}\x00{}", vuln_type, context)
+        format!(
+            "payload{}\x00{}\x00{}",
+            vuln_type.replace('\x00', ""),
+            context.replace('\x00', "")
+        )
     }
 
     pub fn for_waf_bypass(waf: &str, blocked_payload: &str) -> String {
-        format!("waf_bypass{}\x00{}\x00{}", waf, blocked_payload)
+        format!(
+            "waf_bypass{}\x00{}\x00{}",
+            waf.replace('\x00', ""),
+            blocked_payload.replace('\x00', "")
+        )
     }
 
     pub fn for_finding_analysis(findings_hash: &str) -> String {
-        format!("analysis{}\x00{}", findings_hash)
+        format!("analysis{}\x00{}", findings_hash.replace('\x00', ""))
     }
 
     pub fn for_recon_context(target: &str, scan_type: &str) -> String {
-        format!("recon{}\x00{}\x00{}", target, scan_type)
+        format!(
+            "recon{}\x00{}\x00{}",
+            target.replace('\x00', ""),
+            scan_type.replace('\x00', "")
+        )
     }
 }

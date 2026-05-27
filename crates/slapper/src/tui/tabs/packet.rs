@@ -724,18 +724,27 @@ impl TabInput for PacketTab {
     }
 
     fn handle_word_forward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.inputs.is_focused() {
             self.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.inputs.is_focused() {
             self.inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.inputs.is_focused() {
             self.inputs.move_home();
         } else if !self.results_view.is_empty() {
@@ -744,6 +753,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.inputs.is_focused() {
             self.inputs.move_end();
         } else if !self.results_view.is_empty() {
@@ -752,10 +764,16 @@ impl TabInput for PacketTab {
     }
 
     fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.view_selector.focus();
     }
 
     fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.view_selector.blur();
         self.inputs.blur();
     }

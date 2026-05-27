@@ -207,6 +207,10 @@ impl TabState for OAuthTab {
         }
         self.focus_area = OAuthFocusArea::Inputs;
         self.checkbox_focus_index = 0;
+        self.redirect_test_checkbox.checked = true;
+        self.scope_test_checkbox.checked = true;
+        self.state_test_checkbox.checked = true;
+        self.grant_test_checkbox.checked = true;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -437,18 +441,27 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_word_forward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == OAuthFocusArea::Inputs {
             self.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == OAuthFocusArea::Inputs {
             self.inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == OAuthFocusArea::Inputs {
             self.inputs.move_home();
         } else if self.focus_area == OAuthFocusArea::Results {
@@ -457,6 +470,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == OAuthFocusArea::Inputs {
             self.inputs.move_end();
         } else if self.focus_area == OAuthFocusArea::Results {
@@ -465,11 +481,17 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = OAuthFocusArea::Inputs;
         self.inputs.focus(0);
     }
 
     fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = OAuthFocusArea::Results;
     }
 

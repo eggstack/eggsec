@@ -343,11 +343,17 @@ impl TabInput for ComplianceTab {
     }
 
     fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = ComplianceFocusArea::Inputs;
         self.inputs.focus(0);
     }
 
     fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = ComplianceFocusArea::Results;
         self.inputs.blur();
     }

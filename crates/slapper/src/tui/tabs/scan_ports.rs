@@ -294,6 +294,7 @@ impl TabState for ScanPortsTab {
             field.cursor_pos = 1;
         }
         self.focus_area = ScanPortsFocusArea::Inputs;
+        self.udp_checkbox.checked = false;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -420,10 +421,14 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
-        if self.focus_area == ScanPortsFocusArea::Inputs {
-            self.inputs.get_focused_value()
-        } else if self.focus_area == ScanPortsFocusArea::Results {
-            Some(self.results_view.get_content())
+        if !self.is_running() {
+            if self.focus_area == ScanPortsFocusArea::Inputs {
+                self.inputs.get_focused_value()
+            } else if self.focus_area == ScanPortsFocusArea::Results {
+                Some(self.results_view.get_content())
+            } else {
+                None
+            }
         } else {
             None
         }

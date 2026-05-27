@@ -852,3 +852,91 @@ See `architecture/tui.md` for complete bug fix history.
 | `popup.rs` | 39 | Direct `chunks[2]` access | Changed to `.get()` pattern |
 
 (End file - total 872 lines)
+
+## Bug Fixes (2026-06-06 Session)
+
+### TUI Tab Fixes (Deep Dive Audit)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `fingerprint.rs` | 373 | `handle_enter()` blur before stop | Reordered to stop → blur → start |
+| `scan_ports.rs` | 422 | `handle_copy()` missing `is_running()` guard | Added guard |
+| `scan_ports.rs` | 296 | `reset()` doesn't reset `udp_checkbox` | Added `udp_checkbox.checked = false` |
+| `scan_endpoints.rs` | 359 | `handle_copy()` missing `is_running()` guard | Added guard |
+| `scan_endpoints.rs` | 263 | `reset()` doesn't reset `include_404_checkbox` | Added `checkbox.checked = true` |
+| `fuzz.rs` | 824,845 | `handle_left/right` missing `is_running()` guard | Added early return |
+| `waf.rs` | 572,587 | `handle_left/right` missing guard + `is_empty()` + wrong fallback | Fixed all issues |
+| `waf.rs` | 296 | `reset()` doesn't reset `mode_radio` | Added `mode_radio.select(0)` |
+| `waf_stress.rs` | 358,367 | `handle_left/right` missing guard | Added early return |
+| `load.rs` | 527-562 | 6 navigation handlers missing `is_running()` guard | Added guards |
+| `load.rs` | 367 | Direct array access in reset() | Changed to `.get_mut()` pattern |
+| `stress.rs` | 207 | `reset()` missing `focus_area` reset | Added reset |
+| `packet.rs` | 726-761 | 6 navigation handlers missing guard | Added `is_running()` guards |
+| `graphql.rs` | 391-427 | 6 navigation handlers missing guard | Added `is_running()` guards |
+| `graphql.rs` | 165 | `reset()` doesn't clear input fields | Added field clearing loop |
+| `oauth.rs` | 439-474 | 6 navigation handlers missing guard | Added `is_running()` guards |
+| `oauth.rs` | 200 | `reset()` doesn't reset checkboxes | Added checkbox resets |
+| `cluster.rs` | 205 | `reset()` doesn't clear InputGroups | Added clearing loops |
+| `proxy.rs` | 388 | `reset()` doesn't reset `current_view` and `view_selector` | Added resets |
+| `proxy.rs` | 725-759 | 6 duplicate navigation methods missing guard | Added `is_running()` guards |
+| `nse.rs` | 324 | `handle_enter()` early return issue | Restructured to remove early returns |
+| `plugin.rs` | 196 | `reset()` missing `plugins_loaded` and `plugin_list` reset | Added resets |
+| `hunt.rs` | 229 | `reset()` doesn't reset checkboxes | Added checkbox reset loop |
+| `browser.rs` | 195 | `reset()` doesn't reset checkboxes | Added checkbox reset loop |
+| `compliance.rs` | 345 | `handle_top/bottom` missing `is_running()` guard | Added guards |
+| `report.rs` | 224 | `reset()` incomplete - selectors, view, inputs not reset | Added all resets |
+| `settings/input.rs` | 100-162 | 6 navigation handlers missing `is_running()` guard | Added guards |
+
+### Workers Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `plugin.rs` | 12 | Silent `unwrap_or_default()` on plugin discovery | Changed to `unwrap_or_else(\|e\| { warn; Vec::new() })` |
+| `recon.rs` | 166 | Silent `let _ =` on progress send | Changed to `if let Err(e) = ...` |
+| `recon.rs` | 62 | `pipeline.run()` missing timeout | Added 300s timeout wrapper |
+| `scanner.rs` | 37 | `scan_ports()` missing timeout | Added 60s timeout wrapper |
+| `scanner.rs` | 89 | `scan_endpoints()` missing timeout | Added 60s timeout wrapper |
+| `scanner.rs` | 133 | `fingerprint_services()` missing timeout | Added 60s timeout wrapper |
+| `fuzzer.rs` | 89 | `engine.run_return_session()` missing timeout | Added 60s timeout wrapper |
+| `fuzzer.rs` | 110 | `detector.detect()` missing timeout | Added 30s timeout wrapper |
+| `fuzzer.rs` | 153 | `bypass_engine.run_bypasses()` missing timeout | Added 60s timeout wrapper |
+| `fuzzer.rs` | 200 | `fuzzer_run_waf_stress()` missing timeout | Added 60s timeout wrapper |
+| `security.rs` | 23 | `run_hunt()` missing timeout | Added 60s timeout wrapper |
+| `security.rs` | 45 | `run_browser_scan()` missing timeout | Added 60s timeout wrapper |
+| `security.rs` | 205 | `generate_compliance_report()` missing timeout | Added 60s timeout wrapper |
+| `network.rs` | 279 | `traceroute.run()` missing timeout | Added 60s timeout wrapper |
+
+### AI Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `cache.rs` | 168-175 | Cache merge logic prefers NEW instead of OLD | Changed to `entry().or_insert_with()` |
+| `cache.rs` | 323-337 | CacheKeyBuilder doesn't sanitize null bytes | Added `.replace('\x00', "")` |
+| `planner.rs` | 410-416 | `to_lowercase()` in sentence loop | Cached before loop |
+| `planner.rs` | 446-458 | `to_lowercase()` per stage in filter | Cached inside closure |
+
+### Scanner Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `spoofed.rs` | 353,391-396 | Counter increments on failed send | Only increment on success |
+
+### Tool Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scripting.rs` | 6,23,24,68,76 | `HashMap` → `FxHashMap` | Changed to FxHashMap |
+| `orchestrator/mod.rs` | 229 | Silent `let _ =` on progress send | Changed to `if let Err(e) = ...` |
+
+### Components Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scrollable.rs` | 70 | `scroll_right()` missing `is_empty()` guard | Added explicit empty check |
+| `selector.rs` | 228 | Misleading `warn!` for valid `None` | Changed to `debug!` level |
+
+### App Module Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `state_update.rs` | 67 | `handle_security_result` called twice in chain | Changed second to `handle_protocol_result` |

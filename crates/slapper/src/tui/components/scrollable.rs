@@ -68,8 +68,12 @@ impl ScrollableText {
     }
 
     pub fn scroll_right(&mut self, amount: usize) {
-        let max_offset = self.lines.iter().map(|l| l.width()).max().unwrap_or(0);
-        self.horizontal_offset = (self.horizontal_offset + amount).min(max_offset);
+        if self.lines.is_empty() {
+            self.horizontal_offset = 0;
+        } else {
+            let max_offset = self.lines.iter().map(|l| l.width()).max().unwrap_or(0);
+            self.horizontal_offset = (self.horizontal_offset + amount).min(max_offset);
+        }
     }
 
     pub fn scroll_to_top(&mut self) {

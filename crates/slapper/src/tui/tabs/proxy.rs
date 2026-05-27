@@ -394,6 +394,8 @@ impl TabState for ProxyTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        self.current_view = ProxyView::List;
+        self.view_selector.select(0);
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -723,36 +725,54 @@ impl ProxyTab {
     }
 
     pub fn handle_word_forward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         for _ in 0..5 {
             self.handle_right();
         }
     }
 
     pub fn handle_word_backward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         for _ in 0..5 {
             self.handle_left();
         }
     }
 
     pub fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
         for _ in 0..100 {
             self.handle_left();
         }
     }
 
     pub fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
         for _ in 0..100 {
             self.handle_right();
         }
     }
 
     pub fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         for _ in 0..100 {
             self.results_view.scroll_up(1);
         }
     }
 
     pub fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         for _ in 0..100 {
             self.results_view.scroll_down(1);
         }

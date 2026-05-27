@@ -356,6 +356,9 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == WafStressFocusArea::Inputs {
             self.inputs.move_left()
         } else {
@@ -365,6 +368,9 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == WafStressFocusArea::Inputs {
             self.inputs.move_right()
         } else {

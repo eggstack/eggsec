@@ -59,7 +59,11 @@ pub async fn run_pipeline(
         tracing::warn!("Failed to send progress: {}", e);
     }
 
-    let report = pipeline.run().await?;
+    let report = match tokio::time::timeout(std::time::Duration::from_secs(300), pipeline.run()).await {
+        Ok(Ok(report)) => report,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("Pipeline timed out after 300s")),
+    };
 
     if let Err(e) = result_tx.send(TaskResult::Pipeline(report)).await {
         tracing::warn!("Failed to send pipeline result: {}", e);
@@ -163,7 +167,9 @@ pub async fn run_recon(
             }).await;
             if result.is_err() {
                 tracing::warn!("Progress monitor task timed out after 300s");
-                let _ = progress_tx_for_timeout.send((95, 100)).await;
+                if let Err(e) = progress_tx_for_timeout.send((95, 100)).await {
+                    tracing::warn!("Failed to send timeout progress: {}", e);
+                }
             }
         });
 

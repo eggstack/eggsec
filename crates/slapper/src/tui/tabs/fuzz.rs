@@ -822,6 +822,9 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == FuzzFocusArea::Inputs {
             self.inputs.move_left()
         } else if self.focus_area == FuzzFocusArea::PayloadSelector {
@@ -843,6 +846,9 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
         if self.focus_area == FuzzFocusArea::Inputs {
             self.inputs.move_right()
         } else if self.focus_area == FuzzFocusArea::PayloadSelector {

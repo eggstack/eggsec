@@ -98,6 +98,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_word_forward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.current_section {
             SettingsSection::Http => self.http_inputs.move_word_forward(),
             SettingsSection::Scan => self.scan_inputs.move_word_forward(),
@@ -112,6 +115,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_word_backward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.current_section {
             SettingsSection::Http => self.http_inputs.move_word_backward(),
             SettingsSection::Scan => self.scan_inputs.move_word_backward(),
@@ -126,6 +132,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.current_section {
             SettingsSection::Http => self.http_inputs.move_home(),
             SettingsSection::Scan => self.scan_inputs.move_home(),
@@ -140,6 +149,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
         match self.current_section {
             SettingsSection::Http => self.http_inputs.move_end(),
             SettingsSection::Scan => self.scan_inputs.move_end(),
@@ -154,10 +166,16 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.current_section = SettingsSection::Http;
     }
 
     fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.current_section = SettingsSection::Theme;
     }
 

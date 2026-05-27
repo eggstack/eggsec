@@ -276,10 +276,11 @@ pub async fn run_packet_traceroute(
     }
 
     let traceroute = Traceroute::new(config);
-    let result = traceroute
-        .run()
-        .await
-        .map_err(|e| anyhow::anyhow!("Traceroute failed: {}", e))?;
+    let result = match tokio::time::timeout(std::time::Duration::from_secs(60), traceroute.run()).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => return Err(anyhow::anyhow!("Traceroute failed: {}", e)),
+        Err(_) => return Err(anyhow::anyhow!("Traceroute timed out after 60s")),
+    }?;
 
     let hops: Vec<TracerouteHopResult> = result
         .hops

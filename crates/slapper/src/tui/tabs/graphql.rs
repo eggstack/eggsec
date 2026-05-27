@@ -167,6 +167,9 @@ impl TabState for GraphQlTab {
         self.results_view.clear();
         self.progress.current = 0;
         self.error = None;
+        for field in &mut self.inputs.fields {
+            field.clear();
+        }
         self.focus_area = GraphQlFocusArea::Inputs;
         self.checkbox_focus_index = 0;
     }
@@ -389,18 +392,27 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_word_forward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == GraphQlFocusArea::Inputs {
             self.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == GraphQlFocusArea::Inputs {
             self.inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == GraphQlFocusArea::Inputs {
             self.inputs.move_home();
         } else if self.focus_area == GraphQlFocusArea::Results {
@@ -409,6 +421,9 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == GraphQlFocusArea::Inputs {
             self.inputs.move_end();
         } else if self.focus_area == GraphQlFocusArea::Results {
@@ -417,11 +432,17 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = GraphQlFocusArea::Inputs;
         self.inputs.focus(0);
     }
 
     fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = GraphQlFocusArea::Results;
         self.inputs.blur();
     }

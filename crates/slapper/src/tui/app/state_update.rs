@@ -64,11 +64,8 @@ impl super::App {
             Some(r) => r,
             None => return,
         };
-        let unhandled = match self.handle_security_result(result) {
-            Some(r) => match self.handle_protocol_result(r) {
-                Some(r) => self.handle_feature_result(r).is_none(),
-                None => true,
-            },
+        let unhandled = match self.handle_protocol_result(result) {
+            Some(r) => self.handle_feature_result(r).is_none(),
             None => true,
         };
         if unhandled {

@@ -226,7 +226,7 @@ impl Orchestrator {
             .insert(stage_name.to_string(), stage_result);
 
         if let Some(tx) = progress_tx {
-            let _ = tx
+            if let Err(e) = tx
                 .send(StageProgress {
                     execution_id: state.execution_id,
                     stage: stage_name.to_string(),
@@ -234,7 +234,10 @@ impl Orchestrator {
                         / (state.completed_count + state.failed_count + 1).max(1) as f32,
                     message: format!("Completed stage: {}", stage_name),
                 })
-                .await;
+                .await
+            {
+                tracing::warn!(error = %e, "Failed to send stage progress for '{}'", stage_name);
+            }
         }
 
         Ok(())

@@ -225,6 +225,19 @@ impl TabState for ReportTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.error = None;
+        self.view_selector.select(0);
+        self.format_selector.select(0);
+        self.current_view = ReportView::Convert;
+        for field in &mut self.convert_inputs.fields {
+            field.clear();
+        }
+        for field in &mut self.trend_inputs.fields {
+            field.clear();
+        }
+        for field in &mut self.schedule_inputs.fields {
+            field.clear();
+        }
+        self.focus_area = ReportFocusArea::ViewSelector;
     }
 
     fn set_error(&mut self, error: TabError) {

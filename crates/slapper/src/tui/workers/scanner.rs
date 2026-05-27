@@ -22,7 +22,7 @@ pub async fn run_port_scan(
         tracing::warn!("Failed to send progress: {}", e);
     }
 
-    let results = scan_ports(
+    let results = match tokio::time::timeout(std::time::Duration::from_secs(60), scan_ports(
         &target,
         crate::scanner::ports::PortScanConfig {
             ports: port_list,
@@ -33,8 +33,11 @@ pub async fn run_port_scan(
             progress_tx: Some(progress_tx.clone()),
             max_results: None,
         },
-    )
-    .await?;
+    )).await {
+        Ok(Ok(results)) => results,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("Port scan timed out after 60s")),
+    };
 
     let total = results.ports_scanned as u64;
     if let Err(e) = result_tx.send(TaskResult::PortScan(results)).await {
@@ -72,7 +75,7 @@ pub async fn run_endpoint_scan(
     };
     let total_endpoints = endpoints.len() as u64;
 
-    let results = scan_endpoints(EndpointScanConfig {
+    let results = match tokio::time::timeout(std::time::Duration::from_secs(60), scan_endpoints(EndpointScanConfig {
         base_url: target,
         endpoints,
         concurrency,
@@ -83,8 +86,11 @@ pub async fn run_endpoint_scan(
         verify_tls: true,
         progress_tx: Some(progress_tx.clone()),
         max_results: None,
-    })
-    .await?;
+    })).await {
+        Ok(Ok(results)) => results,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("Endpoint scan timed out after 60s")),
+    };
 
     let total = results.endpoints_scanned as u64;
     if let Err(e) = result_tx.send(TaskResult::EndpointScan(results)).await {
@@ -115,7 +121,7 @@ pub async fn run_fingerprint(
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
 
-    let results = fingerprint_services(
+    let results = match tokio::time::timeout(std::time::Duration::from_secs(60), fingerprint_services(
         &target,
         port_list,
         timeout,
@@ -123,8 +129,11 @@ pub async fn run_fingerprint(
         20,
         Some(progress_tx.clone()),
         None,
-    )
-    .await?;
+    )).await {
+        Ok(Ok(results)) => results,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("Fingerprint timed out after 60s")),
+    };
 
     let total = results.ports_scanned as u64;
     if let Err(e) = result_tx.send(TaskResult::Fingerprint(results)).await {

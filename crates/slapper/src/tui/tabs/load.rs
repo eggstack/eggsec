@@ -364,15 +364,23 @@ impl TabState for LoadTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        if self.inputs.fields.len() >= 5 {
-            self.inputs.fields[1].value = "GET".to_string();
-            self.inputs.fields[1].cursor_pos = 3;
-            self.inputs.fields[2].value = "100".to_string();
-            self.inputs.fields[2].cursor_pos = 3;
-            self.inputs.fields[3].value = "10".to_string();
-            self.inputs.fields[3].cursor_pos = 2;
-            self.inputs.fields[4].value = "30".to_string();
-            self.inputs.fields[4].cursor_pos = 2;
+        if self.inputs.fields.len() > 4 {
+            if let Some(field) = self.inputs.fields.get_mut(1) {
+                field.value = "GET".to_string();
+                field.cursor_pos = 3;
+            }
+            if let Some(field) = self.inputs.fields.get_mut(2) {
+                field.value = "100".to_string();
+                field.cursor_pos = 3;
+            }
+            if let Some(field) = self.inputs.fields.get_mut(3) {
+                field.value = "10".to_string();
+                field.cursor_pos = 2;
+            }
+            if let Some(field) = self.inputs.fields.get_mut(4) {
+                field.value = "30".to_string();
+                field.cursor_pos = 2;
+            }
         }
         self.test_type_selector.select(0);
         self.focus_area = LoadFocusArea::Selector;
@@ -525,18 +533,27 @@ impl TabInput for LoadTab {
     }
 
     fn handle_word_forward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == LoadFocusArea::Inputs {
             self.inputs.move_word_forward();
         }
     }
 
     fn handle_word_backward(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == LoadFocusArea::Inputs {
             self.inputs.move_word_backward();
         }
     }
 
     fn handle_home(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == LoadFocusArea::Inputs {
             self.inputs.move_home();
         } else if self.focus_area == LoadFocusArea::Results {
@@ -545,6 +562,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_end(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.focus_area == LoadFocusArea::Inputs {
             self.inputs.move_end();
         } else if self.focus_area == LoadFocusArea::Results {
@@ -553,11 +573,17 @@ impl TabInput for LoadTab {
     }
 
     fn handle_top(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = LoadFocusArea::Selector;
         self.test_type_selector.focus();
     }
 
     fn handle_bottom(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = LoadFocusArea::Results;
     }
 

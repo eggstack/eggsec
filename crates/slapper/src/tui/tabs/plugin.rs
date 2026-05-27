@@ -202,6 +202,8 @@ impl TabState for PluginTab {
         }
         self.plugin_selector.select(0);
         self.focus_area = PluginFocusArea::Inputs;
+        self.plugins_loaded = false;
+        self.plugin_list.clear();
     }
 
     fn set_error(&mut self, error: TabError) {

@@ -205,6 +205,7 @@ impl TabState for StressTab {
             field.cursor_pos = 2;
         }
         self.type_selector.select(0);
+        self.focus_area = StressFocusArea::Inputs;
     }
 
     fn set_error(&mut self, error: TabError) {

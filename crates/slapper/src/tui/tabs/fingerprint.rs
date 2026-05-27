@@ -371,10 +371,10 @@ impl TabInput for FingerprintTab {
     }
 
     fn handle_enter(&mut self) {
-        if self.inputs.is_focused() {
-            self.inputs.blur();
-        } else if self.is_running() {
+        if self.is_running() {
             self.stop();
+        } else if self.inputs.is_focused() {
+            self.inputs.blur();
         } else {
             self.start();
         }

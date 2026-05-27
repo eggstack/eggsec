@@ -408,8 +408,9 @@ impl AiPlanner {
     }
 
     fn extract_sentence_containing(&self, content: &str, keyword: &str) -> String {
+        let keyword_lower = keyword.to_lowercase();
         for sentence in content.split(|c| c == '.' || c == '\n') {
-            if sentence.to_lowercase().contains(keyword) {
+            if sentence.to_lowercase().contains(&keyword_lower) {
                 return sentence.trim().to_string();
             }
         }
@@ -454,7 +455,10 @@ impl AiPlanner {
                         .plan
                         .stages
                         .iter()
-                        .any(|s| s.name.to_lowercase().contains(&target_lower))
+                        .any(|s| {
+                            let stage_name_lower = s.name.to_lowercase();
+                            stage_name_lower.contains(&target_lower)
+                        })
             })
             .max_by_key(|(_, cached)| cached.last_used)
             .map(|(k, _)| k.clone());

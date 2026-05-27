@@ -203,6 +203,9 @@ impl TabState for BrowserTab {
         }
         self.focus_area = BrowserFocusArea::Inputs;
         self.focused_checkbox_index = 0;
+        for cb in &mut self.option_checkboxes {
+            cb.checked = true;
+        }
     }
 
     fn set_error(&mut self, error: TabError) {

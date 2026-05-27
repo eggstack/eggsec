@@ -9,7 +9,10 @@ pub async fn run_load_plugins(
 ) -> anyhow::Result<()> {
     use crate::commands::handlers::plugin::discover_all_plugins;
 
-    let plugins = discover_all_plugins(config_plugins_dir).unwrap_or_default();
+    let plugins = discover_all_plugins(config_plugins_dir).unwrap_or_else(|e| {
+        tracing::warn!("Plugin discovery failed: {}", e);
+        Vec::new()
+    });
 
     if let Err(e) = result_tx.send(TaskResult::PluginsLoaded(plugins)).await {
         tracing::warn!("Failed to send plugins loaded result: {}", e);

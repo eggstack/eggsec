@@ -86,7 +86,11 @@ pub async fn run_fuzz(
     };
 
     let mut engine = FuzzEngine::new_with_tui_mode(args, true)?;
-    let session = engine.run_return_session().await?;
+    let session = match tokio::time::timeout(std::time::Duration::from_secs(60), engine.run_return_session()).await {
+        Ok(Ok(session)) => session,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("Fuzz session timed out after 60s")),
+    };
 
     if let Err(e) = result_tx.send(TaskResult::Fuzz(session)).await {
         tracing::warn!("Failed to send fuzz results: {}", e);
@@ -107,7 +111,11 @@ pub async fn run_waf(
     use crate::waf::WafDetector;
 
     let detector = WafDetector::new()?;
-    let detection = detector.detect(&target).await?;
+    let detection = match tokio::time::timeout(std::time::Duration::from_secs(30), detector.detect(&target)).await {
+        Ok(Ok(d)) => d,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err(anyhow::anyhow!("WAF detection timed out after 30s")),
+    };
 
     if bypass_mode {
         use crate::cli::WafArgs;
@@ -142,7 +150,11 @@ pub async fn run_waf(
         };
 
         let bypass_engine = BypassEngine::new(&args, Some(get_auto_profile()), TestType::All)?;
-        let bypasses = bypass_engine.run_bypasses(&detection).await?;
+        let bypasses = match tokio::time::timeout(std::time::Duration::from_secs(60), bypass_engine.run_bypasses(&detection)).await {
+            Ok(Ok(b)) => b,
+            Ok(Err(e)) => return Err(e.into()),
+            Err(_) => return Err(anyhow::anyhow!("WAF bypass timed out after 60s")),
+        };
         if let Err(e) = result_tx
             .send(TaskResult::WafBypass {
                 detection,
@@ -185,7 +197,7 @@ pub async fn run_waf_stress(
         common: Default::default(),
     };
 
-    fuzzer_run_waf_stress(args).await?;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(60), fuzzer_run_waf_stress(args)).await;
     if let Err(e) = progress_tx.send((1, 1)).await {
         tracing::warn!("Failed to send progress: {}", e);
     }

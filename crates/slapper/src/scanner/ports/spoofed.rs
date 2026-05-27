@@ -353,8 +353,9 @@ pub(crate) async fn scan_ports_spoofed(
                                     let _Ignored = tx_guard.send_to(&packet, Some(interface.clone()));
                                     if _Ignored.is_none() {
                                         tracing::warn!("Failed to send staggered decoy packet");
+                                    } else {
+                                        packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                     }
-                                packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             }
                         }
                     }
@@ -389,11 +390,12 @@ pub(crate) async fn scan_ports_spoofed(
                             ) {
                                 {
                                     let mut tx_guard = tx.lock();
-                            let _Ignored = tx_guard.send_to(&packet, Some(interface.clone()));
-                            if _Ignored.is_none() {
-                                tracing::warn!("Failed to send decoy packet");
-                            }
-                                    packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    let _Ignored = tx_guard.send_to(&packet, Some(interface.clone()));
+                                    if _Ignored.is_none() {
+                                        tracing::warn!("Failed to send decoy packet");
+                                    } else {
+                                        packets_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    }
                                 }
                                 if use_staggered {
                                     let stagger_delay = 10 + rand::random::<u64>() % 100;

@@ -261,6 +261,7 @@ impl TabState for ScanEndpointsTab {
             field.cursor_pos = 2;
         }
         self.focus_area = ScanEndpointsFocusArea::Inputs;
+        self.include_404_checkbox.checked = true;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -357,10 +358,14 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
-        if self.focus_area == ScanEndpointsFocusArea::Inputs {
-            self.inputs.get_focused_value()
-        } else if self.focus_area == ScanEndpointsFocusArea::Results {
-            Some(self.results_view.get_content())
+        if !self.is_running() {
+            if self.focus_area == ScanEndpointsFocusArea::Inputs {
+                self.inputs.get_focused_value()
+            } else if self.focus_area == ScanEndpointsFocusArea::Results {
+                Some(self.results_view.get_content())
+            } else {
+                None
+            }
         } else {
             None
         }

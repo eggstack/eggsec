@@ -3,7 +3,7 @@
 //! Provides script execution capabilities using Python and Ruby runtimes
 //! with sandbox restrictions for security.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -20,8 +20,8 @@ pub trait ScriptEngine: Send + Sync + std::fmt::Debug {
 #[derive(Debug, Clone)]
 pub struct ScriptContext {
     pub target: Option<String>,
-    pub parameters: HashMap<String, serde_json::Value>,
-    pub environment: HashMap<String, String>,
+    pub parameters: FxHashMap<String, serde_json::Value>,
+    pub environment: FxHashMap<String, String>,
     pub working_directory: Option<PathBuf>,
 }
 
@@ -29,8 +29,8 @@ impl Default for ScriptContext {
     fn default() -> Self {
         Self {
             target: None,
-            parameters: HashMap::new(),
-            environment: HashMap::new(),
+            parameters: FxHashMap::default(),
+            environment: FxHashMap::default(),
             working_directory: None,
         }
     }
@@ -65,7 +65,7 @@ impl std::error::Error for ScriptError {}
 
 #[derive(Clone)]
 pub struct ScriptEngineRegistry {
-    engines: Arc<RwLock<HashMap<String, Arc<dyn ScriptEngine>>>>,
+    engines: Arc<RwLock<FxHashMap<String, Arc<dyn ScriptEngine>>>>,
     execution_count: Arc<RwLock<u64>>,
     total_execution_time_ms: Arc<RwLock<u64>>,
 }
@@ -73,7 +73,7 @@ pub struct ScriptEngineRegistry {
 impl ScriptEngineRegistry {
     pub fn new() -> Self {
         Self {
-            engines: Arc::new(RwLock::new(HashMap::new())),
+            engines: Arc::new(RwLock::new(FxHashMap::default())),
             execution_count: Arc::new(RwLock::new(0)),
             total_execution_time_ms: Arc::new(RwLock::new(0)),
         }
