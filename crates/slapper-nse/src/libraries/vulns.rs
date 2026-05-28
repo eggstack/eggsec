@@ -161,12 +161,16 @@ pub fn register_vulns_library(lua: &Lua) -> LuaResult<()> {
             let id_upper = id.to_uppercase();
             if let Some(entries) = db.get(id_upper.as_str()) {
                 if let Some((name, level, description)) = entries.first() {
-                result.set("id", id)?;
-                result.set("name", *name)?;
-                result.set("level", *level)?;
-                result.set("description", *description)?;
-                result.set("status", "known")?;
+                    result.set("id", id)?;
+                    result.set("name", *name)?;
+                    result.set("level", *level)?;
+                    result.set("description", *description)?;
+                    result.set("status", "known")?;
                 } else {
+                    result.set("id", id)?;
+                    result.set("error", "CVE not found in local database")?;
+                    result.set("status", "unknown")?;
+                }
             } else {
                 result.set("id", id)?;
                 result.set("error", "CVE not found in local database")?;
