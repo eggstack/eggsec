@@ -176,31 +176,46 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/plugins_nse.md` | Plugin system (Python/Ruby) and NSE integration |
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |
 
-## Architecture Review (2026-06-09)
+## Architecture Review (2026-05-28)
 
-Completed full architecture review of all 15 modules. See `plans/plan.md` for the consolidated implementation plan.
+Completed full architecture review of all 15 modules. See `plans/plan.md` for the consolidated implementation plan (51 items across 3 waves).
 
 ### Key Findings
 
 | Metric | Count |
 |--------|-------|
-| Verified Claims | 227 |
-| Discrepancies | 47 |
-| Bugs Found | 32 (6 HIGH, 13 MEDIUM, 13 LOW) |
-| Improvement Opportunities | 72 |
+| Plan Items | 51 |
+| Verified & Accurate | 38 |
+| Already Fixed (removed) | 13 |
+| Critical/High Priority | 5 |
 
 ### Critical Issues Requiring Attention
 
 1. **Distributed module**: Task results never sent to coordinator (result system broken)
 2. **CLI**: Resume command bypasses scope validation (security issue)
 3. **Distributed**: Worker stats/heartbeat report hardcoded zeros
-4. **Loadtest**: Rate limiting causes burst on startup
 
-### Stale Documentation
+### Known Stale Items (verified fixed)
 
-- `overview.md`: 6 stale statistics (module count, source files, NSE libraries, payload types, feature flags, path error)
-- `cli_commands.md`: Commands variant count "35+" → actual 33
-- Undocumented feature flags: `tool-api`, `insecure-tls`
+These items appeared in earlier reviews but have been confirmed fixed in the codebase:
+- PDF truncation warning (output/pdf.rs:71-79)
+- Stress handler scope validation (commands/handlers/stress.rs:12)
+- Proxy handler scope validation (commands/handlers/stress.rs:69)
+- `cli.config` field access (commands/handlers/mod.rs:160)
+- Fuzz tab reset bounds check (tui/tabs/fuzz.rs:408)
+- WAF circuit breaker (waf/detector/detect.rs:14,32,198)
+- TUI duplicate key binding 'b' (doesn't exist)
+- TUI InputGroup is_empty guard (already at input.rs:544)
+- Recon FxHashMap migration (already uses FxHashMap)
+- WAF architecture doc count (already says 34)
+- Recon callback FxHashMap (already uses FxHashMap)
+- Recon threatstream_key (no longer exists in codebase)
+
+### File Path Corrections
+
+The following paths from earlier reviews are incorrect:
+- `cli/handlers/` → `commands/handlers/` (there is no `cli/handlers/` directory)
+- `waf/smuggling.rs` → `waf/bypass/smuggling.rs`
 
 ## Verification Commands
 
@@ -227,3 +242,8 @@ cargo clippy --lib -p slapper-ruby
 - **Timeout wrappers**: All spawned tokio tasks should have timeout wrappers (30-300s depending on operation)
 - **FxHashMap migration**: Replace `std::collections::HashMap` with `rustc_hash::FxHashMap` in performance-critical paths
 - **Distributed results**: Workers must send `CommandMessage::Result` back to coordinator via channel
+- **Verification before claims**: Always verify line numbers, file paths, and whether issues still exist before including in plans
+- **File path conventions**: Use `commands/handlers/` not `cli/handlers/` - the latter directory does not exist
+- **Dead code detection**: Check if `#![allow(dead_code)]` is at file top - many items flagged in reviews may already be resolved
+- **Rate limiter patterns**: Use `tokio::time::sleep()` not spin loops; check if rate limiter is actually used (some are dead code)
+- **Bounds check patterns**: Check for existing `if let Some(idx)` or `if len() > N` guards before claiming missing bounds checks
