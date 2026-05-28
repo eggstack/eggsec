@@ -152,7 +152,6 @@ async fn run_udp_flood_spoofed(
     metrics: Arc<StressMetrics>,
 ) -> Result<StressStats> {
     use raw_udp::build_udp_packet;
-    use std::net::Ipv4Addr;
 
     let target_ip_v4 = match target_addr.ip() {
         IpAddr::V4(ip) => ip,
@@ -163,11 +162,7 @@ async fn run_udp_flood_spoofed(
         }
     };
 
-    let src_ips: Vec<Ipv4Addr> = if let Some(ref range) = config.spoof_range {
-        parse_spoof_range(range)?
-    } else {
-        vec![generate_random_ip()]
-    };
+    let spoof_range = config.spoof_range.clone();
 
     let duration = Duration::from_secs(config.duration_secs);
     let start_time = Instant::now();
@@ -204,13 +199,12 @@ async fn run_udp_flood_spoofed(
     };
 
     let socket = Arc::new(socket);
-    let src_ips = Arc::new(src_ips);
     let metrics = Arc::new(metrics);
 
     let mut handles = Vec::new();
 
     while start_time.elapsed() < duration {
-        let src_ip = src_ips[rand::random::<usize>() % src_ips.len()];
+        let src_ip = get_random_spoofed_ip(&spoof_range);
         let src_port = if config.random_source_port {
             rand::random::<u16>()
         } else {
@@ -279,32 +273,32 @@ async fn run_udp_flood_spoofed(
     Ok(metrics.to_stats())
 }
 
-fn parse_spoof_range(range: &str) -> Result<Vec<Ipv4Addr>> {
-    let mut ips = Vec::new();
-    let parts: Vec<&str> = range.split('-').collect();
+fn get_random_spoofed_ip(range: &Option<String>) -> Ipv4Addr {
+    let mut rng = rand::thread_rng();
 
-    if parts.len() == 2 {
-        let start: u32 = parts[0]
-            .parse()
-            .map_err(|_| SlapperError::Runtime("Invalid start IP".to_string()))?;
-        let end: u32 = parts[1]
-            .parse()
-            .map_err(|_| SlapperError::Runtime("Invalid end IP".to_string()))?;
-
-        for ip in start..=end {
-            ips.push(Ipv4Addr::from(ip));
+    if let Some(range_str) = range {
+        let parts: Vec<&str> = range_str.split('/').collect();
+        if parts.len() == 2 {
+            if let (Ok(base), Ok(prefix)) = (parts[0].parse::<Ipv4Addr>(), parts[1].parse::<u8>()) {
+                let base_u32 = u32::from(base);
+                let host_bits = 32 - prefix;
+                let offset = rng.gen_range(1..(1u32 << host_bits).saturating_sub(1).max(1));
+                return Ipv4Addr::from(base_u32 | offset);
+            }
         }
-    } else if parts.len() == 1 {
-        let cidr: ipnetwork::Ipv4Network = range
-            .parse()
-            .map_err(|_| SlapperError::Runtime("Invalid CIDR".to_string()))?;
 
-        for ip in cidr.iter() {
-            ips.push(ip);
+        let parts: Vec<&str> = range_str.split('-').collect();
+        if parts.len() == 2 {
+            if let (Ok(start), Ok(end)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                if end > start {
+                    let offset = rng.gen_range(0..=end - start);
+                    return Ipv4Addr::from(start + offset);
+                }
+            }
         }
     }
 
-    Ok(ips)
+    generate_random_ip()
 }
 
 fn generate_random_ip() -> Ipv4Addr {
