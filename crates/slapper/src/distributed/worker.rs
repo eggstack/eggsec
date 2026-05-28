@@ -4,7 +4,7 @@ use crate::distributed::{
 use crate::error::{Result, SlapperError};
 use crate::scanner::endpoints::EndpointScanConfig;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
 fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
@@ -69,10 +69,12 @@ pub struct WorkerStats {
         heartbeat_handle: Option<JoinHandle<()>>,
         task_processor_handle: Option<JoinHandle<()>>,
         psk: String,
+        shutdown_tx: watch::Sender<bool>,
     }
 
 impl Worker {
     pub fn new(config: WorkerConfig, psk: String) -> Self {
+        let (shutdown_tx, _) = watch::channel(false);
         Self {
             config: config.clone(),
             stats: WorkerStats {
@@ -87,6 +89,7 @@ impl Worker {
             heartbeat_handle: None,
             task_processor_handle: None,
             psk,
+            shutdown_tx,
         }
     }
 
@@ -128,6 +131,7 @@ async fn start_heartbeat_loop(&mut self) {
         let coordinator_url = self.config.coordinator_url.clone();
         let interval = self.config.heartbeat_interval_secs;
         let psk = self.psk.clone();
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         let (host, port) = match parse_coordinator_url(&coordinator_url) {
             Ok(hp) => hp,
@@ -145,18 +149,24 @@ async fn start_heartbeat_loop(&mut self) {
             let mut client = RemoteClient::new_plaintext(psk);
 
             loop {
-                interval.tick().await;
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let status = serde_json::json!({
+                            "worker_id": worker_id,
+                            "status": "idle",
+                            "current_jobs": 0,
+                            "completed_jobs": 0,
+                            "failed_jobs": 0,
+                        });
 
-                let status = serde_json::json!({
-                    "worker_id": worker_id,
-                    "status": "idle",
-                    "current_jobs": 0,
-                    "completed_jobs": 0,
-                    "failed_jobs": 0,
-                });
-
-                if let Err(e) = client.send_heartbeat(&host, port, worker_id.clone(), status.to_string()).await {
-                    tracing::warn!("Heartbeat failed: {}", e);
+                        if let Err(e) = client.send_heartbeat(&host, port, worker_id.clone(), status.to_string()).await {
+                            tracing::warn!("Heartbeat failed: {}", e);
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        tracing::info!("Heartbeat loop shutting down");
+                        break;
+                    }
                 }
             }
         });
@@ -183,6 +193,29 @@ async fn start_heartbeat_loop(&mut self) {
 
     pub fn get_stats(&self) -> &WorkerStats {
         &self.stats
+    }
+
+    pub fn shutdown(&mut self) {
+        tracing::info!("Worker shutting down");
+        let _ = self.shutdown_tx.send(true);
+        if let Some(handle) = self.heartbeat_handle.take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.task_processor_handle.take() {
+            handle.abort();
+        }
+    }
+}
+
+impl Drop for Worker {
+    fn drop(&mut self) {
+        let _ = self.shutdown_tx.send(true);
+        if let Some(handle) = self.heartbeat_handle.take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.task_processor_handle.take() {
+            handle.abort();
+        }
     }
 }
 
