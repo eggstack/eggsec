@@ -629,11 +629,122 @@ impl TlsHandshake {
             _ => "Unknown",
         };
 
+        let client_hello = if data[5] == 0x01 {
+            Self::parse_client_hello(data)
+        } else {
+            None
+        };
+
         Some(Self {
             handshake_type: handshake_type.to_string(),
             version: version.to_string(),
-            client_hello: None,
+            client_hello,
             server_hello: None,
+        })
+    }
+
+    fn parse_client_hello(data: &[u8]) -> Option<TlsClientHello> {
+        // Record header: type(1) + version(2) + length(2) = 5 bytes
+        // Handshake header: type(1) + length(3) = 4 bytes
+        // Client version: 2 bytes
+        // Random: 32 bytes
+        let mut offset = 5 + 4 + 2 + 32;
+
+        if data.len() <= offset {
+            return None;
+        }
+
+        // Session ID: 1 byte length + data
+        let session_id_len = data[offset] as usize;
+        offset += 1 + session_id_len;
+
+        if data.len() <= offset + 1 {
+            return None;
+        }
+
+        // Cipher Suites: 2 bytes length + data
+        let cipher_suites_len = u16::from_be_bytes([data[offset], data[offset + 1]]) as usize;
+        offset += 2 + cipher_suites_len;
+
+        if data.len() <= offset {
+            return None;
+        }
+
+        // Compression Methods: 1 byte length + data
+        let compression_len = data[offset] as usize;
+        offset += 1 + compression_len;
+
+        if data.len() < offset + 2 {
+            return None;
+        }
+
+        // Extensions: 2 bytes length + data
+        let extensions_len = u16::from_be_bytes([data[offset], data[offset + 1]]) as usize;
+        offset += 2;
+        let extensions_end = offset + extensions_len;
+
+        let mut server_name = None;
+        let mut supported_versions = None;
+
+        while offset + 4 <= extensions_end && offset + 4 <= data.len() {
+            let ext_type = u16::from_be_bytes([data[offset], data[offset + 1]]);
+            let ext_len = u16::from_be_bytes([data[offset + 2], data[offset + 3]]) as usize;
+            offset += 4;
+
+            if offset + ext_len > data.len() {
+                break;
+            }
+
+            match ext_type {
+                0x0000 => {
+                    // SNI extension
+                    if ext_len >= 5 {
+                        let sni_list_len =
+                            u16::from_be_bytes([data[offset], data[offset + 1]]) as usize;
+                        if sni_list_len >= 3 && data.len() > offset + 2 {
+                            let name_type = data[offset + 2];
+                            if name_type == 0x00 {
+                                let name_len = u16::from_be_bytes(
+                                    [data[offset + 3], data[offset + 4]],
+                                ) as usize;
+                                if offset + 5 + name_len <= data.len() {
+                                    server_name = Some(
+                                        String::from_utf8_lossy(&data[offset + 5..offset + 5 + name_len])
+                                            .to_string(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                0x002b => {
+                    // Supported Versions extension
+                    if ext_len >= 3 {
+                        let versions_len = data[offset] as usize;
+                        if versions_len == 2 && offset + 3 <= data.len() {
+                            let ver = u16::from_be_bytes([data[offset + 1], data[offset + 2]]);
+                            supported_versions = Some(match ver {
+                                0x0301 => "TLS 1.0",
+                                0x0302 => "TLS 1.1",
+                                0x0303 => "TLS 1.2",
+                                0x0304 => "TLS 1.3",
+                                _ => "Unknown",
+                            }.to_string());
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            offset += ext_len;
+        }
+
+        Some(TlsClientHello {
+            session_id: Vec::new(),
+            cipher_suites: Vec::new(),
+            compression_methods: Vec::new(),
+            server_name,
+            supported_versions,
         })
     }
 }
