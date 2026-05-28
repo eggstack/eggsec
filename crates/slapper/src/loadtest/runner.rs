@@ -6,9 +6,10 @@ use reqwest::{Client, Method};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinSet;
-use tokio::time::{Instant as TokioInstant, sleep};
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use tracing;
 
 use super::metrics::{LoadTestResults, Metrics};
@@ -272,13 +273,20 @@ impl LoadTestRunner {
         let start = Instant::now();
         let issued_requests = Arc::new(AtomicU64::new(0));
 
-        let rate_limit_state = self.rate_limit.map(|rate| {
+        let rate_limit_sem = self.rate_limit.map(|rate| {
+            let sem = Arc::new(Semaphore::new(rate as usize));
             let min_interval = Duration::from_secs_f64(1.0 / f64::from(rate));
-            (
-                min_interval,
-                Arc::new(Mutex::new(TokioInstant::now() - min_interval)),
-            )
+            let sem_clone = sem.clone();
+            tokio::spawn(async move {
+                loop {
+                    sleep(min_interval).await;
+                    sem_clone.add_permits(1);
+                }
+            });
+            sem
         });
+
+        let cancellation_token = CancellationToken::new();
 
         let worker_count = self.concurrency.min(self.total_requests as usize);
         let mut workers = JoinSet::new();
@@ -293,28 +301,23 @@ impl LoadTestRunner {
             let progress = progress.clone();
             let user_agent = self.user_agent.clone();
             let issued_requests = issued_requests.clone();
-            let rate_limit_state = rate_limit_state.clone();
+            let rate_limit_sem = rate_limit_sem.clone();
             let total_requests = self.total_requests;
+            let token = cancellation_token.clone();
 
             workers.spawn(async move {
                 loop {
+                    if token.is_cancelled() {
+                        break;
+                    }
+
                     let request_index = issued_requests.fetch_add(1, Ordering::Relaxed);
                     if request_index >= total_requests {
                         break;
                     }
 
-                    if let Some((min_interval, next_allowed_at)) = &rate_limit_state {
-                        let mut next = next_allowed_at.lock().await;
-                        let now = TokioInstant::now();
-                        if now < *next {
-                            sleep(*next - now).await;
-                        }
-                        let now_after_sleep = TokioInstant::now();
-                        if now_after_sleep >= *next {
-                            *next = now_after_sleep + *min_interval;
-                        } else {
-                            *next += *min_interval;
-                        }
+                    if let Some(sem) = &rate_limit_sem {
+                        let _permit = sem.acquire().await.unwrap();
                     }
 
                     let request_start = Instant::now();
@@ -365,6 +368,9 @@ impl LoadTestRunner {
                 Err(e) => tracing::error!("Load test worker failed: {}", e),
             }
         }
+
+        cancellation_token.cancel();
+        workers.abort_all();
 
         let total_duration = start.elapsed();
         if let Some(ref pb) = progress {
