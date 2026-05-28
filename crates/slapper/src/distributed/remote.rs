@@ -419,6 +419,38 @@ impl RemoteListener {
                         .write_line(&serde_json::to_string(&response)?)
                         .await?;
                 }
+                CommandMessage::RequestTasks {
+                    id,
+                    worker_id,
+                    max_tasks,
+                } => {
+                    let mut tasks = Vec::new();
+                    for _ in 0..max_tasks {
+                        match task_queue.dequeue(&worker_id).await {
+                            Ok(Some(task)) => tasks.push(task),
+                            Ok(None) => break,
+                            Err(_) => break,
+                        }
+                    }
+                    let tasks_json = serde_json::to_string(&tasks)
+                        .unwrap_or_else(|_| "[]".to_string());
+                    let response = ResponseMessage {
+                        id,
+                        msg_type: "tasks_assigned".to_string(),
+                        success: true,
+                        output: Some(tasks_json),
+                        error: None,
+                        duration_ms: None,
+                        hostname: None,
+                        capabilities: None,
+                    };
+                    line_writer
+                        .write_line(&serde_json::to_string(&response)?)
+                        .await?;
+                }
+                CommandMessage::AssignTasks { .. } => {
+                    // Workers don't receive AssignTasks; this is coordinator-only
+                }
             }
         }
 
@@ -719,6 +751,62 @@ impl RemoteClient {
             .map_err(|_| SlapperError::Network("Result response timed out".to_string()))??;
 
         Ok(())
+    }
+
+    pub async fn request_tasks(
+        &mut self,
+        host: &str,
+        port: u16,
+        worker_id: String,
+        max_tasks: usize,
+    ) -> Result<Vec<crate::distributed::queue::Task>> {
+        let host_port = format!("{}:{}", host, port);
+
+        let addr = if let Some(cached) = self.resolve_cached(host, port) {
+            cached
+        } else {
+            let resolved: SocketAddr = tokio::net::lookup_host(&host_port)
+                .await
+                .map_err(|e| SlapperError::Network(format!("Failed to resolve host: {}", e)))?
+                .next()
+                .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
+            self.cache_resolution(resolved);
+            resolved
+        };
+
+        let mut line_writer = self.connect_to_coordinator_with_addr(&addr).await?;
+
+        let cmd = CommandMessage::RequestTasks {
+            id: uuid::Uuid::new_v4().to_string(),
+            worker_id,
+            max_tasks,
+        };
+
+        line_writer
+            .write_line(&serde_json::to_string(&cmd)?)
+            .await?;
+
+        let response: ResponseMessage =
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                let line = line_writer
+                    .read_line()
+                    .await?
+                    .ok_or_else(|| SlapperError::Network("No response".to_string()))?;
+                Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&line)?)
+            })
+            .await
+            .map_err(|_| SlapperError::Network("Task request response timed out".to_string()))??;
+
+        if !response.success {
+            return Ok(Vec::new());
+        }
+
+        let tasks: Vec<crate::distributed::queue::Task> = response
+            .output
+            .and_then(|o| serde_json::from_str(&o).ok())
+            .unwrap_or_default();
+
+        Ok(tasks)
     }
 
     pub async fn execute(

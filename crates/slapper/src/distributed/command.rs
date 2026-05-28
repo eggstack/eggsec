@@ -46,6 +46,17 @@ pub enum CommandMessage {
     Heartbeat { id: String, status: String },
     #[serde(rename = "result")]
     Result { id: String, result: crate::distributed::TaskResult },
+    #[serde(rename = "request_tasks")]
+    RequestTasks {
+        id: String,
+        worker_id: String,
+        max_tasks: usize,
+    },
+    #[serde(rename = "assign_tasks")]
+    AssignTasks {
+        id: String,
+        tasks: Vec<crate::distributed::queue::Task>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

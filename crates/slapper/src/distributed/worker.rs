@@ -8,6 +8,8 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::task::JoinHandle;
 
+const MAX_TASKS_PER_REQUEST: usize = 5;
+
 fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
     let url = url
         .trim_start_matches("http://")
@@ -68,12 +70,13 @@ pub struct WorkerStats {
         sender: Option<mpsc::Sender<Task>>,
         receiver: Option<mpsc::Receiver<Task>>,
         heartbeat_handle: Option<JoinHandle<()>>,
+        task_request_handle: Option<JoinHandle<()>>,
         task_processor_handle: Option<JoinHandle<()>>,
         psk: String,
         shutdown_tx: watch::Sender<bool>,
     }
 
-impl Worker {
+    impl Worker {
     pub fn new(config: WorkerConfig, psk: String) -> Self {
         let (shutdown_tx, _) = watch::channel(false);
         Self {
@@ -88,6 +91,7 @@ impl Worker {
             sender: None,
             receiver: None,
             heartbeat_handle: None,
+            task_request_handle: None,
             task_processor_handle: None,
             psk,
             shutdown_tx,
@@ -102,6 +106,7 @@ impl Worker {
         self.receiver = Some(rx);
 
         self.start_heartbeat_loop().await;
+        self.start_task_request_loop().await;
         self.start_task_processing_loop().await;
 
         Ok(())
@@ -178,6 +183,53 @@ async fn start_heartbeat_loop(&mut self) {
             }
         });
         self.heartbeat_handle = Some(handle);
+    }
+
+    async fn start_task_request_loop(&mut self) {
+        let worker_id = self.config.worker_id.clone();
+        let coordinator_url = self.config.coordinator_url.clone();
+        let psk = self.psk.clone();
+        let sender = self.sender.clone().expect("sender must be set before start");
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
+
+        let (host, port) = match parse_coordinator_url(&coordinator_url) {
+            Ok(hp) => hp,
+            Err(e) => {
+                tracing::error!("Failed to parse coordinator URL for task requests: {}", e);
+                return;
+            }
+        };
+
+        let host = host.to_string();
+
+        let handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let mut client = RemoteClient::new_plaintext(psk.clone());
+                        match client.request_tasks(&host, port, worker_id.clone(), MAX_TASKS_PER_REQUEST).await {
+                            Ok(tasks) => {
+                                for task in tasks {
+                                    if let Err(e) = sender.send(task).await {
+                                        tracing::warn!("Failed to enqueue assigned task: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::debug!("Task request failed: {}", e);
+                            }
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        tracing::info!("Task request loop shutting down");
+                        break;
+                    }
+                }
+            }
+        });
+        self.task_request_handle = Some(handle);
     }
 
     async fn start_task_processing_loop(&mut self) {
@@ -260,6 +312,9 @@ async fn start_heartbeat_loop(&mut self) {
         if let Some(handle) = self.heartbeat_handle.take() {
             handle.abort();
         }
+        if let Some(handle) = self.task_request_handle.take() {
+            handle.abort();
+        }
         if let Some(handle) = self.task_processor_handle.take() {
             handle.abort();
         }
@@ -270,6 +325,9 @@ impl Drop for Worker {
     fn drop(&mut self) {
         let _ = self.shutdown_tx.send(true);
         if let Some(handle) = self.heartbeat_handle.take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.task_request_handle.take() {
             handle.abort();
         }
         if let Some(handle) = self.task_processor_handle.take() {
