@@ -34,7 +34,6 @@
 //! - `takeover` - Subdomain takeover detection
 //! - `threatintel` - Threat intelligence lookup
 //! - `email` / `email_security` - Email discovery and security analysis
-//! - `dependency_scan` - Dependency vulnerability scanning
 //! - `git_secrets` - Git repository secret detection
 //! - `api_schema` - API schema discovery
 //!
