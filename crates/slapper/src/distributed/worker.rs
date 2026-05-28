@@ -5,7 +5,7 @@ use crate::error::{Result, SlapperError};
 use crate::scanner::endpoints::EndpointScanConfig;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, watch, Mutex};
 use tokio::task::JoinHandle;
 
 fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
@@ -70,10 +70,12 @@ pub struct WorkerStats {
         heartbeat_handle: Option<JoinHandle<()>>,
         task_processor_handle: Option<JoinHandle<()>>,
         psk: String,
+        shutdown_tx: watch::Sender<bool>,
     }
 
 impl Worker {
     pub fn new(config: WorkerConfig, psk: String) -> Self {
+        let (shutdown_tx, _) = watch::channel(false);
         Self {
             config: config.clone(),
             stats: Arc::new(Mutex::new(WorkerStats {
@@ -88,6 +90,7 @@ impl Worker {
             heartbeat_handle: None,
             task_processor_handle: None,
             psk,
+            shutdown_tx,
         }
     }
 
@@ -130,6 +133,7 @@ async fn start_heartbeat_loop(&mut self) {
         let interval = self.config.heartbeat_interval_secs;
         let psk = self.psk.clone();
         let stats = Arc::clone(&self.stats);
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         let (host, port) = match parse_coordinator_url(&coordinator_url) {
             Ok(hp) => hp,
@@ -147,23 +151,29 @@ async fn start_heartbeat_loop(&mut self) {
             let mut client = RemoteClient::new_plaintext(psk);
 
             loop {
-                interval.tick().await;
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let (current_jobs, completed_jobs, failed_jobs) = {
+                            let s = stats.lock().await;
+                            (s.tasks_in_progress, s.tasks_completed, s.tasks_failed)
+                        };
 
-                let (current_jobs, completed_jobs, failed_jobs) = {
-                    let s = stats.lock().await;
-                    (s.tasks_in_progress, s.tasks_completed, s.tasks_failed)
-                };
+                        let status = serde_json::json!({
+                            "worker_id": worker_id,
+                            "status": if current_jobs > 0 { "busy" } else { "idle" },
+                            "current_jobs": current_jobs,
+                            "completed_jobs": completed_jobs,
+                            "failed_jobs": failed_jobs,
+                        });
 
-                let status = serde_json::json!({
-                    "worker_id": worker_id,
-                    "status": if current_jobs > 0 { "busy" } else { "idle" },
-                    "current_jobs": current_jobs,
-                    "completed_jobs": completed_jobs,
-                    "failed_jobs": failed_jobs,
-                });
-
-                if let Err(e) = client.send_heartbeat(&host, port, worker_id.clone(), status.to_string()).await {
-                    tracing::warn!("Heartbeat failed: {}", e);
+                        if let Err(e) = client.send_heartbeat(&host, port, worker_id.clone(), status.to_string()).await {
+                            tracing::warn!("Heartbeat failed: {}", e);
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        tracing::info!("Heartbeat loop shutting down");
+                        break;
+                    }
                 }
             }
         });
@@ -242,6 +252,29 @@ async fn start_heartbeat_loop(&mut self) {
 
     pub async fn get_stats(&self) -> WorkerStats {
         self.stats.lock().await.clone()
+    }
+
+    pub fn shutdown(&mut self) {
+        tracing::info!("Worker shutting down");
+        let _ = self.shutdown_tx.send(true);
+        if let Some(handle) = self.heartbeat_handle.take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.task_processor_handle.take() {
+            handle.abort();
+        }
+    }
+}
+
+impl Drop for Worker {
+    fn drop(&mut self) {
+        let _ = self.shutdown_tx.send(true);
+        if let Some(handle) = self.heartbeat_handle.take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.task_processor_handle.take() {
+            handle.abort();
+        }
     }
 }
 

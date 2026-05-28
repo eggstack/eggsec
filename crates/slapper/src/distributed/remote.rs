@@ -174,6 +174,22 @@ impl RemoteListener {
 
         let tls_acceptor = self.tls_server.as_ref().map(|s| s.clone_acceptor());
         let mut shutdown_rx = self.shutdown_tx.subscribe();
+        let rate_limits = Arc::clone(&self.rate_limits);
+
+        // Periodic cleanup of stale rate limit entries
+        let cleanup_handle = tokio::spawn(async move {
+            let mut cleanup_interval = tokio::time::interval(std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS));
+            loop {
+                cleanup_interval.tick().await;
+                let mut limits = rate_limits.write().await;
+                let now = Instant::now();
+                let window = Duration::from_secs(RATE_LIMIT_WINDOW_SECS);
+                limits.retain(|_ip, timestamps| {
+                    timestamps.retain(|t| now.duration_since(*t) < window);
+                    !timestamps.is_empty()
+                });
+            }
+        });
 
         loop {
             tokio::select! {
@@ -206,9 +222,15 @@ impl RemoteListener {
                             let connections = Arc::clone(&self.connections);
                             let tls_acceptor = tls_acceptor.clone();
                             let task_queue = Arc::clone(&self.task_queue);
-                            tokio::spawn(async move {
+                            let handle = tokio::spawn(async move {
                                 if let Err(e) = Self::handle_connection(stream, addr, psk, connections, tls_acceptor, task_queue).await {
                                     tracing::error!("Connection error: {}", e);
+                                }
+                            });
+                            let addr_clone = addr.to_string();
+                            tokio::spawn(async move {
+                                if let Err(e) = handle.await {
+                                    tracing::error!("Connection task panicked for {}: {}", addr_clone, e);
                                 }
                             });
                         }
@@ -219,6 +241,7 @@ impl RemoteListener {
                 }
                 _ = shutdown_rx.recv() => {
                     tracing::info!("Shutting down listener...");
+                    cleanup_handle.abort();
                     break;
                 }
             }
