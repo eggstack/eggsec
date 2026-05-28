@@ -4,7 +4,8 @@ use crate::distributed::{
 use crate::error::{Result, SlapperError};
 use crate::scanner::endpoints::EndpointScanConfig;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
 fn parse_coordinator_url(url: &str) -> Result<(&str, u16)> {
@@ -63,7 +64,7 @@ pub struct WorkerStats {
 
     pub struct Worker {
         config: WorkerConfig,
-        stats: WorkerStats,
+        stats: Arc<Mutex<WorkerStats>>,
         sender: Option<mpsc::Sender<Task>>,
         receiver: Option<mpsc::Receiver<Task>>,
         heartbeat_handle: Option<JoinHandle<()>>,
@@ -75,13 +76,13 @@ impl Worker {
     pub fn new(config: WorkerConfig, psk: String) -> Self {
         Self {
             config: config.clone(),
-            stats: WorkerStats {
+            stats: Arc::new(Mutex::new(WorkerStats {
                 worker_id: config.worker_id.clone(),
                 tasks_completed: 0,
                 tasks_failed: 0,
                 tasks_in_progress: 0,
                 last_heartbeat_secs: chrono::Utc::now().timestamp(),
-            },
+            })),
             sender: None,
             receiver: None,
             heartbeat_handle: None,
@@ -128,6 +129,7 @@ async fn start_heartbeat_loop(&mut self) {
         let coordinator_url = self.config.coordinator_url.clone();
         let interval = self.config.heartbeat_interval_secs;
         let psk = self.psk.clone();
+        let stats = Arc::clone(&self.stats);
 
         let (host, port) = match parse_coordinator_url(&coordinator_url) {
             Ok(hp) => hp,
@@ -147,12 +149,17 @@ async fn start_heartbeat_loop(&mut self) {
             loop {
                 interval.tick().await;
 
+                let (current_jobs, completed_jobs, failed_jobs) = {
+                    let s = stats.lock().await;
+                    (s.tasks_in_progress, s.tasks_completed, s.tasks_failed)
+                };
+
                 let status = serde_json::json!({
                     "worker_id": worker_id,
-                    "status": "idle",
-                    "current_jobs": 0,
-                    "completed_jobs": 0,
-                    "failed_jobs": 0,
+                    "status": if current_jobs > 0 { "busy" } else { "idle" },
+                    "current_jobs": current_jobs,
+                    "completed_jobs": completed_jobs,
+                    "failed_jobs": failed_jobs,
                 });
 
                 if let Err(e) = client.send_heartbeat(&host, port, worker_id.clone(), status.to_string()).await {
@@ -165,14 +172,66 @@ async fn start_heartbeat_loop(&mut self) {
 
     async fn start_task_processing_loop(&mut self) {
         if let Some(receiver) = self.receiver.take() {
+            let stats = Arc::clone(&self.stats);
+            let coordinator_url = self.config.coordinator_url.clone();
+            let psk = self.psk.clone();
+
+            let (host, port) = match parse_coordinator_url(&coordinator_url) {
+                Ok(hp) => hp,
+                Err(e) => {
+                    tracing::error!("Failed to parse coordinator URL for task results: {}", e);
+                    return;
+                }
+            };
+
+            let host = host.to_string();
+
             let handle = tokio::spawn(async move {
                 let mut receiver = receiver;
 
                 while let Some(task) = receiver.recv().await {
+                    let task_id = task.id.clone();
+                    let stats = Arc::clone(&stats);
+
+                    {
+                        let mut s = stats.lock().await;
+                        s.tasks_in_progress += 1;
+                    }
+
+                    let host = host.clone();
+                    let psk = psk.clone();
+                    let stats = Arc::clone(&stats);
+
                     tokio::spawn(async move {
                         let result = process_task(task).await;
-                        if let Err(e) = result {
-                            tracing::error!("Task processing error: {}", e);
+
+                        let task_result = match result {
+                            Ok(r) => r,
+                            Err(e) => {
+                                tracing::error!("Task processing error: {}", e);
+                                TaskResult {
+                                    task_id: task_id.clone(),
+                                    success: false,
+                                    output: String::new(),
+                                    error: Some(e.to_string()),
+                                    duration_millis: 0,
+                                }
+                            }
+                        };
+
+                        {
+                            let mut s = stats.lock().await;
+                            s.tasks_in_progress = s.tasks_in_progress.saturating_sub(1);
+                            if task_result.success {
+                                s.tasks_completed += 1;
+                            } else {
+                                s.tasks_failed += 1;
+                            }
+                        }
+
+                        let mut client = RemoteClient::new_plaintext(psk);
+                        if let Err(e) = client.send_result(&host, port, task_result).await {
+                            tracing::warn!("Failed to send task result to coordinator: {}", e);
                         }
                     });
                 }
@@ -181,8 +240,8 @@ async fn start_heartbeat_loop(&mut self) {
         }
     }
 
-    pub fn get_stats(&self) -> &WorkerStats {
-        &self.stats
+    pub async fn get_stats(&self) -> WorkerStats {
+        self.stats.lock().await.clone()
     }
 }
 

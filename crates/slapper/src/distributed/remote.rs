@@ -636,6 +636,51 @@ impl RemoteClient {
         Ok(())
     }
 
+    pub async fn send_result(
+        &mut self,
+        host: &str,
+        port: u16,
+        result: crate::distributed::queue::TaskResult,
+    ) -> Result<()> {
+        let host_port = format!("{}:{}", host, port);
+
+        let addr = if let Some(cached) = self.resolve_cached(host, port) {
+            cached
+        } else {
+            let resolved: SocketAddr = tokio::net::lookup_host(&host_port)
+                .await
+                .map_err(|e| SlapperError::Network(format!("Failed to resolve host: {}", e)))?
+                .next()
+                .ok_or_else(|| SlapperError::Network("No addresses found for host".to_string()))?;
+            self.cache_resolution(resolved);
+            resolved
+        };
+
+        let mut line_writer = self.connect_to_coordinator_with_addr(&addr).await?;
+
+        let cmd = CommandMessage::Result {
+            id: uuid::Uuid::new_v4().to_string(),
+            result,
+        };
+
+        line_writer
+            .write_line(&serde_json::to_string(&cmd)?)
+            .await?;
+
+        let _response: ResponseMessage =
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                let line = line_writer
+                    .read_line()
+                    .await?
+                    .ok_or_else(|| SlapperError::Network("No response".to_string()))?;
+                Ok::<_, SlapperError>(serde_json::from_str::<ResponseMessage>(&line)?)
+            })
+            .await
+            .map_err(|_| SlapperError::Network("Result response timed out".to_string()))??;
+
+        Ok(())
+    }
+
     pub async fn execute(
         &mut self,
         host: &str,
