@@ -98,6 +98,9 @@ Note: `Task::payload` uses `#[serde(default)]` for backward compatibility with s
 - Use `TaskQueue::reassign_stale_tasks(timeout_secs)` to recover tasks from dead workers
 - `QueueError` enum: `QueueFull`, `TaskNotFound`
 
+### Critical Issue (2026-06-09 Review)
+**Task results never sent to coordinator** - The result system is broken. Workers execute tasks but results are never communicated back. This is a HIGH severity bug identified in the architecture review. See `plans/distributed_review.md` for details.
+
 ### PSK Authentication
 - PSK is sent as first message after TCP connect: `AuthMessage { psk }`
 - Server validates using constant-time comparison: `bool::from(psk.as_bytes().ct_eq(server_psk.as_bytes()))`
