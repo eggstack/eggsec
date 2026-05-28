@@ -1,3 +1,4 @@
+use super::CommandContext;
 use crate::cli::GrpcServerArgs;
 use crate::error::SlapperError;
 use crate::tool::protocol::grpc::start_grpc_server;
@@ -7,7 +8,8 @@ use crate::tool::ToolRegistry;
 use tracing::info;
 
 #[cfg(feature = "grpc-api")]
-pub async fn handle_grpc_server(args: GrpcServerArgs) -> anyhow::Result<()> {
+pub async fn handle_grpc_server(ctx: &CommandContext, args: GrpcServerArgs) -> anyhow::Result<()> {
+    ctx.ensure_scope(&args.host)?;
     info!("Starting gRPC server on {}:{}", args.host, args.port);
 
     let registry = ToolRegistry::new();
@@ -21,7 +23,7 @@ pub async fn handle_grpc_server(args: GrpcServerArgs) -> anyhow::Result<()> {
 }
 
 #[cfg(not(feature = "grpc-api"))]
-pub async fn handle_grpc_server(_args: GrpcServerArgs) -> Result<()> {
+pub async fn handle_grpc_server(_ctx: &CommandContext, _args: GrpcServerArgs) -> Result<()> {
     Err(crate::error::SlapperError::Config(
         "gRPC API is not enabled. Compile with --features grpc-api".to_string(),
     ))

@@ -149,7 +149,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         #[cfg(feature = "ai-integration")]
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(ctx, args).await,
         #[cfg(feature = "grpc-api")]
-        Some(Commands::Grpc(args)) => handle_grpc_server(args).await,
+        Some(Commands::Grpc(args)) => handle_grpc_server(ctx, args).await,
         Some(Commands::Vuln(args)) => handle_vuln(ctx, args).await,
         Some(Commands::Storage(args)) => handle_storage(ctx, args).await,
     }
