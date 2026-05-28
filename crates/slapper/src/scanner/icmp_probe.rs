@@ -41,8 +41,8 @@ pub async fn ping_host(
         let payload = [0u8; 56];
         let sequence = PingSequence(i as u16 + 1);
 
-        match surge_ping::ping(target_ip, &payload).await {
-            Ok((packet, rtt)) => {
+        match tokio::time::timeout(_timeout, surge_ping::ping(target_ip, &payload)).await {
+            Ok(Ok((packet, rtt))) => {
                 let ttl = match &packet {
                     IcmpPacket::V4(p) => p.get_ttl().unwrap_or(64),
                     IcmpPacket::V6(_) => 64,
@@ -57,8 +57,16 @@ pub async fn ping_host(
                     payload_size: payload.len(),
                 });
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 tracing::debug!("Ping timeout for sequence {}: {}", sequence.0, e);
+            }
+            Err(_) => {
+                tracing::debug!(
+                    "Ping probe to {} sequence {} timed out after {:?}",
+                    target,
+                    sequence.0,
+                    _timeout
+                );
             }
         }
 

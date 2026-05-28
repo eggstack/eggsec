@@ -59,7 +59,7 @@
 //!     timeout_duration: Duration::from_secs(30),
 //!     include_404: false,
 //!     tui_mode: false,
-//!     spoof_config: Default::default(),
+//!     spoof_config: std::sync::Arc::new(Default::default()),
 //!     verify_tls: true,
 //!     progress_tx: None,
 //! };

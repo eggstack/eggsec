@@ -4,6 +4,7 @@
 //! and packet fragmentation capabilities.
 
 use crate::error::{Result, SlapperError};
+#[cfg(all(feature = "stress-testing", unix))]
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 #[cfg(all(feature = "stress-testing", unix))]
@@ -87,6 +88,14 @@ pub fn init_packet_trace(path: &str, include_header: bool) -> Result<()> {
         .set(parking_lot::Mutex::new(file))
         .map_err(|_| SlapperError::Runtime("Packet trace file already initialized".to_string()))?;
     Ok(())
+}
+
+pub fn shutdown_packet_trace() {
+    if let Some(file) = PACKET_TRACE_FILE.get() {
+        let mut guard = file.lock();
+        use std::io::Write;
+        let _ = guard.flush();
+    }
 }
 
 #[cfg(all(feature = "stress-testing", unix))]
