@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioResolver;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::Semaphore;
 
 #[cfg(all(feature = "stress-testing", unix))]
 use surge_ping;
@@ -19,6 +21,7 @@ pub struct TracerouteConfig {
     pub packet_size: usize,
     pub parallel_probes: bool,
     pub resolve_names: bool,
+    pub max_concurrent_probes: usize,
 }
 
 impl Default for TracerouteConfig {
@@ -34,6 +37,7 @@ impl Default for TracerouteConfig {
             packet_size: 32,
             parallel_probes: true,
             resolve_names: true,
+            max_concurrent_probes: 6,
         }
     }
 }
@@ -137,13 +141,14 @@ impl Traceroute {
         let mut final_reached = false;
 
         let use_icmp = self.config.use_icmp;
+        let semaphore = Arc::new(Semaphore::new(self.config.max_concurrent_probes));
 
         if self.config.parallel_probes {
             for ttl in self.config.first_ttl..=self.config.max_hops {
                 let hop = if use_icmp {
-                    self.probe_hop_icmp_parallel(target_ip, ttl).await
+                    self.probe_hop_icmp_parallel(target_ip, ttl, semaphore.clone()).await
                 } else {
-                    self.probe_hop_udp_parallel(target_ip, ttl).await
+                    self.probe_hop_udp_parallel(target_ip, ttl, semaphore.clone()).await
                 };
 
                 let hop_addr = hop.address.clone();
@@ -242,7 +247,7 @@ impl Traceroute {
         })
     }
 
-    async fn probe_hop_udp_parallel(&self, target: IpAddr, ttl: u8) -> TracerouteHop {
+    async fn probe_hop_udp_parallel(&self, target: IpAddr, ttl: u8, semaphore: Arc<Semaphore>) -> TracerouteHop {
         let mut hop = TracerouteHop::new(ttl);
         let target_port = self.config.port + ttl as u16 - 1;
 
@@ -253,8 +258,11 @@ impl Traceroute {
                 let timeout = self.config.timeout;
                 let port = target_port;
                 let packet_size = self.config.packet_size;
+                let semaphore = semaphore.clone();
 
                 tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await
+                        .map_err(|e| ProbeError::SocketError(e.to_string()))?;
                     let start = Instant::now();
                     let socket = std::net::UdpSocket::bind("0.0.0.0:0")
                         .map_err(|e| ProbeError::SocketError(e.to_string()))?;
@@ -321,7 +329,7 @@ impl Traceroute {
     }
 
     #[cfg(all(feature = "stress-testing", unix))]
-    async fn probe_hop_icmp_parallel(&self, target: IpAddr, ttl: u8) -> TracerouteHop {
+    async fn probe_hop_icmp_parallel(&self, target: IpAddr, ttl: u8, semaphore: Arc<Semaphore>) -> TracerouteHop {
         use surge_ping::{Client, Config};
 
         let mut hop = TracerouteHop::new(ttl);
@@ -342,9 +350,12 @@ impl Traceroute {
         for _ in 0..self.config.max_retries {
             let target = target;
             let payload = payload.clone();
+            let semaphore = semaphore.clone();
 
             let handle: tokio::task::JoinHandle<(Option<IpAddr>, Option<Duration>)> =
                 tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await
+                        .map_err(|_| (None, None))?;
                     match surge_ping::ping(target, &payload).await {
                         Ok((_, rtt)) => (Some(target), Some(rtt)),
                         Err(e) => {
@@ -379,7 +390,7 @@ impl Traceroute {
     }
 
     #[cfg(not(all(feature = "stress-testing", unix)))]
-    async fn probe_hop_icmp_parallel(&self, _target: IpAddr, _ttl: u8) -> TracerouteHop {
+    async fn probe_hop_icmp_parallel(&self, _target: IpAddr, _ttl: u8, _semaphore: Arc<Semaphore>) -> TracerouteHop {
         TracerouteHop::new(_ttl)
     }
 
@@ -591,6 +602,11 @@ impl TracerouteBuilder {
 
     pub fn resolve_names(mut self, resolve: bool) -> Self {
         self.config.resolve_names = resolve;
+        self
+    }
+
+    pub fn max_concurrent_probes(mut self, max: usize) -> Self {
+        self.config.max_concurrent_probes = max;
         self
     }
 

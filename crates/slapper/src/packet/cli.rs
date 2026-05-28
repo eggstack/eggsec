@@ -465,6 +465,7 @@ pub async fn handle_packet_traceroute(
         packet_size: 32,
         parallel_probes: args.parallel,
         resolve_names: !args.no_resolve,
+        max_concurrent_probes: 6,
     };
 
     let traceroute = Traceroute::new(config);

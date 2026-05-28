@@ -280,25 +280,43 @@ fn get_spoofed_source_v6(range: &Option<String>) -> Result<Ipv6Addr> {
             let prefix: u8 = parts[1].parse()?;
 
             let base_segments = base.segments();
-            let host_bits = 128 - prefix;
-            let offset_lo = rng.gen_range(1..u16::MAX);
-            let offset_hi = if host_bits > 16 {
-                rng.gen_range(0..(1u16 << (host_bits - 16).min(16)))
-            } else {
-                0
-            };
+            let mut new_segments = [0u16; 8];
+            let mut done = false;
 
-            let new_lo = base_segments[7] | offset_lo;
-            let new_hi = base_segments[6] | offset_hi;
+            for i in 0..8 {
+                let seg_start = i * 16;
+                let seg_end = seg_start + 16;
+
+                if seg_end <= prefix as usize {
+                    new_segments[i] = base_segments[i];
+                } else if seg_start >= prefix as usize {
+                    new_segments[i] = rng.gen_range(0..=u16::MAX);
+                } else {
+                    let host_bits_in_seg = seg_end - prefix as usize;
+                    let mask = !((1u16 << host_bits_in_seg) - 1);
+                    let network_part = base_segments[i] & mask;
+                    let random_part = rng.gen_range(0..=(1u16 << host_bits_in_seg) - 1);
+                    new_segments[i] = network_part | random_part;
+                    done = true;
+                }
+
+                if done {
+                    for j in (i + 1)..8 {
+                        new_segments[j] = rng.gen_range(0..=u16::MAX);
+                    }
+                    break;
+                }
+            }
+
             return Ok(Ipv6Addr::new(
-                base_segments[0],
-                base_segments[1],
-                base_segments[2],
-                base_segments[3],
-                base_segments[4],
-                base_segments[5],
-                new_hi,
-                new_lo,
+                new_segments[0],
+                new_segments[1],
+                new_segments[2],
+                new_segments[3],
+                new_segments[4],
+                new_segments[5],
+                new_segments[6],
+                new_segments[7],
             ));
         }
 
@@ -321,7 +339,7 @@ fn get_spoofed_source_v6(range: &Option<String>) -> Result<Ipv6Addr> {
         rng.gen_range(0..0xffff),
         rng.gen_range(0..0xffff),
         rng.gen_range(0..0xffff),
-        rng.gen_range(1..0xffff),
+        rng.gen_range(0..0xffff),
     ))
 }
 

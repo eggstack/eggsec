@@ -269,6 +269,7 @@ pub async fn run_packet_traceroute(
         packet_size: 32,
         parallel_probes: true,
         resolve_names: true,
+        max_concurrent_probes: 6,
     };
 
     if let Err(e) = progress_tx.send((0, max_hops as u64)).await {
