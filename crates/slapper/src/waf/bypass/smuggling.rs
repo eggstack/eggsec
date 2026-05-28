@@ -22,7 +22,9 @@ pub enum SmugglingType {
     TeCl,
     ChunkedMalformed,
     RequestTunneling,
+    #[allow(dead_code)]
     H2CUpgrade,
+    #[allow(dead_code)]
     Http2Frame,
     DoubleContentLength,
     MultipartMixed,
