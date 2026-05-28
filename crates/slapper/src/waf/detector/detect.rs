@@ -114,15 +114,14 @@ impl WafDetector {
                         .unwrap_or("")
                         .trim();
                     if cookie_name == cookie_pattern_lower.as_str() {
-                        score = score.saturating_add(waf::COOKIE_MATCH_SCORE);
-                        sig_matched_cookies.push(
-                            signature.cookies[sig_lower
-                                .cookies
-                                .iter()
-                                .position(|c| c == cookie_pattern_lower)
-                                .unwrap_or(0)]
-                            .clone(),
-                        );
+                        if let Some(pos) = sig_lower
+                            .cookies
+                            .iter()
+                            .position(|c| c == cookie_pattern_lower)
+                        {
+                            score = score.saturating_add(waf::COOKIE_MATCH_SCORE);
+                            sig_matched_cookies.push(signature.cookies[pos].clone());
+                        }
                         break;
                     }
                 }
