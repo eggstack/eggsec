@@ -221,7 +221,7 @@ impl TabInput for AuthTab {
         if self.is_running() {
             self.stop();
         } else {
-            if self.focus_area == AuthFocusArea::Inputs {
+            if self.is_input_focused() {
                 self.inputs.blur();
             }
             self.start();
@@ -229,6 +229,9 @@ impl TabInput for AuthTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
     }
 
@@ -331,9 +334,7 @@ impl AuthTab {
 
     fn sync_input_focus(&mut self) {
         for (i, field) in self.inputs.fields.iter_mut().enumerate() {
-            if i < self.inputs.fields.len() {
-                field.focused = Some(i) == self.current_input_index();
-            }
+            field.focused = Some(i) == self.current_input_index();
         }
     }
 }

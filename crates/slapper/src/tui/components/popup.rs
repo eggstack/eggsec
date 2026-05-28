@@ -182,6 +182,7 @@ pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
         ])
         .split(r);
 
+    let vertical_chunk = popup_layout.get(1).copied().unwrap_or(r);
     Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -189,7 +190,7 @@ pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
             Constraint::Length(clamped_width),
             Constraint::Min(0),
         ])
-        .split(popup_layout.get(1).copied().unwrap_or(r))[1]
+        .split(vertical_chunk)[1]
 }
 
 pub fn help_popup_for_tab(tab: crate::tui::tabs::Tab) -> Popup {

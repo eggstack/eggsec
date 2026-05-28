@@ -8,6 +8,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
 use super::App;
+use super::InputMode;
 use super::KeyHandler;
 use crate::tui::state;
 use crate::tui::tabs::TabWindow;
@@ -163,7 +164,6 @@ where
 
         if app.last_auto_save.elapsed().as_secs() >= auto_save_interval_secs {
             app.auto_save_if_due();
-            app.last_auto_save = std::time::Instant::now();
         }
 
         if app.should_quit {
@@ -181,7 +181,12 @@ where
             match event {
                 Event::Key(key) => key_handler.handle_key_event(app, &key),
                 Event::Mouse(mouse_event) => handle_mouse_event(mouse_event, app),
-                Event::FocusGained | Event::FocusLost | Event::Paste(_) | Event::Resize(_, _) => {
+                Event::Paste(text) => {
+                    if app.mode == InputMode::Insert {
+                        app.dispatcher_mut().handle_paste(&text);
+                    }
+                }
+                Event::FocusGained | Event::FocusLost | Event::Resize(_, _) => {
                     pending_redraw = true;
                 }
             }

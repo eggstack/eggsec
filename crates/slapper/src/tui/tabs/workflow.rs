@@ -318,28 +318,31 @@ impl TabRender for WorkflowTab {
             WorkflowMode::ChangeStatus => vec![3, 6],
         };
 
-        if !fields.is_empty() {
-            let field_chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints(vec![Constraint::Length(3); fields.len()])
-                .split(fields_area);
+        let field_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Length(3); fields.len()])
+            .split(fields_area);
 
-            for (i, &idx) in fields.iter().enumerate() {
-                if let Some(chunk) = field_chunks.get(i) {
-                    if idx < self.inputs.fields.len() {
-                        if idx == 5 {
-                            let mut sev = self.severity_selector.clone();
-                            sev.focused = self.focus_area == WorkflowFocusArea::Inputs;
-                            sev.render(f, *chunk);
-                        } else if idx == 6 {
-                            let mut st = self.status_selector.clone();
-                            st.focused = self.focus_area == WorkflowFocusArea::Inputs;
-                            st.render(f, *chunk);
-                        } else {
-                            self.inputs.fields[idx].render(f, *chunk, insert_mode);
-                        }
-                    }
+        for (i, &idx) in fields.iter().enumerate() {
+            if let Some(chunk) = field_chunks.get(i) {
+                if idx < self.inputs.fields.len() {
+                    self.inputs.fields[idx].render(f, *chunk, insert_mode);
                 }
+            }
+        }
+
+        if matches!(self.current_mode, WorkflowMode::CreateFinding | WorkflowMode::ChangeStatus) {
+            if let Some(chunk) = field_chunks.get(fields.len()) {
+                let mut sev = self.severity_selector.clone();
+                sev.focused = self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused();
+                sev.render(f, *chunk);
+            }
+        }
+        if matches!(self.current_mode, WorkflowMode::ChangeStatus) {
+            if let Some(chunk) = field_chunks.get(fields.len() + 1) {
+                let mut st = self.status_selector.clone();
+                st.focused = self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused();
+                st.render(f, *chunk);
             }
         }
 

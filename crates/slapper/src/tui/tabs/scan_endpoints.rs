@@ -331,8 +331,18 @@ impl TabInput for ScanEndpointsTab {
         if self.is_running() {
             return;
         }
-        if !self.inputs.fields.is_empty() {
-            self.inputs.focus_next();
+        match self.focus_area {
+            ScanEndpointsFocusArea::Inputs => {
+                self.inputs.blur();
+                self.focus_area = ScanEndpointsFocusArea::Options;
+            }
+            ScanEndpointsFocusArea::Options => {
+                self.focus_area = ScanEndpointsFocusArea::Results;
+            }
+            ScanEndpointsFocusArea::Results => {
+                self.focus_area = ScanEndpointsFocusArea::Inputs;
+                self.inputs.focus(0);
+            }
         }
     }
 
@@ -340,8 +350,17 @@ impl TabInput for ScanEndpointsTab {
         if self.is_running() {
             return;
         }
-        if !self.inputs.fields.is_empty() {
-            self.inputs.focus_prev();
+        match self.focus_area {
+            ScanEndpointsFocusArea::Inputs => {
+                self.focus_area = ScanEndpointsFocusArea::Results;
+            }
+            ScanEndpointsFocusArea::Options => {
+                self.inputs.focus(0);
+                self.focus_area = ScanEndpointsFocusArea::Inputs;
+            }
+            ScanEndpointsFocusArea::Results => {
+                self.focus_area = ScanEndpointsFocusArea::Options;
+            }
         }
     }
 
@@ -439,6 +458,10 @@ impl TabInput for ScanEndpointsTab {
             self.inputs.blur();
             return;
         }
+        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Options {
+            self.include_404_checkbox.checked = !self.include_404_checkbox.checked;
+            return;
+        }
         self.start();
     }
 
@@ -457,7 +480,7 @@ impl TabInput for ScanEndpointsTab {
                 self.inputs.focus_prev();
             }
         } else if self.focus_area == ScanEndpointsFocusArea::Options {
-            self.inputs.focus_prev();
+            return;
         }
     }
 
@@ -472,7 +495,7 @@ impl TabInput for ScanEndpointsTab {
                 self.inputs.focus_next();
             }
         } else if self.focus_area == ScanEndpointsFocusArea::Options {
-            self.inputs.focus_next();
+            return;
         }
     }
 

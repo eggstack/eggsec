@@ -371,8 +371,18 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return;
         }
-        if !self.inputs.fields.is_empty() {
-            self.inputs.focus_next();
+        match self.focus_area {
+            ScanPortsFocusArea::Inputs => {
+                self.inputs.blur();
+                self.focus_area = ScanPortsFocusArea::Options;
+            }
+            ScanPortsFocusArea::Options => {
+                self.focus_area = ScanPortsFocusArea::Results;
+            }
+            ScanPortsFocusArea::Results => {
+                self.focus_area = ScanPortsFocusArea::Inputs;
+                self.inputs.focus(0);
+            }
         }
     }
 
@@ -380,8 +390,17 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return;
         }
-        if !self.inputs.fields.is_empty() {
-            self.inputs.focus_prev();
+        match self.focus_area {
+            ScanPortsFocusArea::Inputs => {
+                self.focus_area = ScanPortsFocusArea::Results;
+            }
+            ScanPortsFocusArea::Options => {
+                self.inputs.focus(0);
+                self.focus_area = ScanPortsFocusArea::Inputs;
+            }
+            ScanPortsFocusArea::Results => {
+                self.focus_area = ScanPortsFocusArea::Options;
+            }
         }
     }
 
@@ -396,7 +415,7 @@ impl TabInput for ScanPortsTab {
                 self.inputs.focus_prev();
             }
         } else if self.focus_area == ScanPortsFocusArea::Options {
-            self.inputs.focus_prev();
+            return;
         }
     }
 
@@ -411,7 +430,7 @@ impl TabInput for ScanPortsTab {
                 self.inputs.focus_next();
             }
         } else if self.focus_area == ScanPortsFocusArea::Options {
-            self.inputs.focus_next();
+            return;
         }
     }
 
@@ -506,6 +525,10 @@ impl TabInput for ScanPortsTab {
     fn handle_enter(&mut self) {
         if !self.is_running() && self.inputs.is_focused() {
             self.inputs.blur();
+            return;
+        }
+        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Options {
+            self.udp_checkbox.checked = !self.udp_checkbox.checked;
             return;
         }
         if self.is_running() {

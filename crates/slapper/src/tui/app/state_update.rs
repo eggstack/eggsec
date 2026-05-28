@@ -34,13 +34,14 @@ impl super::App {
             while let Ok(result) = rx.try_recv() {
                 pending_results.push(result);
             }
-            if rx.is_closed() {
-                self.result_rx = None;
-                self.task_tab = None;
-            }
+            let is_closed = rx.is_closed();
             for result in pending_results {
                 self.handle_result(result);
                 dirty = true;
+            }
+            if is_closed {
+                self.result_rx = None;
+                self.task_tab = None;
             }
         }
 

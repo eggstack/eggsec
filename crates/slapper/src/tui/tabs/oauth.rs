@@ -527,6 +527,9 @@ impl TabInput for OAuthTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
     }
 

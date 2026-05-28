@@ -372,20 +372,28 @@ impl TabInput for ComplianceTab {
 
         match self.focus_area {
             ComplianceFocusArea::Inputs => {
-                self.inputs.blur();
+                if self.inputs.is_focused() {
+                    self.inputs.blur();
+                } else {
+                    self.focus_area = ComplianceFocusArea::Inputs;
+                    self.inputs.focus(0);
+                }
             }
             ComplianceFocusArea::Framework => {
                 self.framework_selector.handle_enter();
             }
-            ComplianceFocusArea::Results => {}
-        }
-
-        if !self.target().is_empty() {
-            self.start();
+            ComplianceFocusArea::Results => {
+                if !self.target().is_empty() {
+                    self.start();
+                }
+            }
         }
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
         self.framework_selector.blur();
     }

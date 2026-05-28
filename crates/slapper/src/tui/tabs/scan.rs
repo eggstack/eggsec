@@ -530,7 +530,7 @@ impl TabInput for ScanTab {
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
-            self.focus_area = ScanFocusArea::Inputs;
+            self.focus_area = ScanFocusArea::Results;
             self.inputs.blur();
         }
     }

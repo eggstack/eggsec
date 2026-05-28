@@ -194,7 +194,7 @@ impl SessionManager {
                         e
                     );
                 }
-                sessions.swap_remove(0);
+                sessions.remove(0);
             }
         }
 

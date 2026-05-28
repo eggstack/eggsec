@@ -405,6 +405,7 @@ impl KeyHandler {
                 app.close_quick_switch();
             }
             (KeyModifiers::NONE, KeyCode::Enter) => {
+                let results = app.get_quick_switch_results();
                 if !results.is_empty() && app.quick_switch_selected < results.len() {
                     if let Some(tab) = results.get(app.quick_switch_selected) {
                         app.current_tab = **tab;

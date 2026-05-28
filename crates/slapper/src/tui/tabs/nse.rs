@@ -337,20 +337,30 @@ impl TabInput for NseTab {
             self.stop();
             return;
         }
-        if self.focus_area == NseFocusArea::Inputs {
-            if self.inputs.is_focused() {
-                self.inputs.blur();
+        match self.focus_area {
+            NseFocusArea::Inputs => {
+                if self.inputs.is_focused() {
+                    self.inputs.blur();
+                } else {
+                    self.focus_area = NseFocusArea::Inputs;
+                    self.inputs.focus(0);
+                }
             }
-        } else if self.focus_area == NseFocusArea::ScriptSelector {
-            if self.script_selector.focused {
-                self.script_selector.handle_enter();
+            NseFocusArea::ScriptSelector => {
+                if self.script_selector.focused {
+                    self.script_selector.handle_enter();
+                }
             }
-        } else {
-            self.start();
+            NseFocusArea::Results => {
+                self.start();
+            }
         }
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
         self.script_selector.blur();
     }

@@ -654,7 +654,7 @@ impl TabInput for ReconTab {
     fn handle_down(&mut self) {
         if !self.is_running() {
             if self.focus_area == ReconFocusArea::Options {
-                if self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
+                if self.option_checkboxes.is_empty() || self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
                     self.focused_checkbox_index = 0;
                 } else {
                     self.focused_checkbox_index += 1;

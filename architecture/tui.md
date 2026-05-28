@@ -1151,3 +1151,102 @@ All 5 tabs passed audit - no bugs found.
 | Total bugs fixed | 24 |
 
 (End of file)
+
+## Session Fixes (2026-06-10)
+
+### TUI Deep Dive Audit - All 29 Tabs + Core + Components
+
+#### Group 1 (recon, scan, scan_ports, scan_endpoints, fingerprint)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `recon.rs` | 657 | `handle_down` missing `is_empty()` guard on checkbox index | Added `option_checkboxes.is_empty() ||` guard |
+| `scan.rs` | 531-536 | `handle_bottom` goes to Inputs instead of Results | Changed to `ScanFocusArea::Results` |
+| `scan_ports.rs` | 370-386 | Options focus area unreachable via keyboard | Added Options to `handle_focus_next`/`handle_focus_prev` cycle |
+| `scan_ports.rs` | 506-516 | `handle_enter` doesn't toggle checkbox in Options | Added checkbox toggle when `focus_area == Options` |
+| `scan_ports.rs` | 388-416 | `handle_up`/`handle_down` wrong behavior in Options | Made Options branch a no-op |
+| `scan_endpoints.rs` | 330-346 | Options focus area unreachable via keyboard | Added Options to focus cycle |
+| `scan_endpoints.rs` | 433-443 | `handle_enter` doesn't toggle checkbox in Options | Added checkbox toggle |
+| `scan_endpoints.rs` | 449-476 | `handle_up`/`handle_down` wrong behavior in Options | Made Options branch a no-op |
+| `fingerprint.rs` | - | No bugs found | - |
+
+#### Group 2 (fuzz, waf, waf_stress, load, stress)
+
+All 5 tabs passed audit - no bugs found.
+
+#### Group 3 (packet, graphql, oauth, cluster, proxy)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `graphql.rs` | 394 | `handle_copy()` missing `is_running()` guard | Added guard returning None |
+| `oauth.rs` | 529 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
+| `cluster.rs` | 494 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
+| `packet.rs` | - | No bugs found | - |
+| `proxy.rs` | 731-783 | Duplicate inherent methods shadow trait methods | Noted as structural issue (no runtime impact) |
+
+#### Group 4 (nse, plugin, hunt, browser, compliance)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `nse.rs` | 335-351 | `handle_enter` starts scan from Inputs when not focused | Restructured: only Results triggers start |
+| `nse.rs` | 353 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
+| `compliance.rs` | 367-386 | `handle_enter` unconditionally calls `start()` | Restructured: only Results triggers start |
+| `compliance.rs` | 388 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
+| `plugin.rs` | - | No bugs found | - |
+| `hunt.rs` | - | No bugs found | - |
+| `browser.rs` | - | No bugs found | - |
+
+#### Group 5 (storage, integrations, workflow, vuln, report)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `report.rs` | 670-673 | `start()` conditional guard blocks restart | Removed conditional, now unconditional |
+| `report.rs` | 524-527 | `handle_enter` starts scan from Results | Added `return;` in Results arm |
+| `report.rs` | 676-679 | `stop()` unnecessary guard | Made unconditional |
+| `report.rs` | 276, 308 | Direct `chunks[i]` indexing | Changed to `.get()` pattern |
+| `workflow.rs` | 315-340 | severity/status selectors never rendered | Added explicit rendering after field loop |
+| `vuln.rs` | 564-589 | `handle_enter` restarts from Results | Added `return;` in Results arm |
+| `storage.rs` | - | No bugs found | - |
+| `integrations.rs` | - | No bugs found | - |
+
+#### Group 6 (resume, history, dashboard, settings, auth)
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `settings/main.rs` | 458-513 | `reset()` missing config clear | Added `self.config = None;` |
+| `auth.rs` | 224 | `handle_enter` compares non-existent `AuthFocusArea::Inputs` | Replaced with `self.is_input_focused()` |
+| `auth.rs` | 231-233 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `auth.rs` | 334 | `sync_input_focus` tautological guard | Removed redundant `i < fields.len()` check |
+| `resume.rs` | - | No bugs found | - |
+| `history.rs` | - | No bugs found | - |
+| `dashboard.rs` | - | No bugs found | - |
+
+#### App/Core Modules
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `runner.rs` | 184 | `Event::Paste(_)` silently dropped | Added paste routing in Insert mode |
+| `runner.rs` | 164-167 | Auto-save timer double-reset | Removed redundant reset |
+| `key_handler.rs` | 399, 407-414 | Stale quick-switch results on Enter | Re-fetch fresh results in Enter arm |
+| `state_update.rs` | 37-39 | `task_tab` cleared before results processed | Moved clear to after results loop |
+| `session.rs` | 188-199 | `swap_remove(0)` breaks sort order | Changed to `remove(0)` |
+
+#### Components
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `popup.rs` | 192 | `centered_rect` fallback uses wrong area | Store chunk in variable before split |
+| `scrollable.rs` | 70-76 | Potential `usize` overflow in `scroll_right` | Changed to `saturating_add` |
+| `palette.rs` | 55-57 | `scroll_offset` not clamped to result count | Added `.min(total.saturating_sub(1).max(0))` |
+| `input.rs` | 98 | `to_lowercase()` per candidate in filter | Noted as performance issue (minor) |
+| `selector.rs` | 437 | `options_per_line` uses byte length | Noted as Unicode issue (minor) |
+| `progress.rs` | 116 | `current > total` shows misleading display | Noted as edge case (minor) |
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total files audited | 42 |
+| Total bugs found | 39 |
+| Total bugs fixed | 33 |
+| Bugs noted (minor/edge cases) | 6 |

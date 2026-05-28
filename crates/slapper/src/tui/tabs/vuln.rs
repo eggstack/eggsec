@@ -581,7 +581,9 @@ impl TabInput for VulnTab {
             VulnFocusArea::Inputs => {
                 self.inputs.blur();
             }
-            VulnFocusArea::Results => {}
+            VulnFocusArea::Results => {
+                return;
+            }
         }
         if !self.is_running() {
             self.start();

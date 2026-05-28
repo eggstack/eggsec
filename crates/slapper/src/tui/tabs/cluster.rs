@@ -492,6 +492,9 @@ impl TabInput for ClusterTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_open() {
             self.view_selector.cancel();
             return;

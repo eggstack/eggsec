@@ -271,9 +271,10 @@ impl TabRender for ReportTab {
             .split(area);
 
         // View selector
+        let Some(view_area) = chunks.get(0) else { return; };
         let mut selector = self.view_selector.clone();
         selector.focused = self.focus_area == ReportFocusArea::ViewSelector;
-        selector.render(f, chunks[0]);
+        selector.render(f, *view_area);
 
         // Inputs based on current view
         let inputs_block = Block::default()
@@ -297,6 +298,7 @@ impl TabRender for ReportTab {
             ReportView::Schedule => &self.schedule_inputs,
         };
 
+        let Some(inputs_area) = chunks.get(1) else { return; };
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -305,9 +307,9 @@ impl TabRender for ReportTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(inputs_block.inner(chunks[1]));
+            .split(inputs_block.inner(*inputs_area));
 
-        f.render_widget(inputs_block, chunks[1]);
+        f.render_widget(inputs_block, *inputs_area);
 
         for (i, field) in current_inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -318,8 +320,8 @@ impl TabRender for ReportTab {
         // Format selector for Convert view
         if self.current_view == ReportView::Convert {
             let format_area = Rect {
-                x: chunks[1].x + chunks[1].width - 25,
-                y: chunks[1].y + 1,
+                x: inputs_area.x + inputs_area.width - 25,
+                y: inputs_area.y + 1,
                 width: 23,
                 height: 3,
             };
@@ -329,7 +331,9 @@ impl TabRender for ReportTab {
         }
 
         // Results
-        self.results_view.render(f, chunks[2], None);
+        if let Some(results_area) = chunks.get(2) {
+            self.results_view.render(f, *results_area, None);
+        }
     }
 }
 
@@ -521,7 +525,9 @@ impl TabInput for ReportTab {
                 };
                 current_inputs.blur();
             }
-            ReportFocusArea::Results => {}
+            ReportFocusArea::Results => {
+                return;
+            }
         }
 
         self.start();
@@ -668,15 +674,12 @@ impl TabInput for ReportTab {
 
 impl ReportTab {
     pub fn start(&mut self) {
-        if self.state != AppState::Running {
-            self.state = AppState::Running;
-        }
+        self.state = AppState::Running;
+        self.results_view.clear();
     }
 
     pub fn stop(&mut self) {
-        if self.state == AppState::Running {
-            self.state = AppState::Idle;
-        }
+        self.state = AppState::Idle;
     }
 
     pub fn page_up(&mut self, page_size: usize) {

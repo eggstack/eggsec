@@ -392,6 +392,9 @@ impl TabInput for GraphQlTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if self.focus_area == GraphQlFocusArea::Inputs {
             self.inputs.get_focused_value()
         } else if self.focus_area == GraphQlFocusArea::Results {
