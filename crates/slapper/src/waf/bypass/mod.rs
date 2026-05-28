@@ -133,6 +133,7 @@ pub fn is_bypass_successful(
     detection: &WafDetectionResult,
     payload: &str,
     response_body: &str,
+    response_diff: Option<&super::detector::types::ResponseDiff>,
 ) -> bool {
     let blocked_codes = crate::constants::waf::BLOCKED_STATUS_CODES;
     let baseline_status = detection.status_code;
@@ -140,6 +141,12 @@ pub fn is_bypass_successful(
     let response_blocked = blocked_codes.contains(&status) || body_looks_blocked(response_body);
     if response_blocked {
         return false;
+    }
+
+    if let Some(diff) = response_diff {
+        if diff.is_waf_blocked() {
+            return false;
+        }
     }
 
     let reflected = payload_is_reflected(payload, response_body);
@@ -194,52 +201,87 @@ mod tests {
     #[test]
     fn bypass_fails_for_blocked_status_codes() {
         let detection = detection_with_status(403);
-        assert!(!is_bypass_successful(429, &detection, "", "ok"));
-        assert!(!is_bypass_successful(503, &detection, "", "ok"));
+        assert!(!is_bypass_successful(429, &detection, "", "ok", None));
+        assert!(!is_bypass_successful(503, &detection, "", "ok", None));
     }
 
     #[test]
     fn bypass_fails_when_status_matches_baseline() {
         let detection = detection_with_status(200);
-        assert!(!is_bypass_successful(200, &detection, "", "ok"));
+        assert!(!is_bypass_successful(200, &detection, "", "ok", None));
     }
 
     #[test]
     fn bypass_requires_2xx_status_for_success() {
         let detection = detection_with_status(403);
-        assert!(!is_bypass_successful(302, &detection, "", "ok"));
-        assert!(is_bypass_successful(200, &detection, "", "ok"));
+        assert!(!is_bypass_successful(302, &detection, "", "ok", None));
+        assert!(is_bypass_successful(200, &detection, "", "ok", None));
     }
 
     #[test]
     fn bypass_requires_payload_reflection_for_non_empty_payload() {
         let detection = detection_with_status(403);
         assert!(!is_bypass_successful(
-            200, &detection, "admin'--", "welcome"
+            200, &detection, "admin'--", "welcome", None
         ));
         assert!(is_bypass_successful(
-            200,
-            &detection,
-            "admin'--",
-            "admin'-- accepted"
+            200, &detection, "admin'--", "admin'-- accepted", None
         ));
     }
 
     #[test]
     fn empty_payload_needs_block_to_non_block_transition() {
         let detection = detection_with_status(200);
-        assert!(!is_bypass_successful(200, &detection, "", "ok"));
-        assert!(!is_bypass_successful(302, &detection, "", "ok"));
+        assert!(!is_bypass_successful(200, &detection, "", "ok", None));
+        assert!(!is_bypass_successful(302, &detection, "", "ok", None));
     }
 
     #[test]
     fn reflected_payload_fails_when_body_still_looks_blocked() {
         let detection = detection_with_status(403);
         assert!(!is_bypass_successful(
-            200,
-            &detection,
-            "admin'--",
-            "request blocked admin'--"
+            200, &detection, "admin'--", "request blocked admin'--", None
+        ));
+    }
+
+    #[test]
+    fn bypass_fails_when_response_diff_indicates_blocked() {
+        use crate::waf::detector::types::ResponseDiff;
+        use rustc_hash::FxHashMap;
+
+        let detection = detection_with_status(403);
+        let diff = ResponseDiff {
+            normal_status: 200,
+            normal_length: 5000,
+            malicious_status: 403,
+            malicious_length: 100,
+            normal_headers: None,
+            malicious_headers: None,
+            header_diffs: vec![],
+            body_diffs: None,
+        };
+        assert!(!is_bypass_successful(
+            200, &detection, "admin'--", "admin'-- accepted", Some(&diff)
+        ));
+    }
+
+    #[test]
+    fn bypass_succeeds_when_response_diff_not_blocked() {
+        use crate::waf::detector::types::ResponseDiff;
+
+        let detection = detection_with_status(403);
+        let diff = ResponseDiff {
+            normal_status: 200,
+            normal_length: 5000,
+            malicious_status: 200,
+            malicious_length: 4950,
+            normal_headers: None,
+            malicious_headers: None,
+            header_diffs: vec![],
+            body_diffs: None,
+        };
+        assert!(is_bypass_successful(
+            200, &detection, "admin'--", "admin'-- accepted", Some(&diff)
         ));
     }
 }
