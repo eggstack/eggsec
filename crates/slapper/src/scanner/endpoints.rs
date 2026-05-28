@@ -18,7 +18,6 @@ use crate::config::SlapperConfig;
 
 const MAX_SCAN_RESULTS: usize = 100_000;
 
-#[derive(Clone)]
 pub struct EndpointScanConfig {
     pub base_url: String,
     pub endpoints: Vec<String>,
@@ -26,7 +25,7 @@ pub struct EndpointScanConfig {
     pub timeout_duration: Duration,
     pub include_404: bool,
     pub tui_mode: bool,
-    pub spoof_config: SpoofConfig,
+    pub spoof_config: Arc<SpoofConfig>,
     pub verify_tls: bool,
     pub progress_tx: Option<tokio::sync::mpsc::Sender<(u64, u64)>>,
     pub max_results: Option<usize>,
@@ -420,7 +419,7 @@ where
         timeout_duration: Duration::from_secs(timeout_secs),
         include_404: args.include_404,
         tui_mode: false,
-        spoof_config,
+        spoof_config: Arc::new(spoof_config),
         verify_tls: config.http.verify_tls,
         progress_tx: None,
         max_results: None,
@@ -512,7 +511,7 @@ pub async fn run_cli(args: EndpointScanArgs, config: &SlapperConfig) -> Result<(
         timeout_duration: Duration::from_secs(timeout_secs),
         include_404: args.include_404,
         tui_mode: false,
-        spoof_config,
+        spoof_config: Arc::new(spoof_config),
         verify_tls: config.http.verify_tls,
         progress_tx: None,
         max_results: None,
@@ -737,6 +736,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
     let start = std::time::Instant::now();
     let base = config.base_url.trim_end_matches('/');
     let endpoints_count = config.endpoints.len();
+    let spoof_config = Arc::clone(&config.spoof_config);
 
     for (idx, endpoint) in config.endpoints.into_iter().enumerate() {
         let permit = semaphore.clone().acquire_owned().await?;
@@ -745,7 +745,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
         let progress = progress.clone();
         let url = format!("{}{}", base, endpoint);
         let endpoint_path = endpoint;
-        let spoof_config = config.spoof_config.clone();
+        let spoof_config = Arc::clone(&spoof_config);
         let scanned_count = scanned_count.clone();
         let progress_tx = config.progress_tx.clone();
         let results_count = results_count.clone();

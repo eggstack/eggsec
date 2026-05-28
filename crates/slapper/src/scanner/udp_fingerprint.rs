@@ -1,4 +1,5 @@
 use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -138,14 +139,17 @@ pub async fn fingerprint_udp_services(
         }
     };
     let semaphore = Arc::new(Semaphore::new(50));
+    let rate_limiter = Arc::new(TokenBucket::new(100, Duration::from_millis(10)));
     let mut handles = Vec::new();
 
     for port in ports {
         let ip = resolved_ip;
         let socket = socket.clone();
         let semaphore = semaphore.clone();
+        let rate_limiter = rate_limiter.clone();
         let handle = tokio::spawn(async move {
             let _permit = semaphore.acquire_owned().await.ok();
+            rate_limiter.acquire().await;
             let result = fingerprint_udp_port(ip, port, timeout_duration, Some(socket)).await;
             result
         });
@@ -277,6 +281,43 @@ pub fn get_default_udp_ports() -> Vec<u16> {
         137, 138, 27015, 27016, 8767, 25565, 1883, 5672, 2379, 8200, 8500, 51820, 9092, 9200,
         11211, 6379, 9010, 47808, 502, 102, 20000, 27960, 27961, 50030,
     ]
+}
+
+struct TokenBucket {
+    tokens: AtomicU32,
+    max_tokens: u32,
+    refill_interval: Duration,
+}
+
+impl TokenBucket {
+    fn new(rate_per_second: u32, refill_interval: Duration) -> Self {
+        Self {
+            tokens: AtomicU32::new(rate_per_second),
+            max_tokens: rate_per_second,
+            refill_interval,
+        }
+    }
+
+    async fn acquire(&self) {
+        loop {
+            let current = self.tokens.load(Ordering::Acquire);
+            if current > 0 {
+                if self
+                    .tokens
+                    .compare_exchange(current, current - 1, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+                {
+                    return;
+                }
+            } else {
+                tokio::time::sleep(self.refill_interval).await;
+                let refill = self.max_tokens.min(
+                    self.tokens.load(Ordering::Acquire) + self.max_tokens / 10 + 1,
+                );
+                self.tokens.store(refill, Ordering::Release);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

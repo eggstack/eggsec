@@ -377,7 +377,7 @@ pub async fn run(&self) -> Result<PipelineReport> {
             timeout_duration: std::time::Duration::from_secs(10),
             include_404: false,
             tui_mode: self.tui_mode,
-            spoof_config: self.spoof_config.clone(),
+            spoof_config: std::sync::Arc::new(self.spoof_config.clone()),
             verify_tls,
             progress_tx: None,
             max_results: None,

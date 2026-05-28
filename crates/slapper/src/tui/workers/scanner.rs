@@ -82,7 +82,7 @@ pub async fn run_endpoint_scan(
         timeout_duration: timeout,
         include_404: false,
         tui_mode: true,
-        spoof_config: SpoofConfig::default(),
+        spoof_config: std::sync::Arc::new(SpoofConfig::default()),
         verify_tls: true,
         progress_tx: Some(progress_tx.clone()),
         max_results: None,

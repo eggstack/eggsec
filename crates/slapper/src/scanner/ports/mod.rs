@@ -117,7 +117,7 @@ impl PortScanConfig {
     }
 }
 
-pub use spoofed::init_packet_trace;
+pub use spoofed::{init_packet_trace, shutdown_packet_trace};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortResult {

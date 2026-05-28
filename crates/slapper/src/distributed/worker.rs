@@ -331,7 +331,7 @@ async fn process_endpoints(task: Task) -> Result<serde_json::Value> {
         timeout_duration: std::time::Duration::from_secs(10),
         include_404: false,
         tui_mode: false,
-        spoof_config: crate::scanner::spoof::SpoofConfig::default(),
+        spoof_config: std::sync::Arc::new(crate::scanner::spoof::SpoofConfig::default()),
         verify_tls: true,
         progress_tx: None,
         max_results: None,
