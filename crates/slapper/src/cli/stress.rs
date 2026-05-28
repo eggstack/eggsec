@@ -127,9 +127,9 @@ pub struct StressArgs {
     #[arg(long, help = "Source port")]
     pub src_port: Option<u16>,
     #[arg(long, help = "Spoof source IP address")]
-    pub spoof: bool,
+    pub source_ip_spoof: bool,
     #[arg(long, help = "Spoof source IP from CIDR range")]
-    pub spoof_range: Option<String>,
+    pub source_ip_range: Option<String>,
     #[arg(long, help = "Random source port for each request")]
     pub random_port: bool,
     #[arg(long, help = "Payload size in bytes (for UDP)")]

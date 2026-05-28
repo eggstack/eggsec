@@ -372,7 +372,18 @@ impl RemoteListener {
                     hostname,
                     capabilities,
                 } => {
-                    let response = ResponseMessage::registration(id, hostname, capabilities);
+                    let claimed_count = capabilities.len();
+                    let valid_caps: Vec<String> = capabilities
+                        .into_iter()
+                        .filter(|cap| CAPABILITIES.contains(&cap.as_str()))
+                        .collect();
+                    if valid_caps.len() != claimed_count {
+                        tracing::warn!(
+                            worker = %hostname,
+                            "Worker advertised capabilities not in CAPABILITIES list; filtering"
+                        );
+                    }
+                    let response = ResponseMessage::registration(id, hostname, valid_caps);
                     line_writer
                         .write_line(&serde_json::to_string(&response)?)
                         .await?;
@@ -467,10 +478,16 @@ impl RemoteClient {
         self.tls.is_some()
     }
 
+    /// Returns a cached DNS resolution if still within TTL (60s).
+    ///
+    /// NOTE: Cached addresses are not re-validated for reachability within the TTL.
+    /// Connection failures are handled by the caller, which falls back to fresh
+    /// DNS resolution on the next attempt.
     fn resolve_cached(&self, _host: &str, _port: u16) -> Option<SocketAddr> {
         let now = Instant::now();
         if let Some((addr, cached_at)) = self.cached_addr {
             if now.duration_since(cached_at) < Duration::from_secs(60) {
+                tracing::debug!(addr = %addr, "Using cached DNS resolution");
                 return Some(addr);
             }
         }
