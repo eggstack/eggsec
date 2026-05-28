@@ -430,7 +430,7 @@ impl SmugglingBypass {
         _payload: &str,
         response_body: &str,
     ) -> bool {
-        super::is_bypass_successful(status, detection, "", response_body)
+        super::is_bypass_successful(status, detection, "", response_body, None)
     }
 }
 

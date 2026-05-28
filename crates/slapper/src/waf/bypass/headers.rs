@@ -240,7 +240,7 @@ impl HeaderBypass {
         payload: &str,
         response_body: &str,
     ) -> bool {
-        super::is_bypass_successful(status, detection, payload, response_body)
+        super::is_bypass_successful(status, detection, payload, response_body, None)
     }
 
     fn identify_technique(&self, name: &str) -> BypassTechnique {

@@ -210,11 +210,13 @@ impl WafDetector {
     }
 
     pub(crate) fn normalize_url_static(url: &str) -> String {
-        let url = url.trim();
-        if url.starts_with("http://") || url.starts_with("https://") {
-            url.to_string()
+        let trimmed = url.trim();
+        if let Ok(parsed) = url::Url::parse(trimmed) {
+            parsed.to_string()
+        } else if let Ok(parsed) = url::Url::parse(&format!("https://{}", trimmed)) {
+            parsed.to_string()
         } else {
-            format!("https://{}", url)
+            trimmed.to_string()
         }
     }
 }
@@ -242,7 +244,7 @@ mod tests {
     fn test_normalize_url_with_https() {
         assert_eq!(
             WafDetector::normalize_url_static("https://example.com"),
-            "https://example.com"
+            "https://example.com/"
         );
     }
 
@@ -250,7 +252,7 @@ mod tests {
     fn test_normalize_url_with_http() {
         assert_eq!(
             WafDetector::normalize_url_static("http://example.com"),
-            "http://example.com"
+            "http://example.com/"
         );
     }
 
@@ -258,7 +260,7 @@ mod tests {
     fn test_normalize_url_without_scheme() {
         assert_eq!(
             WafDetector::normalize_url_static("example.com"),
-            "https://example.com"
+            "https://example.com/"
         );
     }
 
@@ -266,8 +268,23 @@ mod tests {
     fn test_normalize_url_trims_whitespace() {
         assert_eq!(
             WafDetector::normalize_url_static("  example.com  "),
-            "https://example.com"
+            "https://example.com/"
         );
+    }
+
+    #[test]
+    fn test_normalize_url_with_path() {
+        assert_eq!(
+            WafDetector::normalize_url_static("https://example.com/foo/bar"),
+            "https://example.com/foo/bar"
+        );
+    }
+
+    #[test]
+    fn test_normalize_url_with_query() {
+        let result = WafDetector::normalize_url_static("https://example.com/page?q=test");
+        assert!(result.starts_with("https://example.com/page"));
+        assert!(result.contains("q=test"));
     }
 
     #[test]
