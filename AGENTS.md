@@ -1015,3 +1015,41 @@ See `architecture/tui.md` for complete bug fix history.
 | `slapper-auth/` | Authentication security testing |
 | `slapper-hunt/` | Vulnerability hunting |
 | `slapper-browser/` | Browser security testing |
+
+Skills provide specialized instructions and workflows for specific tasks.
+Use the skill tool to load a skill when a task matches its description.
+
+## Architecture Review (2026-06-09)
+
+Completed full architecture review of all 15 modules. See `plans/review_summary.md` for aggregate findings.
+
+### Key Findings
+
+| Metric | Count |
+|--------|-------|
+| Verified Claims | 227 |
+| Discrepancies | 47 |
+| Bugs Found | 32 (6 HIGH, 13 MEDIUM, 13 LOW) |
+| Improvement Opportunities | 72 |
+
+### Critical Issues Requiring Attention
+
+1. **Distributed module**: Task results never sent to coordinator (result system broken)
+2. **CLI**: Resume command bypasses scope validation (security issue)
+3. **Distributed**: Worker stats/heartbeat report hardcoded zeros
+4. **Loadtest**: Rate limiting causes burst on startup
+5. **Plugins/NSE**: Brace mismatch in `vulns.rs:157-176` prevents compilation
+
+### Stale Documentation
+
+- `overview.md`: 6 stale statistics (module count, source files, NSE libraries, payload types, feature flags, path error)
+- `cli_commands.md`: Commands variant count "35+" → actual 33
+- Undocumented feature flags: `tool-api`, `insecure-tls`
+
+### Review Files
+
+| File | Content |
+|------|---------|
+| `plans/*_review.md` | Per-module review findings (15 files) |
+| `plans/stale_items_review.md` | Cross-document stale reference audit |
+| `plans/review_summary.md` | Aggregate analysis and priorities |
