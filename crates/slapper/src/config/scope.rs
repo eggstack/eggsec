@@ -33,6 +33,12 @@ impl Scope {
         Self::default()
     }
 
+    /// Validates the scope configuration.
+    ///
+    /// Checks:
+    /// - `allowed_targets` is not empty when `require_explicit_scope` is true
+    /// - No duplicate ports in `allowed_ports`
+    /// - `max_requests_per_second` is in range 1..=10000 (if set)
     pub fn validate(&self) -> Result<(), ScopeError> {
         if self.allowed_targets.is_empty() && self.require_explicit_scope {
             return Err(ScopeError::Validation(

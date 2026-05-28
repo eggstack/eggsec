@@ -55,6 +55,11 @@ impl SessionConfig {
             .map(|dirs| dirs.data_dir().join("sessions"))
             .unwrap_or_else(|| PathBuf::from("~/.slapper/sessions"))
     }
+
+    pub fn with_auto_save_interval(mut self, interval_secs: u64) -> Self {
+        self.auto_save_interval_secs = interval_secs;
+        self
+    }
 }
 
 #[derive(Default)]
@@ -138,17 +143,19 @@ impl SessionManager {
             tracing::debug!("Restored tab not available in current feature set");
         }
 
-        for bookmark_id in &state.bookmarks {
-            if let Some(tab) = Tab::from_stable_id(bookmark_id) {
+        for bookmark_id in state
+            .bookmarks
+            .iter()
+            .map(|id| Some(id.clone()))
+            .chain(state.legacy_bookmarks.iter().map(|&idx| {
+                Tab::from_index(idx)
+                    .filter(|t| t.visible_index().is_some())
+                    .map(|t| t.stable_id().to_string())
+            }))
+            .flatten()
+        {
+            if let Some(tab) = Tab::from_stable_id(&bookmark_id) {
                 app.bookmarks.insert(tab.stable_id().to_string());
-            }
-        }
-
-        for &idx in &state.legacy_bookmarks {
-            if let Some(tab) = Tab::from_index(idx) {
-                if tab.visible_index().is_some() {
-                    app.bookmarks.insert(tab.stable_id().to_string());
-                }
             }
         }
 
