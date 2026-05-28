@@ -1,3 +1,4 @@
+use super::timeout::*;
 use super::{CommonHttpArgs, FuzzMode, OutputFormat};
 
 pub(crate) const FUZZ_ABOUT: &str = "Fuzz target with security payloads
@@ -107,7 +108,7 @@ pub struct FuzzArgs {
         help = "Concurrent requests (used in burst mode)"
     )]
     pub concurrency: usize,
-    #[arg(long, default_value = "10", help = "Request timeout in seconds")]
+    #[arg(long, default_value_t = FUZZ_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,
@@ -252,7 +253,7 @@ pub struct WafStressArgs {
     pub url: String,
     #[arg(short = 'c', long, default_value = "20", help = "Concurrent requests")]
     pub concurrency: usize,
-    #[arg(long, default_value = "10", help = "Request timeout in seconds")]
+    #[arg(long, default_value_t = FUZZ_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,
@@ -350,7 +351,7 @@ pub struct WafArgs {
     pub test_type: Option<String>,
     #[arg(short = 'c', long, default_value = "10", help = "Concurrent requests")]
     pub concurrency: usize,
-    #[arg(long, default_value = "15", help = "Request timeout in seconds")]
+    #[arg(long, default_value_t = WAF_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,

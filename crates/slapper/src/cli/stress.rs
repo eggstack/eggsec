@@ -62,7 +62,7 @@ pub struct IcmpArgs {
         help = "Number of ping requests"
     )]
     pub count: u32,
-    #[arg(short = 'W', long, default_value = "2", help = "Timeout in seconds")]
+    #[arg(short = 'W', long, default_value_t = super::timeout::ICMP_TIMEOUT, help = "Timeout in seconds")]
     pub timeout: u64,
     #[arg(
         short = 'i',
@@ -81,8 +81,9 @@ pub struct TracerouteArgs {
     #[arg(help = "Target host or IP address")]
     pub target: String,
     #[arg(long, default_value = "30", help = "Maximum number of hops")]
+    #[arg(value_parser = clap::value_parser!(u8).range(1..=255))]
     pub max_hops: u8,
-    #[arg(long, default_value = "3", help = "Timeout in seconds")]
+    #[arg(long, default_value_t = super::timeout::TRACEROUTE_TIMEOUT, help = "Timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Use ICMP probes (requires root/sudo)")]
     pub icmp: bool,
@@ -219,7 +220,7 @@ pub struct ProxyHealthArgs {
         help = "URL to check proxy health"
     )]
     pub test_url: String,
-    #[arg(long, default_value = "10", help = "Timeout in seconds")]
+    #[arg(long, default_value_t = super::timeout::PROXY_HEALTH_TIMEOUT, help = "Timeout in seconds")]
     pub timeout: u64,
 }
 

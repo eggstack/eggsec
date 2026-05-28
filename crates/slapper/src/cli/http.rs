@@ -1,3 +1,4 @@
+use super::timeout::*;
 use super::CommonHttpArgs;
 
 pub(crate) const LOAD_ABOUT: &str = "Run HTTP load test against target URL
@@ -83,7 +84,7 @@ pub struct LoadArgs {
     pub body: Option<String>,
     #[arg(long, help = "Request headers (format: Key:Value)")]
     pub headers: Vec<String>,
-    #[arg(long, default_value = "30", help = "Request timeout in seconds")]
+    #[arg(long, default_value_t = LOAD_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,
@@ -159,7 +160,7 @@ pub struct GraphQlArgs {
     pub alias_overload: bool,
     #[arg(short = 'c', long, default_value = "10", help = "Concurrent requests")]
     pub concurrency: usize,
-    #[arg(long, default_value = "15", help = "Request timeout in seconds")]
+    #[arg(long, default_value_t = GRAPHQL_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,
@@ -191,7 +192,7 @@ pub struct OAuthArgs {
     pub grant_test: bool,
     #[arg(short = 'c', long, default_value = "10", help = "Concurrent requests")]
     pub concurrency: usize,
-    #[arg(long, default_value = "15", help = "Request timeout in seconds")]
+    #[arg(long, default_value_t = OAUTH_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,

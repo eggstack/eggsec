@@ -11,6 +11,7 @@ pub mod packet;
 pub mod plan;
 pub mod scan;
 pub mod storage;
+pub(crate) mod timeout;
 pub mod stress;
 pub mod vuln;
 

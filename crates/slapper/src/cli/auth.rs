@@ -1,3 +1,4 @@
+use super::timeout::*;
 use clap::Args;
 
 pub(crate) const AUTH_TEST_ABOUT: &str =
@@ -38,7 +39,7 @@ pub struct AuthTestArgs {
     #[arg(short = 'c', long, default_value = "1", help = "Concurrent requests")]
     pub concurrency: usize,
 
-    #[arg(long, default_value = "10", help = "Request timeout in seconds")]
+    #[arg(long, default_value_t = AUTH_TEST_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
 
     #[arg(long, help = "Run brute force testing")]

@@ -111,6 +111,7 @@ pub struct PacketTracerouteArgs {
     #[arg(help = "Target host")]
     pub target: String,
     #[arg(long, default_value = "30", help = "Maximum hops")]
+    #[arg(value_parser = clap::value_parser!(u8).range(1..=255))]
     pub max_hops: u8,
     #[arg(long, default_value = "3", help = "Number of probes per hop")]
     pub probes: u8,
