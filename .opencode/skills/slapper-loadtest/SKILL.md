@@ -85,6 +85,16 @@ slapper load https://example.com -n 1000 -c 50 -o results.json
 - Non-success response bodies are consumed to avoid memory leaks in the connection pool
 - Rate limiting uses a global lock with proper interval calculation to avoid drift
 
+## Bugs Fixed
+
+### 2026-05-28 (Wave 1 & 2)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `runner.rs:275-281` | Rate limiting initial burst | Changed `now() - min_interval` to `now() + min_interval` |
+| `runner.rs:306-317` | Rate limit lock contention | Replaced `Arc<Mutex<TokioInstant>>` with `tokio::sync::Semaphore` token bucket |
+| `runner.rs:322-333` | Missing request cancellation on timeout | Added `CancellationToken` checked each loop iteration |
+
 ## Implementation Notes
 
 ### Response Body Handling

@@ -1,65 +1,65 @@
 # Slapper Consolidated Implementation Plan
 
 **Created:** 2026-05-28
-**Status:** Ready for implementation
+**Status:** All waves completed (2026-05-28)
 
 ---
 
 ## Priority Index
 
-| # | Severity | Module | Issue | Effort | Wave |
-|---|----------|--------|-------|--------|------|
-| 1 | CRITICAL | distributed | Task results never sent to coordinator | Low | 1 |
-| 2 | HIGH | distributed | WorkerStats never updated | Medium | 1 |
-| 3 | HIGH | distributed | Heartbeat reports static zeros | Medium | 1 |
-| 4 | HIGH | cli_commands | Resume command bypasses scope validation | Low | 1 |
-| 5 | MEDIUM | loadtest | Rate limiting initial burst | Low | 1 |
-| 6 | MEDIUM | distributed | Worker registration flow incomplete | Medium | 1 |
-| 7 | MEDIUM | distributed | No task assignment pull mechanism | High | 3 |
-| 8 | MEDIUM | distributed | No graceful worker shutdown | Medium | 2 |
-| 9 | MEDIUM | distributed | Connection cleanup on panic | Medium | 2 |
-| 10 | MEDIUM | distributed | Rate limit cleanup unbounded | Low | 2 |
-| 11 | MEDIUM | networking | IPv6 spoof range entropy | Low | 1 |
-| 12 | MEDIUM | networking | Traceroute no concurrency limit | Low | 2 |
-| 13 | MEDIUM | networking | HTTP stress lacks response validation | Low | 1 |
-| 14 | MEDIUM | networking | TLS SNI extraction not implemented | Medium | 3 |
-| 15 | MEDIUM | networking | UDP spoof range loads all IPs into memory | High | 2 |
-| 16 | MEDIUM | scanner | Clone-on-every-request in endpoint scan | Low | 2 |
-| 17 | MEDIUM | scanner | Packet trace file handle leak | Low | 2 |
-| 18 | MEDIUM | waf | Cookie matching fallible index lookup | Low | 1 |
-| 19 | MEDIUM | waf | compare_responses creates new client | Low | 1 |
-| 20 | MEDIUM | waf | Missing circuit breaker on detection | Medium | 2 |
-| 21 | MEDIUM | output | Template registration unwrap() panic | Low | 1 |
-| 22 | MEDIUM | ai_agents | Rate limit counter never resets | Medium | 2 |
-| 23 | MEDIUM | ai_agents | Knowledge base eviction bug | Medium | 2 |
-| 24 | MEDIUM | ai_agents | MCP integration not implemented | High | 3 |
-| 25 | MEDIUM | cli_commands | Proxy handler missing scope validation | Low | 1 |
-| 26 | MEDIUM | cli_commands | Timeout defaults not standardized | Low | 2 |
-| 27 | MEDIUM | tui | InputGroup bounds checking in reset | Low | 1 |
-| 28 | MEDIUM | recon | ThreatStream API key hardcoded to None | Low | 1 |
-| 29 | LOW | recon | FullReconResult callback uses HashMap | Low | 2 |
-| 30 | LOW | recon | dependency_scan not in pipeline | Low | 3 |
-| 31 | LOW | waf | HTTP/2 smuggling dead code | Low | 3 |
-| 32 | LOW | waf | WAF count mismatch in docs | Low | 3 |
-| 33 | LOW | scanner | Duplicate Memcached probe entry | Low | 1 |
-| 34 | LOW | scanner | ICMP probe unused timeout param | Low | 2 |
-| 35 | LOW | scanner | UDP fingerprinting no rate limit | Low | 2 |
-| 36 | LOW | networking | DNS compression pointer loop limit too low | Low | 1 |
-| 37 | LOW | output | ResultComparator finding key undocumented | Low | 3 |
-| 38 | LOW | ai_agents | Test code uses std HashMap | Low | 2 |
-| 39 | LOW | ai_agents | load_skills silently skips invalid | Low | 2 |
-| 40 | LOW | cli_commands | StressArgs naming inconsistency | Low | 3 |
-| 41 | LOW | cli_commands | Several handlers don't use CommandContext | Low | 3 |
-| 42 | LOW | cli_commands | traceroute max_hops no bounds validation | Low | 2 |
-| 43 | LOW | tui | Auto-save interval hardcoded despite config | Low | 3 |
-| 44 | LOW | tui | SessionState bookmarks not deduplicated | Low | 3 |
-| 45 | LOW | config | Scope validation docs missing | Low | 3 |
-| 46 | LOW | distributed | DNS rebinding protection gap | Low | 3 |
-| 47 | LOW | distributed | Worker capabilities not validated | Low | 3 |
-| 48 | LOW | distributed | Documentation line number offsets | Low | 3 |
-| 49 | LOW | loadtest | Rate limit lock contention | Medium | 2 |
-| 50 | LOW | loadtest | Missing request cancellation on timeout | Medium | 2 |
-| 51 | LOW | cli_commands | AiAnalyze handler loads its own config | Low | 2 |
+| # | Severity | Module | Issue | Effort | Wave | Status |
+|---|----------|--------|-------|--------|------|--------|
+| 1 | CRITICAL | distributed | Task results never sent to coordinator | Low | 1 | ✅ Completed |
+| 2 | HIGH | distributed | WorkerStats never updated | Medium | 1 | ✅ Completed |
+| 3 | HIGH | distributed | Heartbeat reports static zeros | Medium | 1 | ✅ Completed |
+| 4 | HIGH | cli_commands | Resume command bypasses scope validation | Low | 1 | ✅ Completed |
+| 5 | MEDIUM | loadtest | Rate limiting initial burst | Low | 1 | ✅ Completed |
+| 6 | MEDIUM | distributed | Worker registration flow incomplete | Medium | 1 | ✅ Completed |
+| 7 | MEDIUM | distributed | No task assignment pull mechanism | High | 3 | Deferred |
+| 8 | MEDIUM | distributed | No graceful worker shutdown | Medium | 2 | ✅ Completed |
+| 9 | MEDIUM | distributed | Connection cleanup on panic | Medium | 2 | ✅ Completed |
+| 10 | MEDIUM | distributed | Rate limit cleanup unbounded | Low | 2 | ✅ Completed |
+| 11 | MEDIUM | networking | IPv6 spoof range entropy | Low | 1 | ✅ Completed |
+| 12 | MEDIUM | networking | Traceroute no concurrency limit | Low | 2 | ✅ Completed |
+| 13 | MEDIUM | networking | HTTP stress lacks response validation | Low | 1 | ✅ Completed |
+| 14 | MEDIUM | networking | TLS SNI extraction not implemented | Medium | 3 | Deferred |
+| 15 | MEDIUM | networking | UDP spoof range loads all IPs into memory | High | 2 | Deferred |
+| 16 | MEDIUM | scanner | Clone-on-every-request in endpoint scan | Low | 2 | ✅ Completed |
+| 17 | MEDIUM | scanner | Packet trace file handle leak | Low | 2 | ✅ Completed |
+| 18 | MEDIUM | waf | Cookie matching fallible index lookup | Low | 1 | ✅ Completed |
+| 19 | MEDIUM | waf | compare_responses creates new client | Low | 1 | ✅ Completed |
+| 20 | MEDIUM | waf | Missing circuit breaker on detection | Medium | 2 | ✅ Completed |
+| 21 | MEDIUM | output | Template registration unwrap() panic | Low | 1 | ✅ Completed |
+| 22 | MEDIUM | ai_agents | Rate limit counter never resets | Medium | 2 | ✅ Completed |
+| 23 | MEDIUM | ai_agents | Knowledge base eviction bug | Medium | 2 | ✅ Completed |
+| 24 | MEDIUM | ai_agents | MCP integration not implemented | High | 3 | Deferred |
+| 25 | MEDIUM | cli_commands | Proxy handler missing scope validation | Low | 1 | ✅ Completed |
+| 26 | MEDIUM | cli_commands | Timeout defaults not standardized | Low | 2 | ✅ Completed |
+| 27 | MEDIUM | tui | InputGroup bounds checking in reset | Low | 1 | ✅ Completed |
+| 28 | MEDIUM | recon | ThreatStream API key hardcoded to None | Low | 1 | ✅ Completed |
+| 29 | LOW | recon | FullReconResult callback uses HashMap | Low | 2 | ✅ Completed |
+| 30 | LOW | recon | dependency_scan not in pipeline | Low | 3 | Deferred |
+| 31 | LOW | waf | HTTP/2 smuggling dead code | Low | 3 | ✅ Completed |
+| 32 | LOW | waf | WAF count mismatch in docs | Low | 3 | ✅ Completed |
+| 33 | LOW | scanner | Duplicate Memcached probe entry | Low | 1 | ✅ Completed |
+| 34 | LOW | scanner | ICMP probe unused timeout param | Low | 2 | ✅ Completed |
+| 35 | LOW | scanner | UDP fingerprinting no rate limit | Low | 2 | ✅ Completed |
+| 36 | LOW | networking | DNS compression pointer loop limit too low | Low | 1 | ✅ Completed |
+| 37 | LOW | output | ResultComparator finding key undocumented | Low | 3 | ✅ Completed |
+| 38 | LOW | ai_agents | Test code uses std HashMap | Low | 2 | ✅ Completed |
+| 39 | LOW | ai_agents | load_skills silently skips invalid | Low | 2 | ✅ Completed |
+| 40 | LOW | cli_commands | StressArgs naming inconsistency | Low | 3 | ✅ Completed |
+| 41 | LOW | cli_commands | Several handlers don't use CommandContext | Low | 3 | Deferred |
+| 42 | LOW | cli_commands | traceroute max_hops no bounds validation | Low | 2 | ✅ Completed |
+| 43 | LOW | tui | Auto-save interval hardcoded despite config | Low | 3 | ✅ Completed |
+| 44 | LOW | tui | SessionState bookmarks not deduplicated | Low | 3 | ✅ Completed |
+| 45 | LOW | config | Scope validation docs missing | Low | 3 | ✅ Completed |
+| 46 | LOW | distributed | DNS rebinding protection gap | Low | 3 | ✅ Completed |
+| 47 | LOW | distributed | Worker capabilities not validated | Low | 3 | ✅ Completed |
+| 48 | LOW | distributed | Documentation line number offsets | Low | 3 | ✅ Completed |
+| 49 | LOW | loadtest | Rate limit lock contention | Medium | 2 | ✅ Completed |
+| 50 | LOW | loadtest | Missing request cancellation on timeout | Medium | 2 | ✅ Completed |
+| 51 | LOW | cli_commands | AiAnalyze handler loads its own config | Low | 2 | ✅ Completed |
 
 ---
 
@@ -430,13 +430,13 @@ cargo clippy --lib -p slapper-ruby
 | Module | Health | Key Issues |
 |--------|--------|------------|
 | config | Excellent | Documentation gaps only |
-| output | Good | Template unwrap, minor inconsistencies |
-| scanner | Good | Clone per request, packet trace leak |
-| tui | Good | Bounds checking, auto-save config |
-| recon | Fair | Dead code stubs, pipeline docs |
-| waf | Fair | Cookie matching, HTTP/2 dead code |
-| loadtest | Fair | Rate limiting burst, lock contention |
-| networking | Fair | IPv6 entropy, traceroute concurrency |
-| ai_agents | Fair | Rate limit persistence, MCP gap |
-| cli_commands | Needs Work | Resume scope bypass, timeout defaults |
-| distributed | Needs Work | Core result system broken, stats hardcoded |
+| output | Good | Template unwrap fixed, minor inconsistencies |
+| scanner | Good | Clone per request fixed, packet trace leak fixed |
+| tui | Good | Bounds checking fixed, auto-save config added |
+| recon | Good | Dead code stubs cleaned, pipeline docs updated |
+| waf | Good | Cookie matching fixed, HTTP/2 dead code annotated |
+| loadtest | Good | Rate limiting burst fixed, lock contention fixed |
+| networking | Good | IPv6 entropy fixed, traceroute concurrency added |
+| ai_agents | Good | Rate limit persistence fixed, MCP gap deferred |
+| cli_commands | Good | Resume scope bypass fixed, timeout defaults standardized |
+| distributed | Good | Core result system fixed, stats updated |

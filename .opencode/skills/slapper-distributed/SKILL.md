@@ -45,6 +45,17 @@ client.send_heartbeat(host, port, worker_id, status).await?;
 
 ## Bugs Fixed
 
+### 2026-05-28 (Wave 1 & 2)
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `worker.rs:166-182` | Task results never sent to coordinator (CRITICAL) | Added `RemoteClient::send_result()` to send `CommandMessage::Result` back |
+| `worker.rs:55-82,150-156` | WorkerStats never updated, heartbeat hardcoded zeros | Changed to `Arc<Mutex<WorkerStats>>`, heartbeat reports actual values |
+| `worker.rs:93-104` | Worker registration flow incomplete | Verified registration works correctly |
+| `worker.rs:64-104` | No graceful worker shutdown | Added `watch::Sender<bool>` channel and `shutdown()` method |
+| `remote.rs:207-211` | Connection panics silently lost | Captured `JoinHandle` and log panics |
+| `remote.rs:121-140` | Rate limit entries never cleaned | Added periodic cleanup task |
+
 ### 2026-05-28
 
 | File | Issue | Fix |

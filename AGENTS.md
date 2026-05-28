@@ -185,15 +185,23 @@ Completed full architecture review of all 15 modules. See `plans/plan.md` for th
 | Metric | Count |
 |--------|-------|
 | Plan Items | 51 |
-| Verified & Accurate | 38 |
-| Already Fixed (removed) | 13 |
-| Critical/High Priority | 5 |
+| Completed | 46 |
+| Deferred (future work) | 5 |
+| Critical/High Priority | 5 (all completed) |
 
-### Critical Issues Requiring Attention
+### Completed Critical Issues
 
-1. **Distributed module**: Task results never sent to coordinator (result system broken)
-2. **CLI**: Resume command bypasses scope validation (security issue)
-3. **Distributed**: Worker stats/heartbeat report hardcoded zeros
+1. **Distributed module**: Task results now sent to coordinator via `RemoteClient::send_result()`
+2. **CLI**: Resume command now validates scope via `ctx.ensure_scope()`
+3. **Distributed**: Worker stats/heartbeat now report actual values via `Arc<Mutex<WorkerStats>>`
+
+### Deferred Items (future work)
+
+- **MCP integration** (High effort): Model Context Protocol support for AI agents
+- **TLS SNI extraction** (Medium effort): Extract SNI from TLS handshake
+- **UDP spoof range memory** (High effort): Iterator-based approach for large IP ranges
+- **Task assignment pull mechanism** (High effort): Workers pulling tasks from coordinator
+- **Several handlers don't use CommandContext** (Low effort): Requires refactoring handler signatures
 
 ### Known Stale Items (verified fixed)
 
