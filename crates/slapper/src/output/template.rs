@@ -140,16 +140,16 @@ impl ReportTemplateEngine {
 
         registry
             .register_template_string("executive", EXECUTIVE_TEMPLATE)
-            .unwrap();
+            .expect("template registration should never fail");
         registry
             .register_template_string("technical", TECHNICAL_TEMPLATE)
-            .unwrap();
+            .expect("template registration should never fail");
         registry
             .register_template_string("developer", DEVELOPER_TEMPLATE)
-            .unwrap();
+            .expect("template registration should never fail");
         registry
             .register_template_string("compliance", COMPLIANCE_TEMPLATE)
-            .unwrap();
+            .expect("template registration should never fail");
 
         Self {
             registry,

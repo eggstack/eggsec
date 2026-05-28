@@ -32,7 +32,7 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
             pos = new_offset;
             jumped = true;
             jumps += 1;
-            if jumps > 10 {
+            if jumps > 100 {
                 return None;
             }
             continue;
