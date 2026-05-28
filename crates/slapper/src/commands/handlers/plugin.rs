@@ -184,7 +184,7 @@ pub async fn handle_plugin(_ctx: &CommandContext, args: crate::cli::PluginArgs) 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub fn discover_all_plugins(
     config_plugins_dir: Option<PathBuf>,
-) -> Vec<crate::tui::tabs::plugin::PluginInfo> {
+) -> Result<Vec<crate::tui::tabs::plugin::PluginInfo>> {
     use crate::tui::tabs::plugin::PluginInfo;
 
     #[cfg(feature = "ruby-plugins")]
@@ -218,5 +218,5 @@ pub fn discover_all_plugins(
         }
     }
 
-    all_plugins
+    Ok(all_plugins)
 }

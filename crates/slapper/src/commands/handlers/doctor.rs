@@ -3,7 +3,6 @@ pub(crate) const DOCTOR_SUCCESS: &str = "All checks passed";
 
 #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
 pub async fn handle_doctor(_ctx: &crate::commands::handlers::CommandContext) -> anyhow::Result<()> {
-    use crate::plugin::PythonPluginManager;
     use std::io::Write;
 
     let mut all_ok = true;
@@ -13,6 +12,7 @@ pub async fn handle_doctor(_ctx: &crate::commands::handlers::CommandContext) -> 
 
     #[cfg(feature = "python-plugins")]
     {
+        use crate::plugin::PythonPluginManager;
         let python_ok = PythonPluginManager::is_python_available();
         if python_ok {
             writeln!(out, "[OK] Python runtime")?;
