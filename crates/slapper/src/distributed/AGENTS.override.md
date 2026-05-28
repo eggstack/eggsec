@@ -98,10 +98,21 @@ Note: `Task::payload` uses `#[serde(default)]` for backward compatibility with s
 - Use `TaskQueue::reassign_stale_tasks(timeout_secs)` to recover tasks from dead workers
 - `QueueError` enum: `QueueFull`, `TaskNotFound`
 
-### Critical Issues (See plans/plan.md)
-1. **Task results never sent to coordinator** - Workers execute tasks but results are never communicated back. Fix: send `CommandMessage::Result` via channel in `start_task_processing_loop()`.
-2. **WorkerStats never updated** - Fields stay at 0. Fix: update in `process_task()` and heartbeat.
-3. **Heartbeat reports static zeros** - Always "idle" with 0 jobs. Fix: use actual stats values.
+### Task Assignment Pull Protocol
+
+Workers periodically request tasks from the coordinator when idle (every 5s):
+
+```rust
+// Worker sends RequestTasks
+let tasks = client.request_tasks(host, port, worker_id, max_tasks).await?;
+
+// Coordinator handles RequestTasks by dequeuing from TaskQueue
+// and responding with AssignTasks containing the tasks
+```
+
+Message variants:
+- `CommandMessage::RequestTasks { id, worker_id, max_tasks }` - Worker requests tasks
+- `CommandMessage::AssignTasks { id, tasks }` - Coordinator responds with tasks
 
 ### PSK Authentication
 - PSK is sent as first message after TCP connect: `AuthMessage { psk }`

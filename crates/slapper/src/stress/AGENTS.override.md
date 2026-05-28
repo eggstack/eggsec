@@ -9,6 +9,15 @@ The `raw_udp` module in `stress/udp.rs:20-117` is integrated:
 - Uses `raw_udp::build_udp_packet` when IP spoofing is enabled on Unix
 - Feature-gated behind `stress-testing`
 
+## UDP Spoof Range
+
+`get_random_spoofed_ip()` uses O(1) random selection from CIDR or dash-range notation:
+- CIDR: randomly selects an IP within the network range
+- Dash-range: randomly selects within start-end bounds
+- Falls back to `generate_random_ip()` if range parsing fails
+
+This approach matches `syn.rs::get_spoofed_source()` and avoids loading all IPs into memory.
+
 ## UDP Checksum Pseudo-Header
 
 When implementing UDP checksum calculation, the pseudo-header format (RFC 768) is:

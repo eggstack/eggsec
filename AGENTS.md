@@ -8,7 +8,7 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** is the consolidated implementation plan with all pending work items organized into 3 waves for parallel execution. Consult it before starting any work.
+**`plans/plan.md`** is the consolidated implementation plan. All 51 original items are completed. Consult it for architectural context and verification commands.
 
 ## Quick Reference
 
@@ -185,8 +185,8 @@ Completed full architecture review of all 15 modules. See `plans/plan.md` for th
 | Metric | Count |
 |--------|-------|
 | Plan Items | 51 |
-| Completed | 46 |
-| Deferred (future work) | 5 |
+| Completed | 51 |
+| Deferred (future work) | 0 |
 | Critical/High Priority | 5 (all completed) |
 
 ### Completed Critical Issues
@@ -194,30 +194,9 @@ Completed full architecture review of all 15 modules. See `plans/plan.md` for th
 1. **Distributed module**: Task results now sent to coordinator via `RemoteClient::send_result()`
 2. **CLI**: Resume command now validates scope via `ctx.ensure_scope()`
 3. **Distributed**: Worker stats/heartbeat now report actual values via `Arc<Mutex<WorkerStats>>`
-
-### Deferred Items (future work)
-
-- **MCP integration** (High effort): Model Context Protocol support for AI agents
-- **TLS SNI extraction** (Medium effort): Extract SNI from TLS handshake
-- **UDP spoof range memory** (High effort): Iterator-based approach for large IP ranges
-- **Task assignment pull mechanism** (High effort): Workers pulling tasks from coordinator
-- **Several handlers don't use CommandContext** (Low effort): Requires refactoring handler signatures
-
-### Known Stale Items (verified fixed)
-
-These items appeared in earlier reviews but have been confirmed fixed in the codebase:
-- PDF truncation warning (output/pdf.rs:71-79)
-- Stress handler scope validation (commands/handlers/stress.rs:12)
-- Proxy handler scope validation (commands/handlers/stress.rs:69)
-- `cli.config` field access (commands/handlers/mod.rs:160)
-- Fuzz tab reset bounds check (tui/tabs/fuzz.rs:408)
-- WAF circuit breaker (waf/detector/detect.rs:14,32,198)
-- TUI duplicate key binding 'b' (doesn't exist)
-- TUI InputGroup is_empty guard (already at input.rs:544)
-- Recon FxHashMap migration (already uses FxHashMap)
-- WAF architecture doc count (already says 34)
-- Recon callback FxHashMap (already uses FxHashMap)
-- Recon threatstream_key (no longer exists in codebase)
+4. **Distributed**: Task assignment pull mechanism implemented (workers poll coordinator when idle)
+5. **Networking**: TLS SNI extraction implemented in `packet/parse_impl.rs`
+6. **Stress**: UDP spoof range refactored to O(1) random selection (no full IP vector)
 
 ### File Path Corrections
 

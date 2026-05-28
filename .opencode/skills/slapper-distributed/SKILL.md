@@ -83,9 +83,23 @@ Note: `Task::payload` is serializable with `#[serde(default)]` for backward comp
 ## Task Lifecycle
 
 1. `TaskQueue::enqueue(task)` - Add task to pending queue
-2. `TaskQueue::dequeue(worker_id)` - Worker claims task, sets `worker_id` and `assigned_at_secs`, returns `Result<Option<Task>, QueueError>`
-3. `TaskQueue::reassign_stale_tasks(timeout_secs)` - Returns tasks stale > timeout to pending
-4. `TaskQueue::complete(result)` - Moves task to completed, removes from in_progress
+2. Worker sends `CommandMessage::RequestTasks` when idle (every 5s)
+3. Coordinator handles by calling `TaskQueue::dequeue(worker_id)` for each requested task
+4. Coordinator responds with `CommandMessage::AssignTasks { tasks }`
+5. Worker feeds tasks into internal processing channel
+6. `TaskQueue::complete(result)` - Moves task to completed, removes from in_progress
+7. `TaskQueue::reassign_stale_tasks(timeout_secs)` - Returns tasks stale > timeout to pending
+
+## Message Protocol
+
+| Message | Direction | Purpose |
+|---------|-----------|---------|
+| `Register` | Worker → Coordinator | Register worker with capabilities |
+| `Heartbeat` | Worker → Coordinator | Periodic status update |
+| `RequestTasks` | Worker → Coordinator | Worker requests available tasks |
+| `AssignTasks` | Coordinator → Worker | Response with dequeued tasks |
+| `Result` | Worker → Coordinator | Task completion result |
+| `Execute` | Coordinator → Worker | Remote command execution |
 
 ## Command Execution Security
 
