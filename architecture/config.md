@@ -27,6 +27,11 @@ The `Scope` struct is critical for security and compliance. It defines which tar
 - `is_target_allowed(target)` - Returns `Result<bool, ScopeError>`, checks if target is allowed
 - `validate_url(url)` - Returns `Result<bool, ScopeError>`, validates URL's host via `is_target_allowed`
 - `is_port_allowed(port)` - Returns `bool`, checks port allowlist/blocklist
+- `validate()` - Validates scope configuration: `allowed_targets` must not be empty when `require_explicit_scope` is true; duplicate ports in `allowed_ports` are rejected; `max_requests_per_second` must be greater than 0 if set
+
+**ScopeRule Construction:**
+- `ScopeRule::new(pattern)` - Creates a scope rule from a glob/regex pattern string
+- `ScopeRule::with_cidr(cidr)` - Creates a scope rule from CIDR notation (e.g., `10.0.0.0/8`). Parses via `IpNetwork::from_str()` and stores the CIDR for IP-range matching
 
 **Security enforcement:**
 - **Private IP blocking**: Direct IP addresses (e.g., `127.0.0.1`, `169.254.169.254`) are blocked via `TargetScope::parse()` and `parse_hostname_only()` - they now properly go through private IP checks

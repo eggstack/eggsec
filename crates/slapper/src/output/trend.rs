@@ -55,6 +55,8 @@ pub use crate::types::Severity;
 pub struct ResultComparator;
 
 impl ResultComparator {
+    /// Generates a composite key of `(title, category, cve)` for finding deduplication.
+    /// Findings with the same title but different categories or CVEs are treated as distinct.
     fn finding_key(finding: &Finding) -> (String, String, String) {
         (
             finding.title.clone(),

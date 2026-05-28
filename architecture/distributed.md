@@ -34,20 +34,20 @@ Secure and efficient communication between nodes using line-based JSON over TCP 
 | Component | File | Lines | Key Function/Type |
 |-----------|------|-------|-------------------|
 | TaskType enum | mod.rs | 59-67 | 7 task types |
-| Task struct | queue.rs | 7-18 | Core task representation |
-| TaskResult struct | queue.rs | 20-27 | Task execution result |
+| Task struct | queue.rs | 8-18 | Core task representation |
+| TaskResult struct | queue.rs | 21-27 | Task execution result |
 | TaskQueue | queue.rs | 29-154 | Thread-safe task queue |
-| QueueError | queue.rs | 150-154 | Queue error types |
-| RemoteListener | remote.rs | 26-388 | Coordinator server |
-| RemoteClient | remote.rs | 395-697 | Worker client |
-| CommandExecutor | command.rs | 103-220 | Secure command execution |
-| CommandMessage | command.rs | 28-46 | Protocol messages |
-| Worker | worker.rs | 60-558 | Worker node |
+| QueueError | queue.rs | 155-169 | Queue error types |
+| RemoteListener | remote.rs | 27-390 | Coordinator server |
+| RemoteClient | remote.rs | 407-767 | Worker client |
+| CommandExecutor | command.rs | 106-229 | Secure command execution |
+| CommandMessage | command.rs | 30-48 | Protocol messages |
+| Worker | worker.rs | 64-557 | Worker node |
 | TlsServer | io.rs | 110-161 | TLS server from PEM |
 | TlsClient | io.rs | 163-225 | TLS client |
 | StreamWrapper | io.rs | 19-108 | Unified stream enum |
 | LineWriter | io.rs | 306-340 | Line I/O wrapper |
-| generate_psk | command.rs | 249-254 | PSK generation |
+| generate_psk | command.rs | 258-264 | PSK generation |
 
 ## Task Lifecycle
 

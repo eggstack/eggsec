@@ -40,7 +40,7 @@ waf/
 | `WafDetectionResult` | `detector/types.rs` | Returns detected WAF name, confidence (0-100), matched indicators |
 | `WafSignature` | `data/patterns.rs` | Header, cookie, body pattern, and IP range signatures for a WAF |
 | `WafEngine` | `mod.rs` | High-level orchestrator for detection + bypass |
-| `BypassEngine` | `bypass/mod.rs` | Orchestrates bypass testing across three sub-engines |
+| `BypassEngine` | `bypass/mod.rs` | Orchestrates bypass testing across five categories |
 | `BypassResult` | `bypass/mod.rs` | Reports technique, success status, payload, status code |
 | `BypassTechnique` | `bypass/mod.rs` | Enum of 15 bypass techniques |
 | `WafProfile` | `bypass/profiles.rs` | WAF-specific bypass configurations |
@@ -63,7 +63,7 @@ Slapper can identify **34 different WAF products** by analyzing HTTP responses f
 
 `get_waf_profiles()` and `get_profile_by_name()` in `profiles.rs` use a static `LazyLock<Vec<WafProfile>>` to cache profiles and avoid recreation on every call.
 
-Once a WAF is identified, Slapper can apply specialized bypass techniques across three sub-engines:
+Once a WAF is identified, Slapper can apply specialized bypass techniques across five categories:
 
 - **Encodings**: Using different character encodings (e.g., URL, Double URL, Unicode, Hex) to evade simple pattern matching.
 - **Header Manipulation**: Injecting or modifying headers (e.g., `X-Forwarded-For`, `User-Agent`) that might influence WAF behavior.
