@@ -473,6 +473,7 @@ impl TabInput for WorkflowTab {
     fn handle_enter(&mut self) {
         if self.is_running() {
             self.stop();
+            return;
         } else {
             match self.focus_area {
                 WorkflowFocusArea::Mode => {

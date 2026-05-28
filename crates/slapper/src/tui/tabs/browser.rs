@@ -153,8 +153,8 @@ impl BrowserTab {
     pub fn start(&mut self) {
         if !self.target().is_empty() {
             self.state = AppState::Running;
-self.progress.current = 0;
-        self.progress.total = 0;
+            self.progress.current = 0;
+            self.progress.total = 0;
             self.report = None;
             self.results_view.clear();
         }

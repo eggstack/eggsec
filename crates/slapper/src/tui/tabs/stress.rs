@@ -348,6 +348,9 @@ impl TabInput for StressTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if self.focus_area == StressFocusArea::Inputs {
             self.inputs.get_focused_value()
         } else if self.focus_area == StressFocusArea::Results {
@@ -424,7 +427,7 @@ impl TabInput for StressTab {
                     self.type_selector.open();
                 }
             }
-            StressFocusArea::Results => {}
+StressFocusArea::Results => {}
         }
     }
 
@@ -434,33 +437,35 @@ impl TabInput for StressTab {
     }
 
     fn handle_up(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                StressFocusArea::Inputs => {
-                    self.inputs.focus_prev();
-                }
-                StressFocusArea::TypeSelector => {
-                    self.type_selector.handle_up();
-                }
-                StressFocusArea::Results => {
-                    self.results_view.scroll_up(1);
-                }
+        if self.is_running() {
+            return;
+        }
+        match self.focus_area {
+            StressFocusArea::Inputs => {
+                self.inputs.focus_prev();
+            }
+            StressFocusArea::TypeSelector => {
+                self.type_selector.handle_up();
+            }
+            StressFocusArea::Results => {
+                self.results_view.scroll_up(1);
             }
         }
     }
 
     fn handle_down(&mut self) {
-        if !self.is_running() {
-            match self.focus_area {
-                StressFocusArea::Inputs => {
-                    self.inputs.focus_next();
-                }
-                StressFocusArea::TypeSelector => {
-                    self.type_selector.handle_down();
-                }
-                StressFocusArea::Results => {
-                    self.results_view.scroll_down(1);
-                }
+        if self.is_running() {
+            return;
+        }
+        match self.focus_area {
+            StressFocusArea::Inputs => {
+                self.inputs.focus_next();
+            }
+            StressFocusArea::TypeSelector => {
+                self.type_selector.handle_down();
+            }
+            StressFocusArea::Results => {
+                self.results_view.scroll_down(1);
             }
         }
     }

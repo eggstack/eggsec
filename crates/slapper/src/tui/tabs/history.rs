@@ -468,9 +468,17 @@ impl TabInput for HistoryTab {
             _ => {}
         }
     }
-    fn handle_backspace(&mut self) {}
+    fn handle_backspace(&mut self) {
+        if self.is_running() {
+            return;
+        }
+    }
 
-    fn handle_paste(&mut self, _text: &str) {}
+    fn handle_paste(&mut self, _text: &str) {
+        if self.is_running() {
+            return;
+        }
+    }
 
     fn handle_copy(&mut self) -> Option<String> {
         if self.focus_area == HistoryFocusArea::Details {
@@ -558,7 +566,11 @@ impl TabInput for HistoryTab {
         self.handle_end();
     }
 
-    fn handle_enter(&mut self) {}
+    fn handle_enter(&mut self) {
+        if self.is_running() {
+            return;
+        }
+    }
 
     fn handle_escape(&mut self) {
         self.focus_area = HistoryFocusArea::List;

@@ -233,13 +233,19 @@ impl TabInput for AuthTab {
         if !self.is_running() {
             if self.focus_area == AuthFocusArea::Results {
                 self.focus_area = AuthFocusArea::Password;
-                self.inputs.focus(2);
+                if self.inputs.fields.len() > 2 {
+                    self.inputs.focus(2);
+                }
             } else if self.focus_area == AuthFocusArea::Password {
                 self.focus_area = AuthFocusArea::Username;
-                self.inputs.focus(1);
+                if self.inputs.fields.len() > 1 {
+                    self.inputs.focus(1);
+                }
             } else if self.focus_area == AuthFocusArea::Username {
                 self.focus_area = AuthFocusArea::Target;
-                self.inputs.focus(0);
+                if !self.inputs.fields.is_empty() {
+                    self.inputs.focus(0);
+                }
             } else if self.focus_area == AuthFocusArea::Target {
                 self.inputs.focus_prev();
                 if !self.inputs.is_focused() {
@@ -256,10 +262,14 @@ impl TabInput for AuthTab {
         if !self.is_running() {
             if self.focus_area == AuthFocusArea::Target {
                 self.focus_area = AuthFocusArea::Username;
-                self.inputs.focus(1);
+                if self.inputs.fields.len() > 1 {
+                    self.inputs.focus(1);
+                }
             } else if self.focus_area == AuthFocusArea::Username {
                 self.focus_area = AuthFocusArea::Password;
-                self.inputs.focus(2);
+                if self.inputs.fields.len() > 2 {
+                    self.inputs.focus(2);
+                }
             } else if self.focus_area == AuthFocusArea::Password {
                 self.focus_area = AuthFocusArea::Results;
                 self.inputs.blur();
@@ -308,16 +318,19 @@ impl TabInput for AuthTab {
 impl AuthTab {
     fn current_input_index(&self) -> Option<usize> {
         match self.focus_area {
-            AuthFocusArea::Target => Some(0),
-            AuthFocusArea::Username => Some(1),
-            AuthFocusArea::Password => Some(2),
+            AuthFocusArea::Target if self.inputs.fields.len() > 0 => Some(0),
+            AuthFocusArea::Username if self.inputs.fields.len() > 1 => Some(1),
+            AuthFocusArea::Password if self.inputs.fields.len() > 2 => Some(2),
+            AuthFocusArea::Target | AuthFocusArea::Username | AuthFocusArea::Password => None,
             AuthFocusArea::Results => None,
         }
     }
 
     fn sync_input_focus(&mut self) {
         for (i, field) in self.inputs.fields.iter_mut().enumerate() {
-            field.focused = Some(i) == self.current_input_index();
+            if i < self.inputs.fields.len() {
+                field.focused = Some(i) == self.current_input_index();
+            }
         }
     }
 }
