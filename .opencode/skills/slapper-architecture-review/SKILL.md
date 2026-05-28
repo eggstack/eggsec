@@ -94,17 +94,36 @@ let body = match response.text().await {
 ```markdown
 # <Module> Architecture Review
 
-## Summary
+**Document:** architecture/<module>.md
+**Review Date:** YYYY-MM-DD
+**Implementation Path:** crates/slapper/src/<module>/
 
-## Verified Correct
+## Summary Statistics
 
-## Bugs Found
-| Priority | Issue | Location |
-|----------|-------|----------|
+| Metric | Count |
+|--------|-------|
+| Verified Claims | N |
+| Discrepancies | N |
+| Bugs Found | N |
+| Improvement Opportunities | N |
 
-## Recommended Fixes
+## Verified Claims
+- [claim] — Verified in file:line
 
 ## Discrepancies
+- [issue] — Documented as X, implementation is Y
+
+## Bugs Found
+1. **[HIGH/MEDIUM/LOW]** [title]
+   - File: [path:line]
+   - Description: [what's wrong]
+   - Fix: [suggested approach]
+
+## Improvement Opportunities
+1. **[HIGH/MEDIUM/LOW]** [title]
+   - Current: [description]
+   - Suggested: [description]
+   - Impact: [performance/correctness/maintainability]
 ```
 
 ## Branch Naming
@@ -143,3 +162,29 @@ All `std::collections::HashMap`/`HashSet` instances in the NSE and slapper crate
 ### Previously Fixed (Verify if Regressions)
 - `waf/mod.rs` - Correctly lists 34 WAF products (fixed 2026-05-24) ✅
 - `scanner/` - All bug fixes verified applied ✅
+
+### Review Cycle 2026-06-09 Findings
+
+#### Phase 1: Module Reviews (15 modules)
+- All 15 architecture documents reviewed against implementation
+- 227 verified claims, 47 discrepancies, 32 bugs, 72 improvement opportunities
+
+#### Phase 2: Stale Items Detection
+- `overview.md` has 6 stale statistics (module count 41→35, source files 743→511, etc.)
+- `cli_commands.md` Commands variant count "35+" → actual 33
+- Undocumented feature flags: `tool-api`, `insecure-tls`
+- `nse_tool/` documented as directory but is actually `nse_tool.rs` file
+
+#### Phase 3: Synthesis - Critical Issues
+1. **Distributed module**: Task results never sent to coordinator (result system broken)
+2. **CLI**: Resume command bypasses scope validation (security issue)
+3. **Distributed**: Worker stats/heartbeat report hardcoded zeros
+4. **Loadtest**: Rate limiting causes burst on startup
+
+#### High-Severity Bugs by Module
+| Module | Bug | File |
+|--------|-----|------|
+| Distributed | Task results channel never sent | distributed/ |
+| CLI | Resume bypasses scope | cli/ |
+| Fuzzer | Dead code with invalid FxFxHashMap import | fuzzer/targets/api.rs |
+| Plugins/NSE | Brace mismatch prevents compilation | slapper-nse/src/libraries/vulns.rs:157-176 |
