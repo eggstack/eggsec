@@ -276,7 +276,7 @@ impl LoadTestRunner {
             let min_interval = Duration::from_secs_f64(1.0 / f64::from(rate));
             (
                 min_interval,
-                Arc::new(Mutex::new(TokioInstant::now() - min_interval)),
+                Arc::new(Mutex::new(TokioInstant::now() + min_interval)),
             )
         });
 
