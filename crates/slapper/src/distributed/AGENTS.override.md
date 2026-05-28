@@ -98,8 +98,10 @@ Note: `Task::payload` uses `#[serde(default)]` for backward compatibility with s
 - Use `TaskQueue::reassign_stale_tasks(timeout_secs)` to recover tasks from dead workers
 - `QueueError` enum: `QueueFull`, `TaskNotFound`
 
-### Critical Issue (2026-06-09 Review)
-**Task results never sent to coordinator** - The result system is broken. Workers execute tasks but results are never communicated back. This is a HIGH severity bug identified in the architecture review. See `plans/distributed_review.md` for details.
+### Critical Issues (See plans/plan.md)
+1. **Task results never sent to coordinator** - Workers execute tasks but results are never communicated back. Fix: send `CommandMessage::Result` via channel in `start_task_processing_loop()`.
+2. **WorkerStats never updated** - Fields stay at 0. Fix: update in `process_task()` and heartbeat.
+3. **Heartbeat reports static zeros** - Always "idle" with 0 jobs. Fix: use actual stats values.
 
 ### PSK Authentication
 - PSK is sent as first message after TCP connect: `AuthMessage { psk }`

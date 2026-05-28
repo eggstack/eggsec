@@ -40,6 +40,10 @@ let mut status_codes: FxHashMap<u16, u64> = FxHashMap::default();
 |------|-------|-----|
 | `metrics.rs:76` | Panic message "3 significant figures is invalid" is incorrect | Use `expect("Failed to create hdrhistogram")` instead |
 
+## Known Issue (See plans/plan.md)
+
+- **Rate limiting initial burst**: `next_allowed_at` initialized to `now - min_interval` at `runner.rs:279` lets all workers through simultaneously. Fix: initialize to `TokioInstant::now()`.
+
 ## Testing
 
 ```bash
