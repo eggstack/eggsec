@@ -465,6 +465,9 @@ impl SettingsTab {
         if let Some(field) = self.http_inputs.fields.get_mut(2) {
             field.value = "1000".to_string();
         }
+        if let Some(field) = self.http_inputs.fields.get_mut(3) {
+            field.value = "10".to_string();
+        }
         if let Some(field) = self.scan_inputs.fields.get_mut(0) {
             field.value = "50".to_string();
         }

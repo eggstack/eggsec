@@ -687,39 +687,4 @@ impl ReportTab {
         self.results_view.scroll_down(page_size);
     }
 
-    pub fn handle_word_forward(&mut self) {
-        for _ in 0..5 {
-            self.handle_right();
-        }
-    }
-
-    pub fn handle_word_backward(&mut self) {
-        for _ in 0..5 {
-            self.handle_left();
-        }
-    }
-
-    pub fn handle_home(&mut self) {
-        for _ in 0..100 {
-            self.handle_left();
-        }
-    }
-
-    pub fn handle_end(&mut self) {
-        for _ in 0..100 {
-            self.handle_right();
-        }
-    }
-
-    pub fn handle_top(&mut self) {
-        for _ in 0..100 {
-            self.results_view.scroll_up(1);
-        }
-    }
-
-    pub fn handle_bottom(&mut self) {
-        for _ in 0..100 {
-            self.results_view.scroll_down(1);
-        }
-    }
 }

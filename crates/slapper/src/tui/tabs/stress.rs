@@ -417,6 +417,7 @@ impl TabInput for StressTab {
         match self.focus_area {
             StressFocusArea::Inputs => {
                 self.inputs.blur();
+                self.start();
             }
             StressFocusArea::TypeSelector => {
                 if self.type_selector.is_open() {
@@ -519,6 +520,15 @@ StressFocusArea::Results => {}
 }
 
 impl StressTab {
+    pub fn start(&mut self) {
+        if !self.target().is_empty() {
+            self.state = AppState::Running;
+            self.progress.current = 0;
+            self.results_view.clear();
+            self.error = None;
+        }
+    }
+
     pub fn stop(&mut self) {
         if self.state == AppState::Running {
             self.state = AppState::Idle;

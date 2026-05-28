@@ -422,7 +422,9 @@ impl TabRender for VulnTab {
             for (i, &idx) in field_indices.iter().enumerate() {
                 if idx < self.inputs.fields.len() {
                     if let Some(chunk) = field_chunks.get(i) {
-                        self.inputs.fields[idx].render(f, *chunk, insert_mode);
+                        if let Some(field) = self.inputs.fields.get(idx) {
+                            field.render(f, *chunk, insert_mode);
+                        }
                     }
                 }
             }
@@ -631,12 +633,13 @@ impl TabInput for VulnTab {
         match self.focus_area {
             VulnFocusArea::Mode => self.mode_selector.items.is_empty()
                 || self.mode_selector.selected == 0,
-            VulnFocusArea::Inputs => self
-                .inputs
-                .fields
-                .first()
-                .map(|f| f.cursor_pos == 0)
-                .unwrap_or(true),
+            VulnFocusArea::Inputs => {
+                if let Some(idx) = self.inputs.focused {
+                    self.inputs.fields.get(idx).map(|f| f.cursor_pos == 0).unwrap_or(true)
+                } else {
+                    true
+                }
+            }
             _ => true,
         }
     }
@@ -648,12 +651,13 @@ impl TabInput for VulnTab {
                     || self.mode_selector.selected
                         >= self.mode_selector.items.len().saturating_sub(1)
             }
-            VulnFocusArea::Inputs => self
-                .inputs
-                .fields
-                .first()
-                .map(|f| f.cursor_pos >= f.value.len())
-                .unwrap_or(true),
+            VulnFocusArea::Inputs => {
+                if let Some(idx) = self.inputs.focused {
+                    self.inputs.fields.get(idx).map(|f| f.cursor_pos >= f.value.len()).unwrap_or(true)
+                } else {
+                    true
+                }
+            }
             _ => true,
         }
     }

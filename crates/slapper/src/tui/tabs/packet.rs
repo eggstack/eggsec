@@ -590,9 +590,9 @@ impl TabRender for PacketTab {
             ])
             .split(area);
 
-        let selector_area = chunks[0];
-        let input_area = chunks[1];
-        let results_area = chunks[2];
+        let selector_area = chunks.get(0).copied().unwrap_or(area);
+        let input_area = chunks.get(1).copied().unwrap_or(area);
+        let results_area = chunks.get(2).copied().unwrap_or(area);
 
         self.view_selector.render(f, selector_area);
 

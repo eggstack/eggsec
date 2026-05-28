@@ -499,6 +499,9 @@ impl TabInput for DashboardTab {
     fn handle_paste(&mut self, _text: &str) {}
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         Some(self.view.get_content())
     }
 

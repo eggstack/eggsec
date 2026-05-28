@@ -221,6 +221,9 @@ impl TabInput for AuthTab {
         if self.is_running() {
             self.stop();
         } else {
+            if self.focus_area == AuthFocusArea::Inputs {
+                self.inputs.blur();
+            }
             self.start();
         }
     }

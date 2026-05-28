@@ -86,7 +86,7 @@ impl HistoryTab {
             if idx < self.scroll_offset {
                 self.scroll_offset = idx;
             } else if idx >= self.scroll_offset + self.visible_rows {
-                self.scroll_offset = idx.saturating_sub(self.visible_rows - 1);
+                self.scroll_offset = if self.visible_rows == 0 { 0 } else { idx.saturating_sub(self.visible_rows - 1) };
             }
         }
     }
@@ -481,6 +481,9 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         if self.focus_area == HistoryFocusArea::Details {
             Some(self.details_view.get_content())
         } else if let Some(idx) = self.selected {
@@ -544,7 +547,7 @@ impl TabInput for HistoryTab {
                 if !self.entries.is_empty() {
                     let last = self.entries.len() - 1;
                     self.selected = Some(last);
-                    self.scroll_offset = last.saturating_sub(self.visible_rows - 1);
+                    self.scroll_offset = if self.visible_rows == 0 { 0 } else { last.saturating_sub(self.visible_rows - 1) };
                     self.update_details_view();
                 }
             }

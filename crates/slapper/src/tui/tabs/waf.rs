@@ -315,6 +315,7 @@ impl TabState for WafTab {
             cb.checked = true;
         }
         self.mode_radio.select(0);
+        self.focus_area = WafFocusArea::Inputs;
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -458,6 +459,9 @@ impl TabInput for WafTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         match self.focus_area {
             WafFocusArea::Inputs => self.inputs.get_focused_value(),
             WafFocusArea::Results => {
