@@ -103,11 +103,11 @@ impl SecurityTool for PipelineTool {
             }),
         )
         .await
-        .map_err(|e| crate::error::SlapperError::Timeout(format!(
+        .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
             "Pipeline timed out after 60s: {}",
             e
-        )))?
-        .map_err(|e| crate::error::SlapperError::Tool(format!(
+        ) })?
+        .map_err(|e| crate::error::SlapperError::Runtime(format!(
             "Pipeline failed: {}",
             e
         )))?;

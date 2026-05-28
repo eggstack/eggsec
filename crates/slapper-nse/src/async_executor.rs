@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
 use crate::executor_core::ExecutorCore;
+use crate::SandboxMetrics;
 
 /// Async NSE Executor with tokio runtime support.
 ///

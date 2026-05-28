@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::Utc;
+use std::sync::Arc;
 
 use crate::error::SlapperError;
 use crate::output::AgentSeverity;
@@ -175,11 +176,11 @@ impl SecurityTool for FuzzerTool {
             }),
         )
         .await
-        .map_err(|e| crate::error::SlapperError::Timeout(format!(
+        .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
             "Fuzzing timed out after 60s: {}",
             e
-        )))?
-        .map_err(|e| crate::error::SlapperError::Tool(format!(
+        ) })?
+        .map_err(|e| crate::error::SlapperError::Runtime(format!(
             "Fuzzing failed: {}",
             e
         )))?;

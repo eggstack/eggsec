@@ -208,22 +208,22 @@ impl LongitudinalMemory {
         self.storage_dir.join(SNAPSHOT_FILE)
     }
 
-    async fn load_alerted_findings(&self) -> Result<HashSet<String>> {
+    async fn load_alerted_findings(&self) -> Result<FxHashSet<String>> {
         let path = self.get_alerted_findings_path();
         if !path.exists() {
-            return Ok(HashSet::new());
+            return Ok(FxHashSet::default());
         }
         let content = fs::read_to_string(&path).await?;
-        match serde_json::from_str::<HashSet<String>>(&content) {
+        match serde_json::from_str::<FxHashSet<String>>(&content) {
             Ok(findings) => Ok(findings),
             Err(e) => {
                 tracing::warn!("Corrupt alerted findings file, starting fresh: {}", e);
-                Ok(HashSet::new())
+                Ok(FxHashSet::default())
             }
         }
     }
 
-    async fn save_alerted_findings(&self, findings: &HashSet<String>) -> Result<()> {
+    async fn save_alerted_findings(&self, findings: &FxHashSet<String>) -> Result<()> {
         let path = self.get_alerted_findings_path();
         let content = serde_json::to_string_pretty(findings)?;
         self.atomic_write(&path, &content).await
@@ -508,7 +508,7 @@ impl LongitudinalMemory {
             (Vec::new(), Vec::new())
         };
 
-        let current_ids: HashSet<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        let current_ids: FxHashSet<&str> = findings.iter().map(|f| f.id.as_str()).collect();
 
         let new_findings: Vec<Finding> = findings
             .iter()
@@ -516,8 +516,8 @@ impl LongitudinalMemory {
             .cloned()
             .collect();
 
-        let baseline_ids_set: HashSet<&str> = baseline_ids.iter().map(|s| s.as_str()).collect();
-        let resolved_ids: HashSet<&str> =
+        let baseline_ids_set: FxHashSet<&str> = baseline_ids.iter().map(|s| s.as_str()).collect();
+        let resolved_ids: FxHashSet<&str> =
             baseline_ids_set.difference(&current_ids).cloned().collect();
         let unchanged_count = current_ids.intersection(&baseline_ids_set).count();
 

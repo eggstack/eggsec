@@ -80,11 +80,11 @@ impl SecurityTool for LoadTestTool {
             crate::loadtest::run_cli(args, &config),
         )
         .await
-        .map_err(|e| crate::error::SlapperError::Timeout(format!(
+        .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
             "Load test timed out after 60s: {}",
             e
-        )))?
-        .map_err(|e| crate::error::SlapperError::Tool(format!(
+        ) })?
+        .map_err(|e| crate::error::SlapperError::Runtime(format!(
             "Load test failed: {}",
             e
         )))?;

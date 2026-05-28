@@ -8,6 +8,7 @@ use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
 use crate::executor_core::ExecutorCore;
+use crate::SandboxMetrics;
 
 pub struct NseExecutor {
     core: ExecutorCore,

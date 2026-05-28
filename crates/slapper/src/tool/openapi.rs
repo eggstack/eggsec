@@ -120,10 +120,10 @@ impl Schema {
     pub fn array(items: Schema) -> Self {
         Schema::Object(SchemaObject {
             schema_type: "array".to_string(),
-            properties: Some(FxHashMap::from([(
+            properties: Some([(
                 "items".to_string(),
                 Box::new(items),
-            )])),
+            )].into_iter().collect()),
             required: None,
         })
     }
@@ -259,7 +259,7 @@ impl OpenApiGenerator {
                 format!("{}Response", tool.id),
                 Schema::Object(SchemaObject {
                     schema_type: "object".to_string(),
-                    properties: Some(FxHashMap::from([
+                    properties: Some([
                         ("request_id".to_string(), Box::new(Schema::string())),
                         ("tool_id".to_string(), Box::new(Schema::string())),
                         ("status".to_string(), Box::new(Schema::string())),
@@ -279,7 +279,7 @@ impl OpenApiGenerator {
                                 required: None,
                             })),
                         ),
-                    ])),
+                    ].into_iter().collect()),
                     required: Some(vec![
                         "request_id".to_string(),
                         "tool_id".to_string(),
@@ -303,12 +303,12 @@ impl OpenApiGenerator {
                 Parameter::new("api_key", "query", false, Schema::string()),
             ];
 
-            let responses = FxHashMap::from([
+            let responses = [
                 (
                     "200".to_string(),
                     Response {
                         description: "Successful response".to_string(),
-                        content: Some(FxHashMap::from([(
+                        content: Some([(
                             "application/json".to_string(),
                             MediaType {
                                 schema_: Schema::Ref(format!(
@@ -316,7 +316,7 @@ impl OpenApiGenerator {
                                     tool.id
                                 )),
                             },
-                        )])),
+                        )].into_iter().collect()),
                     },
                 ),
                 (
@@ -340,7 +340,7 @@ impl OpenApiGenerator {
                         content: None,
                     },
                 ),
-            ]);
+            ].into_iter().collect();
 
             paths.insert(
                 format!("/mcp/{}", tool.id),
@@ -353,12 +353,12 @@ impl OpenApiGenerator {
                         parameters: vec![],
                         request_body: Some(RequestBody {
                             description: Some("Tool execution parameters".to_string()),
-                            content: FxHashMap::from([(
+                            content: [(
                                 "application/json".to_string(),
                                 MediaType {
                                     schema_: Schema::Object(SchemaObject {
                                         schema_type: "object".to_string(),
-properties: Some(FxHashMap::from([
+                                        properties: [
                                             ("name".to_string(), Box::new(Schema::string())),
                                             (
                                                 "arguments".to_string(),
@@ -368,11 +368,11 @@ properties: Some(FxHashMap::from([
                                                 ))),
                                             ),
                                             ("api_key".to_string(), Box::new(Schema::string())),
-                                        ])),
+                                        ].into_iter().collect(),
                                         required: Some(vec!["name".to_string()]),
                                     }),
                                 },
-                            )]),
+                            )].into_iter().collect(),
                             required: true,
                         }),
                         responses,
@@ -391,13 +391,13 @@ properties: Some(FxHashMap::from([
                         operation_id: "list_tools".to_string(),
                         parameters: vec![],
                         request_body: None,
-                        responses: FxHashMap::from([(
+                        responses: [(
                             "200".to_string(),
                             Response {
                                 description: "List of tools".to_string(),
                                 content: None,
                             },
-                        )]),
+                        )].into_iter().collect(),
                     }),
                     post: Some(Operation {
                         tags: vec![category],
@@ -406,13 +406,13 @@ properties: Some(FxHashMap::from([
                         operation_id: "execute_tool".to_string(),
                         parameters: tool_params,
                         request_body: None,
-                        responses: FxHashMap::from([(
+                        responses: [(
                             "200".to_string(),
                             Response {
                                 description: "Tool execution result".to_string(),
                                 content: None,
                             },
-                        )]),
+                        )].into_iter().collect(),
                     }),
                 },
             );
@@ -439,13 +439,13 @@ properties: Some(FxHashMap::from([
                     operation_id: "health_check".to_string(),
                     parameters: vec![],
                     request_body: None,
-                    responses: FxHashMap::from([(
+                    responses: [(
                         "200".to_string(),
                         Response {
                             description: "Service is healthy".to_string(),
                             content: None,
                         },
-                    )]),
+                    )].into_iter().collect(),
                 }),
                 post: None,
             },
@@ -463,11 +463,11 @@ properties: Some(FxHashMap::from([
                     operation_id: "stream_events".to_string(),
                     parameters: vec![Parameter::new("request_id", "path", true, Schema::string())],
                     request_body: None,
-                    responses: FxHashMap::from([(
+                    responses: [(
                         "200".to_string(),
                         Response {
                             description: "SSE stream".to_string(),
-                            content: Some(FxHashMap::from([(
+                            content: Some([(
                                 "text/event-stream".to_string(),
                                 MediaType {
                                     schema_: Schema::Object(SchemaObject {
@@ -476,9 +476,9 @@ properties: Some(FxHashMap::from([
                                         required: None,
                                     }),
                                 },
-                            )])),
+                            )].into_iter().collect()),
                         },
-                    )]),
+                    )].into_iter().collect(),
                 }),
                 post: None,
             },

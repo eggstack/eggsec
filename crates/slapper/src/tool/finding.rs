@@ -36,7 +36,7 @@ impl Finding {
             cve_ids: vec![],
             remediation: None,
             references: vec![],
-            metadata: FxHashMap::new(),
+            metadata: FxHashMap::default(),
         }
     }
 

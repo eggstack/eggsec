@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::Utc;
+use std::sync::Arc;
 
 use crate::error::SlapperError;
 use crate::output::AgentSeverity;
@@ -137,11 +138,11 @@ impl SecurityTool for ScannerTool {
                     }),
                 )
                 .await
-                .map_err(|e| crate::error::SlapperError::Timeout(format!(
+                .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
                     "Port scan timed out after 60s: {}",
                     e
-                )))?
-                .map_err(|e| crate::error::SlapperError::Tool(format!(
+                ) })?
+                .map_err(|e| crate::error::SlapperError::Runtime(format!(
                     "Port scan failed: {}",
                     e
                 )))?;
@@ -169,11 +170,11 @@ impl SecurityTool for ScannerTool {
                     }),
                 )
                 .await
-                .map_err(|e| crate::error::SlapperError::Timeout(format!(
+                .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
                     "Fingerprint scan timed out after 60s: {}",
                     e
-                )))?
-                .map_err(|e| crate::error::SlapperError::Tool(format!(
+                ) })?
+                .map_err(|e| crate::error::SlapperError::Runtime(format!(
                     "Fingerprint scan failed: {}",
                     e
                 )))?;
@@ -209,11 +210,11 @@ impl SecurityTool for ScannerTool {
                     }),
                 )
                 .await
-                .map_err(|e| crate::error::SlapperError::Timeout(format!(
+                .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
                     "Endpoint scan timed out after 60s: {}",
                     e
-                )))?
-                .map_err(|e| crate::error::SlapperError::Tool(format!(
+                ) })?
+                .map_err(|e| crate::error::SlapperError::Runtime(format!(
                     "Endpoint scan failed: {}",
                     e
                 )))?;

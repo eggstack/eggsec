@@ -81,35 +81,22 @@ fn get_cve_db() -> &'static FxHashMap<&'static str, Vec<(&'static str, &'static 
         m.entry("CVE-2023-38545").or_insert_with(Vec::new).push(("cURL", "high", "cURL heap overflow"));
         m.entry("CVE-2023-38646").or_insert_with(Vec::new).push(("cURL", "high", "cURL SOCKS5 heap overflow"));
 
-        m.insert(
-            "CVE-2024-0012",
-            (
-                "Palo Alto PAN-OS",
-                "critical",
-                "Management interface auth bypass",
-            ),
+        m.entry("CVE-2024-0012").or_insert_with(Vec::new).push(
+            ("Palo Alto PAN-OS", "critical", "Management interface auth bypass"),
         );
-        m.insert(
-            "CVE-2024-3400",
+        m.entry("CVE-2024-3400").or_insert_with(Vec::new).push(
             ("Palo Alto PAN-OS", "critical", "GlobalProtect RCE"),
         );
 
-        m.insert(
-            "CVE-2024-1708",
+        m.entry("CVE-2024-1708").or_insert_with(Vec::new).push(
             ("ScreenConnect", "critical", "Authentication bypass"),
         );
-        m.insert(
-            "CVE-2024-1709",
+        m.entry("CVE-2024-1709").or_insert_with(Vec::new).push(
             ("ScreenConnect", "critical", "Path traversal"),
         );
 
-        m.insert(
-            "CVE-2024-27198",
-            (
-                "TeamCity",
-                "critical",
-                "JetBrains TeamCity authentication bypass",
-            ),
+        m.entry("CVE-2024-27198").or_insert_with(Vec::new).push(
+            ("TeamCity", "critical", "JetBrains TeamCity authentication bypass"),
         );
         m.entry("CVE-2024-28995").or_insert_with(Vec::new).push(("SolarWinds", "high", "SolarWinds Serv-U path traversal"));
 

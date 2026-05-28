@@ -186,11 +186,11 @@ async fn handle_mcp(
         .await
         .map_err(|e| {
             tracing::warn!(error = %e, "MCP request handler timed out after 30s");
-            crate::error::SlapperError::Timeout(format!("MCP request handler timed out: {}", e))
+            crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!("MCP request handler timed out: {}", e) }
         })?
         .map_err(|e| {
             tracing::warn!(error = %e, "MCP request handler failed");
-            crate::error::SlapperError::Tool(format!("MCP request handler failed: {}", e))
+            crate::error::SlapperError::Runtime(format!("MCP request handler failed: {}", e))
         })?;
         responses.push(response);
     }
@@ -257,11 +257,11 @@ pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>) {
                     .await
                     .map_err(|e| {
                         tracing::warn!(error = %e, "MCP request handler timed out after 30s");
-                        crate::error::SlapperError::Timeout(format!("MCP request handler timed out: {}", e))
+                        crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!("MCP request handler timed out: {}", e) }
                     })?
                     .map_err(|e| {
                         tracing::warn!(error = %e, "MCP request handler failed");
-                        crate::error::SlapperError::Tool(format!("MCP request handler failed: {}", e))
+                        crate::error::SlapperError::Runtime(format!("MCP request handler failed: {}", e))
                     })?;
                     responses.push(response);
                 }
