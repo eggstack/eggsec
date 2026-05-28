@@ -112,7 +112,7 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::WafStress(args)) => handle_waf_stress(ctx, args).await,
         Some(Commands::Waf(args)) => handle_waf(ctx, args).await,
         Some(Commands::Scan(args)) => handle_scan(ctx, args).await,
-        Some(Commands::Resume(args)) => handle_resume(args).await,
+        Some(Commands::Resume(args)) => handle_resume(ctx, args).await,
         Some(Commands::Recon(args)) => handle_recon(ctx, args).await,
         Some(Commands::Plan(args)) => handle_plan(ctx, args).await,
         Some(Commands::Ci(args)) => handle_ci(ctx, args).await,
