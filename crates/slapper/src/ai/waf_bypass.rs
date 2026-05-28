@@ -87,7 +87,7 @@ impl SmartWafBypass {
                 .unwrap_or(0);
 
             self.knowledge_base.sort_by_key(|e| {
-                (e.failed_attempts > 0, now.saturating_sub(e.last_accessed))
+                (e.failed_attempts >= 3, e.failed_attempts, now.saturating_sub(e.last_accessed))
             });
             let keep_count = self.max_knowledge_base_size / 2;
             self.knowledge_base.truncate(keep_count);

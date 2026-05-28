@@ -57,7 +57,7 @@ pub use memory::LongitudinalMemory;
 pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
 
 #[cfg(feature = "ai-integration")]
-pub use skills::{Skill, SkillLoader, SkillRegistry};
+pub use skills::{Skill, SkillLoadResult, SkillLoader, SkillRegistry};
 
 // Crate-private traits for testable seams (Phase 2)
 trait ScanDispatcherTrait: Send + Sync {

@@ -324,9 +324,12 @@ async fn handle_skills(args: crate::cli::agent::SkillsArgs) -> Result<()> {
             crate::cli::agent::SkillsCommand::List => {
                 let default_dirs = vec![expand_path("~/.config/slapper/skills")];
                 let loader = SkillLoader::new(default_dirs);
-                let skills = loader.load_skills()?;
+                let result = loader.load_skills()?;
+                if result.error_count() > 0 {
+                    println!("Warning: {} skill(s) failed to load", result.error_count());
+                }
                 println!("Available skills:");
-                for skill in skills {
+                for skill in &result.skills {
                     println!("  {} - {}", skill.name, skill.description);
                 }
                 Ok(())
@@ -334,15 +337,18 @@ async fn handle_skills(args: crate::cli::agent::SkillsArgs) -> Result<()> {
             crate::cli::agent::SkillsCommand::Load { path } => {
                 let path = expand_path(&path);
                 let loader = SkillLoader::new(vec![path]);
-                let skills = loader.load_skills()?;
-                println!("Loaded {} skills", skills.len());
+                let result = loader.load_skills()?;
+                if result.error_count() > 0 {
+                    println!("Warning: {} skill(s) failed to load", result.error_count());
+                }
+                println!("Loaded {} skills", result.skills.len());
                 Ok(())
             }
             crate::cli::agent::SkillsCommand::Show { name } => {
                 let default_dirs = vec![expand_path("~/.config/slapper/skills")];
                 let loader = SkillLoader::new(default_dirs);
-                let skills = loader.load_skills()?;
-                if let Some(skill) = skills.iter().find(|s| s.name == name) {
+                let result = loader.load_skills()?;
+                if let Some(skill) = result.skills.iter().find(|s| s.name == name) {
                     let tools = skill
                         .metadata
                         .as_ref()
