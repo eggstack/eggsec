@@ -406,6 +406,9 @@ impl TabRender for WafTab {
 
 impl TabInput for WafTab {
     fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             WafFocusArea::Inputs => {
                 if self.inputs.is_focused() {
@@ -426,6 +429,9 @@ impl TabInput for WafTab {
     }
 
     fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = match self.focus_area {
             WafFocusArea::Inputs => WafFocusArea::Results,
             WafFocusArea::ModeRadio => {

@@ -205,6 +205,12 @@ impl TabState for OAuthTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        if self.inputs.fields.len() > 3 {
+            self.inputs.fields[3].value = "10".to_string();
+        }
+        if self.inputs.fields.len() > 4 {
+            self.inputs.fields[4].value = "15".to_string();
+        }
         self.focus_area = OAuthFocusArea::Inputs;
         self.checkbox_focus_index = 0;
         self.redirect_test_checkbox.checked = true;
@@ -230,61 +236,6 @@ impl OAuthTab {
         }
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.scroll_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.scroll_down(page_size);
-    }
-
-    pub fn handle_word_forward(&mut self) {
-        if !self.is_running() {
-            for _ in 0..5 {
-                self.handle_right();
-            }
-        }
-    }
-
-    pub fn handle_word_backward(&mut self) {
-        if !self.is_running() {
-            for _ in 0..5 {
-                self.handle_left();
-            }
-        }
-    }
-
-    pub fn handle_home(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.handle_left();
-            }
-        }
-    }
-
-    pub fn handle_end(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.handle_right();
-            }
-        }
-    }
-
-    pub fn handle_top(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.results_view.scroll_up(1);
-            }
-        }
-    }
-
-    pub fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.results_view.scroll_down(1);
-            }
-        }
-    }
 }
 
 impl TabRender for OAuthTab {
@@ -531,6 +482,7 @@ impl TabInput for OAuthTab {
             return;
         }
         self.inputs.blur();
+        self.focus_area = OAuthFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {

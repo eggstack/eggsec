@@ -429,7 +429,7 @@ impl TabRender for LoadTab {
             dropdown.render(f);
         }
 
-        let num_fields = self.inputs.fields.len();
+        let num_fields = self.inputs.fields.len().max(1);
         let field_height = (input_height / num_fields as u16).max(2);
         let constraints: Vec<Constraint> = (0..num_fields)
             .map(|_| Constraint::Length(field_height))

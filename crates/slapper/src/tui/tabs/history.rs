@@ -317,6 +317,7 @@ impl TabState for HistoryTab {
     fn reset(&mut self) {
         self.clear_all();
         self.error = None;
+        self.next_id = 1;
         self.focus_area = HistoryFocusArea::List;
     }
 
@@ -576,6 +577,9 @@ impl TabInput for HistoryTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.focus_area = HistoryFocusArea::List;
     }
 

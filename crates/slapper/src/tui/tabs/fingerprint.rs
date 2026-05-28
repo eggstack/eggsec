@@ -280,13 +280,19 @@ impl TabInput for FingerprintTab {
         if self.is_running() {
             return;
         }
-        if self.inputs.is_focused() {
-            self.inputs.focus_next();
-            if !self.inputs.is_focused() {
-                self.focus_area = FingerprintFocusArea::Results;
+        match self.focus_area {
+            FingerprintFocusArea::Inputs => {
+                self.inputs.focus_next();
+                if !self.inputs.is_focused() {
+                    self.focus_area = FingerprintFocusArea::Results;
+                }
             }
-        } else {
-            self.focus_area = FingerprintFocusArea::Results;
+            FingerprintFocusArea::Results => {
+                self.focus_area = FingerprintFocusArea::Inputs;
+                if !self.inputs.fields.is_empty() {
+                    self.inputs.focus(0);
+                }
+            }
         }
     }
 

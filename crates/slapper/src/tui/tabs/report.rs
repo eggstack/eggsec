@@ -515,6 +515,7 @@ impl TabInput for ReportTab {
                     };
                 } else {
                     self.view_selector.open();
+                    return;
                 }
             }
             ReportFocusArea::Inputs => {

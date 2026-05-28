@@ -170,6 +170,12 @@ impl TabState for GraphQlTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        if self.inputs.fields.len() > 1 {
+            self.inputs.fields[1].value = "10".to_string();
+        }
+        if self.inputs.fields.len() > 2 {
+            self.inputs.fields[2].value = "15".to_string();
+        }
         self.focus_area = GraphQlFocusArea::Inputs;
         self.checkbox_focus_index = 0;
         self.inject_checkbox.checked = true;
@@ -195,61 +201,6 @@ impl GraphQlTab {
         }
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.scroll_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.scroll_down(page_size);
-    }
-
-    pub fn handle_word_forward(&mut self) {
-        if !self.is_running() {
-            for _ in 0..5 {
-                self.handle_right();
-            }
-        }
-    }
-
-    pub fn handle_word_backward(&mut self) {
-        if !self.is_running() {
-            for _ in 0..5 {
-                self.handle_left();
-            }
-        }
-    }
-
-    pub fn handle_home(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.handle_left();
-            }
-        }
-    }
-
-    pub fn handle_end(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.handle_right();
-            }
-        }
-    }
-
-    pub fn handle_top(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.results_view.scroll_up(1);
-            }
-        }
-    }
-
-    pub fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.results_view.scroll_down(1);
-            }
-        }
-    }
 }
 
 impl TabRender for GraphQlTab {
@@ -487,6 +438,7 @@ impl TabInput for GraphQlTab {
             return;
         }
         self.inputs.blur();
+        self.focus_area = GraphQlFocusArea::Inputs;
     }
 
     fn handle_up(&mut self) {

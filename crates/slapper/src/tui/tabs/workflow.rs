@@ -289,7 +289,7 @@ impl TabRender for WorkflowTab {
             WorkflowMode::CreateFinding => 9,
             WorkflowMode::AssignFinding => 9,
             WorkflowMode::AddComment => 9,
-            WorkflowMode::ChangeStatus => 9,
+            WorkflowMode::ChangeStatus => 12,
         };
 
         let chunks = Layout::default()
@@ -310,17 +310,18 @@ impl TabRender for WorkflowTab {
             ..input_area
         };
 
-        let fields = match self.current_mode {
-            WorkflowMode::ListFindings => vec![],
-            WorkflowMode::CreateFinding => vec![0, 5],
-            WorkflowMode::AssignFinding => vec![3, 1],
-            WorkflowMode::AddComment => vec![3, 2],
-            WorkflowMode::ChangeStatus => vec![3, 6],
+        let (fields, extra_slots) = match self.current_mode {
+            WorkflowMode::ListFindings => (vec![], 0),
+            WorkflowMode::CreateFinding => (vec![0], 1),
+            WorkflowMode::AssignFinding => (vec![3, 1], 0),
+            WorkflowMode::AddComment => (vec![3, 2], 0),
+            WorkflowMode::ChangeStatus => (vec![3], 2),
         };
 
+        let total_slots = fields.len() + extra_slots;
         let field_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Length(3); fields.len()])
+            .constraints(vec![Constraint::Length(3); total_slots])
             .split(fields_area);
 
         for (i, &idx) in fields.iter().enumerate() {

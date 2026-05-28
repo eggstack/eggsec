@@ -457,6 +457,7 @@ impl SettingsTab {
 
     pub fn reset(&mut self) {
         self.config = None;
+        self.error = None;
         if let Some(field) = self.http_inputs.fields.get_mut(0) {
             field.value = "30".to_string();
         }

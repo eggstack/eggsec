@@ -471,6 +471,9 @@ impl TabInput for HuntTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
     }
 

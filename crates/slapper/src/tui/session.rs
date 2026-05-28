@@ -159,7 +159,9 @@ impl SessionManager {
             }
         }
 
-        let _ = app.theme_manager.set_theme(&state.theme_name);
+        if !app.theme_manager.set_theme(&state.theme_name) {
+            tracing::warn!("Failed to restore theme '{}': unknown theme", state.theme_name);
+        }
     }
 
     fn capture_state(&self, app: &App) -> SessionState {
@@ -201,7 +203,7 @@ impl SessionManager {
                         e
                     );
                 }
-                sessions.remove(0);
+                sessions.swap_remove(0);
             }
         }
 

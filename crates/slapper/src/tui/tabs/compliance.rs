@@ -380,7 +380,9 @@ impl TabInput for ComplianceTab {
                 }
             }
             ComplianceFocusArea::Framework => {
-                self.framework_selector.handle_enter();
+                if self.framework_selector.focused {
+                    self.framework_selector.handle_enter();
+                }
             }
             ComplianceFocusArea::Results => {
                 if !self.target().is_empty() {

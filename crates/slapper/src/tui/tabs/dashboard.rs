@@ -453,6 +453,7 @@ impl TabState for DashboardTab {
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.error = None;
+        self.focus_area = DashboardFocusArea::Main;
         self.total_scans = 0;
         self.successful_scans = 0;
         self.failed_scans = 0;

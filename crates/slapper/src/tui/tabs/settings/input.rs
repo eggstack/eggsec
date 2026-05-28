@@ -90,6 +90,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
         match self.current_section {
             SettingsSection::Http => self.http_inputs.get_focused_value(),
             SettingsSection::Scan => self.scan_inputs.get_focused_value(),
@@ -199,9 +202,9 @@ impl TabInput for SettingsTab {
         let idx = self.detail_focus_index;
         match self.current_section {
             SettingsSection::Http => {
-                if idx < 3 {
+                if idx < 4 {
                     self.http_inputs.blur();
-                } else if idx == 3 {
+                } else if idx == 4 {
                     self.follow_redirects.toggle();
                 } else {
                     self.verify_tls.toggle();
@@ -273,6 +276,9 @@ impl TabInput for SettingsTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.proxy_rotation_selector.is_open() {
             self.proxy_rotation_selector.cancel();
             return;

@@ -439,62 +439,6 @@ impl PacketTab {
         }
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.page_down(page_size);
-    }
-
-    pub fn handle_word_forward(&mut self) {
-        if !self.is_running() {
-            for _ in 0..5 {
-                self.handle_right();
-            }
-        }
-    }
-
-    pub fn handle_word_backward(&mut self) {
-        if !self.is_running() {
-            for _ in 0..5 {
-                self.handle_left();
-            }
-        }
-    }
-
-    pub fn handle_home(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.handle_left();
-            }
-        }
-    }
-
-    pub fn handle_end(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.handle_right();
-            }
-        }
-    }
-
-    pub fn handle_top(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.results_view.scroll_up(1);
-            }
-        }
-    }
-
-    pub fn handle_bottom(&mut self) {
-        if !self.is_running() {
-            for _ in 0..100 {
-                self.results_view.scroll_down(1);
-            }
-        }
-    }
-
     fn update_results_view(&mut self) {
         self.results_view.clear();
         let lines: Vec<Line> = self.results.iter().map(|s| Line::from(s.clone())).collect();
@@ -545,6 +489,7 @@ impl TabState for PacketTab {
         if self.inputs.fields.len() > 2 {
             self.inputs.fields[2].value = "100".to_string();
         }
+        self.current_view = PacketView::Capture;
         self.view_selector.select(0);
     }
 
@@ -810,6 +755,9 @@ impl TabInput for PacketTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_open() {
             self.view_selector.cancel();
             return;

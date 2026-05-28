@@ -393,7 +393,10 @@ impl TabInput for IntegrationsTab {
                 self.config_inputs.focus(0);
                 IntegrationsFocusArea::Config
             }
-            IntegrationsFocusArea::Config => IntegrationsFocusArea::Issue,
+            IntegrationsFocusArea::Config => {
+                self.config_inputs.blur();
+                IntegrationsFocusArea::Issue
+            }
             IntegrationsFocusArea::Issue => IntegrationsFocusArea::Results,
             IntegrationsFocusArea::Results => {
                 self.tracker_selector.focus();
@@ -407,12 +410,18 @@ impl TabInput for IntegrationsTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            IntegrationsFocusArea::Tracker => IntegrationsFocusArea::Results,
+            IntegrationsFocusArea::Tracker => {
+                self.tracker_selector.blur();
+                IntegrationsFocusArea::Results
+            }
             IntegrationsFocusArea::Config => {
                 self.tracker_selector.focus();
                 IntegrationsFocusArea::Tracker
             }
-            IntegrationsFocusArea::Issue => IntegrationsFocusArea::Config,
+            IntegrationsFocusArea::Issue => {
+                self.config_inputs.focus(0);
+                IntegrationsFocusArea::Config
+            }
             IntegrationsFocusArea::Results => IntegrationsFocusArea::Issue,
         };
     }
@@ -530,7 +539,11 @@ impl TabInput for IntegrationsTab {
         }
         match self.focus_area {
             IntegrationsFocusArea::Tracker => {
+                let was_open = self.tracker_selector.is_open();
                 self.tracker_selector.handle_enter();
+                if !was_open {
+                    return;
+                }
             }
             IntegrationsFocusArea::Config => {
                 self.config_inputs.blur();

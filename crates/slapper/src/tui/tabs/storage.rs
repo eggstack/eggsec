@@ -251,6 +251,12 @@ impl TabState for StorageTab {
         for field in &mut self.config_inputs.fields {
             field.clear();
         }
+        if let Some(f) = self.config_inputs.fields.get_mut(0) {
+            f.value = "localhost".to_string();
+        }
+        if let Some(f) = self.config_inputs.fields.get_mut(1) {
+            f.value = "5432".to_string();
+        }
         for field in &mut self.query_inputs.fields {
             field.clear();
         }
@@ -413,7 +419,10 @@ impl TabInput for StorageTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            StorageFocusArea::Config => StorageFocusArea::Results,
+            StorageFocusArea::Config => {
+                self.config_inputs.blur();
+                StorageFocusArea::Results
+            }
             StorageFocusArea::Mode => {
                 if self.current_mode == StorageMode::Connect {
                     self.config_inputs.focus(0);
@@ -550,7 +559,11 @@ impl TabInput for StorageTab {
                 self.config_inputs.blur();
             }
             StorageFocusArea::Mode => {
+                let was_open = self.mode_selector.is_open();
                 self.mode_selector.handle_enter();
+                if !was_open {
+                    return;
+                }
                 self.current_mode = match self.mode_selector.selected {
                     0 => StorageMode::Connect,
                     1 => StorageMode::ListScans,

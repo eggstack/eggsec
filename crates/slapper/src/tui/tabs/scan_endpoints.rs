@@ -481,6 +481,8 @@ impl TabInput for ScanEndpointsTab {
             }
         } else if self.focus_area == ScanEndpointsFocusArea::Options {
             return;
+        } else if self.focus_area == ScanEndpointsFocusArea::Results {
+            self.scroll_results_up();
         }
     }
 
@@ -496,6 +498,8 @@ impl TabInput for ScanEndpointsTab {
             }
         } else if self.focus_area == ScanEndpointsFocusArea::Options {
             return;
+        } else if self.focus_area == ScanEndpointsFocusArea::Results {
+            self.scroll_results_down();
         }
     }
 

@@ -416,6 +416,8 @@ impl TabInput for ScanPortsTab {
             }
         } else if self.focus_area == ScanPortsFocusArea::Options {
             return;
+        } else if self.focus_area == ScanPortsFocusArea::Results {
+            self.scroll_results_up();
         }
     }
 
@@ -431,6 +433,8 @@ impl TabInput for ScanPortsTab {
             }
         } else if self.focus_area == ScanPortsFocusArea::Options {
             return;
+        } else if self.focus_area == ScanPortsFocusArea::Results {
+            self.scroll_results_down();
         }
     }
 

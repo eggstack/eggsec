@@ -461,6 +461,7 @@ impl TabInput for VulnTab {
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.blur();
+                self.inputs.focus(0);
                 VulnFocusArea::Inputs
             }
             VulnFocusArea::Inputs => VulnFocusArea::Results,
@@ -481,7 +482,10 @@ impl TabInput for VulnTab {
                 self.mode_selector.focus();
                 VulnFocusArea::Mode
             }
-            VulnFocusArea::Results => VulnFocusArea::Inputs,
+            VulnFocusArea::Results => {
+                self.inputs.focus(0);
+                VulnFocusArea::Inputs
+            }
         };
     }
 
