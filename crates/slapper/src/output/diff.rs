@@ -133,6 +133,7 @@ impl DiffEngine {
         }
     }
 
+    /// Returns `true` if any escalated finding has severity >= High, indicating a regression.
     pub fn has_regressions(diff: &DiffResult) -> bool {
         diff.escalated_findings
             .iter()
