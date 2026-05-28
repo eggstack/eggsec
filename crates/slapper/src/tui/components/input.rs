@@ -112,6 +112,7 @@ impl InputField {
 
     pub fn insert(&mut self, c: char) {
         if self.focused {
+            self.cursor_pos = self.cursor_pos.min(self.value.len());
             self.value.insert(self.cursor_pos, c);
             self.cursor_pos += c.len_utf8();
         }
@@ -119,6 +120,7 @@ impl InputField {
 
     pub fn paste(&mut self, text: &str) {
         if self.focused {
+            self.cursor_pos = self.cursor_pos.min(self.value.len());
             for c in text.chars() {
                 if c != '\n' && c != '\r' {
                     self.value.insert(self.cursor_pos, c);
