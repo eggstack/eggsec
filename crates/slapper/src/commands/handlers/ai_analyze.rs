@@ -8,7 +8,7 @@ pub async fn handle_ai_analyze(
     mut args: AiAnalyzeArgs,
 ) -> Result<()> {
     args.json |= ctx.json;
-    let config = crate::config::load_config(None)?;
+    let config = &ctx.config;
     let ai_config = config.ai.clone().unwrap_or_default();
 
     if ai_config.api_key.is_none() {

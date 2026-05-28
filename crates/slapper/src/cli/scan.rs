@@ -1,3 +1,4 @@
+use super::timeout::*;
 use super::CommonHttpArgs;
 
 pub(crate) const SCAN_PORTS_ABOUT: &str = "Scan ports on target host
@@ -87,7 +88,7 @@ pub struct PortScanArgs {
         help = "Concurrent connections"
     )]
     pub concurrency: usize,
-    #[arg(long, default_value = "2", help = "Connection timeout in seconds")]
+    #[arg(long, default_value_t = PORT_SCAN_TIMEOUT, help = "Connection timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,
@@ -181,7 +182,7 @@ pub struct EndpointScanArgs {
     pub wordlist: Option<String>,
     #[arg(short = 'c', long, default_value = "20", help = "Concurrent requests")]
     pub concurrency: usize,
-    #[arg(long, default_value = "10", help = "Request timeout in seconds")]
+    #[arg(long, default_value_t = ENDPOINT_SCAN_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Include 404 responses in output")]
     pub include_404: bool,
@@ -238,7 +239,7 @@ pub struct FingerprintArgs {
         help = "Comma-separated ports to fingerprint"
     )]
     pub ports: String,
-    #[arg(long, default_value = "5", help = "Connection timeout in seconds")]
+    #[arg(long, default_value_t = FINGERPRINT_TIMEOUT, help = "Connection timeout in seconds")]
     pub timeout: u64,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,
