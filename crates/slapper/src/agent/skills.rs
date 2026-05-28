@@ -160,6 +160,22 @@ fn extract_frontmatter(content: &str) -> Result<(String, String)> {
     Ok((frontmatter, content))
 }
 
+#[derive(Debug, Clone)]
+pub struct SkillLoadResult {
+    pub skills: Vec<Skill>,
+    pub errors: Vec<(String, String)>,
+}
+
+impl SkillLoadResult {
+    pub fn is_empty(&self) -> bool {
+        self.skills.is_empty()
+    }
+
+    pub fn error_count(&self) -> usize {
+        self.errors.len()
+    }
+}
+
 pub struct SkillLoader {
     dirs: Vec<PathBuf>,
 }
@@ -169,8 +185,9 @@ impl SkillLoader {
         SkillLoader { dirs }
     }
 
-    pub fn load_skills(&self) -> Result<Vec<Skill>> {
+    pub fn load_skills(&self) -> Result<SkillLoadResult> {
         let mut skills = Vec::new();
+        let mut errors = Vec::new();
         for dir in &self.dirs {
             if !dir.exists() {
                 continue;
@@ -182,19 +199,23 @@ impl SkillLoader {
                     match Skill::parse(path.clone()) {
                         Ok(skill) => {
                             if let Err(e) = skill.validate() {
-                                tracing::warn!("Skipping invalid skill {}: {}", path.display(), e);
+                                let msg = e.to_string();
+                                tracing::warn!("Skipping invalid skill {}: {}", path.display(), msg);
+                                errors.push((path.display().to_string(), msg));
                                 continue;
                             }
                             skills.push(skill);
                         }
                         Err(e) => {
-                            tracing::warn!("Failed to parse skill {}: {}", path.display(), e);
+                            let msg = e.to_string();
+                            tracing::warn!("Failed to parse skill {}: {}", path.display(), msg);
+                            errors.push((path.display().to_string(), msg));
                         }
                     }
                 }
             }
         }
-        Ok(skills)
+        Ok(SkillLoadResult { skills, errors })
     }
 }
 

@@ -6,6 +6,9 @@ use crate::types::Severity;
 use chrono::Timelike;
 use rustc_hash::FxHashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+const RATE_LIMIT_RESET_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConstraintViolation {
@@ -101,6 +104,7 @@ impl ConstraintViolation {
 pub struct ConstraintChecker {
     constraints: OperationalConstraints,
     request_counts: Arc<Mutex<FxHashMap<String, usize>>>,
+    last_reset_at: Arc<Mutex<Instant>>,
 }
 
 impl ConstraintChecker {
@@ -108,6 +112,7 @@ impl ConstraintChecker {
         Self {
             constraints,
             request_counts: Arc::new(Mutex::new(FxHashMap::default())),
+            last_reset_at: Arc::new(Mutex::new(Instant::now())),
         }
     }
 
@@ -215,6 +220,11 @@ impl ConstraintChecker {
     pub fn evaluate_rate_limit(&self, key: &str) -> Result<(), ConstraintViolation> {
         if let Some(limit) = self.constraints.rate_limit_budget {
             let mut request_counts = self.request_counts.lock().unwrap();
+            let mut last_reset = self.last_reset_at.lock().unwrap();
+            if last_reset.elapsed() >= RATE_LIMIT_RESET_INTERVAL {
+                request_counts.clear();
+                *last_reset = Instant::now();
+            }
             let current = request_counts.entry(key.to_string()).or_insert(0);
             if *current >= limit {
                 return Err(ConstraintViolation::RateLimitExceeded {

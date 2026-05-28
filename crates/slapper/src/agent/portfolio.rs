@@ -569,7 +569,7 @@ mod tests {
             scan_type: "recon".to_string(),
             timestamp: chrono::Utc::now(),
             findings_count: 5,
-            severity_counts: std::collections::HashMap::new(),
+            severity_counts: FxHashMap::default(),
         };
         portfolio.add_scan_record("example.com", record);
 
@@ -597,7 +597,7 @@ mod tests {
             timestamp: chrono::Utc::now(),
             findings_count: 10,
             severity_counts: {
-                let mut counts = std::collections::HashMap::new();
+                let mut counts = FxHashMap::default();
                 counts.insert("Critical".to_string(), 2);
                 counts.insert("High".to_string(), 5);
                 counts.insert("Medium".to_string(), 3);
