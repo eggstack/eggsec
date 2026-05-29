@@ -19,6 +19,7 @@ pub async fn run_pipeline(
         profile,
         stages: None,
         concurrency: 10,
+        concurrent_stages: false,
         json: false,
         output: if output_file.is_empty() {
             None
