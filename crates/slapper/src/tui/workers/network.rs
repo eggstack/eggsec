@@ -199,7 +199,7 @@ pub async fn run_packet_capture(
         }
     }
 
-running.store(false, std::sync::atomic::Ordering::SeqCst);
+    running.store(false, std::sync::atomic::Ordering::SeqCst);
     let handle_result = tokio::time::timeout(Duration::from_secs(2), handle).await;
     match handle_result {
         Err(e) => {
@@ -277,11 +277,12 @@ pub async fn run_packet_traceroute(
     }
 
     let traceroute = Traceroute::new(config);
-    let result = match tokio::time::timeout(std::time::Duration::from_secs(60), traceroute.run()).await {
-        Ok(Ok(r)) => r,
-        Ok(Err(e)) => return Err(anyhow::anyhow!("Traceroute failed: {}", e)),
-        Err(_) => return Err(anyhow::anyhow!("Traceroute timed out after 60s")),
-    }?;
+    let result =
+        match tokio::time::timeout(std::time::Duration::from_secs(60), traceroute.run()).await {
+            Ok(Ok(r)) => r,
+            Ok(Err(e)) => return Err(anyhow::anyhow!("Traceroute failed: {}", e)),
+            Err(_) => return Err(anyhow::anyhow!("Traceroute timed out after 60s")),
+        }?;
 
     let hops: Vec<TracerouteHopResult> = result
         .hops

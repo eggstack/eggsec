@@ -570,13 +570,14 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     )?;
     smb.set("connect_tree", connect_tree_fn)?;
 
-    let open_file_fn = lua.create_function(|lua, (_host, _port, path): (String, u16, String)| {
-        let result = lua.create_table()?;
-        result.set("success", true)?;
-        result.set("path", path)?;
-        result.set("file_id", 1)?;
-        Ok(result)
-    })?;
+    let open_file_fn =
+        lua.create_function(|lua, (_host, _port, path): (String, u16, String)| {
+            let result = lua.create_table()?;
+            result.set("success", true)?;
+            result.set("path", path)?;
+            result.set("file_id", 1)?;
+            Ok(result)
+        })?;
     smb.set("open_file", open_file_fn)?;
 
     let list_directory_fn =
@@ -1023,17 +1024,25 @@ pub fn register_smb_library(lua: &Lua) -> LuaResult<()> {
     smb.set("file_exists", file_exists_fn)?;
 
     // rename_file - Rename a file on the remote share
-    let rename_file_fn = lua.create_function(
-        |lua, (_host, _port, _share, _old_path, _new_path): (String, u16, String, String, String)| {
-            let result = lua.create_table()?;
+    let rename_file_fn =
+        lua.create_function(
+            |lua,
+             (_host, _port, _share, _old_path, _new_path): (
+                String,
+                u16,
+                String,
+                String,
+                String,
+            )| {
+                let result = lua.create_table()?;
 
-            // Rename requires SMB2 SET_INFO with FileRenameInformation
-            result.set("success", false)?;
-            result.set("error", "Rename not fully implemented")?;
+                // Rename requires SMB2 SET_INFO with FileRenameInformation
+                result.set("success", false)?;
+                result.set("error", "Rename not fully implemented")?;
 
-            Ok(result)
-        },
-    )?;
+                Ok(result)
+            },
+        )?;
     smb.set("rename_file", rename_file_fn)?;
 
     let version_fn = lua.create_function(|_lua, _: ()| Ok("1.0.0"))?;

@@ -87,8 +87,8 @@ pub fn register_msrpcperformance_library(lua: &Lua) -> LuaResult<()> {
     })?;
     msrpcperformance.set("connect", connect_fn)?;
 
-    let get_perf_counters_fn =
-        lua.create_function(|lua, (_host, _port, object): (String, Option<u16>, String)| {
+    let get_perf_counters_fn = lua.create_function(
+        |lua, (_host, _port, object): (String, Option<u16>, String)| {
             let result = lua.create_table()?;
 
             let counters = lua.create_table()?;
@@ -102,7 +102,8 @@ pub fn register_msrpcperformance_library(lua: &Lua) -> LuaResult<()> {
             result.set("count", 3)?;
 
             Ok(result)
-        })?;
+        },
+    )?;
     msrpcperformance.set("get_perf_counters", get_perf_counters_fn)?;
 
     msrpcperformance.set(

@@ -91,9 +91,9 @@ handlebars = "6"
 arboard = "3.4"
 
 # Workspace crates
-slapper-plugin = { path = "../slapper-plugin", optional = true }
+# NSE remains optional compatibility support for Nmap NSE scripts.
+# Python/Ruby arbitrary plugin runtimes were intentionally removed.
 slapper-nse = { path = "../slapper-nse", optional = true }
-slapper-ruby = { path = "../slapper-ruby", optional = true }
 
 [dependencies.libc]
 version = "0.2"
@@ -222,20 +222,11 @@ ws-api = ["axum/ws"]
 # gRPC API server for external tool integration
 grpc-api = ["tool-api", "tonic", "prost", "prost-types", "tonic-prost", "tonic-reflection", "prost-build", "dep:tonic-prost-build"]
 
-# Python plugin support
-python-plugins = ["dep:slapper-plugin", "slapper-plugin/python-plugins"]
-
-# Ruby plugin support with Metasploit RPC integration
-ruby-plugins = ["dep:slapper-plugin", "slapper-plugin/ruby-plugins", "dep:slapper-ruby", "slapper-ruby/ruby-plugins"]
-
 # Low-level network stress testing
 stress-testing = ["pnet", "pnet_packet", "socket2", "nix", "libc", "surge-ping", "slapper-nse?/stress-testing"]
 
 # Packet inspection (live capture, hexdump, header parsing, traceroute)
 packet-inspection = ["pnet", "pnet_packet", "libc"]
-
-# All plugin languages
-all-plugins = ["python-plugins", "ruby-plugins"]
 
 # NSE (Nmap Scripting Engine) support - run Lua NSE scripts
 nse = ["tool-api", "dep:slapper-nse", "slapper-nse/nse"]
@@ -262,7 +253,7 @@ finding-workflow = []
 vuln-management = []
 
 # Full build with all features
-full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless"]
+full = ["stress-testing", "packet-inspection", "rest-api", "nse", "ai-integration", "websocket", "headless-browser", "database", "container", "sbom", "advanced-hunting", "compliance", "external-integrations", "finding-workflow", "vuln-management", "wireless"]
 
 # AI integration for analysis, payload generation, WAF bypass suggestions
 ai-integration = ["tool-api", "eventsource-stream", "semver"]

@@ -26,9 +26,13 @@ struct AppState {
 
 async fn handle_openapi_json(State(state): State<Arc<AppState>>) -> axum::Json<serde_json::Value> {
     let spec = state.openapi_generator.generate(&state.mcp_server.registry);
-    axum::Json(serde_json::from_str(&spec.to_json()).inspect_err(|e| {
-        tracing::warn!(error = %e, "Failed to parse OpenAPI JSON spec");
-    }).unwrap_or_default())
+    axum::Json(
+        serde_json::from_str(&spec.to_json())
+            .inspect_err(|e| {
+                tracing::warn!(error = %e, "Failed to parse OpenAPI JSON spec");
+            })
+            .unwrap_or_default(),
+    )
 }
 
 async fn handle_openapi_yaml(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -59,9 +63,12 @@ pub async fn create_mcp_router(
     api_key: Option<String>,
     profile: McpProfile,
 ) -> Router {
-    let server = Arc::new(
-        McpServer::with_scope_and_profile(registry.clone(), api_key, None, profile),
-    );
+    let server = Arc::new(McpServer::with_scope_and_profile(
+        registry.clone(),
+        api_key,
+        None,
+        profile,
+    ));
     let planner = ChainPlanner::new(registry.clone());
     let openapi_generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
 
@@ -193,7 +200,10 @@ async fn handle_mcp(
         .await
         .map_err(|e| {
             tracing::warn!(error = %e, "MCP request handler timed out after 30s");
-            crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!("MCP request handler timed out: {}", e) }
+            crate::error::SlapperError::Timeout {
+                timeout_ms: 0,
+                operation: format!("MCP request handler timed out: {}", e),
+            }
         })?
         .map_err(|e| {
             tracing::warn!(error = %e, "MCP request handler failed");
@@ -205,16 +215,12 @@ async fn handle_mcp(
     (StatusCode::OK, Json(responses))
 }
 
-pub async fn run_stdio(
-    registry: ToolRegistry,
-    api_key: Option<String>,
-    profile: McpProfile,
-) {
+pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>, profile: McpProfile) {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 
-    let server = Arc::new(
-        McpServer::with_scope_and_profile(registry, api_key, None, profile),
-    );
+    let server = Arc::new(McpServer::with_scope_and_profile(
+        registry, api_key, None, profile,
+    ));
 
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
@@ -270,11 +276,17 @@ pub async fn run_stdio(
                     .await
                     .map_err(|e| {
                         tracing::warn!(error = %e, "MCP request handler timed out after 30s");
-                        crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!("MCP request handler timed out: {}", e) }
+                        crate::error::SlapperError::Timeout {
+                            timeout_ms: 0,
+                            operation: format!("MCP request handler timed out: {}", e),
+                        }
                     })?
                     .map_err(|e| {
                         tracing::warn!(error = %e, "MCP request handler failed");
-                        crate::error::SlapperError::Runtime(format!("MCP request handler failed: {}", e))
+                        crate::error::SlapperError::Runtime(format!(
+                            "MCP request handler failed: {}",
+                            e
+                        ))
                     })?;
                     responses.push(response);
                 }
@@ -300,16 +312,16 @@ pub async fn run_stdio(
                     error: Some(error),
                 };
                 if let Ok(response_json) = serde_json::to_string(&response) {
-                        if let Err(e) = writer.write_all(response_json.as_bytes()).await {
-                            tracing::warn!(error = %e, "Failed to write parse error response");
-                        }
-                        if let Err(e) = writer.write_all(b"\n").await {
-                            tracing::warn!(error = %e, "Failed to write newline");
-                        }
-                        if let Err(e) = writer.flush().await {
-                            tracing::warn!(error = %e, "Failed to flush writer");
-                        }
+                    if let Err(e) = writer.write_all(response_json.as_bytes()).await {
+                        tracing::warn!(error = %e, "Failed to write parse error response");
                     }
+                    if let Err(e) = writer.write_all(b"\n").await {
+                        tracing::warn!(error = %e, "Failed to write newline");
+                    }
+                    if let Err(e) = writer.flush().await {
+                        tracing::warn!(error = %e, "Failed to flush writer");
+                    }
+                }
             }
         }
     }

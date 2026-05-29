@@ -140,7 +140,9 @@ impl Popup {
                     / (self.buttons.len().saturating_sub(1).max(1) as u16);
 
                 let mut x_offset = button_area.x;
-                for (i, (button, width)) in self.buttons.iter().zip(button_widths.iter()).enumerate() {
+                for (i, (button, width)) in
+                    self.buttons.iter().zip(button_widths.iter()).enumerate()
+                {
                     let is_active = i == self.active_button;
                     let style = if is_active {
                         Style::default()
@@ -272,10 +274,6 @@ pub fn help_popup_for_tab(tab: crate::tui::tabs::Tab) -> Popup {
                 "  Enter            - Execute report action".to_string()
             }
             crate::tui::tabs::Tab::Nse => "  Enter            - Run NSE scripts".to_string(),
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            crate::tui::tabs::Tab::Plugin => "  Enter            - Run plugin".to_string(),
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            crate::tui::tabs::Tab::Plugin => "".to_string(),
             crate::tui::tabs::Tab::Settings => "  s               - Save settings".to_string(),
             crate::tui::tabs::Tab::History => "  Up/Down         - Navigate entries".to_string(),
             crate::tui::tabs::Tab::Dashboard => "  j/k             - Scroll dashboard".to_string(),

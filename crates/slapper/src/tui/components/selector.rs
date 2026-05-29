@@ -488,10 +488,7 @@ impl RadioGroup {
                     .map(|(j, opt)| {
                         let is_selected = Some(base_idx + j) == self.selected;
                         let radio = if is_selected { "◉" } else { "○" };
-                        Span::styled(
-                            format!(" {} {}", radio, opt),
-                            item_style(base_idx + j),
-                        )
+                        Span::styled(format!(" {} {}", radio, opt), item_style(base_idx + j))
                     })
                     .collect();
                 lines.push(Line::from(spans));

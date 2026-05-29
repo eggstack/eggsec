@@ -462,8 +462,7 @@ impl LoginExecutor {
         let session_cookies: FxHashMap<String, String> = FxHashMap::default();
         let final_url: Option<String> = None;
         let mut response_code: Option<u16> = None;
-        let mut response_headers: FxHashMap<String, String> =
-            FxHashMap::default();
+        let mut response_headers: FxHashMap<String, String> = FxHashMap::default();
 
         for step in &sequence.steps {
             match step {
@@ -508,17 +507,21 @@ impl LoginExecutor {
                             .body(body);
                     }
 
-                    let response = tokio::time::timeout(
-                        std::time::Duration::from_secs(30),
-                        request.send(),
-                    )
-                    .await
-                    .map_err(|e| {
-                        crate::error::SlapperError::Network(format!("Login request timed out: {}", e))
-                    })?
-                    .map_err(|e| {
-                        crate::error::SlapperError::Network(format!("Login request failed: {}", e))
-                    })?;
+                    let response =
+                        tokio::time::timeout(std::time::Duration::from_secs(30), request.send())
+                            .await
+                            .map_err(|e| {
+                                crate::error::SlapperError::Network(format!(
+                                    "Login request timed out: {}",
+                                    e
+                                ))
+                            })?
+                            .map_err(|e| {
+                                crate::error::SlapperError::Network(format!(
+                                    "Login request failed: {}",
+                                    e
+                                ))
+                            })?;
 
                     response_code = Some(response.status().as_u16());
                     let _final_url = response.url().to_string();
@@ -652,7 +655,11 @@ impl LoginExecutor {
         })
     }
 
-    fn substitute_variables(&self, template: &str, variables: &FxHashMap<String, String>) -> String {
+    fn substitute_variables(
+        &self,
+        template: &str,
+        variables: &FxHashMap<String, String>,
+    ) -> String {
         let mut result = template.to_string();
         for (key, value) in variables {
             result = result.replace(&format!("${{{}}}", key), value);

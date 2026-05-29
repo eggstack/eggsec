@@ -33,8 +33,6 @@
 //! - `insecure-tls` - Disables TLS certificate verification (testing only)
 //! - `stress-testing` - DoS tools, proxy management, raw sockets
 //! - `packet-inspection` - Live packet capture, traceroute
-//! - `python-plugins` / `ruby-plugins` - Plugin language support
-//! - `all-plugins` - All plugin languages combined
 //! - `rest-api` / `grpc-api` - API server integration
 //! - `ws-api` - WebSocket API server support
 //! - `nse` - Nmap NSE script support
@@ -83,12 +81,12 @@ pub mod compliance;
 mod compliance;
 pub mod config;
 pub mod constants;
-pub mod diff;
 #[cfg(feature = "container")]
 pub mod container;
 #[cfg(not(feature = "container"))]
 #[allow(dead_code)]
 mod container;
+pub mod diff;
 pub mod distributed;
 pub mod error;
 pub mod findings;
@@ -154,12 +152,6 @@ pub use slapper_nse as nse;
 
 #[cfg(all(feature = "nse", feature = "tool-api"))]
 pub mod nse_tool;
-
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-pub use slapper_plugin as plugin;
-
-#[cfg(feature = "ruby-plugins")]
-pub use slapper_ruby as ruby;
 
 #[cfg(any(feature = "packet-inspection", feature = "stress-testing"))]
 pub mod packet;

@@ -18,7 +18,10 @@ pub fn parse_dns_name(data: &[u8], offset: usize) -> Option<(String, usize)> {
         let length = data[pos] as usize;
 
         if length == 0 {
-            return Some((String::from_utf8_lossy(&name).to_string(), if !jumped { pos + 1 } else { original_offset }));
+            return Some((
+                String::from_utf8_lossy(&name).to_string(),
+                if !jumped { pos + 1 } else { original_offset },
+            ));
         }
 
         if (length & 0xc0) == 0xc0 {

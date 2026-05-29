@@ -84,11 +84,7 @@ impl NseExecutor {
                 }
                 exec.run_script(&script)
             })();
-            let _ = tx.send(
-                result
-                    .map(|v| v.to_string())
-                    .map_err(|e| e.to_string()),
-            );
+            let _ = tx.send(result.map(|v| v.to_string()).map_err(|e| e.to_string()));
         });
 
         match rx.recv_timeout(timeout) {

@@ -46,18 +46,6 @@ cargo build --release -p slapper --features rest-api
 cargo build --release -p slapper --features ai-integration
 ```
 
-### Python Plugin Support
-
-```bash
-cargo build --release -p slapper --features python-plugins
-```
-
-### Ruby Plugin Support
-
-```bash
-cargo build --release -p slapper --features ruby-plugins
-```
-
 ### Nmap NSE Support
 
 ```bash

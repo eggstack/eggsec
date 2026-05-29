@@ -47,11 +47,9 @@ pub fn run(config_path: Option<String>) -> Result<()> {
     let history = state::create_shared_history();
     let mut app = App::new(history);
     if let Ok(config) = crate::config::load_config(config_path.as_deref()) {
-        app.config_plugins_dir = config.paths.plugins_dir.clone();
         app.settings.load_config(&config);
-        app.session_manager.config =
-            crate::tui::session::SessionConfig::default()
-                .with_auto_save_interval(config.auto_save_interval_secs);
+        app.session_manager.config = crate::tui::session::SessionConfig::default()
+            .with_auto_save_interval(config.auto_save_interval_secs);
     } else {
         tracing::warn!("Failed to load config for TUI settings state; using defaults");
     }

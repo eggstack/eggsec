@@ -52,7 +52,10 @@ pub async fn run_http_flood(config: &StressConfig, metrics: &StressMetrics) -> R
 
     metrics.start();
     let request_idx = Arc::new(AtomicU64::new(0));
-    let worker_count = config.concurrency.max(1).min(total_requests.max(1) as usize);
+    let worker_count = config
+        .concurrency
+        .max(1)
+        .min(total_requests.max(1) as usize);
     let mut handles = Vec::with_capacity(worker_count);
 
     for worker_id in 0..worker_count {

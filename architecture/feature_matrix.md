@@ -21,9 +21,6 @@ Comprehensive reference for all Cargo feature flags in the `slapper` crate.
 | `rest-api` | yes | yes | yes | `tool/`, `agent/` | implemented | `cargo check -p slapper --features rest-api` |
 | `ws-api` | yes | yes | - | (WebSocket API) | partial | `cargo check -p slapper --features ws-api` |
 | `grpc-api` | yes | yes | - | `tool/` | implemented | `cargo check -p slapper --features grpc-api` |
-| `python-plugins` | yes | yes | yes | `slapper-plugin` | implemented | `cargo check -p slapper --features python-plugins` |
-| `ruby-plugins` | yes | yes | yes | `slapper-ruby` | implemented | `cargo check -p slapper --features ruby-plugins` |
-| `all-plugins` | yes | yes | - | `slapper-plugin`, `slapper-ruby` | implemented | `cargo check -p slapper --features all-plugins` |
 | `stress-testing` | yes | yes | yes | `stress/`, `packet/` | implemented | `cargo check -p slapper --features stress-testing` |
 | `packet-inspection` | yes | yes | yes | `packet/` | implemented | `cargo check -p slapper --features packet-inspection` |
 | `nse` | yes | yes | yes | `slapper-nse` | implemented | `cargo check -p slapper --features nse` |

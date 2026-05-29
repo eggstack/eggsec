@@ -8,8 +8,7 @@ use crate::utils::create_http_client;
 
 type CveCacheMap = FxHashMap<String, Vec<VulnerabilityInfo>>;
 
-static CVE_CACHE: OnceLock<Arc<Mutex<CveCacheMap>>> =
-    OnceLock::new();
+static CVE_CACHE: OnceLock<Arc<Mutex<CveCacheMap>>> = OnceLock::new();
 
 fn get_cache() -> Arc<Mutex<FxHashMap<String, Vec<VulnerabilityInfo>>>> {
     CVE_CACHE
@@ -57,8 +56,11 @@ impl CveMapper {
 
     pub async fn map_cves(&mut self, tech_stack: &TechStack) -> Result<CveMapping> {
         let mut all_vulns = Vec::with_capacity(
-            tech_stack.servers.len() + tech_stack.frameworks.len()
-                + tech_stack.languages.len() + tech_stack.cms.len() + tech_stack.cdns.len()
+            tech_stack.servers.len()
+                + tech_stack.frameworks.len()
+                + tech_stack.languages.len()
+                + tech_stack.cms.len()
+                + tech_stack.cdns.len(),
         );
 
         for server in &tech_stack.servers {
@@ -135,13 +137,19 @@ impl CveMapper {
         }
 
         if !matched_cves.is_empty() {
-            self.cache.lock().unwrap().insert(product.to_string(), matched_cves.clone());
+            self.cache
+                .lock()
+                .unwrap()
+                .insert(product.to_string(), matched_cves.clone());
             return Some(matched_cves);
         }
 
         if let Some(nvd_key) = &self.nvd_api_key {
             if let Ok(vulns) = self.query_nvd_api(product, nvd_key).await {
-                self.cache.lock().unwrap().insert(product.to_string(), vulns.clone());
+                self.cache
+                    .lock()
+                    .unwrap()
+                    .insert(product.to_string(), vulns.clone());
                 return Some(vulns);
             }
         }

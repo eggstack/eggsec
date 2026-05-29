@@ -852,7 +852,8 @@ impl TabInput for PacketTab {
         if self.view_selector.is_focused() {
             if self.view_selector.is_open() {
                 self.view_selector.items.is_empty()
-                    || self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+                    || self.view_selector.selected
+                        >= self.view_selector.items.len().saturating_sub(1)
             } else {
                 true
             }

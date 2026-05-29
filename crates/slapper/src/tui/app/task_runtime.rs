@@ -67,9 +67,7 @@ impl super::App {
 
             self.task_tab = Some(self.current_tab);
 
-            let inner_handle = tokio::spawn(async move {
-                runner.run().await
-            });
+            let inner_handle = tokio::spawn(async move { runner.run().await });
 
             let handle_to_abort = inner_handle.abort_handle();
 
@@ -93,7 +91,9 @@ impl super::App {
                             tracing::error!("Task failed: {}", join_error);
                         }
                         if let Err(e) = error_tx
-                            .send(workers::TaskResult::Error("Task panicked or failed".to_string()))
+                            .send(workers::TaskResult::Error(
+                                "Task panicked or failed".to_string(),
+                            ))
                             .await
                         {
                             tracing::warn!("Failed to send task error result: {:?}", e);
@@ -103,7 +103,9 @@ impl super::App {
                         tracing::error!("Task timed out after 300s - aborting task");
                         handle_to_abort.abort();
                         if let Err(e) = error_tx
-                            .send(workers::TaskResult::Error("Task timed out after 300 seconds".to_string()))
+                            .send(workers::TaskResult::Error(
+                                "Task timed out after 300 seconds".to_string(),
+                            ))
                             .await
                         {
                             tracing::warn!("Failed to send task error result: {:?}", e);

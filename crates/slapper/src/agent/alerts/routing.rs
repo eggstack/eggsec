@@ -347,8 +347,7 @@ impl AlertRouter {
     }
 
     pub async fn aggregate_findings(&self, alerts: &[Alert]) -> AggregatedAlert {
-        let mut severity_counts: FxHashMap<String, usize> =
-            FxHashMap::default();
+        let mut severity_counts: FxHashMap<String, usize> = FxHashMap::default();
         let mut all_finding_ids = Vec::new();
         let mut targets: FxHashSet<String> = FxHashSet::default();
 

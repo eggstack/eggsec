@@ -104,8 +104,7 @@ pub fn nse_vulns_is_known(service: &str, port: u16) -> NseResult<Vec<NseVulnResu
     Ok(service_vulns)
 }
 
-fn get_cve_database(
-) -> FxHashMap<&'static str, (&'static str, &'static str, &'static str)> {
+fn get_cve_database() -> FxHashMap<&'static str, (&'static str, &'static str, &'static str)> {
     let mut m = FxHashMap::default();
 
     // SMB vulnerabilities

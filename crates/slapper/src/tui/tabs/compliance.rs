@@ -109,7 +109,10 @@ impl ComplianceTab {
             "Passed: {} | Failed: {} | N/A: {} | Review: {}",
             report.passed,
             report.failed,
-            report.total_requirements.saturating_sub(report.passed).saturating_sub(report.failed),
+            report
+                .total_requirements
+                .saturating_sub(report.passed)
+                .saturating_sub(report.failed),
             report.findings.len()
         )));
         self.results_view.add_line(Line::from(""));
@@ -463,7 +466,8 @@ impl TabInput for ComplianceTab {
             self.inputs.is_at_right_edge()
         } else if self.focus_area == ComplianceFocusArea::Framework {
             self.framework_selector.items.is_empty()
-                || self.framework_selector.selected >= self.framework_selector.items.len().saturating_sub(1)
+                || self.framework_selector.selected
+                    >= self.framework_selector.items.len().saturating_sub(1)
         } else {
             true
         }

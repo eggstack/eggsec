@@ -1,6 +1,8 @@
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
-use crate::tui::components::{InputField, InputGroup, ProgressGauge, ScrollableText, Selector, SelectorItem};
+use crate::tui::components::{
+    InputField, InputGroup, ProgressGauge, ScrollableText, Selector, SelectorItem,
+};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -427,8 +429,7 @@ impl TabInput for NseTab {
         match self.focus_area {
             NseFocusArea::Inputs => self.inputs.is_at_left_edge(),
             NseFocusArea::ScriptSelector => {
-                self.script_selector.items.is_empty()
-                    || self.script_selector.selected == 0
+                self.script_selector.items.is_empty() || self.script_selector.selected == 0
             }
             _ => true,
         }

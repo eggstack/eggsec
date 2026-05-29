@@ -1,8 +1,8 @@
 use crate::error::Result;
 use reqwest::Client;
+use rustls::pki_types::ServerName;
 use rustls::ClientConfig;
 use rustls::RootCertStore;
-use rustls::pki_types::ServerName;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -322,9 +322,9 @@ impl SmugglingBypass {
         req: &SmugglingRequest,
     ) -> Result<(u16, String)> {
         let base = url::Url::parse(base_url)?;
-        let host = base
-            .host_str()
-            .ok_or_else(|| crate::error::SlapperError::Validation("Missing host in URL".to_string()))?;
+        let host = base.host_str().ok_or_else(|| {
+            crate::error::SlapperError::Validation("Missing host in URL".to_string())
+        })?;
         let scheme = base.scheme();
         let port = base.port_or_known_default().unwrap_or(match scheme {
             "https" => 443,
@@ -344,18 +344,20 @@ impl SmugglingBypass {
             }
             "https" => {
                 let connector = Self::build_tls_connector();
-                let server_name = ServerName::try_from(host.to_string())
-                    .map_err(|e| crate::error::SlapperError::Validation(format!("Invalid TLS server name '{}': {}", host, e)))?;
+                let server_name = ServerName::try_from(host.to_string()).map_err(|e| {
+                    crate::error::SlapperError::Validation(format!(
+                        "Invalid TLS server name '{}': {}",
+                        host, e
+                    ))
+                })?;
                 let mut tls = timeout(
                     Duration::from_secs(15),
                     connector.connect(server_name, stream),
                 )
                 .await
-                .map_err(|_| {
-                    crate::error::SlapperError::Timeout {
-                        timeout_ms: 15_000,
-                        operation: format!("TLS connect {}", authority),
-                    }
+                .map_err(|_| crate::error::SlapperError::Timeout {
+                    timeout_ms: 15_000,
+                    operation: format!("TLS connect {}", authority),
                 })??;
                 tls.write_all(&request_bytes).await?;
                 tls.flush().await?;

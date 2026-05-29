@@ -1,7 +1,8 @@
-# Slapper - Security Testing Toolkit
+# Slapper - Rust Security Assessment Engine
 
-A high-performance, extensible security testing toolkit written in Rust. Slapper provides comprehensive assessment capabilities including reconnaissance, port scanning, endpoint discovery, service fingerprinting, WAF detection/bypass, security fuzzing, and load testing.
-Developed alongside and tested against MaluWAF.
+Slapper is a Rust-native security assessment engine for scoped, repeatable testing of live systems. It provides high-performance primitives for reconnaissance, port and service scanning, endpoint discovery, web/API security checks, WAF evaluation, fuzzing, load testing, reporting, and AI-oriented orchestration.
+
+Slapper is not intended to be a Metasploit clone or a general arbitrary-code plugin host. Its core value is a maintainable Rust engine with policy-aware execution, structured outputs, and optional compatibility layers such as Nmap NSE support.
 
 ## What is Slapper?
 
@@ -49,16 +50,12 @@ Some features require system-level packages to be installed via your package man
 
 | Feature | Required Packages | Package Manager Commands |
 |---------|-------------------|--------------------------|
-| `ruby-plugins` | `ruby-dev`, `clang` | `sudo apt-get install ruby-dev clang` (Ubuntu/Debian) |
 | `packet-inspection` | `libpcap-dev` (optional, for full packet capture) | `sudo apt-get install libpcap-dev` (Ubuntu/Debian) |
 | `wireless` | `libusb-1.0-0-dev` (optional, for wireless testing) | `sudo apt-get install libusb-1.0-0-dev` (Ubuntu/Debian) |
 | `nse` | `libssl-dev` (for NSE script compatibility) | `sudo apt-get install libssl-dev` (Ubuntu/Debian) |
 
 **Ubuntu/Debian:**
 ```bash
-# For Ruby plugin support
-sudo apt-get install ruby-dev clang
-
 # For packet inspection (optional)
 sudo apt-get install libpcap-dev
 
@@ -68,21 +65,11 @@ sudo apt-get install libusb-1.0-0-dev
 
 **Fedora/RHEL:**
 ```bash
-# For Ruby plugin support
-sudo dnf install ruby-devel clang
-
 # For packet inspection (optional)
 sudo dnf install libpcap-devel
 
 # For wireless testing (optional)
 sudo dnf install libusb1-devel
-```
-
-**macOS:**
-```bash
-# For Ruby plugin support
-xcode-select --install  # Installs clang
-brew install ruby       # Installs ruby with development headers
 ```
 
 ## Build Features
@@ -93,8 +80,7 @@ Slapper uses Cargo feature flags to enable optional capabilities. Some commands 
 |---------|-------------|--------------|
 | `stress-testing` | SYN/UDP/ICMP floods, proxy management | `stress`, `proxy`, `icmp`, `traceroute` commands |
 | `packet-inspection` | Live packet capture, traceroute | `packet capture`, `packet send` (live) |
-| `python-plugins` | Python plugin support | Python-based security plugins |
-| `ruby-plugins` | Ruby plugin support + Metasploit RPC | Ruby plugins, Metasploit integration |
+| `nse` | Nmap NSE script compatibility | `nse` command |
 | `api-schema` | OpenAPI v3 schema-based fuzzing | Type-aware API fuzzing from OpenAPI specs |
 | `sbom` | SBOM generation and analysis | Software bill of materials (`cyclonedx-bom`, `spdx`) |
 | `full` | All features combined | All commands available |
@@ -114,10 +100,8 @@ cargo build --release --features packet-inspection
 # Full build - all features
 cargo build --release --features full
 
-# With plugin support
-cargo build --release --features python-plugins
-cargo build --release --features ruby-plugins
-cargo build --release --features all-plugins
+# With NSE support
+cargo build --release --features nse
 ```
 
 ## Quick Start
@@ -126,26 +110,13 @@ cargo build --release --features all-plugins
 
 Before building, ensure you have Rust installed. For features that require system dependencies, install the necessary packages:
 
-**For Ruby plugin support (recommended):**
-```bash
-# Ubuntu/Debian
-sudo apt-get install ruby-dev clang
-
-# Fedora/RHEL
-sudo dnf install ruby-devel clang
-
-# macOS
-xcode-select --install
-brew install ruby
-```
-
 **For full build with all features:**
 ```bash
 # Ubuntu/Debian
-sudo apt-get install ruby-dev clang libpcap-dev libssl-dev libusb-1.0-0-dev
+sudo apt-get install libpcap-dev libssl-dev libusb-1.0-0-dev
 
 # Fedora/RHEL
-sudo dnf install ruby-devel clang libpcap-devel openssl-devel libusb1-devel
+sudo dnf install libpcap-devel openssl-devel libusb1-devel
 ```
 
 ### Installation
@@ -597,114 +568,6 @@ Passive reconnaissance gathers intelligence about targets without direct interac
 ./slapper recon example.com --concurrency 20
 ```
 
-## Plugin Support
-
-Slapper supports extending functionality through plugins in Python and Ruby.
-
-### Python Plugins
-
-Build with Python support:
-```bash
-cargo build --release --features python-plugins
-```
-
-Create a Python plugin:
-```python
-# ~/.config/slapper/plugins/my_plugin.py
-from typing import Dict, List, Optional
-from dataclasses import dataclass
-import json
-
-@dataclass
-class Finding:
-    severity: str
-    finding_type: str
-    description: str
-    location: str
-    evidence: Optional[str] = None
-
-class MyPlugin:
-    @property
-    def name(self) -> str:
-        return "my_plugin"
-
-    @property
-    def version(self) -> str:
-        return "1.0.0"
-
-    def run(self, target: str, config: Dict) -> Dict:
-        findings = []
-
-        # Your scanning logic here
-        # Make HTTP requests, analyze responses, etc.
-
-        return {
-            "target": target,
-            "findings": findings,
-            "success": True
-        }
-
-# Register plugin
-PLUGINS = [MyPlugin]
-```
-
-### Ruby Plugins
-
-Build with Ruby support:
-```bash
-cargo build --release --features ruby-plugins
-```
-
-Create a Ruby plugin:
-```ruby
-# ~/.config/slapper/plugins/my_plugin.rb
-module Slapper
-  class Plugin
-    NAME = "my_plugin"
-    VERSION = "1.0.0"
-
-    def run(target, config = {})
-      # Your scanning logic here
-      # Use the Ruby API below
-
-      Slapper::Report.success("My Plugin", "Scan completed")
-
-      { success: true, findings: [] }
-    end
-  end
-end
-```
-
-#### Ruby API Reference
-
-```ruby
-# HTTP requests
-Slapper::HTTP.get(url)
-Slapper::HTTP.post(url, body)
-Slapper::HTTP.put(url, body)
-Slapper::HTTP.delete(url)
-Slapper::HTTP.request(method, url)
-
-# Scanning
-Slapper::Scanner.tcp_connect(host, port)
-Slapper::Scanner.scan_port(host, port)
-Slapper::Scanner.grab_banner(host, port)
-
-# Fuzzing
-Slapper::Fuzzer.fuzz_param(url, param, payloads, options)
-Slapper::Fuzzer.fuzz_header(url, header, payloads, options)
-Slapper::Fuzzer.fuzz_cookie(url, cookie_name, payloads, options)
-Slapper::Fuzzer.fuzz_path(url, paths)
-
-# Reporting
-Slapper::Report.finding(severity, type, description, location)
-Slapper::Report.vulnerability(severity, type, description, location, cve)
-Slapper::Report.info(title, message)
-Slapper::Report.success(title, message)
-Slapper::Report.warning(title, message)
-Slapper::Report.error(title, message)
-```
-
 ## Autonomous Agent
 
 Slapper includes an autonomous security agent for continuous monitoring and scheduled security assessments. The agent maintains longitudinal memory of scan results, routes alerts to configured channels, and uses AI-powered skills for intelligent security testing.
@@ -925,7 +788,6 @@ slapper --scope /path/to/scope.toml       # Scope file
 - [Baselines and Differential Scans](docs/BASELINES_AND_DIFFS.md) - Comparing scan results over time
 - [API Testing with OpenAPI Schemas](docs/API_TESTING.md) - Schema import, fuzz target generation
 - [Agent Documentation](docs/AGENT.md) - Autonomous agent setup and usage
-- [Plugin Development](docs/PLUGIN_DEVELOPMENT.md) - Python and Ruby plugin authoring
 - [Capabilities](docs/CAPABILITIES.md) - Feature matrix and capabilities overview
 
 ## Security Considerations
@@ -938,14 +800,6 @@ slapper --scope /path/to/scope.toml       # Scope file
 ## Troubleshooting
 
 ### Build Issues
-
-**Error: `ruby.h` file not found**
-- **Cause:** Ruby development headers not installed
-- **Fix:** Install `ruby-dev` (Ubuntu/Debian) or `ruby-devel` (Fedora/RHEL)
-
-**Error: `stdarg.h` file not found or clang not found**
-- **Cause:** `clang` compiler not installed (required for Ruby FFI bindings)
-- **Fix:** Install `clang` via package manager
 
 **Error: `regex` crate not found during build**
 - **Cause:** This should not happen with the current codebase

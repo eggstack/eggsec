@@ -742,8 +742,7 @@ impl TabInput for LoadTab {
     fn is_at_left_edge(&self) -> bool {
         if self.test_type_selector.is_focused() {
             if self.test_type_selector.is_open() {
-                self.test_type_selector.items.is_empty()
-                    || self.test_type_selector.selected == 0
+                self.test_type_selector.items.is_empty() || self.test_type_selector.selected == 0
             } else {
                 true
             }

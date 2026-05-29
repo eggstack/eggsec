@@ -332,17 +332,22 @@ impl TabRender for WorkflowTab {
             }
         }
 
-        if matches!(self.current_mode, WorkflowMode::CreateFinding | WorkflowMode::ChangeStatus) {
+        if matches!(
+            self.current_mode,
+            WorkflowMode::CreateFinding | WorkflowMode::ChangeStatus
+        ) {
             if let Some(chunk) = field_chunks.get(fields.len()) {
                 let mut sev = self.severity_selector.clone();
-                sev.focused = self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused();
+                sev.focused =
+                    self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused();
                 sev.render(f, *chunk);
             }
         }
         if matches!(self.current_mode, WorkflowMode::ChangeStatus) {
             if let Some(chunk) = field_chunks.get(fields.len() + 1) {
                 let mut st = self.status_selector.clone();
-                st.focused = self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused();
+                st.focused =
+                    self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused();
                 st.render(f, *chunk);
             }
         }
@@ -557,7 +562,8 @@ impl TabInput for WorkflowTab {
         match self.focus_area {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.items.is_empty()
-                    || self.mode_selector.selected >= self.mode_selector.items.len().saturating_sub(1)
+                    || self.mode_selector.selected
+                        >= self.mode_selector.items.len().saturating_sub(1)
             }
             WorkflowFocusArea::Inputs => self.inputs.is_at_right_edge(),
             _ => true,

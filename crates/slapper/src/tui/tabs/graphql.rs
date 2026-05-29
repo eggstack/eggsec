@@ -200,7 +200,6 @@ impl GraphQlTab {
             self.state = AppState::Idle;
         }
     }
-
 }
 
 impl TabRender for GraphQlTab {
@@ -508,12 +507,10 @@ impl TabInput for GraphQlTab {
         self.focus_area == GraphQlFocusArea::Inputs && self.inputs.is_focused()
     }
 
-fn is_at_left_edge(&self) -> bool {
+    fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             GraphQlFocusArea::Inputs => !self.inputs.can_move_left(),
-            GraphQlFocusArea::Options => {
-                self.checkbox_focus_index == 0
-            }
+            GraphQlFocusArea::Options => self.checkbox_focus_index == 0,
             _ => true,
         }
     }
@@ -521,9 +518,7 @@ fn is_at_left_edge(&self) -> bool {
     fn is_at_right_edge(&self) -> bool {
         match self.focus_area {
             GraphQlFocusArea::Inputs => !self.inputs.can_move_right(),
-            GraphQlFocusArea::Options => {
-                self.checkbox_focus_index >= 3
-            }
+            GraphQlFocusArea::Options => self.checkbox_focus_index >= 3,
             _ => true,
         }
     }

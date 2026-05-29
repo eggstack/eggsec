@@ -183,36 +183,6 @@ pub struct ExecArgs {
 }
 
 #[derive(clap::Args)]
-pub struct PluginArgs {
-    #[command(subcommand)]
-    pub command: PluginCommand,
-}
-
-#[derive(clap::Subcommand)]
-pub enum PluginCommand {
-    #[command(about = "List available plugins")]
-    List(PluginListArgs),
-    #[command(about = "Run a plugin against a target")]
-    Run(PluginRunArgs),
-}
-
-#[derive(clap::Args)]
-pub struct PluginListArgs {
-    #[arg(short = 'v', long, help = "Show verbose plugin information")]
-    pub verbose: bool,
-}
-
-#[derive(clap::Args)]
-pub struct PluginRunArgs {
-    #[arg(help = "Plugin name to run")]
-    pub name: String,
-    #[arg(help = "Target URL or host")]
-    pub target: String,
-    #[arg(short = 'o', long, help = "Output results to file")]
-    pub output: Option<String>,
-}
-
-#[derive(clap::Args)]
 pub struct ReportArgs {
     #[command(subcommand)]
     pub command: ReportCommand,

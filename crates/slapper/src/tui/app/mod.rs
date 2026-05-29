@@ -11,9 +11,9 @@ pub(crate) mod navigation;
 mod options;
 pub(crate) mod runner;
 pub(crate) mod state_update;
-pub(crate) mod task_runtime;
 pub(crate) mod tab_error;
 pub(crate) mod task_management;
+pub(crate) mod task_runtime;
 
 pub use crate::tui::state::create_shared_history;
 pub use bookmarks::{get_bookmarked_tab_ids, is_bookmarked, toggle_bookmark};
@@ -38,7 +38,6 @@ use crate::types::OutputFormat;
 use crossterm::event::KeyCode;
 use dispatch::TabDispatcher;
 use rustc_hash::FxHashSet;
-use std::path::PathBuf;
 use task_management::TabTaskConfigSource;
 
 pub struct App {
@@ -67,8 +66,6 @@ pub struct App {
     pub report: tabs::ReportTab,
     #[cfg(feature = "nse")]
     pub nse: tabs::NseTab,
-    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-    pub plugin: tabs::PluginTab,
     pub settings: tabs::SettingsTab,
     pub http_options: GlobalHttpOptions,
     pub history: SharedHistory,
@@ -116,7 +113,6 @@ pub struct App {
     pub show_quick_switch: bool,
     pub quick_switch_query: String,
     pub quick_switch_selected: usize,
-    pub config_plugins_dir: Option<PathBuf>,
 }
 
 impl App {
@@ -137,25 +133,24 @@ impl App {
             None
         };
 
-        let restored_bookmarks: FxHashSet<String> =
-            if let Some(ref state) = restored_state {
-                let mut bookmarks = FxHashSet::default();
-                for bookmark_id in &state.bookmarks {
-                    if let Some(tab) = Tab::from_stable_id(bookmark_id) {
+        let restored_bookmarks: FxHashSet<String> = if let Some(ref state) = restored_state {
+            let mut bookmarks = FxHashSet::default();
+            for bookmark_id in &state.bookmarks {
+                if let Some(tab) = Tab::from_stable_id(bookmark_id) {
+                    bookmarks.insert(tab.stable_id().to_string());
+                }
+            }
+            for &idx in &state.legacy_bookmarks {
+                if let Some(tab) = Tab::from_index(idx) {
+                    if tab.visible_index().is_some() {
                         bookmarks.insert(tab.stable_id().to_string());
                     }
                 }
-                for &idx in &state.legacy_bookmarks {
-                    if let Some(tab) = Tab::from_index(idx) {
-                        if tab.visible_index().is_some() {
-                            bookmarks.insert(tab.stable_id().to_string());
-                        }
-                    }
-                }
-                bookmarks
-            } else {
-                FxHashSet::default()
-            };
+            }
+            bookmarks
+        } else {
+            FxHashSet::default()
+        };
 
         let restored_current_tab = restored_state
             .as_ref()
@@ -197,8 +192,6 @@ impl App {
             report: tabs::ReportTab::new(),
             #[cfg(feature = "nse")]
             nse: tabs::NseTab::new(),
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            plugin: tabs::PluginTab::new(),
             settings: tabs::SettingsTab::new(),
             dashboard: tabs::DashboardTab::new(),
             #[cfg(feature = "advanced-hunting")]
@@ -246,7 +239,6 @@ impl App {
             show_quick_switch: false,
             quick_switch_query: String::new(),
             quick_switch_selected: 0,
-            config_plugins_dir: None,
         };
 
         // Sync settings with current theme
@@ -308,10 +300,6 @@ impl App {
             Tab::Nse => tabs::TabState::state(&self.nse) == tabs::AppState::Running,
             #[cfg(not(feature = "nse"))]
             Tab::Nse => false,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => tabs::TabState::state(&self.plugin) == tabs::AppState::Running,
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => false,
             #[cfg(feature = "advanced-hunting")]
             Tab::Hunt => tabs::TabState::state(&self.hunt) == tabs::AppState::Running,
             #[cfg(not(feature = "advanced-hunting"))]

@@ -1,7 +1,5 @@
 use crate::cli::ScanProfile;
 use crate::tui::tabs::recon::ReconOptions;
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -112,13 +110,6 @@ pub enum TaskConfig {
         concurrency: usize,
         timeout: u64,
     },
-    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-    Plugin {
-        plugin_name: String,
-        target: String,
-        timeout_secs: u64,
-        plugins_dir: Option<PathBuf>,
-    },
     #[cfg(feature = "nse")]
     Nse {
         target: String,
@@ -228,10 +219,6 @@ pub enum TaskResult {
     },
     Workflow(crate::workflow::WorkflowReport),
     Vuln(crate::vuln::VulnAssessment),
-    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-    PluginsLoaded(Vec<crate::tui::tabs::plugin::PluginInfo>),
-    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-    PluginResult(crate::tui::tabs::plugin::PluginResults),
     Error(String),
 }
 
@@ -497,23 +484,6 @@ impl TaskRunner {
                     grant_test,
                     concurrency,
                     timeout,
-                    progress_tx,
-                    result_tx,
-                )
-                .await
-            }
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            TaskConfig::Plugin {
-                plugin_name,
-                target,
-                timeout_secs,
-                plugins_dir,
-            } => {
-                super::plugin::run_plugin_check(
-                    plugin_name,
-                    target,
-                    timeout_secs,
-                    plugins_dir,
                     progress_tx,
                     result_tx,
                 )

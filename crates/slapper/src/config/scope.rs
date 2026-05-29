@@ -67,8 +67,7 @@ impl Scope {
             }
             if rate > 10000 {
                 return Err(ScopeError::Validation(
-                    "max_requests_per_second exceeds reasonable limit (10000)"
-                        .to_string(),
+                    "max_requests_per_second exceeds reasonable limit (10000)".to_string(),
                 ));
             }
         }

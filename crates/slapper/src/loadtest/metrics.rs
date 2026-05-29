@@ -1,6 +1,6 @@
-use rustc_hash::FxHashMap;
 use crate::utils::preserve_all;
 use hdrhistogram::Histogram;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 

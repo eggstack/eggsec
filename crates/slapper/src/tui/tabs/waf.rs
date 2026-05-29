@@ -560,7 +560,10 @@ impl TabInput for WafTab {
 
         if self.focus_area == WafFocusArea::Techniques && !self.is_running() {
             if !self.technique_checkboxes.is_empty() {
-                if let Some(cb) = self.technique_checkboxes.get_mut(self.focused_checkbox_index) {
+                if let Some(cb) = self
+                    .technique_checkboxes
+                    .get_mut(self.focused_checkbox_index)
+                {
                     cb.toggle();
                 }
             }
@@ -640,8 +643,7 @@ impl TabInput for WafTab {
         if self.focus_area == WafFocusArea::Inputs {
             self.inputs.is_at_left_edge()
         } else if self.focus_area == WafFocusArea::Techniques {
-            self.technique_checkboxes.is_empty()
-                || self.focused_checkbox_index == 0
+            self.technique_checkboxes.is_empty() || self.focused_checkbox_index == 0
         } else {
             true
         }

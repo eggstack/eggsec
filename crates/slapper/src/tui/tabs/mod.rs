@@ -17,8 +17,6 @@ mod load;
 pub mod nse;
 pub mod oauth;
 pub mod packet;
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-pub mod plugin;
 pub mod proxy;
 pub mod recon;
 mod report;
@@ -56,8 +54,6 @@ pub use load::LoadTab;
 pub use nse::NseTab;
 pub use oauth::OAuthTab;
 pub use packet::PacketTab;
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-pub use plugin::{PluginInfo, PluginTab};
 pub use proxy::ProxyTab;
 pub use recon::ReconTab;
 pub use report::ReportTab;
@@ -100,17 +96,16 @@ pub enum Tab {
     Stress = 15,
     Report = 16,
     Nse = 17,
-    Plugin = 18,
-    Settings = 19,
-    History = 20,
-    Dashboard = 21,
-    Hunt = 22,
-    Browser = 23,
-    Compliance = 24,
-    Storage = 25,
-    Integrations = 26,
-    Workflow = 27,
-    Vuln = 28,
+    Settings = 18,
+    History = 19,
+    Dashboard = 20,
+    Hunt = 21,
+    Browser = 22,
+    Compliance = 23,
+    Storage = 24,
+    Integrations = 25,
+    Workflow = 26,
+    Vuln = 27,
 }
 
 impl Tab {
@@ -134,7 +129,6 @@ impl Tab {
             Tab::Stress => "Stress",
             Tab::Report => "Report",
             Tab::Nse => "NSE",
-            Tab::Plugin => "Plugins",
             Tab::Settings => "Settings",
             Tab::History => "History",
             Tab::Dashboard => "Dashboard",
@@ -168,7 +162,6 @@ impl Tab {
             Tab::Stress => "slapper stress",
             Tab::Report => "slapper report",
             Tab::Nse => "slapper nse",
-            Tab::Plugin => "slapper plugin",
             Tab::Settings => "Settings",
             Tab::History => "History",
             Tab::Dashboard => "Dashboard",
@@ -202,7 +195,6 @@ impl Tab {
             Tab::Stress => "Run stress/load testing against target",
             Tab::Report => "Convert reports, analyze trends, manage schedules",
             Tab::Nse => "Run Nmap NSE scripts",
-            Tab::Plugin => "Run security plugins against targets",
             Tab::Settings => "Application settings",
             Tab::History => "View scan history",
             Tab::Dashboard => "View scan results dashboard",
@@ -283,12 +275,6 @@ impl Tab {
                 t.push(Tab::Nse);
                 t
             };
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            let tabs = {
-                let mut t = tabs;
-                t.push(Tab::Plugin);
-                t
-            };
             #[cfg(feature = "headless-browser")]
             let tabs = {
                 let mut t = tabs;
@@ -332,17 +318,16 @@ impl Tab {
             15 => Some(Tab::Stress),
             16 => Some(Tab::Report),
             17 => Some(Tab::Nse),
-            18 => Some(Tab::Plugin),
-            19 => Some(Tab::Settings),
-            20 => Some(Tab::History),
-            21 => Some(Tab::Dashboard),
-            22 => Some(Tab::Hunt),
-            23 => Some(Tab::Browser),
-            24 => Some(Tab::Compliance),
-            25 => Some(Tab::Storage),
-            26 => Some(Tab::Integrations),
-            27 => Some(Tab::Workflow),
-            28 => Some(Tab::Vuln),
+            18 => Some(Tab::Settings),
+            19 => Some(Tab::History),
+            20 => Some(Tab::Dashboard),
+            21 => Some(Tab::Hunt),
+            22 => Some(Tab::Browser),
+            23 => Some(Tab::Compliance),
+            24 => Some(Tab::Storage),
+            25 => Some(Tab::Integrations),
+            26 => Some(Tab::Workflow),
+            27 => Some(Tab::Vuln),
             _ => None,
         }
     }
@@ -367,7 +352,6 @@ impl Tab {
             Tab::Stress => "stress",
             Tab::Report => "report",
             Tab::Nse => "nse",
-            Tab::Plugin => "plugin",
             Tab::Settings => "settings",
             Tab::History => "history",
             Tab::Dashboard => "dashboard",
@@ -401,7 +385,6 @@ impl Tab {
             "stress" => Tab::Stress,
             "report" => Tab::Report,
             "nse" => Tab::Nse,
-            "plugin" => Tab::Plugin,
             "settings" => Tab::Settings,
             "history" => Tab::History,
             "dashboard" => Tab::Dashboard,
@@ -589,10 +572,6 @@ impl Tab {
             Tab::Nse => &app.nse,
             #[cfg(not(feature = "nse"))]
             Tab::Nse => &app.dashboard,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => &app.plugin,
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => &app.dashboard,
             Tab::Settings => &app.settings,
             Tab::History => &app.dashboard,
             Tab::Dashboard => &app.dashboard,
@@ -647,7 +626,6 @@ impl Tab {
             Tab::Stress => "Stress Testing",
             Tab::Report => "Report",
             Tab::Nse => "NSE Scripts",
-            Tab::Plugin => "Plugins",
             Tab::Settings => "Settings",
             Tab::History => "History",
             Tab::Dashboard => "Dashboard",
@@ -685,10 +663,6 @@ impl Tab {
             Tab::Nse => &mut app.nse,
             #[cfg(not(feature = "nse"))]
             Tab::Nse => &mut app.dashboard,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => &mut app.plugin,
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => &mut app.dashboard,
             Tab::Settings => &mut app.settings,
             Tab::History => &mut app.dashboard,
             Tab::Dashboard => &mut app.dashboard,
@@ -746,10 +720,6 @@ impl Tab {
             Tab::Nse => &app.nse,
             #[cfg(not(feature = "nse"))]
             Tab::Nse => &app.dashboard,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => &app.plugin,
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => &app.dashboard,
             Tab::Settings => &app.settings,
             Tab::History => &app.dashboard,
             Tab::Dashboard => &app.dashboard,
@@ -807,10 +777,6 @@ impl Tab {
             Tab::Nse => &mut app.nse,
             #[cfg(not(feature = "nse"))]
             Tab::Nse => &mut app.dashboard,
-            #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-            Tab::Plugin => &mut app.plugin,
-            #[cfg(not(any(feature = "python-plugins", feature = "ruby-plugins")))]
-            Tab::Plugin => &mut app.dashboard,
             Tab::Settings => &mut app.settings,
             Tab::History => &mut app.dashboard,
             Tab::Dashboard => &mut app.dashboard,
@@ -933,7 +899,11 @@ mod tests {
                 "missing description for {:?}",
                 tab
             );
-            assert!(!tab.stable_id().is_empty(), "missing stable_id for {:?}", tab);
+            assert!(
+                !tab.stable_id().is_empty(),
+                "missing stable_id for {:?}",
+                tab
+            );
             assert_eq!(
                 tab.default_breadcrumb().len(),
                 1,

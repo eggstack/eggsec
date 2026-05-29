@@ -33,22 +33,6 @@ fn grpc_api_module_available() {
     let _ = std::any::TypeId::of::<slapper::tool::ToolRegistry>();
 }
 
-#[cfg(feature = "python-plugins")]
-#[test]
-fn python_plugins_available() {
-    use slapper::plugin;
-    // Verify the plugin module is re-exported
-    let _ = std::any::TypeId::of::<plugin::PluginManager>();
-}
-
-#[cfg(feature = "ruby-plugins")]
-#[test]
-fn ruby_plugins_available() {
-    use slapper::plugin;
-    // Verify the plugin module is re-exported (ruby also uses slapper-plugin)
-    let _ = std::any::TypeId::of::<plugin::PluginManager>();
-}
-
 #[cfg(feature = "stress-testing")]
 #[test]
 fn stress_testing_module_available() {
@@ -66,13 +50,4 @@ fn packet_inspection_module_available() {
 #[test]
 fn nse_module_available() {
     let _ = std::any::TypeId::of::<slapper::nse::NseConfig>();
-}
-
-#[cfg(feature = "all-plugins")]
-#[test]
-fn all_plugins_enables_both_languages() {
-    // all-plugins should enable both python and ruby
-    // This test just verifies compilation; the types are checked above
-    assert!(cfg!(feature = "python-plugins"));
-    assert!(cfg!(feature = "ruby-plugins"));
 }

@@ -4,9 +4,9 @@
 //! Based on Nmap's ssh library: https://nmap.org/nsedoc/lib/ssh.html
 
 use mlua::{Lua, Result as LuaResult};
-use std::io::Read;
 #[cfg(feature = "nse-ssh2")]
 use ssh2::Session;
+use std::io::Read;
 use std::net::TcpStream;
 use std::time::Duration;
 
@@ -963,10 +963,11 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     ssh.set("keep_alive", keep_alive_fn)?;
 
     // get_cipher_info - Get current cipher information
-    let get_cipher_info_fn = lua.create_function(|_lua, (_host, _port): (String, Option<u16>)| {
-        // Return cipher info structure
-        Ok("aes256-ctr")
-    })?;
+    let get_cipher_info_fn =
+        lua.create_function(|_lua, (_host, _port): (String, Option<u16>)| {
+            // Return cipher info structure
+            Ok("aes256-ctr")
+        })?;
     ssh.set("get_cipher", get_cipher_info_fn)?;
 
     // get_kex_info - Get key exchange information
@@ -1022,10 +1023,11 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     ssh.set("disconnect", disconnect_fn)?;
 
     // get_server_key - Get server public key
-    let get_server_key_fn = lua.create_function(|_lua, (_host, _port): (String, Option<u16>)| {
-        // Would retrieve and return server public key
-        Ok("")
-    })?;
+    let get_server_key_fn =
+        lua.create_function(|_lua, (_host, _port): (String, Option<u16>)| {
+            // Would retrieve and return server public key
+            Ok("")
+        })?;
     ssh.set("get_server_key", get_server_key_fn)?;
 
     // verify_host_key - Verify known host key

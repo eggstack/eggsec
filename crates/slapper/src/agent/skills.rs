@@ -200,7 +200,11 @@ impl SkillLoader {
                         Ok(skill) => {
                             if let Err(e) = skill.validate() {
                                 let msg = e.to_string();
-                                tracing::warn!("Skipping invalid skill {}: {}", path.display(), msg);
+                                tracing::warn!(
+                                    "Skipping invalid skill {}: {}",
+                                    path.display(),
+                                    msg
+                                );
                                 errors.push((path.display().to_string(), msg));
                                 continue;
                             }

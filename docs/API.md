@@ -615,20 +615,7 @@ async fn run_scan() -> Result<()> {
 }
 ```
 
-## Plugin System
-
-### Python Plugins
-
-When compiled with `python-plugins` feature:
-
-```rust
-use slapper::plugin::python::PythonPlugin;
-
-let plugin = PythonPlugin::new("path/to/plugin.py")?;
-let result = plugin.run("target", &config)?;
-```
-
-### Creating Custom Scans
+## Creating Custom Scans
 
 You can implement custom scanning logic using the existing modules:
 

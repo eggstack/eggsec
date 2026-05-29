@@ -202,10 +202,7 @@ impl SubdomainEnumerator {
 
                 if let Ok(cname_lookup) = resolver.lookup(&fqdn, RecordType::CNAME).await {
                     info.has_cname = cname_lookup.answers().iter().any(|record| {
-                        matches!(
-                            record.data,
-                            hickory_resolver::proto::rr::RData::CNAME(_)
-                        )
+                        matches!(record.data, hickory_resolver::proto::rr::RData::CNAME(_))
                     });
                 }
 

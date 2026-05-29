@@ -1,6 +1,4 @@
-use crate::distributed::{
-    CAPABILITIES, RemoteClient, Task, TaskResult, TaskType,
-};
+use crate::distributed::{RemoteClient, Task, TaskResult, TaskType, CAPABILITIES};
 use crate::error::{Result, SlapperError};
 use crate::scanner::endpoints::EndpointScanConfig;
 use serde::{Deserialize, Serialize};
@@ -64,19 +62,19 @@ pub struct WorkerStats {
     pub last_heartbeat_secs: i64,
 }
 
-    pub struct Worker {
-        config: WorkerConfig,
-        stats: Arc<Mutex<WorkerStats>>,
-        sender: Option<mpsc::Sender<Task>>,
-        receiver: Option<mpsc::Receiver<Task>>,
-        heartbeat_handle: Option<JoinHandle<()>>,
-        task_request_handle: Option<JoinHandle<()>>,
-        task_processor_handle: Option<JoinHandle<()>>,
-        psk: String,
-        shutdown_tx: watch::Sender<bool>,
-    }
+pub struct Worker {
+    config: WorkerConfig,
+    stats: Arc<Mutex<WorkerStats>>,
+    sender: Option<mpsc::Sender<Task>>,
+    receiver: Option<mpsc::Receiver<Task>>,
+    heartbeat_handle: Option<JoinHandle<()>>,
+    task_request_handle: Option<JoinHandle<()>>,
+    task_processor_handle: Option<JoinHandle<()>>,
+    psk: String,
+    shutdown_tx: watch::Sender<bool>,
+}
 
-    impl Worker {
+impl Worker {
     pub fn new(config: WorkerConfig, psk: String) -> Self {
         let (shutdown_tx, _) = watch::channel(false);
         Self {
@@ -132,7 +130,7 @@ pub struct WorkerStats {
         Ok(())
     }
 
-async fn start_heartbeat_loop(&mut self) {
+    async fn start_heartbeat_loop(&mut self) {
         let worker_id = self.config.worker_id.clone();
         let coordinator_url = self.config.coordinator_url.clone();
         let interval = self.config.heartbeat_interval_secs;
@@ -189,7 +187,10 @@ async fn start_heartbeat_loop(&mut self) {
         let worker_id = self.config.worker_id.clone();
         let coordinator_url = self.config.coordinator_url.clone();
         let psk = self.psk.clone();
-        let sender = self.sender.clone().expect("sender must be set before start");
+        let sender = self
+            .sender
+            .clone()
+            .expect("sender must be set before start");
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         let (host, port) = match parse_coordinator_url(&coordinator_url) {

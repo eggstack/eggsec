@@ -340,42 +340,41 @@ pub async fn run_nse(
     let (output, errors, success) = tokio::time::timeout(
         tokio::time::Duration::from_secs(300),
         tokio::task::spawn_blocking(move || {
-        let mut executor = NseExecutor::with_target(&target_clone)
-            .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
+            let mut executor = NseExecutor::with_target(&target_clone)
+                .map_err(|e| anyhow::anyhow!("Failed to create NSE executor: {}", e))?;
 
-        if let Some(ref args) = script_args {
-            executor
-                .set_script_args(args)
-                .map_err(|e| anyhow::anyhow!("Invalid script args: {}", e))?;
-        }
+            if let Some(ref args) = script_args {
+                executor
+                    .set_script_args(args)
+                    .map_err(|e| anyhow::anyhow!("Invalid script args: {}", e))?;
+            }
 
-        let script_content = if let Some(ref script_path) = custom_script {
-            std::fs::read_to_string(script_path).map_err(|e| {
-                anyhow::anyhow!("Failed to read custom script '{}': {}", script_path, e)
-            })?
-        } else {
-            slapper_nse::get_builtin_script(&script_clone)
-        };
+            let script_content = if let Some(ref script_path) = custom_script {
+                std::fs::read_to_string(script_path).map_err(|e| {
+                    anyhow::anyhow!("Failed to read custom script '{}': {}", script_path, e)
+                })?
+            } else {
+                slapper_nse::get_builtin_script(&script_clone)
+            };
 
-        let output = executor
-            .run_script(&script_content)
-            .map_err(|e| anyhow::anyhow!("Script execution failed: {}", e))?;
+            let output = executor
+                .run_script(&script_content)
+                .map_err(|e| anyhow::anyhow!("Script execution failed: {}", e))?;
 
-        Ok::<_, anyhow::Error>((output, String::new(), true))
-    }))
+            Ok::<_, anyhow::Error>((output, String::new(), true))
+        }),
+    )
     .await
     .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))
-    .and_then(|result| {
-        match result {
-            Ok((output, errors, success)) => Ok((output, errors, success)),
-            Err(e) => {
-                if e.is_panic() {
-                    tracing::warn!("NSE task panicked: {:?}", e);
-                    Err(anyhow::anyhow!("NSE task panicked"))
-                } else {
-                    tracing::warn!("NSE task failed: {:?}", e);
-                    Err(anyhow::anyhow!("NSE task failed: {}", e))
-                }
+    .and_then(|result| match result {
+        Ok((output, errors, success)) => Ok((output, errors, success)),
+        Err(e) => {
+            if e.is_panic() {
+                tracing::warn!("NSE task panicked: {:?}", e);
+                Err(anyhow::anyhow!("NSE task panicked"))
+            } else {
+                tracing::warn!("NSE task failed: {:?}", e);
+                Err(anyhow::anyhow!("NSE task failed: {}", e))
             }
         }
     })?;

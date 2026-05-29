@@ -240,13 +240,13 @@ impl TabRender for FingerprintTab {
         let input_block = Block::default()
             .borders(Borders::ALL)
             .title(" Fingerprint Configuration ")
-            .border_style(
-                Style::default().fg(if self.focus_area == FingerprintFocusArea::Inputs {
+            .border_style(Style::default().fg(
+                if self.focus_area == FingerprintFocusArea::Inputs {
                     tc!(border_focused)
                 } else {
                     tc!(border)
-                }),
-            );
+                },
+            ));
         let input_inner = input_block.inner(input_area);
         f.render_widget(input_block, input_area);
 
@@ -268,13 +268,13 @@ impl TabRender for FingerprintTab {
         let results_block = Block::default()
             .borders(Borders::ALL)
             .title(" Results ")
-            .border_style(
-                Style::default().fg(if self.focus_area == FingerprintFocusArea::Results {
+            .border_style(Style::default().fg(
+                if self.focus_area == FingerprintFocusArea::Results {
                     tc!(border_focused)
                 } else {
                     tc!(border)
-                }),
-            );
+                },
+            ));
         let results_inner = results_block.inner(results_area);
         f.render_widget(results_block, results_area);
 

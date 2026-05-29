@@ -144,10 +144,7 @@ mod tests {
         assert_eq!(stored.status_history.len(), 1);
         assert_eq!(stored.status_history[0].from, FindingStatus::New);
         assert_eq!(stored.status_history[0].to, FindingStatus::Confirmed);
-        assert_eq!(
-            stored.status_history[0].note.as_deref(),
-            Some("Looks real")
-        );
+        assert_eq!(stored.status_history[0].note.as_deref(), Some("Looks real"));
     }
 
     #[test]

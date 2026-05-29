@@ -146,7 +146,7 @@ pub fn register_smbauth_library(lua: &Lua) -> LuaResult<()> {
                 &result,
             ))
         })?,
-)?;
+    )?;
 
     smbauth.set(
         "get_domain_from_dns",
@@ -191,7 +191,7 @@ pub fn register_smbauth_library(lua: &Lua) -> LuaResult<()> {
         })?,
     )?;
 
-globals.set("smbauth", smbauth)?;
+    globals.set("smbauth", smbauth)?;
     Ok(())
 }
 

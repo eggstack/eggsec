@@ -6,13 +6,16 @@ use std::sync::LazyLock;
 
 use crate::utils::create_http_client;
 
-static EMAIL_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").expect("valid email pattern"));
+static EMAIL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").expect("valid email pattern")
+});
 
 static PHONE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
-        Regex::new(r"\+?1?[-.\s]?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}").expect("valid US phone pattern"),
-        Regex::new(r"\+?[0-9]{1,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}").expect("valid international phone pattern"),
+        Regex::new(r"\+?1?[-.\s]?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}")
+            .expect("valid US phone pattern"),
+        Regex::new(r"\+?[0-9]{1,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}")
+            .expect("valid international phone pattern"),
         Regex::new(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b").expect("valid compact phone pattern"),
     ]
 });
@@ -27,18 +30,23 @@ static SOCIAL_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| 
             "Twitter",
             Regex::new(r"twitter\.com/([a-zA-Z0-9._-]+)").expect("valid Twitter pattern"),
         ),
-        ("X", Regex::new(r"x\.com/([a-zA-Z0-9._-]+)").expect("valid X pattern")),
+        (
+            "X",
+            Regex::new(r"x\.com/([a-zA-Z0-9._-]+)").expect("valid X pattern"),
+        ),
         (
             "Instagram",
             Regex::new(r"instagram\.com/([a-zA-Z0-9._-]+)").expect("valid Instagram pattern"),
         ),
         (
             "LinkedIn",
-            Regex::new(r"linkedin\.com/in/([a-zA-Z0-9._-]+)").expect("valid LinkedIn profile pattern"),
+            Regex::new(r"linkedin\.com/in/([a-zA-Z0-9._-]+)")
+                .expect("valid LinkedIn profile pattern"),
         ),
         (
             "LinkedIn",
-            Regex::new(r"linkedin\.com/company/([a-zA-Z0-9._-]+)").expect("valid LinkedIn company pattern"),
+            Regex::new(r"linkedin\.com/company/([a-zA-Z0-9._-]+)")
+                .expect("valid LinkedIn company pattern"),
         ),
         (
             "GitHub",

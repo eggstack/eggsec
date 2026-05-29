@@ -2,10 +2,10 @@ pub use super::api::ApiConfig;
 pub use super::http::HttpConfig;
 pub use super::scan::{NotificationConfig, OutputConfig, ScanConfig, ScanProfile};
 
+use crate::config::policy::ExecutionPolicy;
 use crate::constants::cache as cache_constants;
 use crate::constants::http;
 pub use crate::constants::DEFAULT_REMOTE_PORT;
-use crate::config::policy::ExecutionPolicy;
 use crate::proxy::ProxyType;
 use crate::types::SensitiveString;
 use directories::ProjectDirs;
@@ -81,9 +81,6 @@ pub struct CacheConfig {
 pub struct PathsConfig {
     #[serde(default)]
     pub custom_payloads_dir: Option<PathBuf>,
-
-    #[serde(default)]
-    pub plugins_dir: Option<PathBuf>,
 
     #[serde(default)]
     pub wordlists_dir: Option<PathBuf>,
@@ -590,9 +587,6 @@ impl SlapperConfig {
         if let Some(ref paths) = self.paths.custom_payloads_dir {
             validate_dir_path(paths, "custom_payloads_dir")?;
         }
-        if let Some(ref paths) = self.paths.plugins_dir {
-            validate_dir_path(paths, "plugins_dir")?;
-        }
         if let Some(ref paths) = self.paths.wordlists_dir {
             validate_dir_path(paths, "wordlists_dir")?;
         }
@@ -630,7 +624,8 @@ impl SlapperConfig {
                     AlertChannelConfigEntry::Webhook(webhook) => {
                         if webhook.url.is_empty() {
                             return Err(ConfigError::Validation(format!(
-                                "alert_channels.'{}'.url cannot be empty", name
+                                "alert_channels.'{}'.url cannot be empty",
+                                name
                             )));
                         }
                         if !webhook.url.starts_with("http://")
@@ -645,29 +640,34 @@ impl SlapperConfig {
                     AlertChannelConfigEntry::Email(email) => {
                         if email.smtp_host.is_empty() {
                             return Err(ConfigError::Validation(format!(
-                                "alert_channels.'{}'.smtp_host cannot be empty", name
+                                "alert_channels.'{}'.smtp_host cannot be empty",
+                                name
                             )));
                         }
                         if email.smtp_port == 0 {
                             return Err(ConfigError::Validation(format!(
-                                "alert_channels.'{}'.smtp_port cannot be 0", name
+                                "alert_channels.'{}'.smtp_port cannot be 0",
+                                name
                             )));
                         }
                         if email.from.is_empty() {
                             return Err(ConfigError::Validation(format!(
-                                "alert_channels.'{}'.from cannot be empty", name
+                                "alert_channels.'{}'.from cannot be empty",
+                                name
                             )));
                         }
                         if email.to.is_empty() {
                             return Err(ConfigError::Validation(format!(
-                                "alert_channels.'{}'.to cannot be empty", name
+                                "alert_channels.'{}'.to cannot be empty",
+                                name
                             )));
                         }
                     }
                     AlertChannelConfigEntry::Slack(slack) => {
                         if slack.webhook_url.is_empty() {
                             return Err(ConfigError::Validation(format!(
-                                "alert_channels.'{}'.webhook_url cannot be empty", name
+                                "alert_channels.'{}'.webhook_url cannot be empty",
+                                name
                             )));
                         }
                         if !slack.webhook_url.starts_with("http://")
@@ -682,7 +682,8 @@ impl SlapperConfig {
                     AlertChannelConfigEntry::PagerDuty(pd) => {
                         if pd.routing_key.expose_secret().is_empty() {
                             return Err(ConfigError::Validation(format!(
-                                "alert_channels.'{}'.routing_key cannot be empty", name
+                                "alert_channels.'{}'.routing_key cannot be empty",
+                                name
                             )));
                         }
                     }

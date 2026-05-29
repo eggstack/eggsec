@@ -334,16 +334,16 @@ pub fn register_ssh2_library(lua: &Lua) -> LuaResult<()> {
 
             let result = lua.create_table()?;
             let port = port.unwrap_or(22);
-                let addr = format!("{}:{}", host, port);
+            let addr = format!("{}:{}", host, port);
 
-                match TcpStream::connect_timeout(
-                    &addr.parse::<std::net::SocketAddr>().map_err(
-                        |e: std::net::AddrParseError| {
+            match TcpStream::connect_timeout(
+                &addr
+                    .parse::<std::net::SocketAddr>()
+                    .map_err(|e: std::net::AddrParseError| {
                         std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
-                    },
-                    )?,
-                    Duration::from_secs(10),
-                ) {
+                    })?,
+                Duration::from_secs(10),
+            ) {
                 Ok(mut stream) => {
                     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
                     let mut banner = vec![0u8; 256];
@@ -384,10 +384,7 @@ pub fn register_ssh2_library(lua: &Lua) -> LuaResult<()> {
                     TcpStream::connect_timeout(
                         &addr.parse::<std::net::SocketAddr>().map_err(
                             |e: std::net::AddrParseError| {
-                                std::io::Error::new(
-                                    std::io::ErrorKind::InvalidInput,
-                                    e.to_string(),
-                                )
+                                std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
                             },
                         )?,
                         Duration::from_secs(10),

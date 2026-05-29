@@ -55,8 +55,6 @@ jobs:
             args: "-p slapper --features nse"
           - name: nse-sandbox
             args: "-p slapper --features nse,nse-sandbox"
-          - name: all-plugins
-            args: "-p slapper --features all-plugins"
           - name: api-schema
             args: "-p slapper --features api-schema"
           - name: sbom

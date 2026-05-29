@@ -44,8 +44,6 @@ docker compose --profile full up -d
 
 The Dockerfile builds with `--features full`, enabling:
 
-- **python-plugins**: Write security scanning plugins in Python
-- **ruby-plugins**: Ruby support with Metasploit RPC integration
 - **stress-testing**: SYN floods, ICMP, raw socket operations
 - **packet-inspection**: Live packet capture, hexdump, traceroute
 
@@ -109,9 +107,6 @@ docker compose run slapper waf-bypass http://dvwa-target
 To build with only specific features, modify the Dockerfile:
 
 ```dockerfile
-# Python plugins only
-RUN cargo build --release --features python-plugins
-
 # Stress testing only  
 RUN cargo build --release --features stress-testing
 ```

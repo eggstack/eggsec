@@ -1,6 +1,6 @@
+use rustc_hash::FxHashMap;
 use slapper::distributed::queue::{TaskQueue, TaskResult};
 use slapper::distributed::{Task, TaskType};
-use rustc_hash::FxHashMap;
 
 fn make_task(id: &str, job_id: &str) -> Task {
     Task {
@@ -68,9 +68,18 @@ async fn test_enqueue_fifo_order() {
     queue.enqueue(make_task("second", "job-1")).await.unwrap();
     queue.enqueue(make_task("third", "job-1")).await.unwrap();
 
-    assert_eq!(queue.dequeue("worker-1").await.unwrap().unwrap().id, "first");
-    assert_eq!(queue.dequeue("worker-2").await.unwrap().unwrap().id, "second");
-    assert_eq!(queue.dequeue("worker-3").await.unwrap().unwrap().id, "third");
+    assert_eq!(
+        queue.dequeue("worker-1").await.unwrap().unwrap().id,
+        "first"
+    );
+    assert_eq!(
+        queue.dequeue("worker-2").await.unwrap().unwrap().id,
+        "second"
+    );
+    assert_eq!(
+        queue.dequeue("worker-3").await.unwrap().unwrap().id,
+        "third"
+    );
 }
 
 #[tokio::test]

@@ -86,7 +86,11 @@ impl HistoryTab {
             if idx < self.scroll_offset {
                 self.scroll_offset = idx;
             } else if idx >= self.scroll_offset + self.visible_rows {
-                self.scroll_offset = if self.visible_rows == 0 { 0 } else { idx.saturating_sub(self.visible_rows - 1) };
+                self.scroll_offset = if self.visible_rows == 0 {
+                    0
+                } else {
+                    idx.saturating_sub(self.visible_rows - 1)
+                };
             }
         }
     }
@@ -171,7 +175,8 @@ impl HistoryTab {
             return self.entries.iter().collect();
         }
         let scan_type_lower = scan_type.to_lowercase();
-        let entry_lowers: Vec<_> = self.entries
+        let entry_lowers: Vec<_> = self
+            .entries
             .iter()
             .map(|e| e.scan_type.to_lowercase())
             .collect();
@@ -188,7 +193,8 @@ impl HistoryTab {
             return self.entries.iter().collect();
         }
         let target_lower = target.to_lowercase();
-        let entry_lowers: Vec<_> = self.entries
+        let entry_lowers: Vec<_> = self
+            .entries
             .iter()
             .map(|e| e.target.to_lowercase())
             .collect();
@@ -206,25 +212,33 @@ impl HistoryTab {
         }
         let query_lower = query.to_lowercase();
 
-        let entry_lowers: Vec<_> = self.entries
+        let entry_lowers: Vec<_> = self
+            .entries
             .iter()
-            .map(|e| (
-                e.target.to_lowercase(),
-                e.scan_type.to_lowercase(),
-                e.summary.to_lowercase(),
-                e.details.iter().map(|d| d.to_lowercase()).collect::<Vec<String>>(),
-            ))
+            .map(|e| {
+                (
+                    e.target.to_lowercase(),
+                    e.scan_type.to_lowercase(),
+                    e.summary.to_lowercase(),
+                    e.details
+                        .iter()
+                        .map(|d| d.to_lowercase())
+                        .collect::<Vec<String>>(),
+                )
+            })
             .collect();
 
         self.entries
             .iter()
             .zip(entry_lowers.iter())
-            .filter(|(_, (target_lower, scan_type_lower, summary_lower, details_lower))| {
-                target_lower.contains(&query_lower)
-                    || scan_type_lower.contains(&query_lower)
-                    || summary_lower.contains(&query_lower)
-                    || details_lower.iter().any(|d| d.contains(&query_lower))
-            })
+            .filter(
+                |(_, (target_lower, scan_type_lower, summary_lower, details_lower))| {
+                    target_lower.contains(&query_lower)
+                        || scan_type_lower.contains(&query_lower)
+                        || summary_lower.contains(&query_lower)
+                        || details_lower.iter().any(|d| d.contains(&query_lower))
+                },
+            )
             .map(|(e, _)| e)
             .collect()
     }
@@ -355,13 +369,13 @@ impl TabRender for HistoryTab {
                         Block::default()
                             .borders(Borders::ALL)
                             .title("History")
-                            .border_style(
-                                Style::default().fg(if self.focus_area == HistoryFocusArea::List {
+                            .border_style(Style::default().fg(
+                                if self.focus_area == HistoryFocusArea::List {
                                     tc!(border_focused)
                                 } else {
                                     tc!(border)
-                                }),
-                            ),
+                                },
+                            )),
                     )
                     .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(empty, list_area);
@@ -371,13 +385,13 @@ impl TabRender for HistoryTab {
                     Block::default()
                         .borders(Borders::ALL)
                         .title("Details")
-                        .border_style(
-                            Style::default().fg(if self.focus_area == HistoryFocusArea::Details {
+                        .border_style(Style::default().fg(
+                            if self.focus_area == HistoryFocusArea::Details {
                                 tc!(border_focused)
                             } else {
                                 tc!(border)
-                            }),
-                        ),
+                            },
+                        )),
                 )
                 .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, details_area);
@@ -446,19 +460,18 @@ impl TabRender for HistoryTab {
             ]));
         }
 
-        let list = Paragraph::new(list_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("History")
-                    .border_style(
-                        Style::default().fg(if self.focus_area == HistoryFocusArea::List {
-                            tc!(border_focused)
-                        } else {
-                            tc!(border)
-                        }),
-                    ),
-            );
+        let list = Paragraph::new(list_lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("History")
+                .border_style(
+                    Style::default().fg(if self.focus_area == HistoryFocusArea::List {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    }),
+                ),
+        );
         f.render_widget(list, list_area);
 
         if !self.details_view.is_empty() {
@@ -469,13 +482,13 @@ impl TabRender for HistoryTab {
                     Block::default()
                         .borders(Borders::ALL)
                         .title("Details")
-                        .border_style(
-                            Style::default().fg(if self.focus_area == HistoryFocusArea::Details {
+                        .border_style(Style::default().fg(
+                            if self.focus_area == HistoryFocusArea::Details {
                                 tc!(border_focused)
                             } else {
                                 tc!(border)
-                            }),
-                        ),
+                            },
+                        )),
                 )
                 .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, details_area);
@@ -592,7 +605,11 @@ impl TabInput for HistoryTab {
                 if !self.entries.is_empty() {
                     let last = self.entries.len() - 1;
                     self.selected = Some(last);
-                    self.scroll_offset = if self.visible_rows == 0 { 0 } else { last.saturating_sub(self.visible_rows - 1) };
+                    self.scroll_offset = if self.visible_rows == 0 {
+                        0
+                    } else {
+                        last.saturating_sub(self.visible_rows - 1)
+                    };
                     self.update_details_view();
                 }
             }

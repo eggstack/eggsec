@@ -112,22 +112,86 @@ impl ReconTab {
 
     pub fn get_options(&self) -> ReconOptions {
         ReconOptions {
-            no_tech: self.option_checkboxes.first().map(|cb| cb.checked).unwrap_or(false),
-            no_dns: self.option_checkboxes.get(1).map(|cb| cb.checked).unwrap_or(false),
-            no_geo: self.option_checkboxes.get(2).map(|cb| cb.checked).unwrap_or(false),
-            no_whois: self.option_checkboxes.get(3).map(|cb| cb.checked).unwrap_or(false),
-            no_subdomains: self.option_checkboxes.get(4).map(|cb| cb.checked).unwrap_or(false),
-            no_ssl: self.option_checkboxes.get(5).map(|cb| cb.checked).unwrap_or(false),
-            no_dns_records: self.option_checkboxes.get(6).map(|cb| cb.checked).unwrap_or(false),
-            no_js: self.option_checkboxes.get(7).map(|cb| cb.checked).unwrap_or(false),
-            no_content: self.option_checkboxes.get(8).map(|cb| cb.checked).unwrap_or(false),
-            no_cloud: self.option_checkboxes.get(9).map(|cb| cb.checked).unwrap_or(false),
-            no_wayback: self.option_checkboxes.get(10).map(|cb| cb.checked).unwrap_or(false),
-            no_cors: self.option_checkboxes.get(11).map(|cb| cb.checked).unwrap_or(false),
-            no_threat: self.option_checkboxes.get(12).map(|cb| cb.checked).unwrap_or(false),
-            no_cve: self.option_checkboxes.get(13).map(|cb| cb.checked).unwrap_or(false),
-            no_email: self.option_checkboxes.get(14).map(|cb| cb.checked).unwrap_or(false),
-            no_takeover: self.option_checkboxes.get(15).map(|cb| cb.checked).unwrap_or(false),
+            no_tech: self
+                .option_checkboxes
+                .first()
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_dns: self
+                .option_checkboxes
+                .get(1)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_geo: self
+                .option_checkboxes
+                .get(2)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_whois: self
+                .option_checkboxes
+                .get(3)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_subdomains: self
+                .option_checkboxes
+                .get(4)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_ssl: self
+                .option_checkboxes
+                .get(5)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_dns_records: self
+                .option_checkboxes
+                .get(6)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_js: self
+                .option_checkboxes
+                .get(7)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_content: self
+                .option_checkboxes
+                .get(8)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_cloud: self
+                .option_checkboxes
+                .get(9)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_wayback: self
+                .option_checkboxes
+                .get(10)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_cors: self
+                .option_checkboxes
+                .get(11)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_threat: self
+                .option_checkboxes
+                .get(12)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_cve: self
+                .option_checkboxes
+                .get(13)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_email: self
+                .option_checkboxes
+                .get(14)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
+            no_takeover: self
+                .option_checkboxes
+                .get(15)
+                .map(|cb| cb.checked)
+                .unwrap_or(false),
         }
     }
 
@@ -654,7 +718,9 @@ impl TabInput for ReconTab {
     fn handle_down(&mut self) {
         if !self.is_running() {
             if self.focus_area == ReconFocusArea::Options {
-                if self.option_checkboxes.is_empty() || self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
+                if self.option_checkboxes.is_empty()
+                    || self.focused_checkbox_index >= self.option_checkboxes.len() - 1
+                {
                     self.focused_checkbox_index = 0;
                 } else {
                     self.focused_checkbox_index += 1;
@@ -691,7 +757,9 @@ impl TabInput for ReconTab {
             if self.focus_area == ReconFocusArea::Inputs {
                 self.inputs.move_right()
             } else if self.focus_area == ReconFocusArea::Options {
-                if self.option_checkboxes.is_empty() || self.focused_checkbox_index >= self.option_checkboxes.len() - 1 {
+                if self.option_checkboxes.is_empty()
+                    || self.focused_checkbox_index >= self.option_checkboxes.len() - 1
+                {
                     false
                 } else {
                     self.focused_checkbox_index += 1;

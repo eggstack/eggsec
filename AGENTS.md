@@ -23,16 +23,6 @@ cargo clippy --lib -p slapper
 cargo build --release -p slapper
 ```
 
-### Ruby Plugin Build Note
-
-For `all-plugins` or `ruby-plugins` builds on macOS, prefer Homebrew Ruby over system Ruby:
-
-```bash
-RUBY=/usr/local/opt/ruby/bin/ruby RB_SYS_STABLE_API_COMPILED_FALLBACK=1 cargo check --lib -p slapper --features all-plugins
-```
-
-Reason: system Ruby (2.6) can fail to provide symbols expected by `magnus`/`rb-sys` during Rust compilation.
-
 ### Module Override Files
 
 For specialized guidance on specific modules, see `AGENTS.override.md` in each module directory:
@@ -69,7 +59,6 @@ Use these sections as the canonical reference points when updating guidance or s
 
 - `stress-testing` - Raw sockets, IP spoofing
 - `packet-inspection` - Packet capture
-- `python-plugins` / `ruby-plugins` - Plugin language support
 - `rest-api` / `grpc-api` - API server integration
 - `nse` - Nmap NSE script support
 - `ai-integration` - AI planner, script generation, autonomous agent skills
@@ -208,15 +197,11 @@ The following paths from earlier reviews are incorrect:
 
 ```bash
 cargo check --lib -p slapper
-cargo check --lib -p slapper-plugin
-cargo check --lib -p slapper-ruby
 cargo check -p slapper-nse
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper
 cargo test --test scanner_tests -p slapper
 cargo clippy --lib -p slapper
-cargo clippy --lib -p slapper-plugin
-cargo clippy --lib -p slapper-ruby
 ```
 
 ## Key Patterns (Lessons Learned)

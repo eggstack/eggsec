@@ -538,7 +538,7 @@ pub fn register_vnc_library(lua: &Lua) -> LuaResult<()> {
                         .await;
 
                 match result {
-                Ok(Ok(_conn)) => {
+                    Ok(Ok(_conn)) => {
                         let r = lua.create_table()?;
                         r.set("success", true)?;
                         r.set("host", host)?;

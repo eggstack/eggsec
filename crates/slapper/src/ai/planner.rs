@@ -110,8 +110,12 @@ impl AiPlanner {
             let cache = self.learning_cache.read();
             if let Some(cached) = cache.get(&cache_key) {
                 if cached.use_count >= 2 && cached.success_rate >= 0.5 {
-                    tracing::debug!("Using cached plan for {} (success_rate={}, use_count={})",
-                        cache_key, cached.success_rate, cached.use_count);
+                    tracing::debug!(
+                        "Using cached plan for {} (success_rate={}, use_count={})",
+                        cache_key,
+                        cached.success_rate,
+                        cached.use_count
+                    );
                     return Ok(cached.plan.clone());
                 }
             }
@@ -451,14 +455,10 @@ impl AiPlanner {
             .iter()
             .filter(|(_, cached)| {
                 cached.plan.total_tools == plan.total_tools
-                    && cached
-                        .plan
-                        .stages
-                        .iter()
-                        .any(|s| {
-                            let stage_name_lower = s.name.to_lowercase();
-                            stage_name_lower.contains(&target_lower)
-                        })
+                    && cached.plan.stages.iter().any(|s| {
+                        let stage_name_lower = s.name.to_lowercase();
+                        stage_name_lower.contains(&target_lower)
+                    })
             })
             .max_by_key(|(_, cached)| cached.last_used)
             .map(|(k, _)| k.clone());
@@ -475,7 +475,11 @@ impl AiPlanner {
                     .as_secs();
             }
         } else {
-            let fallback_key = format!("observed:{}:{}", plan.total_tools, outcome.target.replace('\x00', ""));
+            let fallback_key = format!(
+                "observed:{}:{}",
+                plan.total_tools,
+                outcome.target.replace('\x00', "")
+            );
             cache.insert(
                 fallback_key,
                 CachedPlan {

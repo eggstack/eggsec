@@ -3,8 +3,8 @@ use crate::utils::stealth::tool_user_agent;
 use base64::{engine::general_purpose, Engine as _};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{Client, Method};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinSet;
@@ -114,13 +114,8 @@ impl LoadTestRunner {
             Duration::from_secs(args.timeout)
         };
 
-        let mut runner = Self::new_with_tui_mode(
-            args.url,
-            args.requests,
-            args.concurrency,
-            timeout,
-            false,
-        )?;
+        let mut runner =
+            Self::new_with_tui_mode(args.url, args.requests, args.concurrency, timeout, false)?;
 
         runner.set_method(args.method.clone());
 

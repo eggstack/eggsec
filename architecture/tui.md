@@ -40,7 +40,6 @@ Manages the overall application state, event loop, and rendering.
 | Cluster | `cluster.rs` | Distributed scanning cluster management |
 | Proxy | `proxy.rs` | Proxy pool management |
 | NSE | `nse.rs` | Nmap NSE script execution |
-| Plugin | `plugin.rs` | Python/Ruby security plugin runner |
 | Hunt | `hunt.rs` | Intelligent vulnerability hunting |
 | Browser | `browser.rs` | Headless browser security testing |
 | Compliance | `compliance.rs` | Compliance report generation (OWASP, PCI, HIPAA, SOC2) |

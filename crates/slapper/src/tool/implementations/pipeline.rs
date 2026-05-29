@@ -92,9 +92,11 @@ impl SecurityTool for PipelineTool {
             concurrent_stages: false,
         };
 
-        let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
-            tracing::warn!(error = %e, "Failed to load config for pipeline, using defaults");
-        }).unwrap_or_default();
+        let config = crate::config::load_config(None::<&str>)
+            .inspect_err(|e| {
+                tracing::warn!(error = %e, "Failed to load config for pipeline, using defaults");
+            })
+            .unwrap_or_default();
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(60),
             crate::pipeline::run_cli_with_callback(args, &config, move |f| {
@@ -103,19 +105,19 @@ impl SecurityTool for PipelineTool {
             }),
         )
         .await
-        .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
-            "Pipeline timed out after 60s: {}",
-            e
-        ) })?
-        .map_err(|e| crate::error::SlapperError::Runtime(format!(
-            "Pipeline failed: {}",
-            e
-        )))?;
+        .map_err(|e| crate::error::SlapperError::Timeout {
+            timeout_ms: 0,
+            operation: format!("Pipeline timed out after 60s: {}", e),
+        })?
+        .map_err(|e| crate::error::SlapperError::Runtime(format!("Pipeline failed: {}", e)))?;
 
         let findings = match std::sync::Arc::try_unwrap(findings) {
             Ok(inner) => inner.into_inner(),
             Err(e) => {
-                tracing::warn!("Callback still referenced, using empty result: Arc still has {} references", Arc::strong_count(&e));
+                tracing::warn!(
+                    "Callback still referenced, using empty result: Arc still has {} references",
+                    Arc::strong_count(&e)
+                );
                 Vec::new()
             }
         };

@@ -3,8 +3,8 @@
 //! Provides message passing between agents for capability advertising,
 //! health tracking, and collaborative task execution.
 
-use serde::{Deserialize, Serialize};
 use rustc_hash::{FxHashMap, FxHashSet};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;

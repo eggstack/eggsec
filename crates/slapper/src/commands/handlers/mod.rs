@@ -8,7 +8,6 @@ pub mod load;
 pub mod network;
 pub mod notify;
 pub mod plan;
-pub mod plugin;
 pub mod recon;
 pub mod report;
 pub mod scan;
@@ -37,8 +36,6 @@ pub use scan::*;
 pub use agent::*;
 pub use auth_test::*;
 pub use notify::*;
-#[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-pub use plugin::*;
 pub use report::*;
 #[cfg(feature = "sbom")]
 pub use sbom::*;
@@ -162,8 +159,6 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         Some(Commands::Icmp(args)) => handle_icmp(ctx, args).await,
         #[cfg(feature = "stress-testing")]
         Some(Commands::Traceroute(args)) => handle_traceroute(ctx, args).await,
-        #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-        Some(Commands::Plugin(args)) => handle_plugin(ctx, args).await,
         Some(Commands::Report(args)) => handle_report(ctx, args).await,
         #[cfg(feature = "stress-testing")]
         Some(Commands::Stress(args)) => handle_stress(ctx, args).await,

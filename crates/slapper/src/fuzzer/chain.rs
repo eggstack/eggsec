@@ -302,7 +302,10 @@ impl ChainExecutor {
                 .get(&format!("_header_{}", name))
                 .cloned()
                 .unwrap_or_else(|| {
-                    tracing::debug!("Variable {} not found in chain execution", format!("_header_{}", name));
+                    tracing::debug!(
+                        "Variable {} not found in chain execution",
+                        format!("_header_{}", name)
+                    );
                     String::new()
                 }),
             ExtractionSource::Cookie(name) => self
@@ -310,7 +313,10 @@ impl ChainExecutor {
                 .get(&format!("_cookie_{}", name))
                 .cloned()
                 .unwrap_or_else(|| {
-                    tracing::debug!("Variable {} not found in chain execution", format!("_cookie_{}", name));
+                    tracing::debug!(
+                        "Variable {} not found in chain execution",
+                        format!("_cookie_{}", name)
+                    );
                     String::new()
                 }),
         };
@@ -390,7 +396,9 @@ impl ChainExecutor {
     }
 
     fn interpolate_string(&self, input: &str) -> String {
-        static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$\{(\w+)\}").expect("Interpolation regex must be valid"));
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"\$\{(\w+)\}").expect("Interpolation regex must be valid")
+        });
 
         let mut result = input.to_string();
         for cap in RE.captures_iter(input) {

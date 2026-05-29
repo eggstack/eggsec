@@ -588,7 +588,8 @@ impl ExecutorCore {
 
     fn setup_require(&self, _scripts_path: Arc<Mutex<Vec<PathBuf>>>) -> LuaResult<()> {
         let scripts_path = self.scripts_path.clone();
-        let cache: Arc<Mutex<FxHashMap<String, Value>>> = Arc::new(Mutex::new(FxHashMap::default()));
+        let cache: Arc<Mutex<FxHashMap<String, Value>>> =
+            Arc::new(Mutex::new(FxHashMap::default()));
 
         let require_fn = self.lua.create_function(move |lua, name: String| {
             {

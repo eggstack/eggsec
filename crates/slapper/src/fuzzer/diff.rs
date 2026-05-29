@@ -81,10 +81,11 @@ impl Default for ResponseDiffer {
 
 impl ResponseDiffer {
     pub fn new() -> Self {
-        let ignore_headers: FxHashSet<String> = ["date", "content-length", "connection", "keep-alive"]
-            .iter()
-            .map(|s| (*s).to_string())
-            .collect();
+        let ignore_headers: FxHashSet<String> =
+            ["date", "content-length", "connection", "keep-alive"]
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect();
 
         Self {
             baseline: None,

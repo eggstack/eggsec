@@ -305,7 +305,7 @@ pub fn register_openssl_library(lua: &Lua) -> LuaResult<()> {
         result.set(2, host)?;
 
         Ok(result)
-        })?;
+    })?;
     openssl.set("cert_get_altnames", altnames_fn)?;
 
     globals.set("openssl", openssl)?;

@@ -13,7 +13,9 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 #[cfg(all(feature = "packet-inspection", unix))]
-use pnet::datalink::{self, Channel::Ethernet, Config, DataLinkReceiver, DataLinkSender, NetworkInterface};
+use pnet::datalink::{
+    self, Channel::Ethernet, Config, DataLinkReceiver, DataLinkSender, NetworkInterface,
+};
 
 pub async fn handle_packet_capture(
     args: PacketCaptureArgs,
@@ -93,10 +95,7 @@ pub async fn handle_packet_send(args: PacketSendArgs, _json: bool) -> Result<(),
     use std::net::UdpSocket;
 
     let target: SocketAddr = args.target.parse()?;
-    let src_ip: Option<IpAddr> = args
-        .src_ip
-        .map(|s| s.parse())
-        .transpose()?;
+    let src_ip: Option<IpAddr> = args.src_ip.map(|s| s.parse()).transpose()?;
 
     if args.icmp {
         #[cfg(all(feature = "packet-inspection", unix))]
@@ -178,8 +177,8 @@ async fn send_raw_icmp(
     let mut buffer = vec![0u8; total_len];
     let (ip_bytes, icmp_bytes) = buffer.split_at_mut(20);
 
-    let mut ipv4_packet = MutableIpv4Packet::new(ip_bytes)
-        .ok_or_else(|| anyhow!("Failed to create IPv4 packet"))?;
+    let mut ipv4_packet =
+        MutableIpv4Packet::new(ip_bytes).ok_or_else(|| anyhow!("Failed to create IPv4 packet"))?;
     ipv4_packet.set_version(4);
     ipv4_packet.set_header_length(5);
     ipv4_packet.set_total_length(total_len as u16);
@@ -234,13 +233,7 @@ fn find_network_interface() -> Result<NetworkInterface, anyhow::Error> {
 #[cfg(all(feature = "packet-inspection", unix))]
 fn create_datalink_channel(
     interface: &NetworkInterface,
-) -> Result<
-    (
-        Box<dyn DataLinkSender>,
-        Box<dyn DataLinkReceiver>,
-    ),
-    anyhow::Error,
-> {
+) -> Result<(Box<dyn DataLinkSender>, Box<dyn DataLinkReceiver>), anyhow::Error> {
     let config = Config::default();
     match datalink::channel(interface, config) {
         Ok(Ethernet(tx, rx)) => Ok((tx, rx)),

@@ -217,9 +217,6 @@ These modules are always available without any feature flags:
 |---------|-----------|-------------|
 | `stress-testing` | `stress/`, `packet/` | SYN/UDP/ICMP floods, raw sockets, IP spoofing |
 | `packet-inspection` | `packet/` | Live packet capture (libpcap), traceroute |
-| `python-plugins` | `slapper-plugin` | Python plugin system via `pyo3` |
-| `ruby-plugins` | `slapper-ruby` | Ruby bridge and Metasploit RPC via `magnus`/`rb-sys` |
-| `all-plugins` | Both plugin crates | All plugin languages combined |
 | `rest-api` | `tool/`, `agent/` | REST API + MCP for AI agents (`axum`, `tower`) |
 | `grpc-api` | `tool/` | gRPC API server (`tonic`, `prost`) |
 | `ws-api` | - | WebSocket pub/sub API server |
@@ -251,9 +248,7 @@ These modules are always available without any feature flags:
 | Crate | Location | Purpose |
 |-------|----------|---------|
 | `slapper` | `crates/slapper/` | Core toolkit — all security modules, CLI, TUI |
-| `slapper-plugin` | `crates/slapper-plugin/` | Python plugin system via `pyo3` |
 | `slapper-nse` | `crates/slapper-nse/` | Full Nmap Scripting Engine (NSE) via `mlua` — 164+ NSE-style library modules |
-| `slapper-ruby` | `crates/slapper-ruby/` | Ruby bridge and Metasploit RPC integration |
 
 **NSE Integration**: Full Lua VM with 164+ NSE-style library modules (stdnse, nmap, http, socket, dns, ssl, ssh, mysql, postgres, redis, mongodb, ldap, snmp, smb, vulns, etc.). See [plugins_nse.md](plugins_nse.md).
 
@@ -353,7 +348,7 @@ Built on `tokio` for high concurrency:
 | [networking.md](networking.md) | `packet/`, `stress/` | Packet capture/crafting and stress testing |
 | [output.md](output.md) | `output/` | Reporting formats, deduplication, SARIF/JUnit |
 | [pipeline.md](pipeline.md) | `pipeline/` | Stage orchestration, profiles, session management |
-| [plugins_nse.md](plugins_nse.md) | `slapper-plugin/`, `slapper-nse/`, `slapper-ruby/` | Plugin systems and NSE integration |
+| [plugins_nse.md](plugins_nse.md) | `slapper-nse/` | NSE integration |
 | [recon.md](recon.md) | `recon/` | Reconnaissance modules and runner |
 | [scanner.md](scanner.md) | `scanner/` | Port scanning, fingerprinting, endpoint discovery |
 | [tui.md](tui.md) | `tui/` | Terminal UI, 29 tabs, components, workers |
@@ -390,7 +385,7 @@ The following modules lack dedicated architecture documentation (candidates for 
 |-------|-------|
 | Total modules | 41 modules in `crates/slapper/src/` |
 | Architecture docs | 14 documents in `architecture/` |
-| Workspace crates | 4 (slapper, slapper-plugin, slapper-nse, slapper-ruby) |
+| Workspace crates | 2 (slapper, slapper-nse) |
 | Payload types | 31 (defined in `fuzzer/payloads/mod.rs`) |
 | WAF products | 34 (defined in `waf/data/patterns.rs`) |
 | TUI tabs | 29 |

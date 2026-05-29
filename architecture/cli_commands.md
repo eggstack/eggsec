@@ -36,7 +36,6 @@ Examples:
 - **`scan.rs`**: Entry point for port scanning and reconnaissance.
 - **`fuzz.rs`**: Entry point for the security fuzzing engine.
 - **`cluster.rs`**: Manages distributed scanning nodes.
-- **`plugin.rs`**: Handles execution of external Python/Ruby plugins.
 
 ### Handler Patterns
 

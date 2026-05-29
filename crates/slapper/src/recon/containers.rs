@@ -157,10 +157,7 @@ impl ContainerScanner {
     }
 
     #[cfg(feature = "container")]
-    fn check_pod_security(
-        &self,
-        pod: &kube::api::Pod,
-    ) -> Vec<ConfigIssue> {
+    fn check_pod_security(&self, pod: &kube::api::Pod) -> Vec<ConfigIssue> {
         let mut issues = Vec::new();
 
         if let Some(spec) = &pod.spec {

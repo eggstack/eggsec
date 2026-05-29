@@ -16,7 +16,7 @@ pub async fn handle_report(ctx: &CommandContext, args: crate::cli::ReportArgs) -
             let output = match convert_args.format {
                 ReportFormat::Json => serde_json::to_string_pretty(&report)?,
                 ReportFormat::Csv => convert::convert_to_csv(&report),
-ReportFormat::Junit => {
+                ReportFormat::Junit => {
                     convert::convert_to_junit(&report).map_err(|e| anyhow::anyhow!(e))?
                 }
                 ReportFormat::Sarif => {
@@ -46,20 +46,22 @@ ReportFormat::Junit => {
             let after =
                 convert::load_scan_report(&trend_args.after).map_err(|e| anyhow::anyhow!(e))?;
 
-            let before_counts: FxHashMap<String, usize> = before
-                .findings
-                .iter()
-                .fold(FxHashMap::default(), |mut acc, f| {
-                    *acc.entry(f.severity.clone()).or_insert(0) += 1;
-                    acc
-                });
-            let after_counts: FxHashMap<String, usize> = after
-                .findings
-                .iter()
-                .fold(FxHashMap::default(), |mut acc, f| {
-                    *acc.entry(f.severity.clone()).or_insert(0) += 1;
-                    acc
-                });
+            let before_counts: FxHashMap<String, usize> =
+                before
+                    .findings
+                    .iter()
+                    .fold(FxHashMap::default(), |mut acc, f| {
+                        *acc.entry(f.severity.clone()).or_insert(0) += 1;
+                        acc
+                    });
+            let after_counts: FxHashMap<String, usize> =
+                after
+                    .findings
+                    .iter()
+                    .fold(FxHashMap::default(), |mut acc, f| {
+                        *acc.entry(f.severity.clone()).or_insert(0) += 1;
+                        acc
+                    });
 
             let mut output = String::new();
             output.push_str("# Security Scan Trend Analysis\n\n");

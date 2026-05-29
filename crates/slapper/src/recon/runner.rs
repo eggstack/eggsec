@@ -9,11 +9,11 @@ use crate::recon::{
 };
 use crate::types::SensitiveString;
 use crate::utils::sanitize_for_logging;
-use reqwest::Url;
-use url::Host;
 use parking_lot::Mutex;
+use reqwest::Url;
 use std::net::IpAddr;
 use std::sync::Arc;
+use url::Host;
 
 enum ReconStep<T> {
     Skipped,
@@ -42,7 +42,10 @@ async fn resolve_target(
     target: &str,
     verbose: bool,
 ) -> (String, Option<String>, Option<String>, Option<u16>) {
-    let looks_like_ipv6 = target.parse::<IpAddr>().map(|ip| ip.is_ipv6()).unwrap_or(false);
+    let looks_like_ipv6 = target
+        .parse::<IpAddr>()
+        .map(|ip| ip.is_ipv6())
+        .unwrap_or(false);
     let url = if target.starts_with("http://") || target.starts_with("https://") {
         target.to_string()
     } else if looks_like_ipv6 {
@@ -145,14 +148,8 @@ async fn run_threat_intel(
         return ReconStep::Skipped;
     };
     let is_ip = target.parse::<std::net::IpAddr>().is_ok();
-    match threatintel::check_threat_intel(
-        target,
-        is_ip,
-        virustotal_key,
-        alienvault_key,
-        shodan_key,
-    )
-    .await
+    match threatintel::check_threat_intel(target, is_ip, virustotal_key, alienvault_key, shodan_key)
+        .await
     {
         Ok(v) => ReconStep::Completed(v),
         Err(e) => {
@@ -189,7 +186,10 @@ async fn run_ssl_recon(
 /// Performs WHOIS lookup for a domain.
 ///
 /// Returns `None` if `no_whois` is true, no domain is provided, or the lookup fails.
-async fn run_whois_lookup(domain: Option<&String>, no_whois: bool) -> ReconStep<whois::WhoisResult> {
+async fn run_whois_lookup(
+    domain: Option<&String>,
+    no_whois: bool,
+) -> ReconStep<whois::WhoisResult> {
     if no_whois {
         return ReconStep::Skipped;
     }
@@ -253,7 +253,10 @@ async fn run_dns_records(
 /// Detects the technology stack used by a web application.
 ///
 /// Returns `None` if `no_tech` is true or detection fails.
-async fn run_tech_detection(url: &str, no_tech: bool) -> ReconStep<techdetect::TechDetectionResult> {
+async fn run_tech_detection(
+    url: &str,
+    no_tech: bool,
+) -> ReconStep<techdetect::TechDetectionResult> {
     if no_tech {
         return ReconStep::Skipped;
     }
@@ -626,10 +629,12 @@ pub async fn run_full_recon(
             Some("Threat intel lookup failed (see logs for the underlying error)".to_string());
     }
     if ssl_failed {
-        recon.ssl_error = Some("SSL analysis failed (see logs for the underlying error)".to_string());
+        recon.ssl_error =
+            Some("SSL analysis failed (see logs for the underlying error)".to_string());
     }
     if whois_failed {
-        recon.whois_error = Some("WHOIS lookup failed (see logs for the underlying error)".to_string());
+        recon.whois_error =
+            Some("WHOIS lookup failed (see logs for the underlying error)".to_string());
     }
     if subdomains_failed {
         recon.subdomains_error =
@@ -643,21 +648,25 @@ pub async fn run_full_recon(
         recon.js_error = Some("JS analysis failed (see logs for the underlying error)".to_string());
     }
     if wayback_failed {
-        recon.wayback_error = Some("Wayback lookup failed (see logs for the underlying error)".to_string());
+        recon.wayback_error =
+            Some("Wayback lookup failed (see logs for the underlying error)".to_string());
     }
     #[cfg(feature = "cloud")]
     if cloud_failed {
-        recon.cloud_error = Some("Cloud scan failed (see logs for the underlying error)".to_string());
+        recon.cloud_error =
+            Some("Cloud scan failed (see logs for the underlying error)".to_string());
     }
     if content_failed {
         recon.content_error =
             Some("Content discovery failed (see logs for the underlying error)".to_string());
     }
     if cors_failed {
-        recon.cors_error = Some("CORS analysis failed (see logs for the underlying error)".to_string());
+        recon.cors_error =
+            Some("CORS analysis failed (see logs for the underlying error)".to_string());
     }
     if email_failed {
-        recon.email_error = Some("Email discovery failed (see logs for the underlying error)".to_string());
+        recon.email_error =
+            Some("Email discovery failed (see logs for the underlying error)".to_string());
     }
     if takeover_failed {
         recon.takeover_error = Some(
@@ -669,9 +678,15 @@ pub async fn run_full_recon(
     let techdetect_failed = techdetect_result.is_failed();
     let techdetect_result = techdetect_result.into_option();
 
-    recon.cve_mapping = run_cve_check(techdetect_result.as_ref(), args.no_cve, nvd_api_key.as_deref()).await;
+    recon.cve_mapping = run_cve_check(
+        techdetect_result.as_ref(),
+        args.no_cve,
+        nvd_api_key.as_deref(),
+    )
+    .await;
     if recon.cve_mapping.is_none() && !args.no_cve && techdetect_result.is_some() {
-        recon.cve_error = Some("CVE mapping failed (see logs for the underlying error)".to_string());
+        recon.cve_error =
+            Some("CVE mapping failed (see logs for the underlying error)".to_string());
     }
 
     recon.tech_stack = techdetect_result.map(|t| t.tech_stack);

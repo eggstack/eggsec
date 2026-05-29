@@ -687,7 +687,9 @@ impl InputGroup {
 
     pub fn is_at_right_edge(&self) -> bool {
         if let Some(idx) = self.focused {
-            !self.fields.is_empty() && idx < self.fields.len() && self.fields[idx].is_at_right_edge()
+            !self.fields.is_empty()
+                && idx < self.fields.len()
+                && self.fields[idx].is_at_right_edge()
         } else {
             true
         }
@@ -708,7 +710,8 @@ impl InputGroup {
     pub fn can_move_right(&self) -> bool {
         if !self.fields.is_empty() {
             if let Some(idx) = self.focused {
-                idx < self.fields.len() && self.fields[idx].cursor_pos < self.fields[idx].value.len()
+                idx < self.fields.len()
+                    && self.fields[idx].cursor_pos < self.fields[idx].value.len()
             } else {
                 false
             }

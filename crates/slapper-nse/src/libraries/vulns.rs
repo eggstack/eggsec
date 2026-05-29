@@ -10,126 +10,251 @@ use std::sync::OnceLock;
 static CVE_DB: OnceLock<FxHashMap<&'static str, Vec<(&'static str, &'static str, &'static str)>>> =
     OnceLock::new();
 
-fn get_cve_db() -> &'static FxHashMap<&'static str, Vec<(&'static str, &'static str, &'static str)>> {
+fn get_cve_db() -> &'static FxHashMap<&'static str, Vec<(&'static str, &'static str, &'static str)>>
+{
     CVE_DB.get_or_init(|| {
         let mut m = FxHashMap::default();
 
-        m.entry("CVE-2017-0144").or_insert_with(Vec::new).push(
-            ("WannaCry", "critical", "EternalBlue SMB exploit"),
-        );
-        m.entry("CVE-2017-0145").or_insert_with(Vec::new).push(("WannaCry", "critical", "SMBv1 exploit"));
-        m.entry("CVE-2017-0146").or_insert_with(Vec::new).push(
-            ("WannaCry", "critical", "SMB remote code execution"),
-        );
-        m.entry("CVE-2017-0147").or_insert_with(Vec::new).push(
-            ("WannaCry", "critical", "SMB information disclosure"),
-        );
-        m.entry("CVE-2017-0148").or_insert_with(Vec::new).push(
-            ("WannaCry", "critical", "SMB denial of service"),
-        );
+        m.entry("CVE-2017-0144").or_insert_with(Vec::new).push((
+            "WannaCry",
+            "critical",
+            "EternalBlue SMB exploit",
+        ));
+        m.entry("CVE-2017-0145").or_insert_with(Vec::new).push((
+            "WannaCry",
+            "critical",
+            "SMBv1 exploit",
+        ));
+        m.entry("CVE-2017-0146").or_insert_with(Vec::new).push((
+            "WannaCry",
+            "critical",
+            "SMB remote code execution",
+        ));
+        m.entry("CVE-2017-0147").or_insert_with(Vec::new).push((
+            "WannaCry",
+            "critical",
+            "SMB information disclosure",
+        ));
+        m.entry("CVE-2017-0148").or_insert_with(Vec::new).push((
+            "WannaCry",
+            "critical",
+            "SMB denial of service",
+        ));
 
-        m.entry("CVE-2019-0708").or_insert_with(Vec::new).push(
-            (
-                "BlueKeep",
-                "critical",
-                "Remote Desktop Services vulnerability (CVE-2019-0708)",
-            ),
-        );
-        m.entry("CVE-2020-0796").or_insert_with(Vec::new).push(("SMBGhost", "high", "SMBv3 compression vulnerability"));
-        m.entry("CVE-2020-1472").or_insert_with(Vec::new).push(("Zerologon", "critical", "Netlogon privilege escalation"));
+        m.entry("CVE-2019-0708").or_insert_with(Vec::new).push((
+            "BlueKeep",
+            "critical",
+            "Remote Desktop Services vulnerability (CVE-2019-0708)",
+        ));
+        m.entry("CVE-2020-0796").or_insert_with(Vec::new).push((
+            "SMBGhost",
+            "high",
+            "SMBv3 compression vulnerability",
+        ));
+        m.entry("CVE-2020-1472").or_insert_with(Vec::new).push((
+            "Zerologon",
+            "critical",
+            "Netlogon privilege escalation",
+        ));
 
-        m.entry("CVE-2021-44228").or_insert_with(Vec::new).push(
-            ("Log4Shell", "critical", "Apache Log4j RCE (CVE-2021-44228)"),
-        );
-        m.entry("CVE-2021-45046").or_insert_with(Vec::new).push(
-            ("Log4j", "high", "Log4j DoS vulnerability (CVE-2021-45046)"),
-        );
-        m.entry("CVE-2021-45105").or_insert_with(Vec::new).push(
-            ("Log4j", "medium", "Log4j information disclosure"),
-        );
+        m.entry("CVE-2021-44228").or_insert_with(Vec::new).push((
+            "Log4Shell",
+            "critical",
+            "Apache Log4j RCE (CVE-2021-44228)",
+        ));
+        m.entry("CVE-2021-45046").or_insert_with(Vec::new).push((
+            "Log4j",
+            "high",
+            "Log4j DoS vulnerability (CVE-2021-45046)",
+        ));
+        m.entry("CVE-2021-45105").or_insert_with(Vec::new).push((
+            "Log4j",
+            "medium",
+            "Log4j information disclosure",
+        ));
 
-        m.entry("CVE-2022-22965").or_insert_with(Vec::new).push(
-            (
-                "Spring4Shell",
-                "critical",
-                "Spring Framework RCE (CVE-2022-22965)",
-            ),
-        );
-        m.entry("CVE-2022-22966").or_insert_with(Vec::new).push(("Spring", "high", "Spring Cloud Function RCE"));
-        m.entry("CVE-2022-22967").or_insert_with(Vec::new).push(("Spring", "high", "Spring Cloud Gateway RCE"));
+        m.entry("CVE-2022-22965").or_insert_with(Vec::new).push((
+            "Spring4Shell",
+            "critical",
+            "Spring Framework RCE (CVE-2022-22965)",
+        ));
+        m.entry("CVE-2022-22966").or_insert_with(Vec::new).push((
+            "Spring",
+            "high",
+            "Spring Cloud Function RCE",
+        ));
+        m.entry("CVE-2022-22967").or_insert_with(Vec::new).push((
+            "Spring",
+            "high",
+            "Spring Cloud Gateway RCE",
+        ));
 
-        m.entry("CVE-2022-3602").or_insert_with(Vec::new).push(("OpenSSL", "high", "X.509 certificate verification bypass"));
-        m.entry("CVE-2022-3786").or_insert_with(Vec::new).push(("OpenSSL", "high", "X.509 certificate buffer overflow"));
+        m.entry("CVE-2022-3602").or_insert_with(Vec::new).push((
+            "OpenSSL",
+            "high",
+            "X.509 certificate verification bypass",
+        ));
+        m.entry("CVE-2022-3786").or_insert_with(Vec::new).push((
+            "OpenSSL",
+            "high",
+            "X.509 certificate buffer overflow",
+        ));
 
-        m.entry("CVE-2023-20198").or_insert_with(Vec::new).push(("Cisco IOS XE", "critical", "Web UI privilege escalation"));
-        m.entry("CVE-2023-20269").or_insert_with(Vec::new).push(("Cisco IOS XE", "critical", "Web UI command injection"));
-        m.entry("CVE-2023-46805").or_insert_with(Vec::new).push(("Ivanti Connect", "critical", "Authentication bypass"));
-        m.entry("CVE-2023-46808").or_insert_with(Vec::new).push(("Ivanti Connect", "critical", "ICS authentication bypass"));
+        m.entry("CVE-2023-20198").or_insert_with(Vec::new).push((
+            "Cisco IOS XE",
+            "critical",
+            "Web UI privilege escalation",
+        ));
+        m.entry("CVE-2023-20269").or_insert_with(Vec::new).push((
+            "Cisco IOS XE",
+            "critical",
+            "Web UI command injection",
+        ));
+        m.entry("CVE-2023-46805").or_insert_with(Vec::new).push((
+            "Ivanti Connect",
+            "critical",
+            "Authentication bypass",
+        ));
+        m.entry("CVE-2023-46808").or_insert_with(Vec::new).push((
+            "Ivanti Connect",
+            "critical",
+            "ICS authentication bypass",
+        ));
 
-        m.entry("CVE-2023-22515").or_insert_with(Vec::new).push(("Confluence", "critical", "Atlassian Confluence RCE"));
+        m.entry("CVE-2023-22515").or_insert_with(Vec::new).push((
+            "Confluence",
+            "critical",
+            "Atlassian Confluence RCE",
+        ));
         m.entry("CVE-2023-22518").or_insert_with(Vec::new).push((
-                "Confluence",
-                "critical",
-                "Atlassian Confluence Data Center RCE",
-            ));
+            "Confluence",
+            "critical",
+            "Atlassian Confluence Data Center RCE",
+        ));
 
         m.entry("CVE-2023-44487").or_insert_with(Vec::new).push((
-                "HTTP/2 Rapid Reset",
-                "high",
-                "HTTP/2 Rapid Reset Attack (DoS)",
-            ));
-        m.entry("CVE-2023-38545").or_insert_with(Vec::new).push(("cURL", "high", "cURL heap overflow"));
-        m.entry("CVE-2023-38646").or_insert_with(Vec::new).push(("cURL", "high", "cURL SOCKS5 heap overflow"));
+            "HTTP/2 Rapid Reset",
+            "high",
+            "HTTP/2 Rapid Reset Attack (DoS)",
+        ));
+        m.entry("CVE-2023-38545").or_insert_with(Vec::new).push((
+            "cURL",
+            "high",
+            "cURL heap overflow",
+        ));
+        m.entry("CVE-2023-38646").or_insert_with(Vec::new).push((
+            "cURL",
+            "high",
+            "cURL SOCKS5 heap overflow",
+        ));
 
-        m.entry("CVE-2024-0012").or_insert_with(Vec::new).push(
-            ("Palo Alto PAN-OS", "critical", "Management interface auth bypass"),
-        );
-        m.entry("CVE-2024-3400").or_insert_with(Vec::new).push(
-            ("Palo Alto PAN-OS", "critical", "GlobalProtect RCE"),
-        );
+        m.entry("CVE-2024-0012").or_insert_with(Vec::new).push((
+            "Palo Alto PAN-OS",
+            "critical",
+            "Management interface auth bypass",
+        ));
+        m.entry("CVE-2024-3400").or_insert_with(Vec::new).push((
+            "Palo Alto PAN-OS",
+            "critical",
+            "GlobalProtect RCE",
+        ));
 
-        m.entry("CVE-2024-1708").or_insert_with(Vec::new).push(
-            ("ScreenConnect", "critical", "Authentication bypass"),
-        );
-        m.entry("CVE-2024-1709").or_insert_with(Vec::new).push(
-            ("ScreenConnect", "critical", "Path traversal"),
-        );
+        m.entry("CVE-2024-1708").or_insert_with(Vec::new).push((
+            "ScreenConnect",
+            "critical",
+            "Authentication bypass",
+        ));
+        m.entry("CVE-2024-1709").or_insert_with(Vec::new).push((
+            "ScreenConnect",
+            "critical",
+            "Path traversal",
+        ));
 
-        m.entry("CVE-2024-27198").or_insert_with(Vec::new).push(
-            ("TeamCity", "critical", "JetBrains TeamCity authentication bypass"),
-        );
-        m.entry("CVE-2024-28995").or_insert_with(Vec::new).push(("SolarWinds", "high", "SolarWinds Serv-U path traversal"));
+        m.entry("CVE-2024-27198").or_insert_with(Vec::new).push((
+            "TeamCity",
+            "critical",
+            "JetBrains TeamCity authentication bypass",
+        ));
+        m.entry("CVE-2024-28995").or_insert_with(Vec::new).push((
+            "SolarWinds",
+            "high",
+            "SolarWinds Serv-U path traversal",
+        ));
 
-        m.entry("CVE-2024-0204").or_insert_with(Vec::new).push(("Fortra FileSonic", "critical", "Authentication bypass"));
-        m.entry("CVE-2024-1086").or_insert_with(Vec::new).push(("Linux Kernel", "high", "Linux kernel privilege escalation"));
+        m.entry("CVE-2024-0204").or_insert_with(Vec::new).push((
+            "Fortra FileSonic",
+            "critical",
+            "Authentication bypass",
+        ));
+        m.entry("CVE-2024-1086").or_insert_with(Vec::new).push((
+            "Linux Kernel",
+            "high",
+            "Linux kernel privilege escalation",
+        ));
 
-        m.entry("CVE-2023-50164").or_insert_with(Vec::new).push(("Apache Struts", "critical", "Struts file upload bypass"));
-        m.entry("CVE-2024-21650").or_insert_with(Vec::new).push(("Fortra FileForge", "critical", "FileForge FTP server RCE"));
+        m.entry("CVE-2023-50164").or_insert_with(Vec::new).push((
+            "Apache Struts",
+            "critical",
+            "Struts file upload bypass",
+        ));
+        m.entry("CVE-2024-21650").or_insert_with(Vec::new).push((
+            "Fortra FileForge",
+            "critical",
+            "FileForge FTP server RCE",
+        ));
 
-        m.entry("CVE-2024-23897").or_insert_with(Vec::new).push(("Jenkins", "high", "Jenkins CLI arbitrary file read"));
+        m.entry("CVE-2024-23897").or_insert_with(Vec::new).push((
+            "Jenkins",
+            "high",
+            "Jenkins CLI arbitrary file read",
+        ));
 
-        m.entry("CVE-2023-29360").or_insert_with(Vec::new).push(("Microsoft SharePoint", "critical", "SharePoint Server RCE"));
+        m.entry("CVE-2023-29360").or_insert_with(Vec::new).push((
+            "Microsoft SharePoint",
+            "critical",
+            "SharePoint Server RCE",
+        ));
 
-        m.entry("CVE-2024-21412").or_insert_with(Vec::new).push(("Microsoft Outlook", "critical", "Remote code execution"));
+        m.entry("CVE-2024-21412").or_insert_with(Vec::new).push((
+            "Microsoft Outlook",
+            "critical",
+            "Remote code execution",
+        ));
 
-        m.entry("CVE-2024-20698").or_insert_with(Vec::new).push(("Windows Kerberos", "high", "Windows Kerberos RC4 downgrade"));
-
-        m.entry("CVE-2024-27956").or_insert_with(Vec::new).push(("WordPress", "critical", "WordPress AutomateWoo auth bypass"));
-        m.entry("CVE-2024-3094").or_insert_with(Vec::new).push(("XZ Utils", "critical", "XZ Utils backdoor (supply chain)"));
-
-        m.entry("CVE-2024-4577").or_insert_with(Vec::new).push(("PHP-CGI", "critical", "PHP-CGI argument injection"));
-
-        m.entry("CVE-2024-6387").or_insert_with(Vec::new).push((
-                "OpenSSH",
-                "critical",
-                "OpenSSH RCE (CVE-2024-6387) - RegreSSHion",
-            ));
+        m.entry("CVE-2024-20698").or_insert_with(Vec::new).push((
+            "Windows Kerberos",
+            "high",
+            "Windows Kerberos RC4 downgrade",
+        ));
 
         m.entry("CVE-2024-27956").or_insert_with(Vec::new).push((
-                "WooCommerce",
-                "critical",
-                "WordPress WooCommerce auth bypass",
-            ));
+            "WordPress",
+            "critical",
+            "WordPress AutomateWoo auth bypass",
+        ));
+        m.entry("CVE-2024-3094").or_insert_with(Vec::new).push((
+            "XZ Utils",
+            "critical",
+            "XZ Utils backdoor (supply chain)",
+        ));
+
+        m.entry("CVE-2024-4577").or_insert_with(Vec::new).push((
+            "PHP-CGI",
+            "critical",
+            "PHP-CGI argument injection",
+        ));
+
+        m.entry("CVE-2024-6387").or_insert_with(Vec::new).push((
+            "OpenSSH",
+            "critical",
+            "OpenSSH RCE (CVE-2024-6387) - RegreSSHion",
+        ));
+
+        m.entry("CVE-2024-27956").or_insert_with(Vec::new).push((
+            "WooCommerce",
+            "critical",
+            "WordPress WooCommerce auth bypass",
+        ));
 
         m
     })
@@ -175,8 +300,8 @@ pub fn register_vulns_library(lua: &Lua) -> LuaResult<()> {
 
             if let Some(entries) = db.get(id_upper.as_str()) {
                 if let Some((_, level, _)) = entries.first() {
-                return Ok(level.to_string());
-            }
+                    return Ok(level.to_string());
+                }
             }
 
             if id.starts_with("CVE-") {
@@ -224,22 +349,22 @@ pub fn register_vulns_library(lua: &Lua) -> LuaResult<()> {
             let mut count = 0;
             for (id, entries) in db.iter() {
                 for (name, level, description) in entries.iter() {
-                if name.to_lowercase().contains(&keyword_lower)
-                    || description.to_lowercase().contains(&keyword_lower)
-                    || id.to_lowercase().contains(&keyword_lower)
-                {
-                    let entry = lua.create_table()?;
-                    entry.set("id", *id)?;
-                    entry.set("name", *name)?;
-                    entry.set("level", *level)?;
-                    entry.set("description", *description)?;
-                    results.set(count + 1, entry)?;
-                    count += 1;
-                    if count >= limit {
-                        break;
+                    if name.to_lowercase().contains(&keyword_lower)
+                        || description.to_lowercase().contains(&keyword_lower)
+                        || id.to_lowercase().contains(&keyword_lower)
+                    {
+                        let entry = lua.create_table()?;
+                        entry.set("id", *id)?;
+                        entry.set("name", *name)?;
+                        entry.set("level", *level)?;
+                        entry.set("description", *description)?;
+                        results.set(count + 1, entry)?;
+                        count += 1;
+                        if count >= limit {
+                            break;
+                        }
                     }
                 }
-            }
             }
 
             Ok(results)

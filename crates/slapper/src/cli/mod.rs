@@ -11,8 +11,8 @@ pub mod packet;
 pub mod plan;
 pub mod scan;
 pub mod storage;
-pub(crate) mod timeout;
 pub mod stress;
+pub(crate) mod timeout;
 pub mod vuln;
 
 pub use ci::*;
@@ -132,11 +132,8 @@ pub enum Commands {
     #[command(about = "Packet inspection and analysis tools", long_about = PACKET_ABOUT)]
     Packet(PacketArgs),
     #[cfg(feature = "nse")]
-    #[command(about = "Run Nmap NSE scripts for security scanning", long_about = NSE_ABOUT)]
+    #[command(about = "Run Nmap NSE-compatible scripts through Slapper's optional Lua/NSE compatibility runtime", long_about = NSE_ABOUT)]
     Nse(NseArgs),
-    #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-    #[command(about = "Manage and run security scanning plugins")]
-    Plugin(PluginArgs),
     #[command(about = "Convert and generate security scan reports")]
     Report(ReportArgs),
     #[command(about = "Vulnerability management tools (CVSS scoring, triage, remediation)", long_about = VULN_ABOUT)]

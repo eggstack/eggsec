@@ -28,10 +28,7 @@ pub async fn handle_waf(ctx: &CommandContext, mut args: crate::cli::WafArgs) -> 
         .map_err(|e| anyhow::anyhow!("{}", e))
 }
 
-pub async fn handle_graphql(
-    ctx: &CommandContext,
-    mut args: crate::cli::GraphQlArgs,
-) -> Result<()> {
+pub async fn handle_graphql(ctx: &CommandContext, mut args: crate::cli::GraphQlArgs) -> Result<()> {
     ctx.ensure_scope_url(&args.url)?;
     args.json |= ctx.json;
     crate::commands::run_graphql(args).await

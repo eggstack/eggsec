@@ -10,8 +10,7 @@ Some features require specific Cargo build flags:
 |--------------|--------------|
 | `--features stress-testing` | `stress`, `proxy`, `icmp`, `traceroute` |
 | `--features packet-inspection` | `packet capture`, `packet send` (live) |
-| `--features python-plugins` | Python plugin support |
-| `--features ruby-plugins` | Ruby plugins, Metasploit integration |
+| `--features nse` | NSE script execution |
 | `--features full` | All features |
 
 ```bash
@@ -626,24 +625,6 @@ slapper report schedule cron
 
 # Remove scheduled scan
 slapper report schedule remove <id>
-```
-
-## Plugin Management
-
-> **Note**: Requires building with `--features python-plugins` or `--features ruby-plugins`
-
-### List Plugins
-
-```bash
-slapper plugin list
-slapper plugin list --verbose
-```
-
-### Run a Plugin
-
-```bash
-slapper plugin run my_plugin https://example.com
-slapper plugin run my_plugin https://example.com -o results.json
 ```
 
 ## Remote Execution

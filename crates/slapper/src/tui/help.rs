@@ -96,10 +96,7 @@ impl CommandPalette {
         let vis = self.visible_results_height();
         let max_scroll = self.max_scroll_offset();
         if self.selected_index >= self.scroll_offset + vis {
-            self.scroll_offset = self
-                .selected_index
-                .saturating_sub(vis)
-                .min(max_scroll);
+            self.scroll_offset = self.selected_index.saturating_sub(vis).min(max_scroll);
         }
         if self.selected_index < self.scroll_offset {
             self.scroll_offset = self.selected_index.min(max_scroll);

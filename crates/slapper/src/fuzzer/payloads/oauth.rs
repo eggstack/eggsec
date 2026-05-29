@@ -557,12 +557,12 @@ impl OAuthFuzzer {
                         });
                     } else if status == 400 {
                         let body = match resp.text().await {
-                        Ok(text) => text,
-                        Err(e) => {
-                            tracing::debug!("Failed to read OAuth response body: {}", e);
-                            String::new()
-                        }
-                    };
+                            Ok(text) => text,
+                            Err(e) => {
+                                tracing::debug!("Failed to read OAuth response body: {}", e);
+                                String::new()
+                            }
+                        };
                         if body.contains("unsupported_grant_type") {
                             results.push(OAuthTestResult {
                                 vulnerability: OAuthVulnerability::GrantTypeMixing,

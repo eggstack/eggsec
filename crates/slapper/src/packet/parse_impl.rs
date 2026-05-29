@@ -704,13 +704,15 @@ impl TlsHandshake {
                         if sni_list_len >= 3 && data.len() > offset + 2 {
                             let name_type = data[offset + 2];
                             if name_type == 0x00 {
-                                let name_len = u16::from_be_bytes(
-                                    [data[offset + 3], data[offset + 4]],
-                                ) as usize;
+                                let name_len =
+                                    u16::from_be_bytes([data[offset + 3], data[offset + 4]])
+                                        as usize;
                                 if offset + 5 + name_len <= data.len() {
                                     server_name = Some(
-                                        String::from_utf8_lossy(&data[offset + 5..offset + 5 + name_len])
-                                            .to_string(),
+                                        String::from_utf8_lossy(
+                                            &data[offset + 5..offset + 5 + name_len],
+                                        )
+                                        .to_string(),
                                     );
                                 }
                             }
@@ -723,13 +725,16 @@ impl TlsHandshake {
                         let versions_len = data[offset] as usize;
                         if versions_len == 2 && offset + 3 <= data.len() {
                             let ver = u16::from_be_bytes([data[offset + 1], data[offset + 2]]);
-                            supported_versions = Some(match ver {
-                                0x0301 => "TLS 1.0",
-                                0x0302 => "TLS 1.1",
-                                0x0303 => "TLS 1.2",
-                                0x0304 => "TLS 1.3",
-                                _ => "Unknown",
-                            }.to_string());
+                            supported_versions = Some(
+                                match ver {
+                                    0x0301 => "TLS 1.0",
+                                    0x0302 => "TLS 1.1",
+                                    0x0303 => "TLS 1.2",
+                                    0x0304 => "TLS 1.3",
+                                    _ => "Unknown",
+                                }
+                                .to_string(),
+                            );
                         }
                     }
                 }
@@ -811,8 +816,16 @@ impl ParsedPacket {
         transport: &Option<TransportProtocol>,
     ) -> Option<AppLayer> {
         let (src_port, dst_port, payload) = match transport {
-            Some(TransportProtocol::Tcp(tcp)) => (Some(tcp.src_port), Some(tcp.dst_port), tcp.payload.as_slice()),
-            Some(TransportProtocol::Udp(udp)) => (Some(udp.src_port), Some(udp.dst_port), udp.payload.as_slice()),
+            Some(TransportProtocol::Tcp(tcp)) => (
+                Some(tcp.src_port),
+                Some(tcp.dst_port),
+                tcp.payload.as_slice(),
+            ),
+            Some(TransportProtocol::Udp(udp)) => (
+                Some(udp.src_port),
+                Some(udp.dst_port),
+                udp.payload.as_slice(),
+            ),
             _ => return None,
         };
 

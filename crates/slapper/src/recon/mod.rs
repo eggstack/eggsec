@@ -256,7 +256,8 @@ where
                     let mut m = FxHashMap::default();
                     m.insert(
                         "cname".to_string(),
-                        serde_json::to_value(&result.target.cname).unwrap_or(serde_json::Value::Null),
+                        serde_json::to_value(&result.target.cname)
+                            .unwrap_or(serde_json::Value::Null),
                     );
                     m.insert(
                         "ns".to_string(),

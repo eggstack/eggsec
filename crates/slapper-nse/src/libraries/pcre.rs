@@ -108,7 +108,10 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
                 let id = *counter;
                 *counter += 1;
 
-                COMPILED_REGEX.lock().unwrap_or_else(|e| e.into_inner()).insert(id, re);
+                COMPILED_REGEX
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(id, re);
 
                 Ok(id)
             }
@@ -139,7 +142,10 @@ pub fn register_pcre_library(lua: &Lua) -> LuaResult<()> {
     pcre.set("exec", exec_fn)?;
 
     let free_fn = lua.create_function(|_lua, id: usize| {
-        COMPILED_REGEX.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
+        COMPILED_REGEX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&id);
         Ok(true)
     })?;
     pcre.set("free", free_fn)?;

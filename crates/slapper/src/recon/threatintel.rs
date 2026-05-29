@@ -520,11 +520,8 @@ mod tests {
     fn test_threat_intel_client_new() {
         let client = ThreatIntelClient::new(None, None, None);
         assert!(client.is_ok());
-        let client = ThreatIntelClient::new(
-            Some(SensitiveString::new("vt-key".to_string())),
-            None,
-            None,
-        );
+        let client =
+            ThreatIntelClient::new(Some(SensitiveString::new("vt-key".to_string())), None, None);
         assert!(client.is_ok());
     }
 

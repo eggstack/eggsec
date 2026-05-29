@@ -101,8 +101,8 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
     )?;
     mms.set("write", write_fn)?;
 
-    let get_name_list_fn =
-        lua.create_function(|lua, (_host, _port, domain): (String, Option<u16>, String)| {
+    let get_name_list_fn = lua.create_function(
+        |lua, (_host, _port, domain): (String, Option<u16>, String)| {
             let result = lua.create_table()?;
 
             let items = lua.create_table()?;
@@ -116,7 +116,8 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
             result.set("count", 3)?;
 
             Ok(result)
-        })?;
+        },
+    )?;
     mms.set("get_name_list", get_name_list_fn)?;
 
     let define_named_variable_fn =
@@ -142,8 +143,8 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
         )?;
     mms.set("define_named_variable", define_named_variable_fn)?;
 
-    let read_directory_fn =
-        lua.create_function(|lua, (_host, _port, domain): (String, Option<u16>, String)| {
+    let read_directory_fn = lua.create_function(
+        |lua, (_host, _port, domain): (String, Option<u16>, String)| {
             let result = lua.create_table()?;
 
             let directories = lua.create_table()?;
@@ -155,7 +156,8 @@ pub fn register_iec61850mms_library(lua: &Lua) -> LuaResult<()> {
             result.set("directories", directories)?;
 
             Ok(result)
-        })?;
+        },
+    )?;
     mms.set("read_directory", read_directory_fn)?;
 
     iec61850mms.set("mms", mms)?;

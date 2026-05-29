@@ -9,8 +9,8 @@ use super::models::{TemplateRequest, VulnerabilityTemplate};
 use crate::error::{Result, SlapperError};
 use crate::types::Severity;
 use crate::utils::{create_http_client, create_insecure_http_client};
-use rustc_hash::FxHashMap;
 use reqwest::Client;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::time::Duration;
 

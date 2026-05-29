@@ -252,8 +252,15 @@ impl PacketBuilder {
             .ipv4
             .as_ref()
             .map(|ip| (IpAddr::V4(ip.src), IpAddr::V4(ip.dst)))
-            .or_else(|| self.ipv6.as_ref().map(|ip| (IpAddr::V6(ip.src), IpAddr::V6(ip.dst))))
-            .unwrap_or((IpAddr::V4(Ipv4Addr::UNSPECIFIED), IpAddr::V4(Ipv4Addr::UNSPECIFIED)));
+            .or_else(|| {
+                self.ipv6
+                    .as_ref()
+                    .map(|ip| (IpAddr::V6(ip.src), IpAddr::V6(ip.dst)))
+            })
+            .unwrap_or((
+                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            ));
 
         if let Some(ref trans) = self.transport {
             match trans {
