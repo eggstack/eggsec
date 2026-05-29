@@ -14,6 +14,114 @@ The agent system consists of several components:
 | **AlertRouter** | Routes alerts to configured channels (webhooks) |
 | **SkillRegistry** | Indexes and matches skills for agent behavior |
 
+## Runtime Status Tracking
+
+The agent tracks runtime state for each target and scan execution.
+
+### Runtime States
+
+| State | Description |
+|-------|-------------|
+| `Idle` | Target is not currently being scanned |
+| `Scanning` | Scan is actively running against the target |
+| `Cooldown` | Scan completed, waiting before next scheduled scan |
+| `Paused` | Target scanning is temporarily suspended |
+| `Error` | Last scan failed, waiting for retry |
+
+### State Transitions
+
+```
+Idle → Scanning → Cooldown → Idle
+Idle → Scanning → Error → Idle
+Idle → Paused → Idle (manual resume)
+```
+
+### Runtime State Persistence
+
+Agent runtime state is persisted to `~/.config/slapper/memory/runtime/`:
+
+```
+~/.config/slapper/memory/runtime/
+├── agent-state.json         # Global agent state (start time, last poll)
+├── targets/
+│   ├── example.com.json     # Per-target runtime state
+│   └── api.example.com.json
+└── scans/
+    ├── scan-001.json        # Active scan state (progress, findings so far)
+    └── scan-002.json
+```
+
+State is persisted on:
+- State transitions (Idle → Scanning, Scanning → Cooldown)
+- Periodic snapshots (every 60 seconds during active scans)
+- Graceful shutdown
+
+## Graceful Shutdown
+
+The agent handles shutdown signals (`SIGTERM`, `SIGINT`) gracefully:
+
+1. **Stop accepting new scans** - No new targets are picked up
+2. **Wait for active scans** - Running scans complete or hit their timeout
+3. **Persist state** - All runtime state is flushed to disk
+4. **Flush alerts** - Pending alerts are sent before exit
+5. **Close connections** - HTTP clients, database connections, and file handles are closed
+
+On restart, the agent:
+- Loads persisted runtime state
+- Resumes cooldown timers from where they left off
+- Skips targets that were mid-scan (treats them as errored for retry)
+
+## Scan Budgets and Cooldowns
+
+### Scan Budgets
+
+Each target scan has resource budgets to prevent runaway executions:
+
+| Budget | Default | Description |
+|--------|---------|-------------|
+| `max_duration_ms` | 300,000 (5 min) | Maximum scan duration |
+| `max_findings` | 100 | Stop after N findings |
+| `max_requests` | 1,000 | Maximum HTTP requests |
+| `max_payloads` | 500 | Maximum fuzzing payloads |
+
+Budgets can be set per-target in the portfolio:
+
+```json
+{
+  "target": "https://api.example.com",
+  "budgets": {
+    "max_duration_ms": 600000,
+    "max_findings": 50,
+    "max_requests": 500
+  }
+}
+```
+
+### Cooldowns
+
+After a scan completes, the target enters a cooldown period before the next scan is allowed:
+
+| Scan Type | Default Cooldown |
+|-----------|-----------------|
+| Quick scan | 5 minutes |
+| Full assessment | 1 hour |
+| WAF testing | 30 minutes |
+| Stress testing | 4 hours |
+| Recon only | 15 minutes |
+
+Cooldowns are configurable per-target:
+
+```json
+{
+  "target": "https://api.example.com",
+  "cooldowns": {
+    "full_assessment_ms": 3600000,
+    "quick_scan_ms": 300000,
+    "stress_test_ms": 14400000
+  }
+}
+```
+
 ## Installation
 
 ### Build Requirements

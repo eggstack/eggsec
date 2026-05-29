@@ -132,6 +132,59 @@ Chained security assessment pipelines:
 
 ---
 
+## MCP Profiles
+
+Slapper's MCP server has two profiles that control available tools and safety policies.
+
+### Ops-Agent Profile
+
+Full security testing toolkit for AI agents. All tools are available.
+
+| Capability | Available | Notes |
+|------------|-----------|-------|
+| Recon | Yes | All 18 modules |
+| Port scanning | Yes | |
+| Fingerprinting | Yes | |
+| Fuzzing (all types) | Yes | 24 payload types |
+| WAF detection/bypass | Yes | |
+| WAF stress testing | Yes | |
+| Load testing | Yes | |
+| Stress testing | Yes | SYN/UDP/ICMP floods |
+| Pipeline scanning | Yes | All profiles |
+| Session management | Yes | |
+| Plan generation | Yes | |
+
+### Coding-Agent Profile
+
+Bounded security validation tools for coding assistants. Restricted toolset with enforced safety.
+
+| Capability | Available | Notes |
+|------------|-----------|-------|
+| Target validation | Yes | Verify target is local/scope-allowed |
+| Re-check findings | Yes | Verify if a finding is fixed/still present |
+| Port scanning | Limited | Localhost/private IPs only |
+| Fingerprinting | Limited | Localhost/private IPs only |
+| Fuzzing (safe types) | Limited | xss, sqli, traversal only |
+| WAF detection | Limited | Localhost/private IPs only |
+| Load testing | No | Denied by policy |
+| Stress testing | No | Denied by policy |
+| Broad recon | No | Denied by policy |
+| External network | No | Denied by policy (unless scoped) |
+
+### Coding-Agent Safety Defaults
+
+| Setting | Value |
+|---------|-------|
+| Target policy | `ScopeOrLocalDevOnly` |
+| Max concurrency | 5 |
+| Max timeout | 60,000 ms |
+| Max batch size | 10 |
+| External network | Blocked |
+| Stress testing | Blocked |
+| Broad recon | Blocked |
+
+---
+
 ## CLI Commands Quick Reference
 
 ### Core Scanning Commands
@@ -192,6 +245,7 @@ Chained security assessment pipelines:
 | `slapper serve --port` | REST API server |
 | `slapper grpc-serve --port` | gRPC API server |
 | `slapper mcp-serve --port` | MCP server for AI agents |
+| `slapper codegg-mcp` | MCP server for coding agents (stdio, coding-agent profile) |
 
 ### NSE Scripting
 

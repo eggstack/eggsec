@@ -10,6 +10,7 @@ use axum::{
     Router,
 };
 use futures::Stream;
+use serde::Deserialize;
 
 use crate::tool::{ChainPlanner, ExecutionPlan, OpenApiGenerator, PlanRequest, ToolRegistry};
 
@@ -17,6 +18,22 @@ use super::handlers::McpServer;
 use super::profile::McpProfile;
 use super::streaming::StreamEvent;
 use super::types::{McpError, McpRequest, McpResponse};
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum McpIncoming {
+    Single(McpRequest),
+    Batch(Vec<McpRequest>),
+}
+
+impl McpIncoming {
+    fn into_vec(self) -> Vec<McpRequest> {
+        match self {
+            McpIncoming::Single(req) => vec![req],
+            McpIncoming::Batch(reqs) => reqs,
+        }
+    }
+}
 
 struct AppState {
     mcp_server: Arc<McpServer>,
@@ -166,11 +183,12 @@ async fn handle_sse_stream(
 async fn handle_mcp(
     State(state): State<Arc<AppState>>,
     headers: axum::http::HeaderMap,
-    Json(requests): Json<Vec<McpRequest>>,
+    Json(incoming): Json<McpIncoming>,
 ) -> impl IntoResponse {
-    const MAX_BATCH_SIZE: usize = 100;
+    let requests = incoming.into_vec();
+    let max_batch_size = state.mcp_server.policy.max_batch_size;
 
-    if requests.len() > MAX_BATCH_SIZE {
+    if requests.len() > max_batch_size {
         return (
             StatusCode::BAD_REQUEST,
             Json(vec![McpResponse {
@@ -179,7 +197,7 @@ async fn handle_mcp(
                 result: None,
                 error: Some(McpError::invalid_request(&format!(
                     "Batch size exceeds limit of {}",
-                    MAX_BATCH_SIZE
+                    max_batch_size
                 ))),
             }]),
         );
@@ -215,6 +233,52 @@ async fn handle_mcp(
     (StatusCode::OK, Json(responses))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mcp_incoming_single_object() {
+        let single = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "ping"
+        });
+        let incoming: McpIncoming = serde_json::from_value(single).unwrap();
+        let vec = incoming.into_vec();
+        assert_eq!(vec.len(), 1);
+        assert_eq!(vec[0].method, "ping");
+    }
+
+    #[test]
+    fn test_mcp_incoming_batch_array() {
+        let batch = serde_json::json!([
+            {"jsonrpc": "2.0", "id": 1, "method": "ping"},
+            {"jsonrpc": "2.0", "id": 2, "method": "initialize"}
+        ]);
+        let incoming: McpIncoming = serde_json::from_value(batch).unwrap();
+        let vec = incoming.into_vec();
+        assert_eq!(vec.len(), 2);
+        assert_eq!(vec[0].method, "ping");
+        assert_eq!(vec[1].method, "initialize");
+    }
+
+    #[test]
+    fn test_mcp_incoming_batch_empty() {
+        let batch = serde_json::json!([]);
+        let incoming: McpIncoming = serde_json::from_value(batch).unwrap();
+        let vec = incoming.into_vec();
+        assert!(vec.is_empty());
+    }
+
+    #[test]
+    fn test_mcp_incoming_invalid_json() {
+        let invalid = serde_json::json!("not a request");
+        let result = serde_json::from_value::<McpIncoming>(invalid);
+        assert!(result.is_err());
+    }
+}
+
 pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>, profile: McpProfile) {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 
@@ -235,12 +299,18 @@ pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>, profile:
             continue;
         }
 
-        let requests: Result<Vec<McpRequest>, _> = serde_json::from_str(&line);
+        let incoming: Result<McpIncoming, _> = serde_json::from_str(&line);
 
-        match requests {
-            Ok(reqs) => {
-                if reqs.len() > 100 {
-                    let error = McpError::invalid_request("Batch size exceeds limit of 100");
+        match incoming {
+            Ok(incoming) => {
+                let requests = incoming.into_vec();
+                let max_batch_size = server.policy.max_batch_size;
+
+                if requests.len() > max_batch_size {
+                    let error = McpError::invalid_request(&format!(
+                        "Batch size exceeds limit of {}",
+                        max_batch_size
+                    ));
                     let response = McpResponse {
                         jsonrpc: "2.0".to_string(),
                         id: None,
@@ -263,7 +333,7 @@ pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>, profile:
 
                 let mut responses = Vec::new();
 
-                for req in reqs {
+                for req in requests {
                     if let Err(e) = server.validate_auth_params(&req.params) {
                         responses.push(req.error_response(e));
                         continue;

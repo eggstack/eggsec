@@ -172,6 +172,10 @@ pub struct OperationalConstraints {
     pub do_not_do_list: DoNotDoList,
     pub rate_limit_budget: Option<usize>,
     pub require_approval_for: Vec<String>,
+    #[serde(default)]
+    pub max_concurrent_scans: Option<usize>,
+    #[serde(default)]
+    pub per_target_cooldown_secs: Option<u64>,
 }
 
 impl OperationalConstraints {
@@ -182,6 +186,8 @@ impl OperationalConstraints {
             do_not_do_list: DoNotDoList::new(),
             rate_limit_budget: None,
             require_approval_for: Vec::new(),
+            max_concurrent_scans: None,
+            per_target_cooldown_secs: None,
         }
     }
 
@@ -197,6 +203,16 @@ impl OperationalConstraints {
 
     pub fn with_do_not_do_list(mut self, list: DoNotDoList) -> Self {
         self.do_not_do_list = list;
+        self
+    }
+
+    pub fn with_max_concurrent_scans(mut self, max: usize) -> Self {
+        self.max_concurrent_scans = Some(max);
+        self
+    }
+
+    pub fn with_per_target_cooldown(mut self, secs: u64) -> Self {
+        self.per_target_cooldown_secs = Some(secs);
         self
     }
 

@@ -5,7 +5,7 @@ Slapper's MCP (Model Context Protocol) server provides AI agents with secure, st
 ## Quick Start
 
 ```bash
-# Start MCP server
+# Start MCP server (ops-agent profile, default)
 slapper mcp-serve --port 8081
 
 # Or with authentication
@@ -13,6 +13,75 @@ slapper mcp-serve --port 8081 --api-key your-secret-key
 
 # STDIO mode for direct AI integration
 slapper mcp-serve --stdio
+
+# Coding agent profile (stdio + restricted tools)
+slapper mcp-serve --stdio --profile coding-agent
+
+# Shorthand for coding agent via codegg-mcp alias
+slapper codegg-mcp
+```
+
+## MCP Profiles
+
+Slapper has **one** MCP implementation with multiple profiles that control available tools, safety policies, and output schemas.
+
+| Profile | Server Name | Description |
+|---------|-------------|-------------|
+| `ops-agent` | `slapper-tool-api` | Full security testing toolkit for AI agents. All tools, unconstrained. |
+| `coding-agent` | `slapper-coding-agent-mcp` | Bounded live security validation tools for coding agents. Restricted tools, enforced safety. |
+
+### Ops-Agent Profile
+
+The default profile. Provides full access to all scanning, fuzzing, WAF, stress, and pipeline tools. Designed for AI agents operating in controlled environments with human oversight.
+
+- **Target policy:** No restrictions (scope enforcement optional)
+- **Concurrency:** Up to 20 concurrent scans
+- **Timeout:** Up to 300 seconds per tool
+- **Stress testing:** Allowed
+- **External network:** Allowed
+
+### Coding-Agent Profile
+
+Optimized for AI coding assistants that need to validate security while writing code. Enforces strict safety defaults.
+
+- **Target policy:** Localhost, loopback, and private IPs only (`ScopeOrLocalDevOnly`)
+- **Concurrency:** Max 5 concurrent scans
+- **Timeout:** Max 60 seconds per tool
+- **Stress testing:** Denied
+- **Broad recon:** Denied
+- **External network:** Denied (unless explicitly scoped)
+
+**Coding-agent resources** (available via `resources/read`):
+
+| URI | Description |
+|-----|-------------|
+| `slapper://coding-agent/manifest` | Available tools and recommended workflow |
+| `slapper://coding-agent/safety-policy` | Safety defaults, hard caps, allowed targets |
+| `slapper://coding-agent/finding-schema` | Schema for structured findings output |
+| `slapper://coding-agent/workflow` | Recommended validation workflow |
+| `slapper://coding-agent/tool-contracts` | Per-tool input/output contracts |
+
+### Startup Examples
+
+```bash
+# Ops-agent (HTTP mode)
+slapper mcp-serve --port 8081
+
+# Ops-agent (STDIO mode)
+slapper mcp-serve --stdio
+
+# Coding-agent (STDIO mode)
+slapper mcp-serve --stdio --profile coding-agent
+
+# Coding-agent shorthand
+slapper codegg-mcp
+
+# Coding-agent with scope file
+slapper mcp-serve --stdio --profile coding-agent --scope-file scope.toml
+
+# Coding-agent with example config
+# See examples/codegg-mcp.local.toml
+slapper mcp-serve --stdio --profile coding-agent
 ```
 
 ## Endpoints
@@ -248,6 +317,51 @@ Read a specific resource.
   }
 }
 ```
+
+## Structured Output Schemas
+
+The coding-agent profile returns structured JSON output for all tool executions. The output schema includes:
+
+```json
+{
+  "profile": "coding-agent",
+  "target": "https://localhost:3000",
+  "tool": "recon",
+  "status": "completed",
+  "findings": [
+    {
+      "id": "finding-001",
+      "severity": "high",
+      "title": "Missing security header",
+      "description": "X-Content-Type-Options header is not set",
+      "remediation": "Add 'X-Content-Type-Options: nosniff' header",
+      "evidence": { "header": "X-Content-Type-Options", "status": "missing" }
+    }
+  ],
+  "metadata": {
+    "duration_ms": 1234,
+    "profile": "coding-agent",
+    "policy": {
+      "target_policy": "ScopeOrLocalDevOnly",
+      "max_concurrency": 5,
+      "max_timeout_ms": 60000
+    }
+  }
+}
+```
+
+### Finding Schema
+
+Each finding follows this structure:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique finding identifier |
+| `severity` | enum | `critical`, `high`, `medium`, `low`, `info` |
+| `title` | string | Short descriptive title |
+| `description` | string | Detailed explanation |
+| `remediation` | string | Fix recommendation |
+| `evidence` | object | Tool-specific evidence data |
 
 ## SSE Streaming
 

@@ -1,0 +1,25 @@
+# Codegg MCP Server - Scoped Profile
+# Usage: slapper mcp-serve --stdio --profile coding-agent --scope-file scope.toml
+
+[mcp]
+profile = "coding-agent"
+
+[[scope.rules]]
+type = "allow"
+pattern = "localhost"
+comment = "Local development server"
+
+[[scope.rules]]
+type = "allow"
+pattern = "127.0.0.1"
+comment = "Local development server"
+
+[[scope.rules]]
+type = "allow"
+pattern = "10.0.0.0/8"
+comment = "Internal lab network"
+
+[[scope.rules]]
+type = "deny"
+pattern = "*"
+comment = "Deny everything else by default"

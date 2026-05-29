@@ -48,6 +48,7 @@ EXAMPLES:
   Fuzz endpoints:    slapper fuzz https://example.com/api -t sqli
   Detect WAF:        slapper waf https://example.com
   Auth testing:      slapper auth-test https://example.com/login --brute-force
+  MCP for coding:    slapper codegg-mcp
 
 See https://slapper.dev/docs for full documentation.
 "#;
@@ -173,6 +174,12 @@ pub enum Commands {
         alias = "mcp-serve"
     )]
     McpServe(McpServeArgs),
+    #[cfg(feature = "rest-api")]
+    #[command(
+        about = "Start MCP server for coding agent integration (stdio + coding-agent profile)",
+        alias = "mcp-codegg"
+    )]
+    CodeggMcp(CodeggMcpArgs),
 
     // --- Agent orchestration ---
     #[cfg(feature = "rest-api")]

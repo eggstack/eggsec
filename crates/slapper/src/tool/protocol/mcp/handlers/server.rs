@@ -19,6 +19,7 @@ use crate::tool::protocol::mcp::auth::{validate_auth, validate_auth_params};
 use crate::tool::protocol::mcp::handlers::helpers::{
     build_capabilities_summary, build_input_schema,
 };
+use crate::tool::protocol::mcp::policy::McpProfilePolicy;
 use crate::tool::protocol::mcp::profile::McpProfile;
 use crate::tool::protocol::mcp::prompts::get_builtin_prompts_for_profile;
 use crate::tool::protocol::mcp::streaming::StreamEvent;
@@ -42,6 +43,7 @@ pub struct McpServer {
     scope: Option<Scope>,
     shutdown_requested: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) profile: McpProfile,
+    pub(crate) policy: McpProfilePolicy,
 }
 
 impl McpServer {
@@ -68,6 +70,7 @@ impl McpServer {
 
         let pending_cancellations = Arc::new(RwLock::new(FxHashMap::default()));
         let completed_results = Arc::new(RwLock::new(FxHashMap::default()));
+        let policy = McpProfilePolicy::for_profile(profile);
 
         let server = Self {
             registry,
@@ -84,6 +87,7 @@ impl McpServer {
             scope,
             shutdown_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             profile,
+            policy,
         };
 
         server.start_hashmap_reaper(60);
@@ -93,6 +97,7 @@ impl McpServer {
 
     pub fn with_profile(mut self, profile: McpProfile) -> Self {
         self.profile = profile;
+        self.policy = McpProfilePolicy::for_profile(self.profile);
         self
     }
 
@@ -133,6 +138,7 @@ impl McpServer {
             scope: self.scope,
             shutdown_requested: self.shutdown_requested,
             profile: self.profile,
+            policy: self.policy,
         }
     }
 
@@ -267,49 +273,31 @@ impl McpServer {
     }
 
     async fn handle_initialize(&self, req: McpRequest) -> McpResponse {
-        let result = if self.profile.is_coding_agent() {
-            serde_json::json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": { "listChanged": true },
-                    "sessions": true,
-                    "roots": { "listChanged": true },
-                    "streaming": true
-                },
-                "serverInfo": {
-                    "name": self.profile.server_name(),
-                    "version": "0.1.0",
-                    "description": self.profile.server_description()
-                },
-                "profile": "coding-agent",
-                "safety": {
-                    "default_external_network": false,
-                    "stress_testing_available": false,
-                    "broad_recon_available": false
-                }
-            })
-        } else {
-            serde_json::json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": { "listChanged": true },
-                    "streaming": true,
-                    "sessions": true,
-                    "roots": { "listChanged": true }
-                },
-                "serverInfo": {
-                    "name": self.profile.server_name(),
-                    "version": "0.1.0",
-                    "description": self.profile.server_description()
-                }
-            })
-        };
+        let safety = &self.policy.to_initialize_metadata()["safety"];
+
+        let result = serde_json::json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {
+                "tools": { "listChanged": true },
+                "sessions": self.policy.allow_sessions,
+                "roots": { "listChanged": true },
+                "streaming": self.policy.allow_streaming
+            },
+            "serverInfo": {
+                "name": self.profile.server_name(),
+                "version": "0.1.0",
+                "description": self.profile.server_description()
+            },
+            "profile": self.profile.as_str(),
+            "safety": safety
+        });
 
         req.success_response(result)
     }
 
     async fn handle_tools_list(&self, req: McpRequest) -> McpResponse {
-        let tools = self.registry.list();
+        let all_tools = self.registry.list();
+        let tools = self.policy.filter_tools(all_tools);
 
         let mcp_tools: Vec<McpTool> = tools
             .into_iter()
@@ -335,7 +323,8 @@ impl McpServer {
     }
 
     async fn handle_tools_list_by_category(&self, req: McpRequest) -> McpResponse {
-        let tools = self.registry.list();
+        let all_tools = self.registry.list();
+        let tools = self.policy.filter_tools(all_tools);
         let total_tools = tools.len();
 
         let mut categorized: FxHashMap<String, Vec<McpTool>> = FxHashMap::default();
@@ -393,6 +382,36 @@ impl McpServer {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
+        // Policy enforcement: validate tool call before resolving
+        let (tool_id, capability) = match self.resolve_tool_id(name) {
+            Some(result) => result,
+            None => {
+                return req.error_response(McpError::invalid_params(&format!(
+                    "Unknown tool or capability: {}",
+                    name
+                )))
+            }
+        };
+
+        if let Err(violation) = self.policy.validate_tool_call(&tool_id, capability.as_deref(), &arguments) {
+            return req.error_response(McpError {
+                code: violation.to_mcp_error_code(),
+                message: violation.to_string(),
+                data: None,
+            });
+        }
+
+        // Target policy enforcement
+        if !target_value.is_empty() {
+            if let Err(violation) = self.policy.validate_target(target_value) {
+                return req.error_response(McpError {
+                    code: violation.to_mcp_error_code(),
+                    message: violation.to_string(),
+                    data: None,
+                });
+            }
+        }
+
         #[cfg(feature = "rest-api")]
         {
             if let Some(ref scope) = self.scope {
@@ -420,16 +439,6 @@ impl McpServer {
             _ => Target::url(target_value),
         };
 
-        let (tool_id, capability) = match self.resolve_tool_id(name) {
-            Some(result) => result,
-            None => {
-                return req.error_response(McpError::invalid_params(&format!(
-                    "Unknown tool or capability: {}",
-                    name
-                )))
-            }
-        };
-
         let mut request_args = arguments.clone();
         if let Some(cap) = &capability {
             request_args["_capability"] = serde_json::json!(cap);
@@ -450,15 +459,25 @@ impl McpServer {
 
         match self.dispatcher.dispatch(request).await {
             Ok(response) => {
+                let content = if self.profile.is_coding_agent() {
+                    let output = self.build_coding_agent_output(&target_value, &response);
+                    vec![serde_json::json!({
+                        "type": "text",
+                        "text": serde_json::to_string_pretty(&output).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize coding-agent output");
+                        }).unwrap_or_default()
+                    })]
+                } else {
+                    vec![serde_json::json!({
+                        "type": "text",
+                        "text": serde_json::to_string_pretty(&response).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize tool response");
+                        }).unwrap_or_default()
+                    })]
+                };
+
                 let result = serde_json::json!({
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": serde_json::to_string_pretty(&response).inspect_err(|e| {
-                                tracing::warn!(error = %e, "Failed to serialize tool response");
-                            }).unwrap_or_default()
-                        }
-                    ],
+                    "content": content,
                     "isError": !response.is_success()
                 });
                 req.success_response(result)
@@ -507,31 +526,75 @@ impl McpServer {
             },
         ];
 
-        if self.profile.is_coding_agent() {
-            resources.push(McpResource {
-                uri: "slapper://coding-agent/manifest".to_string(),
-                name: "Coding Agent Manifest".to_string(),
-                description:
-                    "Available coding-agent validation tools, safe defaults, and recommended workflow"
-                        .to_string(),
-                mime_type: Some("application/json".to_string()),
-            });
-            resources.push(McpResource {
-                uri: "slapper://coding-agent/safety-policy".to_string(),
-                name: "Coding Agent Safety Policy".to_string(),
-                description:
-                    "Safety defaults, hard caps, and allowed targets for coding-agent profile"
-                        .to_string(),
-                mime_type: Some("application/json".to_string()),
-            });
-            resources.push(McpResource {
-                uri: "slapper://coding-agent/finding-schema".to_string(),
-                name: "Coding Agent Finding Schema".to_string(),
-                description:
-                    "Schema for structured findings produced by coding-agent validation tools"
-                        .to_string(),
-                mime_type: Some("application/json".to_string()),
-            });
+        match self.policy.profile {
+            crate::tool::protocol::mcp::profile::McpProfile::OpsAgent => {
+                resources.push(McpResource {
+                    uri: "slapper://ops-agent/safety-policy".to_string(),
+                    name: "Ops Agent Safety Policy".to_string(),
+                    description:
+                        "Safety policy, target rules, and enforcement settings for ops-agent profile"
+                            .to_string(),
+                    mime_type: Some("application/json".to_string()),
+                });
+                resources.push(McpResource {
+                    uri: "slapper://ops-agent/task-schema".to_string(),
+                    name: "Ops Agent Task Schema".to_string(),
+                    description:
+                        "Schema for task assignment and result submission in the ops-agent agent runtime"
+                            .to_string(),
+                    mime_type: Some("application/json".to_string()),
+                });
+                resources.push(McpResource {
+                    uri: "slapper://ops-agent/event-schema".to_string(),
+                    name: "Ops Agent Event Schema".to_string(),
+                    description:
+                        "Schema for streaming events emitted during ops-agent tool execution"
+                            .to_string(),
+                    mime_type: Some("application/json".to_string()),
+                });
+            }
+            crate::tool::protocol::mcp::profile::McpProfile::CodingAgent => {
+                resources.push(McpResource {
+                    uri: "slapper://coding-agent/manifest".to_string(),
+                    name: "Coding Agent Manifest".to_string(),
+                    description:
+                        "Available coding-agent validation tools, safe defaults, and recommended workflow"
+                            .to_string(),
+                    mime_type: Some("application/json".to_string()),
+                });
+                resources.push(McpResource {
+                    uri: "slapper://coding-agent/safety-policy".to_string(),
+                    name: "Coding Agent Safety Policy".to_string(),
+                    description:
+                        "Safety defaults, hard caps, and allowed targets for coding-agent profile"
+                            .to_string(),
+                    mime_type: Some("application/json".to_string()),
+                });
+                resources.push(McpResource {
+                    uri: "slapper://coding-agent/finding-schema".to_string(),
+                    name: "Coding Agent Finding Schema".to_string(),
+                    description:
+                        "Schema for structured findings produced by coding-agent validation tools"
+                            .to_string(),
+                    mime_type: Some("application/json".to_string()),
+                });
+                resources.push(McpResource {
+                    uri: "slapper://coding-agent/workflow".to_string(),
+                    name: "Coding Agent Workflow".to_string(),
+                    description:
+                        "Recommended validation workflow, step ordering, and summarization strategy"
+                            .to_string(),
+                    mime_type: Some("application/json".to_string()),
+                });
+                resources.push(McpResource {
+                    uri: "slapper://coding-agent/tool-contracts".to_string(),
+                    name: "Coding Agent Tool Contracts".to_string(),
+                    description:
+                        "Per-tool contracts including input/output schemas, latency, determinism, and network flags"
+                            .to_string(),
+                    mime_type: Some("application/json".to_string()),
+                });
+            }
         }
 
         let result = serde_json::json!({
@@ -598,8 +661,62 @@ impl McpServer {
                 });
                 req.success_response(result)
             }
+            "slapper://ops-agent/safety-policy" => {
+                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::OpsAgent) {
+                    return req.error_response(McpError::invalid_params(
+                        "Ops-agent resources are only available in ops-agent profile",
+                    ));
+                }
+                let policy = self.build_ops_agent_safety_policy();
+                let result = serde_json::json!({
+                    "contents": [{
+                        "uri": "slapper://ops-agent/safety-policy",
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&policy).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize ops-agent safety policy");
+                        }).unwrap_or_default()
+                    }]
+                });
+                req.success_response(result)
+            }
+            "slapper://ops-agent/task-schema" => {
+                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::OpsAgent) {
+                    return req.error_response(McpError::invalid_params(
+                        "Ops-agent resources are only available in ops-agent profile",
+                    ));
+                }
+                let schema = self.build_ops_agent_task_schema();
+                let result = serde_json::json!({
+                    "contents": [{
+                        "uri": "slapper://ops-agent/task-schema",
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&schema).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize ops-agent task schema");
+                        }).unwrap_or_default()
+                    }]
+                });
+                req.success_response(result)
+            }
+            "slapper://ops-agent/event-schema" => {
+                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::OpsAgent) {
+                    return req.error_response(McpError::invalid_params(
+                        "Ops-agent resources are only available in ops-agent profile",
+                    ));
+                }
+                let schema = self.build_ops_agent_event_schema();
+                let result = serde_json::json!({
+                    "contents": [{
+                        "uri": "slapper://ops-agent/event-schema",
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&schema).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize ops-agent event schema");
+                        }).unwrap_or_default()
+                    }]
+                });
+                req.success_response(result)
+            }
             "slapper://coding-agent/manifest" => {
-                if !self.profile.is_coding_agent() {
+                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
                     return req.error_response(McpError::invalid_params(
                         "Coding-agent resources are only available in coding-agent profile",
                     ));
@@ -617,7 +734,7 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://coding-agent/safety-policy" => {
-                if !self.profile.is_coding_agent() {
+                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
                     return req.error_response(McpError::invalid_params(
                         "Coding-agent resources are only available in coding-agent profile",
                     ));
@@ -635,7 +752,7 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://coding-agent/finding-schema" => {
-                if !self.profile.is_coding_agent() {
+                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
                     return req.error_response(McpError::invalid_params(
                         "Coding-agent resources are only available in coding-agent profile",
                     ));
@@ -647,6 +764,42 @@ impl McpServer {
                         "mimeType": "application/json",
                         "text": serde_json::to_string_pretty(&schema).inspect_err(|e| {
                             tracing::warn!(error = %e, "Failed to serialize coding-agent finding schema");
+                        }).unwrap_or_default()
+                    }]
+                });
+                req.success_response(result)
+            }
+            "slapper://coding-agent/workflow" => {
+                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
+                    return req.error_response(McpError::invalid_params(
+                        "Coding-agent resources are only available in coding-agent profile",
+                    ));
+                }
+                let workflow = self.build_coding_agent_workflow();
+                let result = serde_json::json!({
+                    "contents": [{
+                        "uri": "slapper://coding-agent/workflow",
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&workflow).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize coding-agent workflow");
+                        }).unwrap_or_default()
+                    }]
+                });
+                req.success_response(result)
+            }
+            "slapper://coding-agent/tool-contracts" => {
+                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
+                    return req.error_response(McpError::invalid_params(
+                        "Coding-agent resources are only available in coding-agent profile",
+                    ));
+                }
+                let contracts = self.build_coding_agent_tool_contracts();
+                let result = serde_json::json!({
+                    "contents": [{
+                        "uri": "slapper://coding-agent/tool-contracts",
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&contracts).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize coding-agent tool contracts");
                         }).unwrap_or_default()
                     }]
                 });
@@ -852,6 +1005,369 @@ impl McpServer {
                 "retest_recipe": { "type": "object" },
                 "patch_relevance": { "type": "string", "enum": ["blocks_merge", "should_fix", "review_manually", "informational"] }
             }
+        })
+    }
+
+    fn build_coding_agent_output(&self, target: &str, response: &ToolResponse) -> serde_json::Value {
+        let findings: Vec<serde_json::Value> = response
+            .findings
+            .iter()
+            .map(|f| {
+                let patch_relevance = match f.severity {
+                    crate::tool::finding::ResponseSeverity::Critical
+                    | crate::tool::finding::ResponseSeverity::High => "blocks_merge",
+                    crate::tool::finding::ResponseSeverity::Medium => "should_fix",
+                    crate::tool::finding::ResponseSeverity::Low => "review_manually",
+                    _ => "informational",
+                };
+                let confidence = match f.severity {
+                    crate::tool::finding::ResponseSeverity::Critical
+                    | crate::tool::finding::ResponseSeverity::High => "high",
+                    crate::tool::finding::ResponseSeverity::Medium => "medium",
+                    _ => "low",
+                };
+                let category = format!("{}", f.finding_type);
+                let evidence_arr: Vec<serde_json::Value> = f
+                    .evidence
+                    .as_ref()
+                    .map(|e| {
+                        vec![serde_json::json!({
+                            "type": "raw",
+                            "content": e
+                        })]
+                    })
+                    .unwrap_or_default();
+
+                serde_json::json!({
+                    "id": f.id,
+                    "title": f.title,
+                    "category": category,
+                    "severity": f.severity.as_str(),
+                    "confidence": confidence,
+                    "observed_behavior": f.description,
+                    "evidence": evidence_arr,
+                    "patch_relevance": patch_relevance
+                })
+            })
+            .collect();
+
+        let mut by_severity: FxHashMap<String, usize> = FxHashMap::default();
+        for f in &response.findings {
+            let sev = f.severity.as_str().to_string();
+            *by_severity.entry(sev).or_insert(0) += 1;
+        }
+
+        let status = if response.is_success() {
+            "completed"
+        } else {
+            "failed"
+        };
+
+        serde_json::json!({
+            "schema_version": "1.0",
+            "target": target,
+            "profile": "coding-agent",
+            "run_id": response.request_id,
+            "status": status,
+            "findings": findings,
+            "summary": {
+                "total_findings": response.findings.len(),
+                "by_severity": by_severity
+            }
+        })
+    }
+
+    fn build_ops_agent_safety_policy(&self) -> serde_json::Value {
+        let allowed_tools = match &self.policy.allowed_tool_ids {
+            crate::tool::protocol::mcp::policy::ToolSelector::All => {
+                serde_json::json!("all")
+            }
+            crate::tool::protocol::mcp::policy::ToolSelector::None => {
+                serde_json::json!("none")
+            }
+            crate::tool::protocol::mcp::policy::ToolSelector::Exact(ids) => {
+                serde_json::json!(ids)
+            }
+            crate::tool::protocol::mcp::policy::ToolSelector::Category(cats) => {
+                serde_json::json!({"categories": cats})
+            }
+            crate::tool::protocol::mcp::policy::ToolSelector::Capability(caps) => {
+                serde_json::json!({"capabilities": caps})
+            }
+        };
+
+        let denied_tools = match &self.policy.denied_tool_ids {
+            crate::tool::protocol::mcp::policy::ToolSelector::None => {
+                serde_json::json!("none")
+            }
+            crate::tool::protocol::mcp::policy::ToolSelector::All => {
+                serde_json::json!("all")
+            }
+            crate::tool::protocol::mcp::policy::ToolSelector::Exact(ids) => {
+                serde_json::json!(ids)
+            }
+            crate::tool::protocol::mcp::policy::ToolSelector::Category(cats) => {
+                serde_json::json!({"categories": cats})
+            }
+            crate::tool::protocol::mcp::policy::ToolSelector::Capability(caps) => {
+                serde_json::json!({"capabilities": caps})
+            }
+        };
+
+        let target_policy_desc = match self.policy.default_target_policy {
+            crate::tool::protocol::mcp::policy::TargetPolicy::AnyWithScopeEngine => {
+                "Any target subject to scope engine"
+            }
+            crate::tool::protocol::mcp::policy::TargetPolicy::ExplicitScopeOnly => {
+                "Only targets with explicit scope configuration"
+            }
+            crate::tool::protocol::mcp::policy::TargetPolicy::LocalhostAndPrivateCidrsOnly => {
+                "Only loopback and private network targets"
+            }
+            crate::tool::protocol::mcp::policy::TargetPolicy::ScopeOrLocalDevOnly => {
+                "Loopback, private CIDRs, or explicit scope"
+            }
+        };
+
+        serde_json::json!({
+            "profile": "ops-agent",
+            "target_policy": target_policy_desc,
+            "allowed_tools": allowed_tools,
+            "denied_tools": denied_tools,
+            "enforcement": {
+                "max_concurrency": self.policy.max_concurrency,
+                "max_timeout_ms": self.policy.max_timeout_ms,
+                "max_batch_size": self.policy.max_batch_size,
+                "allow_streaming": self.policy.allow_streaming,
+                "allow_sessions": self.policy.allow_sessions,
+                "allow_plan_endpoint": self.policy.allow_plan_endpoint,
+            },
+            "capabilities": {
+                "external_network": self.policy.allow_external_network,
+                "stress_testing": self.policy.allow_stress_testing,
+                "packet_features": self.policy.allow_packet_features,
+                "broad_recon": self.policy.allow_broad_recon,
+            },
+            "denied_argument_keys": self.policy.denied_argument_keys,
+        })
+    }
+
+    fn build_ops_agent_task_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "title": "OpsAgentTask",
+            "description": "Schema for task assignment and result submission in the ops-agent runtime",
+            "type": "object",
+            "required": ["task_id", "tool_name", "target"],
+            "properties": {
+                "task_id": {
+                    "type": "string",
+                    "description": "Unique task identifier"
+                },
+                "tool_name": {
+                    "type": "string",
+                    "description": "Name of the tool to execute"
+                },
+                "target": {
+                    "type": "string",
+                    "description": "Target URL, IP, or domain for the task"
+                },
+                "arguments": {
+                    "type": "object",
+                    "description": "Tool-specific arguments",
+                    "additionalProperties": true
+                },
+                "timeout_ms": {
+                    "type": "integer",
+                    "description": "Maximum execution time in milliseconds",
+                    "minimum": 1000,
+                    "maximum": self.policy.max_timeout_ms
+                },
+                "callback_url": {
+                    "type": "string",
+                    "description": "URL to POST results to when task completes"
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["low", "normal", "high", "critical"],
+                    "default": "normal"
+                },
+                "metadata": {
+                    "type": "object",
+                    "description": "Arbitrary metadata for the task",
+                    "additionalProperties": true
+                }
+            }
+        })
+    }
+
+    fn build_ops_agent_event_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "title": "OpsAgentEvent",
+            "description": "Schema for streaming events emitted during tool execution",
+            "type": "object",
+            "required": ["event_type", "task_id", "timestamp"],
+            "properties": {
+                "event_type": {
+                    "type": "string",
+                    "enum": [
+                        "task_started",
+                        "progress",
+                        "tool_output",
+                        "finding",
+                        "error",
+                        "task_completed",
+                        "task_cancelled"
+                    ]
+                },
+                "task_id": {
+                    "type": "string",
+                    "description": "Task identifier this event belongs to"
+                },
+                "timestamp": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "ISO 8601 timestamp of the event"
+                },
+                "progress": {
+                    "type": "object",
+                    "properties": {
+                        "percent": { "type": "number", "minimum": 0, "maximum": 100 },
+                        "stage": { "type": "string" },
+                        "message": { "type": "string" }
+                    }
+                },
+                "data": {
+                    "type": "object",
+                    "description": "Event-specific payload",
+                    "additionalProperties": true
+                },
+                "error": {
+                    "type": "object",
+                    "properties": {
+                        "code": { "type": "integer" },
+                        "message": { "type": "string" },
+                        "recoverable": { "type": "boolean" }
+                    }
+                }
+            }
+        })
+    }
+
+    fn build_coding_agent_workflow(&self) -> serde_json::Value {
+        let tool_names: Vec<String> = self
+            .policy
+            .filter_tools(self.registry.list())
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+
+        serde_json::json!({
+            "profile": "coding-agent",
+            "description": "Recommended validation workflow for coding agents",
+            "steps": [
+                {
+                    "order": 1,
+                    "name": "establish_target",
+                    "tool": "scan",
+                    "purpose": "Fingerprint the target and confirm it is within allowed scope",
+                    "required": true,
+                    "summarization": "Extract technologies, framework, and target status"
+                },
+                {
+                    "order": 2,
+                    "name": "validate_headers_and_cookies",
+                    "tool": "scan",
+                    "purpose": "Check security headers, cookie flags, and CORS configuration",
+                    "required": true,
+                    "summarization": "List missing headers and insecure cookie attributes"
+                },
+                {
+                    "order": 3,
+                    "name": "validate_endpoints",
+                    "tool": "endpoints",
+                    "purpose": "Discover and validate API endpoints for method handling and error behavior",
+                    "required": false,
+                    "summarization": "Summarize endpoint count, methods, and error patterns"
+                },
+                {
+                    "order": 4,
+                    "name": "check_waf",
+                    "tool": "waf-detect",
+                    "purpose": "Detect WAF presence that may affect further testing",
+                    "required": false,
+                    "summarization": "Report WAF vendor if detected, else 'none'"
+                },
+                {
+                    "order": 5,
+                    "name": "retest_findings",
+                    "tool": "scan",
+                    "purpose": "Re-run targeted checks after code changes to verify fixes",
+                    "required": false,
+                    "summarization": "Compare before/after for each finding"
+                }
+            ],
+            "allowed_tools": tool_names,
+            "constraints": {
+                "max_requests": self.policy.max_batch_size * 10,
+                "max_concurrency": self.policy.max_concurrency,
+                "max_duration_ms": self.policy.max_timeout_ms,
+                "allow_external_network": self.policy.allow_external_network,
+            },
+            "summarization_strategy": {
+                "max_output_tokens": 4096,
+                "include_evidence": true,
+                "include_reproduction_steps": true,
+                "redact_sensitive_data": true,
+                "format": "structured_json"
+            }
+        })
+    }
+
+    fn build_coding_agent_tool_contracts(&self) -> serde_json::Value {
+        let tools = self.policy.filter_tools(self.registry.list());
+
+        let contracts: Vec<serde_json::Value> = tools
+            .iter()
+            .map(|tool| {
+                let input_schema = build_input_schema(tool);
+                let category = format!("{:?}", tool.category).to_lowercase();
+
+                let (latency_class, deterministic, makes_network_requests, requires_running_service, use_context) =
+                    match tool.id.as_str() {
+                        "scan" => ("seconds", true, true, true, "security_review"),
+                        "scan-ports" => ("seconds", true, true, true, "security_review"),
+                        "fingerprint" => ("seconds", true, true, true, "security_review"),
+                        "endpoints" => ("seconds", true, true, true, "security_review"),
+                        "waf-detect" => ("seconds", true, true, true, "security_review"),
+                        "search" => ("milliseconds", true, false, false, "coding_flow"),
+                        _ => ("seconds", true, true, true, "security_review"),
+                    };
+
+                serde_json::json!({
+                    "tool_id": tool.id,
+                    "name": tool.name,
+                    "category": category,
+                    "description": tool.description,
+                    "input_schema": input_schema,
+                    "latency_class": latency_class,
+                    "deterministic": deterministic,
+                    "makes_network_requests": makes_network_requests,
+                    "requires_running_service": requires_running_service,
+                    "use_context": use_context,
+                    "capabilities": tool.capabilities.iter().map(|c| serde_json::json!({
+                        "name": c.name,
+                        "description": c.description,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+
+        serde_json::json!({
+            "profile": "coding-agent",
+            "description": "Per-tool contracts for coding-agent profile",
+            "contracts": contracts,
         })
     }
 

@@ -16,6 +16,14 @@ use crate::tool::agents::{
     AgentInfo, AgentRegistry, AgentStatus, ScheduledTask, TaskPriority, TaskScheduler, TaskStatus,
 };
 
+const MAX_AGENT_NAME_LEN: usize = 128;
+const MIN_LEASE_DURATION_MS: u64 = 1000;
+const MAX_LEASE_DURATION_MS: u64 = 3600000;
+const MAX_TASK_PAYLOAD_BYTES: usize = 1_048_576;
+const MAX_TASK_TYPE_LEN: usize = 128;
+const MAX_RESULT_PAYLOAD_BYTES: usize = 10_485_760;
+const MAX_ERROR_MESSAGE_LEN: usize = 4096;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum CallbackUrlValidationError {
     InvalidUrl(String),
@@ -156,6 +164,82 @@ fn is_documentation_ip(ip: &IpAddr) -> bool {
     }
 }
 
+fn validate_agent_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Agent name cannot be empty".to_string());
+    }
+    if name.len() > MAX_AGENT_NAME_LEN {
+        return Err(format!(
+            "Agent name exceeds maximum length of {}",
+            MAX_AGENT_NAME_LEN
+        ));
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(
+            "Agent name may only contain ASCII letters, digits, hyphens, and underscores"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_task_type(task_type: &str) -> Result<(), String> {
+    if task_type.is_empty() {
+        return Err("Task type cannot be empty".to_string());
+    }
+    if task_type.len() > MAX_TASK_TYPE_LEN {
+        return Err(format!(
+            "Task type exceeds maximum length of {}",
+            MAX_TASK_TYPE_LEN
+        ));
+    }
+    Ok(())
+}
+
+fn validate_payload_size(payload: &serde_json::Value, max_bytes: usize) -> Result<(), String> {
+    let size = serde_json::to_vec(payload)
+        .map(|b| b.len())
+        .unwrap_or(0);
+    if size > max_bytes {
+        return Err(format!(
+            "Payload size {} bytes exceeds maximum of {} bytes",
+            size, max_bytes
+        ));
+    }
+    Ok(())
+}
+
+fn validate_lease_duration(duration_ms: u64) -> Result<(), String> {
+    if duration_ms < MIN_LEASE_DURATION_MS {
+        return Err(format!(
+            "Lease duration must be at least {}ms",
+            MIN_LEASE_DURATION_MS
+        ));
+    }
+    if duration_ms > MAX_LEASE_DURATION_MS {
+        return Err(format!(
+            "Lease duration must not exceed {}ms",
+            MAX_LEASE_DURATION_MS
+        ));
+    }
+    Ok(())
+}
+
+fn sanitize_error_message(msg: &str) -> String {
+    let truncated = if msg.len() > MAX_ERROR_MESSAGE_LEN {
+        &msg[..MAX_ERROR_MESSAGE_LEN]
+    } else {
+        msg
+    };
+    truncated
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .collect()
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RegisterAgentRequest {
     pub name: String,
@@ -178,6 +262,15 @@ async fn register_agent(
 ) -> Result<Json<RegisterAgentResponse>, (StatusCode, String)> {
     if let Err(e) = require_auth(&state.api_key, &headers) {
         return Err((StatusCode::UNAUTHORIZED, e.to_string()));
+    }
+    if let Err(e) = validate_agent_name(&req.name) {
+        return Err((StatusCode::BAD_REQUEST, e));
+    }
+    if state.registry.find_by_name(&req.name).await.is_some() {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("Agent with name '{}' already exists", req.name),
+        ));
     }
     if let Some(ref callback_url) = req.callback_url {
         if let Err(e) = validate_callback_url(callback_url) {
@@ -310,6 +403,12 @@ async fn create_task(
 ) -> Result<Json<CreateTaskResponse>, (StatusCode, String)> {
     if let Err(e) = require_auth(&state.api_key, &headers) {
         return Err((StatusCode::UNAUTHORIZED, e));
+    }
+    if let Err(e) = validate_task_type(&req.task_type) {
+        return Err((StatusCode::BAD_REQUEST, e));
+    }
+    if let Err(e) = validate_payload_size(&req.payload, MAX_TASK_PAYLOAD_BYTES) {
+        return Err((StatusCode::BAD_REQUEST, e));
     }
     let priority = match req.priority.as_deref() {
         Some("critical") => TaskPriority::Critical,
@@ -499,6 +598,9 @@ async fn lease_task(
         _ => {}
     }
     let lease_duration_ms = req.lease_duration_ms.unwrap_or(300000);
+    if let Err(e) = validate_lease_duration(lease_duration_ms) {
+        return Err((StatusCode::BAD_REQUEST, e));
+    }
     let task = state.scheduler.get_task(id).await;
     match task {
         Some(t) if t.status == TaskStatus::Pending => {
@@ -561,6 +663,9 @@ async fn lease_next_task(
         _ => {}
     }
     let lease_duration_ms = req.lease_duration_ms.unwrap_or(300000);
+    if let Err(e) = validate_lease_duration(lease_duration_ms) {
+        return Err((StatusCode::BAD_REQUEST, e));
+    }
     let task = state
         .scheduler
         .lease_next_task(agent_id, lease_duration_ms)
@@ -593,6 +698,11 @@ async fn submit_task_result(
     if let Err(e) = require_auth(&state.api_key, &headers) {
         return Err((StatusCode::UNAUTHORIZED, e));
     }
+    if let Some(ref result) = req.result {
+        if let Err(e) = validate_payload_size(result, MAX_RESULT_PAYLOAD_BYTES) {
+            return Err((StatusCode::BAD_REQUEST, e));
+        }
+    }
     let task = state.scheduler.get_task(id).await;
     match task {
         None => return Err((StatusCode::NOT_FOUND, "Task not found".to_string())),
@@ -607,9 +717,10 @@ async fn submit_task_result(
         }
         _ => {}
     }
+    let sanitized_error = req.error.map(|e| sanitize_error_message(&e));
     let accepted = state
         .scheduler
-        .submit_result(id, req.success, req.result, req.error)
+        .submit_result(id, req.success, req.result, sanitized_error)
         .await;
     Ok(Json(SubmitResultResponse { id, accepted }))
 }
@@ -633,15 +744,26 @@ pub struct AgentState {
     pub api_key: Option<String>,
 }
 
+fn extract_api_token(headers: &HeaderMap) -> Option<String> {
+    if let Some(val) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
+        return Some(val.to_string());
+    }
+    if let Some(val) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
+        let trimmed = val.trim();
+        if let Some(token) = trimmed.strip_prefix("Bearer ") {
+            let token = token.trim();
+            if !token.is_empty() {
+                return Some(token.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn require_auth(api_key: &Option<String>, headers: &HeaderMap) -> Result<(), String> {
     if let Some(ref key) = api_key {
-        let auth = headers
-            .get("authorization")
-            .or_else(|| headers.get("x-api-key"))
-            .and_then(|v| v.to_str().ok());
-
-        match auth {
-            Some(v) if bool::from(key.as_bytes().ct_eq(v.as_bytes())) => Ok(()),
+        match extract_api_token(headers) {
+            Some(ref token) if bool::from(key.as_bytes().ct_eq(token.as_bytes())) => Ok(()),
             _ => Err("Invalid or missing API key".to_string()),
         }
     } else {
@@ -1170,5 +1292,310 @@ mod tests {
         let json = serde_json::to_string(&detail).unwrap();
         assert!(json.contains("scan"));
         assert!(json.contains("pending"));
+    }
+
+    #[test]
+    fn test_validate_agent_name_empty() {
+        assert!(validate_agent_name("").is_err());
+    }
+
+    #[test]
+    fn test_validate_agent_name_too_long() {
+        let long_name = "a".repeat(MAX_AGENT_NAME_LEN + 1);
+        assert!(validate_agent_name(&long_name).is_err());
+    }
+
+    #[test]
+    fn test_validate_agent_name_invalid_chars() {
+        assert!(validate_agent_name("agent name").is_err());
+        assert!(validate_agent_name("agent@name").is_err());
+        assert!(validate_agent_name("agent.name").is_err());
+    }
+
+    #[test]
+    fn test_validate_agent_name_valid() {
+        assert!(validate_agent_name("agent").is_ok());
+        assert!(validate_agent_name("agent-1").is_ok());
+        assert!(validate_agent_name("agent_name").is_ok());
+        assert!(validate_agent_name("Agent123").is_ok());
+    }
+
+    #[test]
+    fn test_validate_task_type_empty() {
+        assert!(validate_task_type("").is_err());
+    }
+
+    #[test]
+    fn test_validate_task_type_too_long() {
+        let long_type = "a".repeat(MAX_TASK_TYPE_LEN + 1);
+        assert!(validate_task_type(&long_type).is_err());
+    }
+
+    #[test]
+    fn test_validate_task_type_valid() {
+        assert!(validate_task_type("scan").is_ok());
+        assert!(validate_task_type("fuzz").is_ok());
+        assert!(validate_task_type("recon").is_ok());
+    }
+
+    #[test]
+    fn test_validate_payload_size_ok() {
+        let payload = serde_json::json!({"key": "value"});
+        assert!(validate_payload_size(&payload, 1024).is_ok());
+    }
+
+    #[test]
+    fn test_validate_payload_size_exceeds() {
+        let payload = serde_json::json!({"key": "a".repeat(2048)});
+        assert!(validate_payload_size(&payload, 1024).is_err());
+    }
+
+    #[test]
+    fn test_validate_lease_duration_too_short() {
+        assert!(validate_lease_duration(0).is_err());
+        assert!(validate_lease_duration(500).is_err());
+    }
+
+    #[test]
+    fn test_validate_lease_duration_too_long() {
+        assert!(validate_lease_duration(MAX_LEASE_DURATION_MS + 1).is_err());
+    }
+
+    #[test]
+    fn test_validate_lease_duration_valid() {
+        assert!(validate_lease_duration(MIN_LEASE_DURATION_MS).is_ok());
+        assert!(validate_lease_duration(MAX_LEASE_DURATION_MS).is_ok());
+        assert!(validate_lease_duration(300000).is_ok());
+    }
+
+    #[test]
+    fn test_sanitize_error_message_basic() {
+        assert_eq!(sanitize_error_message("test error"), "test error");
+    }
+
+    #[test]
+    fn test_sanitize_error_message_control_chars() {
+        let input = "error\x00\x01\x02with\x03control";
+        let result = sanitize_error_message(input);
+        assert!(!result.contains('\x00'));
+        assert!(!result.contains('\x01'));
+        assert!(!result.contains('\x02'));
+        assert!(!result.contains('\x03'));
+    }
+
+    #[test]
+    fn test_sanitize_error_message_preserves_newlines() {
+        let input = "error\nwith\ttabs";
+        let result = sanitize_error_message(input);
+        assert!(result.contains('\n'));
+        assert!(result.contains('\t'));
+    }
+
+    #[test]
+    fn test_sanitize_error_message_truncation() {
+        let input = "a".repeat(MAX_ERROR_MESSAGE_LEN + 100);
+        let result = sanitize_error_message(&input);
+        assert!(result.len() <= MAX_ERROR_MESSAGE_LEN);
+    }
+
+    #[test]
+    fn test_extract_api_token_bearer() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-token-123".parse().unwrap());
+        assert_eq!(extract_api_token(&headers), Some("test-token-123".to_string()));
+    }
+
+    #[test]
+    fn test_extract_api_token_bearer_case_insensitive() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "bearer test-token-123".parse().unwrap());
+        assert_eq!(extract_api_token(&headers), Some("test-token-123".to_string()));
+    }
+
+    #[test]
+    fn test_extract_api_token_x_api_key() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-api-key", "test-token-123".parse().unwrap());
+        assert_eq!(extract_api_token(&headers), Some("test-token-123".to_string()));
+    }
+
+    #[test]
+    fn test_extract_api_token_x_api_key_takes_precedence() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer auth-token".parse().unwrap());
+        headers.insert("x-api-key", "xapi-token".parse().unwrap());
+        assert_eq!(extract_api_token(&headers), Some("xapi-token".to_string()));
+    }
+
+    #[test]
+    fn test_extract_api_token_bearer_empty() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer ".parse().unwrap());
+        assert_eq!(extract_api_token(&headers), None);
+    }
+
+    #[test]
+    fn test_extract_api_token_missing() {
+        let headers = HeaderMap::new();
+        assert_eq!(extract_api_token(&headers), None);
+    }
+
+    #[tokio::test]
+    async fn test_register_agent_duplicate_name_conflict() {
+        let registry = AgentRegistry::new();
+        let scheduler = TaskScheduler::new();
+        let state = AgentState {
+            registry: registry.clone(),
+            scheduler,
+            api_key: None,
+        };
+        let agent = make_agent("test-agent", vec!["scan".to_string()]);
+        registry.register(agent).await;
+
+        let mut headers = HeaderMap::new();
+        let req = RegisterAgentRequest {
+            name: "test-agent".to_string(),
+            capabilities: vec!["scan".to_string()],
+            callback_url: None,
+        };
+        let result = register_agent(State(state), headers, Json(req)).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().0, StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn test_require_auth_with_x_api_key() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-api-key", "test-key".parse().unwrap());
+        assert!(require_auth(&Some("test-key".to_string()), &headers).is_ok());
+        assert!(require_auth(&Some("wrong-key".to_string()), &headers).is_err());
+    }
+
+    #[test]
+    fn test_require_auth_with_bearer_token() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-key".parse().unwrap());
+        assert!(require_auth(&Some("test-key".to_string()), &headers).is_ok());
+        assert!(require_auth(&Some("wrong-key".to_string()), &headers).is_err());
+    }
+
+    #[test]
+    fn test_require_auth_no_key_configured() {
+        let headers = HeaderMap::new();
+        assert!(require_auth(&None, &headers).is_ok());
+    }
+
+    #[test]
+    fn test_callback_url_rejects_redirect_scheme() {
+        assert!(validate_callback_url("http://example.com@evil.com").is_err());
+    }
+
+    // Phase 12: Additional auth and validation tests
+
+    #[test]
+    fn test_require_auth_with_bearer_extra_whitespace() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer   test-key  ".parse().unwrap());
+        assert!(require_auth(&Some("test-key".to_string()), &headers).is_ok());
+    }
+
+    #[test]
+    fn test_require_auth_wrong_key_x_api_key() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-api-key", "wrong-key".parse().unwrap());
+        assert!(require_auth(&Some("correct-key".to_string()), &headers).is_err());
+    }
+
+    #[test]
+    fn test_require_auth_wrong_key_bearer() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer wrong-key".parse().unwrap());
+        assert!(require_auth(&Some("correct-key".to_string()), &headers).is_err());
+    }
+
+    #[test]
+    fn test_require_auth_no_header_no_key() {
+        let headers = HeaderMap::new();
+        assert!(require_auth(&None, &headers).is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_register_agent_empty_name_rejected() {
+        let registry = AgentRegistry::new();
+        let scheduler = TaskScheduler::new();
+        let state = AgentState {
+            registry,
+            scheduler,
+            api_key: None,
+        };
+        let headers = HeaderMap::new();
+        let req = RegisterAgentRequest {
+            name: "".to_string(),
+            capabilities: vec!["scan".to_string()],
+            callback_url: None,
+        };
+        let result = register_agent(State(state), headers, Json(req)).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().0, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_register_agent_invalid_chars_rejected() {
+        let registry = AgentRegistry::new();
+        let scheduler = TaskScheduler::new();
+        let state = AgentState {
+            registry,
+            scheduler,
+            api_key: None,
+        };
+        let headers = HeaderMap::new();
+        let req = RegisterAgentRequest {
+            name: "agent with spaces".to_string(),
+            capabilities: vec!["scan".to_string()],
+            callback_url: None,
+        };
+        let result = register_agent(State(state), headers, Json(req)).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_payload_size_at_boundary() {
+        // Exactly at limit should pass
+        let payload = serde_json::json!({"key": "a".repeat(1020)});
+        assert!(validate_payload_size(&payload, 1024).is_ok());
+    }
+
+    #[test]
+    fn test_validate_task_type_valid_variants() {
+        assert!(validate_task_type("scan").is_ok());
+        assert!(validate_task_type("fuzz").is_ok());
+        assert!(validate_task_type("recon").is_ok());
+        assert!(validate_task_type("pipeline").is_ok());
+        assert!(validate_task_type("waf-detect").is_ok());
+    }
+
+    #[test]
+    fn test_validate_agent_name_valid_variants() {
+        assert!(validate_agent_name("a").is_ok());
+        assert!(validate_agent_name("agent-1").is_ok());
+        assert!(validate_agent_name("agent_name").is_ok());
+        assert!(validate_agent_name("Agent123").is_ok());
+        assert!(validate_agent_name("my-coding-agent_v2").is_ok());
+    }
+
+    #[test]
+    fn test_extract_api_token_bearer_with_trailing_whitespace() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer test-token \t ".parse().unwrap());
+        assert_eq!(extract_api_token(&headers), Some("test-token".to_string()));
+    }
+
+    #[test]
+    fn test_extract_api_token_no_bearer_prefix() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "test-token".parse().unwrap());
+        // Without "Bearer " prefix, it should not be extracted from authorization header
+        assert_eq!(extract_api_token(&headers), None);
     }
 }

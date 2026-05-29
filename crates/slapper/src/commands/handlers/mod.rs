@@ -173,6 +173,17 @@ pub async fn handle_command(cli: Cli, ctx: &CommandContext) -> Result<()> {
         #[cfg(feature = "rest-api")]
         Some(Commands::McpServe(args)) => handle_mcp_serve(ctx, args).await,
         #[cfg(feature = "rest-api")]
+        Some(Commands::CodeggMcp(args)) => {
+            let mcp_args = crate::cli::McpServeArgs {
+                port: args.port,
+                bind: args.bind,
+                api_key: args.api_key,
+                stdio: args.stdio,
+                profile: args.profile,
+            };
+            handle_mcp_serve(ctx, mcp_args).await
+        }
+        #[cfg(feature = "rest-api")]
         Some(Commands::Agent(args)) => handle_agent(ctx, args).await,
         #[cfg(feature = "ai-integration")]
         Some(Commands::AiAnalyze(args)) => handle_ai_analyze(ctx, args).await,

@@ -1,6 +1,7 @@
 mod auth;
 mod constraints;
 mod handlers;
+pub mod policy;
 pub mod profile;
 #[cfg(feature = "rest-api")]
 pub mod prompts;
@@ -11,6 +12,7 @@ mod types;
 
 pub use constraints::McpConstraintContext;
 pub use handlers::McpServer;
+pub use policy::{McpProfilePolicy, PolicyViolation, TargetPolicy, ToolSelector};
 pub use profile::McpProfile;
 pub use routes::{create_mcp_router, run_stdio};
 pub use streaming::StreamEvent;
@@ -458,5 +460,278 @@ mod tests {
         let network_tools =
             planner.suggest_tools_for_attack_surface(crate::tool::AttackSurface::Network);
         assert!(!network_tools.is_empty());
+    }
+
+    // Phase 12: Coding-agent profile tests
+
+    fn create_coding_agent_server() -> McpServer {
+        let registry = create_default_registry();
+        McpServer::with_scope_and_profile(
+            registry,
+            Some("test-api-key".to_string()),
+            None,
+            super::profile::McpProfile::CodingAgent,
+        )
+    }
+
+    #[tokio::test]
+    async fn test_coding_agent_tools_list_returns_only_allowed() {
+        let server = create_coding_agent_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/list".to_string(),
+            params: Some(serde_json::json!({"api_key": "test-api-key"})),
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_none());
+        let result = response.result.unwrap();
+        let tools = result.get("tools").unwrap().as_array().unwrap();
+        let count = result.get("count").unwrap().as_u64().unwrap();
+
+        // Coding-agent only allows: scan, scan-ports, fingerprint, endpoints, waf-detect, search
+        assert!((1..=6).contains(&count), "coding-agent should have 1-6 tools, got {}", count);
+        let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(|n| n.as_str())).collect();
+        for name in &names {
+            assert!(
+                ["scan", "scan-ports", "fingerprint", "endpoints", "waf-detect", "search"].contains(name),
+                "coding-agent should not expose tool: {}",
+                name
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_coding_agent_tools_list_by_category_returns_only_allowed() {
+        let server = create_coding_agent_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/list-by-category".to_string(),
+            params: Some(serde_json::json!({"api_key": "test-api-key"})),
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_none());
+        let result = response.result.unwrap();
+        let categories = result.get("categories").unwrap().as_object().unwrap();
+
+        // Should not have stress or load testing categories
+        assert!(!categories.contains_key("stresstesting"), "coding-agent should not expose stress testing");
+        assert!(!categories.contains_key("loadtesting"), "coding-agent should not expose load testing");
+    }
+
+    #[tokio::test]
+    async fn test_coding_agent_tool_call_denied_tool_returns_policy_error() {
+        let server = create_coding_agent_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/call".to_string(),
+            params: Some(serde_json::json!({
+                "api_key": "test-api-key",
+                "name": "stress-test",
+                "arguments": {"target": "http://localhost:8080"}
+            })),
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_some());
+        let error = response.error.unwrap();
+        assert_eq!(error.code, -32020); // ToolDenied error code
+    }
+
+    #[tokio::test]
+    async fn test_coding_agent_tool_call_denied_argument_returns_policy_error() {
+        let server = create_coding_agent_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/call".to_string(),
+            params: Some(serde_json::json!({
+                "api_key": "test-api-key",
+                "name": "scan",
+                "arguments": {"target": "http://localhost:8080", "stealth": true}
+            })),
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_some());
+        let error = response.error.unwrap();
+        assert_eq!(error.code, -32021); // ArgumentDenied error code
+    }
+
+    #[tokio::test]
+    async fn test_coding_agent_tool_call_excessive_concurrency_returns_error() {
+        let server = create_coding_agent_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/call".to_string(),
+            params: Some(serde_json::json!({
+                "api_key": "test-api-key",
+                "name": "scan",
+                "arguments": {"target": "http://localhost:8080", "concurrency": 100}
+            })),
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_some());
+        let error = response.error.unwrap();
+        assert_eq!(error.code, -32022); // ConcurrencyExceeded error code
+    }
+
+    #[tokio::test]
+    async fn test_coding_agent_tool_call_public_target_returns_error() {
+        let server = create_coding_agent_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/call".to_string(),
+            params: Some(serde_json::json!({
+                "api_key": "test-api-key",
+                "name": "scan",
+                "arguments": {"target": "https://example.com"}
+            })),
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_some());
+        let error = response.error.unwrap();
+        assert_eq!(error.code, -32024); // TargetDenied error code
+    }
+
+    #[tokio::test]
+    async fn test_coding_agent_initialize_returns_correct_profile_metadata() {
+        let server = create_coding_agent_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "initialize".to_string(),
+            params: None,
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_none());
+        let result = response.result.unwrap();
+
+        assert_eq!(result.get("profile").unwrap(), "coding-agent");
+        assert_eq!(result.get("serverInfo").unwrap().get("name").unwrap(), "slapper-coding-agent-mcp");
+        let safety = result.get("safety").unwrap();
+        assert_eq!(safety.get("max_concurrency").unwrap(), 5);
+        assert_eq!(safety.get("max_timeout_ms").unwrap(), 60000);
+        assert_eq!(safety.get("default_external_network").unwrap(), false);
+        assert_eq!(safety.get("stress_testing_available").unwrap(), false);
+    }
+
+    #[tokio::test]
+    async fn test_ops_agent_initialize_returns_correct_profile_metadata() {
+        let server = create_test_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "initialize".to_string(),
+            params: None,
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_none());
+        let result = response.result.unwrap();
+
+        assert_eq!(result.get("profile").unwrap(), "ops-agent");
+        assert_eq!(result.get("serverInfo").unwrap().get("name").unwrap(), "slapper-tool-api");
+        let safety = result.get("safety").unwrap();
+        assert_eq!(safety.get("max_concurrency").unwrap(), 50);
+        assert_eq!(safety.get("default_external_network").unwrap(), true);
+        assert_eq!(safety.get("stress_testing_available").unwrap(), true);
+    }
+
+    #[tokio::test]
+    async fn test_coding_agent_resources_list_returns_coding_resources() {
+        let server = create_coding_agent_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "resources/list".to_string(),
+            params: None,
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_none());
+        let result = response.result.unwrap();
+        let resources = result.get("resources").unwrap().as_array().unwrap();
+        let uris: Vec<&str> = resources.iter()
+            .filter_map(|r| r.get("uri").and_then(|u| u.as_str()))
+            .collect();
+
+        assert!(uris.iter().any(|u| u.starts_with("slapper://coding-agent/")), "should have coding-agent resources");
+        assert!(!uris.iter().any(|u| u.starts_with("slapper://ops-agent/")), "should not have ops-agent resources");
+    }
+
+    #[tokio::test]
+    async fn test_ops_agent_resources_list_returns_ops_resources() {
+        let server = create_test_server();
+        let request = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "resources/list".to_string(),
+            params: None,
+        };
+
+        let response = server.handle_request(request).await;
+        assert!(response.error.is_none());
+        let result = response.result.unwrap();
+        let resources = result.get("resources").unwrap().as_array().unwrap();
+        let uris: Vec<&str> = resources.iter()
+            .filter_map(|r| r.get("uri").and_then(|u| u.as_str()))
+            .collect();
+
+        assert!(uris.iter().any(|u| u.starts_with("slapper://ops-agent/")), "should have ops-agent resources");
+        assert!(!uris.iter().any(|u| u.starts_with("slapper://coding-agent/")), "should not have coding-agent resources");
+    }
+
+    #[tokio::test]
+    async fn test_profile_serde_roundtrip() {
+        use super::profile::McpProfile;
+
+        let ops = McpProfile::OpsAgent;
+        let coding = McpProfile::CodingAgent;
+
+        let ops_json = serde_json::to_string(&ops).unwrap();
+        let coding_json = serde_json::to_string(&coding).unwrap();
+
+        let ops_de: McpProfile = serde_json::from_str(&ops_json).unwrap();
+        let coding_de: McpProfile = serde_json::from_str(&coding_json).unwrap();
+
+        assert_eq!(ops_de, McpProfile::OpsAgent);
+        assert_eq!(coding_de, McpProfile::CodingAgent);
+    }
+
+    #[tokio::test]
+    async fn test_transport_single_jsonrpc_object_deserializes() {
+        // McpIncoming is private in routes.rs, so test that McpRequest deserializes correctly
+        let single = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "ping"
+        });
+        let req: McpRequest = serde_json::from_value(single).unwrap();
+        assert_eq!(req.method, "ping");
+        assert_eq!(req.jsonrpc, "2.0");
+        assert_eq!(req.id, Some(serde_json::json!(1)));
+    }
+
+    #[tokio::test]
+    async fn test_transport_batch_array_deserializes() {
+        // Test that a batch of McpRequest deserializes correctly
+        let batch = serde_json::json!([
+            {"jsonrpc": "2.0", "id": 1, "method": "ping"},
+            {"jsonrpc": "2.0", "id": 2, "method": "initialize"}
+        ]);
+        let requests: Vec<McpRequest> = serde_json::from_value(batch).unwrap();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].method, "ping");
+        assert_eq!(requests[1].method, "initialize");
     }
 }

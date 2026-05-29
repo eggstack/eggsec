@@ -31,6 +31,19 @@ impl McpProfile {
     pub fn is_coding_agent(&self) -> bool {
         matches!(self, McpProfile::CodingAgent)
     }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            McpProfile::OpsAgent => "ops-agent",
+            McpProfile::CodingAgent => "coding-agent",
+        }
+    }
+}
+
+impl std::fmt::Display for McpProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 #[cfg(test)]

@@ -29,6 +29,7 @@ use anyhow::Result;
 use chrono::{DateTime, Timelike, Utc};
 use futures::FutureExt;
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
@@ -55,6 +56,8 @@ pub use constraints::{
 pub use events::{EventHandler, SecurityEvent};
 pub use memory::LongitudinalMemory;
 pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
+
+pub use {AgentRuntimePersisted, AgentRuntimeStatus};
 
 #[cfg(feature = "ai-integration")]
 pub use skills::{Skill, SkillLoadResult, SkillLoader, SkillRegistry};
@@ -132,6 +135,37 @@ impl Default for AgentConfig {
     }
 }
 
+/// Runtime status of the autonomous agent, reportable via `agent status`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentRuntimeStatus {
+    pub running: bool,
+    pub started_at: Option<DateTime<Utc>>,
+    pub last_tick_at: Option<DateTime<Utc>>,
+    pub next_tick_at: Option<DateTime<Utc>>,
+    pub portfolio_targets_total: usize,
+    pub portfolio_targets_enabled: usize,
+    pub last_scan_started_at: Option<DateTime<Utc>>,
+    pub last_scan_completed_at: Option<DateTime<Utc>>,
+    pub last_error: Option<String>,
+    pub scans_completed: u64,
+    pub scans_failed: u64,
+    pub alerts_sent: u64,
+}
+
+/// Persisted runtime metadata, written to disk at start, after each scan, and on shutdown.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentRuntimePersisted {
+    pub started_at: Option<DateTime<Utc>>,
+    pub last_tick_at: Option<DateTime<Utc>>,
+    pub last_scan_started_at: Option<DateTime<Utc>>,
+    pub last_scan_completed_at: Option<DateTime<Utc>>,
+    pub scans_completed: u64,
+    pub scans_failed: u64,
+    pub alerts_sent: u64,
+    pub last_error: Option<String>,
+    pub last_shutdown_at: Option<DateTime<Utc>>,
+}
+
 pub struct Agent {
     config: AgentConfig,
     #[allow(dead_code)]
@@ -150,6 +184,15 @@ pub struct Agent {
     #[allow(dead_code)]
     config_watcher: Option<ConfigWatcher>,
     logger: Option<logging::AgentLogger>,
+    // Runtime status tracking
+    started_at: Option<DateTime<Utc>>,
+    last_tick_at: Option<DateTime<Utc>>,
+    last_scan_started_at: Option<DateTime<Utc>>,
+    last_scan_completed_at: Option<DateTime<Utc>>,
+    scans_completed: u64,
+    scans_failed: u64,
+    alerts_sent: u64,
+    last_error: Option<String>,
 }
 
 impl Agent {
@@ -248,6 +291,14 @@ impl Agent {
             shutdown_notify: tokio::sync::Notify::new(),
             config_watcher,
             logger: None,
+            started_at: None,
+            last_tick_at: None,
+            last_scan_started_at: None,
+            last_scan_completed_at: None,
+            scans_completed: 0,
+            scans_failed: 0,
+            alerts_sent: 0,
+            last_error: None,
         })
     }
 
@@ -287,6 +338,14 @@ impl Agent {
             shutdown_notify: tokio::sync::Notify::new(),
             config_watcher: None,
             logger: None,
+            started_at: None,
+            last_tick_at: None,
+            last_scan_started_at: None,
+            last_scan_completed_at: None,
+            scans_completed: 0,
+            scans_failed: 0,
+            alerts_sent: 0,
+            last_error: None,
         })
     }
 
@@ -311,6 +370,88 @@ impl Agent {
         self.memory.storage_dir().join("portfolio_snapshot.json")
     }
 
+    fn get_runtime_state_path(&self) -> PathBuf {
+        self.config.memory_dir.join("agent_runtime_state.json")
+    }
+
+    pub async fn status(&self) -> AgentRuntimeStatus {
+        let running = *self.running.read().await;
+        let portfolio_targets_total = self.portfolio.targets_count();
+        let portfolio_targets_enabled = self.portfolio.enabled_count();
+        let next_tick_at = if running {
+            self.last_tick_at
+                .map(|t| t + chrono::Duration::seconds(self.config.poll_interval_secs as i64))
+        } else {
+            None
+        };
+
+        AgentRuntimeStatus {
+            running,
+            started_at: self.started_at,
+            last_tick_at: self.last_tick_at,
+            next_tick_at,
+            portfolio_targets_total,
+            portfolio_targets_enabled,
+            last_scan_started_at: self.last_scan_started_at,
+            last_scan_completed_at: self.last_scan_completed_at,
+            last_error: self.last_error.clone(),
+            scans_completed: self.scans_completed,
+            scans_failed: self.scans_failed,
+            alerts_sent: self.alerts_sent,
+        }
+    }
+
+    fn build_persisted_state(&self) -> AgentRuntimePersisted {
+        AgentRuntimePersisted {
+            started_at: self.started_at,
+            last_tick_at: self.last_tick_at,
+            last_scan_started_at: self.last_scan_started_at,
+            last_scan_completed_at: self.last_scan_completed_at,
+            scans_completed: self.scans_completed,
+            scans_failed: self.scans_failed,
+            alerts_sent: self.alerts_sent,
+            last_error: self.last_error.clone(),
+            last_shutdown_at: None,
+        }
+    }
+
+    async fn persist_runtime_state(&self) {
+        let mut state = self.build_persisted_state();
+        state.last_shutdown_at = Some(Utc::now());
+        let path = self.get_runtime_state_path();
+        if let Some(parent) = path.parent() {
+            if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                tracing::error!(error = %e, "Failed to create runtime state directory");
+                return;
+            }
+        }
+        match serde_json::to_string_pretty(&state) {
+            Ok(content) => {
+                let tmp_path = path.with_extension("tmp");
+                if let Err(e) = tokio::fs::write(&tmp_path, &content).await {
+                    tracing::error!(error = %e, "Failed to write runtime state tmp file");
+                    return;
+                }
+                if let Err(e) = tokio::fs::rename(&tmp_path, &path).await {
+                    tracing::error!(error = %e, "Failed to rename runtime state file");
+                }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to serialize runtime state");
+            }
+        }
+    }
+
+    pub async fn load_persisted_state(&self) -> Option<AgentRuntimePersisted> {
+        let path = self.get_runtime_state_path();
+        let content = tokio::fs::read_to_string(&path).await.ok()?;
+        serde_json::from_str(&content).ok()
+    }
+
+    pub fn read_portfolio_snapshot(&self) -> Option<crate::agent::memory::PortfolioSnapshot> {
+        self.memory.read_portfolio_snapshot()
+    }
+
     pub async fn run(&mut self) -> Result<()> {
         {
             let mut running = self.running.write().await;
@@ -320,10 +461,14 @@ impl Agent {
             *running = true;
         }
 
+        self.started_at = Some(Utc::now());
         let log_dir = self.config.memory_dir.join("logs");
         self.logger = Some(logging::AgentLogger::init(log_dir)?);
 
         tracing::info!("Starting security agent");
+
+        // Persist runtime state at agent start
+        self.persist_runtime_state().await;
 
         let mut poll_interval = interval(Duration::from_secs(self.config.poll_interval_secs));
         poll_interval.tick().await;
@@ -339,7 +484,9 @@ impl Agent {
                     break;
                 }
                 _ = poll_interval.tick() => {
+                    self.last_tick_at = Some(Utc::now());
                     if let Err(e) = self.process_scheduled_scans().await {
+                        self.last_error = Some(e.to_string());
                         tracing::warn!(error = %e, "Scheduled scan failed");
                     } else {
                         tracing::debug!("Processed scheduled scans");
@@ -348,9 +495,17 @@ impl Agent {
             }
         }
 
-        let mut running = self.running.write().await;
-        *running = false;
-        drop(running);
+        // Flush state before exit
+        {
+            let mut running = self.running.write().await;
+            *running = false;
+            drop(running);
+        }
+        self.persist_runtime_state().await;
+
+        if let Err(e) = self.portfolio.save() {
+            tracing::error!(error = %e, "Failed to persist portfolio on shutdown");
+        }
 
         tracing::info!("Agent stopped");
         Ok(())
@@ -366,17 +521,25 @@ impl Agent {
             true
         };
 
+        self.started_at = Some(Utc::now());
         let log_dir = self.config.memory_dir.join("logs");
         self.logger = Some(logging::AgentLogger::init(log_dir)?);
 
         tracing::info!("Running agent in single-pass mode");
 
+        self.last_tick_at = Some(Utc::now());
         let result = self.process_scheduled_scans().await;
+
+        if let Err(ref e) = result {
+            self.last_error = Some(e.to_string());
+        }
 
         if start_running {
             let mut running = self.running.write().await;
             *running = false;
         }
+
+        self.persist_runtime_state().await;
 
         if let Err(ref e) = result {
             tracing::warn!(error = %e, "Single pass failed");
@@ -388,6 +551,7 @@ impl Agent {
     }
 
     pub async fn stop(&self) {
+        tracing::info!("Agent stop requested");
         {
             let mut running = self.running.write().await;
             *running = false;
@@ -415,6 +579,26 @@ impl Agent {
                         if !window.is_in_window(&now) {
                             tracing::debug!("Skipping {} - outside off-peak window", target_id);
                             continue;
+                        }
+                    }
+
+                    // Enforce per-target cooldown
+                    if let Some(cooldown) = self
+                        .config
+                        .operational_constraints
+                        .as_ref()
+                        .and_then(|c| c.per_target_cooldown_secs)
+                    {
+                        if let Some(last) = config.last_scan {
+                            let elapsed = (now - last).num_seconds() as u64;
+                            if elapsed < cooldown {
+                                tracing::debug!(
+                                    "Skipping {} - per-target cooldown ({}s remaining)",
+                                    target_id,
+                                    cooldown - elapsed
+                                );
+                                continue;
+                            }
                         }
                     }
 
@@ -460,87 +644,128 @@ impl Agent {
                         continue;
                     }
 
-                    let scope = config.scope.as_ref().map(|s| convert_scope(s));
-                    let result = self
+                    // Wrap individual target scan in error handling so one bad target doesn't block others
+                    self.last_scan_started_at = Some(Utc::now());
+                    let scan_result = self
                         .execute_scan_with_depth(
                             &config.target,
                             "pipeline",
                             config.scan_depth,
                             None,
                             config.get_target_type(),
-                            scope,
+                            config.scope.as_ref().map(|s| convert_scope(s)),
                         )
                         .await;
 
-                    if let Ok(ref response) = result {
-                        let findings = self.process_findings(response);
+                    match scan_result {
+                        Ok(ref response) => {
+                            self.last_scan_completed_at = Some(Utc::now());
+                            self.scans_completed += 1;
+                            self.last_error = None;
 
-                        let mut severity_counts = FxHashMap::default();
-                        for finding in &findings {
-                            let key = format!("{:?}", finding.severity);
-                            *severity_counts.entry(key).or_insert(0) += 1;
-                        }
+                            let findings = self.process_findings(response);
 
-                        let scan_record = crate::agent::portfolio::ScanRecord {
-                            scan_id: response.request_id.clone(),
-                            scan_type: "pipeline".to_string(),
-                            timestamp: now,
-                            findings_count: findings.len(),
-                            severity_counts,
-                        };
-                        self.portfolio.add_scan_record(&target_id, scan_record);
-                        self.portfolio.update_last_scan(&target_id, &now);
+                            let mut severity_counts = FxHashMap::default();
+                            for finding in &findings {
+                                let key = format!("{:?}", finding.severity);
+                                *severity_counts.entry(key).or_insert(0) += 1;
+                            }
 
-                        if let Err(e) = self.portfolio.save() {
-                            tracing::error!(error = %e, "Failed to persist portfolio state after scheduled scan");
-                            return Err(anyhow::anyhow!("Portfolio persistence failed: {}", e));
-                        }
+                            let scan_record = crate::agent::portfolio::ScanRecord {
+                                scan_id: response.request_id.clone(),
+                                scan_type: "pipeline".to_string(),
+                                timestamp: now,
+                                findings_count: findings.len(),
+                                severity_counts,
+                            };
+                            self.portfolio.add_scan_record(&target_id, scan_record);
+                            self.portfolio.update_last_scan(&target_id, &now);
 
-                        if let Err(e) = self
-                            .memory
-                            .store_scan_results(&config.target, response)
-                            .await
-                        {
-                            tracing::warn!("Failed to store scan results: {}", e);
-                        }
+                            if let Err(e) = self.portfolio.save() {
+                                tracing::error!(error = %e, "Failed to persist portfolio state after scheduled scan");
+                            }
 
-                        if !findings.is_empty() {
-                            let baseline_comparison = self
+                            if let Err(e) = self
                                 .memory
-                                .compare_with_baseline(&config.target, &findings)
-                                .await?;
-                            let new_findings = baseline_comparison.new_findings;
+                                .store_scan_results(&config.target, response)
+                                .await
+                            {
+                                tracing::warn!("Failed to store scan results: {}", e);
+                            }
 
-                            if !new_findings.is_empty() {
-                                let (to_alert, deduplicated) =
-                                    self.memory.deduplicate_findings(new_findings).await?;
-                                if !to_alert.is_empty() {
-                                    tracing::debug!(
-                                        "Alerting on {} new findings ({} deduplicated from previous scans)",
-                                        to_alert.len(),
-                                        deduplicated.len()
-                                    );
-                                    self.handle_findings(
-                                        &config.target,
-                                        to_alert,
-                                        &config.alert_channels,
-                                    )
-                                    .await?;
-                                } else {
-                                    tracing::debug!(
-                                        "Skipped alerting on {} findings - already alerted in previous scans",
-                                        deduplicated.len()
-                                    );
+                            if !findings.is_empty() {
+                                let baseline_comparison = self
+                                    .memory
+                                    .compare_with_baseline(&config.target, &findings)
+                                    .await;
+                                match baseline_comparison {
+                                    Ok(comparison) => {
+                                        let new_findings = comparison.new_findings;
+
+                                        if !new_findings.is_empty() {
+                                            let dedup_result =
+                                                self.memory.deduplicate_findings(new_findings).await;
+                                            match dedup_result {
+                                                Ok((to_alert, deduplicated)) => {
+                                                    if !to_alert.is_empty() {
+                                                        tracing::debug!(
+                                                            "Alerting on {} new findings ({} deduplicated from previous scans)",
+                                                            to_alert.len(),
+                                                            deduplicated.len()
+                                                        );
+                                                        let alert_result = self
+                                                            .handle_findings(
+                                                                &config.target,
+                                                                to_alert,
+                                                                &config.alert_channels,
+                                                            )
+                                                            .await;
+                                                        if let Err(e) = alert_result {
+                                                            tracing::warn!("Failed to send alerts: {}", e);
+                                                        } else {
+                                                            self.alerts_sent += 1;
+                                                        }
+                                                    } else {
+                                                        tracing::debug!(
+                                                            "Skipped alerting on {} findings - already alerted in previous scans",
+                                                            deduplicated.len()
+                                                        );
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    tracing::warn!("Failed to deduplicate findings: {}", e);
+                                                }
+                                            }
+                                        }
+
+                                        if !comparison.resolved_findings.is_empty() {
+                                            tracing::info!(
+                                                "{} previously known findings resolved on {}",
+                                                comparison.resolved_findings.len(),
+                                                config.target
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("Failed to compare with baseline: {}", e);
+                                    }
                                 }
                             }
 
-                            if !baseline_comparison.resolved_findings.is_empty() {
-                                tracing::info!(
-                                    "{} previously known findings resolved on {}",
-                                    baseline_comparison.resolved_findings.len(),
-                                    config.target
-                                );
-                            }
+                            // Persist runtime state after each completed scan
+                            self.persist_runtime_state().await;
+                        }
+                        Err(e) => {
+                            self.last_scan_completed_at = Some(Utc::now());
+                            self.scans_failed += 1;
+                            self.last_error = Some(e.to_string());
+                            tracing::warn!(
+                                error = %e,
+                                target = %target_id,
+                                "Scan failed for target, continuing with next target"
+                            );
+                            // Persist runtime state after failure
+                            self.persist_runtime_state().await;
                         }
                     }
                 }
@@ -1979,5 +2204,232 @@ mod tests {
             !*running,
             "running should be reset even when run_once completes"
         );
+    }
+
+    // Phase 12: Agent runtime status and persistence tests
+
+    #[tokio::test]
+    async fn test_status_not_running() {
+        use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
+
+        let status = agent.status().await;
+        assert!(!status.running);
+        assert!(status.started_at.is_none());
+        assert!(status.last_tick_at.is_none());
+        assert!(status.next_tick_at.is_none());
+        assert_eq!(status.scans_completed, 0);
+        assert_eq!(status.scans_failed, 0);
+        assert_eq!(status.alerts_sent, 0);
+    }
+
+    #[tokio::test]
+    async fn test_status_after_manual_state_update() {
+        use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
+
+        // Simulate some activity
+        agent.started_at = Some(Utc::now());
+        agent.last_tick_at = Some(Utc::now());
+        agent.scans_completed = 5;
+        agent.scans_failed = 2;
+        agent.alerts_sent = 3;
+
+        let status = agent.status().await;
+        assert!(!status.running);
+        assert!(status.started_at.is_some());
+        assert!(status.last_tick_at.is_some());
+        assert_eq!(status.scans_completed, 5);
+        assert_eq!(status.scans_failed, 2);
+        assert_eq!(status.alerts_sent, 3);
+    }
+
+    #[tokio::test]
+    async fn test_runtime_state_persistence_roundtrip() {
+        use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
+
+        // Simulate activity
+        agent.started_at = Some(Utc::now());
+        agent.scans_completed = 10;
+        agent.scans_failed = 1;
+        agent.alerts_sent = 4;
+        agent.last_error = Some("test error".to_string());
+
+        // Persist state
+        agent.persist_runtime_state().await;
+
+        // Load and verify
+        let loaded = agent.load_persisted_state().await;
+        assert!(loaded.is_some());
+        let state = loaded.unwrap();
+        assert_eq!(state.scans_completed, 10);
+        assert_eq!(state.scans_failed, 1);
+        assert_eq!(state.alerts_sent, 4);
+        assert_eq!(state.last_error, Some("test error".to_string()));
+        assert!(state.last_shutdown_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_scan_failure_does_not_abort_remaining_targets() {
+        use crate::agent::portfolio::TargetConfig;
+        use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
+
+        // Add two targets with schedules
+        let mut target1 = TargetConfig::new("https://fail.example.com");
+        target1.schedule = Some("* * * * *".to_string());
+        agent.portfolio.add_target("fail.example.com".to_string(), target1);
+
+        let mut target2 = TargetConfig::new("https://ok.example.com");
+        target2.schedule = Some("* * * * *".to_string());
+        agent.portfolio.add_target("ok.example.com".to_string(), target2);
+
+        // Manually set last_scan so they'll trigger
+        agent.portfolio.update_target("fail.example.com", |t| {
+            t.last_scan = Some(Utc::now() - chrono::Duration::minutes(2));
+        });
+        agent.portfolio.update_target("ok.example.com", |t| {
+            t.last_scan = Some(Utc::now() - chrono::Duration::minutes(2));
+        });
+
+        // Run scheduled scans - dispatcher returns None (failure) for all
+        // The key assertion: process_scheduled_scans should NOT return an error
+        // just because individual targets fail. It should continue to next targets.
+        let result = agent.process_scheduled_scans().await;
+        assert!(result.is_ok(), "process_scheduled_scans should continue even when individual targets fail");
+
+        // Both targets should have been attempted (last_scan should be set or error recorded)
+        assert_eq!(agent.scans_failed, 2, "Both failed scans should be counted");
+    }
+
+    #[tokio::test]
+    async fn test_config_watcher_failure_does_not_crash_agent() {
+        use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
+
+        // This test verifies the agent can be created even if config watcher
+        // has issues - the agent uses new_for_test which bypasses config_watcher
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        // new_for_test sets config_watcher to None, simulating a failure path
+        let mut agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
+
+        // Agent should still function correctly
+        let status = agent.status().await;
+        assert!(!status.running);
+
+        // run_once should succeed even without a config watcher
+        let result = agent.run_once().await;
+        assert!(result.is_ok(), "Agent should function without config watcher");
+    }
+
+    #[tokio::test]
+    async fn test_agent_runtime_status_fields_completeness() {
+        use std::sync::Arc as StdArc;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AgentConfig::default();
+        config.memory_dir = temp_dir.path().to_path_buf();
+
+        let dispatcher = MockDispatcher {
+            response: StdArc::new(std::sync::Mutex::new(None)),
+        };
+        let alert_sender = MockAlertSender {
+            sent_alerts: StdArc::new(std::sync::Mutex::new(vec![])),
+        };
+
+        let agent = Agent::new_for_test(config, Box::new(dispatcher), Box::new(alert_sender))
+            .await
+            .unwrap();
+
+        let status = agent.status().await;
+
+        // Verify all fields are present and have sensible defaults
+        let json = serde_json::to_value(&status).unwrap();
+        assert!(json.get("running").is_some());
+        assert!(json.get("started_at").is_some());
+        assert!(json.get("last_tick_at").is_some());
+        assert!(json.get("next_tick_at").is_some());
+        assert!(json.get("portfolio_targets_total").is_some());
+        assert!(json.get("portfolio_targets_enabled").is_some());
+        assert!(json.get("last_scan_started_at").is_some());
+        assert!(json.get("last_scan_completed_at").is_some());
+        assert!(json.get("last_error").is_some());
+        assert!(json.get("scans_completed").is_some());
+        assert!(json.get("scans_failed").is_some());
+        assert!(json.get("alerts_sent").is_some());
     }
 }

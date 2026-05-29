@@ -92,6 +92,72 @@ Slapper can run as an agent-readable scanning orchestrator that executes configu
 
 Slapper implements the **Model Context Protocol (MCP)**, allowing it to be used as a "tool" by other AI agents or integrated into larger AI-driven security platforms.
 
+### Profile-Based Policy Enforcement
+
+The MCP server uses profiles to control tool availability, safety policies, and output schemas.
+
+```rust
+pub enum McpProfile {
+    OpsAgent,    // Full access, no restrictions
+    CodingAgent, // Bounded tools, enforced safety
+}
+
+pub struct McpProfilePolicy {
+    pub profile: McpProfile,
+    pub target_policy: TargetPolicy,
+    pub max_concurrency: usize,
+    pub max_timeout_ms: u64,
+    pub max_batch_size: usize,
+    pub allow_external_network: bool,
+    pub allow_stress_testing: bool,
+    pub allow_broad_recon: bool,
+}
+```
+
+**Policy enforcement points:**
+
+| Enforcement | Location | Description |
+|-------------|----------|-------------|
+| Tool filtering | `tools/list` | Only tools allowed by profile are returned |
+| Argument validation | `tool/execute` | Denied arguments are rejected before execution |
+| Target validation | `tool/execute` | Target must match policy's `TargetPolicy` |
+| Concurrency clamping | `tool/execute` | Requested concurrency is clamped to policy max |
+| Timeout clamping | `tool/execute` | Requested timeout is clamped to policy max |
+
+**Profile policy definitions:**
+
+```rust
+impl McpProfilePolicy {
+    pub fn ops_agent() -> Self {
+        // No restrictions: all tools, no concurrency/timeout caps
+        Self {
+            profile: McpProfile::OpsAgent,
+            target_policy: TargetPolicy::None,
+            max_concurrency: 20,
+            max_timeout_ms: 300_000,
+            max_batch_size: 100,
+            allow_external_network: true,
+            allow_stress_testing: true,
+            allow_broad_recon: true,
+        }
+    }
+
+    pub fn coding_agent() -> Self {
+        // Restricted: localhost/private only, tight caps
+        Self {
+            profile: McpProfile::CodingAgent,
+            target_policy: TargetPolicy::ScopeOrLocalDevOnly,
+            max_concurrency: 5,
+            max_timeout_ms: 60_000,
+            max_batch_size: 10,
+            allow_external_network: false,
+            allow_stress_testing: false,
+            allow_broad_recon: false,
+        }
+    }
+}
+```
+
 ## Recent Bug Fixes (2026-05-22)
 
 ### AI Module

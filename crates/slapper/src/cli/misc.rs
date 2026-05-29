@@ -312,6 +312,24 @@ pub struct McpServeArgs {
 }
 
 #[derive(clap::Args)]
+pub struct CodeggMcpArgs {
+    #[arg(long, default_value = "8081", help = "Port to listen on")]
+    pub port: u16,
+    #[arg(long, default_value = "127.0.0.1", help = "Address to bind to")]
+    pub bind: String,
+    #[arg(long, help = "API key for authentication")]
+    pub api_key: Option<String>,
+    #[arg(long, default_value_t = true, help = "Enable stdio mode (default for codegg-mcp)")]
+    pub stdio: bool,
+    #[arg(
+        long,
+        default_value = "coding-agent",
+        help = "MCP profile (coding-agent recommended for codegg-mcp)"
+    )]
+    pub profile: String,
+}
+
+#[derive(clap::Args)]
 pub struct SbomArgs {
     #[command(subcommand)]
     pub command: SbomCommand,

@@ -93,6 +93,15 @@ impl AgentRegistry {
             .collect()
     }
 
+    pub async fn find_by_name(&self, name: &str) -> Option<AgentInfo> {
+        self.agents
+            .read()
+            .await
+            .values()
+            .find(|agent| agent.name == name)
+            .cloned()
+    }
+
     pub async fn list_active(&self) -> Vec<AgentInfo> {
         let cutoff = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

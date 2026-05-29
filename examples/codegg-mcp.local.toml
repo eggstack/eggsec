@@ -1,0 +1,14 @@
+# Codegg MCP Server - Local Development Profile
+# Usage: slapper mcp-serve --stdio --profile coding-agent
+
+[mcp]
+profile = "coding-agent"
+
+[mcp.policy]
+target_policy = "ScopeOrLocalDevOnly"
+max_concurrency = 5
+max_timeout_ms = 60000
+max_batch_size = 10
+allow_external_network = false
+allow_stress_testing = false
+allow_broad_recon = false
