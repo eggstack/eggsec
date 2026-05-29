@@ -11,8 +11,6 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     libpcap-dev \
-    python3-dev \
-    ruby-dev \
     build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -20,25 +18,19 @@ RUN apt-get update && apt-get install -y \
 # Copy workspace manifests
 COPY Cargo.toml Cargo.lock ./
 COPY crates/slapper/Cargo.toml crates/slapper/
-COPY crates/slapper-plugin/Cargo.toml crates/slapper-plugin/
 COPY crates/slapper-nse/Cargo.toml crates/slapper-nse/
-COPY crates/slapper-ruby/Cargo.toml crates/slapper-ruby/
 
 # Create dummy sources to cache dependencies
-RUN mkdir -p crates/slapper/src crates/slapper-plugin/src crates/slapper-nse/src crates/slapper-ruby/src && \
+RUN mkdir -p crates/slapper/src crates/slapper-nse/src && \
     echo "fn main() {}" > crates/slapper/src/main.rs && \
     echo "" > crates/slapper/src/lib.rs && \
-    echo "" > crates/slapper-plugin/src/lib.rs && \
     echo "" > crates/slapper-nse/src/lib.rs && \
-    echo "" > crates/slapper-ruby/src/lib.rs && \
     cargo build -p slapper --release --features full && \
     rm -rf crates/*/src
 
 # Copy source code
 COPY crates/slapper/src crates/slapper/src
-COPY crates/slapper-plugin/src crates/slapper-plugin/src
 COPY crates/slapper-nse/src crates/slapper-nse/src
-COPY crates/slapper-ruby/src crates/slapper-ruby/src
 COPY crates/slapper/build.rs crates/slapper/
 
 # Build the application with all features
@@ -53,8 +45,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
-    python3 \
-    ruby \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

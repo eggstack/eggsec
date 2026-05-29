@@ -24,9 +24,7 @@ impl McpProfile {
     pub fn server_description(&self) -> &str {
         match self {
             McpProfile::OpsAgent => "High-performance security testing toolkit for AI agents",
-            McpProfile::CodingAgent => {
-                "Bounded live security validation tools for coding agents"
-            }
+            McpProfile::CodingAgent => "Bounded live security validation tools for coding agents",
         }
     }
 

@@ -27,8 +27,6 @@ fn command_to_tab(command: &str) -> Option<Tab> {
         "report" => Some(Tab::Report),
         #[cfg(feature = "nse")]
         "nse" => Some(Tab::Nse),
-        #[cfg(any(feature = "python-plugins", feature = "ruby-plugins"))]
-        "plugin" => Some(Tab::Plugin),
         #[cfg(feature = "advanced-hunting")]
         "hunt" => Some(Tab::Hunt),
         #[cfg(feature = "headless-browser")]

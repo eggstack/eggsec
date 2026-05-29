@@ -1,7 +1,7 @@
 use crate::tool::traits::AttackSurface;
 use crate::tool::{ToolInfo, ToolRegistry};
-use serde::{Deserialize, Serialize};
 use rustc_hash::FxHashSet;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionPlan {
@@ -525,9 +525,11 @@ pub struct PlanValidation {
 
 impl ExecutionPlan {
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).inspect_err(|e| {
-            tracing::debug!(error = %e, "Failed to serialize execution plan");
-        }).unwrap_or_default()
+        serde_json::to_string_pretty(self)
+            .inspect_err(|e| {
+                tracing::debug!(error = %e, "Failed to serialize execution plan");
+            })
+            .unwrap_or_default()
     }
 
     pub fn total_tools(&self) -> usize {

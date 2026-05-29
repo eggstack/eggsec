@@ -600,10 +600,7 @@ pub async fn scan_ports(host: &str, config: PortScanConfig) -> Result<PortScanRe
     let results_map = Arc::try_unwrap(results).map_err(|_| {
         crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
     })?;
-    let mut results: Vec<PortResult> = results_map
-        .into_iter()
-        .map(|(_, v)| v)
-        .collect();
+    let mut results: Vec<PortResult> = results_map.into_iter().map(|(_, v)| v).collect();
     results.sort_by_key(|p| p.port);
 
     if results.len() > MAX_SCAN_RESULTS {

@@ -575,7 +575,6 @@ pub enum SlapperError {
     Config(String),
     Network(String),
     Scan(String),
-    Plugin(String),
     Output(String),
 }
 
@@ -587,7 +586,6 @@ impl std::fmt::Display for SlapperError {
             Self::Config(msg) => write!(f, "Configuration error: {}", msg),
             Self::Network(msg) => write!(f, "Network error: {}", msg),
             Self::Scan(msg) => write!(f, "Scan error: {}", msg),
-            Self::Plugin(msg) => write!(f, "Plugin error: {}", msg),
             Self::Output(msg) => write!(f, "Output error: {}", msg),
         }
     }
@@ -615,20 +613,7 @@ async fn run_scan() -> Result<()> {
 }
 ```
 
-## Plugin System
-
-### Python Plugins
-
-When compiled with `python-plugins` feature:
-
-```rust
-use slapper::plugin::python::PythonPlugin;
-
-let plugin = PythonPlugin::new("path/to/plugin.py")?;
-let result = plugin.run("target", &config)?;
-```
-
-### Creating Custom Scans
+## Creating Custom Scans
 
 You can implement custom scanning logic using the existing modules:
 

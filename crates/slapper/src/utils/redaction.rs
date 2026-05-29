@@ -30,12 +30,10 @@ pub fn redact_sensitive(input: &str) -> String {
         .to_string();
 
     // API keys in common patterns: api_key=... or api-key: ... (extended)
-    result = regex::Regex::new(
-        "(?i)(api[_-]?key\\s*[=:]\\s*['\"]?)[A-Za-z0-9\\-._]{16,}['\"]?",
-    )
-    .expect("valid regex")
-    .replace_all(&result, "${1}[REDACTED]")
-    .to_string();
+    result = regex::Regex::new("(?i)(api[_-]?key\\s*[=:]\\s*['\"]?)[A-Za-z0-9\\-._]{16,}['\"]?")
+        .expect("valid regex")
+        .replace_all(&result, "${1}[REDACTED]")
+        .to_string();
 
     // AWS access key IDs
     result = regex::Regex::new(r"(?i)(AKIA[0-9A-Z]{16})")
@@ -157,7 +155,8 @@ mod tests {
 
     #[test]
     fn redacts_private_key() {
-        let input = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----";
+        let input =
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----";
         let result = redact_sensitive(input);
         assert!(result.contains("[REDACTED PRIVATE KEY]"));
         assert!(!result.contains("MIIEpAIBAAKCAQEA"));

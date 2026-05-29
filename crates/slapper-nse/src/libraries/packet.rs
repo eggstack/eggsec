@@ -282,44 +282,46 @@ pub fn register_packet_library(lua: &Lua) -> LuaResult<()> {
 
     packet.set(
         "send_raw",
-        lua.create_function(|lua, (_interface, _packet_data): (Option<String>, String)| {
-            let result = lua.create_table()?;
-            #[cfg(feature = "stress-testing")]
-            {
-                use std::io::{Read, Write};
-                use std::net::UdpSocket;
+        lua.create_function(
+            |lua, (_interface, _packet_data): (Option<String>, String)| {
+                let result = lua.create_table()?;
+                #[cfg(feature = "stress-testing")]
+                {
+                    use std::io::{Read, Write};
+                    use std::net::UdpSocket;
 
-                match UdpSocket::bind("0.0.0.0:0") {
-                    Ok(socket) => {
-                        socket.set_broadcast(true).ok();
-                        match socket.send_to(_packet_data.as_bytes(), "255.255.255.255:0") {
-                            Ok(n) => {
-                                result.set("status", "ok")?;
-                                result.set("sent", n)?;
-                            }
-                            Err(e) => {
-                                result.set("status", "error")?;
-                                result.set("error", e.to_string())?;
+                    match UdpSocket::bind("0.0.0.0:0") {
+                        Ok(socket) => {
+                            socket.set_broadcast(true).ok();
+                            match socket.send_to(_packet_data.as_bytes(), "255.255.255.255:0") {
+                                Ok(n) => {
+                                    result.set("status", "ok")?;
+                                    result.set("sent", n)?;
+                                }
+                                Err(e) => {
+                                    result.set("status", "error")?;
+                                    result.set("error", e.to_string())?;
+                                }
                             }
                         }
-                    }
-                    Err(e) => {
-                        result.set("status", "error")?;
-                        result.set("error", e.to_string())?;
+                        Err(e) => {
+                            result.set("status", "error")?;
+                            result.set("error", e.to_string())?;
+                        }
                     }
                 }
-            }
-            #[cfg(not(feature = "stress-testing"))]
-            {
-                result.set("status", "unavailable")?;
-                result.set(
-                    "error",
-                    "Raw sockets require stress-testing feature (root privileges)",
-                )?;
-                result.set("sent", 0)?;
-            }
-            Ok(result)
-        })?,
+                #[cfg(not(feature = "stress-testing"))]
+                {
+                    result.set("status", "unavailable")?;
+                    result.set(
+                        "error",
+                        "Raw sockets require stress-testing feature (root privileges)",
+                    )?;
+                    result.set("sent", 0)?;
+                }
+                Ok(result)
+            },
+        )?,
     )?;
 
     packet.set(

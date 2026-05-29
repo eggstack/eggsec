@@ -176,18 +176,18 @@ impl SecurityTool for FuzzerTool {
             }),
         )
         .await
-        .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
-            "Fuzzing timed out after 60s: {}",
-            e
-        ) })?
-        .map_err(|e| crate::error::SlapperError::Runtime(format!(
-            "Fuzzing failed: {}",
-            e
-        )))?;
+        .map_err(|e| crate::error::SlapperError::Timeout {
+            timeout_ms: 0,
+            operation: format!("Fuzzing timed out after 60s: {}", e),
+        })?
+        .map_err(|e| crate::error::SlapperError::Runtime(format!("Fuzzing failed: {}", e)))?;
         let findings = match std::sync::Arc::try_unwrap(findings) {
             Ok(inner) => inner.into_inner(),
             Err(e) => {
-                tracing::warn!("Callback still referenced, using empty result: Arc still has {} references", Arc::strong_count(&e));
+                tracing::warn!(
+                    "Callback still referenced, using empty result: Arc still has {} references",
+                    Arc::strong_count(&e)
+                );
                 Vec::new()
             }
         };

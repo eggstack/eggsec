@@ -185,6 +185,9 @@ mod tests {
     #[test]
     fn risk_display() {
         assert_eq!(format!("{}", OperationRisk::Passive), "passive");
-        assert_eq!(format!("{}", OperationRisk::AgentAutonomous), "agent autonomous");
+        assert_eq!(
+            format!("{}", OperationRisk::AgentAutonomous),
+            "agent autonomous"
+        );
     }
 }

@@ -24,7 +24,7 @@ Examples:
   slapper scan-endpoints https://example.com -c 50 --json";
 
 #[cfg(feature = "nse")]
-pub(crate) const NSE_ABOUT: &str = "Run Nmap NSE (Scripting Engine) scripts
+pub(crate) const NSE_ABOUT: &str = "NSE support provides selective compatibility with Nmap Scripting Engine semantics for scriptable discovery and service checks. It is an optional compatibility layer, separate from the removed Python/Ruby plugin runtimes, and should be used for approved scripts within Slapper's scope and execution policy.
 
 Executes Lua-based NSE scripts for security scanning.
 Built-in scripts: default, discovery, banner, http-headers

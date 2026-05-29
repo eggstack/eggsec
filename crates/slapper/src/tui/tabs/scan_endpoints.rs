@@ -284,13 +284,13 @@ impl TabRender for ScanEndpointsTab {
         let input_block = Block::default()
             .borders(Borders::ALL)
             .title(" Endpoint Scan Configuration ")
-            .border_style(
-                Style::default().fg(if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            .border_style(Style::default().fg(
+                if self.focus_area == ScanEndpointsFocusArea::Inputs {
                     tc!(border_focused)
                 } else {
                     tc!(border)
-                }),
-            );
+                },
+            ));
         let input_inner = input_block.inner(input_area);
         f.render_widget(input_block, input_area);
 
@@ -319,13 +319,13 @@ impl TabRender for ScanEndpointsTab {
         let results_block = Block::default()
             .borders(Borders::ALL)
             .title(" Results ")
-            .border_style(
-                Style::default().fg(if self.focus_area == ScanEndpointsFocusArea::Results {
+            .border_style(Style::default().fg(
+                if self.focus_area == ScanEndpointsFocusArea::Results {
                     tc!(border_focused)
                 } else {
                     tc!(border)
-                }),
-            );
+                },
+            ));
         let results_inner = results_block.inner(results_area);
         f.render_widget(results_block, results_area);
 

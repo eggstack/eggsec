@@ -15,9 +15,11 @@ pub struct OpenApiSpec {
 
 impl OpenApiSpec {
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).inspect_err(|e| {
-            tracing::warn!(error = %e, "Failed to serialize OpenAPI spec to JSON");
-        }).unwrap_or_default()
+        serde_json::to_string_pretty(self)
+            .inspect_err(|e| {
+                tracing::warn!(error = %e, "Failed to serialize OpenAPI spec to JSON");
+            })
+            .unwrap_or_default()
     }
 
     pub fn to_yaml(&self) -> String {
@@ -120,10 +122,11 @@ impl Schema {
     pub fn array(items: Schema) -> Self {
         Schema::Object(SchemaObject {
             schema_type: "array".to_string(),
-            properties: Some([(
-                "items".to_string(),
-                Box::new(items),
-            )].into_iter().collect()),
+            properties: Some(
+                [("items".to_string(), Box::new(items))]
+                    .into_iter()
+                    .collect(),
+            ),
             required: None,
         })
     }
@@ -218,8 +221,7 @@ impl OpenApiGenerator {
         for tool in &tools {
             let category = format!("{:?}", tool.category);
 
-            let mut properties: FxHashMap<String, Box<Schema>> =
-                FxHashMap::default();
+            let mut properties: FxHashMap<String, Box<Schema>> = FxHashMap::default();
             properties.insert("target".to_string(), Box::new(Schema::string()));
             properties.insert("target_type".to_string(), Box::new(Schema::string()));
             properties.insert("api_key".to_string(), Box::new(Schema::string()));
@@ -259,27 +261,31 @@ impl OpenApiGenerator {
                 format!("{}Response", tool.id),
                 Schema::Object(SchemaObject {
                     schema_type: "object".to_string(),
-                    properties: Some([
-                        ("request_id".to_string(), Box::new(Schema::string())),
-                        ("tool_id".to_string(), Box::new(Schema::string())),
-                        ("status".to_string(), Box::new(Schema::string())),
-                        (
-                            "results".to_string(),
-                            Box::new(Schema::Object(SchemaObject {
-                                schema_type: "object".to_string(),
-                                properties: None,
-                                required: None,
-                            })),
-                        ),
-                        (
-                            "metadata".to_string(),
-                            Box::new(Schema::Object(SchemaObject {
-                                schema_type: "object".to_string(),
-                                properties: None,
-                                required: None,
-                            })),
-                        ),
-                    ].into_iter().collect()),
+                    properties: Some(
+                        [
+                            ("request_id".to_string(), Box::new(Schema::string())),
+                            ("tool_id".to_string(), Box::new(Schema::string())),
+                            ("status".to_string(), Box::new(Schema::string())),
+                            (
+                                "results".to_string(),
+                                Box::new(Schema::Object(SchemaObject {
+                                    schema_type: "object".to_string(),
+                                    properties: None,
+                                    required: None,
+                                })),
+                            ),
+                            (
+                                "metadata".to_string(),
+                                Box::new(Schema::Object(SchemaObject {
+                                    schema_type: "object".to_string(),
+                                    properties: None,
+                                    required: None,
+                                })),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
                     required: Some(vec![
                         "request_id".to_string(),
                         "tool_id".to_string(),
@@ -308,15 +314,19 @@ impl OpenApiGenerator {
                     "200".to_string(),
                     Response {
                         description: "Successful response".to_string(),
-                        content: Some([(
-                            "application/json".to_string(),
-                            MediaType {
-                                schema_: Schema::Ref(format!(
-                                    "#/components/schemas/{}Response",
-                                    tool.id
-                                )),
-                            },
-                        )].into_iter().collect()),
+                        content: Some(
+                            [(
+                                "application/json".to_string(),
+                                MediaType {
+                                    schema_: Schema::Ref(format!(
+                                        "#/components/schemas/{}Response",
+                                        tool.id
+                                    )),
+                                },
+                            )]
+                            .into_iter()
+                            .collect(),
+                        ),
                     },
                 ),
                 (
@@ -340,7 +350,9 @@ impl OpenApiGenerator {
                         content: None,
                     },
                 ),
-            ].into_iter().collect();
+            ]
+            .into_iter()
+            .collect();
 
             paths.insert(
                 format!("/mcp/{}", tool.id),
@@ -368,11 +380,15 @@ impl OpenApiGenerator {
                                                 ))),
                                             ),
                                             ("api_key".to_string(), Box::new(Schema::string())),
-                                        ].into_iter().collect(),
+                                        ]
+                                        .into_iter()
+                                        .collect(),
                                         required: Some(vec!["name".to_string()]),
                                     }),
                                 },
-                            )].into_iter().collect(),
+                            )]
+                            .into_iter()
+                            .collect(),
                             required: true,
                         }),
                         responses,
@@ -397,7 +413,9 @@ impl OpenApiGenerator {
                                 description: "List of tools".to_string(),
                                 content: None,
                             },
-                        )].into_iter().collect(),
+                        )]
+                        .into_iter()
+                        .collect(),
                     }),
                     post: Some(Operation {
                         tags: vec![category],
@@ -412,7 +430,9 @@ impl OpenApiGenerator {
                                 description: "Tool execution result".to_string(),
                                 content: None,
                             },
-                        )].into_iter().collect(),
+                        )]
+                        .into_iter()
+                        .collect(),
                     }),
                 },
             );
@@ -445,7 +465,9 @@ impl OpenApiGenerator {
                             description: "Service is healthy".to_string(),
                             content: None,
                         },
-                    )].into_iter().collect(),
+                    )]
+                    .into_iter()
+                    .collect(),
                 }),
                 post: None,
             },
@@ -467,18 +489,24 @@ impl OpenApiGenerator {
                         "200".to_string(),
                         Response {
                             description: "SSE stream".to_string(),
-                            content: Some([(
-                                "text/event-stream".to_string(),
-                                MediaType {
-                                    schema_: Schema::Object(SchemaObject {
-                                        schema_type: "object".to_string(),
-                                        properties: None,
-                                        required: None,
-                                    }),
-                                },
-                            )].into_iter().collect()),
+                            content: Some(
+                                [(
+                                    "text/event-stream".to_string(),
+                                    MediaType {
+                                        schema_: Schema::Object(SchemaObject {
+                                            schema_type: "object".to_string(),
+                                            properties: None,
+                                            required: None,
+                                        }),
+                                    },
+                                )]
+                                .into_iter()
+                                .collect(),
+                            ),
                         },
-                    )].into_iter().collect(),
+                    )]
+                    .into_iter()
+                    .collect(),
                 }),
                 post: None,
             },
@@ -509,9 +537,11 @@ impl OpenApiGenerator {
     }
 
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(&self).inspect_err(|e| {
-            tracing::warn!(error = %e, "Failed to serialize OpenApiGenerator to JSON");
-        }).unwrap_or_default()
+        serde_json::to_string_pretty(&self)
+            .inspect_err(|e| {
+                tracing::warn!(error = %e, "Failed to serialize OpenApiGenerator to JSON");
+            })
+            .unwrap_or_default()
     }
 
     pub fn to_yaml(&self) -> String {

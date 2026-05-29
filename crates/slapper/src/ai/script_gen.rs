@@ -69,8 +69,14 @@ impl ScriptGenerator {
         }
     }
 
-    pub async fn generate_waf_bypass_script(&self, waf: &str, blocked_payload: &str) -> Result<GeneratedScript> {
-        let client = self.client.as_ref()
+    pub async fn generate_waf_bypass_script(
+        &self,
+        waf: &str,
+        blocked_payload: &str,
+    ) -> Result<GeneratedScript> {
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| AiError::invalid_config("AI client required for script generation"))?;
 
         let prompt = Self::build_waf_bypass_prompt(waf, blocked_payload);
@@ -114,8 +120,14 @@ impl ScriptGenerator {
         })
     }
 
-    pub async fn generate_payload_script(&self, vuln_type: &str, context: &str) -> Result<GeneratedScript> {
-        let client = self.client.as_ref()
+    pub async fn generate_payload_script(
+        &self,
+        vuln_type: &str,
+        context: &str,
+    ) -> Result<GeneratedScript> {
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| AiError::invalid_config("AI client required for script generation"))?;
 
         let prompt = Self::build_payload_generation_prompt(vuln_type, context);
@@ -159,8 +171,13 @@ impl ScriptGenerator {
         })
     }
 
-    pub async fn generate_adaptive_script(&self, findings: Vec<serde_json::Value>) -> Result<GeneratedScript> {
-        let client = self.client.as_ref()
+    pub async fn generate_adaptive_script(
+        &self,
+        findings: Vec<serde_json::Value>,
+    ) -> Result<GeneratedScript> {
+        let client = self
+            .client
+            .as_ref()
             .ok_or_else(|| AiError::invalid_config("AI client required for script generation"))?;
 
         let prompt = Self::build_adaptive_script_prompt(&findings);
@@ -335,14 +352,14 @@ mod tests {
     fn create_test_client() -> Option<AiClient> {
         Some(
             AiClient::new(crate::config::AiConfig {
-            provider: "openai".to_string(),
-            model: Some("gpt-4".to_string()),
-            api_key: None,
-            base_url: None,
-            max_tokens: Some(2048),
-            temperature: Some(0.7),
-            max_payloads: 50,
-            max_bypasses: 10,
+                provider: "openai".to_string(),
+                model: Some("gpt-4".to_string()),
+                api_key: None,
+                base_url: None,
+                max_tokens: Some(2048),
+                temperature: Some(0.7),
+                max_payloads: 50,
+                max_bypasses: 10,
             })
             .expect("test client should be valid"),
         )
@@ -354,7 +371,8 @@ mod tests {
             ScriptTarget::WafBypass {
                 waf_name: "cloudflare".to_string(),
                 blocked_payload: "test".to_string(),
-            }.vuln_type(),
+            }
+            .vuln_type(),
             Some("waf_bypass")
         );
 
@@ -362,7 +380,8 @@ mod tests {
             ScriptTarget::PayloadGeneration {
                 vuln_type: "sqli".to_string(),
                 context: "test".to_string(),
-            }.vuln_type(),
+            }
+            .vuln_type(),
             Some("sqli")
         );
 
@@ -409,7 +428,7 @@ mod tests {
     fn test_generate_waf_bypass_script_requires_client() {
         let generator = ScriptGenerator::new(None);
         let result = futures::executor::block_on(
-            generator.generate_waf_bypass_script("cloudflare", "payload")
+            generator.generate_waf_bypass_script("cloudflare", "payload"),
         );
         assert!(result.is_err());
     }
@@ -417,18 +436,15 @@ mod tests {
     #[test]
     fn test_generate_payload_script_requires_client() {
         let generator = ScriptGenerator::new(None);
-        let result = futures::executor::block_on(
-            generator.generate_payload_script("xss", "reflected")
-        );
+        let result =
+            futures::executor::block_on(generator.generate_payload_script("xss", "reflected"));
         assert!(result.is_err());
     }
 
     #[test]
     fn test_generate_adaptive_script_requires_client() {
         let generator = ScriptGenerator::new(None);
-        let result = futures::executor::block_on(
-            generator.generate_adaptive_script(vec![])
-        );
+        let result = futures::executor::block_on(generator.generate_adaptive_script(vec![]));
         assert!(result.is_err());
     }
 

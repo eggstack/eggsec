@@ -429,7 +429,7 @@ impl TabInput for StressTab {
                     self.type_selector.open();
                 }
             }
-StressFocusArea::Results => {}
+            StressFocusArea::Results => {}
         }
     }
 
@@ -513,7 +513,8 @@ StressFocusArea::Results => {}
             StressFocusArea::Inputs => self.inputs.is_at_right_edge(),
             StressFocusArea::TypeSelector => {
                 self.type_selector.items.is_empty()
-                    || self.type_selector.selected >= self.type_selector.items.len().saturating_sub(1)
+                    || self.type_selector.selected
+                        >= self.type_selector.items.len().saturating_sub(1)
             }
             _ => true,
         }
@@ -535,5 +536,4 @@ impl StressTab {
             self.state = AppState::Idle;
         }
     }
-
 }

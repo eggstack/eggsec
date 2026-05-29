@@ -25,7 +25,7 @@ src/commands/      # Handler dispatch and implementations
 - `cluster.rs` - `ClusterArgs`, `ClusterCommand`
 - `storage.rs` - `StorageArgs`, `StorageCommand`
 - `vuln.rs` - `VulnArgs`, `VulnCommand`
-- `misc.rs` - `ConfigArgs`, `NotifyArgs`, `RemoteArgs`, `ExecArgs`, `PluginArgs`, `ReportArgs`, `SbomArgs`
+- `misc.rs` - `ConfigArgs`, `NotifyArgs`, `RemoteArgs`, `ExecArgs`, `ReportArgs`, `SbomArgs`
 
 ### Key Types
 

@@ -303,7 +303,10 @@ impl Finding {
         let mut hasher = DefaultHasher::new();
 
         self.affected_asset.asset_type.hash(&mut hasher);
-        self.affected_asset.identifier.to_lowercase().hash(&mut hasher);
+        self.affected_asset
+            .identifier
+            .to_lowercase()
+            .hash(&mut hasher);
 
         format!("{:?}", self.finding_type).hash(&mut hasher);
 
@@ -469,7 +472,11 @@ mod tests {
 
     #[test]
     fn evidence_new() {
-        let ev = Evidence::new(EvidenceKind::HttpResponse, "200 OK", serde_json::json!({"status": 200}));
+        let ev = Evidence::new(
+            EvidenceKind::HttpResponse,
+            "200 OK",
+            serde_json::json!({"status": 200}),
+        );
         assert!(!ev.redacted);
         assert_eq!(ev.kind, EvidenceKind::HttpResponse);
     }

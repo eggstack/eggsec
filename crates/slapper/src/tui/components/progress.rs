@@ -70,7 +70,12 @@ impl ProgressGauge {
         );
 
         let gauge = Gauge::default()
-            .block(Block::default().borders(Borders::ALL).title("Progress").border_style(Style::default().fg(tc!(border))))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Progress")
+                    .border_style(Style::default().fg(tc!(border))),
+            )
             .gauge_style(Style::default().fg(self.color))
             .percent(percent)
             .label(label);
@@ -85,7 +90,11 @@ impl ProgressGauge {
         let percent = self.percent();
 
         let gauge = Gauge::default()
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(tc!(border))))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(tc!(border))),
+            )
             .gauge_style(Style::default().fg(self.color))
             .percent(percent);
 
@@ -100,7 +109,12 @@ impl ProgressGauge {
         let label = format!("{} {} - running...", spinner, self.label);
 
         let gauge = Gauge::default()
-            .block(Block::default().borders(Borders::ALL).title("Progress").border_style(Style::default().fg(tc!(border))))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Progress")
+                    .border_style(Style::default().fg(tc!(border))),
+            )
             .gauge_style(Style::default().fg(self.color))
             .percent(0)
             .label(label);

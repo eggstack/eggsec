@@ -192,12 +192,13 @@ pub fn register_mssql_library(lua: &Lua) -> LuaResult<()> {
     mssql.set("query_async", async_query_fn)?;
 
     // mssql.exec() - Execute a stored procedure
-    let exec_fn = lua.create_function(|_lua, (_host, _port, procedure): (String, u16, String)| {
-        let result = mlua::Lua::default().create_table()?;
-        result.set("procedure", procedure)?;
-        result.set("executed", true)?;
-        Ok(result)
-    })?;
+    let exec_fn =
+        lua.create_function(|_lua, (_host, _port, procedure): (String, u16, String)| {
+            let result = mlua::Lua::default().create_table()?;
+            result.set("procedure", procedure)?;
+            result.set("executed", true)?;
+            Ok(result)
+        })?;
     mssql.set("exec", exec_fn)?;
 
     // mssql.get_db_names() - Get list of databases

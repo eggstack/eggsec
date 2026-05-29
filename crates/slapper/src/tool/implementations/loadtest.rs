@@ -72,22 +72,21 @@ impl SecurityTool for LoadTestTool {
             common: crate::cli::CommonHttpArgs::default(),
         };
 
-        let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
-            tracing::warn!(error = %e, "Failed to load config for loadtest, using defaults");
-        }).unwrap_or_default();
+        let config = crate::config::load_config(None::<&str>)
+            .inspect_err(|e| {
+                tracing::warn!(error = %e, "Failed to load config for loadtest, using defaults");
+            })
+            .unwrap_or_default();
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(60),
             crate::loadtest::run_cli(args, &config),
         )
         .await
-        .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
-            "Load test timed out after 60s: {}",
-            e
-        ) })?
-        .map_err(|e| crate::error::SlapperError::Runtime(format!(
-            "Load test failed: {}",
-            e
-        )))?;
+        .map_err(|e| crate::error::SlapperError::Timeout {
+            timeout_ms: 0,
+            operation: format!("Load test timed out after 60s: {}", e),
+        })?
+        .map_err(|e| crate::error::SlapperError::Runtime(format!("Load test failed: {}", e)))?;
 
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;

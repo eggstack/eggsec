@@ -138,14 +138,13 @@ impl SecurityTool for ScannerTool {
                     }),
                 )
                 .await
-                .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
-                    "Port scan timed out after 60s: {}",
-                    e
-                ) })?
-                .map_err(|e| crate::error::SlapperError::Runtime(format!(
-                    "Port scan failed: {}",
-                    e
-                )))?;
+                .map_err(|e| crate::error::SlapperError::Timeout {
+                    timeout_ms: 0,
+                    operation: format!("Port scan timed out after 60s: {}", e),
+                })?
+                .map_err(|e| {
+                    crate::error::SlapperError::Runtime(format!("Port scan failed: {}", e))
+                })?;
             }
             ScanMode::Fingerprint => {
                 let args = crate::cli::FingerprintArgs {
@@ -170,14 +169,13 @@ impl SecurityTool for ScannerTool {
                     }),
                 )
                 .await
-                .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
-                    "Fingerprint scan timed out after 60s: {}",
-                    e
-                ) })?
-                .map_err(|e| crate::error::SlapperError::Runtime(format!(
-                    "Fingerprint scan failed: {}",
-                    e
-                )))?;
+                .map_err(|e| crate::error::SlapperError::Timeout {
+                    timeout_ms: 0,
+                    operation: format!("Fingerprint scan timed out after 60s: {}", e),
+                })?
+                .map_err(|e| {
+                    crate::error::SlapperError::Runtime(format!("Fingerprint scan failed: {}", e))
+                })?;
             }
             ScanMode::Endpoints => {
                 let args = crate::cli::EndpointScanArgs {
@@ -210,21 +208,23 @@ impl SecurityTool for ScannerTool {
                     }),
                 )
                 .await
-                .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
-                    "Endpoint scan timed out after 60s: {}",
-                    e
-                ) })?
-                .map_err(|e| crate::error::SlapperError::Runtime(format!(
-                    "Endpoint scan failed: {}",
-                    e
-                )))?;
+                .map_err(|e| crate::error::SlapperError::Timeout {
+                    timeout_ms: 0,
+                    operation: format!("Endpoint scan timed out after 60s: {}", e),
+                })?
+                .map_err(|e| {
+                    crate::error::SlapperError::Runtime(format!("Endpoint scan failed: {}", e))
+                })?;
             }
         };
 
         let findings = match std::sync::Arc::try_unwrap(findings) {
             Ok(inner) => inner.into_inner(),
             Err(e) => {
-                tracing::warn!("Callback still referenced, using empty result: Arc still has {} references", Arc::strong_count(&e));
+                tracing::warn!(
+                    "Callback still referenced, using empty result: Arc still has {} references",
+                    Arc::strong_count(&e)
+                );
                 Vec::new()
             }
         };

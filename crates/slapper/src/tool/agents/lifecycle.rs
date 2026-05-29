@@ -334,7 +334,10 @@ impl LifecycleManager {
         }
 
         for agent_id in mark_offline {
-            if let Err(e) = agent_registry.update_status(agent_id, AgentStatus::Offline).await {
+            if let Err(e) = agent_registry
+                .update_status(agent_id, AgentStatus::Offline)
+                .await
+            {
                 tracing::warn!("Failed to mark agent {} offline: {:?}", agent_id, e);
             }
         }
@@ -396,7 +399,11 @@ impl LifecycleManager {
                     })
                     .await
                 {
-                    tracing::warn!("Failed to send HealthCheckFailed event for agent {}: {:?}", agent_id, e);
+                    tracing::warn!(
+                        "Failed to send HealthCheckFailed event for agent {}: {:?}",
+                        agent_id,
+                        e
+                    );
                 }
             }
         }
@@ -431,11 +438,19 @@ impl LifecycleManager {
             })
             .await
         {
-            tracing::warn!("Failed to send GracefulShutdown event for agent {}: {:?}", agent_id, e);
+            tracing::warn!(
+                "Failed to send GracefulShutdown event for agent {}: {:?}",
+                agent_id,
+                e
+            );
         }
 
         if let Err(e) = self.agent_registry.unregister(agent_id).await {
-            tracing::warn!("Failed to unregister agent {} during graceful shutdown: {:?}", agent_id, e);
+            tracing::warn!(
+                "Failed to unregister agent {} during graceful shutdown: {:?}",
+                agent_id,
+                e
+            );
         }
         true
     }
@@ -454,11 +469,19 @@ impl LifecycleManager {
             })
             .await
         {
-            tracing::warn!("Failed to send ForcedShutdown event for agent {}: {:?}", agent_id, e);
+            tracing::warn!(
+                "Failed to send ForcedShutdown event for agent {}: {:?}",
+                agent_id,
+                e
+            );
         }
 
         if let Err(e) = self.agent_registry.unregister(agent_id).await {
-            tracing::warn!("Failed to unregister agent {} during force shutdown: {:?}", agent_id, e);
+            tracing::warn!(
+                "Failed to unregister agent {} during force shutdown: {:?}",
+                agent_id,
+                e
+            );
         }
 
         let mut status = self.health_status.write().await;

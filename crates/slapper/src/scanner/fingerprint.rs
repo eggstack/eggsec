@@ -320,10 +320,7 @@ pub async fn fingerprint_services(
     let results_map = Arc::try_unwrap(results).map_err(|_| {
         crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
     })?;
-    let mut results: Vec<ServiceFingerprint> = results_map
-        .into_iter()
-        .map(|(_, v)| v)
-        .collect();
+    let mut results: Vec<ServiceFingerprint> = results_map.into_iter().map(|(_, v)| v).collect();
     results.sort_by_key(|p| p.port);
 
     if results.len() > MAX_SCAN_RESULTS {
@@ -341,7 +338,11 @@ pub async fn fingerprint_services(
     })
 }
 
-async fn fingerprint_port(ip: IpAddr, port: u16, timeout_duration: Duration) -> Option<ServiceFingerprint> {
+async fn fingerprint_port(
+    ip: IpAddr,
+    port: u16,
+    timeout_duration: Duration,
+) -> Option<ServiceFingerprint> {
     let addr = SocketAddr::new(ip, port);
 
     #[allow(unreachable_patterns)]
@@ -428,11 +429,11 @@ async fn probe_service(
     port: u16,
     timeout_duration: Duration,
 ) -> Option<ServiceFingerprint> {
-if !probe_data.is_empty() {
-            if let Err(e) = stream.write_all(probe_data).await {
-                tracing::warn!(target: "scanner", "Probe write failed for {}: {}", probe_name, e);
-            }
+    if !probe_data.is_empty() {
+        if let Err(e) = stream.write_all(probe_data).await {
+            tracing::warn!(target: "scanner", "Probe write failed for {}: {}", probe_name, e);
         }
+    }
 
     let mut buffer: SmallVec<[u8; 256]> = SmallVec::new();
     buffer.resize(4096, 0);

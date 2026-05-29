@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added LICENSE files (MIT and Apache-2.0)
 - Added `#![allow(dead_code)]` to stress metrics module
 
+### Removed
+
+- Python plugin runtime and all Python plugin support (`python-plugins` feature)
+- Ruby plugin runtime and all Ruby plugin support (`ruby-plugins` feature)
+- Metasploit RPC integration (`slapper-ruby` crate)
+- `slapper-plugin` crate (Python plugin manager, AST scanner, security validation)
+- `slapper-ruby` crate (Ruby plugin bridge, loader, MSF client)
+- `slapper plugin list` and `slapper plugin run` CLI commands
+- TUI plugin tab for Python/Ruby plugin discovery
+- Plugin-related configuration fields (`plugins_dir`)
+- Plugin development documentation (`PLUGIN_DEVELOPMENT.md`, `PLUGINS.md`)
+
+NSE support remains available as an optional Nmap NSE compatibility layer via the `nse`, `nse-sandbox`, and `nse-ssh2` features.
+
 ### Added
 
 #### Configuration System

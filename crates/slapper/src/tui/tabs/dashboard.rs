@@ -6,8 +6,8 @@ use chrono::{DateTime, Utc};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
-use serde::Deserialize;
 use rustc_hash::FxHashMap;
+use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
 struct PortfolioSnapshot {
@@ -105,9 +105,7 @@ impl DashboardTab {
         self.view.clear();
         self.view.add_line(Line::from(Span::styled(
             "Security Assessment Dashboard",
-            Style::default()
-                .fg(tc!(info))
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(tc!(info)).add_modifier(Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
         self.view
@@ -263,9 +261,7 @@ impl DashboardTab {
 
         self.view.add_line(Line::from(Span::styled(
             "Security Assessment Dashboard",
-            Style::default()
-                .fg(tc!(info))
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(tc!(info)).add_modifier(Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
 

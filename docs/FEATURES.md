@@ -14,12 +14,9 @@ Slapper uses Cargo feature flags to enable optional capabilities. This allows us
 | `grpc-api` | gRPC API server for external tool integration | `tool-api`, tonic, prost |
 | `stress-testing` | DoS testing tools, proxy management, ICMP, IP spoofing | pnet, pnet_packet, socket2, nix, libc, surge-ping |
 | `packet-inspection` | Live packet capture, advanced packet tools | pnet, pnet_packet, libc |
-| `python-plugins` | Python plugin support (PyO3) | slapper-plugin (pyo3, dirs) |
-| `ruby-plugins` | Ruby plugin support + Metasploit RPC | slapper-plugin (magnus), slapper-ruby |
-| `all-plugins` | Both Python and Ruby plugin support | python-plugins, ruby-plugins |
 | `nse` | Nmap Scripting Engine support - run Lua NSE scripts | tool-api, slapper-nse |
 | `nse-sandbox` | NSE sandbox mode - restrict dangerous Lua operations | nse, slapper-nse/sandbox |
-| `full` | All features combined | python-plugins, ruby-plugins, stress-testing, packet-inspection, rest-api, nse |
+| `full` | All features combined | stress-testing, packet-inspection, rest-api, nse |
 
 ## Available Builds
 
@@ -69,32 +66,7 @@ Adds:
 
 **Note**: Live packet capture requires root/sudo privileges.
 
-### With Python Plugins
-
-```bash
-cargo build --release --features python-plugins
-```
-
-Adds:
-- Python plugin support
-- Run custom Python-based security scanners
-
-Requires Python 3.8+ development headers.
-
-### With Ruby Plugins
-
-```bash
-cargo build --release --features ruby-plugins
-```
-
-Adds:
-- Ruby plugin support
-- Metasploit Framework RPC integration
-- Full Metasploit module access from Ruby plugins
-
-Requires Ruby 3.0+ development headers and Metasploit Framework (optional, for RPC functionality).
-
-### Full Build (Recommended for Pentesting)
+### Full Build (Recommended)
 
 ```bash
 cargo build --release --features full
@@ -104,7 +76,6 @@ Includes all features:
 - Core functionality
 - Stress testing tools
 - Packet inspection
-- Python and Ruby plugin support
 - REST API server
 - NSE (Nmap Scripting Engine) support
 
@@ -112,11 +83,6 @@ Includes all features:
 
 ```
 full
-├── python-plugins
-│   └── slapper-plugin (pyo3)
-├── ruby-plugins
-│   ├── slapper-plugin (magnus)
-│   └── slapper-ruby
 ├── stress-testing
 │   ├── pnet, pnet_packet
 │   ├── socket2, nix, libc
@@ -199,8 +165,6 @@ Adds:
 | `grpc-api` | Medium (tonic + prost) | Medium |
 | `stress-testing` | Medium (pnet + nix) | Medium |
 | `packet-inspection` | Low (pnet) | Low |
-| `python-plugins` | Medium (pyo3 + Python) | Medium |
-| `ruby-plugins` | High (magnus + Ruby) | High |
 | `nse` | Medium (mlua + Lua) | Medium |
 | `full` | High (all combined) | High |
 
@@ -252,5 +216,4 @@ The following commands require specific build features:
 | `traceroute` | `stress-testing` |
 | `packet capture` | `packet-inspection` |
 | `packet send` | `packet-inspection` |
-| `plugin` | `python-plugins` or `ruby-plugins` |
 | `nse` | `nse` |

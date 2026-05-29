@@ -225,7 +225,11 @@ mod tests {
             200, &detection, "admin'--", "welcome", None
         ));
         assert!(is_bypass_successful(
-            200, &detection, "admin'--", "admin'-- accepted", None
+            200,
+            &detection,
+            "admin'--",
+            "admin'-- accepted",
+            None
         ));
     }
 
@@ -240,7 +244,11 @@ mod tests {
     fn reflected_payload_fails_when_body_still_looks_blocked() {
         let detection = detection_with_status(403);
         assert!(!is_bypass_successful(
-            200, &detection, "admin'--", "request blocked admin'--", None
+            200,
+            &detection,
+            "admin'--",
+            "request blocked admin'--",
+            None
         ));
     }
 
@@ -261,7 +269,11 @@ mod tests {
             body_diffs: None,
         };
         assert!(!is_bypass_successful(
-            200, &detection, "admin'--", "admin'-- accepted", Some(&diff)
+            200,
+            &detection,
+            "admin'--",
+            "admin'-- accepted",
+            Some(&diff)
         ));
     }
 
@@ -281,7 +293,11 @@ mod tests {
             body_diffs: None,
         };
         assert!(is_bypass_successful(
-            200, &detection, "admin'--", "admin'-- accepted", Some(&diff)
+            200,
+            &detection,
+            "admin'--",
+            "admin'-- accepted",
+            Some(&diff)
         ));
     }
 }

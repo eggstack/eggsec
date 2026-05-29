@@ -1,7 +1,6 @@
 mod api;
 mod fuzzer;
 mod network;
-mod plugin;
 mod recon;
 mod runner;
 mod scanner;

@@ -12,11 +12,11 @@ Slapper has multiple optional features that increase binary size and compilation
 
 We use Cargo feature flags with the following design principles:
 
-1. **Granular Features**: Each optional capability is a separate feature flag (e.g., `python-plugins`, `ruby-plugins`, `stress-testing`)
+1. **Granular Features**: Each optional capability is a separate feature flag (e.g., `stress-testing`, `nse`)
 
 2. **Composite Features**: The `full` feature enables all features except those with known issues:
    ```toml
-   full = ["python-plugins", "ruby-plugins", "stress-testing", "packet-inspection",
+   full = ["stress-testing", "packet-inspection",
            "rest-api", "grpc-api", "nse", "ai-integration"]
    ```
 
@@ -45,8 +45,6 @@ We use Cargo feature flags with the following design principles:
 |---------|-------------|---------|
 | `stress-testing` | ICMP probing, IP spoofing, raw sockets | off |
 | `packet-inspection` | Packet capture features | off |
-| `python-plugins` | Python plugin support via PyO3 | off |
-| `ruby-plugins` | Ruby plugin support via Magnus | off |
 | `rest-api` | REST API server | off |
 | `grpc-api` | gRPC API server (NOT in `full`) | off |
 | `nse` | Nmap NSE script support | off |

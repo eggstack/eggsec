@@ -334,7 +334,10 @@ impl TabRender for IntegrationsTab {
                 if let Some(fields) = self.issue_inputs.fields.get(..4) {
                     fields
                 } else {
-                    tracing::warn!("CreateIssue mode: expected at least 4 fields, got {}", self.issue_inputs.fields.len());
+                    tracing::warn!(
+                        "CreateIssue mode: expected at least 4 fields, got {}",
+                        self.issue_inputs.fields.len()
+                    );
                     &self.issue_inputs.fields
                 }
             }
@@ -342,7 +345,10 @@ impl TabRender for IntegrationsTab {
                 if let Some(fields) = self.issue_inputs.fields.get(4..) {
                     fields
                 } else {
-                    tracing::warn!("SearchIssues mode: expected at least 4 fields, got {}", self.issue_inputs.fields.len());
+                    tracing::warn!(
+                        "SearchIssues mode: expected at least 4 fields, got {}",
+                        self.issue_inputs.fields.len()
+                    );
                     &[]
                 }
             }
@@ -612,8 +618,7 @@ impl TabInput for IntegrationsTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             IntegrationsFocusArea::Tracker => {
-                self.tracker_selector.items.is_empty()
-                    || self.tracker_selector.selected == 0
+                self.tracker_selector.items.is_empty() || self.tracker_selector.selected == 0
             }
             IntegrationsFocusArea::Config => self.config_inputs.is_at_left_edge(),
             IntegrationsFocusArea::Issue => self.issue_inputs.is_at_left_edge(),

@@ -22,18 +22,23 @@ pub async fn run_port_scan(
         tracing::warn!("Failed to send progress: {}", e);
     }
 
-    let results = match tokio::time::timeout(std::time::Duration::from_secs(60), scan_ports(
-        &target,
-        crate::scanner::ports::PortScanConfig {
-            ports: port_list,
-            concurrency,
-            timeout_duration: timeout,
-            tui_mode: true,
-            spoof_config: SpoofConfig::default(),
-            progress_tx: Some(progress_tx.clone()),
-            max_results: None,
-        },
-    )).await {
+    let results = match tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        scan_ports(
+            &target,
+            crate::scanner::ports::PortScanConfig {
+                ports: port_list,
+                concurrency,
+                timeout_duration: timeout,
+                tui_mode: true,
+                spoof_config: SpoofConfig::default(),
+                progress_tx: Some(progress_tx.clone()),
+                max_results: None,
+            },
+        ),
+    )
+    .await
+    {
         Ok(Ok(results)) => results,
         Ok(Err(e)) => return Err(e.into()),
         Err(_) => return Err(anyhow::anyhow!("Port scan timed out after 60s")),
@@ -75,18 +80,23 @@ pub async fn run_endpoint_scan(
     };
     let total_endpoints = endpoints.len() as u64;
 
-    let results = match tokio::time::timeout(std::time::Duration::from_secs(60), scan_endpoints(EndpointScanConfig {
-        base_url: target,
-        endpoints,
-        concurrency,
-        timeout_duration: timeout,
-        include_404: false,
-        tui_mode: true,
-        spoof_config: std::sync::Arc::new(SpoofConfig::default()),
-        verify_tls: true,
-        progress_tx: Some(progress_tx.clone()),
-        max_results: None,
-    })).await {
+    let results = match tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        scan_endpoints(EndpointScanConfig {
+            base_url: target,
+            endpoints,
+            concurrency,
+            timeout_duration: timeout,
+            include_404: false,
+            tui_mode: true,
+            spoof_config: std::sync::Arc::new(SpoofConfig::default()),
+            verify_tls: true,
+            progress_tx: Some(progress_tx.clone()),
+            max_results: None,
+        }),
+    )
+    .await
+    {
         Ok(Ok(results)) => results,
         Ok(Err(e)) => return Err(e.into()),
         Err(_) => return Err(anyhow::anyhow!("Endpoint scan timed out after 60s")),
@@ -121,15 +131,20 @@ pub async fn run_fingerprint(
     let port_list = crate::utils::parsing::parse_ports(&ports)?;
     let total_ports = port_list.len() as u64;
 
-    let results = match tokio::time::timeout(std::time::Duration::from_secs(60), fingerprint_services(
-        &target,
-        port_list,
-        timeout,
-        true,
-        20,
-        Some(progress_tx.clone()),
-        None,
-    )).await {
+    let results = match tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        fingerprint_services(
+            &target,
+            port_list,
+            timeout,
+            true,
+            20,
+            Some(progress_tx.clone()),
+            None,
+        ),
+    )
+    .await
+    {
         Ok(Ok(results)) => results,
         Ok(Err(e)) => return Err(e.into()),
         Err(_) => return Err(anyhow::anyhow!("Fingerprint timed out after 60s")),

@@ -75,9 +75,6 @@ pub enum SlapperError {
     #[error("Output error: {0}")]
     Output(String),
 
-    #[error("Plugin error: {0}")]
-    Plugin(String),
-
     #[error("Scope violation: {0}")]
     ScopeViolation(String),
 

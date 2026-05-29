@@ -271,7 +271,9 @@ impl TabRender for ReportTab {
             .split(area);
 
         // View selector
-        let Some(view_area) = chunks.get(0) else { return; };
+        let Some(view_area) = chunks.get(0) else {
+            return;
+        };
         let mut selector = self.view_selector.clone();
         selector.focused = self.focus_area == ReportFocusArea::ViewSelector;
         selector.render(f, *view_area);
@@ -298,7 +300,9 @@ impl TabRender for ReportTab {
             ReportView::Schedule => &self.schedule_inputs,
         };
 
-        let Some(inputs_area) = chunks.get(1) else { return; };
+        let Some(inputs_area) = chunks.get(1) else {
+            return;
+        };
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -637,8 +641,7 @@ impl TabInput for ReportTab {
     fn is_at_left_edge(&self) -> bool {
         match self.focus_area {
             ReportFocusArea::ViewSelector if self.view_selector.is_open() => {
-                self.view_selector.items.is_empty()
-                    || self.view_selector.selected == 0
+                self.view_selector.items.is_empty() || self.view_selector.selected == 0
             }
             ReportFocusArea::ViewSelector => true,
             ReportFocusArea::Inputs => {
@@ -657,7 +660,8 @@ impl TabInput for ReportTab {
         match self.focus_area {
             ReportFocusArea::ViewSelector if self.view_selector.is_open() => {
                 self.view_selector.items.is_empty()
-                    || self.view_selector.selected >= self.view_selector.items.len().saturating_sub(1)
+                    || self.view_selector.selected
+                        >= self.view_selector.items.len().saturating_sub(1)
             }
             ReportFocusArea::ViewSelector => true,
             ReportFocusArea::Inputs => {
@@ -690,5 +694,4 @@ impl ReportTab {
     pub fn page_down(&mut self, page_size: usize) {
         self.results_view.scroll_down(page_size);
     }
-
 }

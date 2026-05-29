@@ -177,7 +177,11 @@ fn count_cargo_toml_deps(path: &Path) -> anyhow::Result<usize> {
         let trimmed = line.trim();
         if trimmed.starts_with('[') {
             in_deps = trimmed == "[dependencies]" || trimmed.starts_with("[dependencies.");
-        } else if in_deps && !trimmed.is_empty() && !trimmed.starts_with('#') && !trimmed.starts_with('[') {
+        } else if in_deps
+            && !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+            && !trimmed.starts_with('[')
+        {
             count += 1;
         }
     }
@@ -221,19 +225,24 @@ fn check_dockerfile(path: &Path) -> Vec<SupplyChainFinding> {
                     severity: "low".to_string(),
                     category: "dockerfile".to_string(),
                     title: "ADD used instead of COPY".to_string(),
-                    description: "Prefer COPY over ADD for local file copies to avoid unintended effects".to_string(),
+                    description:
+                        "Prefer COPY over ADD for local file copies to avoid unintended effects"
+                            .to_string(),
                     file_path: Some(path.display().to_string()),
                     line: Some((i + 1) as u32),
                 });
             }
 
             // Check for latest tag or untagged base image
-            if trimmed.contains(":latest") || (trimmed.starts_with("FROM ") && !trimmed.contains(":")) {
+            if trimmed.contains(":latest")
+                || (trimmed.starts_with("FROM ") && !trimmed.contains(":"))
+            {
                 findings.push(SupplyChainFinding {
                     severity: "info".to_string(),
                     category: "dockerfile".to_string(),
                     title: "Using latest or untagged base image".to_string(),
-                    description: "Pin base images to specific versions for reproducibility".to_string(),
+                    description: "Pin base images to specific versions for reproducibility"
+                        .to_string(),
                     file_path: Some(path.display().to_string()),
                     line: Some((i + 1) as u32),
                 });
@@ -246,7 +255,8 @@ fn check_dockerfile(path: &Path) -> Vec<SupplyChainFinding> {
                 severity: "medium".to_string(),
                 category: "dockerfile".to_string(),
                 title: "No USER instruction found".to_string(),
-                description: "Container may run as root. Add a USER instruction to run as non-root".to_string(),
+                description: "Container may run as root. Add a USER instruction to run as non-root"
+                    .to_string(),
                 file_path: Some(path.display().to_string()),
                 line: None,
             });
@@ -279,7 +289,8 @@ fn check_github_actions(path: &Path) -> Vec<SupplyChainFinding> {
                 severity: "medium".to_string(),
                 category: "github_actions".to_string(),
                 title: "Overly broad GitHub Actions permissions".to_string(),
-                description: "Workflows with write-all or read-all permissions may be excessive".to_string(),
+                description: "Workflows with write-all or read-all permissions may be excessive"
+                    .to_string(),
                 file_path: Some(path.display().to_string()),
                 line: None,
             });
@@ -320,7 +331,11 @@ mod tests {
     #[test]
     fn scan_finds_cargo_toml() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("Cargo.toml"), "[dependencies]\nserde = \"1.0\"\n").unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            "[dependencies]\nserde = \"1.0\"\n",
+        )
+        .unwrap();
 
         let result = scan_repo(dir.path()).unwrap();
         assert_eq!(result.manifests.len(), 1);
@@ -345,7 +360,11 @@ mod tests {
     #[test]
     fn scan_detects_dockerfile_issues() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("Dockerfile"), "FROM ubuntu\nADD file.txt /app/\n").unwrap();
+        fs::write(
+            dir.path().join("Dockerfile"),
+            "FROM ubuntu\nADD file.txt /app/\n",
+        )
+        .unwrap();
 
         let result = scan_repo(dir.path()).unwrap();
         assert!(result.dockerfile_found);
@@ -365,7 +384,10 @@ mod tests {
 
         let result = scan_repo(dir.path()).unwrap();
         assert!(result.github_actions_found);
-        assert!(result.findings.iter().any(|f| f.title.contains("permissions")));
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.title.contains("permissions")));
     }
 
     #[test]
@@ -397,13 +419,14 @@ mod tests {
     #[test]
     fn dockerfile_no_user_instruction() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("Dockerfile"), "FROM ubuntu\nRUN apt-get update\n").unwrap();
+        fs::write(
+            dir.path().join("Dockerfile"),
+            "FROM ubuntu\nRUN apt-get update\n",
+        )
+        .unwrap();
 
         let result = scan_repo(dir.path()).unwrap();
-        assert!(result
-            .findings
-            .iter()
-            .any(|f| f.title.contains("No USER")));
+        assert!(result.findings.iter().any(|f| f.title.contains("No USER")));
     }
 
     #[test]
@@ -416,10 +439,7 @@ mod tests {
         .unwrap();
 
         let result = scan_repo(dir.path()).unwrap();
-        assert!(!result
-            .findings
-            .iter()
-            .any(|f| f.title.contains("No USER")));
+        assert!(!result.findings.iter().any(|f| f.title.contains("No USER")));
     }
 
     #[test]
@@ -432,10 +452,7 @@ mod tests {
         .unwrap();
 
         let result = scan_repo(dir.path()).unwrap();
-        assert!(result
-            .findings
-            .iter()
-            .any(|f| f.title.contains("latest")));
+        assert!(result.findings.iter().any(|f| f.title.contains("latest")));
     }
 
     #[test]
@@ -450,10 +467,7 @@ mod tests {
         .unwrap();
 
         let result = scan_repo(dir.path()).unwrap();
-        assert!(result
-            .findings
-            .iter()
-            .any(|f| f.title.contains("Unpinned")));
+        assert!(result.findings.iter().any(|f| f.title.contains("Unpinned")));
     }
 
     #[test]
@@ -468,10 +482,7 @@ mod tests {
         .unwrap();
 
         let result = scan_repo(dir.path()).unwrap();
-        assert!(!result
-            .findings
-            .iter()
-            .any(|f| f.title.contains("Unpinned")));
+        assert!(!result.findings.iter().any(|f| f.title.contains("Unpinned")));
     }
 
     #[test]
@@ -486,10 +497,7 @@ mod tests {
         .unwrap();
 
         let result = scan_repo(dir.path()).unwrap();
-        assert!(!result
-            .findings
-            .iter()
-            .any(|f| f.title.contains("Unpinned")));
+        assert!(!result.findings.iter().any(|f| f.title.contains("Unpinned")));
     }
 
     #[test]
@@ -509,8 +517,16 @@ mod tests {
     #[test]
     fn multiple_manifest_types() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("Cargo.toml"), "[dependencies]\nserde = \"1.0\"\n").unwrap();
-        fs::write(dir.path().join("go.mod"), "module m\n\nrequire (\n\tpkg v1\n)\n").unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            "[dependencies]\nserde = \"1.0\"\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("go.mod"),
+            "module m\n\nrequire (\n\tpkg v1\n)\n",
+        )
+        .unwrap();
         fs::write(dir.path().join("Dockerfile"), "FROM alpine\n").unwrap();
 
         let result = scan_repo(dir.path()).unwrap();

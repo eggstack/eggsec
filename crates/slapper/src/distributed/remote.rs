@@ -178,7 +178,8 @@ impl RemoteListener {
 
         // Periodic cleanup of stale rate limit entries
         let cleanup_handle = tokio::spawn(async move {
-            let mut cleanup_interval = tokio::time::interval(std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS));
+            let mut cleanup_interval =
+                tokio::time::interval(std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS));
             loop {
                 cleanup_interval.tick().await;
                 let mut limits = rate_limits.write().await;
@@ -432,8 +433,8 @@ impl RemoteListener {
                             Err(_) => break,
                         }
                     }
-                    let tasks_json = serde_json::to_string(&tasks)
-                        .unwrap_or_else(|_| "[]".to_string());
+                    let tasks_json =
+                        serde_json::to_string(&tasks).unwrap_or_else(|_| "[]".to_string());
                     let response = ResponseMessage {
                         id,
                         msg_type: "tasks_assigned".to_string(),

@@ -128,9 +128,7 @@ impl StatefulFuzzer {
                 .last()
                 .map(|r| r.status_code.to_string())
                 .unwrap_or_default(),
-            ExtractionSource::ResponseHeader(_) | ExtractionSource::Cookie(_) => {
-                String::new()
-            }
+            ExtractionSource::ResponseHeader(_) | ExtractionSource::Cookie(_) => String::new(),
         };
 
         if source.is_empty() {

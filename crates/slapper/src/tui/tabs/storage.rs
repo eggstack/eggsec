@@ -327,10 +327,7 @@ impl TabRender for StorageTab {
                 Style::default().fg(status_color),
             ));
             if let Some(chunk) = config_chunks.first() {
-                f.render_widget(
-                    ratatui::widgets::Paragraph::new(status_line),
-                    *chunk,
-                );
+                f.render_widget(ratatui::widgets::Paragraph::new(status_line), *chunk);
             }
 
             for (i, field) in self.config_inputs.fields.iter().enumerate() {
@@ -444,7 +441,8 @@ impl TabInput for StorageTab {
 
     fn handle_char(&mut self, c: char) {
         if !self.is_running() {
-            if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
+            if self.focus_area == StorageFocusArea::Config
+                && self.current_mode == StorageMode::Connect
             {
                 self.config_inputs.insert(c);
             } else if self.focus_area == StorageFocusArea::Query {
@@ -455,7 +453,8 @@ impl TabInput for StorageTab {
 
     fn handle_backspace(&mut self) {
         if !self.is_running() {
-            if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
+            if self.focus_area == StorageFocusArea::Config
+                && self.current_mode == StorageMode::Connect
             {
                 self.config_inputs.backspace();
             } else if self.focus_area == StorageFocusArea::Query {
@@ -466,7 +465,8 @@ impl TabInput for StorageTab {
 
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() {
-            if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
+            if self.focus_area == StorageFocusArea::Config
+                && self.current_mode == StorageMode::Connect
             {
                 self.config_inputs.paste(text);
             } else if self.focus_area == StorageFocusArea::Query {
@@ -477,7 +477,8 @@ impl TabInput for StorageTab {
 
     fn handle_copy(&mut self) -> Option<String> {
         if !self.is_running() {
-            if self.focus_area == StorageFocusArea::Config && self.current_mode == StorageMode::Connect
+            if self.focus_area == StorageFocusArea::Config
+                && self.current_mode == StorageMode::Connect
             {
                 return self.config_inputs.get_focused_value();
             } else if self.focus_area == StorageFocusArea::Query {

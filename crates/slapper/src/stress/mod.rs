@@ -202,6 +202,9 @@ mod tests {
         };
 
         let result = test.run_non_interactive().await;
-        assert!(result.is_ok(), "expected non-interactive run to bypass stdin confirmation");
+        assert!(
+            result.is_ok(),
+            "expected non-interactive run to bypass stdin confirmation"
+        );
     }
 }

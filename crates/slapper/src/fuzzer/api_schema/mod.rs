@@ -311,7 +311,11 @@ impl ApiSchemaFuzzer {
                 let body = match response.text().await {
                     Ok(text) => text,
                     Err(e) => {
-                        tracing::debug!("Failed to read response body for {}: {}", endpoint.path, e);
+                        tracing::debug!(
+                            "Failed to read response body for {}: {}",
+                            endpoint.path,
+                            e
+                        );
                         String::new()
                     }
                 };

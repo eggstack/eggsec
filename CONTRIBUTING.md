@@ -103,8 +103,6 @@ Slapper uses Cargo feature flags to enable optional capabilities. This allows bu
 | `tool-api` | Base abstraction layer | None |
 | `rest-api` | REST API server with MCP | axum, tower, async-stream |
 | `grpc-api` | gRPC API server | tonic, prost |
-| `python-plugins` | Python plugin support | pyo3 via slapper-plugin |
-| `ruby-plugins` | Ruby/Metasploit integration | magnus via slapper-ruby |
 | `stress-testing` | Network stress testing | pnet, socket2, nix, surge-ping |
 | `packet-inspection` | Live packet capture | pnet, libc |
 | `nse` | Nmap Scripting Engine | mlua, openssl, ssh2 |
@@ -116,8 +114,6 @@ Features are propagated between workspace crates:
 
 ```
 slapper (parent)
-├── python-plugins → slapper-plugin/python-plugins
-├── ruby-plugins → slapper-ruby/ruby-plugins
 ├── nse → slapper-nse/nse
 └── stress-testing → slapper-nse?/stress-testing (if nse enabled)
 ```
@@ -151,7 +147,6 @@ The CI runs checks and tests across multiple feature combinations:
 - **stress-testing**: Raw sockets and stress testing
 - **nse**: Nmap NSE script support
 - **nse-sandbox**: NSE with sandbox mode
-- **all-plugins**: Python and Ruby plugin support
 - **api-schema**: OpenAPI schema support
 - **sbom**: SBOM generation
 - **full**: All features combined

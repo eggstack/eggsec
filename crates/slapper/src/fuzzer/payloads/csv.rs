@@ -219,8 +219,7 @@ mod tests {
     fn test_csv_payloads_have_varied_severities() {
         use rustc_hash::FxHashSet;
         let payloads = get_payloads();
-        let severities: FxHashSet<_> =
-            payloads.iter().map(|p| p.severity).collect();
+        let severities: FxHashSet<_> = payloads.iter().map(|p| p.severity).collect();
         assert!(
             severities.len() >= 2,
             "CSV payloads should have varied severities"

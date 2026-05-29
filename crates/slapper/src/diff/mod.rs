@@ -112,7 +112,10 @@ pub fn format_diff_text(diff: &DiffResult) -> String {
 
     out.push_str("=== Scan Diff Report ===\n\n");
     out.push_str(&format!("Old scan: {} findings\n", diff.summary.old_total));
-    out.push_str(&format!("New scan: {} findings\n\n", diff.summary.new_total));
+    out.push_str(&format!(
+        "New scan: {} findings\n\n",
+        diff.summary.new_total
+    ));
 
     if !diff.new.is_empty() {
         out.push_str(&format!("--- New Findings ({}) ---\n", diff.new.len()));

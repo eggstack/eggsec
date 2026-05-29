@@ -204,7 +204,11 @@ impl TemplateMatcher {
                                 re
                             }
                             Err(e) => {
-                                tracing::debug!("invalid regex pattern '{}': {}", search.pattern, e);
+                                tracing::debug!(
+                                    "invalid regex pattern '{}': {}",
+                                    search.pattern,
+                                    e
+                                );
                                 return false;
                             }
                         }

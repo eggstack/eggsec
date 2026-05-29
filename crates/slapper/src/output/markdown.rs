@@ -131,7 +131,10 @@ impl MarkdownReport {
     }
 }
 
-pub fn generate_markdown_report(summary: ScanSummary, findings: Vec<Finding>) -> Result<String, std::fmt::Error> {
+pub fn generate_markdown_report(
+    summary: ScanSummary,
+    findings: Vec<Finding>,
+) -> Result<String, std::fmt::Error> {
     let report = MarkdownReport::new(summary, findings);
     report.generate()
 }

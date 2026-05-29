@@ -1,6 +1,6 @@
+use lru::LruCache;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use lru::LruCache;
 
 const DEFAULT_MAX_HISTORY: usize = 1000;
 

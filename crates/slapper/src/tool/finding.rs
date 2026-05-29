@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 
 use crate::fuzzer::FuzzResult;
 use crate::types::Severity;
@@ -243,9 +243,11 @@ impl From<FuzzResult> for Finding {
         );
         metadata.insert(
             "payload".to_string(),
-            serde_json::to_value(&result.payload).inspect_err(|e| {
-                tracing::debug!(error = %e, "Failed to serialize payload metadata");
-            }).unwrap_or_default(),
+            serde_json::to_value(&result.payload)
+                .inspect_err(|e| {
+                    tracing::debug!(error = %e, "Failed to serialize payload metadata");
+                })
+                .unwrap_or_default(),
         );
 
         Finding {
@@ -348,15 +350,19 @@ impl From<crate::scanner::fingerprint::ServiceFingerprint> for Finding {
                 );
                 m.insert(
                     "product".to_string(),
-                    serde_json::to_value(&fp.product).inspect_err(|e| {
-                        tracing::debug!(error = %e, "Failed to serialize product metadata");
-                    }).unwrap_or_default(),
+                    serde_json::to_value(&fp.product)
+                        .inspect_err(|e| {
+                            tracing::debug!(error = %e, "Failed to serialize product metadata");
+                        })
+                        .unwrap_or_default(),
                 );
                 m.insert(
                     "version".to_string(),
-                    serde_json::to_value(&fp.version).inspect_err(|e| {
-                        tracing::debug!(error = %e, "Failed to serialize version metadata");
-                    }).unwrap_or_default(),
+                    serde_json::to_value(&fp.version)
+                        .inspect_err(|e| {
+                            tracing::debug!(error = %e, "Failed to serialize version metadata");
+                        })
+                        .unwrap_or_default(),
                 );
                 m.insert(
                     "confidence".to_string(),
@@ -364,9 +370,11 @@ impl From<crate::scanner::fingerprint::ServiceFingerprint> for Finding {
                 );
                 m.insert(
                     "banner".to_string(),
-                    serde_json::to_value(&fp.banner).inspect_err(|e| {
-                        tracing::debug!(error = %e, "Failed to serialize banner metadata");
-                    }).unwrap_or_default(),
+                    serde_json::to_value(&fp.banner)
+                        .inspect_err(|e| {
+                            tracing::debug!(error = %e, "Failed to serialize banner metadata");
+                        })
+                        .unwrap_or_default(),
                 );
                 m
             },
@@ -405,15 +413,19 @@ impl From<crate::scanner::udp_fingerprint::UdpServiceFingerprint> for Finding {
                 m.insert("service".to_string(), serde_json::Value::String(fp.service));
                 m.insert(
                     "response".to_string(),
-                    serde_json::to_value(&fp.response).inspect_err(|e| {
-                        tracing::debug!(error = %e, "Failed to serialize response metadata");
-                    }).unwrap_or_default(),
+                    serde_json::to_value(&fp.response)
+                        .inspect_err(|e| {
+                            tracing::debug!(error = %e, "Failed to serialize response metadata");
+                        })
+                        .unwrap_or_default(),
                 );
                 m.insert(
                     "banner".to_string(),
-                    serde_json::to_value(&fp.banner).inspect_err(|e| {
-                        tracing::debug!(error = %e, "Failed to serialize banner metadata");
-                    }).unwrap_or_default(),
+                    serde_json::to_value(&fp.banner)
+                        .inspect_err(|e| {
+                            tracing::debug!(error = %e, "Failed to serialize banner metadata");
+                        })
+                        .unwrap_or_default(),
                 );
                 m.insert(
                     "confidence".to_string(),

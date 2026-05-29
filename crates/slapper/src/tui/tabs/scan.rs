@@ -381,19 +381,18 @@ impl TabRender for ScanTab {
             .filter(|s| matches!(s.status, StageStatus::Completed))
             .count();
         let progress_text = format!("Stages ({}/{})", completed, self.stages.len());
-        let stages_block = Paragraph::new(stage_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(progress_text)
-                    .border_style(
-                        Style::default().fg(if self.focus_area == ScanFocusArea::Results {
-                            tc!(border_focused)
-                        } else {
-                            tc!(border)
-                        }),
-                    ),
-            );
+        let stages_block = Paragraph::new(stage_lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(progress_text)
+                .border_style(
+                    Style::default().fg(if self.focus_area == ScanFocusArea::Results {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    }),
+                ),
+        );
         f.render_widget(stages_block, stages_area);
 
         let output_block = Block::default()

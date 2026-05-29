@@ -95,7 +95,6 @@ All 29 tabs now properly guard input handlers with `!self.is_running()`. This pr
 - **scan_endpoints.rs:333-335**: Fixed `handle_focus_prev()` to use `focus_prev()` with `is_empty()` guard
 - **fuzz.rs:477-497**: Added `config_chunks.len() >= 7` guard before accessing config_chunks[3-6]
 - **fuzz.rs:583-591**: Added `config_chunks.len() >= 6` guard and `.get()` pattern for dropdown info
-- **plugin.rs:250-252**: Added `input_chunks.first()` check before accessing `input_chunks[0]`
 - **graphql.rs:296-300**: Added `options_chunks.len() >= 4` guard for checkbox renders
 - **oauth.rs:341-345**: Added `options_chunks.len() >= 4` guard for checkbox renders
 - **nse.rs:393-401**: Fixed `is_at_left_edge()` - changed `<=` to `==` for left edge detection
@@ -618,7 +617,7 @@ if let Err(e) = progress_tx.send((requests, requests)).await {
 }
 ```
 
-Files fixed (2026-05-31 session): api.rs (15), fuzzer.rs (8), network.rs (13), plugin.rs (10), recon.rs (12), scanner.rs (9), security.rs (27)
+Files fixed (2026-05-31 session): api.rs (15), fuzzer.rs (8), network.rs (13), recon.rs (12), scanner.rs (9), security.rs (27)
 
 ### Error String Matching in Retry Logic
 
@@ -747,7 +746,6 @@ self.entries
 | cluster.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
 | proxy.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
 | nse.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
-| plugin.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
 | report.rs | ✅ Fixed | ✅ Fixed | ✅ Fixed |
 
 ### is_at_*_edge Guards for Selectors
@@ -833,7 +831,6 @@ pub fn is_at_left_edge(&self) -> bool {
 | security.rs | 27 |
 | recon.rs | 12 |
 | network.rs | 13 |
-| plugin.rs | 10 |
 | scanner.rs | 9 |
 | fuzzer.rs | 8 |
 
@@ -872,7 +869,6 @@ pub fn is_at_left_edge(&self) -> bool {
 |------|-------|--------|
 | `report.rs` | 457 | ✅ Fixed |
 | `nse.rs` | 311 | ✅ Fixed (removed inverted guard) |
-| `plugin.rs` | 356 | ✅ Fixed (rewrote to stop when running, start when idle) |
 
 ### Other Tab Fixes
 
@@ -897,7 +893,6 @@ Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `ha
 
 | File | Lines | Fix |
 |------|-------|-----|
-| `plugin.rs` | 419-435 | Added `self.plugin_selector.items.is_empty() \|\|` to both `is_at_left_edge()` and `is_at_right_edge()` |
 | `input.rs` | 684-698 | Wrapped `can_move_left()` and `can_move_right()` in `if !self.fields.is_empty()` check |
 
 ### Non-TUI Module Fixes
@@ -952,7 +947,6 @@ Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `ha
 |------|-------|-------|-----|
 | `report.rs` | 457-487 | `handle_enter()` returns early when not running | Restructured to allow selector interaction when idle + proper start/stop |
 | `nse.rs` | 311-340 | `handle_enter()` logic issue with Results + is_running | Restructured to properly handle blur/selector |
-| `plugin.rs` | 356-388 | Missing `start()` method + handle_enter incomplete | Added `start()` method, restructured `handle_enter()` |
 
 ### Missing is_running() Guards on handle_enter
 
@@ -990,7 +984,6 @@ Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `ha
 
 | File | Lines | Issue | Fix |
 |------|-------|-------|-----|
-| `plugin.rs` | 100 | Silent `discover_plugins()` call | Changed to `if let Err(e) = ...` with debug |
 | `task_runtime.rs` | 72-76 | Silent error suppression `Err(_e)` | Changed to `if let Err(e) = ...` using actual error |
 
 ### Tool/AI Module Fixes
@@ -1045,7 +1038,6 @@ Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `ha
 | `cluster.rs` | 9 handlers |
 | `proxy.rs` | 13 handlers |
 | `nse.rs` | 8 handlers |
-| `plugin.rs` | 8 handlers |
 | `hunt.rs` | 6 handlers |
 | `browser.rs` | 6 handlers |
 | `report.rs` | 12 handlers |
@@ -1101,7 +1093,6 @@ Added `!self.items.is_empty()` guard to `handle_left()` for consistency with `ha
 | `cluster.rs` | view_selector, worker/coordinator/status_inputs |
 | `proxy.rs` | view_selector |
 | `nse.rs` | input fields |
-| `plugin.rs` | input fields, plugin_selector, plugins_loaded, plugin_list |
 | `hunt.rs` | checkbox reset, focused_checkbox_index, focus_area |
 | `browser.rs` | checkbox reset, focused_checkbox_index, focus_area |
 | `compliance.rs` | framework_selector.select(0), focus_area |
@@ -1184,7 +1175,7 @@ Completed comprehensive audit of all 29 TUI tabs across 6 groups. Fixed ~100+ is
 | Group 1 | recon, scan, scan_ports, scan_endpoints, fingerprint | 21 navigation guards + handle_enter logic + reset() |
 | Group 2 | fuzz, waf, waf_stress, load, stress | 40 navigation guards |
 | Group 3 | packet, graphql, oauth, cluster, proxy | 13 fixes (bounds, guards, logic) |
-| Group 4 | nse, plugin, hunt, browser, compliance | 15+ fixes |
+| Group 4 | nse, hunt, browser, compliance | 15+ fixes |
 | Group 5 | storage, integrations, workflow, vuln, report | 8 major fixes |
 | Group 6 | history, settings | 18 navigation guards + reset fields |
 
@@ -1260,7 +1251,6 @@ Key patterns fixed:
 | `proxy.rs` | 388 | `reset()` doesn't reset `current_view` and `view_selector` | Added resets |
 | `proxy.rs` | 725-759 | 6 duplicate navigation methods missing guard | Added `is_running()` guards |
 | `nse.rs` | 324 | `handle_enter()` early return issue | Restructured to remove early returns |
-| `plugin.rs` | 196 | `reset()` missing `plugins_loaded` and `plugin_list` reset | Added resets |
 | `hunt.rs` | 229 | `reset()` doesn't reset checkboxes | Added checkbox reset loop |
 | `browser.rs` | 195 | `reset()` doesn't reset checkboxes | Added checkbox reset loop |
 | `compliance.rs` | 345 | `handle_top/bottom` missing `is_running()` guard | Added guards |
@@ -1271,7 +1261,6 @@ Key patterns fixed:
 
 | File | Line | Issue | Fix |
 |------|------|-------|-----|
-| `plugin.rs` | 12 | Silent `unwrap_or_default()` on plugin discovery | Changed to `unwrap_or_else(\|e\| { warn; Vec::new() })` |
 | `recon.rs` | 166 | Silent `let _ =` on progress send | Changed to `if let Err(e) = ...` |
 | `recon.rs` | 62 | `pipeline.run()` missing timeout | Added 300s timeout wrapper |
 | `scanner.rs` | 37 | `scan_ports()` missing timeout | Added 60s timeout wrapper |

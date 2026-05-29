@@ -7,7 +7,7 @@
 - **Phase 1** (2026-06-09): All 15 module reviews completed
   - Group A: ai_agents, config, output, overview, waf
   - Group B: cli_commands, recon, scanner, loadtest, networking
-  - Group C: distributed, fuzzer, pipeline, plugins_nse, tui
+  - Group C: distributed, fuzzer, pipeline, nse_integration, tui
 - **Phase 2** (2026-06-09): Stale items detection completed → `plans/stale_items_review.md`
 - **Phase 3** (2026-06-09): Synthesis completed → `plans/review_summary.md`
 
@@ -37,7 +37,7 @@ Review all 15 architecture documents (excluding this file) against their corresp
 | 8 | Output | `output.md` | `crates/slapper/src/output/` | `plans/output_review.md` |
 | 9 | Overview | `overview.md` | N/A (cross-cutting) | `plans/overview_review.md` |
 | 10 | Pipeline | `pipeline.md` | `crates/slapper/src/pipeline/` | `plans/pipeline_review.md` |
-| 11 | Plugins/NSE | `plugins_nse.md` | `slapper-nse/`, `crates/slapper-plugin/`, `crates/slapper-ruby/` | `plans/plugins_nse_review.md` |
+| 11 | NSE | `nse_integration.md` | `slapper-nse/` | `plans/nse_integration_review.md` |
 | 12 | Recon | `recon.md` | `crates/slapper/src/recon/` | `plans/recon_review.md` |
 | 13 | Scanner | `scanner.md` | `crates/slapper/src/scanner/` | `plans/scanner_review.md` |
 | 14 | TUI | `tui.md` | `crates/slapper/src/tui/` | `plans/tui_review.md` |

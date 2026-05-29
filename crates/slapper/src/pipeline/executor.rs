@@ -170,7 +170,7 @@ impl Pipeline {
         &self.stages
     }
 
-pub async fn run(&self) -> Result<PipelineReport> {
+    pub async fn run(&self) -> Result<PipelineReport> {
         let start = Instant::now();
 
         if self.concurrent_stages {
@@ -252,17 +252,21 @@ pub async fn run(&self) -> Result<PipelineReport> {
     async fn run_concurrent(&self) -> Result<PipelineReport> {
         let start = Instant::now();
 
-        let stage_futures: Vec<_> = self.stages.iter().map(|stage| async {
-            let stage_start = Instant::now();
-            let result = self.execute_stage(stage).await;
-            let stage_result = StageResult {
-                stage: *stage,
-                duration_ms: stage_start.elapsed().as_millis() as u64,
-                success: result.is_ok(),
-                error: result.as_ref().err().map(|e| e.to_string()),
-            };
-            stage_result
-        }).collect();
+        let stage_futures: Vec<_> = self
+            .stages
+            .iter()
+            .map(|stage| async {
+                let stage_start = Instant::now();
+                let result = self.execute_stage(stage).await;
+                let stage_result = StageResult {
+                    stage: *stage,
+                    duration_ms: stage_start.elapsed().as_millis() as u64,
+                    success: result.is_ok(),
+                    error: result.as_ref().err().map(|e| e.to_string()),
+                };
+                stage_result
+            })
+            .collect();
 
         let stage_results = futures::future::join_all(stage_futures).await;
         let context = self.context.lock().await.clone();
@@ -502,8 +506,7 @@ pub async fn run(&self) -> Result<PipelineReport> {
             common: self.common.clone(),
         };
 
-        let runner =
-            crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, config)?;
+        let runner = crate::loadtest::runner::LoadTestRunner::from_args_with_config(args, config)?;
         runner.run().await?;
 
         Ok(())

@@ -160,7 +160,10 @@ impl SessionManager {
         }
 
         if !app.theme_manager.set_theme(&state.theme_name) {
-            tracing::warn!("Failed to restore theme '{}': unknown theme", state.theme_name);
+            tracing::warn!(
+                "Failed to restore theme '{}': unknown theme",
+                state.theme_name
+            );
         }
         crate::tui::theme::sync_theme_to_thread_local(app.theme_manager.current());
     }
@@ -198,11 +201,7 @@ impl SessionManager {
         while sessions.len() > self.config.max_sessions {
             if let Some(oldest) = sessions.first() {
                 if let Err(e) = fs::remove_file(oldest.path()) {
-                    tracing::warn!(
-                        "Failed to cleanup old session {:?}: {:?}",
-                        oldest.path(),
-                        e
-                    );
+                    tracing::warn!("Failed to cleanup old session {:?}: {:?}", oldest.path(), e);
                 }
                 sessions.swap_remove(0);
             }

@@ -129,11 +129,7 @@ fn parse_operation(
     let parameters = operation
         .get("parameters")
         .and_then(|p| p.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|p| parse_parameter(p).ok())
-                .collect()
-        })
+        .map(|arr| arr.iter().filter_map(|p| parse_parameter(p).ok()).collect())
         .unwrap_or_default();
 
     let request_body = operation
@@ -225,10 +221,7 @@ fn parse_security_schemes(value: &serde_json::Value) -> Vec<SecurityScheme> {
                         .unwrap_or("unknown")
                         .to_string();
                     let location = match scheme_type.as_str() {
-                        "apiKey" => scheme
-                            .get("in")
-                            .and_then(|i| i.as_str())
-                            .map(String::from),
+                        "apiKey" => scheme.get("in").and_then(|i| i.as_str()).map(String::from),
                         "http" => Some(
                             scheme
                                 .get("scheme")
@@ -371,10 +364,7 @@ components:
         let schema = parse_openapi(SAMPLE_OPENAPI, false).unwrap();
         assert_eq!(schema.title, Some("Test API".to_string()));
         assert_eq!(schema.version, Some("1.0.0".to_string()));
-        assert_eq!(
-            schema.base_url,
-            Some("https://api.example.com".to_string())
-        );
+        assert_eq!(schema.base_url, Some("https://api.example.com".to_string()));
         assert_eq!(schema.endpoints.len(), 2);
         assert_eq!(schema.security_schemes.len(), 1);
     }
@@ -408,10 +398,7 @@ components:
         assert_eq!(get_users.path, "/users");
         assert_eq!(get_users.method, "GET");
         assert_eq!(get_users.operation_id, Some("listUsers".to_string()));
-        assert_eq!(
-            get_users.summary,
-            Some("List all users".to_string())
-        );
+        assert_eq!(get_users.summary, Some("List all users".to_string()));
         assert_eq!(get_users.tags, vec!["users".to_string()]);
         assert_eq!(get_users.parameters.len(), 2);
 
@@ -434,10 +421,7 @@ components:
         assert_eq!(post_users.method, "POST");
         let body = post_users.request_body.as_ref().unwrap();
         assert!(body.required);
-        assert_eq!(
-            body.content_type,
-            Some("application/json".to_string())
-        );
+        assert_eq!(body.content_type, Some("application/json".to_string()));
         assert!(body.schema.is_some());
     }
 

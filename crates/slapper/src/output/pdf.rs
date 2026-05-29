@@ -70,7 +70,10 @@ impl PdfGenerator {
 
         if findings.len() > 30 {
             current_layer.use_text(
-                &format!("Warning: {} findings truncated to 30 (PDF page limit)", findings.len() - 30),
+                &format!(
+                    "Warning: {} findings truncated to 30 (PDF page limit)",
+                    findings.len() - 30
+                ),
                 10.0,
                 Mm(20.0),
                 Mm(228.0),

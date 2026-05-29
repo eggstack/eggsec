@@ -40,7 +40,6 @@ Manages the overall application state, event loop, and rendering.
 | Cluster | `cluster.rs` | Distributed scanning cluster management |
 | Proxy | `proxy.rs` | Proxy pool management |
 | NSE | `nse.rs` | Nmap NSE script execution |
-| Plugin | `plugin.rs` | Python/Ruby security plugin runner |
 | Hunt | `hunt.rs` | Intelligent vulnerability hunting |
 | Browser | `browser.rs` | Headless browser security testing |
 | Compliance | `compliance.rs` | Compliance report generation (OWASP, PCI, HIPAA, SOC2) |
@@ -435,18 +434,18 @@ pub fn can_move_left(&self) -> bool {
 }
 ```
 
-### PluginSelector Edge Detection Empty Guard
+### Selector Edge Detection Empty Guard
 
-Tabs with `PluginSelector` or similar selectors must guard against empty selector items:
+Tabs with `Selector` or similar selectors must guard against empty selector items:
 
 ```rust
 // WRONG - items could be empty causing incorrect edge detection
-PluginFocusArea::PluginSelector => self.plugin_selector.selected == 0,
+FocusArea::Selector => self.selector.selected == 0,
 
 // CORRECT - guard against empty selector
-PluginFocusArea::PluginSelector => {
-    self.plugin_selector.items.is_empty()
-        || self.plugin_selector.selected == 0
+FocusArea::Selector => {
+    self.selector.items.is_empty()
+        || self.selector.selected == 0
 }
 ```
 
@@ -548,7 +547,7 @@ if let Err(e) = progress_tx.send((requests, requests)).await {
 
 This pattern was fixed across all 7 worker files (94 total occurrences) in the 2026-05-31 session:
 - `api.rs` (15), `security.rs` (27), `recon.rs` (12), `network.rs` (13)
-- `plugin.rs` (10), `scanner.rs` (9), `fuzzer.rs` (8)
+- `scanner.rs` (9), `fuzzer.rs` (8)
 
 ### Selector confirm() Return Value
 
@@ -766,7 +765,6 @@ fn clamp_quick_switch_selection(&self, app: &mut App) {
 |------|-------|--------|
 | `report.rs` | 457-460 | `handle_enter()` guarded | ✅ Fixed |
 | `nse.rs` | 312-314 | `handle_enter()` guarded | ✅ Fixed |
-| `plugin.rs` | 357-359 | `handle_enter()` guarded | ✅ Fixed |
 
 ### Other Tab-Specific Fixes
 
@@ -810,7 +808,6 @@ fn clamp_quick_switch_selection(&self, app: &mut App) {
 |------|-------|-------|-----|
 | `report.rs` | 457-487 | `handle_enter()` returns early when not running | Restructured to allow selector interaction when idle |
 | `nse.rs` | 311-340 | `handle_enter()` logic issue with Results + is_running | Restructured to properly handle blur/selector |
-| `plugin.rs` | 356-388 | Missing `start()` method | Added `start()` method, restructured `handle_enter()` |
 | `graphql.rs` | 415-432 | Missing `is_running()` guard on `handle_enter()` | Added `!self.is_running()` guard |
 | `oauth.rs` | 459-476 | Missing `is_running()` guard on `handle_enter()` | Added `!self.is_running()` guard |
 | `recon.rs` | 591-596 | Missing `is_running()` guard on Options toggle | Added `!self.is_running()` guard |
@@ -843,7 +840,6 @@ fn clamp_quick_switch_selection(&self, app: &mut App) {
 
 | File | Lines | Issue | Fix |
 |------|-------|-------|-----|
-| `plugin.rs` | 100 | Silent `discover_plugins()` call | Changed to `if let Err(e) = ...` with debug |
 | `task_runtime.rs` | 72-76 | Silent error suppression `Err(_e)` | Changed to `if let Err(e) = ...` using actual error |
 | `session.rs` | 525, 1016 | Silent error suppression `unwrap_or_default()` | Changed to `unwrap_or_else(\|e\| { warn!; String::new() })` |
 | `state.rs` | 217 | `debug!` instead of `warn!` for file removal | Changed to `tracing::warn!` |
@@ -914,7 +910,6 @@ All `!self.is_running()` guards added to navigation handlers:
 | `cluster.rs` | view_selector, worker/coordinator/status_inputs |
 | `proxy.rs` | view_selector |
 | `nse.rs` | input fields |
-| `plugin.rs` | input fields, plugin_selector, plugins_loaded, plugin_list |
 | `hunt.rs`, `browser.rs` | checkbox reset, focused_checkbox_index, focus_area |
 | `compliance.rs` | framework_selector.select(0), focus_area |
 | `storage.rs` | mode_selector, query_inputs, focus_area, current_mode |
@@ -992,7 +987,6 @@ Key patterns fixed:
 |------|------|-------|-----|
 | `api.rs` | 143 | Division by zero | Added `.max(1)` guard |
 | `recon.rs` | 127-168 | progress_handle spawn no timeout | Added 300s timeout |
-| `plugin.rs` | 12, 100 | Silent plugin discovery failures | Added error checks |
 | `network.rs` | 168-170 | capture.start() no timeout | Added 300s timeout |
 
 ### Tool/AI/App/Scanner/Config Fixes
@@ -1192,7 +1186,6 @@ All 5 tabs passed audit - no bugs found.
 | `nse.rs` | 353 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
 | `compliance.rs` | 367-386 | `handle_enter` unconditionally calls `start()` | Restructured: only Results triggers start |
 | `compliance.rs` | 388 | `handle_escape()` missing `is_running()` guard | Added guard returning early |
-| `plugin.rs` | - | No bugs found | - |
 | `hunt.rs` | - | No bugs found | - |
 | `browser.rs` | - | No bugs found | - |
 

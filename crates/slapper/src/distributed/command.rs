@@ -45,7 +45,10 @@ pub enum CommandMessage {
     #[serde(rename = "heartbeat")]
     Heartbeat { id: String, status: String },
     #[serde(rename = "result")]
-    Result { id: String, result: crate::distributed::TaskResult },
+    Result {
+        id: String,
+        result: crate::distributed::TaskResult,
+    },
     #[serde(rename = "request_tasks")]
     RequestTasks {
         id: String,

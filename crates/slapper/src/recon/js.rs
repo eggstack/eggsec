@@ -13,9 +13,12 @@ static ENDPOINT_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
             .expect("valid endpoint pattern"),
         Regex::new(r#"fetch\s*\(\s*["']([^"'<>\s]+)["']"#).expect("valid fetch pattern"),
         Regex::new(r#"axios\.[\w]+\(\s*["']([^"'<>\s]+)["']"#).expect("valid axios pattern"),
-        Regex::new(r#"\$\.ajax\s*\(\s*\{[^}]*url\s*:\s*["']([^"'<>\s]+)["']"#).expect("valid jQuery ajax pattern"),
-        Regex::new(r#"window\.open\s*\(\s*["']([^"'<>\s]+)["']"#).expect("valid window.open pattern"),
-        Regex::new(r#"(?:href|src|action)\s*=\s*["']([^"'<>\s]+)["']"#).expect("valid href/src/action pattern"),
+        Regex::new(r#"\$\.ajax\s*\(\s*\{[^}]*url\s*:\s*["']([^"'<>\s]+)["']"#)
+            .expect("valid jQuery ajax pattern"),
+        Regex::new(r#"window\.open\s*\(\s*["']([^"'<>\s]+)["']"#)
+            .expect("valid window.open pattern"),
+        Regex::new(r#"(?:href|src|action)\s*=\s*["']([^"'<>\s]+)["']"#)
+            .expect("valid href/src/action pattern"),
     ]
 });
 
@@ -52,7 +55,8 @@ static SECRET_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(|| 
         ),
         (
             r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#,
-            Regex::new(r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#).expect("valid JWT pattern"),
+            Regex::new(r#"(?i)(jwt|token)["']?\s*[:=]\s*["'](eyJ[a-zA-Z0-9\-_\.]+)["']"#)
+                .expect("valid JWT pattern"),
         ),
     ]
 });

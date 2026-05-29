@@ -317,7 +317,6 @@ impl FuzzEngine {
 
         Ok(results)
     }
-
 }
 
 #[cfg(test)]

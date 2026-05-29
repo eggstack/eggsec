@@ -238,10 +238,7 @@ mod tests {
         findings[0].finding_type = FindingType::Misconfiguration;
 
         let summary = ReportSummary::from_findings(&findings);
-        assert_eq!(
-            summary.by_type.get("Misconfiguration").unwrap(),
-            &1
-        );
+        assert_eq!(summary.by_type.get("Misconfiguration").unwrap(), &1);
     }
 
     #[test]

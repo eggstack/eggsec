@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioResolver;
+use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -146,9 +146,11 @@ impl Traceroute {
         if self.config.parallel_probes {
             for ttl in self.config.first_ttl..=self.config.max_hops {
                 let hop = if use_icmp {
-                    self.probe_hop_icmp_parallel(target_ip, ttl, semaphore.clone()).await
+                    self.probe_hop_icmp_parallel(target_ip, ttl, semaphore.clone())
+                        .await
                 } else {
-                    self.probe_hop_udp_parallel(target_ip, ttl, semaphore.clone()).await
+                    self.probe_hop_udp_parallel(target_ip, ttl, semaphore.clone())
+                        .await
                 };
 
                 let hop_addr = hop.address.clone();
@@ -247,7 +249,12 @@ impl Traceroute {
         })
     }
 
-    async fn probe_hop_udp_parallel(&self, target: IpAddr, ttl: u8, semaphore: Arc<Semaphore>) -> TracerouteHop {
+    async fn probe_hop_udp_parallel(
+        &self,
+        target: IpAddr,
+        ttl: u8,
+        semaphore: Arc<Semaphore>,
+    ) -> TracerouteHop {
         let mut hop = TracerouteHop::new(ttl);
         let target_port = self.config.port + ttl as u16 - 1;
 
@@ -261,7 +268,9 @@ impl Traceroute {
                 let semaphore = semaphore.clone();
 
                 tokio::spawn(async move {
-                    let _permit = semaphore.acquire().await
+                    let _permit = semaphore
+                        .acquire()
+                        .await
                         .map_err(|e| ProbeError::SocketError(e.to_string()))?;
                     let start = Instant::now();
                     let socket = std::net::UdpSocket::bind("0.0.0.0:0")
@@ -329,7 +338,12 @@ impl Traceroute {
     }
 
     #[cfg(all(feature = "stress-testing", unix))]
-    async fn probe_hop_icmp_parallel(&self, target: IpAddr, ttl: u8, semaphore: Arc<Semaphore>) -> TracerouteHop {
+    async fn probe_hop_icmp_parallel(
+        &self,
+        target: IpAddr,
+        ttl: u8,
+        semaphore: Arc<Semaphore>,
+    ) -> TracerouteHop {
         use surge_ping::{Client, Config};
 
         let mut hop = TracerouteHop::new(ttl);
@@ -354,8 +368,7 @@ impl Traceroute {
 
             let handle: tokio::task::JoinHandle<(Option<IpAddr>, Option<Duration>)> =
                 tokio::spawn(async move {
-                    let _permit = semaphore.acquire().await
-                        .map_err(|_| (None, None))?;
+                    let _permit = semaphore.acquire().await.map_err(|_| (None, None))?;
                     match surge_ping::ping(target, &payload).await {
                         Ok((_, rtt)) => (Some(target), Some(rtt)),
                         Err(e) => {
@@ -390,7 +403,12 @@ impl Traceroute {
     }
 
     #[cfg(not(all(feature = "stress-testing", unix)))]
-    async fn probe_hop_icmp_parallel(&self, _target: IpAddr, _ttl: u8, _semaphore: Arc<Semaphore>) -> TracerouteHop {
+    async fn probe_hop_icmp_parallel(
+        &self,
+        _target: IpAddr,
+        _ttl: u8,
+        _semaphore: Arc<Semaphore>,
+    ) -> TracerouteHop {
         TracerouteHop::new(_ttl)
     }
 

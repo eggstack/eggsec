@@ -1,9 +1,7 @@
 [workspace]
 members = [
     "crates/slapper",
-    "crates/slapper-plugin",
     "crates/slapper-nse",
-    "crates/slapper-ruby",
 ]
 resolver = "2"
 

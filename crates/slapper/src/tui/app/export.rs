@@ -23,7 +23,6 @@ impl super::App {
             super::tabs::Tab::Stress => "stress_results",
             super::tabs::Tab::Report => "report_results",
             super::tabs::Tab::Nse => "nse_results",
-            super::tabs::Tab::Plugin => "plugin_results",
             super::tabs::Tab::Settings => "settings",
             super::tabs::Tab::History => "history",
             super::tabs::Tab::Dashboard => "dashboard",
@@ -250,10 +249,6 @@ impl super::App {
             }
             super::tabs::Tab::Nse => {
                 let msg = "NSE tab: no exportable data available".to_string();
-                self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
-            }
-            super::tabs::Tab::Plugin => {
-                let msg = "Plugin tab: no exportable data available".to_string();
                 self.notification = Some(Notification::new(msg, NotificationSeverity::Warning));
             }
             super::tabs::Tab::Settings => {

@@ -92,22 +92,14 @@ impl KeyHandler {
         true
     }
 
-    fn handle_mode_specific_input(
-        &self,
-        app: &mut App,
-        key: &crossterm::event::KeyEvent,
-    ) -> bool {
+    fn handle_mode_specific_input(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
         match app.mode {
             InputMode::Normal => self.handle_normal_mode_input(app, key),
             InputMode::Insert => self.handle_insert_mode_input(app, key),
         }
     }
 
-    fn handle_normal_mode_input(
-        &self,
-        app: &mut App,
-        key: &crossterm::event::KeyEvent,
-    ) -> bool {
+    fn handle_normal_mode_input(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
         match (key.modifiers, key.code) {
             (KeyModifiers::NONE, KeyCode::Char('i')) => self.handle_enter_insert_mode(app),
             (KeyModifiers::NONE, KeyCode::Char('q')) => self.handle_quit(app),
@@ -144,11 +136,7 @@ impl KeyHandler {
         true
     }
 
-    fn handle_insert_mode_input(
-        &self,
-        app: &mut App,
-        key: &crossterm::event::KeyEvent,
-    ) -> bool {
+    fn handle_insert_mode_input(&self, app: &mut App, key: &crossterm::event::KeyEvent) -> bool {
         match (key.modifiers, key.code) {
             (KeyModifiers::CONTROL, KeyCode::Char(' ')) => {
                 app.handle_autocomplete();
@@ -414,14 +402,14 @@ impl KeyHandler {
                 }
                 app.close_quick_switch();
             }
-            (KeyModifiers::NONE, KeyCode::Up)
-                if app.quick_switch_selected > 0 => {
-                    app.quick_switch_selected -= 1;
-                }
+            (KeyModifiers::NONE, KeyCode::Up) if app.quick_switch_selected > 0 => {
+                app.quick_switch_selected -= 1;
+            }
             (KeyModifiers::NONE, KeyCode::Down)
-                if app.quick_switch_selected < results.len().saturating_sub(1) => {
-                    app.quick_switch_selected += 1;
-                }
+                if app.quick_switch_selected < results.len().saturating_sub(1) =>
+            {
+                app.quick_switch_selected += 1;
+            }
             (KeyModifiers::CONTROL, KeyCode::Char('u')) | (KeyModifiers::NONE, KeyCode::PageUp) => {
                 if app.quick_switch_selected >= 10 {
                     app.quick_switch_selected -= 10;

@@ -842,10 +842,7 @@ pub async fn scan_endpoints(config: EndpointScanConfig) -> Result<EndpointScanRe
     let results_map = Arc::try_unwrap(results).map_err(|_| {
         crate::error::SlapperError::Runtime("Arc ref count non-zero after workers completed".into())
     })?;
-    let mut results: Vec<EndpointResult> = results_map
-        .into_iter()
-        .map(|(_, v)| v)
-        .collect();
+    let mut results: Vec<EndpointResult> = results_map.into_iter().map(|(_, v)| v).collect();
     results.sort_by(|a, b| {
         b.interesting
             .cmp(&a.interesting)

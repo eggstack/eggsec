@@ -34,7 +34,7 @@ The `Commands` enum is organized into logical groups:
 | Recon operations | `Recon` |
 | Planning & CI | `Plan`, `Ci`, `Sbom` |
 | Load testing | `Load` |
-| Tool operations | `Packet`, `Nse`, `Plugin`, `Report` |
+| Tool operations | `Packet`, `Nse`, `Report` |
 | Stress testing | `Stress`, `Proxy`, `Icmp`, `Traceroute` |
 | Infrastructure | `Cluster`, `Notify`, `Remote`, `Exec`, `Serve`, `McpServe`, `Agent` |
 | AI operations | `AiAnalyze` |
@@ -60,8 +60,7 @@ handlers/
 ├── auth_test.rs # Authentication testing
 ├── agent.rs    # Autonomous agent
 ├── ai_analyze.rs # AI analysis
-├── sbom.rs     # SBOM generation
-└── plugin.rs   # Plugin management
+└── sbom.rs     # SBOM generation
 ```
 
 ## Command Dispatch

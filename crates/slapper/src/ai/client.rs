@@ -44,7 +44,10 @@ impl Provider {
     }
 
     pub fn requires_api_key(&self) -> bool {
-        matches!(self, Provider::OpenAI | Provider::Azure | Provider::Anthropic)
+        matches!(
+            self,
+            Provider::OpenAI | Provider::Azure | Provider::Anthropic
+        )
     }
 }
 
@@ -237,7 +240,9 @@ impl AiClient {
         let messages = match body.get("messages").and_then(|v| v.as_array()).cloned() {
             Some(msgs) => msgs,
             None => {
-                tracing::debug!("No messages array found in request body for Anthropic transformation");
+                tracing::debug!(
+                    "No messages array found in request body for Anthropic transformation"
+                );
                 Vec::new()
             }
         };
@@ -365,9 +370,8 @@ impl AiClient {
                     .and_then(|c| c.as_str())
                 {
                     let json_content = Self::extract_json_content(content);
-                    if let Ok(parsed) = serde_json::from_str::<crate::ai::types::AiAnalysisResult>(
-                        json_content,
-                    )
+                    if let Ok(parsed) =
+                        serde_json::from_str::<crate::ai::types::AiAnalysisResult>(json_content)
                     {
                         return Ok(parsed);
                     }

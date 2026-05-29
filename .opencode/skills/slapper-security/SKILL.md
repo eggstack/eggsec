@@ -291,8 +291,6 @@ slapper scan --target 192.168.1.0/24
 | `ai-integration` | AI/LLM integration for analysis |
 | `stress-testing` | ICMP probing, IP spoofing, raw sockets |
 | `packet-inspection` | Packet capture features |
-| `python-plugins` | Python plugin support |
-| `ruby-plugins` | Ruby plugin support |
 | `nse` | Nmap NSE script support |
 | `nse-sandbox` | Sandboxed NSE execution |
 | `full` | All features (except grpc-api) |

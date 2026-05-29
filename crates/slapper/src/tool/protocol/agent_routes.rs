@@ -884,9 +884,10 @@ mod tests {
 
     #[test]
     fn test_callback_url_allows_non_private_172_15() {
-        let resolver = |_host: &str, _port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
-            Ok(vec!["172.15.0.1".parse().unwrap()])
-        };
+        let resolver =
+            |_host: &str, _port: u16| -> Result<Vec<IpAddr>, CallbackUrlValidationError> {
+                Ok(vec!["172.15.0.1".parse().unwrap()])
+            };
         assert!(validate_callback_url_with_resolver("http://example.com", resolver).is_ok());
     }
 

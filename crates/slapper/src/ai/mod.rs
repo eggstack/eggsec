@@ -18,6 +18,8 @@ pub use payloads::AiPayloadGenerator;
 #[cfg(feature = "ai-integration")]
 pub use planner::AiPlanner;
 #[cfg(feature = "ai-integration")]
-pub use script_gen::{GeneratedScript, PluginLanguage, ScriptGenerator, ScriptMetadata, ScriptTarget};
+pub use script_gen::{
+    GeneratedScript, PluginLanguage, ScriptGenerator, ScriptMetadata, ScriptTarget,
+};
 pub use types::*;
 pub use waf_bypass::SmartWafBypass;

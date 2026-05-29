@@ -135,9 +135,11 @@ impl SecurityTool for ReconTool {
             output: None,
         };
 
-        let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
-            tracing::warn!(error = %e, "Failed to load config for recon, using defaults");
-        }).unwrap_or_default();
+        let config = crate::config::load_config(None::<&str>)
+            .inspect_err(|e| {
+                tracing::warn!(error = %e, "Failed to load config for recon, using defaults");
+            })
+            .unwrap_or_default();
 
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(60),
@@ -147,19 +149,19 @@ impl SecurityTool for ReconTool {
             }),
         )
         .await
-        .map_err(|e| crate::error::SlapperError::Timeout { timeout_ms: 0, operation: format!(
-            "Recon timed out after 60s: {}",
-            e
-        ) })?
-        .map_err(|e| crate::error::SlapperError::Runtime(format!(
-            "Recon failed: {}",
-            e
-        )))?;
+        .map_err(|e| crate::error::SlapperError::Timeout {
+            timeout_ms: 0,
+            operation: format!("Recon timed out after 60s: {}", e),
+        })?
+        .map_err(|e| crate::error::SlapperError::Runtime(format!("Recon failed: {}", e)))?;
 
         let findings = match std::sync::Arc::try_unwrap(findings) {
             Ok(inner) => inner.into_inner(),
             Err(e) => {
-                tracing::warn!("Callback still referenced, using empty result: Arc still has {} references", Arc::strong_count(&e));
+                tracing::warn!(
+                    "Callback still referenced, using empty result: Arc still has {} references",
+                    Arc::strong_count(&e)
+                );
                 Vec::new()
             }
         };

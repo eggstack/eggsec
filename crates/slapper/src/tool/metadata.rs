@@ -68,7 +68,11 @@ impl ToolMetadataRegistry {
         self.tools.get(name)
     }
 
-    pub fn is_tool_allowed(&self, name: &str, policy: &crate::config::policy::ExecutionPolicy) -> bool {
+    pub fn is_tool_allowed(
+        &self,
+        name: &str,
+        policy: &crate::config::policy::ExecutionPolicy,
+    ) -> bool {
         self.get(name)
             .map(|m| m.is_allowed_by(policy))
             .unwrap_or(false)

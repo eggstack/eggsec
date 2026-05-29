@@ -105,12 +105,11 @@ impl WafDetector {
             let mut sig_matched_cookies = Vec::new();
             let mut sig_matched_patterns = Vec::new();
 
-                    for header_pattern_lower in &sig_lower.headers {
-                        for (name_lower, value_lower) in &headers_lower {
-                            let header_name_match = name_lower == header_pattern_lower.as_str();
-                            let header_value_match =
-                                value_lower.contains(header_pattern_lower.as_str())
-                                    && value_lower.len() <= HEADER_VALUE_MAX_LEN;
+            for header_pattern_lower in &sig_lower.headers {
+                for (name_lower, value_lower) in &headers_lower {
+                    let header_name_match = name_lower == header_pattern_lower.as_str();
+                    let header_value_match = value_lower.contains(header_pattern_lower.as_str())
+                        && value_lower.len() <= HEADER_VALUE_MAX_LEN;
                     if header_name_match || header_value_match {
                         score = score.saturating_add(waf::HEADER_MATCH_SCORE);
                         sig_matched_headers.push(format!("{}: {}", name_lower, value_lower));
@@ -192,8 +191,7 @@ impl WafDetector {
                 }
             }
 
-            if !matched_patterns.is_empty()
-                || weak_hits >= waf::UNKNOWN_WAF_WEAK_PATTERN_THRESHOLD
+            if !matched_patterns.is_empty() || weak_hits >= waf::UNKNOWN_WAF_WEAK_PATTERN_THRESHOLD
             {
                 best_match = Some(("Unknown WAF".to_string(), waf::UNKNOWN_WAF_CONFIDENCE));
                 if weak_hits > 0 {
@@ -242,7 +240,11 @@ fn remote_ip_in_cidr(ip: IpAddr, cidr: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn apply_remote_ip_match(ip: IpAddr, ip_ranges: &[String], matched_patterns: &mut Vec<String>) -> bool {
+fn apply_remote_ip_match(
+    ip: IpAddr,
+    ip_ranges: &[String],
+    matched_patterns: &mut Vec<String>,
+) -> bool {
     if ip_ranges.iter().any(|cidr| remote_ip_in_cidr(ip, cidr)) {
         matched_patterns.push(format!("remote-ip-match:{}", ip));
         return true;

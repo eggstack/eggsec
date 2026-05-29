@@ -337,7 +337,7 @@ impl JUnitReport {
         match String::from_utf8(result) {
             Ok(s) => Ok(s),
             Err(e) => Err(quick_xml::Error::Io(std::sync::Arc::new(
-                std::io::Error::new(std::io::ErrorKind::InvalidData, e)
+                std::io::Error::new(std::io::ErrorKind::InvalidData, e),
             ))),
         }
     }

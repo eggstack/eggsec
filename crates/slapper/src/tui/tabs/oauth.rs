@@ -235,7 +235,6 @@ impl OAuthTab {
             self.state = AppState::Idle;
         }
     }
-
 }
 
 impl TabRender for OAuthTab {
@@ -556,8 +555,12 @@ impl TabInput for OAuthTab {
         match self.focus_area {
             OAuthFocusArea::Inputs => !self.inputs.can_move_left(),
             OAuthFocusArea::Options => {
-                let checkboxes = [&self.redirect_test_checkbox, &self.scope_test_checkbox,
-                    &self.state_test_checkbox, &self.grant_test_checkbox];
+                let checkboxes = [
+                    &self.redirect_test_checkbox,
+                    &self.scope_test_checkbox,
+                    &self.state_test_checkbox,
+                    &self.grant_test_checkbox,
+                ];
                 checkboxes.is_empty() || self.checkbox_focus_index == 0
             }
             _ => true,
@@ -568,9 +571,14 @@ impl TabInput for OAuthTab {
         match self.focus_area {
             OAuthFocusArea::Inputs => !self.inputs.can_move_right(),
             OAuthFocusArea::Options => {
-                let checkboxes = [&self.redirect_test_checkbox, &self.scope_test_checkbox,
-                    &self.state_test_checkbox, &self.grant_test_checkbox];
-                checkboxes.is_empty() || self.checkbox_focus_index >= checkboxes.len().saturating_sub(1)
+                let checkboxes = [
+                    &self.redirect_test_checkbox,
+                    &self.scope_test_checkbox,
+                    &self.state_test_checkbox,
+                    &self.grant_test_checkbox,
+                ];
+                checkboxes.is_empty()
+                    || self.checkbox_focus_index >= checkboxes.len().saturating_sub(1)
             }
             _ => true,
         }

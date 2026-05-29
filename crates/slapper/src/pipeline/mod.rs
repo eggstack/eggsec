@@ -60,7 +60,11 @@ pub use executor::Pipeline;
 pub use report::PipelineReport;
 pub use stage::{parse_stages, Stage};
 
-async fn write_output(report: &PipelineReport, output_path: &str, format: Option<crate::cli::OutputFormat>) -> Result<()> {
+async fn write_output(
+    report: &PipelineReport,
+    output_path: &str,
+    format: Option<crate::cli::OutputFormat>,
+) -> Result<()> {
     match format {
         Some(crate::cli::OutputFormat::Html)
         | Some(crate::cli::OutputFormat::Pretty)

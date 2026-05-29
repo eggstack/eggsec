@@ -72,7 +72,10 @@ impl ScrollableText {
             self.horizontal_offset = 0;
         } else {
             let max_offset = self.lines.iter().map(|l| l.width()).max().unwrap_or(0);
-            self.horizontal_offset = self.horizontal_offset.saturating_add(amount).min(max_offset);
+            self.horizontal_offset = self
+                .horizontal_offset
+                .saturating_add(amount)
+                .min(max_offset);
         }
     }
 

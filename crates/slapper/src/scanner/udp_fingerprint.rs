@@ -311,9 +311,9 @@ impl TokenBucket {
                 }
             } else {
                 tokio::time::sleep(self.refill_interval).await;
-                let refill = self.max_tokens.min(
-                    self.tokens.load(Ordering::Acquire) + self.max_tokens / 10 + 1,
-                );
+                let refill = self
+                    .max_tokens
+                    .min(self.tokens.load(Ordering::Acquire) + self.max_tokens / 10 + 1);
                 self.tokens.store(refill, Ordering::Release);
             }
         }
@@ -470,13 +470,7 @@ mod tests {
     #[tokio::test]
     async fn test_fingerprint_udp_port_invalid_host() {
         let invalid_ip: std::net::IpAddr = "192.0.2.255".parse().unwrap();
-        let result = fingerprint_udp_port(
-            invalid_ip,
-            53,
-            Duration::from_millis(10),
-            None,
-        )
-        .await;
+        let result = fingerprint_udp_port(invalid_ip, 53, Duration::from_millis(10), None).await;
         assert!(result.is_none());
     }
 

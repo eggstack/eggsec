@@ -22,8 +22,7 @@ impl super::App {
         if tab_index < window.start {
             self.tab_scroll_offset = tab_index as u16;
         } else if tab_index >= window.end {
-            self.tab_scroll_offset =
-                (tab_index.saturating_sub(window.max_visible) + 1) as u16;
+            self.tab_scroll_offset = (tab_index.saturating_sub(window.max_visible) + 1) as u16;
         }
     }
 
@@ -157,9 +156,6 @@ impl super::App {
                 "Report - Convert and generate security scan reports.".to_string()
             }
             super::tabs::Tab::Nse => "NSE - Run Nmap NSE scripts.".to_string(),
-            super::tabs::Tab::Plugin => {
-                "Plugins - Manage and run security scanning plugins.".to_string()
-            }
             super::tabs::Tab::Settings => "Settings - Configure application options.".to_string(),
             super::tabs::Tab::History => "History - View previous scan results.".to_string(),
             super::tabs::Tab::Dashboard => "Dashboard - View scan results at a glance.".to_string(),
@@ -446,7 +442,7 @@ mod tests {
         }
         assert_eq!(Tab::from_discriminant(999), None);
         assert_eq!(Tab::from_discriminant(0), Some(Tab::Recon));
-        assert_eq!(Tab::from_discriminant(28), Some(Tab::Vuln));
+        assert_eq!(Tab::from_discriminant(27), Some(Tab::Vuln));
     }
 
     #[test]

@@ -46,20 +46,23 @@ impl CsvExporter {
             .await?;
 
         for f in findings {
-            buf.write_all(super::escape::escape_csv(&f.severity).as_bytes()).await?;
+            buf.write_all(super::escape::escape_csv(&f.severity).as_bytes())
+                .await?;
             buf.write_all(b",").await?;
-            buf.write_all(super::escape::escape_csv(&f.target).as_bytes()).await?;
+            buf.write_all(super::escape::escape_csv(&f.target).as_bytes())
+                .await?;
             buf.write_all(b",").await?;
-            buf.write_all(super::escape::escape_csv(&f.path).as_bytes()).await?;
+            buf.write_all(super::escape::escape_csv(&f.path).as_bytes())
+                .await?;
             buf.write_all(b",").await?;
-            buf.write_all(super::escape::escape_csv(&f.description).as_bytes()).await?;
+            buf.write_all(super::escape::escape_csv(&f.description).as_bytes())
+                .await?;
             buf.write_all(b",").await?;
             buf.write_all(super::escape::escape_csv(f.cve.as_deref().unwrap_or("")).as_bytes())
                 .await?;
             buf.write_all(b",").await?;
             buf.write_all(
-                super::escape::escape_csv(f.remediation.as_deref().unwrap_or(""))
-                    .as_bytes(),
+                super::escape::escape_csv(f.remediation.as_deref().unwrap_or("")).as_bytes(),
             )
             .await?;
             buf.write_all(b"\n").await?;

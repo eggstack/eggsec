@@ -193,12 +193,10 @@ Chained security assessment pipelines:
 | `slapper grpc-serve --port` | gRPC API server |
 | `slapper mcp-serve --port` | MCP server for AI agents |
 
-### Plugin Support
+### NSE Scripting
 
 | Command | Description |
 |---------|-------------|
-| `slapper plugin list` | List available plugins |
-| `slapper plugin run <name>` | Run a plugin |
 | `slapper nse <target>` | Run NSE scripts |
 
 ---
@@ -210,8 +208,6 @@ Chained security assessment pipelines:
 | `default` | Core: load testing, scanning, fuzzing, WAF testing |
 | `stress-testing` | SYN/UDP/HTTP/TCP/ICMP floods, proxy management |
 | `packet-inspection` | Live packet capture and crafting |
-| `python-plugins` | Python plugin support |
-| `ruby-plugins` | Ruby plugin support + Metasploit RPC |
 | `nse` | Nmap Scripting Engine support |
 | `rest-api` | REST API server |
 | `grpc-api` | gRPC API server |

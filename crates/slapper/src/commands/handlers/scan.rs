@@ -58,8 +58,8 @@ pub async fn handle_scan(ctx: &CommandContext, mut args: crate::cli::ScanArgs) -
 }
 
 pub async fn handle_resume(ctx: &CommandContext, args: crate::cli::ResumeArgs) -> Result<()> {
-    let session = crate::pipeline::session::load(&args.session)
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let session =
+        crate::pipeline::session::load(&args.session).map_err(|e| anyhow::anyhow!("{}", e))?;
     ctx.ensure_scope(&session.target)?;
     crate::pipeline::resume_cli(args)
         .await

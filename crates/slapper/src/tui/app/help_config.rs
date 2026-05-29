@@ -344,26 +344,6 @@ pub fn get_static_help_data() -> StaticHelpData {
     );
 
     sections.insert(
-        Tab::Plugin,
-        HelpSection {
-            title: "Plugins".to_string(),
-            content: "Run custom Python or Ruby plugins for specialized testing.".to_string(),
-            commands: vec![
-                HelpCommand {
-                    key: "Enter".to_string(),
-                    description: "Run plugin".to_string(),
-                    category: "Action".to_string(),
-                },
-                HelpCommand {
-                    key: "l".to_string(),
-                    description: "List plugins".to_string(),
-                    category: "View".to_string(),
-                },
-            ],
-        },
-    );
-
-    sections.insert(
         Tab::Settings,
         HelpSection {
             title: "Settings".to_string(),
@@ -743,70 +723,64 @@ pub fn get_static_help_data() -> StaticHelpData {
             shortcut: Some("17".to_string()),
         },
         CommandPaletteResult {
-            command: "plugin".to_string(),
-            description: "Go to Plugins".to_string(),
-            category: "Tabs".to_string(),
-            shortcut: Some("18".to_string()),
-        },
-        CommandPaletteResult {
             command: "settings".to_string(),
             description: "Go to Settings".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("19".to_string()),
+            shortcut: Some("18".to_string()),
         },
         CommandPaletteResult {
             command: "history".to_string(),
             description: "Go to History".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("20".to_string()),
+            shortcut: Some("19".to_string()),
         },
         CommandPaletteResult {
             command: "dashboard".to_string(),
             description: "Go to Dashboard".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("21".to_string()),
+            shortcut: Some("20".to_string()),
         },
         CommandPaletteResult {
             command: "hunt".to_string(),
             description: "Go to Vulnerability Hunting".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("22".to_string()),
+            shortcut: Some("21".to_string()),
         },
         CommandPaletteResult {
             command: "browser".to_string(),
             description: "Go to Headless Browser".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("23".to_string()),
+            shortcut: Some("22".to_string()),
         },
         CommandPaletteResult {
             command: "compliance".to_string(),
             description: "Go to Compliance".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("24".to_string()),
+            shortcut: Some("23".to_string()),
         },
         CommandPaletteResult {
             command: "storage".to_string(),
             description: "Go to Database Storage".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("25".to_string()),
+            shortcut: Some("24".to_string()),
         },
         CommandPaletteResult {
             command: "integrations".to_string(),
             description: "Go to Integrations".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("26".to_string()),
+            shortcut: Some("25".to_string()),
         },
         CommandPaletteResult {
             command: "workflow".to_string(),
             description: "Go to Workflow".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("27".to_string()),
+            shortcut: Some("26".to_string()),
         },
         CommandPaletteResult {
             command: "vuln".to_string(),
             description: "Go to Vulnerability Management".to_string(),
             category: "Tabs".to_string(),
-            shortcut: Some("28".to_string()),
+            shortcut: Some("27".to_string()),
         },
         CommandPaletteResult {
             command: "next-tab".to_string(),
