@@ -40,7 +40,7 @@ jobs:
 
       - name: Download Slapper
         run: |
-          curl -sL "https://github.com/slapper-tool/slapper/releases/download/${SLAPPER_VERSION}/slapper-linux-amd64" -o slapper
+          curl -sL "https://github.com/dbowm91/slapper/releases/download/${SLAPPER_VERSION}/slapper-linux-amd64" -o slapper
           chmod +x slapper
 
       - name: Run Quick Scan
@@ -116,7 +116,7 @@ jobs:
 
       - name: Download Slapper
         run: |
-          curl -sL "https://github.com/slapper-tool/slapper/releases/download/${SLAPPER_VERSION}/slapper-linux-amd64" -o slapper
+          curl -sL "https://github.com/dbowm91/slapper/releases/download/${SLAPPER_VERSION}/slapper-linux-amd64" -o slapper
           chmod +x slapper
 
       - name: Load targets from file

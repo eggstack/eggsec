@@ -1,8 +1,8 @@
 # Slapper - Rust Security Assessment Engine
 
-Slapper is a Rust-native security assessment and defense-validation engine for scoped testing of live systems. It combines high-level application security checks, low-level protocol probing, controlled load-bearing tests, WAF evaluation, and optional Nmap NSE compatibility to help developers and security teams understand, reproduce, and harden real attack surfaces. Slapper is designed for authorized testing, local lab validation, and agent-readable regression workflows, not arbitrary exploitation or unscoped scanning.
+Slapper is a Rust-native, scope-enforced security assessment and defense-validation engine for authorized testing, local lab validation, WAF regression, CI security checks, and agent-readable security workflows.
 
-## What is Slapper?
+## What Slapper is
 
 Slapper is a command-line security assessment tool designed for security professionals, developers, and defensive teams who need to:
 
@@ -13,20 +13,18 @@ Slapper is a command-line security assessment tool designed for security profess
 - **Load test** - Measure application performance under controlled load
 - **Repeat assessments** - Pipeline scans with customizable profiles for regression workflows
 
-## Why Slapper?
-
-Slapper excels in areas that complement your existing toolkit:
+### Why Slapper?
 
 | Capability | Description |
 |------------|-------------|
 | **Scoped Repeatable Testing** | Run the same assessment profiles repeatedly for regression validation |
 | **Rust-Native Primitives** | High-performance async I/O, no external runtime dependencies |
 | **Structured Outputs** | JSON, SARIF, JUnit, HTML, CSV for humans, CI, and agents |
-| **WAF and Defense Validation** | Detection of 30+ WAF products with evasion-resistance testing |
+| **WAF and Defense Validation** | Detection of 26+ WAF products with evasion-resistance testing |
 | **Local Lab/Regression Workflows** | Repeatable profiles against local test environments |
 | **Optional NSE Compatibility** | Curated Nmap NSE script support as an optional layer |
 
-## Core Features
+### Core Capabilities
 
 | Category | Capabilities |
 |----------|-------------|
@@ -39,76 +37,45 @@ Slapper excels in areas that complement your existing toolkit:
 | **Controlled Stress** | SYN, UDP, HTTP, TCP, ICMP flood testing (requires `--features stress-testing`) |
 | **Proxy Management** | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking |
 | **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
-| **Notifications** | Slack, Discord, Teams, and custom webhook integrations |
 | **Repeatable Profiles** | 11 pipeline profiles, session resumption, multiple output formats |
 
-## System Dependencies
+## What Slapper is not
 
-Some features require system-level packages to be installed via your package manager:
+Slapper is not an exploitation framework, botnet component, credential attack platform, or tool for unscoped internet scanning. Some modules can generate aggressive traffic or security-test payloads, so advanced capabilities are feature-gated and intended for systems you own, operate, or have explicit authorization to test.
 
-| Feature | Required Packages | Package Manager Commands |
-|---------|-------------------|--------------------------|
-| `packet-inspection` | `libpcap-dev` (optional, for full packet capture) | `sudo apt-get install libpcap-dev` (Ubuntu/Debian) |
-| `wireless` | `libusb-1.0-0-dev` (optional, for wireless testing) | `sudo apt-get install libusb-1.0-0-dev` (Ubuntu/Debian) |
-| `nse` | `libssl-dev` (for NSE script compatibility) | `sudo apt-get install libssl-dev` (Ubuntu/Debian) |
+## Safety Model
 
-**Ubuntu/Debian:**
-```bash
-# For packet inspection (optional)
-sudo apt-get install libpcap-dev
+Slapper enforces a defense-in-depth safety model built around scope control, configuration defaults, and feature gating.
 
-# For wireless testing (optional)
-sudo apt-get install libusb-1.0-0-dev
+**Scope files** restrict every scan to explicitly authorized targets. Define allowed domains, CIDR ranges, and exclusions in a TOML file. When `require_explicit_scope = true`, any target not in the allowed list is rejected before a single packet is sent.
+
+```toml
+# scope.toml
+require_explicit_scope = true
+
+[[allowed_targets]]
+pattern = "*.lab.internal"
+description = "Lab environment"
+
+[[allowed_targets]]
+cidr = "10.0.0.0/8"
+description = "Internal network"
+
+[[excluded_targets]]
+pattern = "admin.lab.internal"
+description = "Admin panel - excluded"
 ```
 
-**Fedora/RHEL:**
-```bash
-# For packet inspection (optional)
-sudo dnf install libpcap-devel
+**Configuration defaults** keep aggressive capabilities disabled until you opt in. Rate limits, concurrency caps, and timeouts are configurable per profile. Dry-run planning (`slapper plan`) previews what a scan will do without sending traffic.
 
-# For wireless testing (optional)
-sudo dnf install libusb1-devel
-```
+**Feature gating** ensures intrusive modules (stress testing, raw packet crafting, IP spoofing) require explicit build flags like `--features stress-testing` and cannot be invoked accidentally.
 
-## Build Features
-
-Slapper uses Cargo feature flags to enable optional capabilities. Some commands require specific build configurations:
-
-| Feature | Description | Required For |
-|---------|-------------|--------------|
-| `stress-testing` | SYN/UDP/ICMP floods, proxy management | `stress`, `proxy`, `icmp`, `traceroute` commands |
-| `packet-inspection` | Live packet capture, traceroute | `packet capture`, `packet send` (live) |
-| `nse` | Nmap NSE script compatibility | `nse` command |
-| `api-schema` | OpenAPI v3 schema-based fuzzing | Type-aware API fuzzing from OpenAPI specs |
-| `sbom` | SBOM generation and analysis | Software bill of materials (`cyclonedx-bom`, `spdx`) |
-| `full` | All features combined | All commands available |
-
-### Build Examples
-
-```bash
-# Default build - load testing, scanning, fuzzing, WAF testing
-cargo build --release
-
-# With stress testing (DoS tools, proxy pool)
-cargo build --release --features stress-testing
-
-# With packet inspection (live capture)
-cargo build --release --features packet-inspection
-
-# Full build - all features
-cargo build --release --features full
-
-# With NSE support
-cargo build --release --features nse
-```
+See [docs/SAFETY.md](docs/SAFETY.md) for full details on authorization, risk tiers, and scope rule evaluation.
 
 ## Quick Start
 
 ### Prerequisites
 
-Before building, ensure you have Rust installed. For features that require system dependencies, install the necessary packages:
-
-**For full build with all features:**
 ```bash
 # Ubuntu/Debian
 sudo apt-get install libpcap-dev libssl-dev libusb-1.0-0-dev
@@ -117,390 +84,30 @@ sudo apt-get install libpcap-dev libssl-dev libusb-1.0-0-dev
 sudo dnf install libpcap-devel openssl-devel libusb1-devel
 ```
 
-### Installation
+### Build and Run
 
 ```bash
-# Clone and build (default features)
-git clone https://github.com/slapper-tool/slapper.git
+# Clone and build
+git clone https://github.com/dbowm91/slapper.git
 cd slapper
 cargo build --release
 
-# The binary will be at ./target/release/slapper
+# Generate a config file
+./target/release/slapper --generate-config > slapper.toml
 
-# Full build with all features (recommended for full capability)
-cargo build --release --features full
+# Validate your config
+./target/release/slapper config validate --config slapper.toml
 
-# Build with stress testing (controlled flood testing, proxy pool)
-cargo build --release --features stress-testing
+# Plan a scan (dry-run, no traffic sent)
+./target/release/slapper plan --scope examples/scope-localhost.toml --target http://127.0.0.1:8080
+
+# Run a scoped scan against localhost
+./target/release/slapper scan 127.0.0.1 --profile quick --scope examples/scope-localhost.toml --json
 ```
 
-### Basic Usage
+## Pipeline Profiles
 
-```bash
-# Load test a URL
-./slapper load https://example.com -n 1000 -c 50
-
-# Scan ports
-./slapper scan-ports example.com -p 1-1000 -c 100
-
-# Discover endpoints
-./slapper scan-endpoints https://example.com
-
-# Fuzz for vulnerabilities
-./slapper fuzz https://example.com/api -t sqli,xss
-
-# GraphQL security testing
-./slapper graphql https://api.example.com/graphql
-
-# OAuth/OIDC security testing
-./slapper oauth https://oauth.example.com/authorize
-
-# Full security assessment
-./slapper scan example.com --profile full
-
-# Reconnaissance
-./slapper recon example.com
-```
-
-### Advanced Features
-
-```bash
-# Stress testing (requires stress-testing feature)
-./slapper stress example.com --type http -r 1000 -d 60
-./slapper stress example.com --type syn -r 5000 -d 30
-
-# Proxy management
-./slapper proxy add --file proxies.txt
-./slapper proxy list --healthy
-
-# Distributed cluster
-./slapper cluster coordinator --port 9000
-./slapper cluster worker --coordinator localhost:9000 --workers 4
-
-# Notifications
-./slapper notify test --slack https://hooks.slack.com/services/XXX
-./slapper notify send "Vulnerability found" --discord https://discord.com/api/webhooks/XXX
-```
-
-## Command Reference
-
-### Load Testing
-
-HTTP load testing measures server performance under concurrent requests. Useful for capacity planning, finding bottlenecks, and testing resilience.
-
-```bash
-# Basic load test - sends 1000 requests with 50 concurrent connections
-./slapper load https://example.com -n 1000 -c 50
-
-# With POST data - sends JSON body
-./slapper load https://api.example.com/endpoint -n 500 -c 20 -m POST -d '{"key": "value"}'
-
-# With proxy - routes through HTTP proxy
-./slapper load https://example.com -n 200 -c 10 --proxy http://127.0.0.1:8080
-
-# JSON output - machine-readable results
-./slapper load https://example.com -n 100 --json
-```
-
-### Port Scanning
-
-TCP port scanning discovers open services on target hosts. Supports concurrent scanning for speed and configurable timeouts for reliability.
-
-```bash
-# Scan common ports (1-1000)
-./slapper scan-ports example.com -p 1-1000
-
-# Specific ports - scan enumerated list
-./slapper scan-ports 192.168.1.1 -p 22,80,443,8080
-
-# High concurrency - faster scan with more parallel connections
-./slapper scan-ports example.com -p 1-1024 -c 50
-```
-
-### Service Fingerprinting
-
-Identifies running services by grabbing banners and matching against known fingerprints. Detects service type, version, and sometimes configuration.
-
-```bash
-# Fingerprint specific ports
-./slapper fingerprint example.com -p 80,443,22,21,25,3306,5432
-
-# Full port range with service detection
-./slapper fingerprint example.com -p 1-1000
-```
-
-### Endpoint Discovery
-
-Directory and endpoint brute-forcing discovers hidden paths, administrative interfaces, sensitive files, and API endpoints using wordlist-based scanning.
-
-```bash
-# Basic scan - uses default wordlist
-./slapper scan-endpoints https://example.com
-
-# Custom wordlist - specify your own wordlist
-./slapper scan-endpoints https://example.com -w wordlist.txt -c 20
-```
-
-### Security Fuzzing
-
-Fuzz testing injects payloads into parameters to discover vulnerabilities. Slapper supports 20+ payload types targeting common vulnerabilities.
-
-```bash
-# SQL Injection - tests for SQL injection vulnerabilities
-./slapper fuzz https://example.com/api?id=1 -t sqli
-
-# XSS (Cross-Site Scripting) - tests for reflected/stored XSS
-./slapper fuzz https://example.com/search?q=test -t xss
-
-# SSRF (Server-Side Request Forgery) - tests for internal service access
-./slapper fuzz https://example.com/url?url=https://internal -t ssrf
-
-# Path Traversal - tests for directory traversal (LFI/FI)
-./slapper fuzz https://example.com/file?path=/etc/passwd -t traversal
-
-# Open Redirect - tests for redirect injection
-./slapper fuzz https://example.com/redirect?url=https://evil.com -t redirect
-
-# ReDoS (Regular Expression DoS) - tests for catastrophic backtracking
-./slapper fuzz https://example.com/search?q=test -t redos
-
-# All payload types
-./slapper fuzz https://example.com -t all
-
-# Multiple types at once
-./slapper fuzz https://example.com -t sqli,xss,ssrf -c 20
-
-# JWT testing - tests for JWT vulnerabilities (weak algo, none alg, key confusion)
-./slapper fuzz https://api.example.com -t jwt
-
-# IDOR (Insecure Direct Object Reference) - tests for authorization bypass
-./slapper fuzz https://example.com/api/user/1 -t idor
-
-# SSTI (Server-Side Template Injection) - tests for template injection
-./slapper fuzz https://example.com/template?name=test -t ssti
-
-# XXE (XML External Entity) - tests for XML injection
-./slapper fuzz https://example.com/api/xml -t xxe
-
-# LDAP Injection - tests for LDAP injection
-./slapper fuzz https://example.com/login?user=admin -t ldap
-
-# Command Injection - tests for OS command execution
-./slapper fuzz https://example.com/ping?host=127.0.0.1 -t cmd
-
-# Deserialization - tests for unsafe deserialization
-./slapper fuzz https://example.com/api/deserialize -t deser
-
-# Host Header Injection - tests for host header manipulation
-./slapper fuzz https://example.com -t host
-
-# Cache Poisoning - tests for HTTP cache manipulation
-./slapper fuzz https://example.com -t cache
-
-# CSV Injection - tests for formula injection in CSV exports
-./slapper fuzz https://example.com/export -t csv
-
-# SOAP Injection - tests for SOAP XML injection
-./slapper fuzz https://example.com/soap -t soap
-
-# HTTP Header Injection - tests for response splitting
-./slapper fuzz https://example.com -t headers
-
-# Compression Bomb - tests for zip bomb decompression
-./slapper fuzz https://example.com/upload -t compression
-```
-
-#### Fuzzing Modes
-
-```bash
-# Sequential mode (default) - one request at a time
-./slapper fuzz https://example.com -t sqli --mode sequential
-
-# Burst mode - concurrent requests for speed
-./slapper fuzz https://example.com -t sqli --mode burst -c 50
-
-# Adaptive mode - auto-adjusts rate based on server responses
-./slapper fuzz https://example.com -t sqli --mode adaptive
-```
-
-#### Advanced Fuzzing Options
-
-```bash
-# Mutation fuzzing - mutates existing inputs to find edge cases
-./slapper fuzz https://example.com -t xss --mutate -m 5
-
-# Grammar-based fuzzing (generative) - generates inputs based on grammar
-./slapper fuzz https://example.com/api -t json --grammar-fuzz --grammar-type json
-
-# Adaptive rate limiting - auto-adjusts to server responses
-./slapper fuzz https://example.com -t sqli --adaptive-rate
-
-# HTTP session handling - maintains cookies across requests
-./slapper fuzz https://example.com -t xss --session
-
-# Response diffing - compares responses to detect anomalies
-./slapper fuzz https://example.com -t all --diffing --capture-baseline
-
-# Enhanced ReDoS detection - executes regexes to find catastrophic backtracking
-./slapper fuzz https://example.com -t redos --enhanced-redos
-
-# WAF fingerprinting - identifies specific WAF products
-./slapper fuzz https://example.com -t all --waf-fingerprint
-
-# Request chaining - chains multiple requests for multi-step exploitation
-./slapper fuzz https://example.com -t ssrf --chaining --chain-file chain.yaml
-
-# Target-specific payloads - uses payloads tailored to specific technologies
-./slapper fuzz https://example.com -t sqli --target php
-
-# Combined: adaptive + session + diffing + waf detection
-./slapper fuzz https://example.com -t all --adaptive-rate --session --diffing --waf-fingerprint
-```
-
-#### Payload Type Reference
-
-| Type | Alias | Tests For |
-|------|-------|-----------|
-| `sqli` | sql | SQL Injection |
-| `xss` | - | Cross-Site Scripting |
-| `traversal` | lfi, path | Path Traversal / Local File Inclusion |
-| `ssrf` | - | Server-Side Request Forgery |
-| `redirect` | open-redirect | Open Redirect |
-| `redos` | regex | Regular Expression DoS |
-| `headers` | - | HTTP Header Injection |
-| `compression` | gzip | Compression Bomb |
-| `graphql` | - | GraphQL security issues |
-| `oauth` | - | OAuth/OIDC vulnerabilities |
-| `jwt` | - | JWT vulnerabilities |
-| `idor` | - | Insecure Direct Object Reference |
-| `ssti` | - | Server-Side Template Injection |
-| `xxe` | - | XML External Entity |
-| `ldap` | - | LDAP Injection |
-| `cmd` | - | Command Injection |
-| `deser` | - | Deserialization vulnerabilities |
-| `host` | - | Host Header Injection |
-| `cache` | - | Cache Poisoning |
-| `csv` | - | CSV Injection |
-| `soap` | - | SOAP Injection |
-
-### GraphQL Security
-
-GraphQL endpoints have unique security considerations. This command tests for GraphQL-specific vulnerabilities including introspection leakage, query injection, and DoS vectors.
-
-```bash
-# Basic GraphQL scan (runs all tests)
-./slapper graphql https://api.example.com/graphql
-
-# Introspection tests - queries schema without authentication
-./slapper graphql https://api.example.com/graphql --introspection
-
-# Query injection - tests for injection via query parameters
-./slapper graphql https://api.example.com/graphql --inject
-
-# Depth limit bypass - tests if nested queries are properly limited
-./slapper graphql https://api.example.com/graphql --depth-bypass
-
-# Alias overload DoS - tests if aliases can cause denial of service
-./slapper graphql https://api.example.com/graphql --alias-overload
-```
-
-### OAuth/OIDC Security
-
-Tests OAuth 2.0 and OpenID Connect implementations for common misconfigurations including redirect URI validation, scope escalation, and state parameter handling.
-
-```bash
-# Redirect URI validation - tests for redirect URI bypass
-./slapper o-auth https://oauth.example.com --redirect-test
-
-# Scope escalation - tests if scope can be expanded
-./slapper o-auth https://oauth.example.com --scope-test
-
-# State parameter tests - checks for CSRF via state parameter
-./slapper o-auth https://oauth.example.com --state-test
-```
-
-### WAF Testing
-
-Web Application Firewall detection and evasion-resistance testing. Identifies 26 WAF products and tests evasion techniques including header manipulation, HTTP smuggling, and payload classification.
-
-Supported WAFs: Cloudflare, Akamai, AWS WAF, Azure WAF, Google Cloud Armor, Fastly, Imperva, Sucuri, CloudFront, F5 BIG-IP, Barracuda, Fortinet, Citrix NetScaler, ModSecurity, Wordfence, DataDome, PerimeterX, Nginx, Traefik, Kong, Varnish, Radware, Signal Sciences, Wallarm, Reblaze.
-
-```bash
-# Detect WAF - identifies WAF products
-./slapper waf https://example.com
-
-# Detect and test evasion resistance
-./slapper waf https://example.com --bypass
-
-# WAF-specific evaluation - targets specific WAF products
-./slapper waf https://example.com --profile cloudflare --bypass
-```
-
-### WAF Stress Testing
-
-Comprehensive WAF evaluation with multiple attack vectors to validate WAF rule effectiveness and detection capabilities.
-
-```bash
-# Full stress test
-./slapper waf-stress https://example.com
-
-# Targeted stress testing
-./slapper waf-stress https://example.com --profile owasp
-```
-
-### Packet Tools
-
-Slapper includes packet manipulation tools for network analysis, reconnaissance, and crafting custom packets. These require root/sudo privileges for live capture.
-
-```bash
-# List available network interfaces
-sudo slapper packet interfaces
-
-# Capture packets from an interface (requires root)
-sudo slapper packet capture -i eth0
-
-# Capture with filter and limit
-sudo slapper packet capture -i eth0 --filter tcp --max 100
-
-# Hexdump a pcap file
-slapper packet dump capture.pcap
-
-# Hexdump raw packet data
-slapper packet dump --hex "45 00 00 3c 1c 46 40 00 40 06 b1 e6 ac 10 0a 0a ac 10 0a 01"
-
-# Traceroute to target
-slapper packet traceroute example.com
-
-# Send custom TCP packet
-slapper packet send --tcp --dst example.com:80 --flags SYN
-
-# Send custom UDP packet
-slapper packet send --udp --dst 192.168.1.1:53 --data "hello"
-```
-
-**Packet Capture** - Captures network packets from a specified interface using libpcap. Useful for analyzing network traffic during tests or inspecting responses.
-
-**Packet Send** - Crafts and sends custom packets with specified protocols (TCP, UDP, ICMP), flags, and payloads. Essential for firewall testing and network discovery.
-
-**Packet Dump** - Displays packet data in hexdump format. Supports reading from pcap files or raw hex data.
-
-**Traceroute** - Traces the network path to a target host, showing each hop. Helps understand network topology and identify firewalls.
-
-### Resume Command
-
-Resume a previous scan from a saved session file. This is useful for long-running scans that were interrupted or to continue analysis.
-
-```bash
-# Resume a previous scan
-./slapper resume session.json
-
-# Resume with new output file
-./slapper resume session.json -o results.json
-```
-
-### Pipeline Scans
-
-Pipeline scans chain multiple security tests together in a single command. Choose the appropriate profile based on your assessment goals.
+Slapper includes 11 built-in profiles that chain multiple security tests together. Choose the profile that matches your assessment goals.
 
 | Profile | Use Case |
 |---------|----------|
@@ -517,152 +124,145 @@ Pipeline scans chain multiple security tests together in a single command. Choos
 | **auth** | JWT, OAuth, IDOR focused |
 
 ```bash
-# Quick - port scan + fingerprinting
+# Quick scan - port scan + fingerprinting
 ./slapper scan example.com --profile quick
 
-# Endpoint - quick + endpoint discovery
-./slapper scan example.com --profile endpoint
-
-# Web - endpoint + web fuzzing
+# Web assessment - endpoint discovery + vulnerability fuzzing
 ./slapper scan example.com --profile web
 
-# WAF - endpoint + WAF detection and bypass
-./slapper scan example.com --profile waf
-
-# Full - all stages including load testing
+# Full assessment - all stages including load testing
 ./slapper scan example.com --profile full
 
-# API - GraphQL/JWT/OAuth focused
+# API-focused - GraphQL/JWT/OAuth testing
 ./slapper scan example.com --profile api
-
-# Recon - intelligence-led with tech detection
-./slapper scan example.com --profile recon
-
-# Stealth - evasion mode (randomized delays, header rotation)
-./slapper scan example.com --profile stealth
-
-# Deep - mutation fuzzing enabled
-./slapper scan example.com --profile deep
-
-# Vuln - CVE-prioritized based on detected tech
-./slapper scan example.com --profile vuln
-
-# Auth - JWT/OAuth/IDOR focused
-./slapper scan example.com --profile auth
 ```
 
-### Reconnaissance
+## Core Workflows
 
-Passive reconnaissance gathers intelligence about targets without direct interaction. Collects DNS records, technology stack, subdomains, SSL info, wayback data, CORS policies, and CVE mappings.
+- **Scoped web assessment** - Port scanning, service fingerprinting, endpoint discovery, and vulnerability fuzzing against authorized targets
+- **WAF/defense validation in lab** - Detect 26+ WAF products, test evasion resistance, run regression suites against local WAF instances
+- **CI regression checks** - Structured output (SARIF, JUnit, JSON) for integration into GitHub Actions, GitLab CI, and other pipelines
+- **Agent/MCP integration** - Autonomous security agent with skills, portfolio management, and structured findings for AI-driven workflows
+- **Optional NSE compatibility** - Curated Nmap NSE script support as an optional build layer
+
+## Quick Command Reference
 
 ```bash
-# Full reconnaissance - all available checks
+# Load testing
+./slapper load https://example.com -n 1000 -c 50
+
+# Port scanning
+./slapper scan-ports example.com -p 1-1000 -c 100
+
+# Endpoint discovery
+./slapper scan-endpoints https://example.com
+
+# Vulnerability fuzzing
+./slapper fuzz https://example.com/api -t sqli,xss
+
+# GraphQL security testing
+./slapper graphql https://api.example.com/graphql
+
+# WAF detection and bypass testing
+./slapper waf https://example.com --bypass
+
+# Reconnaissance
 ./slapper recon example.com
 
-# Skip certain checks - disable specific modules
-./slapper recon example.com --no-tech --no-whois
-
-# Concurrency control - adjust parallel requests
-./slapper recon example.com --concurrency 20
+# Resume a previous scan
+./slapper resume session.json
 ```
 
-## Agent-Readable Orchestration
+For the full command reference with all options, see [docs/cli.md](docs/cli.md).
+
+## Build Features
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| `stress-testing` | SYN/UDP/ICMP floods, proxy management, IP spoofing | Lab-only |
+| `packet-inspection` | Live packet capture, traceroute | Experimental |
+| `nse` | Nmap NSE script compatibility | Experimental |
+| `api-schema` | OpenAPI v3 schema-based fuzzing | Stable |
+| `sbom` | SBOM generation (CycloneDX, SPDX) | Stable |
+| `rest-api` | REST API server for agent integration | Experimental |
+| `ai-integration` | AI planner, script generation, autonomous agent | Experimental |
+| `ws-api` | WebSocket pub/sub | Experimental |
+| `full` | All features combined | - |
+
+### Build Examples
+
+```bash
+# Default build - load testing, scanning, fuzzing, WAF testing
+cargo build --release
+
+# With stress testing (controlled flood testing, proxy pool)
+cargo build --release --features stress-testing
+
+# With packet inspection (live capture)
+cargo build --release --features packet-inspection
+
+# With NSE support
+cargo build --release --features nse
+
+# Full build - all features
+cargo build --release --features full
+```
+
+## System Dependencies
+
+| Feature | Required Packages | Install (Ubuntu/Debian) |
+|---------|-------------------|--------------------------|
+| `packet-inspection` | `libpcap-dev` | `sudo apt-get install libpcap-dev` |
+| `wireless` | `libusb-1.0-0-dev` | `sudo apt-get install libusb-1.0-0-dev` |
+| `nse` | `libssl-dev` | `sudo apt-get install libssl-dev` |
+
+## Output Formats
+
+| Format | Use Case |
+|--------|----------|
+| JSON | Machine parsing, automation |
+| HTML | Human-readable reports |
+| CSV | Spreadsheet analysis |
+| SARIF | CI/CD security scanning (GitHub, GitLab) |
+| JUnit XML | Test integration (CI pipelines) |
+
+## Defense-Lab Mode
+
+Slapper can run local, repeatable profiles against defensive systems for regression testing.
+
+- **Repeatable adversarial traffic** - Run the same probe suite multiple times to measure changes in WAF or protocol behavior
+- **Structured observations and baseline diffs** - Compare current results against a saved baseline to identify regressions or improvements
+- **WAF regression testing** - Validate that WAF rules continue to catch known evasion patterns after updates
+
+```bash
+# Run a profile against a local instance
+./slapper scan localhost:8080 --profile waf --json -o baseline.json
+
+# Later, compare against baseline
+./slapper diff baseline.json current.json
+```
+
+## Relationship to Nmap/NSE
+
+Slapper borrows proven scanning concepts from Nmap but is not a drop-in replacement.
+
+- **NSE is an optional compatibility layer.** Build with `--features nse` to enable curated Nmap NSE script support.
+- **No full Nmap parity.** Slapper does not aim to replicate all Nmap behavior. The goal is broad practical compatibility for useful script categories.
+- **NSE is a protocol-testing knowledge source.** Selected behaviors may be promoted into Rust-native probes over time for repeatability, performance, and safety.
+
+## Agent and Orchestration
 
 Slapper includes a security agent for continuous monitoring and scheduled assessments. The agent maintains longitudinal memory of scan results, routes alerts to configured channels, and uses AI-powered skills for intelligent security testing.
 
-### Build Requirements
-
 ```bash
-# Agent requires rest-api feature
+# Build with agent support
 cargo build --release --features rest-api
 
-# With AI integration (recommended)
-cargo build --release --features "rest-api ai-integration"
-```
-
-### Quick Start
-
-```bash
-# Run the agent (continuous monitoring)
+# Run the agent
 ./slapper agent run --portfolio /path/to/portfolio.json
-
-# Run once (single assessment)
-./slapper agent run --once
-
-# With AI analysis
-./slapper agent run --with-ai --ai-config /path/to/ai.toml
 ```
 
-### Target Management
-
-```bash
-# List configured targets
-./slapper agent targets list
-
-# Add a target with scheduled scan
-./slapper agent targets add example-com \
-  --target https://example.com \
-  --schedule "0 0 * * *"
-
-# Remove a target
-./slapper agent targets remove example-com
-
-# Enable/disable targets
-./slapper agent targets enable example-com
-./slapper agent targets disable example-com
-```
-
-### Skills
-
-Skills are YAML+Markdown files that guide the agent's behavior. See `slapper_skills/` for available skills.
-
-```bash
-# List available skills
-./slapper agent skills list
-
-# Load custom skills
-./slapper agent skills load /path/to/skills/
-
-# Show skill details
-./slapper agent skills show sql_injection_fuzzing
-```
-
-### Configuration
-
-Create a portfolio file (`portfolio.json`):
-
-```json
-{
-  "version": "1.0",
-  "targets": {
-    "example-com": {
-      "target": "https://example.com",
-      "target_type": "url",
-      "priority": "high",
-      "schedule": "0 0 * * *",
-      "alert_channels": ["webhook"],
-      "enabled": true
-    }
-  }
-}
-```
-
-### Alert Configuration
-
-Configure webhooks in `config.toml`:
-
-```toml
-[agent]
-memory_dir = "~/.config/slapper/memory"
-poll_interval_secs = 60
-
-[[agent.alert_channels]]
-type = "webhook"
-url = "https://hooks.example.com/security"
-secret = "your-hmac-secret"
-```
-
-For detailed documentation, see [docs/AGENT.md](docs/AGENT.md).
+See [docs/AGENT.md](docs/AGENT.md) for full documentation.
 
 ## Docker Usage
 
@@ -672,111 +272,9 @@ docker-compose --profile testing up -d dvwa
 
 # Run scans against containerized target
 docker-compose --profile testing run --rm slapper fuzz http://dvwa.target.local/login -t xss
-
-# Full environment with Elasticsearch storage
-docker-compose --profile full up -d
 ```
 
 See [DOCKER_COMPOSE.md](DOCKER_COMPOSE.md) for detailed Docker setup.
-
-## Configuration
-
-### Scope Configuration
-
-Scope files restrict testing to authorized targets only. Enable `require_explicit_scope` to enforce scope checking - any target not in the allowed list will be rejected.
-
-Create `scope.toml` to define allowed targets:
-
-```toml
-# When true, only explicitly allowed targets can be scanned
-require_explicit_scope = true
-
-# Wildcard patterns for allowed domains
-[[allowed_targets]]
-pattern = "*.example.com"
-description = "Production environment"
-
-# CIDR ranges for internal networks
-[[allowed_targets]]
-cidr = "10.0.0.0/8"
-description = "Internal network"
-
-# Exclude specific hosts
-[[excluded_targets]]
-pattern = "admin.example.com"
-description = "Admin panel - excluded"
-```
-
-### Custom Payloads
-
-Add your own payloads for specialized testing. Place custom payloads in `~/.config/slapper/payloads/`:
-
-```toml
-[[payloads]]
-name = "custom_sqli"
-payload_type = "sqli"
-payload = "' UNION SELECT username,password FROM users--"
-description = "Custom UNION-based SQL injection"
-severity = "critical"
-tags = ["sqli", "union", "custom"]
-```
-
-### Main Configuration
-
-Generate a default configuration file:
-
-```bash
-slapper --generate-config
-```
-
-Key configuration sections:
-- `http` - Timeout, retries, TLS, proxy settings
-- `scan` - Concurrency, rate limiting, stealth mode
-- `output` - Default format, report settings
-- `recon` - API keys for geolocation (MaxMind, ipapi)
-
-## Output Formats
-
-Slapper supports multiple output formats for different use cases:
-
-| Format | Use Case |
-|--------|-----------|
-| JSON | Machine parsing, automation |
-| HTML | Human-readable reports |
-| CSV | Spreadsheet analysis |
-| SARIF | CI/CD security scanning (GitHub, GitLab) |
-| JUnit XML | Test integration (CI pipelines) |
-
-```bash
-# JSON output
-./slapper scan example.com --json -o results.json
-
-# HTML report
-./slapper scan example.com --format html -o report.html
-
-# CSV export
-./slapper scan example.com --format csv -o results.csv
-
-# SARIF (for CI/CD)
-./slapper fuzz https://example.com --sarif -o results.sarif
-
-# JUnit XML (for test integration)
-./slapper fuzz https://example.com --junit -o results.xml
-```
-
-## Global Options
-
-```bash
-slapper --help                           # Show help
-slapper --version                         # Show version
-slapper --generate-config                 # Generate default config
-slapper --generate-shell-completion bash # Generate bash completions
-
-# Common flags
-slapper --json                            # JSON output
-slapper --config /path/to/config.toml     # Custom config
-slapper --scope /path/to/scope.toml       # Scope file
-```
 
 ## Documentation
 
@@ -788,40 +286,6 @@ slapper --scope /path/to/scope.toml       # Scope file
 - [Agent Documentation](docs/AGENT.md) - Autonomous agent setup and usage
 - [Capabilities](docs/CAPABILITIES.md) - Feature matrix and capabilities overview
 
-## Intended Use and Guardrails
-
-Slapper is designed for **authorized security testing only**. Key guardrails:
-
-- **Scope files are expected.** Define allowed targets with `scope.toml` to restrict testing to authorized systems.
-- **Intrusive and stress profiles require explicit opt-in.** Build with `--features stress-testing` and use scope files before running stress or flood tests.
-- **Local lab mode is encouraged.** Use Slapper against local test environments (Docker, VMs, or systems like Synvoid) for defensive development and regression testing.
-- **Rate limiting is recommended.** Use `--rate-limit` and `--concurrency` to avoid overwhelming targets.
-
-## Relationship to Nmap/NSE
-
-Slapper borrows proven scanning concepts from Nmap but is not a drop-in replacement.
-
-- **NSE is an optional compatibility layer.** Build with `--features nse` to enable curated Nmap NSE script support.
-- **No full Nmap parity.** Slapper does not aim to replicate all Nmap behavior. The goal is broad practical compatibility for useful script categories.
-- **NSE is a protocol-testing knowledge source.** NSE libraries and scripts encode mature testing concepts. Selected behaviors may be promoted into Rust-native probes over time for repeatability, performance, and safety.
-
-## Defense-Lab Mode
-
-Slapper can run local, repeatable profiles against Synvoid-like defensive systems.
-
-- **Repeatable adversarial traffic.** Run the same probe suite multiple times to measure changes in WAF or protocol behavior.
-- **Structured observations and baseline diffs.** Compare current results against a saved baseline to identify regressions or improvements.
-- **WAF regression testing.** Validate that WAF rules continue to catch known evasion patterns after updates.
-- **Protocol-edge testing.** Probe TCP/IP stack, TLS fingerprint, and HTTP ambiguity behavior in a controlled environment.
-
-```bash
-# Run a profile against a local Synvoid instance
-./slapper scan localhost:8080 --profile waf --json -o baseline.json
-
-# Later, compare against baseline
-./slapper diff baseline.json current.json
-```
-
 ## Security Considerations
 
 - **Always ensure you have explicit permission** to test targets
@@ -831,21 +295,24 @@ Slapper can run local, repeatable profiles against Synvoid-like defensive system
 
 ## Troubleshooting
 
-### Build Issues
-
-**Error: `regex` crate not found during build**
-- **Cause:** This should not happen with the current codebase
-- **Fix:** Ensure you're using the latest version from the repository
-
-### Runtime Issues
+**Permission denied when running packet capture**
+Packet capture requires root/sudo privileges. Run with `sudo slapper packet capture -i eth0`.
 
 **Panic: "command X alias X is duplicated"**
-- **Cause:** Duplicate command alias in CLI configuration (fixed in current version)
-- **Fix:** Update to the latest version from the repository
+Update to the latest version from the repository.
 
-**Permission denied when running packet capture**
-- **Cause:** Packet capture requires root/sudo privileges
-- **Fix:** Run with `sudo slapper packet capture -i eth0`
+**Target rejected by scope file**
+Ensure your target matches an `allowed_targets` pattern or CIDR range in your scope TOML file. Use `slapper plan` to preview what targets will be accepted.
+
+**Build fails with missing system packages**
+Install the required system dependencies for your platform. See the System Dependencies section above.
+
+**High memory usage during large scans**
+Reduce concurrency with `--concurrency 10` or use a more targeted port range with `-p`.
+
+## Responsible Use
+
+Slapper is designed for authorized security testing only. Use it against systems you own, operate, or have explicit written authorization to test. Always define scope files, use rate limits, and prefer local lab environments for development and regression testing.
 
 ## License
 

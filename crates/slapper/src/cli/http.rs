@@ -30,9 +30,9 @@ Examples:
   slapper recon example.com --concurrency 20
   slapper recon example.com --json";
 
-pub(crate) const GRAPHQL_ABOUT: &str = "Test GraphQL endpoints for security issues
+pub(crate) const GRAPHQL_ABOUT: &str = "Validate GraphQL endpoint security controls
 
-Performs GraphQL-specific security testing including:
+Performs GraphQL-specific validation including:
 - Introspection enumeration
 - Query injection
 - Depth limit bypass
@@ -45,9 +45,9 @@ Examples:
   slapper graphql https://api.example.com/graphql --inject
   slapper graphql https://api.example.com/graphql --json";
 
-pub(crate) const OAUTH_ABOUT: &str = "Test OAuth/OIDC endpoints for vulnerabilities
+pub(crate) const OAUTH_ABOUT: &str = "Validate OAuth/OIDC endpoint security controls
 
-Tests OAuth/OIDC implementations for common issues:
+Validates OAuth/OIDC implementations for common issues:
 - Redirect URI validation bypass
 - State parameter bypass
 - Scope escalation

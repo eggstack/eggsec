@@ -145,7 +145,7 @@ pub struct PortScanArgs {
     #[arg(
         short = 'f',
         long = "fragment",
-        help = "Split TCP packets into 8-byte fragments to bypass WAFs"
+        help = "Split TCP packets into 8-byte fragments for fragmentation testing"
     )]
     pub fragment: bool,
     #[arg(
@@ -295,11 +295,11 @@ pub struct ScanArgs {
                 - quick: port scan + fingerprint\n\
                 - endpoint: quick + endpoint discovery\n\
                 - web: endpoint + web fuzzing (sqli, xss, ssrf, etc.)\n\
-                - waf: web + WAF detection and bypass testing\n\
+                - waf: web + WAF detection and evasion resistance evaluation\n\
                 - full: all stages including load testing\n\
                 - api: GraphQL/JWT/OAuth focused assessment\n\
                 - recon: intelligence-led with tech detection and CVE mapping\n\
-                - stealth: web scan with evasion techniques\n\
+                - stealth: web scan with rate adaptation and header variation\n\
                 - deep: web scan with mutation fuzzing\n\
                 - vuln: CVE-prioritized fuzzing based on detected tech\n\
                 - auth: JWT/OAuth/IDOR security testing"

@@ -28,7 +28,7 @@ Examples:
 #[cfg(feature = "stress-testing")]
 pub(crate) const STRESS_ABOUT: &str = "Run stress/load testing against target
 
-Performs various stress testing techniques including SYN, UDP, HTTP, TCP, and ICMP floods.
+Applies controlled stress testing techniques including SYN, UDP, HTTP, TCP, and ICMP floods to measure resilience.
 WARNING: Only use on systems you own or have explicit permission to test.
 NOTE: Requires building with --features stress-testing
 
@@ -40,7 +40,7 @@ Examples:
 #[cfg(feature = "stress-testing")]
 pub(crate) const PROXY_ABOUT: &str = "Manage proxy pool and rotation
 
-Manages proxy lists for scan distribution and stealth.
+Manages proxy lists for scan distribution and traffic normalization.
 Supports SOCKS4, SOCKS5, HTTP, HTTPS, and Tor proxies.
 NOTE: Requires building with --features stress-testing
 

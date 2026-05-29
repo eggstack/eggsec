@@ -15,13 +15,13 @@ Thank you for your interest in contributing to Slapper! This document provides g
 
 ## Code of Conduct
 
-This project adheres to a Code of Conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior to conduct@slapper-tool.org.
+This project adheres to a Code of Conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior by opening a GitHub issue or contacting the maintainers.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Rust 1.70 or later
+- Rust 1.80 or later
 - Git
 - A GitHub account
 
@@ -35,7 +35,7 @@ This project adheres to a Code of Conduct. By participating, you are expected to
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/slapper-tool/slapper.git
+   git remote add upstream https://github.com/dbowm91/slapper.git
    ```
 
 ## Development Setup

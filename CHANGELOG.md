@@ -120,5 +120,5 @@ NSE support remains available as an optional Nmap NSE compatibility layer via th
 - Initial security controls for responsible testing
 - TLS certificate verification (configurable)
 
-[Unreleased]: https://github.com/slapper-tool/slapper/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/slapper-tool/slapper/releases/tag/v0.1.0
+[Unreleased]: https://github.com/dbowm91/slapper/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/dbowm91/slapper/releases/tag/v0.1.0

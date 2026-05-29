@@ -2,18 +2,15 @@
 Brief description of the changes in this PR.
 
 ## Type of change
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] This change requires a documentation update
-
-## How has this been tested?
-Describe the tests you ran to verify your changes.
+- [ ] Bug fix
+- [ ] Feature
+- [ ] Documentation
+- [ ] Refactor
+- [ ] Test
+- [ ] Chore (CI, deps, build)
 
 ## Checklist
-- [ ] My code follows the project's code style
-- [ ] I have performed a self-review of my code
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] All new and existing tests pass
+- [ ] Code compiles (`cargo check --lib -p slapper`)
+- [ ] Tests pass (`cargo test --lib -p slapper`)
+- [ ] Docs updated (if applicable)
+- [ ] No secrets committed

@@ -520,7 +520,7 @@ impl OpenApiGenerator {
                 version: self.version.clone(),
                 contact: Some(Contact {
                     name: "Slapper Team".to_string(),
-                    url: "https://github.com/slapper-tool/slapper".to_string(),
+                    url: "https://github.com/dbowm91/slapper".to_string(),
                 }),
             },
             servers: vec![Server {

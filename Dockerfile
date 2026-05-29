@@ -75,5 +75,5 @@ CMD ["--help"]
 # Labels
 LABEL org.opencontainers.image.title="Slapper"
 LABEL org.opencontainers.image.description="Security Testing Toolkit"
-LABEL org.opencontainers.image.source="https://github.com/slapper-tool/slapper"
+LABEL org.opencontainers.image.source="https://github.com/dbowm91/slapper"
 LABEL org.opencontainers.image.authors="Slapper Team"

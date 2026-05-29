@@ -1,0 +1,16 @@
+# Minimal localhost scope for safe testing
+# Use with: slapper scan 127.0.0.1 --profile quick --scope examples/scope-localhost.toml
+
+require_explicit_scope = true
+
+[[allowed_targets]]
+pattern = "127.0.0.1"
+description = "Localhost"
+
+[[allowed_targets]]
+pattern = "localhost"
+description = "Localhost"
+
+[[allowed_targets]]
+pattern = "*.local"
+description = "Local development"

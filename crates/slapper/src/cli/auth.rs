@@ -2,10 +2,10 @@ use super::timeout::*;
 use clap::Args;
 
 pub(crate) const AUTH_TEST_ABOUT: &str =
-    "Test authentication security (brute force, credential stuffing, MFA bypass, etc.)
+    "Validate authentication security controls (brute force resilience, credential stuffing defense, MFA bypass resistance, etc.)
 
-Tests applications for authentication vulnerabilities including weak credentials,
-missing rate limiting, session fixation, timing attacks, and MFA bypass.
+Validates authentication controls including weak credential detection,
+rate limiting verification, session fixation resistance, timing attack analysis, and MFA bypass resistance.
 
 ⚠️  WARNING: Only use against systems you have explicit permission to test.
 

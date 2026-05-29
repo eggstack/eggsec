@@ -50,7 +50,7 @@ EXAMPLES:
   Auth testing:      slapper auth-test https://example.com/login --brute-force
   MCP for coding:    slapper codegg-mcp
 
-See https://slapper.dev/docs for full documentation.
+See https://dbowm91.dev/docs for full documentation.
 "#;
 
 #[derive(Parser)]
@@ -93,18 +93,18 @@ pub enum Commands {
     #[command(about = "Resume a previous scan from session file", long_about = RESUME_ABOUT)]
     Resume(ResumeArgs),
 
-    // --- Attack operations ---
+    // --- Assessment operations ---
     #[command(about = "Fuzz target with security payloads", long_about = FUZZ_ABOUT)]
     Fuzz(FuzzArgs),
-    #[command(about = "Detect and bypass Web Application Firewalls", long_about = WAF_ABOUT)]
+    #[command(about = "Evaluate WAF detection and evasion resistance", long_about = WAF_ABOUT)]
     Waf(WafArgs),
     #[command(about = "Comprehensive WAF stress testing", long_about = WAF_STRESS_ABOUT)]
     WafStress(WafStressArgs),
-    #[command(about = "Test GraphQL endpoints for security issues", long_about = GRAPHQL_ABOUT)]
+    #[command(about = "Validate GraphQL endpoint security controls", long_about = GRAPHQL_ABOUT)]
     Graphql(GraphQlArgs),
-    #[command(about = "Test OAuth/OIDC endpoints for vulnerabilities", long_about = OAUTH_ABOUT)]
+    #[command(about = "Validate OAuth/OIDC endpoint security controls", long_about = OAUTH_ABOUT)]
     OAuth(OAuthArgs),
-    #[command(about = "Test authentication security (brute force, credential stuffing, MFA)", long_about = AUTH_TEST_ABOUT)]
+    #[command(about = "Validate authentication controls (brute force resilience, credential stuffing defense, MFA bypass resistance)", long_about = AUTH_TEST_ABOUT)]
     AuthTest(AuthTestArgs),
 
     // --- Recon operations ---
@@ -223,7 +223,7 @@ pub struct CommonHttpArgs {
     pub user_agent: Option<String>,
     #[arg(
         long,
-        help = "Enable stealth mode (randomized delays, header rotation)"
+        help = "Enable stealth mode (randomized delays, header rotation for realistic lab testing)"
     )]
     pub stealth: bool,
     #[arg(long, help = "Rate limit (requests per second)")]

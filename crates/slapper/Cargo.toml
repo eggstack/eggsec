@@ -5,12 +5,12 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "High-performance security testing toolkit for penetration testers and security researchers"
+description = "Scope-enforced Rust security assessment engine for defense validation and regression testing"
 authors = ["Slapper Team"]
-homepage = "https://github.com/slapper-tool/slapper"
-documentation = "https://github.com/slapper-tool/slapper#readme"
+homepage = "https://github.com/dbowm91/slapper"
+documentation = "https://github.com/dbowm91/slapper#readme"
 readme = "../../README.md"
-keywords = ["security", "pentesting", "load-testing", "waf", "fuzzer", "vulnerability-scanner"]
+keywords = ["security", "defense-validation", "waf", "scanner", "testing"]
 categories = ["command-line-utilities", "development-tools::testing"]
 
 exclude = [
@@ -19,6 +19,12 @@ exclude = [
     ".git/**",
     "*.pcap",
     "*.pcapng",
+    "proptest-regressions/**",
+    "waf_bypasses.json",
+    "wordlists/**",
+    "exports/**",
+    "**/AGENTS.override.md",
+    "tests/**",
 ]
 
 [dependencies]

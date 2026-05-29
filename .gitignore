@@ -12,9 +12,6 @@ slapper.exe
 *.dylib
 *.dll
 
-# Cargo
-Cargo.lock
-
 # IDE
 .idea/
 .vscode/

@@ -159,9 +159,9 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit
       
+      # Fail on vulnerabilities for public release - no silent failures
       - name: Run security audit
         run: cargo audit --deny warnings
-        continue-on-error: true
 
   cargo-deny:
     name: Cargo Deny
@@ -202,11 +202,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Check for secrets
-        run: |
-          pip install gitLeaks 2>/dev/null || true
-          if command -v gitleaks &> /dev/null; then
-            gitleaks detect --source . --verbose
-          else
-            echo "gitleaks not installed, skipping"
-          fi
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

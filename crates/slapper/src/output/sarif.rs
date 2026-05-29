@@ -285,7 +285,7 @@ impl SarifBuilder {
                     driver: SarifDriver {
                         name: self.tool_name,
                         version: self.tool_version,
-                        information_uri: "https://github.com/slapper-tool/slapper".to_string(),
+                        information_uri: "https://github.com/dbowm91/slapper".to_string(),
                         rules: self.rules,
                     },
                 },

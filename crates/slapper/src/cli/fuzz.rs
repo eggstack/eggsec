@@ -1,9 +1,9 @@
 use super::timeout::*;
 use super::{CommonHttpArgs, FuzzMode, OutputFormat};
 
-pub(crate) const FUZZ_ABOUT: &str = "Fuzz target with security payloads
+pub(crate) const FUZZ_ABOUT: &str = "Fuzz target to validate input handling with security payloads
 
-Tests applications for vulnerabilities using various payload types.
+Validates application resilience using various payload types.
 Supports SQL injection, XSS, path traversal, SSRF, open redirects, ReDoS, and more.
 
 Examples:
@@ -18,9 +18,9 @@ Examples:
   slapper fuzz https://api.example.com -t jwt  # JWT testing
   slapper fuzz https://oauth.example.com -t oauth  # OAuth/OIDC testing";
 
-pub(crate) const WAF_STRESS_ABOUT: &str = "Comprehensive WAF stress testing
+pub(crate) const WAF_STRESS_ABOUT: &str = "WAF resilience validation
 
-Applies all payload types to test WAF detection and bypass capabilities.
+Applies all payload types to evaluate WAF detection and resilience.
 Useful for WAF evaluation and tuning.
 
 Examples:
@@ -28,10 +28,10 @@ Examples:
   slapper waf-stress https://example.com -c 50
   slapper waf-stress https://example.com --json";
 
-pub(crate) const WAF_ABOUT: &str = "Detect and bypass Web Application Firewalls
+pub(crate) const WAF_ABOUT: &str = "Evaluate WAF detection and evasion resistance
 
-Detects WAF presence and attempts various bypass techniques.
-Can detect 30+ WAF products and attempt header manipulation, HTTP smuggling, and evasion.
+Detects WAF presence and evaluates evasion resistance using various techniques.
+Supports 30+ WAF products with header manipulation, HTTP smuggling, and evasion resistance analysis.
 
 Examples:
   slapper waf https://example.com
@@ -89,7 +89,7 @@ pub struct FuzzArgs {
         help = "Enable WAF fingerprinting (detect specific WAF products)"
     )]
     pub waf_fingerprint: bool,
-    #[arg(long, help = "Enable request chaining for auto-exploitation")]
+    #[arg(long, help = "Enable request chaining for automated validation")]
     pub chaining: bool,
     #[arg(long, help = "Chain file path (YAML/JSON with action chain)")]
     pub chain_file: Option<String>,
@@ -122,7 +122,7 @@ pub struct FuzzArgs {
     pub format: Option<OutputFormat>,
     #[arg(
         long,
-        help = "Target type for specific payloads: nginx, apache, php, generic (adds target-specific attack payloads)"
+        help = "Target type for specific payloads: nginx, apache, php, generic (adds target-specific validation payloads)"
     )]
     pub target: Option<String>,
     #[arg(long, help = "JWT token to test (enables advanced JWT fuzzing)")]
