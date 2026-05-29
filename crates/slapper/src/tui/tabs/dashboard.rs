@@ -3,6 +3,7 @@ use crate::tui::app::tab_error::TabError;
 use crate::tui::components::ScrollableText;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use chrono::{DateTime, Utc};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
 use serde::Deserialize;
@@ -104,9 +105,9 @@ impl DashboardTab {
         self.view.clear();
         self.view.add_line(Line::from(Span::styled(
             "Security Assessment Dashboard",
-            ratatui::style::Style::default()
+            Style::default()
                 .fg(tc!(info))
-                .add_modifier(ratatui::style::Modifier::BOLD),
+                .add_modifier(Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
         self.view
@@ -134,9 +135,9 @@ impl DashboardTab {
         self.view.add_line(Line::from(""));
         self.view.add_line(Line::styled(
             "Additional Tabs:",
-            ratatui::style::Style::default()
+            Style::default()
                 .fg(tc!(accent))
-                .add_modifier(ratatui::style::Modifier::BOLD),
+                .add_modifier(Modifier::BOLD),
         ));
         self.view
             .add_line(Line::from("  Proxy      - Proxy management"));
@@ -156,9 +157,9 @@ impl DashboardTab {
         self.view.add_line(Line::from(""));
         self.view.add_line(Line::styled(
             "Available Services:",
-            ratatui::style::Style::default()
+            Style::default()
                 .fg(tc!(accent))
-                .add_modifier(ratatui::style::Modifier::BOLD),
+                .add_modifier(Modifier::BOLD),
         ));
         self.view.add_line(Line::from(
             "  REST API Server : Use CLI 'slapper serve' to start",
@@ -262,17 +263,17 @@ impl DashboardTab {
 
         self.view.add_line(Line::from(Span::styled(
             "Security Assessment Dashboard",
-            ratatui::style::Style::default()
+            Style::default()
                 .fg(tc!(info))
-                .add_modifier(ratatui::style::Modifier::BOLD),
+                .add_modifier(Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
 
         self.view.add_line(Line::from(Span::styled(
             "Session Statistics",
-            ratatui::style::Style::default()
+            Style::default()
                 .fg(tc!(accent))
-                .add_modifier(ratatui::style::Modifier::BOLD),
+                .add_modifier(Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
 
@@ -296,9 +297,9 @@ impl DashboardTab {
         if !self.sparkline_data.is_empty() {
             self.view.add_line(Line::from(Span::styled(
                 "Activity Trend (last 7 scans)",
-                ratatui::style::Style::default()
+                Style::default()
                     .fg(tc!(success))
-                    .add_modifier(ratatui::style::Modifier::BOLD),
+                    .add_modifier(Modifier::BOLD),
             )));
             self.view.add_line(Line::from(""));
             let sparkline = Self::render_sparkline(&self.sparkline_data);
@@ -308,9 +309,9 @@ impl DashboardTab {
 
         self.view.add_line(Line::from(Span::styled(
             "Asset Health Summary",
-            ratatui::style::Style::default()
+            Style::default()
                 .fg(tc!(success))
-                .add_modifier(ratatui::style::Modifier::BOLD),
+                .add_modifier(Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
 
@@ -410,9 +411,9 @@ impl DashboardTab {
         if !self.last_scan_type.is_empty() {
             self.view.add_line(Line::from(Span::styled(
                 "Last Scan",
-                ratatui::style::Style::default()
+                Style::default()
                     .fg(tc!(accent))
-                    .add_modifier(ratatui::style::Modifier::BOLD),
+                    .add_modifier(Modifier::BOLD),
             )));
             self.view.add_line(Line::from(""));
             self.view
@@ -424,9 +425,9 @@ impl DashboardTab {
 
         self.view.add_line(Line::from(Span::styled(
             "Quick Actions",
-            ratatui::style::Style::default()
+            Style::default()
                 .fg(tc!(accent))
-                .add_modifier(ratatui::style::Modifier::BOLD),
+                .add_modifier(Modifier::BOLD),
         )));
         self.view.add_line(Line::from(""));
         self.view.add_line(Line::from("  [h/l]     Navigate tabs"));
@@ -475,7 +476,6 @@ impl TabState for DashboardTab {
 impl TabRender for DashboardTab {
     fn render(&self, f: &mut Frame, area: ratatui::layout::Rect, _insert_mode: bool) {
         if let Some(ref err) = self.error {
-            use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(

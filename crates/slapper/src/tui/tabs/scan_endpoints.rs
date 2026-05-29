@@ -281,6 +281,19 @@ impl TabRender for ScanEndpointsTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
+        let input_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Endpoint Scan Configuration ")
+            .border_style(
+                Style::default().fg(if self.focus_area == ScanEndpointsFocusArea::Inputs {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let input_inner = input_block.inner(input_area);
+        f.render_widget(input_block, input_area);
+
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -290,7 +303,7 @@ impl TabRender for ScanEndpointsTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(input_area);
+            .split(input_inner);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -303,25 +316,32 @@ impl TabRender for ScanEndpointsTab {
             include_404.render(f, *chunk);
         }
 
+        let results_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Results ")
+            .border_style(
+                Style::default().fg(if self.focus_area == ScanEndpointsFocusArea::Results {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let results_inner = results_block.inner(results_area);
+        f.render_widget(results_block, results_area);
+
         if self.state == AppState::Running {
-            self.progress.render(f, results_area);
+            self.progress.render(f, results_inner);
         } else if let Some(ref err) = self.error {
-            use ratatui::style::Style;
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Endpoint Scan - Error"),
-                )
                 .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, results_area);
+            f.render_widget(error_text, results_inner);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(tc!(success)));
+                .render(f, results_inner, Some(tc!(success)));
         } else {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, results_area);
+            f.render_widget(placeholder, results_inner);
         }
     }
 }

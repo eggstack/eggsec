@@ -351,12 +351,34 @@ impl TabRender for HistoryTab {
         if self.entries.is_empty() {
             let empty =
                 Paragraph::new("No history entries yet.\n\nRun a scan to see results here.")
-                    .block(Block::default().borders(Borders::ALL).title("History"))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("History")
+                            .border_style(
+                                Style::default().fg(if self.focus_area == HistoryFocusArea::List {
+                                    tc!(border_focused)
+                                } else {
+                                    tc!(border)
+                                }),
+                            ),
+                    )
                     .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(empty, list_area);
 
             let placeholder = Paragraph::new("Select an entry to view details")
-                .block(Block::default().borders(Borders::ALL).title("Details"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Details")
+                        .border_style(
+                            Style::default().fg(if self.focus_area == HistoryFocusArea::Details {
+                                tc!(border_focused)
+                            } else {
+                                tc!(border)
+                            }),
+                        ),
+                )
                 .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, details_area);
             return;
@@ -425,14 +447,36 @@ impl TabRender for HistoryTab {
         }
 
         let list = Paragraph::new(list_lines)
-            .block(Block::default().borders(Borders::ALL).title("History"));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("History")
+                    .border_style(
+                        Style::default().fg(if self.focus_area == HistoryFocusArea::List {
+                            tc!(border_focused)
+                        } else {
+                            tc!(border)
+                        }),
+                    ),
+            );
         f.render_widget(list, list_area);
 
         if !self.details_view.is_empty() {
             self.details_view.render(f, details_area, None);
         } else {
             let placeholder = Paragraph::new("Select an entry to view details")
-                .block(Block::default().borders(Borders::ALL).title("Details"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Details")
+                        .border_style(
+                            Style::default().fg(if self.focus_area == HistoryFocusArea::Details {
+                                tc!(border_focused)
+                            } else {
+                                tc!(border)
+                            }),
+                        ),
+                )
                 .style(Style::default().fg(tc!(text_dim)));
             f.render_widget(placeholder, details_area);
         }

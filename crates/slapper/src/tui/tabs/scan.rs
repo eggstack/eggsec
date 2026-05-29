@@ -296,7 +296,20 @@ impl TabRender for ScanTab {
         let config_area = chunks[0];
         let main_area = chunks[1];
 
-        let config_chunks = Layout::default()
+        let input_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Configuration ")
+            .border_style(
+                Style::default().fg(if self.focus_area == ScanFocusArea::Inputs {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let input_inner = input_block.inner(config_area);
+        f.render_widget(input_block, config_area);
+
+        let inner_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),
@@ -304,24 +317,24 @@ impl TabRender for ScanTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(config_area);
+            .split(input_inner);
 
         if self.inputs.fields.len() >= 2 {
             if let Some(field) = self.inputs.fields.get(0) {
-                field.render(f, config_chunks[0], insert_mode);
+                field.render(f, inner_chunks[0], insert_mode);
             }
             if let Some(field) = self.inputs.fields.get(1) {
-                field.render(f, config_chunks[1], insert_mode);
+                field.render(f, inner_chunks[1], insert_mode);
             }
         }
 
         let mut profile_sel = self.profile_selector.clone();
         profile_sel.focused = self.focus_area == ScanFocusArea::ProfileSelector;
-        profile_sel.render(f, config_chunks[2]);
+        profile_sel.render(f, inner_chunks[2]);
 
         let mut output_sel = self.output_selector.clone();
         output_sel.focused = self.focus_area == ScanFocusArea::OutputSelector;
-        output_sel.render(f, config_chunks[3]);
+        output_sel.render(f, inner_chunks[3]);
 
         let main_chunks = Layout::default()
             .direction(Direction::Horizontal)
@@ -369,20 +382,43 @@ impl TabRender for ScanTab {
             .count();
         let progress_text = format!("Stages ({}/{})", completed, self.stages.len());
         let stages_block = Paragraph::new(stage_lines)
-            .block(Block::default().borders(Borders::ALL).title(progress_text));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(progress_text)
+                    .border_style(
+                        Style::default().fg(if self.focus_area == ScanFocusArea::Results {
+                            tc!(border_focused)
+                        } else {
+                            tc!(border)
+                        }),
+                    ),
+            );
         f.render_widget(stages_block, stages_area);
+
+        let output_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Output ")
+            .border_style(
+                Style::default().fg(if self.focus_area == ScanFocusArea::Results {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let output_inner = output_block.inner(output_area);
+        f.render_widget(output_block, output_area);
 
         if let Some(ref err) = self.error {
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(Block::default().borders(Borders::ALL).title("Scan - Error"))
                 .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, output_area);
+            f.render_widget(error_text, output_inner);
         } else if !self.current_stage_output.is_empty() {
-            self.current_stage_output.render(f, output_area, None);
+            self.current_stage_output.render(f, output_inner, None);
         } else {
             let placeholder =
                 empty_state_paragraph("Current Stage Output", "Stage output will appear here");
-            f.render_widget(placeholder, output_area);
+            f.render_widget(placeholder, output_inner);
         }
     }
 

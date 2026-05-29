@@ -108,7 +108,7 @@ pub fn light_theme() -> Theme {
             border: Color::LightBlue,
             border_focused: Color::Blue,
             text: Color::Black,
-            text_dim: Color::DarkGray,
+            text_dim: Color::Gray,
             text_bright: Color::Black,
             success: Color::Green,
             warning: Color::Yellow,
@@ -145,12 +145,12 @@ impl Theme {
     pub fn style_for_mode(&self, normal: bool) -> Style {
         if normal {
             Style::default()
-                .fg(Color::Black)
+                .fg(self.colors.selected_text)
                 .bg(self.colors.mode_normal)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
-                .fg(Color::Black)
+                .fg(self.colors.selected_text)
                 .bg(self.colors.mode_insert)
                 .add_modifier(Modifier::BOLD)
         }
@@ -230,8 +230,8 @@ impl ThemeManager {
         }
     }
 
-    pub fn list_themes(&self) -> Vec<&'static str> {
-        vec!["dark", "light"]
+    pub fn list_themes(&self) -> Vec<&str> {
+        self.themes.keys().map(|s| s.as_str()).collect()
     }
 
     pub fn set_accent_color(&mut self, color_name: &str) {
@@ -251,6 +251,12 @@ impl ThemeManager {
         self.current.colors.tab_active = color;
         self.current.colors.selected = color;
     }
+}
+
+pub fn sync_theme_to_thread_local(theme: &Theme) {
+    THEME_MANAGER.with(|tm| {
+        tm.borrow_mut().current = theme.clone();
+    });
 }
 
 #[macro_export]

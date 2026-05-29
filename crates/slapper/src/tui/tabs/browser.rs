@@ -7,6 +7,7 @@ use crate::tui::components::{
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
+    style::Style,
     text::{Line, Span},
     Frame,
 };
@@ -99,19 +100,19 @@ impl BrowserTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("Browser Scan Complete: {}", report.target),
-            ratatui::style::Style::default().fg(tc!(success)),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
         self.results_view.add_line(Line::from(Span::styled(
             format!("Total findings: {}", report.total_findings),
-            ratatui::style::Style::default().fg(tc!(warning)),
+            Style::default().fg(tc!(warning)),
         )));
         self.results_view.add_line(Line::from(""));
 
         if !report.dom_xss.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("DOM XSS Findings ({}):", report.dom_xss.len()),
-                ratatui::style::Style::default().fg(tc!(error)),
+                Style::default().fg(tc!(error)),
             )));
             for finding in &report.dom_xss {
                 self.results_view.add_line(Line::from(format!(
@@ -125,7 +126,7 @@ impl BrowserTab {
         if !report.spa_routes.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("SPA Routes Discovered ({}):", report.spa_routes.len()),
-                ratatui::style::Style::default().fg(tc!(info)),
+                Style::default().fg(tc!(info)),
             )));
             for route in &report.spa_routes {
                 self.results_view.add_line(Line::from(format!(
@@ -139,7 +140,7 @@ impl BrowserTab {
         if !report.client_issues.is_empty() {
             self.results_view.add_line(Line::from(Span::styled(
                 format!("Client Issues ({}):", report.client_issues.len()),
-                ratatui::style::Style::default().fg(tc!(warning)),
+                Style::default().fg(tc!(warning)),
             )));
             for issue in &report.client_issues {
                 self.results_view.add_line(Line::from(format!(
@@ -282,7 +283,7 @@ impl TabRender for BrowserTab {
                         .borders(Borders::ALL)
                         .title("Browser Scan - Error"),
                 )
-                .style(ratatui::style::Style::default().fg(tc!(error)));
+                .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view

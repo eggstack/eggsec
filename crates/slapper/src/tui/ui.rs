@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
-    widgets::{Block, Borders, Paragraph, Tabs},
+    widgets::{Block, BorderType, Borders, Paragraph, Tabs},
     Frame,
 };
 
@@ -99,6 +99,7 @@ fn draw_http_options_popup(f: &mut Frame, app: &App) {
     let block = Block::default()
         .title("Global HTTP Options (press h to close)")
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(tc!(primary)));
 
     let inner = block.inner(popup_area);
@@ -166,6 +167,7 @@ fn draw_command_palette(f: &mut Frame, app: &mut App) {
     let block = Block::default()
         .title("Command Palette (Ctrl+P to close, Up/Down to navigate, Enter to select)")
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(tc!(highlight)));
 
     let inner = block.inner(popup_area);
@@ -233,6 +235,7 @@ fn draw_command_palette(f: &mut Frame, app: &mut App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(tc!(border))),
         )
         .style(Style::default().fg(tc!(text)));
@@ -253,6 +256,7 @@ fn draw_search_popup(f: &mut Frame, app: &App) {
     let block = Block::default()
         .title("Search (press Esc to close, Enter to search)")
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(tc!(accent)));
 
     let inner = block.inner(popup_area);
@@ -282,6 +286,7 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
     let block = Block::default()
         .title("Tab Search (Ctrl+X to close, Enter to select, Up/Down to navigate)")
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(tc!(primary)));
 
     let inner = block.inner(popup_area);
@@ -344,6 +349,7 @@ fn draw_quick_switch(f: &mut Frame, app: &mut App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(tc!(border))),
         )
         .style(Style::default().fg(tc!(text)));

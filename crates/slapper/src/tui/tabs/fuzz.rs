@@ -467,9 +467,22 @@ impl TabRender for FuzzTab {
         let config_area = chunks[0];
         let results_area = chunks[1];
 
+        let config_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Fuzzing Configuration ")
+            .border_style(
+                Style::default().fg(if self.focus_area == FuzzFocusArea::Inputs {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let config_inner = config_block.inner(config_area);
+        f.render_widget(config_block, config_area);
+
         // Dynamic field height based on available config area
         let num_fields = 8;
-        let field_height = (config_area.height / num_fields).max(2);
+        let field_height = (config_inner.height / num_fields).max(2);
         let config_constraints: Vec<Constraint> = (0..num_fields)
             .map(|_| Constraint::Length(field_height))
             .collect();
@@ -477,7 +490,7 @@ impl TabRender for FuzzTab {
         let config_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(config_constraints)
-            .split(config_area);
+            .split(config_inner);
 
         if self.inputs.fields.len() > 2 && config_chunks.len() >= 3 {
             self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
@@ -519,19 +532,27 @@ impl TabRender for FuzzTab {
             f.render_widget(status, *status_chunk);
         }
 
+        let results_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Results ")
+            .border_style(
+                Style::default().fg(if self.focus_area == FuzzFocusArea::Results {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let results_inner = results_block.inner(results_area);
+        f.render_widget(results_block, results_area);
+
         if self.state == AppState::Running {
-            self.progress.render(f, results_area);
+            self.progress.render(f, results_inner);
         } else if let Some(ref err) = self.error {
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Fuzzing - Error"),
-                )
                 .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, results_area);
+            f.render_widget(error_text, results_inner);
         } else if !self.results_view.is_empty() {
-            self.results_view.render(f, results_area, Some(tc!(info)));
+            self.results_view.render(f, results_inner, Some(tc!(info)));
         } else {
             let info_text = vec![
                 Line::from(""),
@@ -556,7 +577,7 @@ impl TabRender for FuzzTab {
             ];
 
             let placeholder = empty_state_paragraph("Results", info_text);
-            f.render_widget(placeholder, results_area);
+            f.render_widget(placeholder, results_inner);
         }
     }
 

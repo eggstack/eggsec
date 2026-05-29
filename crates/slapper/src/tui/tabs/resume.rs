@@ -4,7 +4,9 @@ use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, Scro
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
+    style::Style,
     text::Line,
+    widgets::{Block, Borders},
     Frame,
 };
 
@@ -129,10 +131,23 @@ impl TabRender for ResumeTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
+        let input_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Resume Session ")
+            .border_style(
+                Style::default().fg(if self.focus_area == ResumeFocusArea::Inputs {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let input_inner = input_block.inner(input_area);
+        f.render_widget(input_block, input_area);
+
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(3)])
-            .split(input_area);
+            .split(input_inner);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -140,8 +155,21 @@ impl TabRender for ResumeTab {
             }
         }
 
+        let results_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Session Info ")
+            .border_style(
+                Style::default().fg(if self.focus_area == ResumeFocusArea::Results {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let results_inner = results_block.inner(results_area);
+        f.render_widget(results_block, results_area);
+
         if !self.results_view.is_empty() {
-            self.results_view.render(f, results_area, Some(tc!(info)));
+            self.results_view.render(f, results_inner, Some(tc!(info)));
         } else {
             let placeholder = empty_state_paragraph(
                 "Session Info",
@@ -150,7 +178,7 @@ impl TabRender for ResumeTab {
                     slapper resume session.json\n\
                     slapper resume /path/to/session.json",
             );
-            f.render_widget(placeholder, results_area);
+            f.render_widget(placeholder, results_inner);
         }
     }
 }

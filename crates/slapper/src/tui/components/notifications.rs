@@ -23,7 +23,7 @@ pub fn draw_notifications(f: &mut Frame, area: Rect, notifications: &std::collec
         let (icon, color) = match notif.severity {
             NotificationSeverity::Info => ("ℹ", tc!(status_idle)),
             NotificationSeverity::Success => ("✔", tc!(success)),
-            NotificationSeverity::Warning => ("⚠", tc!(status_running)),
+            NotificationSeverity::Warning => ("⚠", tc!(warning)),
             NotificationSeverity::Error => ("✖", tc!(error)),
         };
 

@@ -655,17 +655,20 @@ impl App {
 
     pub fn toggle_theme(&mut self) {
         self.theme_manager.toggle();
+        crate::tui::theme::sync_theme_to_thread_local(self.theme_manager.current());
     }
 
     pub fn set_dark_mode(&mut self, enabled: bool) {
         let target_mode = if enabled { "dark" } else { "light" };
         if self.theme_manager.set_theme(target_mode) {
+            crate::tui::theme::sync_theme_to_thread_local(self.theme_manager.current());
             self.needs_redraw = true;
         }
     }
 
     pub fn set_accent_color(&mut self, color: &str) {
         self.theme_manager.set_accent_color(color);
+        crate::tui::theme::sync_theme_to_thread_local(self.theme_manager.current());
         self.needs_redraw = true;
     }
 

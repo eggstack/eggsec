@@ -321,7 +321,7 @@ impl Selector {
             .map(|i| i.label.as_str())
             .unwrap_or("-");
 
-        let prefix = if self.focused { ">" } else { "" };
+        let prefix = if self.focused { "▶" } else { "" };
         let arrow = if self.expanded { "▲" } else { "▼" };
         let text = if self.focused {
             format!("{} {} {}", prefix, selected_text, arrow)
@@ -373,7 +373,7 @@ impl Checkbox {
 
     pub fn render_with_focus(&self, focused: bool, f: &mut Frame, area: Rect) {
         let check = if self.checked { "[✓]" } else { "[ ]" };
-        let prefix = if focused { "> " } else { "  " };
+        let prefix = if focused { "▶ " } else { "  " };
         let text = format!("{}{}{}", prefix, check, self.label);
 
         let style = if focused {
@@ -381,7 +381,7 @@ impl Checkbox {
                 .fg(tc!(focus_input))
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(tc!(border))
+            Style::default().fg(tc!(text))
         };
 
         let paragraph = Paragraph::new(text).style(style);
@@ -427,7 +427,7 @@ impl RadioGroup {
     }
 
     pub fn render(&self, f: &mut Frame, area: Rect) {
-        let style = if self.focused {
+        let label_style = if self.focused {
             Style::default().fg(tc!(border_focused))
         } else {
             Style::default().fg(tc!(border))
@@ -435,6 +435,23 @@ impl RadioGroup {
 
         let label_width = self.label.len() + 2;
         let options_per_line = ((area.width as usize).saturating_sub(label_width)) / 12;
+
+        let item_style = |i: usize| -> Style {
+            let is_selected = Some(i) == self.selected;
+            if is_selected {
+                if self.focused {
+                    Style::default().fg(tc!(accent))
+                } else {
+                    Style::default().fg(tc!(selected))
+                }
+            } else {
+                if self.focused {
+                    Style::default().fg(tc!(border_focused))
+                } else {
+                    Style::default().fg(tc!(border))
+                }
+            }
+        };
 
         if options_per_line >= self.options.len() || options_per_line == 0 {
             let spans: Vec<Span> = self
@@ -444,12 +461,12 @@ impl RadioGroup {
                 .map(|(i, opt)| {
                     let is_selected = Some(i) == self.selected;
                     let radio = if is_selected { "◉" } else { "○" };
-                    Span::styled(format!(" {} {}", radio, opt), style)
+                    Span::styled(format!(" {} {}", radio, opt), item_style(i))
                 })
                 .collect();
 
             let line = Line::from(
-                std::iter::once(Span::styled(format!("{}: ", self.label), style))
+                std::iter::once(Span::styled(format!("{}: ", self.label), label_style))
                     .chain(spans)
                     .collect::<Vec<_>>(),
             );
@@ -458,7 +475,10 @@ impl RadioGroup {
             f.render_widget(paragraph, area);
         } else {
             let mut lines = Vec::new();
-            lines.push(Line::from(Span::styled(format!("{}: ", self.label), style)));
+            lines.push(Line::from(Span::styled(
+                format!("{}: ", self.label),
+                label_style,
+            )));
 
             for (chunk_idx, chunk) in self.options.chunks(options_per_line).enumerate() {
                 let base_idx = chunk_idx * options_per_line;
@@ -468,7 +488,10 @@ impl RadioGroup {
                     .map(|(j, opt)| {
                         let is_selected = Some(base_idx + j) == self.selected;
                         let radio = if is_selected { "◉" } else { "○" };
-                        Span::styled(format!(" {} {}", radio, opt), style)
+                        Span::styled(
+                            format!(" {} {}", radio, opt),
+                            item_style(base_idx + j),
+                        )
                     })
                     .collect();
                 lines.push(Line::from(spans));

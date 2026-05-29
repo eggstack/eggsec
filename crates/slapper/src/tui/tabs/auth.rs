@@ -115,9 +115,13 @@ impl TabRender for AuthTab {
         }
         builder.render(f, layout[1], insert_mode);
 
-        let results = Paragraph::new(self.results.as_str())
-            .block(Block::default().borders(Borders::ALL).title("Results"))
-            .style(Style::default().fg(tc!(text)));
+        let results = if self.results.is_empty() {
+            crate::tui::components::empty_state_paragraph("Results", "No results yet")
+        } else {
+            Paragraph::new(self.results.as_str())
+                .block(Block::default().borders(Borders::ALL).title("Results"))
+                .style(Style::default().fg(tc!(text)))
+        };
         f.render_widget(results, layout[2]);
     }
 }

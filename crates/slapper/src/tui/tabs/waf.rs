@@ -10,6 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
+    widgets::{Block, Borders},
     Frame,
 };
 
@@ -377,13 +378,26 @@ impl TabRender for WafTab {
 
         builder.render(f, config_area, insert_mode);
 
+        let results_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Results ")
+            .border_style(
+                Style::default().fg(if self.focus_area == WafFocusArea::Results {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let results_inner = results_block.inner(results_area);
+        f.render_widget(results_block, results_area);
+
         if self.state == AppState::Running {
-            self.progress.render(f, results_area);
+            self.progress.render(f, results_inner);
         } else {
             let results_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-                .split(results_area);
+                .split(results_inner);
 
             if !self.detection_view.is_empty() {
                 self.detection_view.render(f, results_chunks[0], None);

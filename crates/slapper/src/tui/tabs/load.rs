@@ -7,6 +7,8 @@ use crate::tui::components::{
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
+    style::Style,
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -429,8 +431,21 @@ impl TabRender for LoadTab {
             dropdown.render(f);
         }
 
+        let input_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Load Test Configuration ")
+            .border_style(
+                Style::default().fg(if self.focus_area == LoadFocusArea::Inputs {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let input_inner = input_block.inner(input_area);
+        f.render_widget(input_block, input_area);
+
         let num_fields = self.inputs.fields.len().max(1);
-        let field_height = (input_height / num_fields as u16).max(2);
+        let field_height = (input_inner.height / num_fields as u16).max(2);
         let constraints: Vec<Constraint> = (0..num_fields)
             .map(|_| Constraint::Length(field_height))
             .collect();
@@ -438,7 +453,7 @@ impl TabRender for LoadTab {
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(constraints)
-            .split(input_area);
+            .split(input_inner);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -446,26 +461,32 @@ impl TabRender for LoadTab {
             }
         }
 
+        let results_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Results ")
+            .border_style(
+                Style::default().fg(if self.focus_area == LoadFocusArea::Results {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                }),
+            );
+        let results_inner = results_block.inner(results_area);
+        f.render_widget(results_block, results_area);
+
         if self.state == AppState::Running {
-            self.progress.render(f, results_area);
+            self.progress.render(f, results_inner);
         } else if let Some(ref err) = self.error {
-            use ratatui::style::Style;
-            use ratatui::widgets::{Block, Borders, Paragraph};
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Load Testing - Error"),
-                )
                 .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, results_area);
+            f.render_widget(error_text, results_inner);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(tc!(success)));
+                .render(f, results_inner, Some(tc!(success)));
         } else {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, results_area);
+            f.render_widget(placeholder, results_inner);
         }
     }
 

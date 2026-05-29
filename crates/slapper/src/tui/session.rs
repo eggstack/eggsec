@@ -162,6 +162,7 @@ impl SessionManager {
         if !app.theme_manager.set_theme(&state.theme_name) {
             tracing::warn!("Failed to restore theme '{}': unknown theme", state.theme_name);
         }
+        crate::tui::theme::sync_theme_to_thread_local(app.theme_manager.current());
     }
 
     fn capture_state(&self, app: &App) -> SessionState {

@@ -7,6 +7,7 @@ use crate::tui::components::{
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
+    style::Style,
     text::{Line, Span},
     Frame,
 };
@@ -141,7 +142,7 @@ impl ReconTab {
 
         self.results_view.add_line(Line::from(Span::styled(
             format!("Reconnaissance Complete: {}", results.target),
-            ratatui::style::Style::default().fg(tc!(success)),
+            Style::default().fg(tc!(success)),
         )));
         self.results_view.add_line(Line::from(""));
 
@@ -158,7 +159,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Tech Stack:",
-                ratatui::style::Style::default().fg(tc!(accent)),
+                Style::default().fg(tc!(accent)),
             )));
             if !tech.frameworks.is_empty() {
                 self.results_view.add_line(Line::from(format!(
@@ -182,7 +183,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Tech Stack: Failed",
-                ratatui::style::Style::default().fg(tc!(error)),
+                Style::default().fg(tc!(error)),
             )));
             if let Some(ref err) = results.tech_error {
                 self.results_view.add_line(Line::from(format!("  {}", err)));
@@ -193,7 +194,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "Geolocation:",
-                ratatui::style::Style::default().fg(tc!(accent)),
+                Style::default().fg(tc!(accent)),
             )));
             if let Some(ref country) = geo.country {
                 self.results_view
@@ -213,7 +214,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "GeoIP Error:",
-                ratatui::style::Style::default().fg(tc!(error)),
+                Style::default().fg(tc!(error)),
             )));
             for line in geo_err.lines().take(4) {
                 self.results_view
@@ -225,7 +226,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "SSL/TLS:",
-                ratatui::style::Style::default().fg(tc!(accent)),
+                Style::default().fg(tc!(accent)),
             )));
             if let Some(ref cert) = ssl.certificate {
                 self.results_view
@@ -237,7 +238,7 @@ impl ReconTab {
             self.results_view.add_line(Line::from(""));
             self.results_view.add_line(Line::from(Span::styled(
                 "SSL/TLS: Failed",
-                ratatui::style::Style::default().fg(tc!(error)),
+                Style::default().fg(tc!(error)),
             )));
             if let Some(ref err) = results.ssl_error {
                 self.results_view.add_line(Line::from(format!("  {}", err)));
@@ -249,7 +250,7 @@ impl ReconTab {
                 self.results_view.add_line(Line::from(""));
                 self.results_view.add_line(Line::from(Span::styled(
                     format!("Subdomains ({}):", subdomains.subdomains.len()),
-                    ratatui::style::Style::default().fg(tc!(accent)),
+                    Style::default().fg(tc!(accent)),
                 )));
                 for sub in subdomains.subdomains.iter().take(5) {
                     self.results_view.add_line(Line::from(format!(
@@ -457,7 +458,6 @@ impl TabRender for ReconTab {
         if self.state == AppState::Running {
             self.progress.render(f, results_area);
         } else if let Some(ref err) = self.error {
-            use ratatui::style::Style;
             use ratatui::widgets::{Block, Borders, Paragraph};
             let error_text = Paragraph::new(format!("Error: {}", err.message()))
                 .block(
