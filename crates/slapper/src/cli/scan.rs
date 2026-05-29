@@ -378,8 +378,6 @@ pub struct ScanArgs {
     pub ttl: Option<u8>,
     #[arg(long, help = "Verbose output")]
     pub verbose: bool,
-    #[arg(long, help = "Run stages concurrently instead of sequentially")]
-    pub concurrent_stages: bool,
 }
 
 #[derive(clap::Args)]
