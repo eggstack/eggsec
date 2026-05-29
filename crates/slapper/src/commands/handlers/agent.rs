@@ -35,7 +35,7 @@ pub async fn handle_agent(_ctx: &CommandContext, args: AgentArgs) -> Result<()> 
     match args.command {
         None => {
             println!("Agent commands:");
-            println!("  slapper agent run          - Run the autonomous agent");
+            println!("  slapper agent run          - Run the security agent");
             println!("  slapper agent targets     - Manage targets");
             println!("  slapper agent skills      - Manage skills");
             println!("  slapper agent status      - Show agent status");

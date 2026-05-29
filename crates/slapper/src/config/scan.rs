@@ -176,6 +176,17 @@ impl WebhookConfig {
     }
 }
 
+/// Config-driven scan profile. Users can define custom profiles in `SlapperConfig.profiles`.
+///
+/// TODO(reframe-pass3): Planned defense-lab config profiles:
+/// - `defense-lab`: local/private-scope controlled probe suite
+/// - `synvoid-local`: localhost/container/private lab defaults
+/// - `waf-regression`: WAF payload and evasion-resistance regression
+/// - `protocol-edge`: malformed protocol, TCP/TLS/HTTP edge behavior
+/// - `nse-safe`: sandboxed safe/default/version/discovery NSE scripts only
+///
+/// Defense-lab profiles should validate scope at load time and reject public targets.
+/// Stress and packet features must require explicit feature gates.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ScanProfile {
     pub name: String,

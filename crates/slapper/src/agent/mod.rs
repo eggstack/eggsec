@@ -323,7 +323,7 @@ impl Agent {
         let log_dir = self.config.memory_dir.join("logs");
         self.logger = Some(logging::AgentLogger::init(log_dir)?);
 
-        tracing::info!("Starting autonomous security agent");
+        tracing::info!("Starting security agent");
 
         let mut poll_interval = interval(Duration::from_secs(self.config.poll_interval_secs));
         poll_interval.tick().await;

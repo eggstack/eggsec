@@ -106,6 +106,7 @@ pub mod logging;
 pub mod notify;
 pub mod output;
 pub mod pipeline;
+pub mod probe;
 pub mod proxy;
 pub mod recon;
 pub mod scanner;

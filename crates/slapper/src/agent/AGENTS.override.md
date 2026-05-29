@@ -1,6 +1,6 @@
 # Agent Module Override
 
-Specialized guidance for the autonomous agent module.
+Specialized guidance for the security agent module.
 
 ## Key Types
 

@@ -1,6 +1,6 @@
 # Slapper Architecture Overview
 
-Slapper is a high-performance, async-first security testing toolkit built in Rust. It provides a full assessment pipeline from reconnaissance through exploitation, with autonomous AI-driven agents, distributed cluster scanning, and a comprehensive TUI.
+Slapper is a Rust-native security assessment and defense-validation engine. It is designed for scoped, repeatable testing of live systems, including service discovery, protocol probing, WAF evaluation, application security checks, load-bearing validation, and agent-readable reporting. Its low-level networking capabilities are intended for controlled defensive validation, especially local lab testing against systems such as Synvoid.
 
 **Quick Facts:**
 - 41 modules in `crates/slapper/src/`
@@ -12,6 +12,18 @@ Slapper is a high-performance, async-first security testing toolkit built in Rus
 - 11 pipeline profiles
 - 4 workspace crates
 - 20+ feature flags
+
+---
+
+## Architectural Principles
+
+1. **Scope enforcement is a core invariant**, not a CLI convenience.
+2. **Slapper-native Rust probes are the curated core.** NSE and other compatibility layers are optional.
+3. **NSE is a compatibility and knowledge layer**, not the architectural center.
+4. **Low-level packet/protocol testing belongs in controlled defense-lab workflows.**
+5. **Outputs should be structured and suitable for humans, CI, and agents.**
+6. **Intrusive or stress behavior must be explicit and budgeted.**
+7. **Profiles should compile into clear probe plans** with documented intent and risk.
 
 ---
 
@@ -80,16 +92,16 @@ Each major area links to a detailed `.md` file in this directory. Modules withou
 
 | Module | Source | Description | Doc |
 |--------|--------|-------------|-----|
-| `scanner/` | `crates/slapper/src/scanner/` | Port scanning (TCP/SYN/UDP), service fingerprinting (20+ protocols), endpoint discovery, timing templates (T0-T5), ICMP/UDP probing | [scanner.md](scanner.md) |
+| `scanner/` | `crates/slapper/src/scanner/` | Port scanning (TCP/SYN/UDP), service fingerprinting (20+ protocols), endpoint discovery, timing templates (T0-T5), ICMP/UDP probing. Controlled use for defense validation. | [scanner.md](scanner.md) |
 | `fuzzer/` | `crates/slapper/src/fuzzer/` | Security fuzzing engine with 31 payload types, mutation, grammar-based generation, detection algorithms (error/boolean/time-based), API schema fuzzing | [fuzzer.md](fuzzer.md) |
 | `recon/` | `crates/slapper/src/recon/` | Passive/active recon: DNS, WHOIS, SSL, subdomain discovery, CVE mapping, cloud asset discovery, CORS, JS analysis, Wayback, threat intel, email harvesting, git secrets | [recon.md](recon.md) |
-| `waf/` | `crates/slapper/src/waf/` | WAF detection (34 products), header manipulation, HTTP smuggling, evasion techniques, knowledge-base-driven bypass | [waf.md](waf.md) |
+| `waf/` | `crates/slapper/src/waf/` | WAF detection (34 products), evasion-resistance testing, header manipulation, HTTP smuggling, knowledge-base-driven evaluation | [waf.md](waf.md) |
 | `auth/` | `crates/slapper/src/auth/` | Authentication testing: brute force, credential stuffing, MFA bypass, SSH/SMTP testing | - |
 | `browser/` | `crates/slapper/src/browser/` | Headless Chrome for DOM XSS and SPA crawling (feature: `headless-browser`) | - |
 | `websocket/` | `crates/slapper/src/websocket/` | WebSocket security testing (feature: `websocket`) | - |
 | `wireless/` | `crates/slapper/src/wireless/` | Wireless security testing (feature: `wireless`) | - |
 | `hunt/` | `crates/slapper/src/hunt/` | Intelligent vulnerability hunting (feature: `advanced-hunting`) | - |
-| `nse_tool/` | `crates/slapper/src/nse_tool/` | NSE tool integration (feature: `nse` + `tool-api`) | [nse_integration.md](nse_integration.md) |
+| `nse_tool/` | `crates/slapper/src/nse_tool/` | Optional NSE compatibility adapter (feature: `nse` + `tool-api`) | [nse_integration.md](nse_integration.md) |
 | `auth_context/` | `crates/slapper/src/auth_context/` | Multi-role auth contexts with env variable interpolation | [AUTH_CONTEXT.md](../docs/AUTH_CONTEXT.md) |
 | `api_schema/` | `crates/slapper/src/api_schema/` | OpenAPI v3 schema import for type-aware fuzzing (feature: `api-schema`) | [API_TESTING.md](../docs/API_TESTING.md) |
 
@@ -102,20 +114,20 @@ Each major area links to a detailed `.md` file in this directory. Modules withou
 | `workflow/` | `crates/slapper/src/workflow/` | Finding management and SLA tracking (feature: `finding-workflow`) | - |
 | `vuln/` | `crates/slapper/src/vuln/` | Vulnerability triage and lifecycle management (feature: `vuln-management`) | - |
 
-### AI & Autonomous Agents
+### AI & Agent Orchestration
 
 | Module | Source | Description | Doc |
 |--------|--------|-------------|-----|
-| `ai/` | `crates/slapper/src/ai/` | AI/LLM integration: adaptive fuzzing, WAF bypass suggestions, payload generation, execution planning, TTL caching | [ai_agents.md](ai_agents.md) |
-| `agent/` | `crates/slapper/src/agent/` | Autonomous security agent with scheduled scans, memory, alert routing, skill system (feature: `rest-api`) | [ai_agents.md](ai_agents.md) |
-| `tool/` | `crates/slapper/src/tool/` | `SecurityTool` trait, `ToolRegistry`, MCP/REST/gRPC integration for AI-driven tool exposure (feature: `tool-api`) | [ai_agents.md](ai_agents.md) |
+| `ai/` | `crates/slapper/src/ai/` | AI/LLM integration: adaptive fuzzing, WAF evaluation suggestions, payload generation, execution planning, TTL caching | [ai_agents.md](ai_agents.md) |
+| `agent/` | `crates/slapper/src/agent/` | Agent-readable orchestration with scheduled scans, memory, alert routing, skill system (feature: `rest-api`) | [ai_agents.md](ai_agents.md) |
+| `tool/` | `crates/slapper/src/tool/` | `SecurityTool` trait, `ToolRegistry`, MCP/REST/gRPC integration for agent-readable tool exposure (feature: `tool-api`) | [ai_agents.md](ai_agents.md) |
 
 ### Performance & Load
 
 | Module | Source | Description | Doc |
 |--------|--------|-------------|-----|
 | `loadtest/` | `crates/slapper/src/loadtest/` | HTTP load testing with HDR histogram metrics, connection pooling, configurable concurrency | [loadtest.md](loadtest.md) |
-| `stress/` | `crates/slapper/src/stress/` | SYN/UDP/HTTP/ICMP flood testing, proxy management, raw sockets (feature: `stress-testing`) | [networking.md](networking.md) |
+| `stress/` | `crates/slapper/src/stress/` | Controlled SYN/UDP/HTTP/ICMP flood testing, proxy management, raw sockets. Requires explicit `stress-testing` feature gate. | [networking.md](networking.md) |
 
 ### Networking & Packets
 
@@ -250,7 +262,7 @@ These modules are always available without any feature flags:
 | `slapper` | `crates/slapper/` | Core toolkit — all security modules, CLI, TUI |
 | `slapper-nse` | `crates/slapper-nse/` | Full Nmap Scripting Engine (NSE) via `mlua` — 164+ NSE-style library modules |
 
-**NSE Integration**: Full Lua VM with 164+ NSE-style library modules (stdnse, nmap, http, socket, dns, ssl, ssh, mysql, postgres, redis, mongodb, ldap, snmp, smb, vulns, etc.). See [nse_integration.md](nse_integration.md).
+**NSE Integration**: Optional NSE compatibility via `slapper-nse` crate. Full Lua VM with 164+ NSE-style library modules (stdnse, nmap, http, socket, dns, ssl, ssh, mysql, postgres, redis, mongodb, ldap, snmp, smb, vulns, etc.). See [nse_integration.md](nse_integration.md).
 
 ---
 
@@ -261,6 +273,9 @@ These modules are always available without any feature flags:
 | `SlapperConfig` | `config/settings.rs` | Main configuration struct |
 | `Scope` | `config/scope.rs` | Target allow/block enforcement |
 | `Severity` | `types.rs` | Unified severity (Critical, High, Medium, Low, Info) |
+| `ProbeIntent` | `probe.rs` | Shared intent vocabulary (Discovery, Fingerprint, WafEvaluation, etc.) |
+| `ProbeRisk` | `probe.rs` | Risk classification (Passive, SafeActive, Intrusive, Stress, etc.) |
+| `ProbeMetadata` | `probe.rs` | Probe purpose, risk, and requirements metadata |
 | `SlapperError` | `error/mod.rs` | Unified error via `thiserror` |
 | `TabError` | `tui/app/tab_error.rs` | Structured error with recovery categories |
 | `PayloadType` | `fuzzer/payloads/mod.rs` | 31 payload categories |
@@ -339,7 +354,7 @@ Built on `tokio` for high concurrency:
 
 | Document | Modules Covered | Description |
 |----------|-----------------|-------------|
-| [ai_agents.md](ai_agents.md) | `ai/`, `agent/`, `tool/` | AI/LLM integration, autonomous agents, MCP tool exposure |
+| [ai_agents.md](ai_agents.md) | `ai/`, `agent/`, `tool/` | AI/LLM integration, agent-readable orchestration, MCP tool exposure |
 | [cli_commands.md](cli_commands.md) | `cli/`, `commands/` | CLI parsing, command dispatch, handler patterns |
 | [config.md](config.md) | `config/` | Configuration system, scope enforcement, profiles |
 | [distributed.md](distributed.md) | `distributed/` | Worker/coordinator cluster architecture |

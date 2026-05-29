@@ -85,6 +85,20 @@ Session checkpoints are written only when output path is explicitly a session-li
 - `run_cli_with_callback(args, config, callback)` - Pipeline execution with finding callback (for tool abstraction)
 - `resume_cli(args)` - Resume from session checkpoint
 
+## Planned Defense-Lab Profiles
+
+Five defense-lab profiles are planned but not yet implemented. They will add to the `ScanProfile` enum and `Stage::from_profile()` mapping. See `architecture/defense_lab.md` for full semantics.
+
+| Profile | Purpose | Key Constraint |
+|---------|---------|----------------|
+| `defense-lab` | Comprehensive local/private-scope probe suite | Explicit scope required, no stress/packet defaults |
+| `synvoid-local` | Synvoid validation on localhost/container | Loopback or private CIDR only |
+| `waf-regression` | WAF evasion-resistance regression testing | Payload classification focus |
+| `protocol-edge` | Malformed protocol and edge behavior | Requires `packet-inspection` feature |
+| `nse-safe` | Sandboxed NSE scripts (safe/default/version/discovery) | Requires `nse` + `nse-sandbox` features |
+
+TODOs are placed in `cli/mod.rs` (variant definitions), `pipeline/stage.rs` (profile-to-stage mapping and string parsing). These profiles should not be added until the defense-lab runner infrastructure is in place.
+
 ## Benefits
 
 - **Automation**: Automate standard pentesting methodologies.

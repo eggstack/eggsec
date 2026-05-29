@@ -1,6 +1,6 @@
 # AI & Agents Module
 
-Slapper features deep integration with AI models for analysis, payload generation, and autonomous security testing via the Model Context Protocol (MCP).
+Slapper features deep integration with AI models for analysis, payload generation, and agent-readable security orchestration via the Model Context Protocol (MCP).
 
 ## AI Integration (`src/ai/`)
 
@@ -78,9 +78,9 @@ pub enum AiError {
 }
 ```
 
-## Autonomous Agents (`src/agent/`)
+## Agent Orchestration (`src/agent/`)
 
-Slapper can run as an autonomous scanning agent that executes configured schedules, enforces operational constraints, and handles alert routing.
+Slapper can run as an agent-readable scanning orchestrator that executes configured schedules, enforces operational constraints, and handles alert routing.
 
 - **Agent Runner (`mod.rs`)**: Core polling loop, scheduled scan dispatch, and event handling.
 - **Memory (`memory.rs`)**: Maintains longitudinal context and baseline-aware finding comparisons.

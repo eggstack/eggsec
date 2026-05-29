@@ -312,7 +312,10 @@ pub struct ScanArgs {
     pub stages: Option<String>,
     #[arg(short = 'c', long, default_value = "10", help = "Concurrent requests")]
     pub concurrency: usize,
-    #[arg(long, help = "Run pipeline stages concurrently instead of sequentially")]
+    #[arg(
+        long,
+        help = "Run pipeline stages concurrently instead of sequentially"
+    )]
     pub concurrent_stages: bool,
     #[arg(long, help = "Output results as JSON")]
     pub json: bool,

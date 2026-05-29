@@ -174,9 +174,12 @@ pub enum Commands {
     )]
     McpServe(McpServeArgs),
 
-    // --- Autonomous agent ---
+    // --- Agent orchestration ---
     #[cfg(feature = "rest-api")]
-    #[command(about = "Run autonomous security agent", alias = "agent")]
+    #[command(
+        about = "Run security agent for scheduled assessments",
+        alias = "agent"
+    )]
     Agent(AgentArgs),
 
     // --- AI operations ---
@@ -252,6 +255,26 @@ pub enum ScanProfile {
     Deep,
     Vuln,
     Auth,
+    // TODO(reframe-pass3): Add defense-lab profile variants once the defense-lab runner is
+    // implemented. These profiles target local/private-lab environments only and require
+    // explicit scope validation. Planned variants:
+    //
+    // - `DefenseLab` — local/private-scope controlled probe suite. Requires explicit
+    //   scope. No stress or packet features enabled by default.
+    // - `SynvoidLocal` — localhost/container/private lab defaults for Synvoid validation.
+    //   Restricts targets to loopback or private CIDRs. Uses WAF regression + protocol edge.
+    // - `WafRegression` — WAF payload and evasion-resistance regression profile.
+    //   Focused on payload classification, encoding bypass, case manipulation probes.
+    // - `ProtocolEdge` — malformed protocol, TCP/TLS/HTTP edge behavior.
+    //   Requires `packet-inspection` feature. No stress features by default.
+    // - `NseSafe` — sandboxed safe/default/version/discovery NSE scripts only.
+    //   Requires `nse` + `nse-sandbox` features. No intrusive categories.
+    //
+    // Guardrails for defense-lab profiles:
+    // - Scope is required (localhost or private CIDR only).
+    // - Rate/concurrency/duration budgets are mandatory for load-bearing probes.
+    // - Stress and packet features require explicit feature gates and runtime confirmation.
+    // - No dangerous behavior enabled by default.
 }
 
 impl std::fmt::Display for ScanProfile {

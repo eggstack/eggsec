@@ -64,10 +64,41 @@ pub struct DiffEngine;
 pub fn has_regressions(diff: &DiffResult) -> bool;  // checks Critical escalations
 ```
 
+## Run Manifest (`run_manifest.rs`)
+
+The `RunManifest` provides a structured summary of a single assessment run. It is designed for regression-oriented workflows where runs must be comparable, reproducible, and diffable against a baseline.
+
+```rust
+pub struct RunManifest {
+    pub schema_version: String,
+    pub run_id: String,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: DateTime<Utc>,
+    pub slapper_version: String,
+    pub target_scope: String,
+    pub profile: String,
+    pub probe_intents: Vec<String>,
+    pub risk_budget: String,
+    pub feature_flags: Vec<String>,
+    pub observations: Vec<serde_json::Value>,
+    pub findings: Vec<serde_json::Value>,
+    pub artifacts: Vec<String>,
+    pub baseline_id: Option<String>,
+    pub diff_summary: Option<DiffSummary>,
+}
+```
+
+The manifest is a metadata envelope — it does not replace existing finding or diff types. Instead it wraps them with provenance (run identity, scope, profile, feature flags) so that two manifests can be meaningfully compared.
+
+For defense-lab regression workflows, a baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline via `baseline_id` and populate `diff_summary` with the delta. See `architecture/defense_lab.md` for the full workflow.
+
+This type is intentionally minimal and serde-only. It is not yet wired into the existing output/report generation paths — that integration is future work.
+
 ## Key Types
 
 | Type | Location | Purpose |
 |------|----------|---------|
+| `RunManifest` | `run_manifest.rs` | Run-level metadata envelope for regression workflows |
 | `AgentFinding` | `agent.rs` | Core finding with evidence, remediation, confidence |
 | `FindingSummary` | `agent.rs` | Aggregated statistics by severity/confidence/type |
 | `ScanReportData` | `convert.rs` | Intermediate format for conversions |

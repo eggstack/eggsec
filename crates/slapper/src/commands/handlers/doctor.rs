@@ -7,10 +7,7 @@ pub async fn handle_doctor(_ctx: &crate::commands::handlers::CommandContext) -> 
     let mut out = std::io::stdout();
 
     writeln!(out, "=== Slapper Dependency Check ===\n")?;
-    writeln!(
-        out,
-        "All core dependencies available."
-    )?;
+    writeln!(out, "All core dependencies available.")?;
     writeln!(out, "\n{}", DOCTOR_SUCCESS)?;
     Ok(())
 }

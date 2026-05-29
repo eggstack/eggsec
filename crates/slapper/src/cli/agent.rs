@@ -28,7 +28,7 @@ pub struct AgentArgs {
 
 #[derive(Debug, Clone, Parser)]
 pub enum AgentCommand {
-    /// Run the autonomous agent
+    /// Run the security agent
     Run(RunArgs),
     /// Manage targets in the portfolio
     Targets(TargetsArgs),

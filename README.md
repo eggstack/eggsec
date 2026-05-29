@@ -1,19 +1,17 @@
 # Slapper - Rust Security Assessment Engine
 
-Slapper is a Rust-native security assessment engine for scoped, repeatable testing of live systems. It provides high-performance primitives for reconnaissance, port and service scanning, endpoint discovery, web/API security checks, WAF evaluation, fuzzing, load testing, reporting, and AI-oriented orchestration.
-
-Slapper is not intended to be a Metasploit clone or a general arbitrary-code plugin host. Its core value is a maintainable Rust engine with policy-aware execution, structured outputs, and optional compatibility layers such as Nmap NSE support.
+Slapper is a Rust-native security assessment and defense-validation engine for scoped testing of live systems. It combines high-level application security checks, low-level protocol probing, controlled load-bearing tests, WAF evaluation, and optional Nmap NSE compatibility to help developers and security teams understand, reproduce, and harden real attack surfaces. Slapper is designed for authorized testing, local lab validation, and agent-readable regression workflows, not arbitrary exploitation or unscoped scanning.
 
 ## What is Slapper?
 
-Slapper is a command-line security testing tool designed for security professionals, penetration testers, and developers who need to:
+Slapper is a command-line security assessment tool designed for security professionals, developers, and defensive teams who need to:
 
 - **Discover attack surfaces** - Reconnaissance, subdomain enumeration, technology detection
 - **Assess web application security** - Find vulnerabilities like SQL injection, XSS, SSRF, and more
 - **Test infrastructure** - Scan ports, fingerprint services, discover endpoints
-- **Evaluate defenses** - Test WAF detection and bypass capabilities
-- **Load test** - Measure application performance under stress
-- **Automate assessments** - Pipeline scans with customizable profiles
+- **Evaluate defenses** - Test WAF detection and evasion-resistance
+- **Load test** - Measure application performance under controlled load
+- **Repeat assessments** - Pipeline scans with customizable profiles for regression workflows
 
 ## Why Slapper?
 
@@ -21,12 +19,12 @@ Slapper excels in areas that complement your existing toolkit:
 
 | Capability | Description |
 |------------|-------------|
-| **High Performance** | Built in Rust with async I/O for rapid scanning and fuzzing |
-| **Modern API Testing** | Specialized support for GraphQL, JWT, OAuth/OIDC, gRPC, and WebSocket security |
-| **WAF Evaluation** | Detection of 30+ WAF products with multiple bypass techniques |
-| **CVE Prioritization** | Map discovered technologies to known vulnerabilities |
-| **CI/CD Integration** | SARIF and JUnit XML output for automated pipelines |
-| **Interactive TUI** | Real-time progress monitoring with terminal UI |
+| **Scoped Repeatable Testing** | Run the same assessment profiles repeatedly for regression validation |
+| **Rust-Native Primitives** | High-performance async I/O, no external runtime dependencies |
+| **Structured Outputs** | JSON, SARIF, JUnit, HTML, CSV for humans, CI, and agents |
+| **WAF and Defense Validation** | Detection of 30+ WAF products with evasion-resistance testing |
+| **Local Lab/Regression Workflows** | Repeatable profiles against local test environments |
+| **Optional NSE Compatibility** | Curated Nmap NSE script support as an optional layer |
 
 ## Core Features
 
@@ -36,13 +34,13 @@ Slapper excels in areas that complement your existing toolkit:
 | **Web Security** | SQLi, XSS, SSRF, Path Traversal, ReDoS, Header Injection, SSTI, IDOR testing |
 | **API Security** | GraphQL introspection/injection, JWT analysis, OAuth/OIDC testing, gRPC fuzzing |
 | **Scanning** | Port scanning, service fingerprinting (20+ protocols), endpoint discovery |
-| **WAF** | Detection of 26 WAF products, header manipulation, HTTP smuggling, evasion techniques |
+| **WAF** | Detection of 26 WAF products, header manipulation, HTTP smuggling, evasion-resistance testing |
 | **Load Testing** | High-concurrency HTTP testing with detailed metrics |
-| **Stress Testing** | SYN, UDP, HTTP, TCP, ICMP flood testing (requires `--features stress-testing`) |
+| **Controlled Stress** | SYN, UDP, HTTP, TCP, ICMP flood testing (requires `--features stress-testing`) |
 | **Proxy Management** | SOCKS4, SOCKS5, HTTP, HTTPS, Tor proxy pool with health checking |
 | **Cluster Mode** | Distributed scanning with worker/coordinator architecture |
 | **Notifications** | Slack, Discord, Teams, and custom webhook integrations |
-| **Automation** | 11 pipeline profiles, session resumption, multiple output formats |
+| **Repeatable Profiles** | 11 pipeline profiles, session resumption, multiple output formats |
 
 ## System Dependencies
 
@@ -129,10 +127,10 @@ cargo build --release
 
 # The binary will be at ./target/release/slapper
 
-# Full build with all features (recommended for pentesting)
+# Full build with all features (recommended for full capability)
 cargo build --release --features full
 
-# Build with stress testing (DoS tools, proxy pool)
+# Build with stress testing (controlled flood testing, proxy pool)
 cargo build --release --features stress-testing
 ```
 
@@ -423,7 +421,7 @@ Tests OAuth 2.0 and OpenID Connect implementations for common misconfigurations 
 
 ### WAF Testing
 
-Web Application Firewall detection and bypass testing. Identifies 26 WAF products and attempts bypass techniques including header manipulation, HTTP smuggling, and evasion.
+Web Application Firewall detection and evasion-resistance testing. Identifies 26 WAF products and tests evasion techniques including header manipulation, HTTP smuggling, and payload classification.
 
 Supported WAFs: Cloudflare, Akamai, AWS WAF, Azure WAF, Google Cloud Armor, Fastly, Imperva, Sucuri, CloudFront, F5 BIG-IP, Barracuda, Fortinet, Citrix NetScaler, ModSecurity, Wordfence, DataDome, PerimeterX, Nginx, Traefik, Kong, Varnish, Radware, Signal Sciences, Wallarm, Reblaze.
 
@@ -431,16 +429,16 @@ Supported WAFs: Cloudflare, Akamai, AWS WAF, Azure WAF, Google Cloud Armor, Fast
 # Detect WAF - identifies WAF products
 ./slapper waf https://example.com
 
-# Detect and bypass - tries multiple bypass techniques
+# Detect and test evasion resistance
 ./slapper waf https://example.com --bypass
 
-# WAF-specific bypass - targets specific WAF products
+# WAF-specific evaluation - targets specific WAF products
 ./slapper waf https://example.com --profile cloudflare --bypass
 ```
 
 ### WAF Stress Testing
 
-Comprehensive WAF stress testing with multiple attack vectors to evaluate WAF rule effectiveness and detection capabilities.
+Comprehensive WAF evaluation with multiple attack vectors to validate WAF rule effectiveness and detection capabilities.
 
 ```bash
 # Full stress test
@@ -568,9 +566,9 @@ Passive reconnaissance gathers intelligence about targets without direct interac
 ./slapper recon example.com --concurrency 20
 ```
 
-## Autonomous Agent
+## Agent-Readable Orchestration
 
-Slapper includes an autonomous security agent for continuous monitoring and scheduled security assessments. The agent maintains longitudinal memory of scan results, routes alerts to configured channels, and uses AI-powered skills for intelligent security testing.
+Slapper includes a security agent for continuous monitoring and scheduled assessments. The agent maintains longitudinal memory of scan results, routes alerts to configured channels, and uses AI-powered skills for intelligent security testing.
 
 ### Build Requirements
 
@@ -789,6 +787,40 @@ slapper --scope /path/to/scope.toml       # Scope file
 - [API Testing with OpenAPI Schemas](docs/API_TESTING.md) - Schema import, fuzz target generation
 - [Agent Documentation](docs/AGENT.md) - Autonomous agent setup and usage
 - [Capabilities](docs/CAPABILITIES.md) - Feature matrix and capabilities overview
+
+## Intended Use and Guardrails
+
+Slapper is designed for **authorized security testing only**. Key guardrails:
+
+- **Scope files are expected.** Define allowed targets with `scope.toml` to restrict testing to authorized systems.
+- **Intrusive and stress profiles require explicit opt-in.** Build with `--features stress-testing` and use scope files before running stress or flood tests.
+- **Local lab mode is encouraged.** Use Slapper against local test environments (Docker, VMs, or systems like Synvoid) for defensive development and regression testing.
+- **Rate limiting is recommended.** Use `--rate-limit` and `--concurrency` to avoid overwhelming targets.
+
+## Relationship to Nmap/NSE
+
+Slapper borrows proven scanning concepts from Nmap but is not a drop-in replacement.
+
+- **NSE is an optional compatibility layer.** Build with `--features nse` to enable curated Nmap NSE script support.
+- **No full Nmap parity.** Slapper does not aim to replicate all Nmap behavior. The goal is broad practical compatibility for useful script categories.
+- **NSE is a protocol-testing knowledge source.** NSE libraries and scripts encode mature testing concepts. Selected behaviors may be promoted into Rust-native probes over time for repeatability, performance, and safety.
+
+## Defense-Lab Mode
+
+Slapper can run local, repeatable profiles against Synvoid-like defensive systems.
+
+- **Repeatable adversarial traffic.** Run the same probe suite multiple times to measure changes in WAF or protocol behavior.
+- **Structured observations and baseline diffs.** Compare current results against a saved baseline to identify regressions or improvements.
+- **WAF regression testing.** Validate that WAF rules continue to catch known evasion patterns after updates.
+- **Protocol-edge testing.** Probe TCP/IP stack, TLS fingerprint, and HTTP ambiguity behavior in a controlled environment.
+
+```bash
+# Run a profile against a local Synvoid instance
+./slapper scan localhost:8080 --profile waf --json -o baseline.json
+
+# Later, compare against baseline
+./slapper diff baseline.json current.json
+```
 
 ## Security Considerations
 
