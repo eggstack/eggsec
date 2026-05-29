@@ -19,7 +19,8 @@ use crate::tool::protocol::mcp::auth::{validate_auth, validate_auth_params};
 use crate::tool::protocol::mcp::handlers::helpers::{
     build_capabilities_summary, build_input_schema,
 };
-use crate::tool::protocol::mcp::prompts::get_builtin_prompts;
+use crate::tool::protocol::mcp::profile::McpProfile;
+use crate::tool::protocol::mcp::prompts::get_builtin_prompts_for_profile;
 use crate::tool::protocol::mcp::streaming::StreamEvent;
 use crate::tool::protocol::mcp::types::{
     McpError, McpRequest, McpResource, McpResponse, McpRoot, McpTool,
@@ -40,17 +41,27 @@ pub struct McpServer {
     #[cfg(feature = "rest-api")]
     scope: Option<Scope>,
     shutdown_requested: Arc<std::sync::atomic::AtomicBool>,
+    pub(crate) profile: McpProfile,
 }
 
 impl McpServer {
     pub fn new(registry: ToolRegistry, api_key: Option<String>) -> Self {
-        Self::with_scope(registry, api_key, None)
+        Self::with_scope_and_profile(registry, api_key, None, McpProfile::default())
     }
 
     pub fn with_scope(
         registry: ToolRegistry,
         api_key: Option<String>,
         scope: Option<Scope>,
+    ) -> Self {
+        Self::with_scope_and_profile(registry, api_key, scope, McpProfile::default())
+    }
+
+    pub fn with_scope_and_profile(
+        registry: ToolRegistry,
+        api_key: Option<String>,
+        scope: Option<Scope>,
+        profile: McpProfile,
     ) -> Self {
         let dispatcher = ToolDispatcher::new(registry.clone());
         let (stream_events, _) = tokio::sync::broadcast::channel(1000);
@@ -72,11 +83,17 @@ impl McpServer {
             #[cfg(feature = "rest-api")]
             scope,
             shutdown_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            profile,
         };
 
         server.start_hashmap_reaper(60);
 
         server
+    }
+
+    pub fn with_profile(mut self, profile: McpProfile) -> Self {
+        self.profile = profile;
+        self
     }
 
     pub fn request_shutdown(&self) {
@@ -115,6 +132,7 @@ impl McpServer {
             #[cfg(feature = "rest-api")]
             scope: self.scope,
             shutdown_requested: self.shutdown_requested,
+            profile: self.profile,
         }
     }
 
@@ -249,24 +267,43 @@ impl McpServer {
     }
 
     async fn handle_initialize(&self, req: McpRequest) -> McpResponse {
-        let result = serde_json::json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {
-                "tools": {
-                    "listChanged": true
+        let result = if self.profile.is_coding_agent() {
+            serde_json::json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": { "listChanged": true },
+                    "sessions": true,
+                    "roots": { "listChanged": true },
+                    "streaming": true
                 },
-                "streaming": true,
-                "sessions": true,
-                "roots": {
-                    "listChanged": true
+                "serverInfo": {
+                    "name": self.profile.server_name(),
+                    "version": "0.1.0",
+                    "description": self.profile.server_description()
+                },
+                "profile": "coding-agent",
+                "safety": {
+                    "default_external_network": false,
+                    "stress_testing_available": false,
+                    "broad_recon_available": false
                 }
-            },
-            "serverInfo": {
-                "name": "slapper-tool-api",
-                "version": "0.1.0",
-                "description": "High-performance security testing toolkit for AI agents"
-            }
-        });
+            })
+        } else {
+            serde_json::json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": { "listChanged": true },
+                    "streaming": true,
+                    "sessions": true,
+                    "roots": { "listChanged": true }
+                },
+                "serverInfo": {
+                    "name": self.profile.server_name(),
+                    "version": "0.1.0",
+                    "description": self.profile.server_description()
+                }
+            })
+        };
 
         req.success_response(result)
     }
@@ -448,7 +485,7 @@ impl McpServer {
     }
 
     async fn handle_resources_list(&self, req: McpRequest) -> McpResponse {
-        let resources = vec![
+        let mut resources = vec![
             McpResource {
                 uri: "slapper://tools".to_string(),
                 name: "Available Tools".to_string(),
@@ -469,6 +506,33 @@ impl McpServer {
                 mime_type: Some("application/json".to_string()),
             },
         ];
+
+        if self.profile.is_coding_agent() {
+            resources.push(McpResource {
+                uri: "slapper://coding-agent/manifest".to_string(),
+                name: "Coding Agent Manifest".to_string(),
+                description:
+                    "Available coding-agent validation tools, safe defaults, and recommended workflow"
+                        .to_string(),
+                mime_type: Some("application/json".to_string()),
+            });
+            resources.push(McpResource {
+                uri: "slapper://coding-agent/safety-policy".to_string(),
+                name: "Coding Agent Safety Policy".to_string(),
+                description:
+                    "Safety defaults, hard caps, and allowed targets for coding-agent profile"
+                        .to_string(),
+                mime_type: Some("application/json".to_string()),
+            });
+            resources.push(McpResource {
+                uri: "slapper://coding-agent/finding-schema".to_string(),
+                name: "Coding Agent Finding Schema".to_string(),
+                description:
+                    "Schema for structured findings produced by coding-agent validation tools"
+                        .to_string(),
+                mime_type: Some("application/json".to_string()),
+            });
+        }
 
         let result = serde_json::json!({
             "resources": resources
@@ -534,12 +598,66 @@ impl McpServer {
                 });
                 req.success_response(result)
             }
+            "slapper://coding-agent/manifest" => {
+                if !self.profile.is_coding_agent() {
+                    return req.error_response(McpError::invalid_params(
+                        "Coding-agent resources are only available in coding-agent profile",
+                    ));
+                }
+                let manifest = self.build_coding_agent_manifest();
+                let result = serde_json::json!({
+                    "contents": [{
+                        "uri": "slapper://coding-agent/manifest",
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&manifest).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize coding-agent manifest");
+                        }).unwrap_or_default()
+                    }]
+                });
+                req.success_response(result)
+            }
+            "slapper://coding-agent/safety-policy" => {
+                if !self.profile.is_coding_agent() {
+                    return req.error_response(McpError::invalid_params(
+                        "Coding-agent resources are only available in coding-agent profile",
+                    ));
+                }
+                let policy = self.build_coding_agent_safety_policy();
+                let result = serde_json::json!({
+                    "contents": [{
+                        "uri": "slapper://coding-agent/safety-policy",
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&policy).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize coding-agent safety policy");
+                        }).unwrap_or_default()
+                    }]
+                });
+                req.success_response(result)
+            }
+            "slapper://coding-agent/finding-schema" => {
+                if !self.profile.is_coding_agent() {
+                    return req.error_response(McpError::invalid_params(
+                        "Coding-agent resources are only available in coding-agent profile",
+                    ));
+                }
+                let schema = self.build_coding_agent_finding_schema();
+                let result = serde_json::json!({
+                    "contents": [{
+                        "uri": "slapper://coding-agent/finding-schema",
+                        "mimeType": "application/json",
+                        "text": serde_json::to_string_pretty(&schema).inspect_err(|e| {
+                            tracing::warn!(error = %e, "Failed to serialize coding-agent finding schema");
+                        }).unwrap_or_default()
+                    }]
+                });
+                req.success_response(result)
+            }
             _ => req.error_response(McpError::invalid_params("Unknown resource uri")),
         }
     }
 
     async fn handle_prompts_list(&self, req: McpRequest) -> McpResponse {
-        let prompts = get_builtin_prompts();
+        let prompts = get_builtin_prompts_for_profile(&self.profile);
 
         let result = serde_json::json!({
             "prompts": prompts,
@@ -560,7 +678,7 @@ impl McpServer {
             None => return req.error_response(McpError::invalid_params("Missing prompt name")),
         };
 
-        let prompts = get_builtin_prompts();
+        let prompts = get_builtin_prompts_for_profile(&self.profile);
 
         if let Some(prompt) = prompts.into_iter().find(|p| p.name == name) {
             let result = serde_json::json!({
@@ -610,6 +728,130 @@ impl McpServer {
                 {"name": "Broken Authentication", "cwe": "CWE-287"},
                 {"name": "Security Misconfiguration", "cwe": "CWE-16"}
             ]
+        })
+    }
+
+    fn build_coding_agent_manifest(&self) -> serde_json::Value {
+        serde_json::json!({
+            "profile": "coding-agent",
+            "description": "Bounded live security validation tools for coding agents",
+            "tools": [
+                {
+                    "name": "prepare_validation_target",
+                    "description": "Validate and normalize a local or explicitly scoped live application target before running coding-agent security checks"
+                },
+                {
+                    "name": "validate_live_web_app",
+                    "description": "Run bounded, low-volume live validation of a running web application for headers, cookies, CORS, unsafe methods, error leakage, and lightweight input handling issues"
+                },
+                {
+                    "name": "validate_auth_boundaries",
+                    "description": "Validate authentication and authorization boundaries across supplied routes and test sessions"
+                },
+                {
+                    "name": "validate_api_surface",
+                    "description": "Validate an explicit API surface or supplied API schema for method handling, content-type handling, malformed input behavior, and error leakage"
+                },
+                {
+                    "name": "validate_file_surface",
+                    "description": "Validate explicitly supplied upload, download, import, or export endpoints for safe path handling, content-type behavior, and size limits"
+                },
+                {
+                    "name": "run_targeted_probe",
+                    "description": "Run one narrow hypothesis-driven validation probe against one explicit endpoint and parameter"
+                },
+                {
+                    "name": "retest_finding",
+                    "description": "Rerun the minimal validation recipe for a previous coding-agent finding to determine whether it is fixed, still present, inconclusive, or changed"
+                }
+            ],
+            "safe_defaults": {
+                "allowed_hosts": ["localhost", "127.0.0.1", "::1"],
+                "allowed_schemes": ["http", "https"],
+                "allow_external_network": false,
+                "max_requests": 100,
+                "max_duration_ms": 60000,
+                "max_concurrency": 5,
+                "max_depth": 1
+            },
+            "hard_caps": {
+                "max_requests": 500,
+                "max_duration_ms": 300000,
+                "max_concurrency": 10
+            },
+            "workflow": [
+                "1. Call prepare_validation_target to establish safe target context",
+                "2. Call appropriate validation tool based on change type",
+                "3. Review structured findings with evidence",
+                "4. Patch source code based on findings",
+                "5. Call retest_finding to verify fix"
+            ]
+        })
+    }
+
+    fn build_coding_agent_safety_policy(&self) -> serde_json::Value {
+        serde_json::json!({
+            "profile": "coding-agent",
+            "default_allowlist": ["localhost", "127.0.0.1", "[::1]"],
+            "default_deny": [
+                "broad CIDRs",
+                "arbitrary external domains",
+                "production-looking hosts unless explicitly allowed",
+                "stress testing",
+                "WAF bypass tooling",
+                "proxy/Tor pools",
+                "cluster mode",
+                "high request volume",
+                "SYN/UDP/ICMP/TCP flood tools",
+                "destructive payloads",
+                "credential brute force",
+                "key brute force",
+                "arbitrary crawl depth"
+            ],
+            "budgets": {
+                "default_max_requests": 100,
+                "hard_max_requests": 500,
+                "default_max_duration_ms": 60000,
+                "hard_max_duration_ms": 300000,
+                "default_max_concurrency": 5,
+                "hard_max_concurrency": 10
+            }
+        })
+    }
+
+    fn build_coding_agent_finding_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "required": ["id", "title", "category", "severity", "confidence", "observed_behavior", "patch_relevance"],
+            "properties": {
+                "id": { "type": "string", "description": "Stable finding identifier" },
+                "title": { "type": "string", "description": "Short finding title" },
+                "category": { "type": "string", "description": "Finding category (e.g., auth_boundary, header_missing, error_leakage)" },
+                "severity": { "type": "string", "enum": ["critical", "high", "medium", "low", "info"] },
+                "confidence": { "type": "string", "enum": ["confirmed", "high", "medium", "low", "inconclusive"] },
+                "endpoint": {
+                    "type": "object",
+                    "properties": {
+                        "method": { "type": "string" },
+                        "path": { "type": "string" }
+                    }
+                },
+                "parameter": { "type": "string" },
+                "observed_behavior": { "type": "string" },
+                "expected_behavior": { "type": "string" },
+                "evidence": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": { "type": "string" },
+                            "content": { "type": "string" }
+                        }
+                    }
+                },
+                "retest_recipe": { "type": "object" },
+                "patch_relevance": { "type": "string", "enum": ["blocks_merge", "should_fix", "review_manually", "informational"] }
+            }
         })
     }
 

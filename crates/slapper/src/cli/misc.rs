@@ -333,6 +333,12 @@ pub struct McpServeArgs {
     pub api_key: Option<String>,
     #[arg(long, help = "Enable stdio mode for AI assistant integration")]
     pub stdio: bool,
+    #[arg(
+        long,
+        default_value = "ops-agent",
+        help = "MCP profile (ops-agent or coding-agent)"
+    )]
+    pub profile: String,
 }
 
 #[derive(clap::Args)]

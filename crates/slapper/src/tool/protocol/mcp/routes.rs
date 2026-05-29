@@ -14,6 +14,7 @@ use futures::Stream;
 use crate::tool::{ChainPlanner, ExecutionPlan, OpenApiGenerator, PlanRequest, ToolRegistry};
 
 use super::handlers::McpServer;
+use super::profile::McpProfile;
 use super::streaming::StreamEvent;
 use super::types::{McpError, McpRequest, McpResponse};
 
@@ -53,8 +54,14 @@ async fn handle_create_plan(
     axum::Json(plan)
 }
 
-pub async fn create_mcp_router(registry: ToolRegistry, api_key: Option<String>) -> Router {
-    let server = Arc::new(McpServer::new(registry.clone(), api_key));
+pub async fn create_mcp_router(
+    registry: ToolRegistry,
+    api_key: Option<String>,
+    profile: McpProfile,
+) -> Router {
+    let server = Arc::new(
+        McpServer::with_scope_and_profile(registry.clone(), api_key, None, profile),
+    );
     let planner = ChainPlanner::new(registry.clone());
     let openapi_generator = OpenApiGenerator::new("http://localhost:8080", "0.1.0");
 
@@ -198,10 +205,16 @@ async fn handle_mcp(
     (StatusCode::OK, Json(responses))
 }
 
-pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>) {
+pub async fn run_stdio(
+    registry: ToolRegistry,
+    api_key: Option<String>,
+    profile: McpProfile,
+) {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 
-    let server = Arc::new(McpServer::new(registry, api_key));
+    let server = Arc::new(
+        McpServer::with_scope_and_profile(registry, api_key, None, profile),
+    );
 
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();

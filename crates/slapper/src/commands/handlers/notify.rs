@@ -156,19 +156,27 @@ pub async fn handle_serve(_ctx: &CommandContext, args: crate::cli::ServeArgs) ->
 #[cfg(feature = "rest-api")]
 pub async fn handle_mcp_serve(_ctx: &CommandContext, args: crate::cli::McpServeArgs) -> Result<()> {
     use crate::tool::create_default_registry;
-    use crate::tool::protocol::mcp::{create_mcp_router, run_stdio};
+    use crate::tool::protocol::mcp::{create_mcp_router, run_stdio, McpProfile};
     use axum::serve;
     use std::net::SocketAddr;
     use tokio::net::TcpListener;
 
     let registry = create_default_registry();
 
+    let profile = match args.profile.as_str() {
+        "coding-agent" => McpProfile::CodingAgent,
+        _ => McpProfile::OpsAgent,
+    };
+
     if args.stdio {
-        tracing::info!("Starting MCP server in STDIO mode");
-        run_stdio(registry, args.api_key).await;
+        tracing::info!(
+            "Starting MCP server in STDIO mode (profile: {})",
+            args.profile
+        );
+        run_stdio(registry, args.api_key, profile).await;
         Ok(())
     } else {
-        let router = create_mcp_router(registry, args.api_key.clone()).await;
+        let router = create_mcp_router(registry, args.api_key.clone(), profile).await;
 
         let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
             .parse()
