@@ -139,6 +139,25 @@ cargo build -p slapper --features full
 # CI tests all feature combinations via matrix strategy
 ```
 
+#### CI Matrix
+
+The CI runs checks and tests across multiple feature combinations:
+
+- **Default**: Workspace check with no optional features
+- **Minimal CLI**: Core CLI without API servers
+- **rest-api**: REST API + MCP server
+- **grpc-api**: gRPC API server
+- **packet-inspection**: Packet capture and traceroute
+- **stress-testing**: Raw sockets and stress testing
+- **nse**: Nmap NSE script support
+- **nse-sandbox**: NSE with sandbox mode
+- **all-plugins**: Python and Ruby plugin support
+- **api-schema**: OpenAPI schema support
+- **sbom**: SBOM generation
+- **full**: All features combined
+
+This catches undeclared or miswired features early.
+
 #### Adding a New Feature
 
 1. Add the feature to `crates/slapper/Cargo.toml`:

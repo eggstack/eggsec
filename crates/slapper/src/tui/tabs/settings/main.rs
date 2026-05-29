@@ -398,6 +398,7 @@ impl SettingsTab {
             ai: None,
             search: None,
             alert_channels: crate::config::AlertChannelsConfig::default(),
+            execution_policy: crate::config::ExecutionPolicy::default(),
             auto_save_interval_secs: 30,
         });
         self.apply_to_config(&mut config);

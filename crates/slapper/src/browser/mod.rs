@@ -10,6 +10,7 @@
 //! - [`client_checks`] - Client-side security checks
 
 pub mod client_checks;
+pub mod corpus;
 pub mod spa_discovery;
 pub mod xss_dom;
 

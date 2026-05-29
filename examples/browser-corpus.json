@@ -1,0 +1,116 @@
+{
+  "entries": [
+    {
+      "url": "https://example.com/api/v1/users",
+      "method": "GET",
+      "headers": [
+        {"name": "Authorization", "value": "Bearer <redacted>", "redacted": true},
+        {"name": "Accept", "value": "application/json", "redacted": false}
+      ],
+      "body_shape": null,
+      "content_type": null,
+      "source": "fetch",
+      "timestamp": "2026-05-29T12:00:00Z"
+    },
+    {
+      "url": "https://example.com/api/v1/users",
+      "method": "POST",
+      "headers": [
+        {"name": "Content-Type", "value": "application/json", "redacted": false}
+      ],
+      "body_shape": {
+        "content_type": "application/json",
+        "fields": [
+          {"name": "name", "field_type": "string", "required": true},
+          {"name": "email", "field_type": "string", "required": true},
+          {"name": "role", "field_type": "string", "required": false}
+        ]
+      },
+      "content_type": "application/json",
+      "source": "fetch",
+      "timestamp": "2026-05-29T12:00:01Z"
+    },
+    {
+      "url": "https://example.com/api/v1/users/123",
+      "method": "DELETE",
+      "headers": [
+        {"name": "Authorization", "value": "Bearer <redacted>", "redacted": true}
+      ],
+      "body_shape": null,
+      "content_type": null,
+      "source": "fetch",
+      "timestamp": "2026-05-29T12:00:02Z"
+    },
+    {
+      "url": "https://example.com/login",
+      "method": "POST",
+      "headers": [],
+      "body_shape": {
+        "content_type": "application/x-www-form-urlencoded",
+        "fields": [
+          {"name": "username", "field_type": "text", "required": true},
+          {"name": "password", "field_type": "password", "required": true}
+        ]
+      },
+      "content_type": "application/x-www-form-urlencoded",
+      "source": "form",
+      "timestamp": "2026-05-29T12:00:03Z"
+    },
+    {
+      "url": "https://example.com/dashboard",
+      "method": "GET",
+      "headers": [],
+      "body_shape": null,
+      "content_type": null,
+      "source": "navigation",
+      "timestamp": "2026-05-29T12:00:04Z"
+    },
+    {
+      "url": "https://example.com/graphql",
+      "method": "POST",
+      "headers": [
+        {"name": "Content-Type", "value": "application/json", "redacted": false}
+      ],
+      "body_shape": {
+        "content_type": "application/json",
+        "fields": [
+          {"name": "query", "field_type": "string", "required": true},
+          {"name": "variables", "field_type": "object", "required": false}
+        ]
+      },
+      "content_type": "application/json",
+      "source": "fetch",
+      "timestamp": "2026-05-29T12:00:05Z"
+    }
+  ],
+  "urls": [
+    "https://example.com/",
+    "https://example.com/login",
+    "https://example.com/dashboard",
+    "https://example.com/api/v1/users",
+    "https://example.com/api/v1/users/123",
+    "https://example.com/graphql"
+  ],
+  "api_endpoints": [
+    "https://example.com/api/v1/users",
+    "https://example.com/api/v1/users/123",
+    "https://example.com/graphql"
+  ],
+  "forms": [
+    {
+      "action": "https://example.com/login",
+      "method": "POST",
+      "fields": ["username", "password"]
+    }
+  ],
+  "websocket_urls": [],
+  "javascript_urls": [
+    "https://example.com/static/app.bundle.js"
+  ],
+  "graphql_candidates": [
+    "https://example.com/graphql"
+  ],
+  "openapi_links": [],
+  "crawl_duration_ms": 12500,
+  "pages_visited": 4
+}

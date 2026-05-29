@@ -185,9 +185,7 @@ optional = true
 version = "0.7"
 optional = true
 
-[dependencies.openapiv3]
-version = "2"
-optional = true
+
 
 [dependencies.cyclonedx-bom]
 version = "0.8"
@@ -195,6 +193,10 @@ optional = true
 
 [dependencies.spdx]
 version = "0.10"
+optional = true
+
+[dependencies.walkdir]
+version = "2"
 optional = true
 
 [build-dependencies.prost-build]
@@ -280,11 +282,8 @@ container = ["kube", "k8s-openapi"]
 # Cloud security scanning (AWS, GCP, Azure)
 cloud = []
 
-# API schema-based fuzzing
-api-schema = ["openapiv3"]
-
 # SBOM generation and vulnerability checking
-sbom = ["cyclonedx-bom", "spdx"]
+sbom = ["cyclonedx-bom", "spdx", "walkdir"]
 
 # Git secrets scanning
 git-secrets = []
@@ -294,6 +293,9 @@ pdf = ["printpdf"]
 
 # Wireless security testing (WiFi scanning, authentication testing)
 wireless = []
+
+# OpenAPI schema ingestion and fuzz target generation
+api-schema = []
 
 [[bin]]
 name = "slapper"

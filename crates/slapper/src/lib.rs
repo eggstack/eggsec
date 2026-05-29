@@ -30,12 +30,15 @@
 //!
 //! - `default` - Core scanning, fuzzing, WAF, load testing
 //! - `tool-api` - Tool abstraction layer (always enabled internally)
+//! - `insecure-tls` - Disables TLS certificate verification (testing only)
 //! - `stress-testing` - DoS tools, proxy management, raw sockets
 //! - `packet-inspection` - Live packet capture, traceroute
 //! - `python-plugins` / `ruby-plugins` - Plugin language support
 //! - `all-plugins` - All plugin languages combined
 //! - `rest-api` / `grpc-api` - API server integration
+//! - `ws-api` - WebSocket API server support
 //! - `nse` - Nmap NSE script support
+//! - `nse-ssh2` - NSE with full SSH2/libssh2-backed support
 //! - `nse-sandbox` - NSE sandbox mode (restricts dangerous operations)
 //! - `ai-integration` - AI/LLM analysis and WAF bypass suggestions
 //! - `websocket` - WebSocket security testing
@@ -49,8 +52,8 @@
 //! - `finding-workflow` - Finding lifecycle management
 //! - `vuln-management` - Vulnerability triage and prioritization
 //! - `cloud` - Cloud security scanning (AWS, GCP, Azure)
-//! - `api-schema` - API schema-based fuzzing (OpenAPI v3)
 //! - `git-secrets` - Git secrets scanning
+//! - `wireless` - Wireless security testing (WiFi scanning, authentication testing)
 //! - `pdf` - PDF report generation
 //! - `full` - All features combined
 //!
@@ -65,7 +68,10 @@
 //! `From` impls (e.g., `From<std::io::Error>`) for automatic conversion from
 //! third-party error types.
 
+#[cfg(feature = "api-schema")]
+pub mod api_schema;
 pub mod auth;
+pub mod auth_context;
 #[cfg(feature = "headless-browser")]
 pub mod browser;
 pub mod cli;
@@ -77,6 +83,7 @@ pub mod compliance;
 mod compliance;
 pub mod config;
 pub mod constants;
+pub mod diff;
 #[cfg(feature = "container")]
 pub mod container;
 #[cfg(not(feature = "container"))]
@@ -84,6 +91,7 @@ pub mod container;
 mod container;
 pub mod distributed;
 pub mod error;
+pub mod findings;
 pub mod fuzzer;
 #[cfg(feature = "advanced-hunting")]
 pub mod hunt;

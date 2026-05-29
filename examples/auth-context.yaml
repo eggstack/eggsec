@@ -1,0 +1,10 @@
+version: 1
+contexts:
+  user:
+    description: "Normal user - set USER_TOKEN env var"
+    headers:
+      Authorization: "Bearer ${USER_TOKEN}"
+  admin:
+    description: "Admin user - set ADMIN_TOKEN env var"
+    headers:
+      Authorization: "Bearer ${ADMIN_TOKEN}"

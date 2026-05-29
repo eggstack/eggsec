@@ -1,0 +1,61 @@
+{
+  "identity": {
+    "service_name": "nginx",
+    "version": "1.18.0",
+    "product": "nginx",
+    "vendor": "Nginx, Inc.",
+    "protocol": "tcp",
+    "transport": "ssl",
+    "port": 443,
+    "confidence": "high",
+    "evidence": [
+      {
+        "kind": "tls_certificate",
+        "raw_value": "CN=example.com, O=Example Inc.",
+        "redacted_value": "CN=*.example.com, O=Example Inc.",
+        "confidence_contribution": "high"
+      },
+      {
+        "kind": "http_header",
+        "raw_value": "Server: nginx/1.18.0",
+        "redacted_value": "Server: nginx/1.18.0",
+        "confidence_contribution": "high"
+      },
+      {
+        "kind": "banner",
+        "raw_value": "HTTP/1.1 200 OK\\r\\nServer: nginx/1.18.0\\r\\n",
+        "redacted_value": "HTTP/1.1 200 OK\\r\\nServer: nginx/1.18.0\\r\\n",
+        "confidence_contribution": "medium"
+      }
+    ],
+    "cpe": "cpe:/a:nginx:nginx:1.18.0",
+    "possible_cves": [
+      "CVE-2021-23017",
+      "CVE-2021-23336"
+    ]
+  },
+  "all可能性": [
+    {
+      "service_name": "openresty",
+      "version": "1.19.3.1",
+      "product": "openresty",
+      "vendor": "OpenResty, Inc.",
+      "protocol": "tcp",
+      "transport": "ssl",
+      "port": 443,
+      "confidence": "low",
+      "evidence": [
+        {
+          "kind": "http_header",
+          "raw_value": "Server: nginx/1.18.0",
+          "redacted_value": "Server: nginx/1.18.0",
+          "confidence_contribution": "low"
+        }
+      ],
+      "cpe": "cpe:/a:openresty:openresty:1.19.3.1",
+      "possible_cves": []
+    }
+  ],
+  "raw_banner": "HTTP/1.1 200 OK\r\nServer: nginx/1.18.0\r\nContent-Type: text/html\r\nContent-Length: 612\r\n",
+  "scan_timestamp": "2026-05-29T12:34:56.789Z"
+}

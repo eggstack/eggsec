@@ -61,6 +61,7 @@ pub mod junit;
 pub mod markdown;
 pub mod pdf;
 pub mod report;
+pub mod report_summary;
 pub mod sarif;
 pub mod schedule;
 pub mod session;

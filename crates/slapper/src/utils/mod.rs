@@ -40,6 +40,7 @@ pub mod output;
 pub mod parsing;
 pub mod progress;
 pub mod rate_limiter;
+pub mod redaction;
 pub mod scope;
 pub mod service_detection;
 pub mod stealth;

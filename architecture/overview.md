@@ -90,6 +90,8 @@ Each major area links to a detailed `.md` file in this directory. Modules withou
 | `wireless/` | `crates/slapper/src/wireless/` | Wireless security testing (feature: `wireless`) | - |
 | `hunt/` | `crates/slapper/src/hunt/` | Intelligent vulnerability hunting (feature: `advanced-hunting`) | - |
 | `nse_tool/` | `crates/slapper/src/nse_tool/` | NSE tool integration (feature: `nse` + `tool-api`) | [plugins_nse.md](plugins_nse.md) |
+| `auth_context/` | `crates/slapper/src/auth_context/` | Multi-role auth contexts with env variable interpolation | [AUTH_CONTEXT.md](../docs/AUTH_CONTEXT.md) |
+| `api_schema/` | `crates/slapper/src/api_schema/` | OpenAPI v3 schema import for type-aware fuzzing (feature: `api-schema`) | [API_TESTING.md](../docs/API_TESTING.md) |
 
 ### Assessment Orchestration
 
@@ -127,6 +129,8 @@ Each major area links to a detailed `.md` file in this directory. Modules withou
 | Module | Source | Description | Doc |
 |--------|--------|-------------|-----|
 | `output/` | `crates/slapper/src/output/` | Report generation: JSON, HTML, CSV, SARIF (CI/CD), JUnit XML, PDF, Markdown, deduplication | [output.md](output.md) |
+| `findings/` | `crates/slapper/src/findings/` | Canonical finding schema, fingerprinting, evidence redaction | [FINDINGS_SCHEMA.md](../docs/FINDINGS_SCHEMA.md) |
+| `diff/` | `crates/slapper/src/diff/` | Differential scan comparison (new/resolved/changed/persisting findings) | [BASELINES_AND_DIFFS.md](../docs/BASELINES_AND_DIFFS.md) |
 | `storage/` | `crates/slapper/src/storage/` | SQLx-based persistence for findings, history, configuration (feature: `database`) | - |
 
 ### Integration & Compliance

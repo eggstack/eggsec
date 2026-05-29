@@ -1,9 +1,11 @@
 use crate::cli::ReconArgs;
 use crate::config::SlapperConfig;
 use crate::error::Result;
+#[cfg(feature = "cloud")]
+use crate::recon::cloud;
 use crate::recon::{
-    cloud, content, cors, cve, dns_records, email, geolocation, js, reverse_dns, secrets, ssl,
-    subdomain, takeover, techdetect, threatintel, wayback, whois, FullReconResult,
+    content, cors, cve, dns_records, email, geolocation, js, reverse_dns, secrets, ssl, subdomain,
+    takeover, techdetect, threatintel, wayback, whois, FullReconResult,
 };
 use crate::types::SensitiveString;
 use crate::utils::sanitize_for_logging;
@@ -306,6 +308,7 @@ async fn run_wayback_check(
 /// Scans for cloud infrastructure misconfigurations.
 ///
 /// Returns `None` if `no_cloud` is true, no domain is provided, or the scan fails.
+#[cfg(feature = "cloud")]
 async fn run_cloud_detection(
     domain: Option<&String>,
     concurrency: usize,
@@ -533,7 +536,6 @@ pub async fn run_full_recon(
         techdetect_result,
         js_result,
         wayback_result,
-        cloud_result,
         content_result,
         cors_result,
         email_result,
@@ -559,7 +561,6 @@ pub async fn run_full_recon(
         run_tech_detection(&url, args.no_tech),
         run_js_analysis(&url, args.no_js),
         run_wayback_check(domain.as_ref(), args.no_wayback, wayback_key),
-        run_cloud_detection(domain.as_ref(), concurrency, args.no_cloud),
         run_content_analysis(&url, concurrency, args.no_content),
         run_cors_check(&url, args.no_cors),
         run_email_security(&url, args.no_email),
@@ -574,10 +575,16 @@ pub async fn run_full_recon(
     let dns_records_failed = dns_records_result.is_failed();
     let js_failed = js_result.is_failed();
     let wayback_failed = wayback_result.is_failed();
-    let cloud_failed = cloud_result.is_failed();
     let content_failed = content_result.is_failed();
     let cors_failed = cors_result.is_failed();
     let email_failed = email_result.is_failed();
+
+    #[cfg(feature = "cloud")]
+    let (cloud_result, cloud_failed) = {
+        let result = run_cloud_detection(domain.as_ref(), concurrency, args.no_cloud).await;
+        let failed = result.is_failed();
+        (result, failed)
+    };
 
     let subdomain_result = subdomain_result.into_option();
     let takeover_result = run_takeover_check(subdomain_result.as_ref(), args.no_takeover).await;
@@ -594,7 +601,10 @@ pub async fn run_full_recon(
     recon.dns_records = dns_records_result.into_option();
     recon.js_analysis = js_result.into_option();
     recon.wayback = wayback_result.into_option();
-    recon.cloud = cloud_result.into_option();
+    #[cfg(feature = "cloud")]
+    {
+        recon.cloud = cloud_result.into_option();
+    }
     recon.cors = cors_result.into_option();
     recon.email_discovery = email_result.into_option();
     recon.takeover = takeover_result;
@@ -635,6 +645,7 @@ pub async fn run_full_recon(
     if wayback_failed {
         recon.wayback_error = Some("Wayback lookup failed (see logs for the underlying error)".to_string());
     }
+    #[cfg(feature = "cloud")]
     if cloud_failed {
         recon.cloud_error = Some("Cloud scan failed (see logs for the underlying error)".to_string());
     }

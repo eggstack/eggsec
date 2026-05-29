@@ -81,6 +81,7 @@
 
 pub mod endpoints;
 pub mod fingerprint;
+pub mod fingerprint_types;
 pub mod ports;
 pub mod spoof;
 pub mod templates;
@@ -92,6 +93,9 @@ pub mod icmp_probe;
 
 pub use endpoints::{scan_endpoints, EndpointResult, EndpointScanConfig, EndpointScanResults};
 pub use fingerprint::{fingerprint_services, FingerprintResults, ServiceFingerprint};
+pub use fingerprint_types::{
+    EnhancedFingerprint, EvidenceType, FingerprintConfidence, FingerprintEvidence, ServiceIdentity,
+};
 pub use ports::{
     scan_ports, PortResult, PortScanConfig, PortScanResults, COMMON_PORTS, MAX_SCAN_RESULTS,
 };

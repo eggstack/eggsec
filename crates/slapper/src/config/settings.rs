@@ -5,6 +5,7 @@ pub use super::scan::{NotificationConfig, OutputConfig, ScanConfig, ScanProfile}
 use crate::constants::cache as cache_constants;
 use crate::constants::http;
 pub use crate::constants::DEFAULT_REMOTE_PORT;
+use crate::config::policy::ExecutionPolicy;
 use crate::proxy::ProxyType;
 use crate::types::SensitiveString;
 use directories::ProjectDirs;
@@ -131,6 +132,9 @@ pub struct SlapperConfig {
 
     #[serde(default)]
     pub alert_channels: AlertChannelsConfig,
+
+    #[serde(default)]
+    pub execution_policy: ExecutionPolicy,
 
     #[serde(default = "default_auto_save_interval")]
     pub auto_save_interval_secs: u64,

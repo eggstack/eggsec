@@ -1,0 +1,80 @@
+[
+  {
+    "id": "finding-1",
+    "fingerprint": "abc123",
+    "title": "SQL Injection in login",
+    "description": "The login form is vulnerable to SQL injection",
+    "severity": "critical",
+    "confidence": "confirmed",
+    "finding_type": "vulnerability",
+    "cwe": "CWE-89",
+    "owasp": "A03:2021-Injection",
+    "cve": null,
+    "affected_asset": {
+      "asset_type": "web_application",
+      "identifier": "https://example.com",
+      "host": "example.com",
+      "port": 443,
+      "protocol": "https"
+    },
+    "location": {
+      "url": "https://example.com/login",
+      "path": "/login",
+      "parameter": "username",
+      "header": null,
+      "method": "POST",
+      "line": null,
+      "file": null
+    },
+    "evidence": [],
+    "reproduction": null,
+    "remediation": "Use parameterized queries",
+    "discovered_at": "2026-05-29T10:00:00Z",
+    "source": {
+      "tool": "slapper",
+      "module": "fuzzer",
+      "run_id": "rescan"
+    },
+    "tags": ["sqli"],
+    "metadata": null
+  },
+  {
+    "id": "finding-3",
+    "fingerprint": "ghi789",
+    "title": "XSS in search parameter",
+    "description": "Reflected XSS in search query parameter",
+    "severity": "high",
+    "confidence": "high",
+    "finding_type": "vulnerability",
+    "cwe": "CWE-79",
+    "owasp": "A03:2021-Injection",
+    "cve": null,
+    "affected_asset": {
+      "asset_type": "web_application",
+      "identifier": "https://example.com",
+      "host": "example.com",
+      "port": 443,
+      "protocol": "https"
+    },
+    "location": {
+      "url": "https://example.com/search",
+      "path": "/search",
+      "parameter": "q",
+      "header": null,
+      "method": "GET",
+      "line": null,
+      "file": null
+    },
+    "evidence": [],
+    "reproduction": null,
+    "remediation": "Escape output and use CSP",
+    "discovered_at": "2026-05-29T10:00:00Z",
+    "source": {
+      "tool": "slapper",
+      "module": "fuzzer",
+      "run_id": "rescan"
+    },
+    "tags": ["xss"],
+    "metadata": null
+  }
+]

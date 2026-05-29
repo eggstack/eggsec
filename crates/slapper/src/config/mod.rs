@@ -35,6 +35,7 @@
 mod api;
 mod http;
 mod loader;
+mod policy;
 mod scan;
 mod scope;
 mod settings;
@@ -42,6 +43,7 @@ mod settings;
 pub use api::{ApiConfig, ApiKeyConfig, IpApiConfig, MaxMindConfig, NvdConfig, WaybackConfig};
 pub use http::{HttpConfig, Verbosity};
 pub use loader::{config_dir, load_config, load_scope};
+pub use policy::{ExecutionPolicy, OperationRisk};
 pub use scan::{
     FuzzProfile, NotificationConfig, OutputConfig, ScanConfig, ScanProfile, WebhookConfig,
     WebhookEvent,

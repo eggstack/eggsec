@@ -43,6 +43,7 @@ pub mod convert;
 pub mod dispatcher;
 pub mod finding;
 pub mod history;
+pub mod metadata;
 pub mod openapi;
 pub mod planner;
 pub mod ratelimit;

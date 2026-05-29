@@ -58,6 +58,7 @@ pub use ai_analyze::*;
 
 use crate::cli::Cli;
 use crate::cli::Commands;
+use crate::config::OperationRisk;
 use crate::config::{Scope, SlapperConfig};
 use crate::error::Result as ErrorResult;
 use anyhow::Result;
@@ -94,6 +95,38 @@ impl CommandContext {
 
     pub fn ensure_scope(&self, target: &str) -> ErrorResult<()> {
         crate::utils::check_scope(&self.scope, target)
+    }
+
+    /// Validate that an operation is allowed by the current execution policy.
+    ///
+    /// Checks scope (if a target is provided), the risk level against the
+    /// policy, and blocks high-risk operations in non-interactive mode.
+    pub fn enforce_operation_policy(
+        &self,
+        risk: OperationRisk,
+        target: Option<&str>,
+    ) -> Result<()> {
+        if let Some(target_str) = target {
+            self.ensure_scope(target_str)?;
+        }
+
+        if !risk.is_allowed_by(&self.config.execution_policy) {
+            anyhow::bail!(
+                "Operation risk level '{}' is not allowed by current policy. \
+                 Enable it in your config file under [execution_policy].",
+                risk
+            );
+        }
+
+        if risk > self.config.execution_policy.max_risk_without_confirm && self.json {
+            anyhow::bail!(
+                "Operation risk level '{}' exceeds maximum allowed without confirmation \
+                 in non-interactive mode.",
+                risk
+            );
+        }
+
+        Ok(())
     }
 }
 

@@ -1,0 +1,80 @@
+[
+  {
+    "id": "finding-1",
+    "fingerprint": "abc123",
+    "title": "SQL Injection in login",
+    "description": "The login form is vulnerable to SQL injection",
+    "severity": "critical",
+    "confidence": "high",
+    "finding_type": "vulnerability",
+    "cwe": "CWE-89",
+    "owasp": "A03:2021-Injection",
+    "cve": null,
+    "affected_asset": {
+      "asset_type": "web_application",
+      "identifier": "https://example.com",
+      "host": "example.com",
+      "port": 443,
+      "protocol": "https"
+    },
+    "location": {
+      "url": "https://example.com/login",
+      "path": "/login",
+      "parameter": "username",
+      "header": null,
+      "method": "POST",
+      "line": null,
+      "file": null
+    },
+    "evidence": [],
+    "reproduction": null,
+    "remediation": "Use parameterized queries",
+    "discovered_at": "2026-05-28T10:00:00Z",
+    "source": {
+      "tool": "slapper",
+      "module": "fuzzer",
+      "run_id": "baseline"
+    },
+    "tags": ["sqli"],
+    "metadata": null
+  },
+  {
+    "id": "finding-2",
+    "fingerprint": "def456",
+    "title": "Missing security headers",
+    "description": "Response is missing X-Content-Type-Options header",
+    "severity": "low",
+    "confidence": "high",
+    "finding_type": "misconfiguration",
+    "cwe": null,
+    "owasp": null,
+    "cve": null,
+    "affected_asset": {
+      "asset_type": "web_application",
+      "identifier": "https://example.com",
+      "host": "example.com",
+      "port": 443,
+      "protocol": "https"
+    },
+    "location": {
+      "url": null,
+      "path": null,
+      "parameter": null,
+      "header": "X-Content-Type-Options",
+      "method": null,
+      "line": null,
+      "file": null
+    },
+    "evidence": [],
+    "reproduction": null,
+    "remediation": "Add X-Content-Type-Options: nosniff header",
+    "discovered_at": "2026-05-28T10:00:00Z",
+    "source": {
+      "tool": "slapper",
+      "module": "scanner",
+      "run_id": "baseline"
+    },
+    "tags": [],
+    "metadata": null
+  }
+]

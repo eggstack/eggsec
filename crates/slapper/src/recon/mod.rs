@@ -51,7 +51,6 @@
 //! | Feature | Modules Enabled |
 //! |---------|----------------|
 //! | `git-secrets` | `git_secrets` |
-//! | `api-schema` | `api_schema` |
 //! | `cloud` | `cloud` |
 //!
 //! ## Usage
@@ -79,6 +78,7 @@
 //! - Timeout during long-running enumeration
 
 pub mod api_schema;
+#[cfg(feature = "cloud")]
 pub mod cloud;
 pub mod containers;
 pub mod content;
@@ -89,6 +89,7 @@ pub mod dns_records;
 pub mod email;
 pub mod email_security;
 pub mod geolocation;
+#[cfg(feature = "git-secrets")]
 pub mod git_secrets;
 pub mod js;
 pub mod reverse_dns;
@@ -137,7 +138,9 @@ pub struct FullReconResult {
     pub js_error: Option<String>,
     pub wayback: Option<wayback::WaybackResult>,
     pub wayback_error: Option<String>,
+    #[cfg(feature = "cloud")]
     pub cloud: Option<cloud::CloudDiscovery>,
+    #[cfg(feature = "cloud")]
     pub cloud_error: Option<String>,
     pub content: Option<content::ContentDiscovery>,
     pub content_error: Option<String>,

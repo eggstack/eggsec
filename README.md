@@ -95,6 +95,8 @@ Slapper uses Cargo feature flags to enable optional capabilities. Some commands 
 | `packet-inspection` | Live packet capture, traceroute | `packet capture`, `packet send` (live) |
 | `python-plugins` | Python plugin support | Python-based security plugins |
 | `ruby-plugins` | Ruby plugin support + Metasploit RPC | Ruby plugins, Metasploit integration |
+| `api-schema` | OpenAPI v3 schema-based fuzzing | Type-aware API fuzzing from OpenAPI specs |
+| `sbom` | SBOM generation and analysis | Software bill of materials (`cyclonedx-bom`, `spdx`) |
 | `full` | All features combined | All commands available |
 
 ### Build Examples
@@ -914,6 +916,17 @@ slapper --json                            # JSON output
 slapper --config /path/to/config.toml     # Custom config
 slapper --scope /path/to/scope.toml       # Scope file
 ```
+
+## Documentation
+
+- [Safety and Scope Enforcement](docs/SAFETY.md) - Authorization, risk tiers, scope rules
+- [Canonical Findings Schema](docs/FINDINGS_SCHEMA.md) - Finding structure, fingerprinting, redaction
+- [Auth Context Configuration](docs/AUTH_CONTEXT.md) - Multi-role testing, env interpolation
+- [Baselines and Differential Scans](docs/BASELINES_AND_DIFFS.md) - Comparing scan results over time
+- [API Testing with OpenAPI Schemas](docs/API_TESTING.md) - Schema import, fuzz target generation
+- [Agent Documentation](docs/AGENT.md) - Autonomous agent setup and usage
+- [Plugin Development](docs/PLUGIN_DEVELOPMENT.md) - Python and Ruby plugin authoring
+- [Capabilities](docs/CAPABILITIES.md) - Feature matrix and capabilities overview
 
 ## Security Considerations
 

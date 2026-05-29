@@ -4,6 +4,7 @@
 //! for software dependencies.
 
 pub mod sbom;
+pub mod scanner;
 pub mod typosquat;
 
 use serde::{Deserialize, Serialize};
