@@ -238,7 +238,7 @@ impl Pipeline {
 
         let context = self.context.lock().await.clone();
 
-        Ok(PipelineReport {
+        let mut report = PipelineReport {
             target: self.target.clone(),
             total_duration_ms: start.elapsed().as_millis() as u64,
             stage_results,
@@ -246,7 +246,14 @@ impl Pipeline {
             services: context.services.into_values().collect(),
             endpoints: context.endpoints,
             checkpoint_error,
-        })
+            manifest: None,
+        };
+
+        let mut manifest = crate::output::RunManifest::from_report(&report, "pipeline");
+        manifest.populate_findings_from_report(&report);
+        report.manifest = Some(manifest);
+
+        Ok(report)
     }
 
     async fn run_concurrent(&self) -> Result<PipelineReport> {
@@ -271,7 +278,7 @@ impl Pipeline {
         let stage_results = futures::future::join_all(stage_futures).await;
         let context = self.context.lock().await.clone();
 
-        Ok(PipelineReport {
+        let mut report = PipelineReport {
             target: self.target.clone(),
             total_duration_ms: start.elapsed().as_millis() as u64,
             stage_results,
@@ -279,7 +286,14 @@ impl Pipeline {
             services: context.services.into_values().collect(),
             endpoints: context.endpoints,
             checkpoint_error: None,
-        })
+            manifest: None,
+        };
+
+        let mut manifest = crate::output::RunManifest::from_report(&report, "pipeline");
+        manifest.populate_findings_from_report(&report);
+        report.manifest = Some(manifest);
+
+        Ok(report)
     }
 
     async fn execute_stage(&self, stage: &Stage) -> Result<()> {

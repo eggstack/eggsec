@@ -287,6 +287,7 @@ pub async fn handle_exec(ctx: &CommandContext, args: crate::cli::ExecArgs) -> Re
     let mut results: Vec<RemoteResult> = Vec::new();
 
     for target in &targets {
+        ctx.ensure_scope(target)?;
         let (host, port) = crate::utils::parse_host_port(target, ctx.config.remote.default_port);
 
         println!("Executing on {}:{}...", host, port);

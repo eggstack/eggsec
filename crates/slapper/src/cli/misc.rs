@@ -319,7 +319,11 @@ pub struct CodeggMcpArgs {
     pub bind: String,
     #[arg(long, help = "API key for authentication")]
     pub api_key: Option<String>,
-    #[arg(long, default_value_t = true, help = "Enable stdio mode (default for codegg-mcp)")]
+    #[arg(
+        long,
+        default_value_t = true,
+        help = "Enable stdio mode (default for codegg-mcp)"
+    )]
     pub stdio: bool,
     #[arg(
         long,

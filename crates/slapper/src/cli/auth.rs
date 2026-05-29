@@ -2,15 +2,15 @@ use super::timeout::*;
 use clap::Args;
 
 pub(crate) const AUTH_TEST_ABOUT: &str =
-    "Validate authentication security controls (brute force resilience, credential stuffing defense, MFA bypass resistance, etc.)
+    "Validate authentication controls in authorized environments
 
-Validates authentication controls including weak credential detection,
-rate limiting verification, session fixation resistance, timing attack analysis, and MFA bypass resistance.
+Tests authentication mechanisms including credential validation, rate limiting,
+session handling, timing behavior, and multi-factor authentication in lab settings.
 
 ⚠️  WARNING: Only use against systems you have explicit permission to test.
 
 Examples:
-  slapper auth-test https://example.com/login --brute-force -u admin
+  slapper auth-test https://example.com/login --all -u admin
   slapper auth-test https://example.com/login --credential-stuffing --wordlist passwords.txt
   slapper auth-test https://example.com/login --mfa-test
   slapper auth-test https://example.com/login --all --max-attempts 1000";
@@ -20,7 +20,7 @@ pub struct AuthTestArgs {
     #[arg(help = "Target authentication endpoint URL")]
     pub target: String,
 
-    #[arg(long, help = "Username for brute force testing")]
+    #[arg(long, help = "Username for authentication testing")]
     pub username: Option<String>,
 
     #[arg(long, help = "Password wordlist file path")]
@@ -42,10 +42,10 @@ pub struct AuthTestArgs {
     #[arg(long, default_value_t = AUTH_TEST_TIMEOUT, help = "Request timeout in seconds")]
     pub timeout: u64,
 
-    #[arg(long, help = "Run brute force testing")]
+    #[arg(long, help = "Run authentication attempt testing")]
     pub brute_force: bool,
 
-    #[arg(long, help = "Run credential stuffing")]
+    #[arg(long, help = "Run credential validation testing")]
     pub credential_stuffing: bool,
 
     #[arg(long, help = "Run account lockout detection")]

@@ -14,6 +14,9 @@ use kube::{
     Client,
 };
 
+#[cfg(feature = "container")]
+use k8s_openapi::api::core::v1::Pod;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContainerScanResult {
     pub container_id: String,
@@ -83,18 +86,14 @@ pub struct ContainerScanner {
 
 impl ContainerScanner {
     pub fn new() -> Result<Self> {
-        #[cfg(feature = "container")]
-        {
-            let client = Client::try_default()
-                .map_err(|e| SlapperError::Config(format!("Kubernetes client failed: {}", e)))?;
-            Ok(Self {
-                kube_client: Some(client),
-            })
-        }
-
         #[cfg(not(feature = "container"))]
         {
             Ok(Self {})
+        }
+
+        #[cfg(feature = "container")]
+        {
+            Ok(Self { kube_client: None })
         }
     }
 
@@ -105,7 +104,7 @@ impl ContainerScanner {
             .as_ref()
             .ok_or_else(|| SlapperError::Config("Kubernetes client not available".to_string()))?;
 
-        let api: Api<kube::api::Pod> = if let Some(ns) = namespace {
+        let api: Api<Pod> = if let Some(ns) = namespace {
             Api::namespaced(client.clone(), ns)
         } else {
             Api::all(client.clone())
@@ -157,7 +156,7 @@ impl ContainerScanner {
     }
 
     #[cfg(feature = "container")]
-    fn check_pod_security(&self, pod: &kube::api::Pod) -> Vec<ConfigIssue> {
+    fn check_pod_security(&self, pod: &Pod) -> Vec<ConfigIssue> {
         let mut issues = Vec::new();
 
         if let Some(spec) = &pod.spec {
@@ -216,14 +215,22 @@ impl ContainerScanner {
                 });
             }
 
-            if spec.privileged == Some(true) {
-                issues.push(ConfigIssue {
-                    rule_id: "PSD005".to_string(),
-                    severity: Severity::Critical,
-                    title: "Privileged container".to_string(),
-                    description: "Container runs in privileged mode".to_string(),
-                    recommendation: "Remove privileged mode unless strictly necessary".to_string(),
-                });
+            for container in &spec.containers {
+                if let Some(sc) = &container.security_context {
+                    if sc.privileged == Some(true) {
+                        issues.push(ConfigIssue {
+                            rule_id: "PSD005".to_string(),
+                            severity: Severity::Critical,
+                            title: "Privileged container".to_string(),
+                            description: format!(
+                                "Container {} runs in privileged mode",
+                                container.name
+                            ),
+                            recommendation: "Remove privileged mode unless strictly necessary"
+                                .to_string(),
+                        });
+                    }
+                }
             }
         }
 
@@ -286,7 +293,10 @@ impl ContainerScanner {
 
 impl Default for ContainerScanner {
     fn default() -> Self {
-        Self::new().unwrap_or(Self {})
+        Self::new().unwrap_or(Self {
+            #[cfg(feature = "container")]
+            kube_client: None,
+        })
     }
 }
 

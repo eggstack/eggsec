@@ -77,7 +77,7 @@ impl SecurityTool for LoadTestTool {
                 tracing::warn!(error = %e, "Failed to load config for loadtest, using defaults");
             })
             .unwrap_or_default();
-        let result = tokio::time::timeout(
+        tokio::time::timeout(
             std::time::Duration::from_secs(60),
             crate::loadtest::run_cli(args, &config),
         )
@@ -91,41 +91,21 @@ impl SecurityTool for LoadTestTool {
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
 
-        match result {
-            Ok(_) => Ok(ToolResponse {
-                request_id: request.id,
-                tool_id: "load".to_string(),
-                status: crate::tool::ResponseStatus::Success,
-                results: serde_json::json!({ "target": target, "requests": requests, "concurrency": concurrency }),
-                metadata: crate::tool::ResponseMetadata {
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                    targets_scanned: 1,
-                    findings_count: 0,
-                },
-                errors: vec![],
-                findings: vec![],
-            }),
-            Err(e) => Ok(ToolResponse {
-                request_id: request.id,
-                tool_id: "load".to_string(),
-                status: crate::tool::ResponseStatus::Failed,
-                results: serde_json::json!({}),
-                metadata: crate::tool::ResponseMetadata {
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                    targets_scanned: 0,
-                    findings_count: 0,
-                },
-                errors: vec![crate::tool::ToolError::new(
-                    "EXECUTION_ERROR",
-                    e.to_string(),
-                )],
-                findings: vec![],
-            }),
-        }
+        Ok(ToolResponse {
+            request_id: request.id,
+            tool_id: "load".to_string(),
+            status: crate::tool::ResponseStatus::Success,
+            results: serde_json::json!({ "target": target, "requests": requests, "concurrency": concurrency }),
+            metadata: crate::tool::ResponseMetadata {
+                started_at,
+                completed_at,
+                duration_ms,
+                targets_scanned: 1,
+                findings_count: 0,
+            },
+            errors: vec![],
+            findings: vec![],
+        })
     }
 
     fn capabilities(&self) -> Vec<ToolCapability> {

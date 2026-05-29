@@ -393,7 +393,10 @@ impl McpServer {
             }
         };
 
-        if let Err(violation) = self.policy.validate_tool_call(&tool_id, capability.as_deref(), &arguments) {
+        if let Err(violation) =
+            self.policy
+                .validate_tool_call(&tool_id, capability.as_deref(), &arguments)
+        {
             return req.error_response(McpError {
                 code: violation.to_mcp_error_code(),
                 message: violation.to_string(),
@@ -662,7 +665,10 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://ops-agent/safety-policy" => {
-                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::OpsAgent) {
+                if !matches!(
+                    self.policy.profile,
+                    crate::tool::protocol::mcp::profile::McpProfile::OpsAgent
+                ) {
                     return req.error_response(McpError::invalid_params(
                         "Ops-agent resources are only available in ops-agent profile",
                     ));
@@ -680,7 +686,10 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://ops-agent/task-schema" => {
-                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::OpsAgent) {
+                if !matches!(
+                    self.policy.profile,
+                    crate::tool::protocol::mcp::profile::McpProfile::OpsAgent
+                ) {
                     return req.error_response(McpError::invalid_params(
                         "Ops-agent resources are only available in ops-agent profile",
                     ));
@@ -698,7 +707,10 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://ops-agent/event-schema" => {
-                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::OpsAgent) {
+                if !matches!(
+                    self.policy.profile,
+                    crate::tool::protocol::mcp::profile::McpProfile::OpsAgent
+                ) {
                     return req.error_response(McpError::invalid_params(
                         "Ops-agent resources are only available in ops-agent profile",
                     ));
@@ -716,7 +728,10 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://coding-agent/manifest" => {
-                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
+                if !matches!(
+                    self.policy.profile,
+                    crate::tool::protocol::mcp::profile::McpProfile::CodingAgent
+                ) {
                     return req.error_response(McpError::invalid_params(
                         "Coding-agent resources are only available in coding-agent profile",
                     ));
@@ -734,7 +749,10 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://coding-agent/safety-policy" => {
-                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
+                if !matches!(
+                    self.policy.profile,
+                    crate::tool::protocol::mcp::profile::McpProfile::CodingAgent
+                ) {
                     return req.error_response(McpError::invalid_params(
                         "Coding-agent resources are only available in coding-agent profile",
                     ));
@@ -752,7 +770,10 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://coding-agent/finding-schema" => {
-                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
+                if !matches!(
+                    self.policy.profile,
+                    crate::tool::protocol::mcp::profile::McpProfile::CodingAgent
+                ) {
                     return req.error_response(McpError::invalid_params(
                         "Coding-agent resources are only available in coding-agent profile",
                     ));
@@ -770,7 +791,10 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://coding-agent/workflow" => {
-                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
+                if !matches!(
+                    self.policy.profile,
+                    crate::tool::protocol::mcp::profile::McpProfile::CodingAgent
+                ) {
                     return req.error_response(McpError::invalid_params(
                         "Coding-agent resources are only available in coding-agent profile",
                     ));
@@ -788,7 +812,10 @@ impl McpServer {
                 req.success_response(result)
             }
             "slapper://coding-agent/tool-contracts" => {
-                if !matches!(self.policy.profile, crate::tool::protocol::mcp::profile::McpProfile::CodingAgent) {
+                if !matches!(
+                    self.policy.profile,
+                    crate::tool::protocol::mcp::profile::McpProfile::CodingAgent
+                ) {
                     return req.error_response(McpError::invalid_params(
                         "Coding-agent resources are only available in coding-agent profile",
                     ));
@@ -1008,7 +1035,11 @@ impl McpServer {
         })
     }
 
-    fn build_coding_agent_output(&self, target: &str, response: &ToolResponse) -> serde_json::Value {
+    fn build_coding_agent_output(
+        &self,
+        target: &str,
+        response: &ToolResponse,
+    ) -> serde_json::Value {
         let findings: Vec<serde_json::Value> = response
             .findings
             .iter()
@@ -1334,16 +1365,21 @@ impl McpServer {
                 let input_schema = build_input_schema(tool);
                 let category = format!("{:?}", tool.category).to_lowercase();
 
-                let (latency_class, deterministic, makes_network_requests, requires_running_service, use_context) =
-                    match tool.id.as_str() {
-                        "scan" => ("seconds", true, true, true, "security_review"),
-                        "scan-ports" => ("seconds", true, true, true, "security_review"),
-                        "fingerprint" => ("seconds", true, true, true, "security_review"),
-                        "endpoints" => ("seconds", true, true, true, "security_review"),
-                        "waf-detect" => ("seconds", true, true, true, "security_review"),
-                        "search" => ("milliseconds", true, false, false, "coding_flow"),
-                        _ => ("seconds", true, true, true, "security_review"),
-                    };
+                let (
+                    latency_class,
+                    deterministic,
+                    makes_network_requests,
+                    requires_running_service,
+                    use_context,
+                ) = match tool.id.as_str() {
+                    "scan" => ("seconds", true, true, true, "security_review"),
+                    "scan-ports" => ("seconds", true, true, true, "security_review"),
+                    "fingerprint" => ("seconds", true, true, true, "security_review"),
+                    "endpoints" => ("seconds", true, true, true, "security_review"),
+                    "waf-detect" => ("seconds", true, true, true, "security_review"),
+                    "search" => ("milliseconds", true, false, false, "coding_flow"),
+                    _ => ("seconds", true, true, true, "security_review"),
+                };
 
                 serde_json::json!({
                     "tool_id": tool.id,

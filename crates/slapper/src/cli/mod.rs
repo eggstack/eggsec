@@ -47,7 +47,7 @@ EXAMPLES:
   Scan ports:        slapper scan-ports 192.168.1.1 -p 1-1000
   Fuzz endpoints:    slapper fuzz https://example.com/api -t sqli
   Detect WAF:        slapper waf https://example.com
-  Auth testing:      slapper auth-test https://example.com/login --brute-force
+  Auth testing:      slapper auth-test https://example.com/login --all
   MCP for coding:    slapper codegg-mcp
 
 See https://dbowm91.dev/docs for full documentation.
@@ -104,7 +104,7 @@ pub enum Commands {
     Graphql(GraphQlArgs),
     #[command(about = "Validate OAuth/OIDC endpoint security controls", long_about = OAUTH_ABOUT)]
     OAuth(OAuthArgs),
-    #[command(about = "Validate authentication controls (brute force resilience, credential stuffing defense, MFA bypass resistance)", long_about = AUTH_TEST_ABOUT)]
+    #[command(about = "Validate authentication controls in authorized environments", long_about = AUTH_TEST_ABOUT)]
     AuthTest(AuthTestArgs),
 
     // --- Recon operations ---
@@ -221,10 +221,7 @@ pub struct CommonHttpArgs {
     pub api_key: Option<String>,
     #[arg(long, help = "Custom User-Agent header")]
     pub user_agent: Option<String>,
-    #[arg(
-        long,
-        help = "Enable stealth mode (randomized delays, header rotation for realistic lab testing)"
-    )]
+    #[arg(long, help = "Randomized timing/header behavior for lab realism")]
     pub stealth: bool,
     #[arg(long, help = "Rate limit (requests per second)")]
     pub rate_limit: Option<u32>,
@@ -262,26 +259,11 @@ pub enum ScanProfile {
     Deep,
     Vuln,
     Auth,
-    // TODO(reframe-pass3): Add defense-lab profile variants once the defense-lab runner is
-    // implemented. These profiles target local/private-lab environments only and require
-    // explicit scope validation. Planned variants:
-    //
-    // - `DefenseLab` — local/private-scope controlled probe suite. Requires explicit
-    //   scope. No stress or packet features enabled by default.
-    // - `SynvoidLocal` — localhost/container/private lab defaults for Synvoid validation.
-    //   Restricts targets to loopback or private CIDRs. Uses WAF regression + protocol edge.
-    // - `WafRegression` — WAF payload and evasion-resistance regression profile.
-    //   Focused on payload classification, encoding bypass, case manipulation probes.
-    // - `ProtocolEdge` — malformed protocol, TCP/TLS/HTTP edge behavior.
-    //   Requires `packet-inspection` feature. No stress features by default.
-    // - `NseSafe` — sandboxed safe/default/version/discovery NSE scripts only.
-    //   Requires `nse` + `nse-sandbox` features. No intrusive categories.
-    //
-    // Guardrails for defense-lab profiles:
-    // - Scope is required (localhost or private CIDR only).
-    // - Rate/concurrency/duration budgets are mandatory for load-bearing probes.
-    // - Stress and packet features require explicit feature gates and runtime confirmation.
-    // - No dangerous behavior enabled by default.
+    DefenseLab,
+    SynvoidLocal,
+    WafRegression,
+    ProtocolEdge,
+    NseSafe,
 }
 
 impl std::fmt::Display for ScanProfile {
@@ -298,6 +280,11 @@ impl std::fmt::Display for ScanProfile {
             ScanProfile::Deep => write!(f, "deep"),
             ScanProfile::Vuln => write!(f, "vuln"),
             ScanProfile::Auth => write!(f, "auth"),
+            ScanProfile::DefenseLab => write!(f, "defense-lab"),
+            ScanProfile::SynvoidLocal => write!(f, "synvoid-local"),
+            ScanProfile::WafRegression => write!(f, "waf-regression"),
+            ScanProfile::ProtocolEdge => write!(f, "protocol-edge"),
+            ScanProfile::NseSafe => write!(f, "nse-safe"),
         }
     }
 }

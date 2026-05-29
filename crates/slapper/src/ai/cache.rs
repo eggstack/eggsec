@@ -145,6 +145,12 @@ impl From<&AiCache> for AiCacheSerialized {
     }
 }
 
+impl From<AiCache> for AiCacheSerialized {
+    fn from(cache: AiCache) -> Self {
+        AiCacheSerialized::from(&cache)
+    }
+}
+
 impl AiCache {
     pub fn new(max_entries: usize, default_ttl: Duration) -> Self {
         Self {
@@ -164,8 +170,9 @@ impl AiCache {
                         let disk_cache: AiCache = serialized.into();
                         let runtime = tokio::runtime::Handle::current();
                         runtime.block_on(async {
+                            let disk_entries = disk_cache.entries.read().await;
                             let mut entries = self.entries.write().await;
-                            for (k, v) in disk_cache.entries.iter() {
+                            for (k, v) in disk_entries.iter() {
                                 entries.entry(k.clone()).or_insert_with(|| v.clone());
                             }
                         });
@@ -318,7 +325,7 @@ pub struct CacheKeyBuilder;
 impl CacheKeyBuilder {
     pub fn for_payload_suggestion(vuln_type: &str, context: &str) -> String {
         format!(
-            "payload{}\x00{}\x00{}",
+            "payload\x00{}\x00{}",
             vuln_type.replace('\x00', ""),
             context.replace('\x00', "")
         )
@@ -326,19 +333,19 @@ impl CacheKeyBuilder {
 
     pub fn for_waf_bypass(waf: &str, blocked_payload: &str) -> String {
         format!(
-            "waf_bypass{}\x00{}\x00{}",
+            "waf_bypass\x00{}\x00{}",
             waf.replace('\x00', ""),
             blocked_payload.replace('\x00', "")
         )
     }
 
     pub fn for_finding_analysis(findings_hash: &str) -> String {
-        format!("analysis{}\x00{}", findings_hash.replace('\x00', ""))
+        format!("analysis\x00{}", findings_hash.replace('\x00', ""))
     }
 
     pub fn for_recon_context(target: &str, scan_type: &str) -> String {
         format!(
-            "recon{}\x00{}\x00{}",
+            "recon\x00{}\x00{}",
             target.replace('\x00', ""),
             scan_type.replace('\x00', "")
         )

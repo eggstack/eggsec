@@ -98,7 +98,7 @@ impl SecurityTool for ScannerTool {
             std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
         let findings_clone = findings.clone();
 
-        let result = match self.mode {
+        let result: Result<(), crate::error::SlapperError> = match self.mode {
             ScanMode::Ports => {
                 let args = crate::cli::PortScanArgs {
                     host: target.clone(),
@@ -130,7 +130,7 @@ impl SecurityTool for ScannerTool {
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
                     tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
                 }).unwrap_or_default();
-                let result = tokio::time::timeout(
+                tokio::time::timeout(
                     std::time::Duration::from_secs(60),
                     crate::scanner::ports::run_cli_with_callback(args, &config, move |f| {
                         let mut findings = findings_clone.lock();
@@ -145,6 +145,7 @@ impl SecurityTool for ScannerTool {
                 .map_err(|e| {
                     crate::error::SlapperError::Runtime(format!("Port scan failed: {}", e))
                 })?;
+                Ok(())
             }
             ScanMode::Fingerprint => {
                 let args = crate::cli::FingerprintArgs {
@@ -161,7 +162,7 @@ impl SecurityTool for ScannerTool {
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
                     tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
                 }).unwrap_or_default();
-                let result = tokio::time::timeout(
+                tokio::time::timeout(
                     std::time::Duration::from_secs(60),
                     crate::scanner::fingerprint::run_cli_with_callback(args, &config, move |f| {
                         let mut findings = findings_clone.lock();
@@ -176,6 +177,7 @@ impl SecurityTool for ScannerTool {
                 .map_err(|e| {
                     crate::error::SlapperError::Runtime(format!("Fingerprint scan failed: {}", e))
                 })?;
+                Ok(())
             }
             ScanMode::Endpoints => {
                 let args = crate::cli::EndpointScanArgs {
@@ -200,7 +202,7 @@ impl SecurityTool for ScannerTool {
                 let config = crate::config::load_config(None::<&str>).inspect_err(|e| {
                     tracing::warn!(error = %e, "Failed to load config for scanner, using defaults");
                 }).unwrap_or_default();
-                let result = tokio::time::timeout(
+                tokio::time::timeout(
                     std::time::Duration::from_secs(60),
                     crate::scanner::endpoints::run_cli_with_callback(args, &config, move |f| {
                         let mut findings = findings_clone.lock();
@@ -215,6 +217,7 @@ impl SecurityTool for ScannerTool {
                 .map_err(|e| {
                     crate::error::SlapperError::Runtime(format!("Endpoint scan failed: {}", e))
                 })?;
+                Ok(())
             }
         };
 
@@ -233,41 +236,21 @@ impl SecurityTool for ScannerTool {
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
 
-        match result {
-            Ok(_) => Ok(ToolResponse {
-                request_id: request.id,
-                tool_id: self.id().to_string(),
-                status: crate::tool::ResponseStatus::Success,
-                results: serde_json::json!({ "target": target }),
-                metadata: crate::tool::ResponseMetadata {
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                    targets_scanned: 1,
-                    findings_count,
-                },
-                errors: vec![],
-                findings,
-            }),
-            Err(e) => Ok(ToolResponse {
-                request_id: request.id,
-                tool_id: self.id().to_string(),
-                status: crate::tool::ResponseStatus::Failed,
-                results: serde_json::json!({}),
-                metadata: crate::tool::ResponseMetadata {
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                    targets_scanned: 0,
-                    findings_count,
-                },
-                errors: vec![crate::tool::ToolError::new(
-                    "EXECUTION_ERROR",
-                    e.to_string(),
-                )],
-                findings,
-            }),
-        }
+        Ok(ToolResponse {
+            request_id: request.id,
+            tool_id: self.id().to_string(),
+            status: crate::tool::ResponseStatus::Success,
+            results: serde_json::json!({ "target": target }),
+            metadata: crate::tool::ResponseMetadata {
+                started_at,
+                completed_at,
+                duration_ms,
+                targets_scanned: 1,
+                findings_count,
+            },
+            errors: vec![],
+            findings,
+        })
     }
 
     fn capabilities(&self) -> Vec<ToolCapability> {

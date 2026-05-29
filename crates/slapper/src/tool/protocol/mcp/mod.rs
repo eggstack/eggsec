@@ -491,11 +491,26 @@ mod tests {
         let count = result.get("count").unwrap().as_u64().unwrap();
 
         // Coding-agent only allows: scan, scan-ports, fingerprint, endpoints, waf-detect, search
-        assert!((1..=6).contains(&count), "coding-agent should have 1-6 tools, got {}", count);
-        let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(|n| n.as_str())).collect();
+        assert!(
+            (1..=6).contains(&count),
+            "coding-agent should have 1-6 tools, got {}",
+            count
+        );
+        let names: Vec<&str> = tools
+            .iter()
+            .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
+            .collect();
         for name in &names {
             assert!(
-                ["scan", "scan-ports", "fingerprint", "endpoints", "waf-detect", "search"].contains(name),
+                [
+                    "scan",
+                    "scan-ports",
+                    "fingerprint",
+                    "endpoints",
+                    "waf-detect",
+                    "search"
+                ]
+                .contains(name),
                 "coding-agent should not expose tool: {}",
                 name
             );
@@ -518,8 +533,14 @@ mod tests {
         let categories = result.get("categories").unwrap().as_object().unwrap();
 
         // Should not have stress or load testing categories
-        assert!(!categories.contains_key("stresstesting"), "coding-agent should not expose stress testing");
-        assert!(!categories.contains_key("loadtesting"), "coding-agent should not expose load testing");
+        assert!(
+            !categories.contains_key("stresstesting"),
+            "coding-agent should not expose stress testing"
+        );
+        assert!(
+            !categories.contains_key("loadtesting"),
+            "coding-agent should not expose load testing"
+        );
     }
 
     #[tokio::test]
@@ -617,7 +638,10 @@ mod tests {
         let result = response.result.unwrap();
 
         assert_eq!(result.get("profile").unwrap(), "coding-agent");
-        assert_eq!(result.get("serverInfo").unwrap().get("name").unwrap(), "slapper-coding-agent-mcp");
+        assert_eq!(
+            result.get("serverInfo").unwrap().get("name").unwrap(),
+            "slapper-coding-agent-mcp"
+        );
         let safety = result.get("safety").unwrap();
         assert_eq!(safety.get("max_concurrency").unwrap(), 5);
         assert_eq!(safety.get("max_timeout_ms").unwrap(), 60000);
@@ -640,7 +664,10 @@ mod tests {
         let result = response.result.unwrap();
 
         assert_eq!(result.get("profile").unwrap(), "ops-agent");
-        assert_eq!(result.get("serverInfo").unwrap().get("name").unwrap(), "slapper-tool-api");
+        assert_eq!(
+            result.get("serverInfo").unwrap().get("name").unwrap(),
+            "slapper-tool-api"
+        );
         let safety = result.get("safety").unwrap();
         assert_eq!(safety.get("max_concurrency").unwrap(), 50);
         assert_eq!(safety.get("default_external_network").unwrap(), true);
@@ -661,12 +688,20 @@ mod tests {
         assert!(response.error.is_none());
         let result = response.result.unwrap();
         let resources = result.get("resources").unwrap().as_array().unwrap();
-        let uris: Vec<&str> = resources.iter()
+        let uris: Vec<&str> = resources
+            .iter()
             .filter_map(|r| r.get("uri").and_then(|u| u.as_str()))
             .collect();
 
-        assert!(uris.iter().any(|u| u.starts_with("slapper://coding-agent/")), "should have coding-agent resources");
-        assert!(!uris.iter().any(|u| u.starts_with("slapper://ops-agent/")), "should not have ops-agent resources");
+        assert!(
+            uris.iter()
+                .any(|u| u.starts_with("slapper://coding-agent/")),
+            "should have coding-agent resources"
+        );
+        assert!(
+            !uris.iter().any(|u| u.starts_with("slapper://ops-agent/")),
+            "should not have ops-agent resources"
+        );
     }
 
     #[tokio::test]
@@ -683,12 +718,21 @@ mod tests {
         assert!(response.error.is_none());
         let result = response.result.unwrap();
         let resources = result.get("resources").unwrap().as_array().unwrap();
-        let uris: Vec<&str> = resources.iter()
+        let uris: Vec<&str> = resources
+            .iter()
             .filter_map(|r| r.get("uri").and_then(|u| u.as_str()))
             .collect();
 
-        assert!(uris.iter().any(|u| u.starts_with("slapper://ops-agent/")), "should have ops-agent resources");
-        assert!(!uris.iter().any(|u| u.starts_with("slapper://coding-agent/")), "should not have coding-agent resources");
+        assert!(
+            uris.iter().any(|u| u.starts_with("slapper://ops-agent/")),
+            "should have ops-agent resources"
+        );
+        assert!(
+            !uris
+                .iter()
+                .any(|u| u.starts_with("slapper://coding-agent/")),
+            "should not have coding-agent resources"
+        );
     }
 
     #[tokio::test]

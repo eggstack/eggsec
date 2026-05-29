@@ -283,8 +283,7 @@ impl McpProfilePolicy {
                 } else {
                     Err(PolicyViolation::TargetDenied {
                         target: target.to_string(),
-                        reason: "Only loopback and private network targets are allowed"
-                            .to_string(),
+                        reason: "Only loopback and private network targets are allowed".to_string(),
                     })
                 }
             }
@@ -359,7 +358,10 @@ impl std::fmt::Display for PolicyViolation {
                     requested, max
                 )
             }
-            PolicyViolation::TimeoutExceeded { requested_ms, max_ms } => {
+            PolicyViolation::TimeoutExceeded {
+                requested_ms,
+                max_ms,
+            } => {
                 write!(
                     f,
                     "Requested timeout {}ms exceeds profile maximum {}ms",
@@ -403,7 +405,10 @@ fn is_loopback_or_private(target: &str) -> bool {
     let host = extract_hostname(target);
 
     // Handle IPv6 brackets
-    let host = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')).unwrap_or(host);
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
 
     if let Ok(ip) = IpAddr::from_str(host) {
         return is_loopback_ip(ip) || is_private_ip(ip);
@@ -519,7 +524,9 @@ mod tests {
     #[test]
     fn test_coding_agent_tool_call_allowed() {
         let policy = McpProfilePolicy::coding_agent();
-        assert!(policy.validate_tool_call("scan", None, &serde_json::json!({})).is_ok());
+        assert!(policy
+            .validate_tool_call("scan", None, &serde_json::json!({}))
+            .is_ok());
     }
 
     #[test]
@@ -536,11 +543,7 @@ mod tests {
     #[test]
     fn test_coding_agent_denied_argument() {
         let policy = McpProfilePolicy::coding_agent();
-        let result = policy.validate_tool_call(
-            "scan",
-            None,
-            &serde_json::json!({"stealth": true}),
-        );
+        let result = policy.validate_tool_call("scan", None, &serde_json::json!({"stealth": true}));
         assert!(result.is_err());
         match result.unwrap_err() {
             PolicyViolation::ArgumentDenied { key, .. } => assert_eq!(key, "stealth"),
@@ -551,11 +554,8 @@ mod tests {
     #[test]
     fn test_coding_agent_concurrency_clamp() {
         let policy = McpProfilePolicy::coding_agent();
-        let result = policy.validate_tool_call(
-            "scan",
-            None,
-            &serde_json::json!({"concurrency": 100}),
-        );
+        let result =
+            policy.validate_tool_call("scan", None, &serde_json::json!({"concurrency": 100}));
         assert!(result.is_err());
         match result.unwrap_err() {
             PolicyViolation::ConcurrencyExceeded { requested, max } => {
@@ -569,14 +569,14 @@ mod tests {
     #[test]
     fn test_coding_agent_timeout_clamp() {
         let policy = McpProfilePolicy::coding_agent();
-        let result = policy.validate_tool_call(
-            "scan",
-            None,
-            &serde_json::json!({"timeout_ms": 120000}),
-        );
+        let result =
+            policy.validate_tool_call("scan", None, &serde_json::json!({"timeout_ms": 120000}));
         assert!(result.is_err());
         match result.unwrap_err() {
-            PolicyViolation::TimeoutExceeded { requested_ms, max_ms } => {
+            PolicyViolation::TimeoutExceeded {
+                requested_ms,
+                max_ms,
+            } => {
                 assert_eq!(requested_ms, 120000);
                 assert_eq!(max_ms, 60000);
             }
@@ -606,7 +606,9 @@ mod tests {
         let result = policy.validate_target("https://example.com");
         assert!(result.is_err());
         match result.unwrap_err() {
-            PolicyViolation::TargetDenied { target, .. } => assert_eq!(target, "https://example.com"),
+            PolicyViolation::TargetDenied { target, .. } => {
+                assert_eq!(target, "https://example.com")
+            }
             _ => panic!("Expected TargetDenied"),
         }
     }
@@ -614,8 +616,12 @@ mod tests {
     #[test]
     fn test_coding_agent_target_metadata_denied() {
         let policy = McpProfilePolicy::coding_agent();
-        assert!(policy.validate_target("http://169.254.169.254/latest/meta-data").is_err());
-        assert!(policy.validate_target("http://metadata.google.internal").is_err());
+        assert!(policy
+            .validate_target("http://169.254.169.254/latest/meta-data")
+            .is_err());
+        assert!(policy
+            .validate_target("http://metadata.google.internal")
+            .is_err());
     }
 
     #[test]
@@ -695,22 +701,16 @@ mod tests {
     #[test]
     fn test_coding_agent_timeout_within_limit_allowed() {
         let policy = McpProfilePolicy::coding_agent();
-        let result = policy.validate_tool_call(
-            "scan",
-            None,
-            &serde_json::json!({"timeout_ms": 30000}),
-        );
+        let result =
+            policy.validate_tool_call("scan", None, &serde_json::json!({"timeout_ms": 30000}));
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_coding_agent_concurrency_within_limit_allowed() {
         let policy = McpProfilePolicy::coding_agent();
-        let result = policy.validate_tool_call(
-            "scan",
-            None,
-            &serde_json::json!({"concurrency": 3}),
-        );
+        let result =
+            policy.validate_tool_call("scan", None, &serde_json::json!({"concurrency": 3}));
         assert!(result.is_ok());
     }
 
@@ -791,8 +791,12 @@ mod tests {
     #[test]
     fn test_coding_agent_target_metadata_azure_denied() {
         let policy = McpProfilePolicy::coding_agent();
-        assert!(policy.validate_target("http://169.254.169.254/latest/meta-data").is_err());
-        assert!(policy.validate_target("http://metadata.azure.internal").is_err());
+        assert!(policy
+            .validate_target("http://169.254.169.254/latest/meta-data")
+            .is_err());
+        assert!(policy
+            .validate_target("http://metadata.azure.internal")
+            .is_err());
     }
 
     #[test]
@@ -860,7 +864,10 @@ mod tests {
 
     #[test]
     fn test_extract_hostname_various() {
-        assert_eq!(extract_hostname("http://user:pass@host.com:8080/path"), "host.com");
+        assert_eq!(
+            extract_hostname("http://user:pass@host.com:8080/path"),
+            "host.com"
+        );
         assert_eq!(extract_hostname("https://192.168.1.1/api"), "192.168.1.1");
         assert_eq!(extract_hostname("http://[::1]:8080"), "[::1]");
         assert_eq!(extract_hostname("just-hostname"), "just-hostname");

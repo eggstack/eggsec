@@ -200,11 +200,9 @@ pub async fn run_packet_capture(
     }
 
     running.store(false, std::sync::atomic::Ordering::SeqCst);
-    let handle_result = tokio::time::timeout(Duration::from_secs(2), handle).await;
-    match handle_result {
-        Err(e) => {
-            tracing::warn!("Packet capture handle timed out: {}", e);
-            handle.abort();
+    match tokio::time::timeout(Duration::from_secs(2), handle).await {
+        Err(_) => {
+            tracing::warn!("Packet capture handle timed out after 2s");
         }
         Ok(Err(e)) => {
             if e.is_panic() {
@@ -213,7 +211,7 @@ pub async fn run_packet_capture(
                 tracing::warn!("Packet capture task failed: {:?}", e);
             }
         }
-        Ok(Ok(())) => {
+        Ok(Ok(_)) => {
             tracing::debug!("Packet capture task completed successfully");
         }
     }
@@ -282,7 +280,7 @@ pub async fn run_packet_traceroute(
             Ok(Ok(r)) => r,
             Ok(Err(e)) => return Err(anyhow::anyhow!("Traceroute failed: {}", e)),
             Err(_) => return Err(anyhow::anyhow!("Traceroute timed out after 60s")),
-        }?;
+        };
 
     let hops: Vec<TracerouteHopResult> = result
         .hops

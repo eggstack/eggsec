@@ -368,7 +368,10 @@ impl Traceroute {
 
             let handle: tokio::task::JoinHandle<(Option<IpAddr>, Option<Duration>)> =
                 tokio::spawn(async move {
-                    let _permit = semaphore.acquire().await.map_err(|_| (None, None))?;
+                    let _permit = match semaphore.acquire().await {
+                        Ok(p) => p,
+                        Err(_) => return (None, None),
+                    };
                     match surge_ping::ping(target, &payload).await {
                         Ok((_, rtt)) => (Some(target), Some(rtt)),
                         Err(e) => {

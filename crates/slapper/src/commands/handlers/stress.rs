@@ -187,6 +187,8 @@ pub async fn handle_proxy(ctx: &CommandContext, args: crate::cli::ProxyArgs) -> 
             }
         }
         ProxyCommand::Test(test_args) => {
+            ctx.ensure_scope_url(&test_args.test_url)?;
+
             let proxy_entry = crate::commands::proxy::create_proxy_entry(&test_args.proxy)?;
 
             let test_url = test_args.test_url.clone();

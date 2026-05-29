@@ -29,7 +29,7 @@ pub async fn run_hunt_task(
         Ok(Ok(report)) => report,
         Ok(Err(e)) => return Err(e.into()),
         Err(_) => return Err(anyhow::anyhow!("Hunt timed out after 60s")),
-    }?;
+    };
     if let Err(e) = progress_tx.send((5, 5)).await {
         tracing::warn!("Failed to send hunt progress: {}", e);
     }
@@ -60,7 +60,7 @@ pub async fn run_browser_task(
         Ok(Ok(report)) => report,
         Ok(Err(e)) => return Err(e.into()),
         Err(_) => return Err(anyhow::anyhow!("Browser scan timed out after 60s")),
-    }?;
+    };
     if let Err(e) = progress_tx.send((3, 3)).await {
         tracing::warn!("Failed to send browser progress: {}", e);
     }
@@ -218,7 +218,7 @@ pub async fn run_compliance_task(
         Ok(Ok(report)) => report,
         Ok(Err(e)) => return Err(e.into()),
         Err(_) => return Err(anyhow::anyhow!("Compliance report timed out after 60s")),
-    }?;
+    };
     if let Err(e) = progress_tx.send((3, 3)).await {
         tracing::warn!("Failed to send compliance progress: {}", e);
     }
@@ -381,11 +381,15 @@ pub async fn run_integrations_task(
         "create_issue" => {
             if let (Some(t), Some(d)) = (&title, &description) {
                 let issue = crate::integrations::Issue {
+                    id: None,
                     title: t.clone(),
                     description: d.clone(),
                     labels: labels.clone(),
                     severity: None,
                     assignees: assignees.clone(),
+                    status: None,
+                    url: None,
+                    created_at: None,
                 };
                 if let Err(e) = result_tx
                     .send(TaskResult::IntegrationsCreateIssue { issue })

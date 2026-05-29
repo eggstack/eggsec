@@ -370,19 +370,21 @@ impl OpenApiGenerator {
                                 MediaType {
                                     schema_: Schema::Object(SchemaObject {
                                         schema_type: "object".to_string(),
-                                        properties: [
-                                            ("name".to_string(), Box::new(Schema::string())),
-                                            (
-                                                "arguments".to_string(),
-                                                Box::new(Schema::Ref(format!(
-                                                    "#/components/schemas/{}",
-                                                    schema_name
-                                                ))),
-                                            ),
-                                            ("api_key".to_string(), Box::new(Schema::string())),
-                                        ]
-                                        .into_iter()
-                                        .collect(),
+                                        properties: Some(
+                                            [
+                                                ("name".to_string(), Box::new(Schema::string())),
+                                                (
+                                                    "arguments".to_string(),
+                                                    Box::new(Schema::Ref(format!(
+                                                        "#/components/schemas/{}",
+                                                        schema_name
+                                                    ))),
+                                                ),
+                                                ("api_key".to_string(), Box::new(Schema::string())),
+                                            ]
+                                            .into_iter()
+                                            .collect(),
+                                        ),
                                         required: Some(vec!["name".to_string()]),
                                     }),
                                 },

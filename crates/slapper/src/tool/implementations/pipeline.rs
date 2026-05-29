@@ -90,7 +90,6 @@ impl SecurityTool for PipelineTool {
             ttl: None,
             source_port: None,
             verbose: false,
-            concurrent_stages: false,
         };
 
         let config = crate::config::load_config(None::<&str>)
@@ -98,7 +97,7 @@ impl SecurityTool for PipelineTool {
                 tracing::warn!(error = %e, "Failed to load config for pipeline, using defaults");
             })
             .unwrap_or_default();
-        let result = tokio::time::timeout(
+        tokio::time::timeout(
             std::time::Duration::from_secs(60),
             crate::pipeline::run_cli_with_callback(args, &config, move |f| {
                 let mut findings = findings_clone.lock();
@@ -127,41 +126,21 @@ impl SecurityTool for PipelineTool {
         let completed_at = Utc::now();
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
 
-        match result {
-            Ok(_) => Ok(ToolResponse {
-                request_id: request.id,
-                tool_id: "scan".to_string(),
-                status: crate::tool::ResponseStatus::Success,
-                results: serde_json::json!({ "target": target, "profile": profile }),
-                metadata: crate::tool::ResponseMetadata {
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                    targets_scanned: 1,
-                    findings_count,
-                },
-                errors: vec![],
-                findings,
-            }),
-            Err(e) => Ok(ToolResponse {
-                request_id: request.id,
-                tool_id: "scan".to_string(),
-                status: crate::tool::ResponseStatus::Failed,
-                results: serde_json::json!({}),
-                metadata: crate::tool::ResponseMetadata {
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                    targets_scanned: 0,
-                    findings_count,
-                },
-                errors: vec![crate::tool::ToolError::new(
-                    "EXECUTION_ERROR",
-                    e.to_string(),
-                )],
-                findings,
-            }),
-        }
+        Ok(ToolResponse {
+            request_id: request.id,
+            tool_id: "scan".to_string(),
+            status: crate::tool::ResponseStatus::Success,
+            results: serde_json::json!({ "target": target, "profile": profile }),
+            metadata: crate::tool::ResponseMetadata {
+                started_at,
+                completed_at,
+                duration_ms,
+                targets_scanned: 1,
+                findings_count,
+            },
+            errors: vec![],
+            findings,
+        })
     }
 
     fn capabilities(&self) -> Vec<ToolCapability> {

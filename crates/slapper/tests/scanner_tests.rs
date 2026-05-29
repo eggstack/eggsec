@@ -3,6 +3,7 @@ mod common;
 use common::{create_test_server, mock_json, mock_not_found, mock_ok, mock_waf_response};
 use slapper::scanner::spoof::SpoofConfig;
 use slapper::scanner::EndpointScanConfig;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[tokio::test]
@@ -17,7 +18,7 @@ async fn test_endpoint_scan_basic() {
         "/health".to_string(),
         "/admin".to_string(),
     ];
-    let spoof_config = SpoofConfig::default();
+    let spoof_config = Arc::new(SpoofConfig::default());
 
     let config = EndpointScanConfig {
         base_url: server.uri(),
@@ -45,7 +46,7 @@ async fn test_endpoint_scan_include_404() {
     mock_not_found("/admin").mount(&server).await;
 
     let endpoints = vec!["/api".to_string(), "/admin".to_string()];
-    let spoof_config = SpoofConfig::default();
+    let spoof_config = Arc::new(SpoofConfig::default());
 
     let config = EndpointScanConfig {
         base_url: server.uri(),
@@ -72,7 +73,7 @@ async fn test_endpoint_scan_interesting() {
     mock_ok("/api").mount(&server).await;
 
     let endpoints = vec!["/.env".to_string(), "/api".to_string()];
-    let spoof_config = SpoofConfig::default();
+    let spoof_config = Arc::new(SpoofConfig::default());
 
     let config = EndpointScanConfig {
         base_url: server.uri(),
@@ -101,7 +102,7 @@ async fn test_endpoint_scan_json_response() {
         .await;
 
     let endpoints = vec!["/api/data".to_string()];
-    let spoof_config = SpoofConfig::default();
+    let spoof_config = Arc::new(SpoofConfig::default());
 
     let config = EndpointScanConfig {
         base_url: server.uri(),
@@ -129,7 +130,7 @@ async fn test_endpoint_scan_waf_blocked() {
         .await;
 
     let endpoints = vec!["/api".to_string()];
-    let spoof_config = SpoofConfig::default();
+    let spoof_config = Arc::new(SpoofConfig::default());
 
     let config = EndpointScanConfig {
         base_url: server.uri(),
@@ -154,7 +155,7 @@ async fn test_endpoint_scan_empty_wordlist() {
     let server = create_test_server().await;
 
     let endpoints: Vec<String> = vec![];
-    let spoof_config = SpoofConfig::default();
+    let spoof_config = Arc::new(SpoofConfig::default());
 
     let config = EndpointScanConfig {
         base_url: server.uri(),

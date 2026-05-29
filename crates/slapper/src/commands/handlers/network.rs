@@ -1,24 +1,35 @@
 use crate::commands::handlers::CommandContext;
 use anyhow::Result;
 
-pub async fn handle_packet(_ctx: &CommandContext, _args: crate::cli::PacketArgs) -> Result<()> {
+pub async fn handle_packet(ctx: &CommandContext, args: crate::cli::PacketArgs) -> Result<()> {
     #[cfg(feature = "packet-inspection")]
     {
         use crate::cli::PacketSubcommand;
         use crate::packet::cli as packet_cli;
 
-        match _args.command {
-            PacketSubcommand::Capture(cap_args) => {
-                packet_cli::handle_packet_capture(cap_args, _ctx.json).await?;
-            }
+        // Scope check for subcommands that target external hosts
+        match &args.command {
             PacketSubcommand::Send(send_args) => {
-                packet_cli::handle_packet_send(send_args, _ctx.json).await?;
-            }
-            PacketSubcommand::Dump(dump_args) => {
-                packet_cli::handle_packet_dump(dump_args, _ctx.json)?;
+                ctx.ensure_scope(&send_args.target)?;
             }
             PacketSubcommand::Traceroute(trace_args) => {
-                packet_cli::handle_packet_traceroute(trace_args, _ctx.json).await?;
+                ctx.ensure_scope(&trace_args.target)?;
+            }
+            _ => {}
+        }
+
+        match args.command {
+            PacketSubcommand::Capture(cap_args) => {
+                packet_cli::handle_packet_capture(cap_args, ctx.json).await?;
+            }
+            PacketSubcommand::Send(send_args) => {
+                packet_cli::handle_packet_send(send_args, ctx.json).await?;
+            }
+            PacketSubcommand::Dump(dump_args) => {
+                packet_cli::handle_packet_dump(dump_args, ctx.json)?;
+            }
+            PacketSubcommand::Traceroute(trace_args) => {
+                packet_cli::handle_packet_traceroute(trace_args, ctx.json).await?;
             }
             PacketSubcommand::Interfaces => {
                 packet_cli::handle_packet_interfaces()?;

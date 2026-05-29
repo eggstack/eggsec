@@ -57,8 +57,6 @@ pub use events::{EventHandler, SecurityEvent};
 pub use memory::LongitudinalMemory;
 pub use portfolio::{Priority, ScanRecord, TargetConfig, TargetPortfolio};
 
-pub use {AgentRuntimePersisted, AgentRuntimeStatus};
-
 #[cfg(feature = "ai-integration")]
 pub use skills::{Skill, SkillLoadResult, SkillLoader, SkillRegistry};
 
@@ -703,8 +701,10 @@ impl Agent {
                                         let new_findings = comparison.new_findings;
 
                                         if !new_findings.is_empty() {
-                                            let dedup_result =
-                                                self.memory.deduplicate_findings(new_findings).await;
+                                            let dedup_result = self
+                                                .memory
+                                                .deduplicate_findings(new_findings)
+                                                .await;
                                             match dedup_result {
                                                 Ok((to_alert, deduplicated)) => {
                                                     if !to_alert.is_empty() {
@@ -721,7 +721,10 @@ impl Agent {
                                                             )
                                                             .await;
                                                         if let Err(e) = alert_result {
-                                                            tracing::warn!("Failed to send alerts: {}", e);
+                                                            tracing::warn!(
+                                                                "Failed to send alerts: {}",
+                                                                e
+                                                            );
                                                         } else {
                                                             self.alerts_sent += 1;
                                                         }
@@ -733,7 +736,10 @@ impl Agent {
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    tracing::warn!("Failed to deduplicate findings: {}", e);
+                                                    tracing::warn!(
+                                                        "Failed to deduplicate findings: {}",
+                                                        e
+                                                    );
                                                 }
                                             }
                                         }
@@ -2339,11 +2345,15 @@ mod tests {
         // Add two targets with schedules
         let mut target1 = TargetConfig::new("https://fail.example.com");
         target1.schedule = Some("* * * * *".to_string());
-        agent.portfolio.add_target("fail.example.com".to_string(), target1);
+        agent
+            .portfolio
+            .add_target("fail.example.com".to_string(), target1);
 
         let mut target2 = TargetConfig::new("https://ok.example.com");
         target2.schedule = Some("* * * * *".to_string());
-        agent.portfolio.add_target("ok.example.com".to_string(), target2);
+        agent
+            .portfolio
+            .add_target("ok.example.com".to_string(), target2);
 
         // Manually set last_scan so they'll trigger
         agent.portfolio.update_target("fail.example.com", |t| {
@@ -2357,7 +2367,10 @@ mod tests {
         // The key assertion: process_scheduled_scans should NOT return an error
         // just because individual targets fail. It should continue to next targets.
         let result = agent.process_scheduled_scans().await;
-        assert!(result.is_ok(), "process_scheduled_scans should continue even when individual targets fail");
+        assert!(
+            result.is_ok(),
+            "process_scheduled_scans should continue even when individual targets fail"
+        );
 
         // Both targets should have been attempted (last_scan should be set or error recorded)
         assert_eq!(agent.scans_failed, 2, "Both failed scans should be counted");
@@ -2392,7 +2405,10 @@ mod tests {
 
         // run_once should succeed even without a config watcher
         let result = agent.run_once().await;
-        assert!(result.is_ok(), "Agent should function without config watcher");
+        assert!(
+            result.is_ok(),
+            "Agent should function without config watcher"
+        );
     }
 
     #[tokio::test]

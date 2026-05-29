@@ -299,7 +299,7 @@ pub struct ScanArgs {
                 - full: all stages including load testing\n\
                 - api: GraphQL/JWT/OAuth focused assessment\n\
                 - recon: intelligence-led with tech detection and CVE mapping\n\
-                - stealth: web scan with rate adaptation and header variation\n\
+                - stealth: web scan with randomized timing/header behavior for lab realism\n\
                 - deep: web scan with mutation fuzzing\n\
                 - vuln: CVE-prioritized fuzzing based on detected tech\n\
                 - auth: JWT/OAuth/IDOR security testing"

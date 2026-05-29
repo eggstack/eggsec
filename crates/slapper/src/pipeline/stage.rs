@@ -89,35 +89,22 @@ impl Stage {
                 Stage::EndpointScan,
                 Stage::Fuzz,
             ],
-            // TODO(reframe-pass3): Map defense-lab profiles to stages once variants are added:
-            //
-            // ScanProfile::DefenseLab => vec![
-            //     Stage::PortScan,
-            //     Stage::Fingerprint,
-            //     Stage::EndpointScan,
-            //     Stage::Waf,
-            //     Stage::Fuzz,
-            // ],
-            // ScanProfile::SynvoidLocal => vec![
-            //     Stage::PortScan,
-            //     Stage::Fingerprint,
-            //     Stage::EndpointScan,
-            //     Stage::Waf,
-            // ],
-            // ScanProfile::WafRegression => vec![
-            //     Stage::PortScan,
-            //     Stage::Fingerprint,
-            //     Stage::Waf,
-            // ],
-            // ScanProfile::ProtocolEdge => vec![
-            //     Stage::PortScan,
-            //     Stage::Fingerprint,
-            // ],
-            // ScanProfile::NseSafe => vec![
-            //     Stage::PortScan,
-            //     Stage::Fingerprint,
-            //     Stage::EndpointScan,
-            // ],
+            ScanProfile::DefenseLab => vec![
+                Stage::PortScan,
+                Stage::Fingerprint,
+                Stage::EndpointScan,
+                Stage::Waf,
+                Stage::Fuzz,
+            ],
+            ScanProfile::SynvoidLocal => vec![
+                Stage::PortScan,
+                Stage::Fingerprint,
+                Stage::EndpointScan,
+                Stage::Waf,
+            ],
+            ScanProfile::WafRegression => vec![Stage::PortScan, Stage::Fingerprint, Stage::Waf],
+            ScanProfile::ProtocolEdge => vec![Stage::PortScan, Stage::Fingerprint],
+            ScanProfile::NseSafe => vec![Stage::PortScan, Stage::Fingerprint, Stage::EndpointScan],
         }
     }
 
@@ -161,12 +148,11 @@ pub fn profile_from_str(s: &str) -> Option<crate::cli::ScanProfile> {
         "deep" => Some(crate::cli::ScanProfile::Deep),
         "vuln" => Some(crate::cli::ScanProfile::Vuln),
         "auth" => Some(crate::cli::ScanProfile::Auth),
-        // TODO(reframe-pass3): Add string mappings once defense-lab variants are added:
-        // "defense-lab" => Some(crate::cli::ScanProfile::DefenseLab),
-        // "synvoid-local" => Some(crate::cli::ScanProfile::SynvoidLocal),
-        // "waf-regression" => Some(crate::cli::ScanProfile::WafRegression),
-        // "protocol-edge" => Some(crate::cli::ScanProfile::ProtocolEdge),
-        // "nse-safe" => Some(crate::cli::ScanProfile::NseSafe),
+        "defense-lab" => Some(crate::cli::ScanProfile::DefenseLab),
+        "synvoid-local" => Some(crate::cli::ScanProfile::SynvoidLocal),
+        "waf-regression" => Some(crate::cli::ScanProfile::WafRegression),
+        "protocol-edge" => Some(crate::cli::ScanProfile::ProtocolEdge),
+        "nse-safe" => Some(crate::cli::ScanProfile::NseSafe),
         _ => None,
     }
 }

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::executor::StageResult;
 use crate::output::escape::{escape_html, escape_xml};
+use crate::output::RunManifest;
 use crate::scanner::endpoints::EndpointResult;
 use crate::scanner::fingerprint::ServiceFingerprint;
 use crate::scanner::ports::PortResult;
@@ -30,6 +31,10 @@ pub struct PipelineReport {
     pub endpoints: Vec<EndpointResult>,
     #[serde(skip)]
     pub checkpoint_error: Option<String>,
+    /// Run manifest providing structured metadata for regression workflows.
+    /// Populated after pipeline execution completes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<RunManifest>,
 }
 
 impl std::fmt::Display for PipelineReport {

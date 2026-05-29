@@ -180,7 +180,7 @@ impl SecurityTool for FuzzerTool {
             timeout_ms: 0,
             operation: format!("Fuzzing timed out after 60s: {}", e),
         })?
-        .map_err(|e| crate::error::SlapperError::Runtime(format!("Fuzzing failed: {}", e)))?;
+        .map_err(|e| crate::error::SlapperError::Runtime(format!("Fuzzing failed: {}", e)));
         let findings = match std::sync::Arc::try_unwrap(findings) {
             Ok(inner) => inner.into_inner(),
             Err(e) => {
@@ -196,41 +196,21 @@ impl SecurityTool for FuzzerTool {
         let duration_ms = (completed_at - started_at).num_milliseconds() as u64;
         let findings_count = findings.len();
 
-        match result {
-            Ok(_) => Ok(ToolResponse {
-                request_id: request.id,
-                tool_id: "fuzz".to_string(),
-                status: crate::tool::ResponseStatus::Success,
-                results: serde_json::json!({ "target": target }),
-                metadata: crate::tool::ResponseMetadata {
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                    targets_scanned: 1,
-                    findings_count,
-                },
-                errors: vec![],
-                findings,
-            }),
-            Err(e) => Ok(ToolResponse {
-                request_id: request.id,
-                tool_id: "fuzz".to_string(),
-                status: crate::tool::ResponseStatus::Failed,
-                results: serde_json::json!({}),
-                metadata: crate::tool::ResponseMetadata {
-                    started_at,
-                    completed_at,
-                    duration_ms,
-                    targets_scanned: 0,
-                    findings_count,
-                },
-                errors: vec![crate::tool::ToolError::new(
-                    "EXECUTION_ERROR",
-                    e.to_string(),
-                )],
-                findings,
-            }),
-        }
+        Ok(ToolResponse {
+            request_id: request.id,
+            tool_id: "fuzz".to_string(),
+            status: crate::tool::ResponseStatus::Success,
+            results: serde_json::json!({ "target": target }),
+            metadata: crate::tool::ResponseMetadata {
+                started_at,
+                completed_at,
+                duration_ms,
+                targets_scanned: 1,
+                findings_count,
+            },
+            errors: vec![],
+            findings,
+        })
     }
 
     fn capabilities(&self) -> Vec<ToolCapability> {

@@ -127,6 +127,19 @@ impl Scope {
                 );
                 return Ok(false);
             }
+            // Block private IPs even when no scope rules are defined
+            if let Some(ref ip) = target_scope.ip {
+                if is_private_ip(ip) {
+                    tracing::warn!(
+                        target = %target,
+                        "Private IP address blocked by security policy"
+                    );
+                    return Err(ScopeError::DnsResolution(
+                        target.to_string(),
+                        "Private IP address blocked by security policy".to_string(),
+                    ));
+                }
+            }
             return Ok(true);
         }
 
@@ -265,12 +278,7 @@ impl TargetScope {
         }
 
         if let Ok(ip) = IpAddr::from_str(target) {
-            if is_private_ip(&ip) {
-                return Err(ScopeError::DnsResolution(
-                    target.to_string(),
-                    "Private IP address blocked by security policy".to_string(),
-                ));
-            }
+            // Private IP check is deferred to scope rule evaluation in is_target_allowed()
             return Ok(Self {
                 host: target.to_string(),
                 ip: Some(ip),
@@ -319,12 +327,7 @@ impl TargetScope {
         }
 
         if let Ok(ip) = IpAddr::from_str(target) {
-            if is_private_ip(&ip) {
-                return Err(ScopeError::DnsResolution(
-                    target.to_string(),
-                    "Private IP address blocked by security policy".to_string(),
-                ));
-            }
+            // Private IP check is deferred to scope rule evaluation in is_target_allowed()
             return Ok(Self {
                 host: target.to_string(),
                 ip: Some(ip),

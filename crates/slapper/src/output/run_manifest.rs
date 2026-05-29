@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::DiffSummary;
+use crate::pipeline::report::PipelineReport;
+use crate::types::Severity;
 
 /// Structured summary of a single assessment or defense-lab run.
 ///
@@ -10,9 +12,9 @@ use super::DiffSummary;
 /// and an optional baseline diff. It is designed for regression-oriented
 /// workflows where runs must be comparable and reproducible.
 ///
-/// The manifest is intentionally minimal and serde-only. It is not yet
-/// wired into existing output/report generation paths — that integration
-/// is future work.
+/// The manifest is integrated into the pipeline output path via
+/// [`PipelineReport::manifest`]. Use [`RunManifest::from_report`] to
+/// construct one from a completed pipeline run.
 ///
 /// # Schema Direction
 ///
@@ -91,6 +93,104 @@ impl RunManifest {
         self.baseline_id = Some(baseline_id);
         self.diff_summary = Some(diff_summary);
         self
+    }
+
+    /// Create a manifest from a completed pipeline report.
+    ///
+    /// Populates `started_at` from now minus the run duration, `ended_at` as now,
+    /// and derives `observations` from open ports/services/endpoints.
+    /// `findings` are derived from interesting endpoints (as a simple heuristic).
+    pub fn from_report(report: &PipelineReport, profile: &str) -> Self {
+        let now = Utc::now();
+        let started_at = now - chrono::Duration::milliseconds(report.total_duration_ms as i64);
+
+        let run_id = uuid::Uuid::new_v4().to_string();
+
+        let observations: Vec<serde_json::Value> = report
+            .open_ports
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "type": "port",
+                    "port": p.port,
+                    "status": &p.status,
+                    "service": &p.service,
+                })
+            })
+            .chain(report.services.iter().map(|s| {
+                serde_json::json!({
+                    "type": "service",
+                    "port": s.port,
+                    "service": &s.service,
+                    "product": s.product,
+                    "version": s.version,
+                })
+            }))
+            .chain(report.endpoints.iter().filter(|e| e.interesting).map(|e| {
+                serde_json::json!({
+                    "type": "endpoint",
+                    "path": &e.path,
+                    "status_code": e.status_code,
+                    "content_length": e.content_length,
+                })
+            }))
+            .collect();
+
+        let probe_intents: Vec<String> = report
+            .stage_results
+            .iter()
+            .filter(|r| r.success)
+            .map(|r| format!("{}", r.stage))
+            .collect();
+
+        let feature_flags: Vec<String> = report
+            .stage_results
+            .iter()
+            .map(|r| {
+                if r.success {
+                    format!("stage:{}", r.stage)
+                } else {
+                    format!("stage:{}:failed", r.stage)
+                }
+            })
+            .collect();
+
+        Self {
+            schema_version: "1.0.0".to_string(),
+            run_id,
+            started_at,
+            ended_at: now,
+            slapper_version: env!("CARGO_PKG_VERSION").to_string(),
+            target_scope: report.target.clone(),
+            profile: profile.to_string(),
+            probe_intents,
+            risk_budget: "safe-active".to_string(),
+            feature_flags,
+            observations,
+            findings: Vec::new(),
+            artifacts: Vec::new(),
+            baseline_id: None,
+            diff_summary: None,
+        }
+    }
+
+    /// Populate findings from the report's interesting endpoints as a basic heuristic.
+    /// Each interesting endpoint becomes a finding observation.
+    pub fn populate_findings_from_report(&mut self, report: &PipelineReport) {
+        self.findings = report
+            .endpoints
+            .iter()
+            .filter(|e| e.interesting)
+            .map(|e| {
+                serde_json::json!({
+                    "title": format!("Interesting endpoint: {}", e.path),
+                    "severity": Severity::Info.as_str(),
+                    "category": "endpoint_discovery",
+                    "description": format!("Endpoint {} returned status {}", e.path, e.status_code),
+                    "location": e.path,
+                })
+            })
+            .collect();
     }
 }
 

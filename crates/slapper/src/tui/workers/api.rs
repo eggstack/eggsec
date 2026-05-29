@@ -367,7 +367,7 @@ pub async fn run_nse(
     .await
     .map_err(|e| anyhow::anyhow!("Task execution failed: {}", e))
     .and_then(|result| match result {
-        Ok((output, errors, success)) => Ok((output, errors, success)),
+        Ok(inner) => inner.map_err(|e| anyhow::anyhow!("NSE script failed: {}", e)),
         Err(e) => {
             if e.is_panic() {
                 tracing::warn!("NSE task panicked: {:?}", e);

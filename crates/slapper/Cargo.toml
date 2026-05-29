@@ -186,6 +186,7 @@ features = ["client", "runtime"]
 [dependencies.k8s-openapi]
 version = "0.22"
 optional = true
+features = ["v1_30"]
 
 [dependencies.printpdf]
 version = "0.7"

@@ -1,4 +1,4 @@
-use crate::config::policy::OperationRisk;
+use crate::config::OperationRisk;
 use serde::{Deserialize, Serialize};
 
 /// Metadata for a tool that describes its capabilities and risk profile
@@ -19,7 +19,7 @@ pub struct ToolMetadata {
 
 impl ToolMetadata {
     /// Check if this tool is allowed by the given policy
-    pub fn is_allowed_by(&self, policy: &crate::config::policy::ExecutionPolicy) -> bool {
+    pub fn is_allowed_by(&self, policy: &crate::config::ExecutionPolicy) -> bool {
         if self.requires_explicit_enablement && !self.risk_tier.is_allowed_by(policy) {
             return false;
         }
@@ -68,11 +68,7 @@ impl ToolMetadataRegistry {
         self.tools.get(name)
     }
 
-    pub fn is_tool_allowed(
-        &self,
-        name: &str,
-        policy: &crate::config::policy::ExecutionPolicy,
-    ) -> bool {
+    pub fn is_tool_allowed(&self, name: &str, policy: &crate::config::ExecutionPolicy) -> bool {
         self.get(name)
             .map(|m| m.is_allowed_by(policy))
             .unwrap_or(false)
@@ -84,7 +80,7 @@ impl ToolMetadataRegistry {
 
     pub fn list_blocked_tools(
         &self,
-        policy: &crate::config::policy::ExecutionPolicy,
+        policy: &crate::config::ExecutionPolicy,
     ) -> Vec<&ToolMetadata> {
         self.tools
             .values()
@@ -208,7 +204,7 @@ pub fn default_tool_registry() -> ToolMetadataRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::policy::ExecutionPolicy;
+    use crate::config::ExecutionPolicy;
 
     #[test]
     fn default_registry_has_tools() {

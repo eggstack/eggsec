@@ -102,8 +102,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.login() - Authenticate to SSH server
     let login_fn = lua.create_function(
-        |lua, (_host, _port, user, _password): (String, Option<u16>, String, String)| {
-            let _port = _port.unwrap_or(SSH_PORT);
+        |lua, (host, port, user, password): (String, Option<u16>, String, String)| {
+            let port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -177,8 +177,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.execute() - Execute a command
     let execute_fn = lua.create_function(
-        |lua, (_host, _port, command): (String, Option<u16>, String)| {
-            let _port = _port.unwrap_or(SSH_PORT);
+        |lua, (host, port, command): (String, Option<u16>, String)| {
+            let port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -400,28 +400,13 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
     })?;
     ssh.set("cipher_info", cipher_info_fn)?;
 
-    // ssh.userauth() - Generic user authentication
-    let userauth_fn = lua.create_function(
-        |lua, (_host, _port, user, _password): (String, Option<u16>, String, String)| {
-            let _port = _port.unwrap_or(SSH_PORT);
-
-            let result = lua.create_table()?;
-            result.set("success", false)?;
-            result.set("user", user)?;
-            result.set("error", "userauth requires ssh2 crate")?;
-
-            Ok(result)
-        },
-    )?;
-    ssh.set("userauth", userauth_fn)?;
-
     let version_fn = lua.create_function(|_lua, _: ()| Ok("1.0.0"))?;
     ssh.set("version", version_fn)?;
 
     // ssh.userauth_pubkey() - Public key authentication
     let userauth_pubkey_fn = lua.create_function(
-        |lua, (_host, _port, user, _key_file): (String, Option<u16>, String, String)| {
-            let _port = _port.unwrap_or(SSH_PORT);
+        |lua, (host, port, user, key_file): (String, Option<u16>, String, String)| {
+            let port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -557,54 +542,6 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.scp_download() - Download files via SCP
     let scp_download_fn = lua.create_function(
-        |lua, (_host, port, _remote_path, _local_path): (String, Option<u16>, String, String)| {
-            let _port = port.unwrap_or(SSH_PORT);
-
-            #[cfg(feature = "nse-ssh2")]
-            {
-                let result = lua.create_table()?;
-                result.set("success", false)?;
-                result.set("error", "SCP download requires authenticated session")?;
-                Ok(result)
-            }
-
-            #[cfg(not(feature = "nse-ssh2"))]
-            {
-                let result = lua.create_table()?;
-                result.set("success", false)?;
-                result.set("error", "SCP requires ssh2 crate")?;
-                Ok(result)
-            }
-        },
-    )?;
-    ssh.set("scp_download", scp_download_fn)?;
-
-    // ssh.scp_upload() - Upload files via SCP
-    let scp_upload_fn = lua.create_function(
-        |lua, (_host, _port, _local_path, _remote_path): (String, Option<u16>, String, String)| {
-            let _port = _port.unwrap_or(SSH_PORT);
-
-            #[cfg(feature = "nse-ssh2")]
-            {
-                let result = lua.create_table()?;
-                result.set("success", false)?;
-                result.set("error", "SCP upload requires authenticated session")?;
-                Ok(result)
-            }
-
-            #[cfg(not(feature = "nse-ssh2"))]
-            {
-                let result = lua.create_table()?;
-                result.set("success", false)?;
-                result.set("error", "SCP requires ssh2 crate")?;
-                Ok(result)
-            }
-        },
-    )?;
-    ssh.set("scp_upload", scp_upload_fn)?;
-
-    // ssh.scp_download() - Download files via SCP
-    let scp_download_fn = lua.create_function(
         |lua, (_host, _port, _remote_path, _local_path): (String, Option<u16>, String, String)| {
             let _port = _port.unwrap_or(SSH_PORT);
 
@@ -644,7 +581,6 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
                     return Ok(result);
                 }
 
-                // Try to authenticate - in practice you'd need credentials
                 let result = lua.create_table()?;
                 result.set("success", false)?;
                 result.set("error", "Authentication required for SCP")?;
@@ -664,8 +600,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.scp_upload() - Upload files via SCP
     let scp_upload_fn = lua.create_function(
-        |lua, (_host, port, _local_path, _remote_path): (String, Option<u16>, String, String)| {
-            let _port = port.unwrap_or(SSH_PORT);
+        |lua, (host, port, _local_path, _remote_path): (String, Option<u16>, String, String)| {
+            let port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -722,8 +658,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.sftp() - SFTP operations
     let sftp_fn = lua.create_function(
-        |lua, (_host, _port, operation, path): (String, Option<u16>, String, String)| {
-            let _port = _port.unwrap_or(SSH_PORT);
+        |lua, (host, port, operation, path): (String, Option<u16>, String, String)| {
+            let port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {
@@ -839,8 +775,8 @@ pub fn register_ssh_library(lua: &Lua) -> LuaResult<()> {
 
     // ssh.userauth() - Generic user authentication
     let userauth_fn = lua.create_function(
-        |lua, (_host, _port, user, _password): (String, Option<u16>, String, String)| {
-            let _port = _port.unwrap_or(SSH_PORT);
+        |lua, (host, port, user, password): (String, Option<u16>, String, String)| {
+            let port = port.unwrap_or(SSH_PORT);
 
             #[cfg(feature = "nse-ssh2")]
             {

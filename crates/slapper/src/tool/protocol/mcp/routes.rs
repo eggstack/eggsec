@@ -211,22 +211,26 @@ async fn handle_mcp(
             continue;
         }
 
-        let response = tokio::time::timeout(
+        let response = match tokio::time::timeout(
             std::time::Duration::from_secs(30),
             state.mcp_server.handle_request(req),
         )
         .await
-        .map_err(|e| {
-            tracing::warn!(error = %e, "MCP request handler timed out after 30s");
-            crate::error::SlapperError::Timeout {
-                timeout_ms: 0,
-                operation: format!("MCP request handler timed out: {}", e),
+        {
+            Ok(response) => response,
+            Err(e) => {
+                tracing::warn!(error = %e, "MCP request handler timed out after 30s");
+                McpResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id: None,
+                    result: None,
+                    error: Some(McpError::internal(&format!(
+                        "MCP request handler timed out: {}",
+                        e
+                    ))),
+                }
             }
-        })?
-        .map_err(|e| {
-            tracing::warn!(error = %e, "MCP request handler failed");
-            crate::error::SlapperError::Runtime(format!("MCP request handler failed: {}", e))
-        })?;
+        };
         responses.push(response);
     }
 
@@ -339,25 +343,26 @@ pub async fn run_stdio(registry: ToolRegistry, api_key: Option<String>, profile:
                         continue;
                     }
 
-                    let response = tokio::time::timeout(
+                    let response = match tokio::time::timeout(
                         std::time::Duration::from_secs(30),
                         server.handle_request(req),
                     )
                     .await
-                    .map_err(|e| {
-                        tracing::warn!(error = %e, "MCP request handler timed out after 30s");
-                        crate::error::SlapperError::Timeout {
-                            timeout_ms: 0,
-                            operation: format!("MCP request handler timed out: {}", e),
+                    {
+                        Ok(response) => response,
+                        Err(e) => {
+                            tracing::warn!(error = %e, "MCP request handler timed out after 30s");
+                            McpResponse {
+                                jsonrpc: "2.0".to_string(),
+                                id: None,
+                                result: None,
+                                error: Some(McpError::internal(&format!(
+                                    "MCP request handler timed out: {}",
+                                    e
+                                ))),
+                            }
                         }
-                    })?
-                    .map_err(|e| {
-                        tracing::warn!(error = %e, "MCP request handler failed");
-                        crate::error::SlapperError::Runtime(format!(
-                            "MCP request handler failed: {}",
-                            e
-                        ))
-                    })?;
+                    };
                     responses.push(response);
                 }
 

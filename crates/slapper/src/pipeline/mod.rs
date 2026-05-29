@@ -95,6 +95,13 @@ async fn write_output(
             tokio::fs::write(output_path, junit.to_xml()?).await?;
         }
     }
+
+    if let Some(ref manifest) = report.manifest {
+        let manifest_path = format!("{}.manifest.json", output_path.trim_end_matches(".json"));
+        let manifest_json = serde_json::to_string_pretty(manifest)?;
+        tokio::fs::write(&manifest_path, manifest_json).await?;
+    }
+
     Ok(())
 }
 

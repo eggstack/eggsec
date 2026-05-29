@@ -334,12 +334,9 @@ impl LifecycleManager {
         }
 
         for agent_id in mark_offline {
-            if let Err(e) = agent_registry
+            agent_registry
                 .update_status(agent_id, AgentStatus::Offline)
-                .await
-            {
-                tracing::warn!("Failed to mark agent {} offline: {:?}", agent_id, e);
-            }
+                .await;
         }
 
         for event in pending_events {
@@ -445,13 +442,7 @@ impl LifecycleManager {
             );
         }
 
-        if let Err(e) = self.agent_registry.unregister(agent_id).await {
-            tracing::warn!(
-                "Failed to unregister agent {} during graceful shutdown: {:?}",
-                agent_id,
-                e
-            );
-        }
+        self.agent_registry.unregister(agent_id).await;
         true
     }
 
@@ -476,13 +467,7 @@ impl LifecycleManager {
             );
         }
 
-        if let Err(e) = self.agent_registry.unregister(agent_id).await {
-            tracing::warn!(
-                "Failed to unregister agent {} during force shutdown: {:?}",
-                agent_id,
-                e
-            );
-        }
+        self.agent_registry.unregister(agent_id).await;
 
         let mut status = self.health_status.write().await;
         status.remove(&agent_id);

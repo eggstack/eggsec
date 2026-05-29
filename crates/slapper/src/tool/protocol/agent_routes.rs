@@ -200,9 +200,7 @@ fn validate_task_type(task_type: &str) -> Result<(), String> {
 }
 
 fn validate_payload_size(payload: &serde_json::Value, max_bytes: usize) -> Result<(), String> {
-    let size = serde_json::to_vec(payload)
-        .map(|b| b.len())
-        .unwrap_or(0);
+    let size = serde_json::to_vec(payload).map(|b| b.len()).unwrap_or(0);
     if size > max_bytes {
         return Err(format!(
             "Payload size {} bytes exceeds maximum of {} bytes",
@@ -1402,21 +1400,30 @@ mod tests {
     fn test_extract_api_token_bearer() {
         let mut headers = HeaderMap::new();
         headers.insert("authorization", "Bearer test-token-123".parse().unwrap());
-        assert_eq!(extract_api_token(&headers), Some("test-token-123".to_string()));
+        assert_eq!(
+            extract_api_token(&headers),
+            Some("test-token-123".to_string())
+        );
     }
 
     #[test]
     fn test_extract_api_token_bearer_case_insensitive() {
         let mut headers = HeaderMap::new();
         headers.insert("authorization", "bearer test-token-123".parse().unwrap());
-        assert_eq!(extract_api_token(&headers), Some("test-token-123".to_string()));
+        assert_eq!(
+            extract_api_token(&headers),
+            Some("test-token-123".to_string())
+        );
     }
 
     #[test]
     fn test_extract_api_token_x_api_key() {
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", "test-token-123".parse().unwrap());
-        assert_eq!(extract_api_token(&headers), Some("test-token-123".to_string()));
+        assert_eq!(
+            extract_api_token(&headers),
+            Some("test-token-123".to_string())
+        );
     }
 
     #[test]

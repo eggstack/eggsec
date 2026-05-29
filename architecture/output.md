@@ -92,7 +92,7 @@ The manifest is a metadata envelope — it does not replace existing finding or 
 
 For defense-lab regression workflows, a baseline run produces a manifest with `baseline_id: None`. Subsequent runs reference the baseline via `baseline_id` and populate `diff_summary` with the delta. See `architecture/defense_lab.md` for the full workflow.
 
-This type is intentionally minimal and serde-only. It is not yet wired into the existing output/report generation paths — that integration is future work.
+The manifest is integrated into the pipeline output path: `PipelineReport` carries an optional `RunManifest` that is auto-generated after each run. The manifest is serialized alongside the report when output is written to disk.
 
 ## Key Types
 

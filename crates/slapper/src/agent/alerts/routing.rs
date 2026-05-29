@@ -76,7 +76,7 @@ impl AlertRouter {
             reqwest::Client::builder()
                 .pool_max_idle_per_host(5)
                 .build()
-                .context("Failed to create fallback HTTP client")?
+                .expect("Failed to create fallback HTTP client")
         });
 
         Ok(Self {

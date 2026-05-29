@@ -59,10 +59,15 @@ impl ScanTab {
             SelectorItem::new("Full (all stages)", "full"),
             SelectorItem::new("API (GraphQL/JWT/OAuth)", "api"),
             SelectorItem::new("Recon (tech detection + CVE)", "recon"),
-            SelectorItem::new("Stealth (evasion mode)", "stealth"),
+            SelectorItem::new("Stealth (lab realism)", "stealth"),
             SelectorItem::new("Deep (mutation fuzzing)", "deep"),
             SelectorItem::new("Vuln (CVE-prioritized)", "vuln"),
             SelectorItem::new("Auth (JWT/OAuth/IDOR)", "auth"),
+            SelectorItem::new("Defense Lab (local probe suite)", "defense-lab"),
+            SelectorItem::new("Synvoid Local (Synvoid validation)", "synvoid-local"),
+            SelectorItem::new("WAF Regression (evasion resistance)", "waf-regression"),
+            SelectorItem::new("Protocol Edge (malformed protocols)", "protocol-edge"),
+            SelectorItem::new("NSE Safe (sandboxed scripts)", "nse-safe"),
         ]);
 
         let output_selector = Selector::new("Output Format").items(vec![
@@ -121,6 +126,11 @@ impl ScanTab {
             Some("deep") => Some(ScanProfile::Deep),
             Some("vuln") => Some(ScanProfile::Vuln),
             Some("auth") => Some(ScanProfile::Auth),
+            Some("defense-lab") => Some(ScanProfile::DefenseLab),
+            Some("synvoid-local") => Some(ScanProfile::SynvoidLocal),
+            Some("waf-regression") => Some(ScanProfile::WafRegression),
+            Some("protocol-edge") => Some(ScanProfile::ProtocolEdge),
+            Some("nse-safe") => Some(ScanProfile::NseSafe),
             _ => Some(ScanProfile::Quick),
         }
     }

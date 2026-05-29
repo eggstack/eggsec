@@ -9,6 +9,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
+    widgets::{Block, Borders},
     Frame,
 };
 
@@ -139,7 +140,7 @@ impl StorageTab {
             port: self.port(),
             database: self.database().to_string(),
             username: self.username().to_string(),
-            password: self.password().to_string(),
+            password: self.password().to_string().into(),
             max_connections: 5,
         }
     }
