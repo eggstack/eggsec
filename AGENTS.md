@@ -162,7 +162,7 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/loadtest.md` | HTTP load testing and benchmarking |
 | `architecture/networking.md` | Networking & packets module |
 | `architecture/output.md` | Output & reporting module |
-| `architecture/plugins_nse.md` | Plugin system (Python/Ruby) and NSE integration |
+| `architecture/nse_integration.md` | NSE integration |
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |
 
 ## Architecture Review (2026-05-28)

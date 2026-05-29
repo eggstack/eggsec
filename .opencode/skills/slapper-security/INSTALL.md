@@ -154,28 +154,6 @@ Ensure you have Rust 1.80 or later:
 rustup update stable
 ```
 
-### Python plugin build fails
-
-Ensure Python 3.14 development headers are installed:
-```bash
-# Ubuntu/Debian
-sudo apt install python3.14-dev
-
-# macOS
-brew install python@3.14
-```
-
-### Ruby plugin build fails
-
-Ensure Ruby development headers are installed:
-```bash
-# Ubuntu/Debian
-sudo apt install ruby-dev
-
-# macOS
-brew install ruby
-```
-
 ### Raw socket features require root
 
 The `stress-testing` feature uses raw sockets which require elevated privileges:

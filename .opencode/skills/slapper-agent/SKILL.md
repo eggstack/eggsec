@@ -47,7 +47,6 @@ This skill directory contains specialized guides for the Slapper autonomous agen
 ### Technical Implementation
 - `fuzz_core.md` - Fuzzing engine internals
 - `nse_sandbox.md` - NSE script sandboxing
-- `plugin_security.md` - Plugin security
 - `grpc_implementation.md` - gRPC implementation
 - `websocket_api.md` - WebSocket API
 - `intercepting_proxy.md` - Intercepting proxy

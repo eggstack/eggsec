@@ -39,15 +39,11 @@ All 49 other items across Waves 1-3 have been verified as implemented in the cod
 
 ```bash
 cargo check --lib -p slapper
-cargo check --lib -p slapper-plugin
-cargo check --lib -p slapper-ruby
 cargo check -p slapper-nse
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper
 cargo test --test scanner_tests -p slapper
 cargo clippy --lib -p slapper
-cargo clippy --lib -p slapper-plugin
-cargo clippy --lib -p slapper-ruby
 ```
 
 ---

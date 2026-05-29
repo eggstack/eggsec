@@ -186,7 +186,7 @@ pub struct SessionState {
 
 ## Feature-Gated Tabs
 
-Tabs like NSE, Plugin, Hunt, etc. are only available when their feature flag is enabled. `Tab::from_stable_id()` returns `None` if the tab isn't available in the current build:
+Tabs like NSE, Hunt, etc. are only available when their feature flag is enabled. `Tab::from_stable_id()` returns `None` if the tab isn't available in the current build:
 
 ```rust
 // This returns None in a build without the nse feature

@@ -9,7 +9,7 @@ pub async fn handle_doctor(_ctx: &crate::commands::handlers::CommandContext) -> 
     writeln!(out, "=== Slapper Dependency Check ===\n")?;
     writeln!(
         out,
-        "No plugin features enabled. All core dependencies available."
+        "All core dependencies available."
     )?;
     writeln!(out, "\n{}", DOCTOR_SUCCESS)?;
     Ok(())

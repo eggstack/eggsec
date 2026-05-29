@@ -34,7 +34,6 @@ These skills provide specialized workflows and domain knowledge for the Slapper 
 | `path_traversal_testing.md` | Path traversal testing |
 | `performance_patterns.md` | Performance testing patterns |
 | `plan_improvement.md` | Plan improvement workflows |
-| `plugin_security.md` | Plugin security testing |
 | `port_scanning.md` | Port scanning patterns |
 | `prototype_pollution.md` | Prototype pollution testing |
 | `race_condition.md` | Race condition testing |

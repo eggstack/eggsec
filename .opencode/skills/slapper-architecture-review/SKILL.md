@@ -187,4 +187,4 @@ All `std::collections::HashMap`/`HashSet` instances in the NSE and slapper crate
 | Distributed | Task results channel never sent | distributed/ |
 | CLI | Resume bypasses scope | cli/ |
 | Fuzzer | Dead code with invalid FxFxHashMap import | fuzzer/targets/api.rs |
-| Plugins/NSE | Brace mismatch prevents compilation | slapper-nse/src/libraries/vulns.rs:157-176 |
+| NSE | Brace mismatch prevents compilation | slapper-nse/src/libraries/vulns.rs:157-176 |

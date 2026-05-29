@@ -62,20 +62,7 @@ let content = fs::read_to_string(&canonical_path)
 
 **Pattern**: Use `canonicalize()` and validate paths start with base directory.
 
-**Implementation**: `crates/slapper-plugin/src/validation.rs` and `crates/slapper-ruby/src/validation.rs`
-
 ```rust
-pub fn validate_plugin_path(base: &Path, user_path: &Path) -> Result<PathBuf> {
-    let canonical = user_path.canonicalize()
-        .map_err(|e| anyhow!("Failed to canonicalize path: {}", e))?;
-    let base_canonical = base.canonicalize()
-        .map_err(|e| anyhow!("Failed to canonicalize base path: {}", e))?;
-    if !canonical.starts_with(&base_canonical) {
-        return Err(anyhow!("Path traversal detected"));
-    }
-    Ok(canonical)
-}
-```
 
 ### 4. Silent Data Loss Prevention
 
@@ -254,4 +241,3 @@ cargo check --lib -p slapper --features rest-api,ai-integration
 ## Related Skills
 
 - `code_quality_patterns` - Performance patterns (FxHashMap, parking_lot, etc.)
-- `plugin_security` - Plugin system security considerations

@@ -575,7 +575,6 @@ pub enum SlapperError {
     Config(String),
     Network(String),
     Scan(String),
-    Plugin(String),
     Output(String),
 }
 
@@ -587,7 +586,6 @@ impl std::fmt::Display for SlapperError {
             Self::Config(msg) => write!(f, "Configuration error: {}", msg),
             Self::Network(msg) => write!(f, "Network error: {}", msg),
             Self::Scan(msg) => write!(f, "Scan error: {}", msg),
-            Self::Plugin(msg) => write!(f, "Plugin error: {}", msg),
             Self::Output(msg) => write!(f, "Output error: {}", msg),
         }
     }

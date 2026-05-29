@@ -89,7 +89,7 @@ Each major area links to a detailed `.md` file in this directory. Modules withou
 | `websocket/` | `crates/slapper/src/websocket/` | WebSocket security testing (feature: `websocket`) | - |
 | `wireless/` | `crates/slapper/src/wireless/` | Wireless security testing (feature: `wireless`) | - |
 | `hunt/` | `crates/slapper/src/hunt/` | Intelligent vulnerability hunting (feature: `advanced-hunting`) | - |
-| `nse_tool/` | `crates/slapper/src/nse_tool/` | NSE tool integration (feature: `nse` + `tool-api`) | [plugins_nse.md](plugins_nse.md) |
+| `nse_tool/` | `crates/slapper/src/nse_tool/` | NSE tool integration (feature: `nse` + `tool-api`) | [nse_integration.md](nse_integration.md) |
 | `auth_context/` | `crates/slapper/src/auth_context/` | Multi-role auth contexts with env variable interpolation | [AUTH_CONTEXT.md](../docs/AUTH_CONTEXT.md) |
 | `api_schema/` | `crates/slapper/src/api_schema/` | OpenAPI v3 schema import for type-aware fuzzing (feature: `api-schema`) | [API_TESTING.md](../docs/API_TESTING.md) |
 
@@ -250,7 +250,7 @@ These modules are always available without any feature flags:
 | `slapper` | `crates/slapper/` | Core toolkit — all security modules, CLI, TUI |
 | `slapper-nse` | `crates/slapper-nse/` | Full Nmap Scripting Engine (NSE) via `mlua` — 164+ NSE-style library modules |
 
-**NSE Integration**: Full Lua VM with 164+ NSE-style library modules (stdnse, nmap, http, socket, dns, ssl, ssh, mysql, postgres, redis, mongodb, ldap, snmp, smb, vulns, etc.). See [plugins_nse.md](plugins_nse.md).
+**NSE Integration**: Full Lua VM with 164+ NSE-style library modules (stdnse, nmap, http, socket, dns, ssl, ssh, mysql, postgres, redis, mongodb, ldap, snmp, smb, vulns, etc.). See [nse_integration.md](nse_integration.md).
 
 ---
 
@@ -348,7 +348,7 @@ Built on `tokio` for high concurrency:
 | [networking.md](networking.md) | `packet/`, `stress/` | Packet capture/crafting and stress testing |
 | [output.md](output.md) | `output/` | Reporting formats, deduplication, SARIF/JUnit |
 | [pipeline.md](pipeline.md) | `pipeline/` | Stage orchestration, profiles, session management |
-| [plugins_nse.md](plugins_nse.md) | `slapper-nse/` | NSE integration |
+| [nse_integration.md](nse_integration.md) | `slapper-nse/` | NSE integration |
 | [recon.md](recon.md) | `recon/` | Reconnaissance modules and runner |
 | [scanner.md](scanner.md) | `scanner/` | Port scanning, fingerprinting, endpoint discovery |
 | [tui.md](tui.md) | `tui/` | Terminal UI, 29 tabs, components, workers |
