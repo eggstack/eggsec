@@ -40,9 +40,26 @@ let mut status_codes: FxHashMap<u16, u64> = FxHashMap::default();
 |------|-------|-----|
 | `metrics.rs:76` | Panic message "3 significant figures is invalid" is incorrect | Use `expect("Failed to create hdrhistogram")` instead |
 
-## Known Issue (See plans/plan.md)
+## Rate Limiting (Updated 2026-05-28)
 
-- **Rate limiting initial burst**: `next_allowed_at` initialized to `now - min_interval` at `runner.rs:279` lets all workers through simultaneously. Fix: initialize to `TokioInstant::now()`.
+Rate limiting was refactored from mutex-based to semaphore token bucket approach:
+
+```rust
+let rate_limit_sem = self.rate_limit.map(|rate| {
+    let sem = Arc::new(Semaphore::new(rate as usize));
+    let min_interval = Duration::from_secs_f64(1.0 / f64::from(rate));
+    let sem_clone = sem.clone();
+    tokio::spawn(async move {
+        loop {
+            sleep(min_interval).await;
+            sem_clone.add_permits(1);
+        }
+    });
+    sem
+});
+```
+
+Workers acquire permits before processing. Initial burst is prevented because semaphore starts with exactly `rate` permits.
 
 ## Testing
 

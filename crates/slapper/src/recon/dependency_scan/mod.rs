@@ -1,13 +1,19 @@
 pub mod cargo;
 pub mod go;
+pub mod java;
 pub mod npm;
+pub mod php;
+pub mod ruby;
 
 pub use crate::error::Result;
 pub use crate::types::Severity;
 
 pub use self::cargo::CargoScanner;
 pub use self::go::GoScanner;
+pub use self::java::JavaScanner;
 pub use self::npm::NpmScanner;
+pub use self::php::PhpScanner;
+pub use self::ruby::RubyScanner;
 
 use crate::utils::create_http_client;
 use serde::{Deserialize, Serialize};
@@ -206,6 +212,10 @@ impl DependencyScanner {
             "requirements.txt" => NpmScanner::scan_requirements_txt(path),
             "go.mod" => GoScanner::scan_go_mod(path),
             "go.sum" => GoScanner::scan_go_sum(path),
+            "Gemfile" => RubyScanner::scan_gemfile(path),
+            "Gemfile.lock" => RubyScanner::scan_gemfile_lock(path),
+            "composer.json" => PhpScanner::scan_composer_json(path),
+            "pom.xml" => JavaScanner::scan_pom_xml(path),
             _ => Err(crate::error::SlapperError::Runtime(format!(
                 "Unknown manifest file: {}",
                 file_name

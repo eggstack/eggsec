@@ -121,12 +121,14 @@ Load testing can be combined with **Fuzzing** to see how a target behaves under 
 
 ### Rate Limiting Algorithm
 
-Rate limiting uses a lock-protected token bucket approach:
-1. Worker acquires lock on `next_allowed_at` timestamp
-2. If current time < next_allowed, sleep until next_allowed
-3. Update `next_allowed = now_after_sleep + interval` (not `next + interval`) to maintain accurate rate
+Rate limiting uses a **semaphore-based token bucket** approach (replaced mutex approach on 2026-05-28):
 
-This ensures RPS stays close to the configured limit even under high concurrency.
+1. A background task adds 1 permit to the semaphore every `min_interval` (1/rate seconds)
+2. Worker attempts to acquire a permit before processing
+3. If no permits available, worker waits (backpressure)
+4. Semaphore starts with `rate` permits, preventing initial burst
+
+This ensures RPS stays close to the configured limit even under high concurrency without lock contention.
 
 ### Response Body Handling
 

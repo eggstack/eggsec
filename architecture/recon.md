@@ -24,7 +24,7 @@ The Reconnaissance module focuses on passive and active information gathering ab
 ### Vulnerability Mapping
 
 - **CVE Lookup (`cve.rs`)**: Mapping identified software versions to known CVEs using built-in database + NVD API.
-- **Secret Detection (`secrets.rs`)**: Detecting API keys, tokens, and credentials via 25+ regex patterns. Standalone module (not part of `FULL_RECON_PIPELINE_MODULES`).
+- **Secret Detection (`secrets.rs`)**: Detecting API keys, tokens, and credentials via 25+ regex patterns.
 - **Git Secrets (`git_secrets.rs`)**: Scanning git repositories for committed secrets (feature-gated).
 - **Threat Intelligence (`threatintel.rs`)**: Checking targets against VirusTotal, Shodan, and AlienVault OTX.
 
