@@ -962,7 +962,7 @@ Completed comprehensive audit of all 28 TUI tabs across 6 groups. Fixed ~100+ is
 | Group 1 | recon, scan, scan_ports, scan_endpoints, fingerprint | 21 navigation guards + handle_enter logic + reset() |
 | Group 2 | fuzz, waf, waf_stress, load, stress | 40 navigation guards |
 | Group 3 | packet, graphql, oauth, cluster, proxy | 13 fixes (bounds, guards, logic) |
-| Group 4 | nse, plugin, hunt, browser, compliance | 15+ fixes |
+| Group 4 | nse, hunt, browser, compliance | 15+ fixes |
 | Group 5 | storage, integrations, workflow, vuln, report | 8 major fixes |
 | Group 6 | history, settings | 18 navigation guards + reset fields |
 
@@ -1178,7 +1178,7 @@ All 5 tabs passed audit - no bugs found.
 | `packet.rs` | - | No bugs found | - |
 | `proxy.rs` | 731-783 | Duplicate inherent methods shadow trait methods | Noted as structural issue (no runtime impact) |
 
-#### Group 4 (nse, plugin, hunt, browser, compliance)
+#### Group 4 (nse, hunt, browser, compliance)
 
 | File | Line | Issue | Fix |
 |------|------|-------|-----|
