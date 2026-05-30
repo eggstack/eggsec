@@ -188,3 +188,30 @@ All `std::collections::HashMap`/`HashSet` instances in the NSE and slapper crate
 | CLI | Resume bypasses scope | cli/ |
 | Fuzzer | Dead code with invalid FxFxHashMap import | fuzzer/targets/api.rs |
 | NSE | Brace mismatch prevents compilation | slapper-nse/src/libraries/vulns.rs:157-176 |
+
+### Review Cycle 2026-05-30 (17 documents)
+
+#### Phase 1: Document Reviews (17 modules)
+- All 17 architecture documents reviewed against implementation
+- 250+ verified claims, 40+ discrepancies, 2 bugs, 30+ improvement opportunities
+
+#### Critical Discrepancies Found
+1. **overview.md**: Quick Facts outdated (41→39 modules, 743→526 files, 31→30 payloads)
+2. **defense_lab.md**: Profiles marked "planned" but fully implemented (DefenseLab, SynvoidLocal, WafRegression, ProtocolEdge, NseSafe)
+3. **pipeline.md**: Same defense-lab status issue
+4. **feature_matrix.md**: Feature counts wrong (33→28 total, 18→16 in full)
+5. **tui.md**: Tab count 29 vs actual 28, stale "plugin" reference
+6. **cli_commands.md**: cluster.rs:349 fix not applied (unwrap_or vs unwrap_or_else)
+
+#### Notable Bugs Found
+- **[MEDIUM]** loadtest runner.rs:279 - Rate limiter initial burst allows simultaneous worker release
+- **[MEDIUM]** fuzzer grpc.rs:91 - Internal payload type inconsistency (PayloadType::Ssrf vs PayloadType::Grpc)
+- **[LOW]** networking parse_impl.rs:858 - Redundant TLS byte sequence check
+
+#### Discrepancy Categories
+- Stale line number references in bug fix sections (many documents)
+- Implementation vs documentation mismatches (overview, feature_matrix, tui)
+- Noted missing documentation (calibration.rs, chain.rs in fuzzer, api_schema feature)
+
+#### Stale Items Identified
+See `plans/stale_items.md` for full list of items needing updates/pruning
