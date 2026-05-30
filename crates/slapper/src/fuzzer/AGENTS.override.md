@@ -10,6 +10,19 @@ Specialized guidance for the fuzzing engine module.
   - Used by `filters::FilterChain` for regex-based filtering
 - `PayloadType` - Enum of 30 payload categories
 
+## Module Structure (Verified 2026-05-30)
+
+The following modules exist in `fuzzer/`:
+- `calibration.rs` - Calibration engine for baseline timing
+- `chain.rs` - `ChainExecutor` with LRU regex cache
+- `detection/` - Timing analysis and detection logic
+- `engine/` - Core fuzzing engine
+- `payloads/` - Payload definitions by category (sqli, xss, etc.)
+- `targets/` - Target handling
+- `grammar.rs` - Grammar-based fuzzing
+
+Note: `architecture/fuzzer.md` claims `calibration.rs` and `chain.rs` are missing - this was stale. Both files exist.
+
 ## payload_vec! Macro
 
 `fuzzer/payloads/macros.rs` defines `payload_vec!` for building payload vectors from inline data. Reduces repetitive `for` loops (e.g., sqli.rs went from 8 loops to 1 macro call).

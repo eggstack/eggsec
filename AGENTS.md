@@ -8,7 +8,16 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** is the consolidated implementation plan. All 51 original items are completed. Consult it for architectural context and verification commands.
+**`plans/plan.md`** is the consolidated implementation plan. The original 51 items are completed. Remaining work is organized into 4 waves:
+
+| Wave | Focus | Status |
+|------|-------|--------|
+| Wave 1 | Documentation Foundation (stale items, reframe) | Pending |
+| Wave 2 | Plugin Removal (Python/Ruby/Metasploit) | Pending |
+| Wave 3 | MCP/Agent Profiles (ops-agent, coding-agent) | Pending |
+| Wave 4 | Public Release Polish | Pending |
+
+See `plans/plan.md` for full wave details and implementation phases.
 
 ## Quick Reference
 
@@ -72,7 +81,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `TabError` - Structured error type with categories (Network, Auth, Config, Resource, Target, Internal, Unknown) in `tui/app/tab_error.rs`
 - `SensitiveString` - Zeroized credential wrapper
 - `FuzzEngine` / `FuzzResult` - Fuzzing engine
-- `PayloadType` - Enum of 31 payload categories
+- `PayloadType` - Enum of 30 payload categories
 - `AiClient` / `Provider` - AI LLM client and provider enum
 - `AiCache` / `CacheKeyBuilder` - TTL cache for AI responses
 - `SmartWafBypass` - WAF bypass with knowledge base
@@ -99,7 +108,7 @@ Use these sections as the canonical reference points when updating guidance or s
 | Clippy | ~33 warnings (pre-existing, none in ai module) |
 | Source files | 526 |
 | Payload types | 30 |
-| Tabs | 28 (+ AuthTab conditional) |
+| Tabs | 28 (+ conditional feature tabs) |
 | WAF products | 34 |
 
 ### Security Notes
@@ -164,35 +173,33 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/networking.md` | Networking & packets module |
 | `architecture/output.md` | Output & reporting module |
 | `architecture/nse_integration.md` | NSE integration |
-| `architecture/tui.md` | Terminal User Interface (TUI) module, 29 tabs, event loop, components |
+| `architecture/tui.md` | Terminal User Interface (TUI) module, 28 tabs (+ conditional feature tabs), event loop, components |
+| `architecture/defense_lab.md` | Defense-lab mode and regression validation |
 
-## Architecture Review (2026-05-28)
+## Wave Implementation
 
-Completed full architecture review of all 15 modules. See `plans/plan.md` for the consolidated implementation plan (51 items across 3 waves).
+For multi-wave plan execution, load the `slapper-wave-implementation` skill:
 
-### Key Findings
+```bash
+skill load slapper-wave-implementation
+```
 
-| Metric | Count |
-|--------|-------|
-| Plan Items | 51 |
-| Completed | 51 |
-| Deferred (future work) | 0 |
-| Critical/High Priority | 5 (all completed) |
+### Wave Organization
 
-### Completed Critical Issues
+| Wave | Components | Prerequisites |
+|------|------------|---------------|
+| Wave 1A | Stale items correction | None |
+| Wave 1B | Strategic reframe | None |
+| Wave 2 | Plugin removal (Python/Ruby/Metasploit) | None |
+| Wave 3 | MCP/Agent profiles | Wave 1 |
+| Wave 4 | Public release polish | Wave 2 |
 
-1. **Distributed module**: Task results now sent to coordinator via `RemoteClient::send_result()`
-2. **CLI**: Resume command now validates scope via `ctx.ensure_scope()`
-3. **Distributed**: Worker stats/heartbeat now report actual values via `Arc<Mutex<WorkerStats>>`
-4. **Distributed**: Task assignment pull mechanism implemented (workers poll coordinator when idle)
-5. **Networking**: TLS SNI extraction implemented in `packet/parse_impl.rs`
-6. **Stress**: UDP spoof range refactored to O(1) random selection (no full IP vector)
+### Parallelization Strategy
 
-### File Path Corrections
-
-The following paths from earlier reviews are incorrect:
-- `cli/handlers/` → `commands/handlers/` (there is no `cli/handlers/` directory)
-- `waf/smuggling.rs` → `waf/bypass/smuggling.rs`
+- Wave 1A and Wave 1B can run in parallel
+- Wave 3 can start after Wave 1 completes
+- Wave 4 requires Wave 2 completion first
+- Waves 3 and 4 can run in parallel after their prerequisites
 
 ## Verification Commands
 
