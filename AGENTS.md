@@ -12,10 +12,10 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 | Wave | Focus | Status |
 |------|-------|--------|
-| Wave 1 | Documentation Foundation (stale items, reframe) | Pending |
-| Wave 2 | Plugin Removal (Python/Ruby/Metasploit) | Pending |
-| Wave 3 | MCP/Agent Profiles (ops-agent, coding-agent) | Pending |
-| Wave 4 | Public Release Polish | Pending |
+| Wave 1 | Documentation Foundation (stale items, reframe) | Pending (residual items) |
+| Wave 2 | Plugin Removal (Python/Ruby/Metasploit) | Completed |
+| Wave 3 | MCP/Agent Profiles (ops-agent, coding-agent) | In Progress |
+| Wave 4 | Public Release Polish | In Progress |
 
 See `plans/plan.md` for full wave details and implementation phases.
 
@@ -72,7 +72,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `nse` - Nmap NSE script support
 - `ai-integration` - AI planner, script generation, autonomous agent skills
 - `ws-api` - WebSocket pub/sub
-- `full` - All features combined
+- `full` - All features combined (16 sub-features)
 
 ### Key Types
 
@@ -86,6 +86,9 @@ Use these sections as the canonical reference points when updating guidance or s
 - `AiCache` / `CacheKeyBuilder` - TTL cache for AI responses
 - `SmartWafBypass` - WAF bypass with knowledge base
 - `AiPlanner` - AI-driven execution planning (requires `ai-integration`)
+- `McpProfile` - MCP agent profile (`OpsAgent`, `CodingAgent`) in `tool/protocol/mcp/profile.rs`
+- `TargetPolicy` - Target scope enforcement policy in `tool/protocol/mcp/policy.rs`
+- `ProbeIntent` / `ProbeRisk` - Probe classification in `probe.rs`
 
 ### Important Patterns
 
@@ -99,6 +102,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - **AI Cache Keys**: Always use `CacheKeyBuilder` for cache keys in AI module to avoid collisions
 - **Hash Collections**: Use `rustc_hash::FxHashMap` and `rustc_hash::FxHashSet` instead of std collections for performance
 - **Error Handling**: Avoid `unwrap_or_default()` on async operations; use explicit match with tracing instead
+- **MCP Profile Policy**: Use `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` to enforce tool visibility and call restrictions per profile
 
 ### Codebase Health
 
@@ -110,47 +114,58 @@ Use these sections as the canonical reference points when updating guidance or s
 | Payload types | 30 |
 | Tabs | 28 (+ conditional feature tabs) |
 | WAF products | 34 |
+| NSE libraries | 169 |
+| Modules | 39 |
 
 ### Security Notes
 
 - **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are blocked via private IP checks in `TargetScope::parse()`. However, scope rule evaluation happens AFTER private IP check - so targets like `10.255.255.255` are rejected even with scope rules like `allow 10.0.0.0/8`.
 - **TUI Settings Tab**: The settings editor applies exposed fields on top of an existing config and preserves non-exposed sections such as `profiles`, `schedule`, `remote`, `ai`, `search`, and `alert_channels`. See `architecture/config.md` for the current save semantics.
+- **MCP Coding Agent**: Default deny posture; stress/load/packet tools are hidden from coding-agent profile
 
-### Key Patterns
+### Key Patterns (Lessons Learned)
 
-- **Division by zero guard**: Always check `if self.stages.is_empty()` before division
-- **Scroll offset bounds**: Use `self.lines.is_empty()` check before calculating scroll_offset
-- **Option checkbox array bounds**: Use `.get()` with fallback when accessing checkbox arrays by index
-- **Arc::try_unwrap**: Use `map_err` instead of `.expect()` to avoid panic
-- **LazyLock regex**: Use `.expect()` with descriptive message instead of `.unwrap()`
-- **FxHashMap/FxHashSet**: Always use for performance in new code
-- **Vec removal in loop**: Use `swap_remove` instead of `remove` when order doesn't matter - `swap_remove` is O(1) vs `remove` which is O(n)
+- **TUI bounds checking**: Always use `.get(i)` pattern instead of direct `chunks[i]` indexing
+- **TUI is_running() guards**: All input/navigation handlers must check `!self.is_running()` before processing
+- **TUI reset() methods**: Must reset all state (selectors, checkboxes, fields, focus areas)
+- **TUI edge detection**: `is_at_left_edge()`/`is_at_right_edge()` need `is_empty()` guards
+- **Silent error suppression**: Never use `let _ =` or `filter_map(|e| e.ok())` - always log with tracing
+- **Timeout wrappers**: All spawned tokio tasks should have timeout wrappers (30-300s depending on operation)
+- **FxHashMap migration**: Replace `std::collections::HashMap` with `rustc_hash::FxHashMap` in performance-critical paths
+- **Distributed results**: Workers must send `CommandMessage::Result` back to coordinator via channel
+- **Verification before claims**: Always verify line numbers, file paths, and whether issues still exist before including in plans
+- **File path conventions**: Use `commands/handlers/` not `cli/handlers/` - the latter directory does not exist
+- **Dead code detection**: Check if `#![allow(dead_code)]` is at file top - many items flagged in reviews may already be resolved
+- **Rate limiter patterns**: Use `tokio::time::sleep()` not spin loops; check if rate limiter is actually used (some are dead code)
+- **Bounds check patterns**: Check for existing `if let Some(idx)` or `if len() > N` guards before claiming missing bounds checks
+- **Wave plan verification**: When verifying plan claims, use subagents to check actual codebase state - plans may contain stale assertions that no longer match reality
 
 ## Skills Directory
 
-Skills are located in:
-- `.opencode/skills/slapper-agent/` - Agent-specific workflows
-- `.opencode/skills/slapper-ai/` - AI module workflows
-- `.opencode/skills/slapper-cli/` - CLI parsing, command dispatch, handler patterns
-- `.opencode/skills/slapper-config/` - Config module workflows
-- `.opencode/skills/slapper-distributed/` - Distributed module workflows
-- `.opencode/skills/slapper-fuzzer/` - Fuzzer module workflows
-- `.opencode/skills/slapper-output/` - Output module workflows
-- `.opencode/skills/slapper-proxy/` - Proxy module workflows
-- `.opencode/skills/slapper-recon/` - Reconnaissance module workflows
-- `.opencode/skills/slapper-scanner/` - Scanner module workflows
-- `.opencode/skills/slapper-security/` - Security testing skill workflows
-- `.opencode/skills/slapper-stress/` - Stress module workflows
-- `.opencode/skills/slapper-nse/` - NSE/Lua module workflows
-- `.opencode/skills/slapper-packet/` - Packet capture/crafting/parsing workflows
-- `.opencode/skills/slapper-loadtest/` - Loadtest module workflows
-- `.opencode/skills/slapper-pipeline/` - Pipeline module workflows
-- `.opencode/skills/slapper-tool/` - Tool module workflows
-- `.opencode/skills/slapper-tui/` - TUI module workflows
-- `.opencode/skills/slapper-waf/` - WAF module workflows
-- `.opencode/skills/slapper-architecture-review/` - Architecture document review workflows
-- `.opencode/skills/slapper-wave-implementation/` - Multi-wave plan execution patterns
-- `.opencode/skills/tui-testing/` - TUI testing patterns and guides
+Skills are located in `.opencode/skills/`:
+
+| Skill | Purpose |
+|-------|---------|
+| `slapper-agent/` | Agent-specific workflows |
+| `slapper-ai/` | AI module workflows |
+| `slapper-cli/` | CLI parsing, command dispatch, handler patterns |
+| `slapper-config/` | Config module workflows |
+| `slapper-distributed/` | Distributed module workflows |
+| `slapper-fuzzer/` | Fuzzer module workflows |
+| `slapper-output/` | Output module workflows |
+| `slapper-proxy/` | Proxy module workflows |
+| `slapper-recon/` | Reconnaissance module workflows |
+| `slapper-scanner/` | Scanner module workflows |
+| `slapper-security/` | Security testing skill workflows |
+| `slapper-stress/` | Stress module workflows |
+| `slapper-nse/` | NSE/Lua module workflows |
+| `slapper-packet/` | Packet capture/crafting/parsing workflows |
+| `slapper-loadtest/` | Loadtest module workflows |
+| `slapper-pipeline/` | Pipeline module workflows |
+| `slapper-tool/` | Tool module workflows |
+| `slapper-tui/` | TUI module workflows |
+| `slapper-waf/` | WAF module workflows |
+| `slapper-wave-implementation/` | Multi-wave plan execution patterns (historical - all complete) |
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
 
@@ -176,31 +191,6 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 28 tabs (+ conditional feature tabs), event loop, components |
 | `architecture/defense_lab.md` | Defense-lab mode and regression validation |
 
-## Wave Implementation
-
-For multi-wave plan execution, load the `slapper-wave-implementation` skill:
-
-```bash
-skill load slapper-wave-implementation
-```
-
-### Wave Organization
-
-| Wave | Components | Prerequisites |
-|------|------------|---------------|
-| Wave 1A | Stale items correction | None |
-| Wave 1B | Strategic reframe | None |
-| Wave 2 | Plugin removal (Python/Ruby/Metasploit) | None |
-| Wave 3 | MCP/Agent profiles | Wave 1 |
-| Wave 4 | Public release polish | Wave 2 |
-
-### Parallelization Strategy
-
-- Wave 1A and Wave 1B can run in parallel
-- Wave 3 can start after Wave 1 completes
-- Wave 4 requires Wave 2 completion first
-- Waves 3 and 4 can run in parallel after their prerequisites
-
 ## Verification Commands
 
 ```bash
@@ -211,19 +201,3 @@ cargo test --test negative_tests -p slapper
 cargo test --test scanner_tests -p slapper
 cargo clippy --lib -p slapper
 ```
-
-## Key Patterns (Lessons Learned)
-
-- **TUI bounds checking**: Always use `.get(i)` pattern instead of direct `chunks[i]` indexing
-- **TUI is_running() guards**: All input/navigation handlers must check `!self.is_running()` before processing
-- **TUI reset() methods**: Must reset all state (selectors, checkboxes, fields, focus areas)
-- **TUI edge detection**: `is_at_left_edge()`/`is_at_right_edge()` need `is_empty()` guards
-- **Silent error suppression**: Never use `let _ =` or `filter_map(|e| e.ok())` - always log with tracing
-- **Timeout wrappers**: All spawned tokio tasks should have timeout wrappers (30-300s depending on operation)
-- **FxHashMap migration**: Replace `std::collections::HashMap` with `rustc_hash::FxHashMap` in performance-critical paths
-- **Distributed results**: Workers must send `CommandMessage::Result` back to coordinator via channel
-- **Verification before claims**: Always verify line numbers, file paths, and whether issues still exist before including in plans
-- **File path conventions**: Use `commands/handlers/` not `cli/handlers/` - the latter directory does not exist
-- **Dead code detection**: Check if `#![allow(dead_code)]` is at file top - many items flagged in reviews may already be resolved
-- **Rate limiter patterns**: Use `tokio::time::sleep()` not spin loops; check if rate limiter is actually used (some are dead code)
-- **Bounds check patterns**: Check for existing `if let Some(idx)` or `if len() > N` guards before claiming missing bounds checks
