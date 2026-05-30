@@ -448,7 +448,10 @@ impl TabInput for WafTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            WafFocusArea::Inputs => WafFocusArea::Results,
+            WafFocusArea::Inputs => {
+                self.inputs.blur();
+                WafFocusArea::Results
+            }
             WafFocusArea::ModeRadio => {
                 self.inputs.focus(0);
                 WafFocusArea::Inputs
@@ -584,6 +587,7 @@ impl TabInput for WafTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.inputs.blur();

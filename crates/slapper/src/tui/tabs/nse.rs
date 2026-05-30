@@ -361,13 +361,14 @@ impl TabInput for NseTab {
                 }
             }
             NseFocusArea::Results => {
-                self.start();
+                return;
             }
         }
     }
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.inputs.blur();

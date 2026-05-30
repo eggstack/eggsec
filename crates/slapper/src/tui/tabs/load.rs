@@ -543,7 +543,7 @@ impl TabInput for LoadTab {
         }
         self.focus_area = match self.focus_area {
             LoadFocusArea::Selector => {
-                self.inputs.blur();
+                self.test_type_selector.blur();
                 LoadFocusArea::Results
             }
             LoadFocusArea::Inputs => {
@@ -665,6 +665,7 @@ impl TabInput for LoadTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         if self.test_type_selector.is_open() {

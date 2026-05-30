@@ -315,8 +315,8 @@ impl TabRender for IntegrationsTab {
             .constraints([Constraint::Length(input_height), Constraint::Min(0)])
             .split(area);
 
-        let input_area = chunks[0];
-        let results_area = chunks[1];
+        let Some(input_area) = chunks.get(0) else { return; };
+        let Some(results_area) = chunks.get(1) else { return; };
 
         let config_block = Block::default()
             .borders(Borders::ALL)
@@ -578,7 +578,9 @@ impl TabInput for IntegrationsTab {
             IntegrationsFocusArea::Issue => {
                 self.issue_inputs.blur();
             }
-            IntegrationsFocusArea::Results => {}
+            IntegrationsFocusArea::Results => {
+                return;
+            }
         }
 
         self.start();

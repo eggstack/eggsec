@@ -488,6 +488,7 @@ impl TabInput for ScanEndpointsTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.inputs.blur();
@@ -531,14 +532,22 @@ impl TabInput for ScanEndpointsTab {
         if self.is_running() {
             return false;
         }
-        self.inputs.move_left()
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.inputs.move_left()
+        } else {
+            false
+        }
     }
 
     fn handle_right(&mut self) -> bool {
         if self.is_running() {
             return false;
         }
-        self.inputs.move_right()
+        if self.focus_area == ScanEndpointsFocusArea::Inputs {
+            self.inputs.move_right()
+        } else {
+            false
+        }
     }
 
     fn is_input_focused(&self) -> bool {

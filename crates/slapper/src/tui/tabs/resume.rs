@@ -67,10 +67,16 @@ impl ResumeTab {
     }
 
     pub fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_up(page_size);
     }
 
     pub fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_down(page_size);
     }
 
@@ -298,9 +304,11 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_escape(&mut self) {
-        if !self.is_running() {
-            self.inputs.blur();
+        if self.is_running() {
+            self.stop();
+            return;
         }
+        self.inputs.blur();
     }
 
     fn handle_up(&mut self) {

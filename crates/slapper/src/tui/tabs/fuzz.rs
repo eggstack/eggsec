@@ -644,11 +644,7 @@ impl TabInput for FuzzTab {
             FuzzFocusArea::PayloadSelector => FuzzFocusArea::ModeSelector,
             FuzzFocusArea::ModeSelector => FuzzFocusArea::TargetSelector,
             FuzzFocusArea::TargetSelector => FuzzFocusArea::MutationCheckbox,
-            FuzzFocusArea::MutationCheckbox => {
-                // After MutationCheckbox, go to Results (as per plan)
-                self.inputs.blur();
-                FuzzFocusArea::Results
-            }
+            FuzzFocusArea::MutationCheckbox => FuzzFocusArea::Results,
             FuzzFocusArea::Results => {
                 self.inputs.focus(0);
                 FuzzFocusArea::Inputs
@@ -672,11 +668,7 @@ impl TabInput for FuzzTab {
             FuzzFocusArea::ModeSelector => FuzzFocusArea::PayloadSelector,
             FuzzFocusArea::TargetSelector => FuzzFocusArea::ModeSelector,
             FuzzFocusArea::MutationCheckbox => FuzzFocusArea::TargetSelector,
-            FuzzFocusArea::Results => {
-                // From Results, go back to MutationCheckbox
-                self.inputs.blur();
-                FuzzFocusArea::MutationCheckbox
-            }
+            FuzzFocusArea::Results => FuzzFocusArea::MutationCheckbox,
         };
     }
 
@@ -818,6 +810,7 @@ impl TabInput for FuzzTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         if self.payload_selector.is_open() {

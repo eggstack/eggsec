@@ -356,6 +356,7 @@ impl TabInput for WafStressTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.inputs.blur();

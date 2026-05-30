@@ -296,8 +296,8 @@ impl TabRender for StorageTab {
             ])
             .split(area);
 
-        let input_area = chunks[0];
-        let results_area = chunks[1];
+        let Some(input_area) = chunks.get(0) else { return; };
+        let Some(results_area) = chunks.get(1) else { return; };
 
         let config_block = Block::default()
             .borders(Borders::ALL)
@@ -445,8 +445,13 @@ impl TabInput for StorageTab {
                 }
             }
             StorageFocusArea::Query => {
+                self.query_inputs.blur();
                 self.mode_selector.focus();
                 StorageFocusArea::Mode
+            }
+            StorageFocusArea::Results => {
+                self.query_inputs.focus(0);
+                StorageFocusArea::Query
             }
             StorageFocusArea::Results => {
                 self.query_inputs.focus(0);
@@ -591,7 +596,9 @@ impl TabInput for StorageTab {
             StorageFocusArea::Query => {
                 self.query_inputs.blur();
             }
-            StorageFocusArea::Results => {}
+            StorageFocusArea::Results => {
+                return;
+            }
         }
 
         self.start();

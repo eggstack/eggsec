@@ -328,6 +328,7 @@ impl TabInput for StressTab {
                 StressFocusArea::Results
             }
             StressFocusArea::TypeSelector => {
+                self.type_selector.blur();
                 self.inputs.focus(0);
                 StressFocusArea::Inputs
             }
@@ -443,6 +444,7 @@ impl TabInput for StressTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         if self.type_selector.is_open() {

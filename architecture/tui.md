@@ -1317,3 +1317,60 @@ Comprehensive audit using 7 parallel subagents across all tabs, core modules, an
 | HIGH priority fixes | 10 |
 | MEDIUM priority fixes | 22 |
 | LOW priority fixes | 9 |
+
+## Session Fixes (2026-05-30 - Deep Dive Audit)
+
+### TUI Deep Dive Audit - All 28 Tabs + Components + Core
+
+Comprehensive audit using 7 parallel subagents across all tabs, components, and core modules.
+
+#### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `recon.rs` | 720 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `scan.rs` | 621 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `scan_ports.rs` | 572 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `scan_endpoints.rs` | 490 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `fingerprint.rs` | 413 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `fuzz.rs` | 820 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `waf.rs` | 586 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `waf_stress.rs` | 358 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `load.rs` | 667 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `stress.rs` | 445 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `packet.rs` | 773 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `graphql.rs` | 455 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `oauth.rs` | 502 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `cluster.rs` | 538 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `proxy.rs` | 652 | `handle_escape()` does nothing when running | Rewrote to use early-return pattern with `self.stop();` |
+| `nse.rs` | 370 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `hunt.rs` | 517 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `browser.rs` | 476 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `compliance.rs` | 412 | `handle_escape()` returns early when running instead of stopping task | Added `self.stop();` before `return;` |
+| `resume.rs` | 300 | `handle_escape()` missing `is_running()` guard entirely | Added `is_running()` check with `self.stop();` |
+| `storage.rs` | 594 | `handle_enter()` Results area falls through to `self.start()` | Added `return;` in Results arm |
+| `integrations.rs` | 581 | `handle_enter()` Results area falls through to `self.start()` | Added `return;` in Results arm |
+| `workflow.rs` | 523 | `handle_enter()` Results area falls through to `self.start()` | Added `return;` in Results arm |
+| `nse.rs` | 363 | `handle_enter()` Results area calls `self.start()` | Changed to `return;` |
+| `hunt.rs` | 507 | `handle_enter()` fallthrough triggers `self.start()` from Results | Added `if focus_area == Results { return; }` guard |
+| `browser.rs` | 466 | `handle_enter()` fallthrough triggers `self.start()` from Results | Added `if focus_area == Results { return; }` guard |
+| `compliance.rs` | 403 | `handle_enter()` Results area calls `self.start()` | Changed to `return;` |
+
+#### LOW Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `fuzz.rs` | 647, 671 | Redundant `self.inputs.blur()` in handle_focus_next/prev | Removed blur calls from MutationCheckbox↔Results transitions |
+
+#### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 56 |
+| Total bugs fixed | 28 |
+| Files modified | 22 |
+| HIGH priority fixes | 27 |
+| LOW priority fixes | 1 |
+| Already fixed (MEDIUM/LOW) | 28 |
+
+**Key systemic bug fixed**: `handle_escape()` was unable to stop running tasks across all 20 tabs. Users had no keyboard shortcut to cancel an in-progress scan. All tabs now properly call `self.stop()` before returning when `is_running()` is true.

@@ -410,7 +410,10 @@ impl TabInput for HuntTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            HuntFocusArea::Inputs => HuntFocusArea::Results,
+            HuntFocusArea::Inputs => {
+                self.inputs.blur();
+                HuntFocusArea::Results
+            }
             HuntFocusArea::Options => {
                 self.inputs.focus(0);
                 HuntFocusArea::Inputs
@@ -506,6 +509,10 @@ impl TabInput for HuntTab {
             return;
         }
 
+        if self.focus_area == HuntFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
         } else {
@@ -515,6 +522,222 @@ impl TabInput for HuntTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
+            return;
+        }
+        self.inputs.blur();
+    }
+
+    fn handle_up(&mut self) {
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == HuntFocusArea::Options {
+            if self.option_checkboxes.is_empty() {
+                return;
+            }
+            if self.focused_checkbox_index == 0 {
+                self.focused_checkbox_index = self.option_checkboxes.len().saturating_sub(1);
+            } else {
+                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+            }
+        } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
+            self.results_view.scroll_up(1);
+        } else {
+            self.inputs.focus_prev();
+        }
+    }
+
+    fn handle_down(&mut self) {
+        if self.is_running() {
+            return;
+        }
+        if self.focus_area == HuntFocusArea::Options {
+            if self.option_checkboxes.is_empty() {
+                return;
+            }
+            if self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1) {
+                self.focused_checkbox_index = 0;
+            } else {
+                self.focused_checkbox_index += 1;
+            }
+        } else if !self.inputs.is_focused() && !self.results_view.is_empty() {
+            self.results_view.scroll_down(1);
+        } else {
+            self.inputs.focus_next();
+        }
+    }
+
+    fn handle_left(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
+        if self.focus_area == HuntFocusArea::Inputs {
+            self.inputs.move_left()
+        } else if self.focus_area == HuntFocusArea::Options {
+            if self.focused_checkbox_index == 0 {
+                false
+            } else {
+                self.focused_checkbox_index = self.focused_checkbox_index.saturating_sub(1);
+                true
+            }
+        } else {
+            true
+        }
+    }
+
+    fn handle_right(&mut self) -> bool {
+        if self.is_running() {
+            return false;
+        }
+        if self.focus_area == HuntFocusArea::Inputs {
+            self.inputs.move_right()
+        } else if self.focus_area == HuntFocusArea::Options {
+            if self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1) {
+                false
+            } else {
+                self.focused_checkbox_index += 1;
+                true
+            }
+        } else {
+            true
+        }
+    }
+
+    fn is_at_left_edge(&self) -> bool {
+        if self.focus_area == HuntFocusArea::Inputs {
+            self.inputs.is_at_left_edge()
+        } else if self.focus_area == HuntFocusArea::Options {
+            self.option_checkboxes.is_empty() || self.focused_checkbox_index == 0
+        } else {
+            true
+        }
+    }
+
+    fn is_at_right_edge(&self) -> bool {
+        if self.focus_area == HuntFocusArea::Inputs {
+            self.inputs.is_at_right_edge()
+        } else if self.focus_area == HuntFocusArea::Options {
+            self.option_checkboxes.is_empty()
+                || self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1)
+        } else {
+            true
+        }
+    }
+
+    fn is_input_focused(&self) -> bool {
+        self.focus_area == HuntFocusArea::Inputs && self.inputs.is_focused()
+    }
+}
+            HuntFocusArea::Options => {
+                self.inputs.focus(0);
+                HuntFocusArea::Inputs
+            }
+            HuntFocusArea::Results => {
+                self.focused_checkbox_index = 0;
+                HuntFocusArea::Options
+            }
+        };
+    }
+
+    fn handle_char(&mut self, c: char) {
+        if !self.is_running() && self.focus_area == HuntFocusArea::Inputs {
+            self.inputs.insert(c);
+        }
+    }
+
+    fn handle_backspace(&mut self) {
+        if !self.is_running() && self.focus_area == HuntFocusArea::Inputs {
+            self.inputs.backspace();
+        }
+    }
+
+    fn handle_paste(&mut self, text: &str) {
+        if !self.is_running() && self.focus_area == HuntFocusArea::Inputs {
+            self.inputs.paste(text);
+        }
+    }
+
+    fn handle_word_forward(&mut self) {
+        if !self.is_running() && self.focus_area == HuntFocusArea::Inputs {
+            self.inputs.move_word_forward();
+        }
+    }
+
+    fn handle_word_backward(&mut self) {
+        if !self.is_running() && self.focus_area == HuntFocusArea::Inputs {
+            self.inputs.move_word_backward();
+        }
+    }
+
+    fn handle_home(&mut self) {
+        if !self.is_running() {
+            if self.focus_area == HuntFocusArea::Inputs {
+                self.inputs.move_home();
+            } else if self.focus_area == HuntFocusArea::Results {
+                self.results_view.scroll_to_top();
+            }
+        }
+    }
+
+    fn handle_end(&mut self) {
+        if !self.is_running() {
+            if self.focus_area == HuntFocusArea::Inputs {
+                self.inputs.move_end();
+            } else if self.focus_area == HuntFocusArea::Results {
+                self.results_view.scroll_to_bottom();
+            }
+        }
+    }
+
+    fn handle_top(&mut self) {
+        if !self.is_running() {
+            self.focus_area = HuntFocusArea::Inputs;
+            self.inputs.focus(0);
+        }
+    }
+
+    fn handle_bottom(&mut self) {
+        if !self.is_running() {
+            self.focus_area = HuntFocusArea::Results;
+            self.inputs.blur();
+        }
+    }
+
+    fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
+        if self.focus_area == HuntFocusArea::Inputs && self.inputs.is_focused() {
+            self.inputs.blur();
+            return;
+        }
+
+        if self.focus_area == HuntFocusArea::Options {
+            if !self.is_running() {
+                if let Some(checkbox) = self.option_checkboxes.get_mut(self.focused_checkbox_index)
+                {
+                    checkbox.toggle();
+                }
+            }
+            return;
+        }
+
+        if self.focus_area == HuntFocusArea::Results {
+            return;
+        }
+
+        if self.is_running() {
+            self.stop();
+        } else {
+            self.start();
+        }
+    }
+
+    fn handle_escape(&mut self) {
+        if self.is_running() {
+            self.stop();
             return;
         }
         self.inputs.blur();

@@ -560,7 +560,7 @@ impl SettingsTab {
         self.verify_tls.checked = true;
         self.stealth_mode.checked = false;
         self.notify_on_complete.checked = false;
-        self.notify_on_findings.checked = false;
+        self.notify_on_findings.checked = true;
         self.proxy_rotation_selector.select(0);
         self.severity_selector.select(0);
         self.dark_mode.checked = false;

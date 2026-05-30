@@ -105,16 +105,20 @@ impl TabRender for AuthTab {
             ])
             .split(area);
 
+        let Some(title_area) = layout.get(0) else { return; };
+        let Some(inputs_area) = layout.get(1) else { return; };
+        let Some(results_area) = layout.get(2) else { return; };
+
         let title = Paragraph::new("Authentication Testing")
             .block(Block::default().borders(Borders::ALL))
             .style(Style::default().fg(tc!(info)));
-        f.render_widget(title, layout[0]);
+        f.render_widget(title, *title_area);
 
         let mut builder = FormBuilder::new("Inputs").row_height(3);
         for field in &self.inputs.fields {
             builder = builder.add_input(field.clone());
         }
-        builder.render(f, layout[1], insert_mode);
+        builder.render(f, *inputs_area, insert_mode);
 
         let results = if self.results.is_empty() {
             crate::tui::components::empty_state_paragraph("Results", "No results yet")
@@ -123,7 +127,7 @@ impl TabRender for AuthTab {
                 .block(Block::default().borders(Borders::ALL).title("Results"))
                 .style(Style::default().fg(tc!(text)))
         };
-        f.render_widget(results, layout[2]);
+        f.render_widget(results, *results_area);
     }
 }
 
@@ -239,6 +243,8 @@ impl TabInput for AuthTab {
             return;
         }
         self.inputs.blur();
+        self.focus_area = AuthFocusArea::Results;
+        self.sync_input_focus();
     }
 
     fn handle_up(&mut self) {

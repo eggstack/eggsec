@@ -301,7 +301,10 @@ impl TabInput for ComplianceTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            ComplianceFocusArea::Inputs => ComplianceFocusArea::Results,
+            ComplianceFocusArea::Inputs => {
+                self.inputs.blur();
+                ComplianceFocusArea::Results
+            }
             ComplianceFocusArea::Framework => {
                 self.framework_selector.blur();
                 self.inputs.focus(0);
@@ -401,15 +404,14 @@ impl TabInput for ComplianceTab {
                 }
             }
             ComplianceFocusArea::Results => {
-                if !self.target().is_empty() {
-                    self.start();
-                }
+                return;
             }
         }
     }
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.inputs.blur();

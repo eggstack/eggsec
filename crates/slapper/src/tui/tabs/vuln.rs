@@ -391,8 +391,8 @@ impl TabRender for VulnTab {
             .constraints([Constraint::Length(input_height), Constraint::Min(0)])
             .split(area);
 
-        let input_area = chunks[0];
-        let results_area = chunks[1];
+        let Some(input_area) = chunks.get(0) else { return; };
+        let Some(results_area) = chunks.get(1) else { return; };
 
         let config_block = Block::default()
             .borders(Borders::ALL)

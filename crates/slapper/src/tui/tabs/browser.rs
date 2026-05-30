@@ -352,7 +352,10 @@ impl TabInput for BrowserTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            BrowserFocusArea::Inputs => BrowserFocusArea::Results,
+            BrowserFocusArea::Inputs => {
+                self.inputs.blur();
+                BrowserFocusArea::Results
+            }
             BrowserFocusArea::Options => {
                 self.inputs.focus(0);
                 BrowserFocusArea::Inputs
@@ -465,6 +468,10 @@ impl TabInput for BrowserTab {
             return;
         }
 
+        if self.focus_area == BrowserFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
         } else {
@@ -474,6 +481,7 @@ impl TabInput for BrowserTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.inputs.blur();

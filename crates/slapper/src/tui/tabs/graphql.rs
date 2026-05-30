@@ -168,6 +168,7 @@ impl TabState for GraphQlTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.progress.current = 0;
+        self.progress.total = 100;
         self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
@@ -453,6 +454,7 @@ impl TabInput for GraphQlTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.inputs.blur();

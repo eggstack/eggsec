@@ -701,7 +701,9 @@ impl TabInput for ReconTab {
         }
 
         if self.focus_area == ReconFocusArea::Options {
-            if !self.is_running() {
+            if self.is_running() {
+                self.stop();
+            } else {
                 if let Some(cb) = self.option_checkboxes.get_mut(self.focused_checkbox_index) {
                     cb.toggle();
                 }
@@ -718,6 +720,7 @@ impl TabInput for ReconTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.inputs.blur();

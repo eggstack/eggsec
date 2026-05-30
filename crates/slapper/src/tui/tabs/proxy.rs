@@ -650,12 +650,14 @@ impl TabInput for ProxyTab {
     }
 
     fn handle_escape(&mut self) {
-        if !self.is_running() {
-            if self.view_selector.is_focused() {
-                self.view_selector.blur();
-            }
-            self.inputs.blur();
+        if self.is_running() {
+            self.stop();
+            return;
         }
+        if self.view_selector.is_focused() {
+            self.view_selector.blur();
+        }
+        self.inputs.blur();
     }
 
     fn handle_up(&mut self) {

@@ -305,10 +305,16 @@ impl HistoryTab {
     }
 
     pub fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.details_view.page_up(page_size);
     }
 
     pub fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.details_view.page_down(page_size);
     }
 }
@@ -332,6 +338,7 @@ impl TabState for HistoryTab {
         self.clear_all();
         self.error = None;
         self.next_id = 1;
+        self.visible_rows = 20;
         self.focus_area = HistoryFocusArea::List;
     }
 
