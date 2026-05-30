@@ -1,6 +1,6 @@
 # TUI (Terminal User Interface)
 
-Slapper includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 29 different tabs.
+Slapper includes a powerful real-time Terminal User Interface (TUI) built with the `ratatui` crate. It provides an interactive way to monitor and control ongoing security scans across 28 different tabs.
 
 ## Core Components (`src/tui/`)
 
@@ -20,7 +20,7 @@ Manages the overall application state, event loop, and rendering.
 
 ### Tabs (`tabs/`)
 
-29 specialized tabs for different security testing functions:
+28 specialized tabs for different security testing functions:
 
 | Tab | File | Purpose |
 |-----|------|---------|
@@ -955,7 +955,7 @@ All `!self.is_running()` guards added to navigation handlers:
 
 ### TUI Deep Dive Audit (2026-06-04)
 
-Completed comprehensive audit of all 29 TUI tabs across 6 groups. Fixed ~100+ issues:
+Completed comprehensive audit of all 28 TUI tabs across 6 groups. Fixed ~100+ issues:
 
 | Group | Tabs | Fixes |
 |-------|------|-------|
@@ -1108,9 +1108,9 @@ All 5 tabs passed audit - no bugs found.
 | `cluster.rs` | 463-465 | Inverted guard logic (stopped when should allow) | Changed to `if !self.is_running()` |
 | `proxy.rs` | 598-599 | Non-standard guard pattern | Changed to `if !self.is_running()` |
 
-#### Group 4 (nse, plugin, hunt, browser, compliance)
+#### Group 4 (nse, hunt, browser, compliance)
 
-All 5 tabs passed audit - no bugs found.
+All 4 tabs passed audit - no bugs found.
 
 #### Group 5 (storage, integrations, workflow, vuln, report)
 
@@ -1139,9 +1139,9 @@ All 5 tabs passed audit - no bugs found.
 
 | Metric | Value |
 |--------|-------|
-| Total tabs audited | 29 |
+| Total tabs audited | 28 |
 | Tabs with bugs | 14 |
-| Tabs clean | 15 |
+| Tabs clean | 14 |
 | Total bugs fixed | 24 |
 
 (End of file)

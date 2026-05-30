@@ -3,11 +3,11 @@
 Slapper is a Rust-native security assessment and defense-validation engine designed for scoped, repeatable security testing of live systems.
 
 **Quick Facts:**
-- 41 modules in `crates/slapper/src/`
-- 743 source files
+- 39 modules in `crates/slapper/src/`
+- 526 source files
 - 1324 base tests (1469+ with full features)
-- 31 payload types for fuzzing
-- 29 TUI tabs
+- 30 payload types for fuzzing
+- 28 TUI tabs
 - 34 WAF products detected
 
 ---
@@ -150,7 +150,7 @@ Each module links to a detailed `.md` file in this directory. Modules without li
 
 | Module | Source | Description | Doc |
 |--------|--------|-------------|-----|
-| `tui/` | `crates/slapper/src/tui/` | Interactive Terminal UI (ratatui + crossterm), 29 tabs | [tui.md](tui.md) |
+| `tui/` | `crates/slapper/src/tui/` | Interactive Terminal UI (ratatui + crossterm), 28 tabs | [tui.md](tui.md) |
 
 ### Notifications & Utilities
 
@@ -281,7 +281,7 @@ Each module links to a detailed `.md` file in this directory. Modules without li
 | [nse_integration.md](nse_integration.md) | `slapper-nse/` | NSE/Lua integration |
 | [recon.md](recon.md) | `recon/` | Reconnaissance modules and runner |
 | [scanner.md](scanner.md) | `scanner/` | Port scanning, fingerprinting, endpoint discovery |
-| [tui.md](tui.md) | `tui/` | Terminal UI, 29 tabs, components, workers |
+| [tui.md](tui.md) | `tui/` | Terminal UI, 28 tabs, components, workers |
 | [waf.md](waf.md) | `waf/` | WAF detection and bypass techniques |
 
 ---

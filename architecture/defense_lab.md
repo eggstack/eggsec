@@ -97,9 +97,9 @@ The manifest wraps run-level provenance so that two manifests can be meaningfull
 
 Defense-lab profiles use the shared `ProbeIntent` and `ProbeRisk` enums defined in `crates/slapper/src/probe.rs`. These enums are also used by scanner, NSE, WAF, and loadtest modules to tag probes with consistent intent and risk metadata. This enables guardrails and budget enforcement across all assessment modes.
 
-## Planned Defense-Lab Profiles
+## Defense-Lab Profiles
 
-The following profiles are planned for implementation in the defense-lab runner. They are not yet wired into the `ScanProfile` enum — see TODOs in `cli/mod.rs` and `pipeline/stage.rs`.
+All profiles are fully implemented in the `ScanProfile` enum (`cli/mod.rs:262-266`) and wired into the stage runner (`pipeline/stage.rs:92-107`).
 
 | Profile | Semantics | Stages | Feature Requirements |
 |---------|-----------|--------|---------------------|
