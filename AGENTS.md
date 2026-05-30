@@ -12,10 +12,10 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 | Wave | Focus | Status |
 |------|-------|--------|
-| Wave 1 | Documentation Foundation (stale items, reframe) | Pending (residual items) |
+| Wave 1 | Documentation Foundation (stale items, reframe) | Completed |
 | Wave 2 | Plugin Removal (Python/Ruby/Metasploit) | Completed |
-| Wave 3 | MCP/Agent Profiles (ops-agent, coding-agent) | In Progress |
-| Wave 4 | Public Release Polish | In Progress |
+| Wave 3 | MCP/Agent Profiles (ops-agent, coding-agent) | Completed |
+| Wave 4 | Public Release Polish | Completed |
 
 See `plans/plan.md` for full wave details and implementation phases.
 
