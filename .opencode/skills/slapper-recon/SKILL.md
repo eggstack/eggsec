@@ -27,7 +27,7 @@ Sequential dependencies:
 | Security | `cve.rs`, `secrets.rs`, `ssl.rs`, `threatintel.rs` | CVE, secrets, SSL, threat intel |
 | Cloud | `cloud/mod.rs`, `cloud/services.rs`, `cloud/iam.rs`, `cloud/metadata.rs` | AWS/GCP/Azure discovery |
 | Email | `email.rs`, `email_security.rs` | Discovery + SPF/DKIM/DMARC |
-| Dependency | `dependency_scan/npm/`, `dependency_scan/cargo/`, `dependency_scan/go/` | Package scanning |
+| Dependency | (removed) | Package scanning |
 | Other | `api_schema.rs`, `containers.rs`, `git_secrets.rs` | Feature-gated modules |
 
 ### Key Types
@@ -71,7 +71,7 @@ Note: TLS version and cipher suite detection is not yet implemented - `supported
 ### Notable Bug Fixes
 
 ### 2026-05-28
-- **20 instances of `unwrap_or_default()`** - Replaced with explicit match with `tracing::debug` across 12 files (cve_lookup.rs, containers.rs, email.rs, js.rs, cors.rs, dependency_scan/mod.rs, reverse_dns.rs, ssl_audit.rs, cloud/storage_test.rs, asn.rs, techdetect.rs, threatintel.rs)
+- **20 instances of `unwrap_or_default()`** - Replaced with explicit match with `tracing::debug` across 12 files (cve_lookup.rs, containers.rs, email.rs, js.rs, cors.rs, reverse_dns.rs, ssl_audit.rs, cloud/storage_test.rs, asn.rs, techdetect.rs, threatintel.rs)
 
 ### 2026-05-23
 - **geolocation.rs:308** - CIDR mask calculation was incorrect. Fixed to proper CIDR mask calculation.

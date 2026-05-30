@@ -51,15 +51,6 @@ The recon module is organized as follows:
 ### Containers
 - `containers.rs` - Docker/Kubernetes security scanning (feature-gated)
 
-### Dependency Scanning
-- `dependency_scan/mod.rs` - Unified interface
-- `dependency_scan/npm/` - npm package scanning (package.json, package-lock.json, yarn.lock, requirements.txt)
-- `dependency_scan/cargo/` - Rust cargo scanning (Cargo.toml, Cargo.lock)
-- `dependency_scan/go/` - Go module scanning (go.mod, go.sum)
-- `dependency_scan/ruby/` - Ruby scanning (Gemfile, Gemfile.lock)
-- `dependency_scan/php/` - PHP scanning (composer.json)
-- `dependency_scan/java/` - Java scanning (pom.xml)
-
 ## Performance Notes
 
 - Use `rustc_hash::FxHashMap`/`FxHashSet` instead of `std::collections::HashMap`/`HashSet`

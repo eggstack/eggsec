@@ -62,7 +62,6 @@ This skill directory contains specialized guides for the Slapper autonomous agen
 ### Infrastructure
 - `config_management.md` - Configuration management
 - `template_based_scanning.md` - Template-based scanning
-- `dependency_scanning.md` - Dependency scanning
 - `wireless_security_testing.md` - Wireless security
 - `web_search_integration.md` - Web search integration
 - `alert_notification.md` - Alert notifications

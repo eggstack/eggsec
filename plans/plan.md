@@ -16,20 +16,6 @@ All 4 waves of implementation are complete. The original 51-item plan plus all w
 |---|---|-------|-----------|
 | 24 | ai_agents | MCP integration | Fully implemented in `tool/protocol/mcp/` with routes, handlers, streaming, auth, stdio transport, and tests. No remaining work. |
 
-## Completed Items (2026-05-30)
-
-### Dependency Scanning Enhancement
-
-Implemented Ruby, PHP, and Java manifest file scanning:
-
-| Scanner | Files | Location |
-|---------|-------|----------|
-| RubyScanner | Gemfile, Gemfile.lock | `recon/dependency_scan/ruby/mod.rs` |
-| PhpScanner | composer.json | `recon/dependency_scan/php/mod.rs` |
-| JavaScanner | pom.xml | `recon/dependency_scan/java/mod.rs` |
-
-All 6 ecosystem scanners now operational: npm, cargo, go, ruby, php, java.
-
 ---
 
 ## Verification Commands
@@ -57,7 +43,7 @@ cargo clippy --lib -p slapper
 | TUI | 28 tabs, event loop | `crates/slapper/src/tui/` |
 | Config | `SlapperConfig` | `crates/slapper/src/config/` |
 | Output | Report formatting, exports | `crates/slapper/src/output/` |
-| Recon | `dependency_scan` standalone | `crates/slapper/src/recon/dependency_scan/` |
+| Recon | `runner.rs`, `FullReconResult` | `crates/slapper/src/recon/` |
 
 ---
 

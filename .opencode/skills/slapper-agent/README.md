@@ -16,7 +16,6 @@ These skills provide specialized workflows and domain knowledge for the Slapper 
 | `config_management.md` | Config management, reloading |
 | `cors_security_testing.md` | CORS testing workflows |
 | `cross_site_scripting.md` | XSS testing patterns |
-| `dependency_scanning.md` | Dependency scanning by ecosystem |
 | `dns_reconnaissance.md` | DNS recon, subdomain enumeration |
 | `endpoint_discovery.md` | Endpoint discovery patterns |
 | `expression_injection.md` | Expression injection testing |

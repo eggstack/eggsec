@@ -41,12 +41,6 @@ The Reconnaissance module focuses on passive and active information gathering ab
 - **Email Discovery (`email.rs`)**: Extracting email addresses, phone numbers, and social media from web content.
 - **Email Security (`email_security.rs`)**: Analyzing SPF, DKIM, DMARC, STARTTLS, and BIMI records.
 
-### Dependency Scanning (`dependency_scan/`)
-
-- **npm**: Scanning package.json, package-lock.json, and yarn.lock files.
-- **cargo**: Scanning Cargo.toml and Cargo.lock files.
-- **go**: Scanning go.mod and go.sum files.
-
 ## Recon Runner (`runner.rs`)
 
 The `runner.rs` file orchestrates all these recon tasks, running them in parallel via `tokio::join!` to maximize efficiency.

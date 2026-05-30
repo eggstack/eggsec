@@ -108,7 +108,7 @@ for item in items {
 }
 ```
 
-**Files**: `vuln/triage.rs`, `recon/dependency_scan.rs`, `ai/planner.rs`
+**Files**: `vuln/triage.rs`, `ai/planner.rs`
 
 ### 5. Regex Caching
 

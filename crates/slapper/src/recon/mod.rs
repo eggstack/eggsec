@@ -39,7 +39,7 @@
 //!
 //! ## Additional Recon Utilities (standalone)
 //!
-//! Exported modules like `email_security`, `dependency_scan`, `git_secrets`,
+//! Exported modules like `email_security`, `git_secrets`,
 //! and `api_schema` are available for direct invocation, but are not currently
 //! part of `run_full_recon`.
 //!
@@ -84,7 +84,6 @@ pub mod containers;
 pub mod content;
 pub mod cors;
 pub mod cve;
-pub mod dependency_scan;
 pub mod dns_records;
 pub mod email;
 pub mod email_security;
