@@ -299,6 +299,20 @@ impl TabRender for StorageTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
+        let config_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Configuration ")
+            .border_style(Style::default().fg(
+                if self.focus_area != StorageFocusArea::Results {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                },
+            ));
+        f.render_widget(config_block, input_area);
+
+        let input_area = config_block.inner(input_area);
+
         let status_color = if self.connected {
             tc!(success)
         } else {
@@ -371,7 +385,7 @@ impl TabRender for StorageTab {
             f.render_widget(gauge, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(tc!(success)));
+                .render(f, results_area, None);
         } else {
             let placeholder = empty_state_paragraph(
                 "Database Storage",

@@ -300,6 +300,20 @@ impl TabRender for WorkflowTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
+        let config_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Configuration ")
+            .border_style(Style::default().fg(
+                if self.focus_area != WorkflowFocusArea::Results {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                },
+            ));
+        f.render_widget(config_block, input_area);
+
+        let input_area = config_block.inner(input_area);
+
         let mut sel = self.mode_selector.clone();
         sel.focused = self.focus_area == WorkflowFocusArea::Mode;
         sel.render(f, input_area);
@@ -364,7 +378,7 @@ impl TabRender for WorkflowTab {
             f.render_widget(gauge, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(tc!(success)));
+                .render(f, results_area, None);
         } else {
             let placeholder =
                 empty_state_paragraph("Finding Management", "Select mode and press Enter");

@@ -217,6 +217,18 @@ impl TabRender for ComplianceTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
+        let config_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Configuration ")
+            .border_style(Style::default().fg(
+                if self.focus_area != ComplianceFocusArea::Results {
+                    tc!(border_focused)
+                } else {
+                    tc!(border)
+                },
+            ));
+        f.render_widget(config_block, input_area);
+
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -224,7 +236,7 @@ impl TabRender for ComplianceTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(input_area);
+            .split(config_block.inner(input_area));
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -251,7 +263,7 @@ impl TabRender for ComplianceTab {
             f.render_widget(gauge, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(tc!(success)));
+                .render(f, results_area, None);
         } else {
             let placeholder = empty_state_paragraph(
                 "Compliance Reporting",

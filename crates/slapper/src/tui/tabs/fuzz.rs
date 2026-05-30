@@ -552,7 +552,7 @@ impl TabRender for FuzzTab {
                 .style(Style::default().fg(tc!(error)));
             f.render_widget(error_text, results_inner);
         } else if !self.results_view.is_empty() {
-            self.results_view.render(f, results_inner, Some(tc!(info)));
+            self.results_view.render(f, results_inner, None);
         } else {
             let info_text = vec![
                 Line::from(""),

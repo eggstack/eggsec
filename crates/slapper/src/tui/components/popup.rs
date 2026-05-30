@@ -127,7 +127,9 @@ impl Popup {
             .collect();
 
         if let Some(content_chunk) = chunks.first() {
-            let paragraph = Paragraph::new(content_lines).wrap(Wrap { trim: true });
+            let paragraph = Paragraph::new(content_lines)
+                .style(Style::default().fg(tc!(text)))
+                .wrap(Wrap { trim: true });
             f.render_widget(paragraph, *content_chunk);
         }
 

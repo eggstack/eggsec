@@ -4,7 +4,7 @@ use crate::tui::components::ScrollableText;
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -425,7 +425,6 @@ impl TabRender for HistoryTab {
                 Style::default()
                     .fg(tc!(selected_text))
                     .bg(tc!(selected))
-                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };

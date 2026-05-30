@@ -1,7 +1,8 @@
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
 use crate::tui::components::{
-    InputField, InputGroup, ProgressGauge, ScrollableText, Selector, SelectorItem,
+    empty_state_paragraph, InputField, InputGroup, ProgressGauge, ScrollableText, Selector,
+    SelectorItem,
 };
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
@@ -212,7 +213,13 @@ impl TabRender for NseTab {
         selector.render(f, chunks[1]);
 
         // Results
-        self.results_view.render(f, chunks[2], None);
+        if self.results_view.is_empty() {
+            let placeholder =
+                empty_state_paragraph("Results", "Results will appear here after running");
+            f.render_widget(placeholder, chunks[2]);
+        } else {
+            self.results_view.render(f, chunks[2], None);
+        }
     }
 }
 

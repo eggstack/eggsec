@@ -482,7 +482,7 @@ impl TabRender for LoadTab {
             f.render_widget(error_text, results_inner);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_inner, Some(tc!(success)));
+                .render(f, results_inner, None);
         } else {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");

@@ -11,6 +11,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
+    widgets::{Block, Borders},
     Frame,
 };
 
@@ -448,18 +449,33 @@ impl TabRender for ProxyTab {
             dropdown.render(f);
         }
 
+        let config_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Configuration ")
+            .border_style(
+                Style::default().fg(
+                    if self.view_selector.is_focused() || self.inputs.is_focused() {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    },
+                ),
+            );
+        let config_inner = config_block.inner(input_area);
+        f.render_widget(config_block, input_area);
+
         if matches!(
             self.current_view,
             ProxyView::Add | ProxyView::HealthCheck | ProxyView::Test
         ) {
             if let Some(field) = self.inputs.fields.first() {
-                field.render(f, input_area, false);
+                field.render(f, config_inner, false);
             }
         }
 
         if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(tc!(success)));
+                .render(f, results_area, None);
         } else {
             let placeholder = empty_state_paragraph("Results", "Results will appear here");
             f.render_widget(placeholder, results_area);

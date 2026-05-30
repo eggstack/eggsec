@@ -166,7 +166,9 @@ impl ScrollableText {
                 .begin_symbol(Some("↑"))
                 .end_symbol(Some("↓"))
                 .track_symbol(Some("│"))
-                .thumb_symbol("█");
+                .thumb_symbol("█")
+                .thumb_style(Style::default().fg(tc!(accent)))
+                .track_style(Style::default().fg(tc!(border)));
 
             let mut scrollbar_state = ScrollbarState::new(self.lines.len())
                 .position(scroll_offset)

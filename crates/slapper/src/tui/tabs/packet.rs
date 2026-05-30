@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -541,6 +541,21 @@ impl TabRender for PacketTab {
 
         self.view_selector.render(f, selector_area);
 
+        let config_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Configuration ")
+            .border_style(
+                Style::default().fg(
+                    if self.view_selector.is_focused() || self.inputs.is_focused() {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    },
+                ),
+            );
+        let config_inner = config_block.inner(input_area);
+        f.render_widget(config_block, input_area);
+
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -549,7 +564,7 @@ impl TabRender for PacketTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(input_area);
+            .split(config_inner);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -563,9 +578,9 @@ impl TabRender for PacketTab {
             f.render_widget(
                 warning,
                 Rect {
-                    x: input_area.x,
-                    y: input_area.y + 13,
-                    width: input_area.width,
+                    x: config_inner.x,
+                    y: config_inner.y + 12,
+                    width: config_inner.width,
                     height: 1,
                 },
             );
@@ -573,7 +588,7 @@ impl TabRender for PacketTab {
 
         if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(tc!(success)));
+                .render(f, results_area, None);
         } else {
             let placeholder = empty_state_paragraph(
                 "Results",

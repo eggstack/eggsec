@@ -9,6 +9,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
+    widgets::{Block, Borders},
     Frame,
 };
 
@@ -455,16 +456,35 @@ impl TabRender for ReconTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
+        let config_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Configuration ")
+            .border_style(
+                Style::default().fg(
+                    if self.focus_area == ReconFocusArea::Inputs
+                        || self.focus_area == ReconFocusArea::Options
+                    {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    },
+                ),
+            );
+        let config_inner = config_block.inner(input_area);
+        f.render_widget(config_block, input_area);
+
         // Simple 3-row layout: 2 input rows + options row
-        let row_height = (input_area.height / 3).max(2);
+        let row_height = (config_inner.height / 3).max(2);
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(row_height.min(input_area.height)),
-                Constraint::Length(row_height.min(input_area.height.saturating_sub(row_height))),
+                Constraint::Length(row_height.min(config_inner.height)),
+                Constraint::Length(
+                    row_height.min(config_inner.height.saturating_sub(row_height)),
+                ),
                 Constraint::Min(0),
             ])
-            .split(input_area);
+            .split(config_inner);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -533,7 +553,7 @@ impl TabRender for ReconTab {
             f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(tc!(success)));
+                .render(f, results_area, None);
         } else {
             let cli_example = "slapper recon example.com --no-tech --no-whois";
             let placeholder = empty_state_paragraph(
@@ -975,12 +995,14 @@ mod tests {
             .unwrap();
 
         let buf = terminal.backend().buffer();
-        let focused_marker = buf
-            .cell((0, 14))
-            .expect("focused checkbox cell should be in bounds");
-        assert_eq!(
-            focused_marker.symbol(),
-            "▶",
+        let found = (0..buf.area.height).any(|y| {
+            (0..buf.area.width).any(|x| {
+                buf.cell((x, y))
+                    .is_some_and(|cell| cell.symbol() == "▶")
+            })
+        });
+        assert!(
+            found,
             "Focused checkbox marker should remain visible after cycling through a small viewport"
         );
     }

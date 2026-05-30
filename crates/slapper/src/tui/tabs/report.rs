@@ -1,6 +1,6 @@
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
-use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector, SelectorItem};
+use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector, SelectorItem};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -336,7 +336,13 @@ impl TabRender for ReportTab {
 
         // Results
         if let Some(results_area) = chunks.get(2) {
-            self.results_view.render(f, *results_area, None);
+            if self.results_view.is_empty() {
+                let placeholder =
+                    empty_state_paragraph("Results", "Results will appear here after running");
+                f.render_widget(placeholder, *results_area);
+            } else {
+                self.results_view.render(f, *results_area, None);
+            }
         }
     }
 }

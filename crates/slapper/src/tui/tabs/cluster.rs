@@ -1,12 +1,12 @@
 use crate::tc;
 use crate::tui::app::tab_error::TabError;
-use crate::tui::components::{InputField, InputGroup, ScrollableText, Selector};
+use crate::tui::components::{empty_state_paragraph, InputField, InputGroup, ScrollableText, Selector};
 use crate::tui::tabs::{AppState, TabInput, TabRender, TabState};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -232,6 +232,19 @@ impl TabState for ClusterTab {
 
 impl TabRender for ClusterTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
+        if let Some(ref error) = self.error {
+            let msg = error.message();
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title("Cluster - Error")
+                .border_style(Style::default().fg(tc!(error)));
+            let paragraph = Paragraph::new(msg)
+                .style(Style::default().fg(tc!(error)))
+                .block(block);
+            f.render_widget(paragraph, area);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -287,7 +300,13 @@ impl TabRender for ClusterTab {
         }
 
         // Results
-        self.results_view.render(f, chunks[2], None);
+        if self.results_view.is_empty() {
+            let placeholder =
+                empty_state_paragraph("Results", "Results will appear here after running");
+            f.render_widget(placeholder, chunks[2]);
+        } else {
+            self.results_view.render(f, chunks[2], None);
+        }
     }
 }
 

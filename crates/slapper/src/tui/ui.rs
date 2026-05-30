@@ -576,7 +576,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
             let color = match notif.severity {
                 super::app::NotificationSeverity::Info => tc!(status_idle),
                 super::app::NotificationSeverity::Success => tc!(success),
-                super::app::NotificationSeverity::Warning => tc!(status_running),
+                super::app::NotificationSeverity::Warning => tc!(warning),
                 super::app::NotificationSeverity::Error => tc!(error),
             };
             (notif.message.clone(), color)

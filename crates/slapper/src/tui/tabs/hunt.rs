@@ -9,6 +9,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
+    widgets::{Block, Borders},
     Frame,
 };
 
@@ -291,6 +292,23 @@ impl TabRender for HuntTab {
         let input_area = chunks[0];
         let results_area = chunks[1];
 
+        let config_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Configuration ")
+            .border_style(
+                Style::default().fg(
+                    if self.focus_area == HuntFocusArea::Inputs
+                        || self.focus_area == HuntFocusArea::Options
+                    {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    },
+                ),
+            );
+        let config_inner = config_block.inner(input_area);
+        f.render_widget(config_block, input_area);
+
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -299,7 +317,7 @@ impl TabRender for HuntTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(input_area);
+            .split(config_inner);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -357,7 +375,7 @@ impl TabRender for HuntTab {
             f.render_widget(error_text, results_area);
         } else if !self.results_view.is_empty() {
             self.results_view
-                .render(f, results_area, Some(tc!(success)));
+                .render(f, results_area, None);
         } else {
             let placeholder = empty_state_paragraph(
                 "Vulnerability Hunting",
