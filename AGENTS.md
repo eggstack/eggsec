@@ -97,9 +97,10 @@ Use these sections as the canonical reference points when updating guidance or s
 |--------|-------|
 | Tests | 1324 base, 1469+ with full features |
 | Clippy | ~33 warnings (pre-existing, none in ai module) |
-| Source files | 743 |
-| Payload types | 31 |
-| Tabs | 29 |
+| Source files | 526 |
+| Payload types | 30 |
+| Tabs | 28 (+ AuthTab conditional) |
+| WAF products | 34 |
 
 ### Security Notes
 
