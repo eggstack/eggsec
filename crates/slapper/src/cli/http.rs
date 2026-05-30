@@ -152,7 +152,7 @@ pub struct GraphQlArgs {
     pub url: String,
     #[arg(long, help = "Run introspection tests")]
     pub introspection: bool,
-    #[arg(long, help = "Run query injection tests")]
+    #[arg(long, help = "Run GraphQL query security validation tests")]
     pub inject: bool,
     #[arg(long, help = "Run depth limit bypass tests")]
     pub depth_bypass: bool,

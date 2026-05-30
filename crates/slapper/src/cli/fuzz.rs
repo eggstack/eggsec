@@ -330,7 +330,7 @@ pub struct WafArgs {
     pub url: String,
     #[arg(short = 'd', long, help = "Detect WAF only (no bypass attempts)")]
     pub detect_only: bool,
-    #[arg(short = 'b', long, help = "Attempt all bypass techniques")]
+    #[arg(short = 'b', long, help = "Test WAF detection and evasion resistance")]
     pub bypass: bool,
     #[arg(long, help = "Enable header manipulation bypass techniques")]
     pub header_bypass: bool,

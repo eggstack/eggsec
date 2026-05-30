@@ -221,7 +221,7 @@ pub struct CommonHttpArgs {
     pub api_key: Option<String>,
     #[arg(long, help = "Custom User-Agent header")]
     pub user_agent: Option<String>,
-    #[arg(long, help = "Randomized timing/header behavior for lab realism")]
+    #[arg(long, help = "Simulate realistic user behavior with randomized timing/headers for regression testing")]
     pub stealth: bool,
     #[arg(long, help = "Rate limit (requests per second)")]
     pub rate_limit: Option<u32>,

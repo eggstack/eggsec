@@ -28,7 +28,7 @@ Examples:
 #[cfg(feature = "stress-testing")]
 pub(crate) const STRESS_ABOUT: &str = "Run stress/load testing against target
 
-Applies controlled stress testing techniques including SYN, UDP, HTTP, TCP, and ICMP floods to measure resilience.
+Applies controlled stress testing techniques including SYN, UDP, HTTP, TCP, and ICMP traffic to measure resilience.
 WARNING: Only use on systems you own or have explicit permission to test.
 NOTE: Requires building with --features stress-testing
 

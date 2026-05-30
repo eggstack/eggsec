@@ -51,10 +51,10 @@ pub struct AuthTestArgs {
     #[arg(long, help = "Run account lockout detection")]
     pub lockout_detection: bool,
 
-    #[arg(long, help = "Run rate limit bypass testing")]
+    #[arg(long, help = "Test rate limiting effectiveness")]
     pub rate_limit_bypass: bool,
 
-    #[arg(long, help = "Run MFA bypass testing")]
+    #[arg(long, help = "Test MFA enforcement strength")]
     pub mfa_bypass: bool,
 
     #[arg(long, help = "Run session fixation testing")]
