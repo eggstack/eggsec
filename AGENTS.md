@@ -8,16 +8,7 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** is the consolidated implementation plan. The original 51 items are completed. Remaining work is organized into 4 waves:
-
-| Wave | Focus | Status |
-|------|-------|--------|
-| Wave 1 | Documentation Foundation (stale items, reframe) | Completed |
-| Wave 2 | Plugin Removal (Python/Ruby/Metasploit) | Completed |
-| Wave 3 | MCP/Agent Profiles (ops-agent, coding-agent) | Completed |
-| Wave 4 | Public Release Polish | Completed |
-
-See `plans/plan.md` for full wave details and implementation phases.
+**`plans/plan.md`** contains the consolidated implementation status. All original 51 items and 4 waves are complete.
 
 ## Quick Reference
 
