@@ -18,7 +18,6 @@ impl RubyScanner {
     pub fn scan_gemfile(path: &Path) -> Result<DependencyEcosystem> {
         let content = std::fs::read_to_string(path)?;
         let mut dependencies = Vec::new();
-        let mut in_group = false;
         let mut group_name: Option<String> = None;
 
         for line in content.lines() {
@@ -33,8 +32,7 @@ impl RubyScanner {
             }
 
             if trimmed.starts_with("group ") {
-                if trimmed.ends_with("do") {
-                    in_group = true;
+                if trimmed.ends_with(" do") {
                     let g = trimmed.trim_start_matches("group ").trim_end_matches(" do");
                     group_name = Some(g.to_string());
                 }
@@ -42,7 +40,6 @@ impl RubyScanner {
             }
 
             if trimmed == "end" {
-                in_group = false;
                 group_name = None;
                 continue;
             }
@@ -74,13 +71,11 @@ impl RubyScanner {
         let mut dependencies = Vec::new();
         let mut current_name: Option<String> = None;
         let mut current_version: Option<String> = None;
-        let mut in_specs = false;
 
         for line in content.lines() {
             let trimmed = line.trim();
 
             if trimmed == "[[main]]" {
-                in_specs = false;
                 if let (Some(name), Some(version)) = (current_name.take(), current_version.take()) {
                     dependencies.push(DependencyInfo {
                         name,
@@ -91,25 +86,17 @@ impl RubyScanner {
                 continue;
             }
 
-            if trimmed.starts_with("specs = [") {
-                in_specs = true;
-                continue;
-            }
-
-            if trimmed == "]" && in_specs {
-                in_specs = false;
-                continue;
-            }
-
-            if !in_specs && (trimmed.starts_with("PATH") || trimmed.starts_with("GEM") || trimmed.starts_with("DEP") || trimmed.starts_with("BUNDLED")) {
-                if let (Some(name), Some(version)) = (current_name.take(), current_version.take()) {
-                    dependencies.push(DependencyInfo {
-                        name,
-                        version,
-                        is_direct: true,
-                    });
+            if !trimmed.is_empty() && !trimmed.starts_with("specs = [") && trimmed != "]" {
+                if trimmed.starts_with("PATH") || trimmed.starts_with("GEM") || trimmed.starts_with("DEP") || trimmed.starts_with("BUNDLED") {
+                    if let (Some(name), Some(version)) = (current_name.take(), current_version.take()) {
+                        dependencies.push(DependencyInfo {
+                            name,
+                            version,
+                            is_direct: true,
+                        });
+                    }
+                    continue;
                 }
-                continue;
             }
 
             if trimmed.starts_with("  name = ") {
