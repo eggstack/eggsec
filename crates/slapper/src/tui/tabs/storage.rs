@@ -597,6 +597,9 @@ impl TabInput for StorageTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.config_inputs.blur();
         self.mode_selector.blur();
         self.query_inputs.blur();

@@ -19,6 +19,9 @@ impl super::App {
         if let Some(handle) = self.task_handle.take() {
             handle.abort();
         }
+        if let Some(abort) = self.task_inner_abort.take() {
+            abort.abort();
+        }
         self.task_tab = None;
         if let Some(rx) = self.progress_rx.take() {
             drop(rx);
@@ -69,7 +72,9 @@ impl super::App {
 
             let inner_handle = tokio::spawn(async move { runner.run().await });
 
-            let handle_to_abort = inner_handle.abort_handle();
+            let inner_abort = inner_handle.abort_handle();
+            let handle_to_abort = inner_abort.clone();
+            self.task_inner_abort = Some(inner_abort);
 
             let handle = tokio::spawn(async move {
                 match tokio::time::timeout(Duration::from_secs(300), inner_handle).await {

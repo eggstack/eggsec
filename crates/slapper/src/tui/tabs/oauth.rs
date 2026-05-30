@@ -275,7 +275,7 @@ impl TabRender for OAuthTab {
 
         // Input fields - dynamic height based on available space
         let num_inputs = 5;
-        let field_height = (chunks[0].height / num_inputs as u16).max(2);
+        let field_height = (chunks.get(0).copied().unwrap_or(area).height / num_inputs as u16).max(2);
         let constraints: Vec<Constraint> = (0..num_inputs)
             .map(|_| Constraint::Length(field_height))
             .collect();
@@ -472,6 +472,7 @@ impl TabInput for OAuthTab {
         if self.is_running() {
             return;
         }
+        self.inputs.blur();
         self.focus_area = OAuthFocusArea::Results;
     }
 

@@ -559,7 +559,7 @@ impl SettingsTab {
         self.focus_area = SettingsFocusArea::SectionList;
         self.current_section = SettingsSection::Http;
         self.detail_focus_index = 0;
-        self.status_message = "Settings reset to defaults".to_string();
+        self.status_message = String::new();
     }
 
     pub fn input_file(&self) -> &str {

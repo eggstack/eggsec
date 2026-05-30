@@ -154,7 +154,6 @@ where
 
     let mut key_handler = KeyHandler::new();
     let mut event_stream = EventStream::new();
-    let auto_save_interval_secs = app.session_manager.auto_save_interval();
     let mut pending_redraw = false;
 
     loop {
@@ -162,9 +161,7 @@ where
 
         app.update();
 
-        if app.last_auto_save.elapsed().as_secs() >= auto_save_interval_secs {
-            app.auto_save_if_due();
-        }
+        app.auto_save_if_due();
 
         if app.should_quit {
             return Ok(());

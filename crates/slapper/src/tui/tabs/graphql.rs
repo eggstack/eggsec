@@ -237,7 +237,7 @@ impl TabRender for GraphQlTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(chunks[0]);
+            .split(chunks.get(0).copied().unwrap_or(area));
 
         let input_block = Block::default()
             .title(" GraphQL Configuration ")
@@ -249,7 +249,7 @@ impl TabRender for GraphQlTab {
                     tc!(border)
                 }),
             );
-        f.render_widget(input_block, chunks[0]);
+        f.render_widget(input_block, chunks.get(0).copied().unwrap_or(area));
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if i < input_chunks.len() {
@@ -311,37 +311,35 @@ impl TabRender for GraphQlTab {
 
 impl TabInput for GraphQlTab {
     fn handle_focus_next(&mut self) {
-        if self.is_running() {
-            return;
+        if !self.is_running() {
+            self.focus_area = match self.focus_area {
+                GraphQlFocusArea::Inputs => {
+                    self.inputs.blur();
+                    GraphQlFocusArea::Options
+                }
+                GraphQlFocusArea::Options => GraphQlFocusArea::Results,
+                GraphQlFocusArea::Results => {
+                    self.inputs.focus(0);
+                    GraphQlFocusArea::Inputs
+                }
+            };
         }
-        self.focus_area = match self.focus_area {
-            GraphQlFocusArea::Inputs => {
-                self.inputs.blur();
-                GraphQlFocusArea::Options
-            }
-            GraphQlFocusArea::Options => GraphQlFocusArea::Results,
-            GraphQlFocusArea::Results => {
-                self.inputs.focus(0);
-                GraphQlFocusArea::Inputs
-            }
-        };
     }
 
     fn handle_focus_prev(&mut self) {
-        if self.is_running() {
-            return;
+        if !self.is_running() {
+            self.focus_area = match self.focus_area {
+                GraphQlFocusArea::Inputs => {
+                    self.inputs.blur();
+                    GraphQlFocusArea::Results
+                }
+                GraphQlFocusArea::Options => {
+                    self.inputs.focus(0);
+                    GraphQlFocusArea::Inputs
+                }
+                GraphQlFocusArea::Results => GraphQlFocusArea::Options,
+            };
         }
-        self.focus_area = match self.focus_area {
-            GraphQlFocusArea::Inputs => {
-                self.inputs.blur();
-                GraphQlFocusArea::Results
-            }
-            GraphQlFocusArea::Options => {
-                self.inputs.focus(0);
-                GraphQlFocusArea::Inputs
-            }
-            GraphQlFocusArea::Results => GraphQlFocusArea::Options,
-        };
     }
 
     fn handle_char(&mut self, c: char) {

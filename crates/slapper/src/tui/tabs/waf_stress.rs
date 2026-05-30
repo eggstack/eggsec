@@ -115,13 +115,7 @@ impl WafStressTab {
         self.results_view.page_down(page_size);
     }
 
-    pub fn handle_top(&mut self) {
-        self.results_view.scroll_to_top();
-    }
 
-    pub fn handle_bottom(&mut self) {
-        self.results_view.scroll_to_bottom();
-    }
 }
 
 impl Default for WafStressTab {
@@ -142,6 +136,7 @@ impl TabState for WafStressTab {
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.progress.current = 0;
+        self.progress.total = 0;
         self.results_view.clear();
         self.error = None;
         for field in &mut self.inputs.fields {
@@ -268,19 +263,19 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if !self.is_running() {
+        if !self.is_running() && self.focus_area == WafStressFocusArea::Inputs {
             self.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
-        if !self.is_running() {
+        if !self.is_running() && self.focus_area == WafStressFocusArea::Inputs {
             self.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() {
+        if !self.is_running() && self.focus_area == WafStressFocusArea::Inputs {
             self.inputs.paste(text);
         }
     }
@@ -348,10 +343,12 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         if self.inputs.is_focused() {
             self.inputs.blur();
-        } else if self.is_running() {
-            self.stop();
         } else {
             self.start();
         }
@@ -365,14 +362,10 @@ impl TabInput for WafStressTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WafStressFocusArea::Inputs {
-            if !self.inputs.is_focused() && !self.results_view.is_empty() {
-                self.scroll_results_up();
-            } else {
-                self.inputs.focus_prev();
-            }
-        } else {
+        if self.focus_area == WafStressFocusArea::Results {
             self.scroll_results_up();
+        } else if self.focus_area == WafStressFocusArea::Inputs {
+            self.inputs.focus_prev();
         }
     }
 
@@ -380,14 +373,10 @@ impl TabInput for WafStressTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WafStressFocusArea::Inputs {
-            if !self.inputs.is_focused() && !self.results_view.is_empty() {
-                self.scroll_results_down();
-            } else {
-                self.inputs.focus_next();
-            }
-        } else {
+        if self.focus_area == WafStressFocusArea::Results {
             self.scroll_results_down();
+        } else if self.focus_area == WafStressFocusArea::Inputs {
+            self.inputs.focus_next();
         }
     }
 

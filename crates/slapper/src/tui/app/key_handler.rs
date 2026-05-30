@@ -114,8 +114,7 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Char('j')) => app.handle_down(),
             (KeyModifiers::NONE, KeyCode::Char('k')) => app.handle_up(),
             (KeyModifiers::NONE, KeyCode::Char('l')) => app.handle_right(),
-            (KeyModifiers::NONE, KeyCode::Char('H')) => app.handle_home(),
-            (KeyModifiers::NONE, KeyCode::Char('L')) => app.handle_end(),
+
             (KeyModifiers::NONE, KeyCode::Char('G')) => app.handle_bottom(),
             (KeyModifiers::NONE, KeyCode::Char('g')) => app.pending_key = Some(KeyCode::Char('g')),
             (KeyModifiers::NONE, KeyCode::Char('w')) => app.handle_word_forward(),
@@ -393,7 +392,6 @@ impl KeyHandler {
                 app.close_quick_switch();
             }
             (KeyModifiers::NONE, KeyCode::Enter) => {
-                let results = app.get_quick_switch_results();
                 if !results.is_empty() && app.quick_switch_selected < results.len() {
                     if let Some(tab) = results.get(app.quick_switch_selected) {
                         app.current_tab = **tab;

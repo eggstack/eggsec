@@ -189,6 +189,7 @@ impl TabState for StressTab {
         self.state = AppState::Idle;
         self.results_view.clear();
         self.progress.current = 0;
+        self.progress.total = 0;
         self.error = None;
         for field in &mut self.inputs.fields {
             field.clear();
@@ -425,7 +426,7 @@ impl TabInput for StressTab {
         match self.focus_area {
             StressFocusArea::Inputs => {
                 self.inputs.blur();
-                self.start();
+                return;
             }
             StressFocusArea::TypeSelector => {
                 if self.type_selector.is_open() {
@@ -441,6 +442,13 @@ impl TabInput for StressTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
+        if self.type_selector.is_open() {
+            self.type_selector.cancel();
+            return;
+        }
         self.inputs.blur();
         self.type_selector.blur();
     }

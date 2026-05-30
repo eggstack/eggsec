@@ -303,6 +303,7 @@ impl TabInput for ComplianceTab {
         self.focus_area = match self.focus_area {
             ComplianceFocusArea::Inputs => ComplianceFocusArea::Results,
             ComplianceFocusArea::Framework => {
+                self.framework_selector.blur();
                 self.inputs.focus(0);
                 ComplianceFocusArea::Inputs
             }

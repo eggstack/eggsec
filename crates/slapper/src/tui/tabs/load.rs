@@ -659,6 +659,9 @@ impl TabInput for LoadTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.test_type_selector.is_open() {
             self.test_type_selector.cancel();
             return;

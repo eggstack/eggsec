@@ -464,21 +464,21 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if !self.is_running() {
+        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
             self.inputs.insert(c);
             self.update_field_validation();
         }
     }
 
     fn handle_backspace(&mut self) {
-        if !self.is_running() {
+        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
             self.inputs.backspace();
             self.update_field_validation();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() {
+        if !self.is_running() && self.focus_area == ScanPortsFocusArea::Inputs {
             self.inputs.paste(text);
             self.update_field_validation();
         }

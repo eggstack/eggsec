@@ -194,7 +194,10 @@ pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
             Constraint::Length(clamped_width),
             Constraint::Min(0),
         ])
-        .split(vertical_chunk)[1]
+        .split(vertical_chunk)
+        .get(1)
+        .copied()
+        .unwrap_or(vertical_chunk)
 }
 
 pub fn help_popup_for_tab(tab: crate::tui::tabs::Tab) -> Popup {

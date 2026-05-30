@@ -385,19 +385,19 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_char(&mut self, c: char) {
-        if !self.is_running() {
+        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
             self.inputs.insert(c);
         }
     }
 
     fn handle_backspace(&mut self) {
-        if !self.is_running() {
+        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
             self.inputs.backspace();
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() {
+        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Inputs {
             self.inputs.paste(text);
         }
     }

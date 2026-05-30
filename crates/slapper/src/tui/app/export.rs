@@ -323,8 +323,15 @@ impl super::App {
                             state: "open".to_string(),
                         })
                         .collect();
-                    let csv = CsvExporter::export_ports(&ports).unwrap_or_default();
-                    self.save_export(filename, csv);
+                    match CsvExporter::export_ports(&ports) {
+                        Ok(csv) => self.save_export(filename, csv),
+                        Err(e) => {
+                            let msg = format!("Failed to export ports to CSV: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
+                        }
+                    }
                 }
             }
             super::tabs::Tab::ScanEndpoints => {
@@ -340,8 +347,15 @@ impl super::App {
                             content_length: e.content_length.unwrap_or(0),
                         })
                         .collect();
-                    let csv = CsvExporter::export_endpoints(&endpoints).unwrap_or_default();
-                    self.save_export(filename, csv);
+                    match CsvExporter::export_endpoints(&endpoints) {
+                        Ok(csv) => self.save_export(filename, csv),
+                        Err(e) => {
+                            let msg = format!("Failed to export endpoints to CSV: {}", e);
+                            tracing::error!("{}", msg);
+                            self.notification =
+                                Some(Notification::new(msg, NotificationSeverity::Error));
+                        }
+                    }
                 }
             }
             _ => {

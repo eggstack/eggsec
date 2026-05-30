@@ -219,9 +219,31 @@ pub async fn run_waf_stress(
         Ok(Ok(())) => {}
         Ok(Err(e)) => {
             tracing::warn!("WAF stress failed: {}", e);
+            if let Err(e) = progress_tx.send((1, 1)).await {
+                tracing::warn!("Failed to send progress: {}", e);
+            }
+            if let Err(send_err) = result_tx
+                .send(TaskResult::Error(e.to_string()))
+                .await
+            {
+                tracing::warn!("Failed to send WAF stress error: {}", send_err);
+            }
+            return Err(e.into());
         }
         Err(_) => {
             tracing::warn!("WAF stress timed out after 60s");
+            if let Err(e) = progress_tx.send((1, 1)).await {
+                tracing::warn!("Failed to send progress: {}", e);
+            }
+            if let Err(send_err) = result_tx
+                .send(TaskResult::Error(
+                    "WAF stress timed out after 60s".to_string(),
+                ))
+                .await
+            {
+                tracing::warn!("Failed to send WAF stress timeout error: {}", send_err);
+            }
+            return Err(anyhow::anyhow!("WAF stress timed out after 60s"));
         }
     }
     if let Err(e) = progress_tx.send((1, 1)).await {

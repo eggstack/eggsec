@@ -405,17 +405,25 @@ impl TabState for FuzzTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        if self.inputs.fields.len() > 6 {
-            self.inputs.fields[1].value = "GET".to_string();
-            self.inputs.fields[1].cursor_pos = 3;
-            self.inputs.fields[3].value = "0".to_string();
-            self.inputs.fields[3].cursor_pos = 1;
-            self.inputs.fields[4].value = "3".to_string();
-            self.inputs.fields[4].cursor_pos = 1;
-            self.inputs.fields[5].value = "10".to_string();
-            self.inputs.fields[5].cursor_pos = 2;
-            self.inputs.fields[6].value = "10".to_string();
-            self.inputs.fields[6].cursor_pos = 2;
+        if let Some(field) = self.inputs.fields.get_mut(1) {
+            field.value = "GET".to_string();
+            field.cursor_pos = 3;
+        }
+        if let Some(field) = self.inputs.fields.get_mut(3) {
+            field.value = "0".to_string();
+            field.cursor_pos = 1;
+        }
+        if let Some(field) = self.inputs.fields.get_mut(4) {
+            field.value = "3".to_string();
+            field.cursor_pos = 1;
+        }
+        if let Some(field) = self.inputs.fields.get_mut(5) {
+            field.value = "10".to_string();
+            field.cursor_pos = 2;
+        }
+        if let Some(field) = self.inputs.fields.get_mut(6) {
+            field.value = "10".to_string();
+            field.cursor_pos = 2;
         }
         self.mutation_checkbox.checked = false;
         self.graphql_introspection.checked = false;
@@ -597,7 +605,7 @@ impl TabRender for FuzzTab {
         };
 
         // Dynamic field height based on available config area
-        let num_fields = 9; // 8 fields + 1 status
+        let num_fields = 8;
         let field_height = (config_area.height / num_fields).max(2);
         let config_constraints: Vec<Constraint> = (0..num_fields)
             .map(|_| Constraint::Length(field_height))
@@ -804,6 +812,9 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.payload_selector.is_open() {
             self.payload_selector.cancel();
             return;

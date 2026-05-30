@@ -178,6 +178,10 @@ pub async fn run_recon(
         let watch_sender = stage_tx.clone();
         let stage_for_thread = stage.clone();
         let start_time = std::time::Instant::now();
+        // NOTE: This OS thread is intentionally not joined. It polls the shared stage
+        // Arc<Mutex<String>> and sends updates via a watch channel. On timeout (120s)
+        // it exits naturally. On retry, a new stage clone is created, orphaning the old
+        // thread — acceptable for short-lived polling that self-terminates.
         std::thread::spawn(move || {
             let mut last = String::new();
             loop {

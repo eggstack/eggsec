@@ -481,6 +481,21 @@ impl TabRender for ProxyTab {
             f.render_widget(placeholder, results_area);
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(0),
+            ])
+            .split(area);
+        let selector_area = chunks.get(0).copied().unwrap_or(area);
+        if let Some(dropdown) = self.view_selector.dropdown_info(selector_area) {
+            dropdown.render(f);
+        }
+    }
 }
 
 impl TabInput for ProxyTab {

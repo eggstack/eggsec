@@ -308,6 +308,21 @@ impl TabRender for ClusterTab {
             self.results_view.render(f, chunks[2], None);
         }
     }
+
+    fn render_overlays(&self, f: &mut Frame, area: Rect) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(14),
+                Constraint::Min(5),
+            ])
+            .split(area);
+        let selector_area = chunks.get(0).copied().unwrap_or(area);
+        if let Some(dropdown) = self.view_selector.dropdown_info(selector_area) {
+            dropdown.render(f);
+        }
+    }
 }
 
 impl TabInput for ClusterTab {

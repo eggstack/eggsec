@@ -578,6 +578,9 @@ impl TabInput for WafTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
     }
 
@@ -585,7 +588,18 @@ impl TabInput for WafTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WafFocusArea::Inputs {
+        if self.focus_area == WafFocusArea::ModeRadio {
+            let len = self.mode_radio.options.len();
+            if len > 0 {
+                let cur = self.mode_radio.selected.unwrap_or(0);
+                let prev = if cur == 0 { len - 1 } else { cur - 1 };
+                self.mode_radio.select(prev);
+            }
+        } else if self.focus_area == WafFocusArea::Techniques {
+            if !self.technique_checkboxes.is_empty() && self.focused_checkbox_index > 0 {
+                self.focused_checkbox_index -= 1;
+            }
+        } else if self.focus_area == WafFocusArea::Inputs {
             self.inputs.focus_prev();
         } else if self.focus_area == WafFocusArea::Results {
             self.scroll_detection_up();
@@ -596,7 +610,17 @@ impl TabInput for WafTab {
         if self.is_running() {
             return;
         }
-        if self.focus_area == WafFocusArea::Inputs {
+        if self.focus_area == WafFocusArea::ModeRadio {
+            let len = self.mode_radio.options.len();
+            if len > 0 {
+                let cur = self.mode_radio.selected.unwrap_or(0);
+                self.mode_radio.select((cur + 1) % len);
+            }
+        } else if self.focus_area == WafFocusArea::Techniques {
+            if self.focused_checkbox_index < self.technique_checkboxes.len().saturating_sub(1) {
+                self.focused_checkbox_index += 1;
+            }
+        } else if self.focus_area == WafFocusArea::Inputs {
             self.inputs.focus_next();
         } else if self.focus_area == WafFocusArea::Results {
             self.scroll_detection_down();

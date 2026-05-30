@@ -82,7 +82,9 @@ impl SessionManager {
 
         fs::create_dir_all(&self.config.session_dir)?;
         let json = serde_json::to_string_pretty(&state)?;
-        fs::write(&path, json)?;
+        let tmp_path = path.with_extension("json.tmp");
+        fs::write(&tmp_path, &json)?;
+        fs::rename(&tmp_path, &path)?;
 
         self.cleanup_old_sessions()?;
 
@@ -94,7 +96,9 @@ impl SessionManager {
         fs::create_dir_all(&self.config.session_dir)?;
         let state = self.capture_state(app);
         let json = serde_json::to_string_pretty(&state)?;
-        fs::write(&path, json)?;
+        let tmp_path = path.with_extension("json.tmp");
+        fs::write(&tmp_path, &json)?;
+        fs::rename(&tmp_path, &path)?;
         Ok(path)
     }
 
@@ -203,7 +207,7 @@ impl SessionManager {
                 if let Err(e) = fs::remove_file(oldest.path()) {
                     tracing::warn!("Failed to cleanup old session {:?}: {:?}", oldest.path(), e);
                 }
-                sessions.swap_remove(0);
+                sessions.remove(0);
             }
         }
 

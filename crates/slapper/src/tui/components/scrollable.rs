@@ -158,7 +158,7 @@ impl ScrollableText {
 
         let paragraph = Paragraph::new(self.lines.clone())
             .block(block)
-            .scroll((scroll_offset as u16, self.horizontal_offset as u16));
+            .scroll((scroll_offset as u16, self.horizontal_offset.min(u16::MAX as usize) as u16));
         f.render_widget(paragraph, area);
 
         if self.lines.len() > visible_height {

@@ -508,7 +508,7 @@ impl InputField {
                 cursor_char_pos as u16
             };
 
-            let cursor_x = area.x + display_cursor + 1;
+            let cursor_x = area.x.saturating_add(display_cursor).saturating_add(1);
             let cursor_y = area.y + 1;
             if cursor_x < area.x + area.width {
                 f.set_cursor_position((cursor_x, cursor_y));

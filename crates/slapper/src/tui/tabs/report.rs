@@ -496,6 +496,7 @@ impl TabInput for ReportTab {
             return;
         }
         self.focus_area = ReportFocusArea::ViewSelector;
+        self.view_selector.focus();
     }
 
     fn handle_bottom(&mut self) {

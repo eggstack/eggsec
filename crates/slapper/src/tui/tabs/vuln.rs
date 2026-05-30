@@ -586,7 +586,11 @@ impl TabInput for VulnTab {
         }
         match self.focus_area {
             VulnFocusArea::Mode => {
+                let was_open = self.mode_selector.is_open();
                 self.mode_selector.handle_enter();
+                if !was_open {
+                    return;
+                }
                 self.current_mode = match self.mode_selector.selected {
                     0 => VulnMode::CvssCalc,
                     1 => VulnMode::ExploitCheck,
@@ -609,6 +613,9 @@ impl TabInput for VulnTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.mode_selector.blur();
         self.inputs.blur();
     }

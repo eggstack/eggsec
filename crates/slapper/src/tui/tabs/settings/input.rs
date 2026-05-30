@@ -179,6 +179,8 @@ impl TabInput for SettingsTab {
             return;
         }
         self.current_section = SettingsSection::Http;
+        self.detail_focus_index = 0;
+        self.sync_component_focus();
     }
 
     fn handle_bottom(&mut self) {
@@ -186,6 +188,8 @@ impl TabInput for SettingsTab {
             return;
         }
         self.current_section = SettingsSection::Theme;
+        self.detail_focus_index = 0;
+        self.sync_component_focus();
     }
 
     fn handle_enter(&mut self) {

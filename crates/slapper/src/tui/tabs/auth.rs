@@ -68,7 +68,7 @@ impl TabState for AuthTab {
     }
 
     fn reset(&mut self) {
-        self.reset();
+        AuthTab::reset(self);
     }
 }
 
@@ -227,6 +227,7 @@ impl TabInput for AuthTab {
         } else {
             if self.is_input_focused() {
                 self.inputs.blur();
+                return;
             }
             self.start();
         }
