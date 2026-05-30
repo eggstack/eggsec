@@ -980,7 +980,7 @@ mod tests {
             .expect("focused checkbox cell should be in bounds");
         assert_eq!(
             focused_marker.symbol(),
-            ">",
+            "▶",
             "Focused checkbox marker should remain visible after cycling through a small viewport"
         );
     }
