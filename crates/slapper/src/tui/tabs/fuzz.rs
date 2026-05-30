@@ -398,6 +398,7 @@ impl TabState for FuzzTab {
     fn reset(&mut self) {
         self.state = AppState::Idle;
         self.progress.current = 0;
+        self.progress.total = 0;
         self.results_view.clear();
         self.session = None;
         self.error = None;
@@ -761,6 +762,10 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         if self.focus_area == FuzzFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.blur();
             return;

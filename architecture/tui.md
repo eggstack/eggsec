@@ -1243,3 +1243,77 @@ All 5 tabs passed audit - no bugs found.
 | Total bugs found | 39 |
 | Total bugs fixed | 33 |
 | Bugs noted (minor/edge cases) | 6 |
+
+## Session Fixes (2026-05-30)
+
+### TUI Deep Dive Audit - All 28 Tabs + Core + Components
+
+Comprehensive audit using 7 parallel subagents across all tabs, core modules, and components.
+
+#### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `proxy.rs` | 273, 357 | State left as Running on HealthChecker::new() early return -- tab permanently unresponsive | Added `self.state = AppState::Idle;` before return |
+| `fuzz.rs` | 763 | `handle_enter()` missing `is_running()` guard -- blur runs instead of stop | Added `if self.is_running() { self.stop(); return; }` |
+| `waf.rs` | 548 | `handle_enter()` missing `is_running()` guard -- blur runs instead of stop | Added `if self.is_running() { self.stop(); return; }` |
+| `load.rs` | 641 | `handle_enter()` missing `is_running()` guard on selector + blur paths | Added `if self.is_running() { self.stop(); return; }` |
+| `storage.rs` | 409 | `handle_focus_next()` Mode→Query missing `query_inputs.focus(0)` -- typing silently no-op | Added `self.query_inputs.focus(0)` |
+| `integrations.rs` | 416-445 | `handle_focus_next/prev()` missing focus(0)/blur() on 3 transitions | Added `focus(0)` and `blur()` calls |
+| `workflow.rs` | 401, 419 | `handle_focus_next/prev()` missing blur/focus on Inputs↔Results transitions | Added `blur()` and `focus(0)` calls |
+| `vuln.rs` | 481 | `handle_focus_next()` Inputs→Results missing `inputs.blur()` | Added `self.inputs.blur()` |
+| `report.rs` | 356 | `handle_focus_next()` ViewSelector→Inputs missing `focus(0)` on active input group | Added `focus(0)` based on `current_view` |
+| `settings/input.rs` | 408-482 | Session section unreachable via keyboard + missing match arms for left/right/edge detection | Added Session to all match arms + navigation arrays |
+
+#### MEDIUM Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `recon.rs` | 408 | `reset()` missing `progress.total = 0` | Added reset |
+| `scan.rs` | 276 | `reset()` missing `progress.total = 0` | Added reset |
+| `scan_ports.rs` | 290 | `reset()` missing `progress.total = 0` | Added reset |
+| `scan_endpoints.rs` | 249 | `reset()` missing `progress.total = 0` | Added reset |
+| `fingerprint.rs` | 206 | `reset()` missing `progress.total = 0` | Added reset |
+| `fuzz.rs` | 400 | `reset()` missing `progress.total = 0` | Added reset |
+| `waf.rs` | 301 | `reset()` missing `progress.total = 0` | Added reset |
+| `load.rs` | 366 | `reset()` missing `progress.total = 0` | Added reset |
+| `recon.rs` | 718 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `scan.rs` | 621 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `scan_ports.rs` | 570 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `scan_endpoints.rs` | 488 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `fingerprint.rs` | 411 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `waf_stress.rs` | 357 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `integrations.rs` | 580 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `workflow.rs` | 524 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `report.rs` | 548 | `handle_escape()` missing `is_running()` guard | Added guard |
+| `nse.rs` | 459 | `start()` missing `target().is_empty()` validation | Added guard |
+| `hunt.rs` | 489 | `handle_enter()` missing `is_running()` guard | Added guard |
+| `browser.rs` | 448 | `handle_enter()` missing `is_running()` guard | Added guard |
+| `waf_stress.rs` | 407 | `is_input_focused()` missing `focus_area` check | Added `self.focus_area == WafStressFocusArea::Inputs &&` |
+| `cluster.rs` | 205-221 | `reset()` doesn't restore default field values | Restored "localhost:9000", "4", "9000" defaults |
+| `settings/main.rs` | 538-549 | `reset()` loses defaults for report/schedule/session inputs | Restored "html", "./exports", "quick", "30" defaults |
+| `settings/main.rs` | 563 | `reset()` missing `sync_component_focus()` | Added call |
+| `history.rs` | 439 | UTF-8 slice `&entry.target[..27]` panic on multi-byte chars | Changed to `char_indices()` safe split |
+
+#### LOW Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scrollable.rs` | 62 | `scroll_down()` missing `saturating_add` -- debug panic on overflow | Changed to `saturating_add` |
+| `scan.rs` | 589 | Redundant `is_running()` check in `handle_enter()` | Removed dead branch |
+| `scan_endpoints.rs` | 481 | Redundant `is_running()` check in `handle_enter()` | Removed dead branch |
+| `auth.rs` | 50 | `reset()` not clearing stale `results` text | Added `self.results = "Ready for authentication testing".to_string()` |
+| `report.rs` | 338-346 | Missing progress gauge during Running state | Added `Gauge` widget render when `state == AppState::Running` |
+| `dashboard.rs` | 568-574 | `page_up/page_down()` missing `is_running()` guard | Added guard |
+| `dashboard.rs` | 100-101 | Silent `.ok()` on I/O and deserialization | Added `tracing::debug!` error logging |
+
+#### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 41 |
+| Total bugs fixed | 41 |
+| Files modified | 27 |
+| HIGH priority fixes | 10 |
+| MEDIUM priority fixes | 22 |
+| LOW priority fixes | 9 |

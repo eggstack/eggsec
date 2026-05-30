@@ -299,6 +299,7 @@ impl TabState for WafTab {
         self.detection_result = None;
         self.bypass_results.clear();
         self.progress.current = 0;
+        self.progress.total = 0;
         self.detection_view.clear();
         self.bypass_view.clear();
         self.error = None;
@@ -546,6 +547,10 @@ impl TabInput for WafTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         if self.focus_area == WafFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.blur();
             return;

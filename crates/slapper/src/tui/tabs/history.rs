@@ -436,7 +436,12 @@ impl TabRender for HistoryTab {
             };
 
             let target_display = if entry.target.len() > 30 {
-                format!("{}...", &entry.target[..27])
+                let truncate_pos = entry.target.char_indices()
+                    .take_while(|(i, _)| *i < 27)
+                    .last()
+                    .map(|(i, c)| i + c.len_utf8())
+                    .unwrap_or(27);
+                format!("{}...", &entry.target[..truncate_pos])
             } else {
                 entry.target.clone()
             };

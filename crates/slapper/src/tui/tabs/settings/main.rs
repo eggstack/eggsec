@@ -538,14 +538,23 @@ impl SettingsTab {
         for field in self.report_inputs.fields.iter_mut() {
             field.value.clear();
         }
+        if let Some(f) = self.report_inputs.fields.get_mut(2) {
+            f.value = "html".to_string();
+        }
+        if let Some(f) = self.report_inputs.fields.get_mut(3) {
+            f.value = "./exports".to_string();
+        }
         for field in self.schedule_inputs.fields.iter_mut() {
             field.value.clear();
+        }
+        if let Some(f) = self.schedule_inputs.fields.get_mut(2) {
+            f.value = "quick".to_string();
         }
         for field in self.notify_inputs.fields.iter_mut() {
             field.value.clear();
         }
-        for field in self.session_inputs.fields.iter_mut() {
-            field.value.clear();
+        if let Some(f) = self.session_inputs.fields.get_mut(0) {
+            f.value = "30".to_string();
         }
         self.follow_redirects.checked = true;
         self.verify_tls.checked = true;
@@ -560,6 +569,7 @@ impl SettingsTab {
         self.current_section = SettingsSection::Http;
         self.detail_focus_index = 0;
         self.status_message = String::new();
+        self.sync_component_focus();
     }
 
     pub fn input_file(&self) -> &str {

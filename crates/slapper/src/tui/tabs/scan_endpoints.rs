@@ -247,6 +247,7 @@ impl TabState for ScanEndpointsTab {
         self.state = AppState::Idle;
         self.results = None;
         self.progress.current = 0;
+        self.progress.total = 0;
         self.results_view.clear();
         self.error = None;
         for field in &mut self.inputs.fields {
@@ -478,7 +479,7 @@ impl TabInput for ScanEndpointsTab {
             self.inputs.blur();
             return;
         }
-        if !self.is_running() && self.focus_area == ScanEndpointsFocusArea::Options {
+        if self.focus_area == ScanEndpointsFocusArea::Options {
             self.include_404_checkbox.checked = !self.include_404_checkbox.checked;
             return;
         }
@@ -486,6 +487,9 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
     }
 

@@ -97,8 +97,20 @@ impl DashboardTab {
         if !path.exists() {
             return None;
         }
-        let content = std::fs::read_to_string(path).ok()?;
-        serde_json::from_str(&content).ok()
+        let content = match std::fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::debug!("Failed to read portfolio snapshot: {}", e);
+                return None;
+            }
+        };
+        match serde_json::from_str(&content) {
+            Ok(snap) => Some(snap),
+            Err(e) => {
+                tracing::debug!("Failed to parse portfolio snapshot: {}", e);
+                None
+            }
+        }
     }
 
     fn render_welcome(&mut self) {
@@ -566,10 +578,16 @@ impl TabInput for DashboardTab {
 
 impl DashboardTab {
     pub fn page_up(&mut self, count: usize) {
+        if self.is_running() {
+            return;
+        }
         self.view.scroll_up(count);
     }
 
     pub fn page_down(&mut self, count: usize) {
+        if self.is_running() {
+            return;
+        }
         self.view.scroll_down(count);
     }
 }

@@ -270,6 +270,7 @@ impl ProxyTab {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!("Failed to create health checker: {}", e);
+                self.state = AppState::Idle;
                 return;
             }
         };
@@ -354,6 +355,7 @@ impl ProxyTab {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!("Failed to create health checker: {}", e);
+                self.state = AppState::Idle;
                 return;
             }
         };

@@ -398,7 +398,10 @@ impl TabInput for WorkflowTab {
                 self.inputs.focus(0);
                 WorkflowFocusArea::Inputs
             }
-            WorkflowFocusArea::Inputs => WorkflowFocusArea::Results,
+            WorkflowFocusArea::Inputs => {
+                self.inputs.blur();
+                WorkflowFocusArea::Results
+            }
             WorkflowFocusArea::Results => {
                 self.mode_selector.focus();
                 WorkflowFocusArea::Mode
@@ -416,7 +419,10 @@ impl TabInput for WorkflowTab {
                 self.mode_selector.focus();
                 WorkflowFocusArea::Mode
             }
-            WorkflowFocusArea::Results => WorkflowFocusArea::Inputs,
+            WorkflowFocusArea::Results => {
+                self.inputs.focus(0);
+                WorkflowFocusArea::Inputs
+            }
         };
     }
 
@@ -522,6 +528,9 @@ impl TabInput for WorkflowTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.mode_selector.blur();
         self.inputs.blur();
     }

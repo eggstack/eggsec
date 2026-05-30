@@ -408,6 +408,7 @@ impl TabInput for StorageTab {
             }
             StorageFocusArea::Mode => {
                 self.mode_selector.blur();
+                self.query_inputs.focus(0);
                 StorageFocusArea::Query
             }
             StorageFocusArea::Query => {

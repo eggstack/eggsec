@@ -487,6 +487,10 @@ impl TabInput for HuntTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         if self.focus_area == HuntFocusArea::Inputs && self.inputs.is_focused() {
             self.inputs.blur();
             return;

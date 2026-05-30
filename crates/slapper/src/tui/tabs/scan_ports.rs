@@ -288,6 +288,7 @@ impl TabState for ScanPortsTab {
         self.state = AppState::Idle;
         self.results = None;
         self.progress.current = 0;
+        self.progress.total = 0;
         self.results_view.clear();
         self.error = None;
         for field in &mut self.inputs.fields {
@@ -568,6 +569,9 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
     }
 

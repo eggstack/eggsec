@@ -457,6 +457,9 @@ impl TabInput for NseTab {
 
 impl NseTab {
     pub fn start(&mut self) {
+        if self.target().is_empty() {
+            return;
+        }
         if self.state != AppState::Running {
             // In a real implementation this would trigger an event/worker
             self.state = AppState::Running;

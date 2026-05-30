@@ -218,6 +218,15 @@ impl TabState for ClusterTab {
         for field in &mut self.status_inputs.fields {
             field.clear();
         }
+        if let Some(f) = self.worker_inputs.fields.get_mut(0) {
+            f.value = "localhost:9000".to_string();
+        }
+        if let Some(f) = self.worker_inputs.fields.get_mut(1) {
+            f.value = "4".to_string();
+        }
+        if let Some(f) = self.coordinator_inputs.fields.get_mut(0) {
+            f.value = "9000".to_string();
+        }
     }
 
     fn set_error(&mut self, error: TabError) {

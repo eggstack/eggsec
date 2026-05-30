@@ -336,7 +336,17 @@ impl TabRender for ReportTab {
 
         // Results
         if let Some(results_area) = chunks.get(2) {
-            if self.results_view.is_empty() {
+            if self.state == AppState::Running {
+                let gauge = ratatui::widgets::Gauge::default()
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Processing..."),
+                    )
+                    .gauge_style(Style::default().fg(tc!(warning)))
+                    .ratio(0.5);
+                f.render_widget(gauge, *results_area);
+            } else if self.results_view.is_empty() {
                 let placeholder =
                     empty_state_paragraph("Results", "Results will appear here after running");
                 f.render_widget(placeholder, *results_area);
@@ -355,6 +365,11 @@ impl TabInput for ReportTab {
         self.focus_area = match self.focus_area {
             ReportFocusArea::ViewSelector => {
                 self.view_selector.blur();
+                match self.current_view {
+                    ReportView::Convert => self.convert_inputs.focus(0),
+                    ReportView::Trend => self.trend_inputs.focus(0),
+                    ReportView::Schedule => self.schedule_inputs.focus(0),
+                }
                 ReportFocusArea::Inputs
             }
             ReportFocusArea::Inputs => {
@@ -546,6 +561,9 @@ impl TabInput for ReportTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.view_selector.is_open() {
             self.view_selector.cancel();
             return;

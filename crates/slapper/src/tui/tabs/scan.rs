@@ -274,6 +274,7 @@ impl TabState for ScanTab {
         self.state = AppState::Idle;
         self.report = None;
         self.progress.current = 0;
+        self.progress.total = 0;
         self.reset_stages();
         self.error = None;
         for field in &mut self.inputs.fields {
@@ -586,9 +587,7 @@ impl TabInput for ScanTab {
             return;
         }
         if self.focus_area == ScanFocusArea::Inputs && self.inputs.is_focused() {
-            if !self.is_running() {
-                self.inputs.blur();
-            }
+            self.inputs.blur();
             return;
         }
 
@@ -619,6 +618,9 @@ impl TabInput for ScanTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         if self.profile_selector.is_open() {
             self.profile_selector.cancel();
             return;

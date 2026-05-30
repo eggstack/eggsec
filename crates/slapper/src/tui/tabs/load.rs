@@ -364,6 +364,7 @@ impl TabState for LoadTab {
         self.state = AppState::Idle;
         self.results = None;
         self.progress.current = 0;
+        self.progress.total = 0;
         self.results_view.clear();
         self.error = None;
         for field in &mut self.inputs.fields {
@@ -639,6 +640,10 @@ impl TabInput for LoadTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
         if self.test_type_selector.is_focused() {
             if self.test_type_selector.is_open() {
                 if self.test_type_selector.confirm().is_none() {

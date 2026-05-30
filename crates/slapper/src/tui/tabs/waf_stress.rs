@@ -355,6 +355,9 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
     }
 
@@ -405,7 +408,7 @@ impl TabInput for WafStressTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.inputs.is_focused()
+        self.focus_area == WafStressFocusArea::Inputs && self.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {

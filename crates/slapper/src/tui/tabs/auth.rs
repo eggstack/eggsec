@@ -51,6 +51,7 @@ impl AuthTab {
         self.state = AppState::Idle;
         self.error = None;
         self.focus_area = AuthFocusArea::Target;
+        self.results = "Ready for authentication testing".to_string();
         for field in &mut self.inputs.fields {
             field.clear();
         }

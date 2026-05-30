@@ -307,6 +307,7 @@ impl TabInput for SettingsTab {
             let sections = [
                 SettingsSection::Http,
                 SettingsSection::Scan,
+                SettingsSection::Session,
                 SettingsSection::Proxy,
                 SettingsSection::Scope,
                 SettingsSection::Report,
@@ -354,6 +355,7 @@ impl TabInput for SettingsTab {
             let sections = [
                 SettingsSection::Http,
                 SettingsSection::Scan,
+                SettingsSection::Session,
                 SettingsSection::Proxy,
                 SettingsSection::Scope,
                 SettingsSection::Report,
@@ -408,6 +410,7 @@ impl TabInput for SettingsTab {
                     match self.current_section {
                         SettingsSection::Http => self.http_inputs.move_left(),
                         SettingsSection::Scan => self.scan_inputs.move_left(),
+                        SettingsSection::Session => self.session_inputs.move_left(),
                         SettingsSection::Proxy => self.proxy_inputs.move_left(),
                         SettingsSection::Scope => self.scope_inputs.move_left(),
                         SettingsSection::Report => self.report_inputs.move_left(),
@@ -438,6 +441,7 @@ impl TabInput for SettingsTab {
             match self.current_section {
                 SettingsSection::Http => self.http_inputs.move_right(),
                 SettingsSection::Scan => self.scan_inputs.move_right(),
+                SettingsSection::Session => self.session_inputs.move_right(),
                 SettingsSection::Proxy => self.proxy_inputs.move_right(),
                 SettingsSection::Scope => self.scope_inputs.move_right(),
                 SettingsSection::Report => self.report_inputs.move_right(),
@@ -457,6 +461,7 @@ impl TabInput for SettingsTab {
             match self.current_section {
                 SettingsSection::Http => self.http_inputs.is_at_left_edge(),
                 SettingsSection::Scan => self.scan_inputs.is_at_left_edge(),
+                SettingsSection::Session => self.session_inputs.is_at_left_edge(),
                 SettingsSection::Proxy => self.proxy_inputs.is_at_left_edge(),
                 SettingsSection::Scope => self.scope_inputs.is_at_left_edge(),
                 SettingsSection::Report => self.report_inputs.is_at_left_edge(),
@@ -474,6 +479,7 @@ impl TabInput for SettingsTab {
             match self.current_section {
                 SettingsSection::Http => self.http_inputs.is_at_right_edge(),
                 SettingsSection::Scan => self.scan_inputs.is_at_right_edge(),
+                SettingsSection::Session => self.session_inputs.is_at_right_edge(),
                 SettingsSection::Proxy => self.proxy_inputs.is_at_right_edge(),
                 SettingsSection::Scope => self.scope_inputs.is_at_right_edge(),
                 SettingsSection::Report => self.report_inputs.is_at_right_edge(),

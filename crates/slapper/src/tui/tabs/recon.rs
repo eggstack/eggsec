@@ -406,6 +406,7 @@ impl TabState for ReconTab {
         self.state = AppState::Idle;
         self.results = None;
         self.progress.current = 0;
+        self.progress.total = 0;
         self.results_view.clear();
         self.error = None;
         self.focus_area = ReconFocusArea::Inputs;
@@ -716,6 +717,9 @@ impl TabInput for ReconTab {
     }
 
     fn handle_escape(&mut self) {
+        if self.is_running() {
+            return;
+        }
         self.inputs.blur();
     }
 
