@@ -1,5 +1,7 @@
 # Architecture Review Plan
 
+**Status:** INCOMPLETE - Review Phase 1 and Phase 2 complete, pruning pending
+
 ## Overview
 
 This plan orchestrates a systematic review of all architecture documents in `architecture/` (excluding `review_plan.md` itself). Each document is assigned to a dedicated subagent that will:
@@ -129,3 +131,51 @@ Each subagent must verify:
 - Focus on verification and identification, not implementation
 - Use `cargo check --lib -p slapper` to verify compilation after any structural changes
 - Reference actual source files with line numbers for all claims
+
+---
+
+## Review Completion Status (2026-05-30)
+
+### Phase 1: Document Reviews - COMPLETED
+
+| Document | Review File | Status |
+|----------|-------------|--------|
+| ai_agents.md | plans/ai_agents_review.md | ✅ Complete |
+| cli_commands.md | plans/cli_commands_review.md | ✅ Complete |
+| config.md | plans/config_review.md | ✅ Complete |
+| defense_lab.md | plans/defense_lab_review.md | ✅ Complete |
+| distributed.md | plans/distributed_review.md | ✅ Complete |
+| feature_matrix.md | plans/feature_matrix_review.md | ✅ Complete |
+| fuzzer.md | plans/fuzzer_review.md | ✅ Complete |
+| loadtest.md | plans/loadtest_review.md | ✅ Complete |
+| networking.md | plans/networking_review.md | ✅ Complete |
+| nse_integration.md | plans/nse_integration_review.md | ✅ Complete |
+| output.md | plans/output_review.md | ✅ Complete |
+| overview.md | plans/overview_review.md | ✅ Complete |
+| pipeline.md | plans/pipeline_review.md | ✅ Complete |
+| recon.md | plans/recon_review.md | ✅ Complete |
+| scanner.md | plans/scanner_review.md | ✅ Complete |
+| tui.md | plans/tui_review.md | ✅ Complete |
+| waf.md | plans/waf_review.md | ✅ Complete |
+
+### Phase 2: Stale Items Detection - COMPLETED
+
+See `plans/stale_items.md` for identified stale items requiring updates/pruning.
+
+### Key Findings Summary
+
+| Metric | Count |
+|--------|-------|
+| Total Verified Claims | 250+ |
+| Total Discrepancies | 40+ |
+| Total Bugs Found | 2 (1 medium, 1 low) |
+| Total Improvement Opportunities | 30+ |
+
+### Critical Discrepancies Requiring Action
+
+1. **overview.md**: Quick Facts statistics outdated (41→39 modules, 743→526 files, 31→30 payloads)
+2. **defense_lab.md**: Profiles marked as "planned" but fully implemented
+3. **pipeline.md**: Defense-lab profiles marked as "planned" but fully implemented
+4. **feature_matrix.md**: Feature counts incorrect (33→28 total, 18→16 in full)
+5. **tui.md**: Tab count 29 vs actual 28, stale "plugin" reference
+6. **cli_commands.md**: cluster.rs:349 fix not applied (unwrap_or vs unwrap_or_else)
