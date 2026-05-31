@@ -1,0 +1,23 @@
+# Diff Module
+
+## Purpose
+
+Finding comparison engine that compares two scan result sets and identifies new, resolved, persisting, and changed findings using fingerprint-based matching.
+
+## Key Types
+
+| Type | Location | Description |
+|------|----------|-------------|
+| `DiffResult` | `diff/mod.rs` | Result of comparing two finding sets |
+| `FindingChange` | `diff/mod.rs` | Description of a finding that changed between scans |
+| `DiffSummary` | `diff/mod.rs` | Numeric summary of diff results |
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `mod.rs` | Module root: `diff_findings()`, `diff_findings_from_files()`, `DiffResult`, `DiffSummary`, fingerprint comparison logic |
+
+## Implementation Status
+
+Fully implemented. `diff_findings()` compares finding sets by fingerprint and produces a structured `DiffResult`. File-based comparison via `diff_findings_from_files()` also supported.
