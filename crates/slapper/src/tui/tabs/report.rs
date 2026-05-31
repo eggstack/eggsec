@@ -332,7 +332,7 @@ impl TabRender for ReportTab {
         // Format selector for Convert view
         if self.current_view == ReportView::Convert {
             let format_area = Rect {
-                x: inputs_area.x + inputs_area.width - 25,
+                x: inputs_area.x + inputs_area.width.saturating_sub(25),
                 y: inputs_area.y + 1,
                 width: 23,
                 height: 3,
@@ -547,6 +547,7 @@ impl TabInput for ReportTab {
                         2 => ReportView::Schedule,
                         _ => ReportView::Convert,
                     };
+                    return;
                 } else {
                     self.view_selector.open();
                     return;

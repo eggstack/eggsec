@@ -829,6 +829,14 @@ impl TabInput for ReconTab {
         self.focus_area == ReconFocusArea::Inputs && self.inputs.is_focused()
     }
 
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
+    }
+
     fn stop(&mut self) {
         ReconTab::stop(self);
     }

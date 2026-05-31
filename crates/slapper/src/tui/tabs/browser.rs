@@ -453,11 +453,9 @@ impl TabInput for BrowserTab {
         }
 
         if self.focus_area == BrowserFocusArea::Options {
-            if !self.is_running() {
-                if let Some(checkbox) = self.option_checkboxes.get_mut(self.focused_checkbox_index)
-                {
-                    checkbox.toggle();
-                }
+            if let Some(checkbox) = self.option_checkboxes.get_mut(self.focused_checkbox_index)
+            {
+                checkbox.toggle();
             }
             return;
         }
@@ -466,11 +464,7 @@ impl TabInput for BrowserTab {
             return;
         }
 
-        if self.is_running() {
-            self.stop();
-        } else {
-            self.start();
-        }
+        self.start();
     }
 
     fn handle_escape(&mut self) {

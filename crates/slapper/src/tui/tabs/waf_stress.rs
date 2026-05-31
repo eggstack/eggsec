@@ -86,6 +86,8 @@ impl WafStressTab {
         if !self.target().is_empty() {
             self.state = AppState::Running;
             self.progress.current = 0;
+            self.progress.total = 0;
+            self.error = None;
             self.results_view.clear();
         }
     }
@@ -151,6 +153,7 @@ impl TabState for WafStressTab {
             field.cursor_pos = 2;
         }
         self.focus_area = WafStressFocusArea::Inputs;
+        self.inputs.blur();
     }
 
     fn set_error(&mut self, error: TabError) {

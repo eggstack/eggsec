@@ -319,6 +319,7 @@ impl TabInput for StressTab {
             }
             StressFocusArea::TypeSelector => {
                 self.type_selector.blur();
+                self.type_selector.cancel();
                 StressFocusArea::Results
             }
             StressFocusArea::Results => {

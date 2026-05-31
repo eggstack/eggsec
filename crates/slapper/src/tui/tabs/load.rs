@@ -387,6 +387,12 @@ impl TabState for LoadTab {
                 field.value = "30".to_string();
                 field.cursor_pos = 2;
             }
+            if let Some(field) = self.inputs.fields.get_mut(5) {
+                field.value.clear();
+            }
+            if let Some(field) = self.inputs.fields.get_mut(6) {
+                field.value.clear();
+            }
         }
         self.test_type_selector.select(0);
         self.test_type_selector.blur();
@@ -733,8 +739,10 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else {
+        } else if self.focus_area != LoadFocusArea::Results {
             self.inputs.move_left()
+        } else {
+            false
         }
     }
 
@@ -749,8 +757,10 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else {
+        } else if self.focus_area != LoadFocusArea::Results {
             self.inputs.move_right()
+        } else {
+            false
         }
     }
 

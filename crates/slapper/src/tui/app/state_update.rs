@@ -248,7 +248,10 @@ impl super::App {
                 None
             }
             #[cfg(not(feature = "advanced-hunting"))]
-            TaskResult::Hunt(_) => None,
+            TaskResult::Hunt(_) => {
+                tracing::warn!("TaskResult::Hunt received but feature \"advanced-hunting\" is disabled");
+                None
+            }
             #[cfg(feature = "headless-browser")]
             TaskResult::Browser(r) => {
                 self.browser.set_report(r);
@@ -260,7 +263,10 @@ impl super::App {
                 None
             }
             #[cfg(not(feature = "compliance"))]
-            TaskResult::Compliance(_) => None,
+            TaskResult::Compliance(_) => {
+                tracing::warn!("TaskResult::Compliance received but feature \"compliance\" is disabled");
+                None
+            }
             _ => Some(result),
         }
     }
@@ -290,9 +296,15 @@ impl super::App {
                 None
             }
             #[cfg(not(feature = "database"))]
-            TaskResult::StorageListScans { .. } => None,
+            TaskResult::StorageListScans { .. } => {
+                tracing::warn!("TaskResult::StorageListScans received but feature \"database\" is disabled");
+                None
+            }
             #[cfg(not(feature = "database"))]
-            TaskResult::StorageListFindings { .. } => None,
+            TaskResult::StorageListFindings { .. } => {
+                tracing::warn!("TaskResult::StorageListFindings received but feature \"database\" is disabled");
+                None
+            }
             TaskResult::Integrations => {
                 #[cfg(feature = "external-integrations")]
                 {
@@ -329,9 +341,15 @@ impl super::App {
                 None
             }
             #[cfg(not(feature = "external-integrations"))]
-            TaskResult::IntegrationsCreateIssue { .. } => None,
+            TaskResult::IntegrationsCreateIssue { .. } => {
+                tracing::warn!("TaskResult::IntegrationsCreateIssue received but feature \"external-integrations\" is disabled");
+                None
+            }
             #[cfg(not(feature = "external-integrations"))]
-            TaskResult::IntegrationsSearchIssues { .. } => None,
+            TaskResult::IntegrationsSearchIssues { .. } => {
+                tracing::warn!("TaskResult::IntegrationsSearchIssues received but feature \"external-integrations\" is disabled");
+                None
+            }
             #[cfg(feature = "finding-workflow")]
             TaskResult::Workflow(ref report) => {
                 self.workflow.report = Some(report.clone());
@@ -339,7 +357,10 @@ impl super::App {
                 None
             }
             #[cfg(not(feature = "finding-workflow"))]
-            TaskResult::Workflow(_) => None,
+            TaskResult::Workflow(_) => {
+                tracing::warn!("TaskResult::Workflow received but feature \"finding-workflow\" is disabled");
+                None
+            }
             #[cfg(feature = "vuln-management")]
             TaskResult::Vuln(ref assessment) => {
                 self.vuln.state = AppState::Completed;
@@ -352,7 +373,10 @@ impl super::App {
                 None
             }
             #[cfg(not(feature = "vuln-management"))]
-            TaskResult::Vuln(_) => None,
+            TaskResult::Vuln(_) => {
+                tracing::warn!("TaskResult::Vuln received but feature \"vuln-management\" is disabled");
+                None
+            }
             _ => Some(result),
         }
     }

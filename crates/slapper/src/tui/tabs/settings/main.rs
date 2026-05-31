@@ -155,7 +155,7 @@ impl SettingsTab {
         match self.current_section {
             SettingsSection::Http => 5,
             SettingsSection::Scan => 3,
-            SettingsSection::Session => 0,
+            SettingsSection::Session => 1,
             SettingsSection::Proxy => 2,
             SettingsSection::Scope => 1,
             SettingsSection::Report => 3,
@@ -770,7 +770,6 @@ impl TabState for SettingsTab {
     }
 
     fn reset(&mut self) {
-        self.error = None;
         SettingsTab::reset(self);
     }
 

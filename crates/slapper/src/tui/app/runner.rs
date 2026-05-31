@@ -190,8 +190,9 @@ where
             pending_redraw = false;
         }
 
-        let event = event_stream.next().now_or_never();
-        if let Some(Some(Ok(event))) = event {
+        let mut event_count = 0;
+        while let Some(Some(Ok(event))) = event_stream.next().now_or_never() {
+            event_count += 1;
             match event {
                 Event::Key(key) => key_handler.handle_key_event(app, &key),
                 Event::Mouse(mouse_event) => handle_mouse_event(mouse_event, app),
@@ -206,7 +207,8 @@ where
                     pending_redraw = true;
                 }
             }
-        } else {
+        }
+        if event_count == 0 {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }

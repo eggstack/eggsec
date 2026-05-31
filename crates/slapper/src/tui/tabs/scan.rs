@@ -666,6 +666,9 @@ impl TabInput for ScanTab {
                 self.output_selector.move_next();
             } else if !self.inputs.is_focused() && !self.current_stage_output.is_empty() {
                 self.scroll_output_down();
+            } else if self.focus_area == ScanFocusArea::Results && self.current_stage_output.is_empty() {
+                self.focus_area = ScanFocusArea::Inputs;
+                self.inputs.focus(0);
             } else if self.focus_area == ScanFocusArea::Inputs && !self.inputs.is_focused() {
                 self.focus_area = ScanFocusArea::ProfileSelector;
             } else if self.focus_area == ScanFocusArea::ProfileSelector {

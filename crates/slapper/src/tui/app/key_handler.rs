@@ -108,7 +108,9 @@ impl KeyHandler {
             (KeyModifiers::NONE, KeyCode::Char(' ')) => app.toggle_help(),
             (KeyModifiers::NONE, KeyCode::Char('y')) => {
                 if let Some(text) = app.dispatcher_mut().handle_copy() {
-                    Clipboard::set(&text);
+                    if !Clipboard::set(&text) {
+                        tracing::warn!("Failed to copy to clipboard");
+                    }
                 }
             }
             (KeyModifiers::CONTROL, KeyCode::Char('b')) => app.toggle_bookmark(app.current_tab),

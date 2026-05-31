@@ -537,11 +537,8 @@ impl TabInput for ProxyTab {
                     self.inputs.focus_prev();
                 }
             } else if self.inputs.is_focused() {
-                self.inputs.focus_prev();
-                if !self.inputs.is_focused() {
-                    self.inputs.blur();
-                    self.view_selector.focus();
-                }
+                self.inputs.blur();
+                self.view_selector.focus();
             } else {
                 self.view_selector.focus();
             }

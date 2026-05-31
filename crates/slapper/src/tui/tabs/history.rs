@@ -612,7 +612,11 @@ impl TabInput for HistoryTab {
                 if !self.entries.is_empty() {
                     let last = self.entries.len() - 1;
                     self.selected = Some(last);
-                    self.scroll_offset = self.visible_rows.saturating_sub(1).saturating_sub(last);
+                    self.scroll_offset = if last >= self.visible_rows.saturating_sub(1) {
+                        last.saturating_sub(self.visible_rows.saturating_sub(1))
+                    } else {
+                        0
+                    };
                     self.update_details_view();
                 }
             }

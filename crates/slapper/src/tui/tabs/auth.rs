@@ -250,6 +250,10 @@ impl TabInput for AuthTab {
             return;
         }
 
+        if self.target().is_empty() {
+            return;
+        }
+
         if self.is_input_focused() {
             self.inputs.blur();
         }

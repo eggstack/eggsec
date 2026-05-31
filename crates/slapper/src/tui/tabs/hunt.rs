@@ -488,9 +488,11 @@ impl TabInput for HuntTab {
             self.stop();
             return;
         }
-        if self.focus_area == HuntFocusArea::Inputs && self.inputs.is_focused() {
-            self.inputs.blur();
-            return;
+        if self.focus_area == HuntFocusArea::Inputs {
+            if self.inputs.is_focused() {
+                self.inputs.blur();
+                return;
+            }
         }
 
         if self.focus_area == HuntFocusArea::Options {

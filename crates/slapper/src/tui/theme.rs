@@ -231,7 +231,9 @@ impl ThemeManager {
     }
 
     pub fn list_themes(&self) -> Vec<&str> {
-        self.themes.keys().map(|s| s.as_str()).collect()
+        let mut themes: Vec<&str> = self.themes.keys().map(|s| s.as_str()).collect();
+        themes.sort();
+        themes
     }
 
     pub fn set_accent_color(&mut self, color_name: &str) {

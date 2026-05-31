@@ -403,6 +403,7 @@ impl TabState for FuzzTab {
         self.session = None;
         self.error = None;
         self.focus_area = FuzzFocusArea::Inputs;
+        self.inputs.blur();
         for field in &mut self.inputs.fields {
             field.clear();
         }

@@ -90,18 +90,36 @@ impl super::App {
                         }
                     }
                     Ok(Err(join_error)) => {
-                        if join_error.is_panic() {
+                        if join_error.is_cancelled() {
+                            tracing::error!("Task was cancelled");
+                            if let Err(e) = error_tx
+                                .send(workers::TaskResult::Error(
+                                    "Task was cancelled".to_string(),
+                                ))
+                                .await
+                            {
+                                tracing::warn!("Failed to send task error result: {:?}", e);
+                            }
+                        } else if join_error.is_panic() {
                             tracing::error!("Task panicked");
+                            if let Err(e) = error_tx
+                                .send(workers::TaskResult::Error(
+                                    "Task panicked".to_string(),
+                                ))
+                                .await
+                            {
+                                tracing::warn!("Failed to send task error result: {:?}", e);
+                            }
                         } else {
                             tracing::error!("Task failed: {}", join_error);
-                        }
-                        if let Err(e) = error_tx
-                            .send(workers::TaskResult::Error(
-                                "Task panicked or failed".to_string(),
-                            ))
-                            .await
-                        {
-                            tracing::warn!("Failed to send task error result: {:?}", e);
+                            if let Err(e) = error_tx
+                                .send(workers::TaskResult::Error(
+                                    "Task failed".to_string(),
+                                ))
+                                .await
+                            {
+                                tracing::warn!("Failed to send task error result: {:?}", e);
+                            }
                         }
                     }
                     Err(_) => {

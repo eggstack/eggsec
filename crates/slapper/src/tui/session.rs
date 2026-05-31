@@ -198,6 +198,11 @@ impl SessionManager {
                 }
             })
             .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+            .filter(|e| {
+                e.path()
+                    .file_name()
+                    .is_some_and(|name| name != "quick_save.json")
+            })
             .collect();
 
         sessions.sort_by_key(|e| e.path());
