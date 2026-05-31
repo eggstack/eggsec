@@ -8,7 +8,7 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** contains the consolidated implementation plan with active work items organized into parallel waves. Current plan covers bug fixes, architecture documentation updates, Agent/MCP profile productionization, and output module documentation.
+**`plans/plan.md`** contains the consolidated implementation plan with active work items organized into parallel waves. Current plan covers Waves 4-7: critical bug fixes, type/count corrections, documentation gaps, and uncovered module documentation.
 
 ## Quick Reference
 
@@ -16,6 +16,7 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ```bash
 cargo check --lib -p slapper
+cargo check -p slapper-nse
 cargo test --lib -p slapper
 cargo test --test negative_tests -p slapper
 cargo test --test scanner_tests -p slapper
@@ -61,10 +62,12 @@ Use these sections as the canonical reference points when updating guidance or s
 - `packet-inspection` - Packet capture
 - `rest-api` / `grpc-api` - API server integration
 - `nse` - Nmap NSE script support
+- `nse-ssh2` - NSE with SSH2/libssh2 support
+- `nse-sandbox` - Restrict dangerous Lua operations
 - `ai-integration` - AI planner, script generation, autonomous agent skills
 - `ws-api` - WebSocket pub/sub
 - `api-schema` - API schema support (marker-only, no additional deps)
-- `full` - All features combined (16 sub-features)
+- `full` - All features combined (16 sub-features, does not include `grpc-api` or `ws-api`)
 
 ### Key Types
 
@@ -138,6 +141,9 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Count verification**: Always verify statistical claims (file counts, enum variants, match arms) against actual source. Source file counts can vary by 200+ depending on whether nested crates are included
 - **TUI stale detection**: TUI styling fixes may already be applied in a previous pass - always verify before re-implementing. Check actual `.rs` files, not just plan descriptions
 - **PayloadType location**: `PayloadType` enum is in `fuzzer/payloads/mod.rs`, not `types.rs`. `types.rs` contains `OutputFormat`, `Severity`, etc.
+- **Fabricated claims**: Always verify module/file existence before documenting dead code. The `auth/multi_protocol/` directory was claimed to exist but doesn't.
+- **Proxy features exist**: `Tor` ProxyType and `Weighted`/`LowestLatency` rotation strategies already exist in code — verify before claiming they're missing.
+- **Feature matrix math**: When verifying feature counts, sum the sub-counts to check for arithmetic errors (e.g., 18+12=30≠28).
 
 ## Skills Directory
 
@@ -202,18 +208,15 @@ All 34 architecture documents reviewed against codebase. Findings in `plans/revi
 - `workflow/mod.rs:36` — SLA violation calc ignores actual SLA logic
 - `notify/mod.rs:199` — Missing Discord dispatch in `notify_findings()`
 - `storage/postgres.rs:19-54` — Stub database returns hardcoded values
-- `auth/mod.rs:6-12` — Dead code: `multi_protocol.rs` unreachable
 - `lib.rs:16-17` — Stale docstrings (22→30 payloads, 26→34 WAF)
 
 **Key Discrepancies:**
-- `proxy/config.rs` — Missing `Tor` ProxyType variant in doc
-- `proxy/rotator.rs` — Missing Weighted/LowestLatency rotation strategies
 - Confidence enum: 5 variants (findings) vs 4 (output/agent.rs) — undocumented divergence
 - WAF_BLOCKED_STATUS_CODES: fuzzer uses 3 codes, WAF uses 4 — inconsistent
 
 **Statistics (All Match):** Tabs 28, PayloadType 30, WAF 34, NSE libs 169, Output 8, CLI 37, Modules 39
 
-**Stale Items:** 9 uncovered modules, 17 stale items — see `plans/stale_items.md`
+**Stale Items:** 9 uncovered modules — see `plans/stale_items.md`
 
 ## Verification Commands
 
