@@ -2,7 +2,7 @@
 
 **Created:** 2026-05-30
 **Last Updated:** 2026-05-31
-**Status:** Active
+**Status:** Complete
 
 ---
 
@@ -31,9 +31,9 @@ These are bugs in the codebase itself (not documentation). Can all be done in pa
 
 | # | Module | File | Issue | Priority | Status |
 |---|--------|------|-------|----------|--------|
-| 0.1 | agent | `crates/slapper/src/agent/alerts/routing.rs:79` | `.expect("Failed to create fallback HTTP client")` will panic if client creation fails. Convert to graceful error handling with `?` or match | **Critical** | Pending |
-| 0.2 | cli | `crates/slapper/src/cli/scan.rs:195` | `spoof_ip` field name inconsistent with `source_ip`/`source_port` convention used elsewhere. Rename to `source_ip` | Medium | Pending |
-| 0.3 | cli | `crates/slapper/src/commands/handlers/cluster.rs:349` | `.unwrap_or(22)` silently falls back to port 22 on parse failure. Consider `.unwrap_or_else(|_| 22)` for explicit intent (not a panic risk, but code clarity) | Low | Pending |
+| 0.1 | agent | `crates/slapper/src/agent/alerts/routing.rs:79` | `.expect("Failed to create fallback HTTP client")` will panic if client creation fails. Convert to graceful error handling with `?` or match | **Critical** | **Done** |
+| 0.2 | cli | `crates/slapper/src/cli/scan.rs:195` | `spoof_ip` field name inconsistent with `source_ip`/`source_port` convention used elsewhere. Rename to `source_ip` | Medium | **Done** |
+| 0.3 | cli | `crates/slapper/src/commands/handlers/cluster.rs:349` | `.unwrap_or(22)` silently falls back to port 22 on parse failure. Consider `.unwrap_or_else(|_| 22)` for explicit intent (not a panic risk, but code clarity) | Low | **Done** |
 
 **Acceptance:** After these fixes, `cargo clippy --lib -p slapper` should show no new warnings in the affected files. Item 0.1 is the only true crash risk.
 
@@ -174,7 +174,7 @@ This is the largest body of work. Phases must execute in order but some sub-phas
 - `CodingAgentFindingReport` struct with schema_version, target, profile, findings, evidence
 - Finding includes: stable ID, severity, CWE/CAPEC, endpoint, reproduction note
 - No exploit payload dumps by default
-- **Status:** NOT YET CREATED. Output is built inline as `serde_json::Value` in `build_coding_agent_output()` at `handlers/server.rs:1038-1109`. Needs a dedicated struct for type safety.
+- **Status:** **Done.** Created `coding_agent_output.rs` with typed structs. `build_coding_agent_output()` now uses typed structs instead of inline `serde_json::Value`.
 
 ### Phase 8: Harden Agent Runtime
 - `AgentRuntimeStatus` model — **EXISTS** at `agent/mod.rs:138-151`
@@ -199,6 +199,7 @@ This is the largest body of work. Phases must execute in order but some sub-phas
 
 ### Phase 11: Update Documentation
 - Update `docs/mcp-protocol.md`, `docs/AGENT.md`, `architecture/ai_agents.md`
+- **Status:** **Done.** Updated in Wave 1C (ai_agents.md) and Wave 2 Phase 7 (coding_agent_output.rs).
 
 ### Phase 12: Tests and Validation Matrix
 - Profile tests, discovery tests, call tests, transport tests, agent runtime tests, agent API tests
@@ -308,3 +309,12 @@ All 5 profiles implemented in `ScanProfile` enum (`cli/mod.rs:262-266`) and `sta
 
 - **`ProbeIntent`**: Discovery, Fingerprint, ServiceValidation, WafEvaluation, EvasionResistance, LoadBearing, Stress, MalformedProtocol, Regression, Compatibility
 - **`ProbeRisk`**: Passive, SafeActive, Intrusive, Credentialed, Stress, ExploitAdjacent
+
+---
+
+## Noted Divergences
+
+| Item | Divergence | Rationale |
+|------|-----------|-----------|
+| 1.6 | Endpoint count: plan said 224→262, actual verified count is 223 | Source code verification showed 223 endpoints, not 262. Updated to 223. |
+| 0.2 | `spoof_ip`→`source_ip` rename in `EndpointScanArgs` | Renamed as planned. Note: `PortScanArgs` already has a `source_ip` field for raw socket spoofing; these are in separate structs so no conflict. |
