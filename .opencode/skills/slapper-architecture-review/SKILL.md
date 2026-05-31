@@ -189,29 +189,39 @@ All `std::collections::HashMap`/`HashSet` instances in the NSE and slapper crate
 | Fuzzer | Dead code with invalid FxFxHashMap import | fuzzer/targets/api.rs |
 | NSE | Brace mismatch prevents compilation | slapper-nse/src/libraries/vulns.rs:157-176 |
 
-### Review Cycle 2026-05-30 (17 documents)
+### Review Cycle 2026-05-31 (17 documents)
 
 #### Phase 1: Document Reviews (17 modules)
 - All 17 architecture documents reviewed against implementation
-- 250+ verified claims, 40+ discrepancies, 2 bugs, 30+ improvement opportunities
+- Findings in `plans/*_review.md`
 
-#### Critical Discrepancies Found
-1. **overview.md**: Quick Facts outdated (41→39 modules, 743→526 files, 31→30 payloads)
-2. **defense_lab.md**: Profiles marked "planned" but fully implemented (DefenseLab, SynvoidLocal, WafRegression, ProtocolEdge, NseSafe)
-3. **pipeline.md**: Same defense-lab status issue
-4. **feature_matrix.md**: Feature counts wrong (33→28 total, 18→16 in full)
-5. **tui.md**: Tab count 29 vs actual 28, stale "plugin" reference
-6. **cli_commands.md**: cluster.rs:349 fix not applied (unwrap_or vs unwrap_or_else)
+#### Accuracy Summary
+| Document | Accuracy | Key Issues |
+|----------|----------|------------|
+| ai_agents.md | Medium | McpProfilePolicy underspecified (7/18 fields), TargetPolicy::None doesn't exist |
+| cli_commands.md | Medium | cluster.rs:349 fix not applied, wrong line numbers |
+| config.md | High | Minor line drift, missing sub-configs |
+| output.md | High | has_regressions() check broader than documented |
+| pipeline.md | High | Defense-lab profiles stale (implemented, doc says planned) |
+| fuzzer.md | High | Minor naming mismatches in magic numbers |
+| scanner.md | High | Endpoint count 261 vs documented 224 |
+| waf.md | High | Payload count drift (XSS 17 vs 18, SSRF 16 vs 15) |
+| recon.md | Medium | Parallel tasks 13 vs 14, ASN lookup detached |
+| networking.md | High | BPF-style filters claim misleading |
+| loadtest.md | Medium | run_cli() signature wrong (async, config param) |
+| distributed.md | High | Line number ranges drifted 10-150 lines |
+| nse_integration.md | High | Bug fix history is documentation debt |
+| tui.md | High | ~700 lines session fix history should be changelog |
+| overview.md | Medium-High | Source files 522 not 526, features 28 not 30 |
+| defense_lab.md | High | probe_intents field type wrong |
+| feature_matrix.md | Medium-High | api-schema missing from feature table |
 
-#### Notable Bugs Found
-- **[MEDIUM]** loadtest runner.rs:279 - Rate limiter initial burst allows simultaneous worker release
-- **[MEDIUM]** fuzzer grpc.rs:91 - Internal payload type inconsistency (PayloadType::Ssrf vs PayloadType::Grpc)
-- **[LOW]** networking parse_impl.rs:858 - Redundant TLS byte sequence check
+#### Critical Issues Found
+1. **overview.md**: "Feature flags: 30" wrong — should be 28
+2. **overview.md**: "526 source files" wrong — actual 522
+3. **feature_matrix.md**: `api-schema` feature undeclared in table
+4. **tui.md**: ~700 lines session fix history should be extracted
+5. **pipeline.md:90**: Defense-lab profiles "planned" but fully implemented
 
-#### Discrepancy Categories
-- Stale line number references in bug fix sections (many documents)
-- Implementation vs documentation mismatches (overview, feature_matrix, tui)
-- Noted missing documentation (calibration.rs, chain.rs in fuzzer, api_schema feature)
-
-#### Stale Items Identified
-See `plans/stale_items.md` for full list of items needing updates/pruning
+#### Stale Items
+See `plans/stale_items.md` for full list

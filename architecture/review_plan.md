@@ -1,8 +1,34 @@
 # Architecture Review Plan
 
-**Status:** READY FOR EXECUTION
+**Status:** INCOMPLETE - Iterative Improvement Needed
 **Created:** 2026-05-31
+**Last Updated:** 2026-05-31
 **Purpose:** Systematic review of all architecture documents, verification against codebase, and stale item pruning.
+
+## Completion Status
+
+### Phase 1: Document Reviews - COMPLETE
+All 17 architecture documents reviewed. Findings in `plans/*_review.md`.
+
+### Phase 2: Stale Item Detection - COMPLETE
+Stale items identified in `plans/stale_items.md`. Key issues:
+- `pipeline.md:90` defense-lab profiles claim is stale (profiles are implemented)
+- Source file count drift: documented 526, actual 522
+- Payload type count drift: documented 31, actual 30
+- 17 modules under `src/` lack architecture docs (auth, browser, compliance, etc.)
+- MCP content duplicated between `ai_agents.md` and `overview.md`
+
+### Phase 3: Verification - PARTIAL
+- `cargo check --lib -p slapper`: PASS (7 pre-existing warnings)
+- `cargo test --lib -p slapper`: TIMEOUT (pre-existing issue, not caused by reviews)
+
+### Remaining Work
+- [ ] Fix stale defense-lab profiles claim in `pipeline.md`
+- [ ] Correct statistical counts across architecture docs
+- [ ] Extract TUI session fix history to separate changelog
+- [ ] Resolve duplicate MCP content across docs
+- [ ] Consider adding architecture docs for uncovered modules
+- [ ] Re-run tests to confirm no regressions
 
 ## Overview
 
