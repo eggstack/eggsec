@@ -267,7 +267,7 @@ impl TabState for IntegrationsTab {
         self.focus_area = IntegrationsFocusArea::Tracker;
         self.current_mode = IntegrationsMode::Configure;
         self.tracker_selector.blur();
-        self.tracker_selector.selected = 0;
+        self.tracker_selector.select(0);
         self.config_inputs.blur();
         for field in &mut self.config_inputs.fields {
             field.clear();
@@ -334,7 +334,7 @@ impl TabRender for IntegrationsTab {
 
         let fields_area = Rect {
             y: input_area.y + 3,
-            height: input_area.height - 3,
+            height: input_area.height.saturating_sub(3),
             ..input_area
         };
 

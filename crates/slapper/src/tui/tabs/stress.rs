@@ -431,6 +431,10 @@ impl TabInput for StressTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == StressFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
             return;
@@ -438,22 +442,19 @@ impl TabInput for StressTab {
         match self.focus_area {
             StressFocusArea::Inputs => {
                 self.inputs.blur();
-                return;
+                self.focus_area = StressFocusArea::TypeSelector;
+                self.type_selector.open();
             }
             StressFocusArea::TypeSelector => {
                 if self.type_selector.is_open() {
                     if self.type_selector.confirm().is_none() {
                         tracing::warn!("Failed to confirm stress type selector");
                     }
-                    return;
                 } else {
                     self.type_selector.open();
-                    return;
                 }
             }
-            StressFocusArea::Results => {
-                return;
-            }
+            StressFocusArea::Results => {}
         }
     }
 

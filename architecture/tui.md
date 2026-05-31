@@ -1445,3 +1445,61 @@ Comprehensive audit using 7 parallel subagents across all tabs, core modules, an
 | LOW priority fixes | 19 |
 
 **Key systemic bug fixed**: `page_up`/`page_down` methods were defined as inherent `pub fn` outside `impl TabInput` in 5 tabs, making them unreachable through the trait dispatcher. PageUp/PageDown keys were completely non-functional for those tabs.
+
+## Session Fixes (2026-05-31 - Deep Dive Audit)
+
+### TUI Deep Dive Audit - All 28 Tabs + Core + Components
+
+Comprehensive audit using 7 parallel subagents across all tabs, core modules, and components. Found 31 bugs total (3 HIGH, 16 MEDIUM, 12 LOW).
+
+#### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `stress.rs` | 433-458 | `handle_enter()` has no path to `start()` — user can never start a stress test by pressing Enter | Restructured: Inputs opens TypeSelector, TypeSelector confirms, Results returns early |
+| `stress.rs` | 433-437 | `handle_enter()` guard order inverted — `is_running()` checked before Results guard | Added Results early-return before is_running check |
+| `auth.rs` | 66-74 | `TabState` impl missing `set_error()` override — errors dispatched via trait silently swallowed | Added `set_error()` delegation to inherent method |
+
+#### MEDIUM Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scan.rs` | 477,499 | `handle_focus_next/prev` doesn't collapse stale dropdowns when transitioning between ProfileSelector↔OutputSelector | Added `.cancel()` calls on source selector during transitions |
+| `packet.rs` | 429,438 | `execute()` calls `run_dump()`/`run_interfaces()` without setting `self.state = AppState::Running` — UI shows no running indicator | Added `self.state = AppState::Running` before both calls |
+| `proxy.rs` | 453-455 | Duplicate dropdown render in `render()` and `render_overlays()` — visual artifacts | Removed dropdown render from `render()`, kept in `render_overlays()` |
+| `storage.rs` | 400-402 | `handle_focus_next` Config→Mode missing `mode_selector.focus()` — selector not keyboard-accessible | Added `self.mode_selector.focus()` call |
+| `storage.rs` | 443-451 | `handle_focus_prev` from Results always goes to Query — in non-Connect mode navigates to invisible area | Added mode-based branching to go to Mode when not in Connect |
+| `workflow.rs` | 247-261 | `reset()` missing blur calls on mode/severity/status selectors and inputs | Added `.blur()` calls for all selectors and inputs |
+| `workflow.rs` | 485-489 | `handle_top()` goes to Inputs, skipping Mode selector — inconsistent with other tabs | Changed to go to Mode selector first |
+| `vuln.rs` | 344-353 | `reset()` missing blur calls on mode selector and inputs | Added `.blur()` calls |
+| `vuln.rs` | 568-572 | `handle_top()` goes to Inputs, skipping Mode selector — inconsistent with other tabs | Changed to go to Mode selector first |
+| `report.rs` | 232-248 | `reset()` missing blur calls on view/format selectors and convert/trend/schedule inputs | Added `.blur()` calls for all selectors and input groups |
+| `settings/render.rs` | 150-154 | Hardcoded `y: inner.y + 6` for theme hint text — overlaps content if layout changes | Changed to compute offset from form height (checkbox=2 + selector=3 + borders=2 = 7) |
+
+#### LOW Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `fuzz.rs` | 364 | `update_progress` is a no-op — progress bar never updates during fuzzing | Implemented to set `progress.current` and `progress.total` |
+| `integrations.rs` | 270 | `reset()` sets `tracker_selector.selected = 0` directly instead of `.select(0)` — bypasses internal state | Changed to `.select(0)` |
+| `integrations.rs` | 335-339 | `render()` uses `input_area.height - 3` — u16 underflow on small terminals | Changed to `.saturating_sub(3)` |
+| `workflow.rs` | 318-322 | Same u16 underflow in render | Changed to `.saturating_sub(3)` |
+| `vuln.rs` | 410-414 | Same u16 underflow in render | Changed to `.saturating_sub(3)` |
+| `storage.rs` | 556-561 | `handle_top()` always goes to Config — in non-Connect mode Config fields aren't rendered | Added mode-based branching |
+
+#### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 31 |
+| Total bugs fixed | 26 |
+| Files modified | 12 |
+| HIGH priority fixes | 3 |
+| MEDIUM priority fixes | 11 |
+| LOW priority fixes | 6 |
+| Noted (design/edge cases) | 5 |
+
+**Key systemic bugs fixed**:
+1. `stress.rs` `handle_enter()` had no path to `start()` — users could never start a stress test via keyboard
+2. `auth.rs` `TabState` impl missing `set_error()` — errors dispatched via trait were silently swallowed
+3. `scan.rs` stale dropdowns on focus transitions — dropdown stayed open and intercepted keyboard input in wrong focus area

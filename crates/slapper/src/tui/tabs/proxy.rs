@@ -450,9 +450,6 @@ impl TabRender for ProxyTab {
         let results_area = chunks.get(2).copied().unwrap_or(area);
 
         self.view_selector.render(f, selector_area);
-        if let Some(dropdown) = self.view_selector.dropdown_info(selector_area) {
-            dropdown.render(f);
-        }
 
         let config_block = Block::default()
             .borders(Borders::ALL)

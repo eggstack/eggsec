@@ -256,8 +256,12 @@ impl TabState for WorkflowTab {
             field.clear();
         }
         self.mode_selector.select(0);
+        self.mode_selector.blur();
         self.severity_selector.select(0);
+        self.severity_selector.blur();
         self.status_selector.select(0);
+        self.status_selector.blur();
+        self.inputs.blur();
     }
 
     fn set_error(&mut self, error: TabError) {
@@ -313,7 +317,7 @@ impl TabRender for WorkflowTab {
 
         let fields_area = Rect {
             y: input_area.y + 3,
-            height: input_area.height - 3,
+            height: input_area.height.saturating_sub(3),
             ..input_area
         };
 
@@ -484,8 +488,9 @@ impl TabInput for WorkflowTab {
 
     fn handle_top(&mut self) {
         if !self.is_running() {
-            self.focus_area = WorkflowFocusArea::Inputs;
-            self.inputs.focus(0);
+            self.inputs.blur();
+            self.focus_area = WorkflowFocusArea::Mode;
+            self.mode_selector.focus();
         }
     }
 

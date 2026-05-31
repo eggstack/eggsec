@@ -71,6 +71,10 @@ impl TabState for AuthTab {
     fn reset(&mut self) {
         AuthTab::reset(self);
     }
+
+    fn set_error(&mut self, error: TabError) {
+        AuthTab::set_error(self, error);
+    }
 }
 
 impl TabRender for AuthTab {

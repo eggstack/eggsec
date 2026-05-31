@@ -399,6 +399,7 @@ impl TabInput for StorageTab {
         self.focus_area = match self.focus_area {
             StorageFocusArea::Config => {
                 self.config_inputs.blur();
+                self.mode_selector.focus();
                 StorageFocusArea::Mode
             }
             StorageFocusArea::Mode => {
@@ -446,8 +447,13 @@ impl TabInput for StorageTab {
                 StorageFocusArea::Mode
             }
             StorageFocusArea::Results => {
-                self.query_inputs.focus(0);
-                StorageFocusArea::Query
+                if self.current_mode == StorageMode::Connect {
+                    self.query_inputs.blur();
+                    StorageFocusArea::Query
+                } else {
+                    self.mode_selector.focus();
+                    StorageFocusArea::Mode
+                }
             }
         };
     }
@@ -551,8 +557,13 @@ impl TabInput for StorageTab {
         if self.is_running() {
             return;
         }
-        self.focus_area = StorageFocusArea::Config;
-        self.config_inputs.focus(0);
+        if self.current_mode == StorageMode::Connect {
+            self.focus_area = StorageFocusArea::Config;
+            self.config_inputs.focus(0);
+        } else {
+            self.focus_area = StorageFocusArea::Mode;
+            self.mode_selector.focus();
+        }
     }
 
     fn handle_bottom(&mut self) {

@@ -349,6 +349,8 @@ impl TabState for VulnTab {
             field.clear();
         }
         self.mode_selector.select(0);
+        self.mode_selector.blur();
+        self.inputs.blur();
         self.focus_area = VulnFocusArea::Mode;
         self.current_mode = VulnMode::CvssCalc;
     }
@@ -407,7 +409,7 @@ impl TabRender for VulnTab {
 
         let fields_area = Rect {
             y: input_area.y + 3,
-            height: input_area.height - 3,
+            height: input_area.height.saturating_sub(3),
             ..input_area
         };
 
@@ -567,8 +569,9 @@ impl TabInput for VulnTab {
 
     fn handle_top(&mut self) {
         if !self.is_running() {
-            self.focus_area = VulnFocusArea::Inputs;
-            self.inputs.focus(0);
+            self.inputs.blur();
+            self.focus_area = VulnFocusArea::Mode;
+            self.mode_selector.focus();
         }
     }
 

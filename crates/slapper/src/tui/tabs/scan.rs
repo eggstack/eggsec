@@ -474,8 +474,14 @@ impl TabInput for ScanTab {
                 self.inputs.blur();
                 ScanFocusArea::ProfileSelector
             }
-            ScanFocusArea::ProfileSelector => ScanFocusArea::OutputSelector,
-            ScanFocusArea::OutputSelector => ScanFocusArea::Results,
+            ScanFocusArea::ProfileSelector => {
+                self.profile_selector.cancel();
+                ScanFocusArea::OutputSelector
+            }
+            ScanFocusArea::OutputSelector => {
+                self.output_selector.cancel();
+                ScanFocusArea::Results
+            }
             ScanFocusArea::Results => {
                 self.inputs.focus(0);
                 ScanFocusArea::Inputs
@@ -496,7 +502,10 @@ impl TabInput for ScanTab {
                 self.inputs.focus(0);
                 ScanFocusArea::Inputs
             }
-            ScanFocusArea::OutputSelector => ScanFocusArea::ProfileSelector,
+            ScanFocusArea::OutputSelector => {
+                self.output_selector.cancel();
+                ScanFocusArea::ProfileSelector
+            }
             ScanFocusArea::Results => ScanFocusArea::OutputSelector,
         };
     }

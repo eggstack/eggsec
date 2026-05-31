@@ -146,13 +146,18 @@ impl TabRender for super::SettingsTab {
                 builder = builder.add_selector(self.accent_color.clone());
                 builder.render(f, inner, insert_mode);
 
+                // Form height: 2 fields (checkbox=2, selector=3) + block borders (2) = 7
+                let form_height: u16 = 7;
                 let theme_hint = Paragraph::new("Use Ctrl+T to toggle theme instantly");
-                let hint_area = Rect {
-                    y: inner.y + 6,
-                    height: 1,
-                    ..inner
-                };
-                f.render_widget(theme_hint, hint_area);
+                let hint_y = inner.y + form_height;
+                if hint_y < inner.y + inner.height {
+                    let hint_area = Rect {
+                        y: hint_y,
+                        height: 1,
+                        ..inner
+                    };
+                    f.render_widget(theme_hint, hint_area);
+                }
             }
         }
 

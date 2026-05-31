@@ -426,7 +426,10 @@ impl PacketTab {
                 self.state = AppState::Running;
                 self.run_send();
             }
-            PacketView::Dump => self.run_dump(),
+            PacketView::Dump => {
+                self.state = AppState::Running;
+                self.run_dump();
+            }
             PacketView::Icmp => {
                 self.state = AppState::Running;
                 self.run_icmp();
@@ -435,7 +438,10 @@ impl PacketTab {
                 self.state = AppState::Running;
                 self.run_traceroute();
             }
-            PacketView::Interfaces => self.run_interfaces(),
+            PacketView::Interfaces => {
+                self.state = AppState::Running;
+                self.run_interfaces();
+            }
         }
     }
 

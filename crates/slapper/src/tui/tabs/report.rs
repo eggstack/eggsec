@@ -234,7 +234,9 @@ impl TabState for ReportTab {
         self.results_view.clear();
         self.error = None;
         self.view_selector.select(0);
+        self.view_selector.blur();
         self.format_selector.select(0);
+        self.format_selector.blur();
         self.current_view = ReportView::Convert;
         for field in &mut self.convert_inputs.fields {
             field.clear();
@@ -245,6 +247,9 @@ impl TabState for ReportTab {
         for field in &mut self.schedule_inputs.fields {
             field.clear();
         }
+        self.convert_inputs.blur();
+        self.trend_inputs.blur();
+        self.schedule_inputs.blur();
         self.focus_area = ReportFocusArea::ViewSelector;
     }
 
