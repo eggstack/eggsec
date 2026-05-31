@@ -159,7 +159,9 @@ impl TabInput for AuthTab {
     fn handle_char(&mut self, c: char) {
         if !self.is_running() {
             if let Some(idx) = self.current_input_index() {
-                self.inputs.fields[idx].insert(c);
+                if let Some(field) = self.inputs.fields.get_mut(idx) {
+                    field.insert(c);
+                }
             }
         }
     }
@@ -167,7 +169,9 @@ impl TabInput for AuthTab {
     fn handle_backspace(&mut self) {
         if !self.is_running() {
             if let Some(idx) = self.current_input_index() {
-                self.inputs.fields[idx].backspace();
+                if let Some(field) = self.inputs.fields.get_mut(idx) {
+                    field.backspace();
+                }
             }
         }
     }
@@ -175,7 +179,9 @@ impl TabInput for AuthTab {
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() {
             if let Some(idx) = self.current_input_index() {
-                self.inputs.fields[idx].paste(text);
+                if let Some(field) = self.inputs.fields.get_mut(idx) {
+                    field.paste(text);
+                }
             }
         }
     }
@@ -183,7 +189,9 @@ impl TabInput for AuthTab {
     fn handle_word_forward(&mut self) {
         if !self.is_running() {
             if let Some(idx) = self.current_input_index() {
-                self.inputs.fields[idx].move_word_forward();
+                if let Some(field) = self.inputs.fields.get_mut(idx) {
+                    field.move_word_forward();
+                }
             }
         }
     }
@@ -191,7 +199,9 @@ impl TabInput for AuthTab {
     fn handle_word_backward(&mut self) {
         if !self.is_running() {
             if let Some(idx) = self.current_input_index() {
-                self.inputs.fields[idx].move_word_backward();
+                if let Some(field) = self.inputs.fields.get_mut(idx) {
+                    field.move_word_backward();
+                }
             }
         }
     }
@@ -199,7 +209,9 @@ impl TabInput for AuthTab {
     fn handle_home(&mut self) {
         if !self.is_running() {
             if let Some(idx) = self.current_input_index() {
-                self.inputs.fields[idx].move_home();
+                if let Some(field) = self.inputs.fields.get_mut(idx) {
+                    field.move_home();
+                }
             }
         }
     }
@@ -207,7 +219,9 @@ impl TabInput for AuthTab {
     fn handle_end(&mut self) {
         if !self.is_running() {
             if let Some(idx) = self.current_input_index() {
-                self.inputs.fields[idx].move_end();
+                if let Some(field) = self.inputs.fields.get_mut(idx) {
+                    field.move_end();
+                }
             }
         }
     }

@@ -207,6 +207,8 @@ impl TabState for ClusterTab {
         self.results_view.clear();
         self.error = None;
         self.view_selector.select(0);
+        self.view_selector.cancel();
+        self.view_selector.blur();
         self.current_view = ClusterView::Worker;
         self.focus_area = ClusterFocusArea::ViewSelector;
         for field in &mut self.worker_inputs.fields {
@@ -218,6 +220,9 @@ impl TabState for ClusterTab {
         for field in &mut self.status_inputs.fields {
             field.clear();
         }
+        self.worker_inputs.blur();
+        self.coordinator_inputs.blur();
+        self.status_inputs.blur();
         if let Some(f) = self.worker_inputs.fields.get_mut(0) {
             f.value = "localhost:9000".to_string();
         }
@@ -513,6 +518,12 @@ impl TabInput for ClusterTab {
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
+            match self.current_view {
+                ClusterView::Worker => self.worker_inputs.blur(),
+                ClusterView::Coordinator => self.coordinator_inputs.blur(),
+                ClusterView::Status => self.status_inputs.blur(),
+            }
+            self.view_selector.blur();
             self.focus_area = ClusterFocusArea::Results;
         }
     }

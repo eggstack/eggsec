@@ -351,6 +351,7 @@ impl TabInput for NseTab {
             NseFocusArea::Inputs => {
                 if self.inputs.is_focused() {
                     self.inputs.blur();
+                    return;
                 } else {
                     self.focus_area = NseFocusArea::Inputs;
                     self.inputs.focus(0);
@@ -361,6 +362,7 @@ impl TabInput for NseTab {
                 if self.script_selector.focused {
                     self.script_selector.handle_enter();
                 }
+                return;
             }
             NseFocusArea::Results => {
                 return;

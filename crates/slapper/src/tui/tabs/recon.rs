@@ -360,14 +360,6 @@ impl ReconTab {
         self.results_view.scroll_down(1);
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.page_down(page_size);
-    }
-
     fn options_row_count(&self) -> usize {
         self.option_checkboxes.len() / CHECKBOX_COLUMNS
     }

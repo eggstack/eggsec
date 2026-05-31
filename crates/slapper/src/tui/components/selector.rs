@@ -108,6 +108,13 @@ impl Selector {
         self
     }
 
+    pub fn set_items(&mut self, items: Vec<SelectorItem>) {
+        self.items = items;
+        if !self.items.is_empty() && self.selected >= self.items.len() {
+            self.selected = self.items.len() - 1;
+        }
+    }
+
     pub fn simple_items(mut self, items: Vec<&str>) -> Self {
         self.items = items.into_iter().map(SelectorItem::simple).collect();
         self

@@ -237,13 +237,6 @@ impl ScanTab {
         self.current_stage_output.scroll_down(1);
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.current_stage_output.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.current_stage_output.page_down(page_size);
-    }
 }
 
 impl Default for ScanTab {
@@ -726,5 +719,13 @@ impl TabInput for ScanTab {
 
     fn is_input_focused(&self) -> bool {
         self.focus_area == ScanFocusArea::Inputs && self.inputs.is_focused()
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.current_stage_output.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.current_stage_output.page_down(page_size);
     }
 }

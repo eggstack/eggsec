@@ -174,6 +174,9 @@ impl Popup {
 }
 
 pub fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
+    if r.width < 3 || r.height < 3 {
+        return r;
+    }
     let clamped_width = width.min(r.width.saturating_sub(2));
     let clamped_height = height.min(r.height.saturating_sub(2));
 

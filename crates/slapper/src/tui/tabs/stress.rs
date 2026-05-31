@@ -434,6 +434,7 @@ impl TabInput for StressTab {
                     if self.type_selector.confirm().is_none() {
                         tracing::warn!("Failed to confirm stress type selector");
                     }
+                    return;
                 } else {
                     self.type_selector.open();
                     return;
@@ -443,7 +444,6 @@ impl TabInput for StressTab {
                 return;
             }
         }
-        self.start();
     }
 
     fn handle_escape(&mut self) {

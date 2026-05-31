@@ -545,6 +545,7 @@ impl TabInput for WafTab {
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
+            self.inputs.blur();
             self.focus_area = WafFocusArea::Results;
         }
     }

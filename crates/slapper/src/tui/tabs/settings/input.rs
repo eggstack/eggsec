@@ -281,6 +281,7 @@ impl TabInput for SettingsTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         if self.proxy_rotation_selector.is_open() {

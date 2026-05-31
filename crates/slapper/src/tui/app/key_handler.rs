@@ -77,7 +77,9 @@ impl KeyHandler {
                 if app.is_paused() {
                     app.resume();
                 } else if let Some(text) = app.dispatcher_mut().handle_copy() {
-                    Clipboard::set(&text);
+                    if !Clipboard::set(&text) {
+                        tracing::warn!("Clipboard write failed");
+                    }
                 }
             }
             (KeyModifiers::NONE, KeyCode::Tab) => app.handle_focus_next(),
@@ -320,7 +322,14 @@ impl KeyHandler {
                     if let Some(ref mut palette) = app.command_palette {
                         palette.query.pop();
                         let new_query = palette.query.clone();
+                        let _ = palette;
                         app.update_command_palette_query(&new_query);
+                    }
+                    if let Some(ref mut palette) = app.command_palette {
+                        let max_idx = palette.results.len().saturating_sub(1);
+                        if palette.selected_index > max_idx {
+                            palette.selected_index = max_idx;
+                        }
                     }
                 }
             }
@@ -328,7 +337,14 @@ impl KeyHandler {
                 if let Some(ref mut palette) = app.command_palette {
                     palette.query.push(c);
                     let new_query = palette.query.clone();
+                    drop(palette);
                     app.update_command_palette_query(&new_query);
+                }
+                if let Some(ref mut palette) = app.command_palette {
+                    let max_idx = palette.results.len().saturating_sub(1);
+                    if palette.selected_index > max_idx {
+                        palette.selected_index = max_idx;
+                    }
                 }
             }
             (KeyModifiers::NONE, KeyCode::Tab) => {

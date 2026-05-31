@@ -489,8 +489,11 @@ impl TabState for PacketTab {
         if self.inputs.fields.len() > 2 {
             self.inputs.fields[2].value = "100".to_string();
         }
+        self.inputs.blur();
         self.current_view = PacketView::Capture;
         self.view_selector.select(0);
+        self.view_selector.cancel();
+        self.view_selector.blur();
     }
 
     fn set_error(&mut self, error: TabError) {

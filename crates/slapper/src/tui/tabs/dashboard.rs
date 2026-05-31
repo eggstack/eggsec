@@ -437,6 +437,12 @@ impl Default for DashboardTab {
     }
 }
 
+impl DashboardTab {
+    pub fn stop(&mut self) {
+        self.state = AppState::Idle;
+    }
+}
+
 impl TabState for DashboardTab {
     fn state(&self) -> AppState {
         self.state.clone()

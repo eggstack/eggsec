@@ -325,6 +325,10 @@ impl Default for HistoryTab {
     }
 }
 
+impl HistoryTab {
+    pub fn stop(&mut self) {}
+}
+
 impl TabState for HistoryTab {
     fn state(&self) -> AppState {
         AppState::Idle

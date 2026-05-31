@@ -504,6 +504,9 @@ impl TabInput for WorkflowTab {
             WorkflowFocusArea::Mode => {
                 let was_open = self.mode_selector.is_open();
                 self.mode_selector.handle_enter();
+                if !was_open {
+                    return;
+                }
                 self.current_mode = match self.mode_selector.selected {
                     0 => WorkflowMode::ListFindings,
                     1 => WorkflowMode::CreateFinding,
@@ -511,9 +514,6 @@ impl TabInput for WorkflowTab {
                     3 => WorkflowMode::AddComment,
                     _ => WorkflowMode::ChangeStatus,
                 };
-                if !was_open {
-                    return;
-                }
             }
             WorkflowFocusArea::Inputs => {
                 self.inputs.blur();
@@ -598,10 +598,16 @@ impl TabInput for WorkflowTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_down(page_size);
     }
 }

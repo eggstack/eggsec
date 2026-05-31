@@ -1374,3 +1374,74 @@ Comprehensive audit using 7 parallel subagents across all tabs, components, and 
 | Already fixed (MEDIUM/LOW) | 28 |
 
 **Key systemic bug fixed**: `handle_escape()` was unable to stop running tasks across all 20 tabs. Users had no keyboard shortcut to cancel an in-progress scan. All tabs now properly call `self.stop()` before returning when `is_running()` is true.
+
+## Session Fixes (2026-05-31 - Deep Dive Audit)
+
+### TUI Deep Dive Audit - All 28 Tabs + Core + Components
+
+Comprehensive audit using 7 parallel subagents across all tabs, core modules, and components. Found 40 bugs total (1 HIGH, 13 MEDIUM, 26 LOW).
+
+#### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `key_handler.rs` | 320-324 | Command palette `selected_index` not clamped after backspace — out-of-bounds access on Enter | Added clamping after `update_command_palette_query` in both Backspace and Char handlers |
+
+#### MEDIUM Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `recon.rs` | 363-368 | `page_up`/`page_down` defined as inherent methods, unreachable via trait dispatch | Moved into `impl TabInput` block |
+| `scan.rs` | 240-245 | Same — inherent methods unreachable | Moved into `impl TabInput` block |
+| `scan_ports.rs` | 241-246 | Same | Moved into `impl TabInput` block |
+| `scan_endpoints.rs` | 228-233 | Same | Moved into `impl TabInput` block |
+| `fingerprint.rs` | 185-190 | Same | Moved into `impl TabInput` block |
+| `load.rs` | 686-718 | `handle_up`/`handle_down` missing Results scroll branch | Added `LoadFocusArea::Results` branches |
+| `load.rs` | 636-641 | `handle_bottom` missing `self.inputs.blur()` | Added blur call |
+| `stress.rs` | 432-446 | `handle_enter` auto-starts after TypeSelector confirm | Added `return;` after confirm |
+| `workflow.rs` | 507-516 | `handle_enter` mode update before `was_open` guard | Moved mode update after guard |
+| `settings/main.rs` | 578 | `reset()` sets `dark_mode.checked = false` instead of `true` | Changed to `true` to match `new()` default |
+| `browser.rs` | 584-590 | `page_up`/`page_down` missing `is_running()` guard | Added guard |
+| `nse.rs` | 345-370 | `handle_enter` blur falls through to `start()` | Added `return;` after blur |
+| `compliance.rs` | 380-407 | `handle_enter` blur falls through to `start()` | Added `return;` after blur |
+| `packet.rs` | 481-494 | `reset()` doesn't close dropdown or reset InputGroup.focused | Added `cancel()`, `blur()` calls |
+| `cluster.rs` | 205-230 | `reset()` incomplete — no selector/inputs reset | Added `cancel()`, `blur()` for all inputs |
+| `proxy.rs` | 391-403 | `reset()` incomplete | Added `cancel()`, `blur()` calls |
+| `history.rs` | impl TabInput | `stop()` is no-op trait default | Added explicit `stop()` override |
+| `dashboard.rs` | impl TabInput | `stop()` is no-op trait default | Added explicit `stop()` resetting state |
+| `key_handler.rs` | 80 | `Clipboard::set` result silently discarded | Added `if !Clipboard::set(&text) { warn }` |
+| `selector.rs` | 116 | `selected` stale after items shrink externally | Added `set_items()` method with clamping |
+
+#### LOW Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `fingerprint.rs` | 333-335 | `handle_focus_prev` doesn't cycle Inputs→Results | Changed to blur + switch to Results |
+| `fingerprint.rs` | (missing) | `handle_copy` not overridden | Added override returning results content |
+| `waf.rs` | 546-549 | `handle_bottom` missing `self.inputs.blur()` | Added blur call |
+| `waf_stress.rs` | 339-342 | `handle_bottom` missing `self.inputs.blur()` | Added blur call |
+| `load.rs` | 664 | Dead code — unreachable `else if self.is_running()` branch | Removed dead branch |
+| `cluster.rs` | 514-518 | `handle_bottom` doesn't blur current inputs | Added blur based on current_view |
+| `nse.rs` | 360-363 | `handle_enter` ScriptSelector falls through to `start()` | Added `return;` |
+| `compliance.rs` | 396-399 | `handle_enter` Framework falls through to `start()` | Added `return;` |
+| `storage.rs` | 684-689 | `page_up`/`page_down` missing `is_running()` guard | Added guard |
+| `integrations.rs` | 671-676 | Same | Added guard |
+| `workflow.rs` | 600-605 | Same | Added guard |
+| `vuln.rs` | 705-710 | Same | Added guard |
+| `report.rs` | 713-718 | Same | Added guard |
+| `popup.rs` | 176-178 | `centered_rect` underflow on tiny areas | Added `r.width < 3 \|\| r.height < 3` guard |
+| `auth.rs` | 162-210 | Direct `fields[idx]` indexing | Changed to `.get_mut(idx)` pattern |
+| `settings/input.rs` | 282-285 | `handle_escape` missing `stop()` call | Added `self.stop()` |
+
+#### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 40 |
+| Total bugs fixed | 40 |
+| Files modified | 26 |
+| HIGH priority fixes | 1 |
+| MEDIUM priority fixes | 20 |
+| LOW priority fixes | 19 |
+
+**Key systemic bug fixed**: `page_up`/`page_down` methods were defined as inherent `pub fn` outside `impl TabInput` in 5 tabs, making them unreachable through the trait dispatcher. PageUp/PageDown keys were completely non-functional for those tabs.

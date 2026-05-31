@@ -182,13 +182,6 @@ impl FingerprintTab {
         self.results_view.scroll_down(1);
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.page_down(page_size);
-    }
 }
 
 impl Default for FingerprintTab {
@@ -331,7 +324,8 @@ impl TabInput for FingerprintTab {
             }
             self.focus_area = FingerprintFocusArea::Inputs;
         } else {
-            self.inputs.focus_prev();
+            self.inputs.blur();
+            self.focus_area = FingerprintFocusArea::Results;
         }
     }
 
@@ -350,6 +344,14 @@ impl TabInput for FingerprintTab {
     fn handle_paste(&mut self, text: &str) {
         if !self.is_running() && self.focus_area == FingerprintFocusArea::Inputs {
             self.inputs.paste(text);
+        }
+    }
+
+    fn handle_copy(&mut self) -> Option<String> {
+        if !self.is_running() && self.focus_area == FingerprintFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else {
+            None
         }
     }
 
@@ -483,5 +485,13 @@ impl TabInput for FingerprintTab {
         } else {
             true
         }
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
     }
 }

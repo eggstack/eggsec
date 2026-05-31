@@ -398,8 +398,11 @@ impl TabState for ProxyTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
+        self.inputs.blur();
         self.current_view = ProxyView::List;
         self.view_selector.select(0);
+        self.view_selector.cancel();
+        self.view_selector.blur();
     }
 
     fn set_error(&mut self, error: TabError) {

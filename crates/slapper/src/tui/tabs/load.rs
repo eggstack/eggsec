@@ -637,6 +637,7 @@ impl TabInput for LoadTab {
         if self.is_running() {
             return;
         }
+        self.inputs.blur();
         self.focus_area = LoadFocusArea::Results;
     }
 
@@ -661,8 +662,6 @@ impl TabInput for LoadTab {
         }
         if self.inputs.is_focused() {
             self.inputs.blur();
-        } else if self.is_running() {
-            self.stop();
         } else {
             self.start();
         }
@@ -697,6 +696,8 @@ impl TabInput for LoadTab {
             } else {
                 self.inputs.focus_prev();
             }
+        } else if self.focus_area == LoadFocusArea::Results {
+            self.scroll_results_up();
         }
     }
 
@@ -714,6 +715,8 @@ impl TabInput for LoadTab {
             } else {
                 self.inputs.focus_next();
             }
+        } else if self.focus_area == LoadFocusArea::Results {
+            self.scroll_results_down();
         }
     }
 

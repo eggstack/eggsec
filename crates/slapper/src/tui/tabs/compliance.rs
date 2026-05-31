@@ -387,6 +387,7 @@ impl TabInput for ComplianceTab {
             ComplianceFocusArea::Inputs => {
                 if self.inputs.is_focused() {
                     self.inputs.blur();
+                    return;
                 } else {
                     self.focus_area = ComplianceFocusArea::Inputs;
                     self.inputs.focus(0);
@@ -397,6 +398,7 @@ impl TabInput for ComplianceTab {
                 if self.framework_selector.focused {
                     self.framework_selector.handle_enter();
                 }
+                return;
             }
             ComplianceFocusArea::Results => {
                 return;

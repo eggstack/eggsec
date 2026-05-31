@@ -575,7 +575,7 @@ impl SettingsTab {
         self.notify_on_findings.checked = true;
         self.proxy_rotation_selector.select(0);
         self.severity_selector.select(0);
-        self.dark_mode.checked = false;
+        self.dark_mode.checked = true;
         self.accent_color.select(0);
         self.focus_area = SettingsFocusArea::SectionList;
         self.current_section = SettingsSection::Http;
