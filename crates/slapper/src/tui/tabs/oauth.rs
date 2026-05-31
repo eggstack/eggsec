@@ -276,14 +276,15 @@ impl TabRender for OAuthTab {
 
         // Input fields - dynamic height based on available space
         let num_inputs = 5;
-        let field_height = (chunks.get(0).copied().unwrap_or(area).height / num_inputs as u16).max(2);
+        let field_height = (chunks.first().copied().unwrap_or(area).height / num_inputs as u16).max(2);
         let constraints: Vec<Constraint> = (0..num_inputs)
             .map(|_| Constraint::Length(field_height))
             .collect();
+        let input_area = chunks.first().copied().unwrap_or(area);
         let input_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(constraints)
-            .split(chunks[0]);
+            .split(input_area);
 
         let input_block = Block::default()
             .title(" OAuth/OIDC Configuration ")
@@ -295,7 +296,7 @@ impl TabRender for OAuthTab {
                     tc!(border)
                 }),
             );
-        f.render_widget(input_block, chunks[0]);
+        f.render_widget(input_block, input_area);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if i < input_chunks.len() {
@@ -315,6 +316,7 @@ impl TabRender for OAuthTab {
                 }),
             );
 
+        let options_area = chunks.get(1).copied().unwrap_or(area);
         let options_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -323,9 +325,9 @@ impl TabRender for OAuthTab {
                 Constraint::Percentage(25),
                 Constraint::Percentage(25),
             ])
-            .split(options_block.inner(chunks[1]));
+            .split(options_block.inner(options_area));
 
-        f.render_widget(options_block, chunks[1]);
+        f.render_widget(options_block, options_area);
         if options_chunks.len() >= 4 {
             self.redirect_test_checkbox.render(f, options_chunks[0]);
             self.scope_test_checkbox.render(f, options_chunks[1]);
@@ -334,12 +336,13 @@ impl TabRender for OAuthTab {
         }
 
         // Results
+        let results_area = chunks.get(2).copied().unwrap_or(area);
         if self.results_view.is_empty() {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, chunks[2]);
+            f.render_widget(placeholder, results_area);
         } else {
-            self.results_view.render(f, chunks[2], None);
+            self.results_view.render(f, results_area, None);
         }
 
         // Progress bar if running
@@ -506,6 +509,7 @@ impl TabInput for OAuthTab {
         }
         self.inputs.blur();
         self.focus_area = OAuthFocusArea::Inputs;
+        self.checkbox_focus_index = 0;
     }
 
     fn handle_up(&mut self) {

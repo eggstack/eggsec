@@ -324,13 +324,6 @@ impl VulnTab {
         }
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.page_down(page_size);
-    }
 }
 
 impl Default for VulnTab {
@@ -707,5 +700,13 @@ impl TabInput for VulnTab {
 
     fn is_input_focused(&self) -> bool {
         self.focus_area == VulnFocusArea::Inputs && self.inputs.is_focused()
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
     }
 }

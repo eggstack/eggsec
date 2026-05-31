@@ -238,7 +238,7 @@ impl TabRender for GraphQlTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(chunks.get(0).copied().unwrap_or(area));
+            .split(chunks.first().copied().unwrap_or(area));
 
         let input_block = Block::default()
             .title(" GraphQL Configuration ")
@@ -250,7 +250,7 @@ impl TabRender for GraphQlTab {
                     tc!(border)
                 }),
             );
-        f.render_widget(input_block, chunks.get(0).copied().unwrap_or(area));
+        f.render_widget(input_block, chunks.first().copied().unwrap_or(area));
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if i < input_chunks.len() {
@@ -270,6 +270,7 @@ impl TabRender for GraphQlTab {
                 }),
             );
 
+        let options_area = chunks.get(1).copied().unwrap_or(area);
         let options_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -278,9 +279,9 @@ impl TabRender for GraphQlTab {
                 Constraint::Percentage(25),
                 Constraint::Percentage(25),
             ])
-            .split(options_block.inner(chunks[1]));
+            .split(options_block.inner(options_area));
 
-        f.render_widget(options_block, chunks[1]);
+        f.render_widget(options_block, options_area);
         if options_chunks.len() >= 4 {
             self.introspection_checkbox.render(f, options_chunks[0]);
             self.inject_checkbox.render(f, options_chunks[1]);
@@ -289,12 +290,13 @@ impl TabRender for GraphQlTab {
         }
 
         // Results
+        let results_area = chunks.get(2).copied().unwrap_or(area);
         if self.results_view.is_empty() {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, chunks[2]);
+            f.render_widget(placeholder, results_area);
         } else {
-            self.results_view.render(f, chunks[2], None);
+            self.results_view.render(f, results_area, None);
         }
 
         // Progress bar if running
@@ -459,6 +461,7 @@ impl TabInput for GraphQlTab {
         }
         self.inputs.blur();
         self.focus_area = GraphQlFocusArea::Inputs;
+        self.checkbox_focus_index = 0;
     }
 
     fn handle_up(&mut self) {

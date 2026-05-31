@@ -486,8 +486,16 @@ impl TabRender for DashboardTab {
 }
 
 impl TabInput for DashboardTab {
-    fn handle_focus_next(&mut self) {}
-    fn handle_focus_prev(&mut self) {}
+    fn handle_focus_next(&mut self) {
+        if self.is_running() {
+            return;
+        }
+    }
+    fn handle_focus_prev(&mut self) {
+        if self.is_running() {
+            return;
+        }
+    }
     fn handle_char(&mut self, _c: char) {}
     fn handle_backspace(&mut self) {}
 
@@ -541,7 +549,11 @@ impl TabInput for DashboardTab {
     }
 
     fn handle_enter(&mut self) {}
-    fn handle_escape(&mut self) {}
+    fn handle_escape(&mut self) {
+        if self.is_running() {
+            self.stop();
+        }
+    }
 
     fn handle_up(&mut self) {
         if !self.is_running() {
@@ -564,11 +576,11 @@ impl TabInput for DashboardTab {
     }
 
     fn is_at_left_edge(&self) -> bool {
-        self.view.is_at_left_edge()
+        self.view.is_empty() || self.view.is_at_left_edge()
     }
 
     fn is_at_right_edge(&self) -> bool {
-        self.view.is_at_right_edge()
+        self.view.is_empty() || self.view.is_at_right_edge()
     }
 
     fn is_input_focused(&self) -> bool {

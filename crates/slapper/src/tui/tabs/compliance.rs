@@ -390,6 +390,7 @@ impl TabInput for ComplianceTab {
                 } else {
                     self.focus_area = ComplianceFocusArea::Inputs;
                     self.inputs.focus(0);
+                    return;
                 }
             }
             ComplianceFocusArea::Framework => {
@@ -489,10 +490,16 @@ impl TabInput for ComplianceTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_down(page_size);
     }
 }

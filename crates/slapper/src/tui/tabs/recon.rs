@@ -681,6 +681,7 @@ impl TabInput for ReconTab {
 
     fn handle_top(&mut self) {
         if !self.is_running() {
+            self.inputs.blur();
             self.focus_area = ReconFocusArea::Inputs;
             self.inputs.focus(0);
         }
@@ -688,6 +689,7 @@ impl TabInput for ReconTab {
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
+            self.inputs.blur();
             self.focus_area = ReconFocusArea::Results;
         }
     }
@@ -698,9 +700,11 @@ impl TabInput for ReconTab {
         }
 
         if self.focus_area == ReconFocusArea::Inputs && self.inputs.is_focused() {
-            if !self.is_running() {
-                self.inputs.blur();
+            if self.is_running() {
+                self.stop();
+                return;
             }
+            self.inputs.blur();
             return;
         }
 

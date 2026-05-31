@@ -227,13 +227,6 @@ impl WorkflowTab {
         }
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.page_down(page_size);
-    }
 }
 
 impl Default for WorkflowTab {
@@ -352,16 +345,16 @@ impl TabRender for WorkflowTab {
         ) {
             if let Some(chunk) = field_chunks.get(fields.len()) {
                 let mut sev = self.severity_selector.clone();
-                sev.focused =
-                    self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused();
+                // These selectors are currently decorative only (no keyboard navigation)
+                sev.focused = false;
                 sev.render(f, *chunk);
             }
         }
         if matches!(self.current_mode, WorkflowMode::ChangeStatus) {
             if let Some(chunk) = field_chunks.get(fields.len() + 1) {
                 let mut st = self.status_selector.clone();
-                st.focused =
-                    self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused();
+                // These selectors are currently decorative only (no keyboard navigation)
+                st.focused = false;
                 st.render(f, *chunk);
             }
         }
@@ -509,6 +502,7 @@ impl TabInput for WorkflowTab {
         }
         match self.focus_area {
             WorkflowFocusArea::Mode => {
+                let was_open = self.mode_selector.is_open();
                 self.mode_selector.handle_enter();
                 self.current_mode = match self.mode_selector.selected {
                     0 => WorkflowMode::ListFindings,
@@ -517,6 +511,9 @@ impl TabInput for WorkflowTab {
                     3 => WorkflowMode::AddComment,
                     _ => WorkflowMode::ChangeStatus,
                 };
+                if !was_open {
+                    return;
+                }
             }
             WorkflowFocusArea::Inputs => {
                 self.inputs.blur();
@@ -598,5 +595,13 @@ impl TabInput for WorkflowTab {
     fn is_input_focused(&self) -> bool {
         (self.focus_area == WorkflowFocusArea::Mode && self.mode_selector.is_focused())
             || (self.focus_area == WorkflowFocusArea::Inputs && self.inputs.is_focused())
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
     }
 }

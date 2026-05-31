@@ -439,7 +439,9 @@ impl TabInput for StressTab {
                     return;
                 }
             }
-            StressFocusArea::Results => {}
+            StressFocusArea::Results => {
+                return;
+            }
         }
         self.start();
     }

@@ -542,6 +542,7 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return;
         }
+        self.inputs.blur();
         self.focus_area = ScanPortsFocusArea::Inputs;
         self.inputs.focus(0);
     }
@@ -550,6 +551,7 @@ impl TabInput for ScanPortsTab {
         if self.is_running() {
             return;
         }
+        self.inputs.blur();
         self.focus_area = ScanPortsFocusArea::Results;
     }
 

@@ -466,6 +466,7 @@ impl TabInput for ScanEndpointsTab {
         if self.is_running() {
             return;
         }
+        self.inputs.blur();
         self.focus_area = ScanEndpointsFocusArea::Inputs;
         self.inputs.focus(0);
     }
@@ -474,6 +475,7 @@ impl TabInput for ScanEndpointsTab {
         if self.is_running() {
             return;
         }
+        self.inputs.blur();
         self.focus_area = ScanEndpointsFocusArea::Results;
     }
 

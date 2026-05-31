@@ -231,6 +231,7 @@ impl TabInput for NseTab {
         self.focus_area = match self.focus_area {
             NseFocusArea::Inputs => {
                 self.inputs.blur();
+                self.script_selector.focus();
                 NseFocusArea::ScriptSelector
             }
             NseFocusArea::ScriptSelector => {
@@ -353,6 +354,7 @@ impl TabInput for NseTab {
                 } else {
                     self.focus_area = NseFocusArea::Inputs;
                     self.inputs.focus(0);
+                    return;
                 }
             }
             NseFocusArea::ScriptSelector => {
@@ -457,10 +459,16 @@ impl TabInput for NseTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_down(page_size);
     }
 }

@@ -243,13 +243,6 @@ impl IntegrationsTab {
         )));
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.page_down(page_size);
-    }
 }
 
 impl Default for IntegrationsTab {
@@ -273,10 +266,13 @@ impl TabState for IntegrationsTab {
         self.error = None;
         self.focus_area = IntegrationsFocusArea::Tracker;
         self.current_mode = IntegrationsMode::Configure;
+        self.tracker_selector.blur();
         self.tracker_selector.selected = 0;
+        self.config_inputs.blur();
         for field in &mut self.config_inputs.fields {
             field.clear();
         }
+        self.issue_inputs.blur();
         for field in &mut self.issue_inputs.fields {
             field.clear();
         }
@@ -670,5 +666,13 @@ impl TabInput for IntegrationsTab {
         (self.focus_area == IntegrationsFocusArea::Tracker && self.tracker_selector.is_focused())
             || (self.focus_area == IntegrationsFocusArea::Config && self.config_inputs.is_focused())
             || (self.focus_area == IntegrationsFocusArea::Issue && self.issue_inputs.is_focused())
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
     }
 }

@@ -218,13 +218,6 @@ impl StorageTab {
         }
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.page_down(page_size);
-    }
 }
 
 impl Default for StorageTab {
@@ -686,5 +679,13 @@ impl TabInput for StorageTab {
     fn is_input_focused(&self) -> bool {
         (self.focus_area == StorageFocusArea::Config && self.config_inputs.is_focused())
             || (self.focus_area == StorageFocusArea::Query && self.query_inputs.is_focused())
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
     }
 }

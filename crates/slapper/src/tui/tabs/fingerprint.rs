@@ -309,10 +309,8 @@ impl TabInput for FingerprintTab {
         }
         match self.focus_area {
             FingerprintFocusArea::Inputs => {
-                self.inputs.focus_next();
-                if !self.inputs.is_focused() {
-                    self.focus_area = FingerprintFocusArea::Results;
-                }
+                self.inputs.blur();
+                self.focus_area = FingerprintFocusArea::Results;
             }
             FingerprintFocusArea::Results => {
                 self.focus_area = FingerprintFocusArea::Inputs;

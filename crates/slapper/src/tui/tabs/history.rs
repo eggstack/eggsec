@@ -366,8 +366,8 @@ impl TabRender for HistoryTab {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(area);
 
-        let list_area = chunks[0];
-        let details_area = chunks[1];
+        let list_area = chunks.first().copied().unwrap_or(area);
+        let details_area = chunks.get(1).copied().unwrap_or(area);
 
         if self.entries.is_empty() {
             let empty =
@@ -436,11 +436,7 @@ impl TabRender for HistoryTab {
                 Style::default()
             };
 
-            let time_short = if entry.timestamp.len() > 16 {
-                &entry.timestamp[5..16]
-            } else {
-                &entry.timestamp
-            };
+            let time_short = entry.timestamp.get(5..16).unwrap_or(&entry.timestamp);
 
             let target_display = if entry.target.len() > 30 {
                 let truncate_pos = entry.target.char_indices()

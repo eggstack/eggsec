@@ -44,6 +44,14 @@ impl Default for ReportTab {
 }
 
 impl ReportTab {
+    fn current_inputs(&self) -> &InputGroup {
+        match self.current_view {
+            ReportView::Convert => &self.convert_inputs,
+            ReportView::Trend => &self.trend_inputs,
+            ReportView::Schedule => &self.schedule_inputs,
+        }
+    }
+
     pub fn new() -> Self {
         let view_selector =
             Selector::new("Mode").simple_items(vec!["Convert", "Trend Analysis", "Schedule"]);
@@ -661,7 +669,7 @@ impl TabInput for ReportTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.focus_area == ReportFocusArea::Inputs
+        self.focus_area == ReportFocusArea::Inputs && self.current_inputs().is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {
@@ -701,6 +709,14 @@ impl TabInput for ReportTab {
             _ => true,
         }
     }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
+    }
 }
 
 impl ReportTab {
@@ -713,11 +729,4 @@ impl ReportTab {
         self.state = AppState::Idle;
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.scroll_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.scroll_down(page_size);
-    }
 }

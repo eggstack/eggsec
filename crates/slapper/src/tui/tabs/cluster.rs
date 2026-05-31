@@ -264,11 +264,13 @@ impl TabRender for ClusterTab {
             .split(area);
 
         // View selector
+        let selector_area = chunks.first().copied().unwrap_or(area);
         let mut selector = self.view_selector.clone();
         selector.focused = self.focus_area == ClusterFocusArea::ViewSelector;
-        selector.render(f, chunks[0]);
+        selector.render(f, selector_area);
 
         // Inputs based on current view
+        let inputs_area = chunks.get(1).copied().unwrap_or(area);
         let inputs_block = Block::default()
             .title(match self.current_view {
                 ClusterView::Worker => " Worker Configuration ",
@@ -298,9 +300,9 @@ impl TabRender for ClusterTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(inputs_block.inner(chunks[1]));
+            .split(inputs_block.inner(inputs_area));
 
-        f.render_widget(inputs_block, chunks[1]);
+        f.render_widget(inputs_block, inputs_area);
 
         for (i, field) in current_inputs.fields.iter().enumerate() {
             if i < input_chunks.len() {
@@ -309,12 +311,13 @@ impl TabRender for ClusterTab {
         }
 
         // Results
+        let results_area = chunks.get(2).copied().unwrap_or(area);
         if self.results_view.is_empty() {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, chunks[2]);
+            f.render_widget(placeholder, results_area);
         } else {
-            self.results_view.render(f, chunks[2], None);
+            self.results_view.render(f, results_area, None);
         }
     }
 
@@ -327,7 +330,7 @@ impl TabRender for ClusterTab {
                 Constraint::Min(5),
             ])
             .split(area);
-        let selector_area = chunks.get(0).copied().unwrap_or(area);
+        let selector_area = chunks.first().copied().unwrap_or(area);
         if let Some(dropdown) = self.view_selector.dropdown_info(selector_area) {
             dropdown.render(f);
         }

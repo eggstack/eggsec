@@ -573,7 +573,9 @@ impl TabInput for ProxyTab {
 
     fn handle_copy(&mut self) -> Option<String> {
         if !self.is_running() {
-            if !self.view_selector.is_focused() && self.inputs.is_focused() {
+            if self.view_selector.is_focused() {
+                None
+            } else if self.inputs.is_focused() {
                 self.inputs.get_focused_value()
             } else {
                 Some(self.results_view.get_content())
