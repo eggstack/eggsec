@@ -198,6 +198,8 @@ where
                 Event::Paste(text) => {
                     if app.mode == InputMode::Insert {
                         app.dispatcher_mut().handle_paste(&text);
+                    } else {
+                        tracing::trace!("Paste event dropped: not in Insert mode");
                     }
                 }
                 Event::FocusGained | Event::FocusLost | Event::Resize(_, _) => {

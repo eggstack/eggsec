@@ -72,12 +72,13 @@ impl DashboardTab {
 
         let min_val = *data.iter().min().unwrap_or(&0);
         let max_val = *data.iter().max().unwrap_or(&0);
-        let range = if max_val > min_val {
-            max_val - min_val
-        } else {
-            1
-        };
 
+        if min_val == max_val {
+            let flat_line: String = "─".repeat(data.len().min(50));
+            return format!(" {}", flat_line);
+        }
+
+        let range = max_val - min_val;
         let blocks = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
         let bucket_count = blocks.len() - 1;
 
@@ -259,7 +260,7 @@ impl DashboardTab {
         let sum: usize = numbers.iter().sum();
         let count = numbers.len();
 
-        let base_score = sum.checked_div(count).unwrap_or(1);
+        let base_score = sum / count;
 
         base_score.clamp(1, 100)
     }

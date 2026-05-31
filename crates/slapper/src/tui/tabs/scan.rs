@@ -273,9 +273,9 @@ impl TabState for ScanTab {
         for field in &mut self.inputs.fields {
             field.clear();
         }
-        if self.inputs.fields.len() > 1 {
-            self.inputs.fields[1].value = "report.json".to_string();
-            self.inputs.fields[1].cursor_pos = 10;
+        if let Some(field) = self.inputs.fields.get_mut(1) {
+            field.value = "report.json".to_string();
+            field.cursor_pos = 10;
         }
         self.profile_selector.select(0);
         self.output_selector.select(0);
@@ -334,19 +334,23 @@ impl TabRender for ScanTab {
 
         let mut profile_sel = self.profile_selector.clone();
         profile_sel.focused = self.focus_area == ScanFocusArea::ProfileSelector;
-        profile_sel.render(f, inner_chunks[2]);
+        if let Some(area) = inner_chunks.get(2) {
+            profile_sel.render(f, *area);
+        }
 
         let mut output_sel = self.output_selector.clone();
         output_sel.focused = self.focus_area == ScanFocusArea::OutputSelector;
-        output_sel.render(f, inner_chunks[3]);
+        if let Some(area) = inner_chunks.get(3) {
+            output_sel.render(f, *area);
+        }
 
         let main_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
             .split(main_area);
 
-        let stages_area = main_chunks[0];
-        let output_area = main_chunks[1];
+        let stages_area = main_chunks.get(0).copied().unwrap_or(main_area);
+        let output_area = main_chunks.get(1).copied().unwrap_or(main_area);
 
         let mut stage_lines: Vec<Line> = Vec::new();
 
@@ -443,10 +447,10 @@ impl TabRender for ScanTab {
             ])
             .split(config_area);
 
-        if let Some(info) = self.profile_selector.dropdown_info(config_chunks[2]) {
+        if let Some(info) = self.profile_selector.dropdown_info(config_chunks.get(2).copied().unwrap_or(config_area)) {
             info.render(f);
         }
-        if let Some(info) = self.output_selector.dropdown_info(config_chunks[3]) {
+        if let Some(info) = self.output_selector.dropdown_info(config_chunks.get(3).copied().unwrap_or(config_area)) {
             info.render(f);
         }
     }

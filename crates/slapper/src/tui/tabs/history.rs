@@ -78,7 +78,7 @@ impl HistoryTab {
 
     fn calc_visible_rows(&self, area: Rect) -> usize {
         let header_lines = 3;
-        area.height.saturating_sub(header_lines).into()
+        area.height.saturating_sub(header_lines).max(1).into()
     }
 
     fn ensure_visible(&mut self) {
@@ -86,11 +86,7 @@ impl HistoryTab {
             if idx < self.scroll_offset {
                 self.scroll_offset = idx;
             } else if idx >= self.scroll_offset + self.visible_rows {
-                self.scroll_offset = if self.visible_rows == 0 {
-                    0
-                } else {
-                    idx.saturating_sub(self.visible_rows - 1)
-                };
+                self.scroll_offset = idx.saturating_sub(self.visible_rows.saturating_sub(1));
             }
         }
     }
@@ -616,11 +612,7 @@ impl TabInput for HistoryTab {
                 if !self.entries.is_empty() {
                     let last = self.entries.len() - 1;
                     self.selected = Some(last);
-                    self.scroll_offset = if self.visible_rows == 0 {
-                        0
-                    } else {
-                        last.saturating_sub(self.visible_rows - 1)
-                    };
+                    self.scroll_offset = self.visible_rows.saturating_sub(1).saturating_sub(last);
                     self.update_details_view();
                 }
             }

@@ -353,8 +353,8 @@ impl TabRender for WafTab {
             .constraints([Constraint::Length(19), Constraint::Min(0)])
             .split(area);
 
-        let config_area = chunks[0];
-        let results_area = chunks[1];
+        let config_area = chunks.get(0).copied().unwrap_or(area);
+        let results_area = chunks.get(1).copied().unwrap_or(area);
 
         use crate::tui::components::FormBuilder;
         let mut builder = FormBuilder::new(" WAF Configuration ").row_height(3);
@@ -400,20 +400,24 @@ impl TabRender for WafTab {
                 .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
                 .split(results_inner);
 
-            if !self.detection_view.is_empty() {
-                self.detection_view.render(f, results_chunks[0], None);
-            } else {
-                let placeholder =
-                    empty_state_paragraph("Detection Result", "Detection results will appear here");
-                f.render_widget(placeholder, results_chunks[0]);
+            if let Some(results_chunks_0) = results_chunks.get(0).copied() {
+                if !self.detection_view.is_empty() {
+                    self.detection_view.render(f, results_chunks_0, None);
+                } else {
+                    let placeholder =
+                        empty_state_paragraph("Detection Result", "Detection results will appear here");
+                    f.render_widget(placeholder, results_chunks_0);
+                }
             }
 
-            if !self.bypass_view.is_empty() {
-                self.bypass_view.render(f, results_chunks[1], None);
-            } else {
-                let placeholder =
-                    empty_state_paragraph("Bypass Results", "Bypass results will appear here");
-                f.render_widget(placeholder, results_chunks[1]);
+            if let Some(results_chunks_1) = results_chunks.get(1).copied() {
+                if !self.bypass_view.is_empty() {
+                    self.bypass_view.render(f, results_chunks_1, None);
+                } else {
+                    let placeholder =
+                        empty_state_paragraph("Bypass Results", "Bypass results will appear here");
+                    f.render_widget(placeholder, results_chunks_1);
+                }
             }
         }
     }

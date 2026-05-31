@@ -479,6 +479,7 @@ impl TabInput for HuntTab {
         if !self.is_running() {
             self.focus_area = HuntFocusArea::Results;
             self.inputs.blur();
+            self.focused_checkbox_index = 0;
         }
     }
 
@@ -512,6 +513,7 @@ impl TabInput for HuntTab {
             return;
         }
         self.inputs.blur();
+        self.focused_checkbox_index = 0;
     }
 
     fn handle_up(&mut self) {

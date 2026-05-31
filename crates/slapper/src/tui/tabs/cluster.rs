@@ -310,8 +310,8 @@ impl TabRender for ClusterTab {
         f.render_widget(inputs_block, inputs_area);
 
         for (i, field) in current_inputs.fields.iter().enumerate() {
-            if i < input_chunks.len() {
-                field.render(f, input_chunks[i], insert_mode);
+            if let Some(chunk) = input_chunks.get(i) {
+                field.render(f, *chunk, insert_mode);
             }
         }
 

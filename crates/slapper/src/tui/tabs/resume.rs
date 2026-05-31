@@ -309,20 +309,19 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_enter(&mut self) {
-        if self.focus_area == ResumeFocusArea::Results {
-            return;
-        }
-
         if self.is_running() {
             self.stop();
             return;
         }
 
+        if self.focus_area == ResumeFocusArea::Results {
+            return;
+        }
+
         if self.inputs.is_focused() {
             self.inputs.blur();
-        } else {
-            self.start();
         }
+        self.start();
     }
 
     fn handle_escape(&mut self) {

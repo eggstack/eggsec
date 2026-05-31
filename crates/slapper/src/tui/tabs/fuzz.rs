@@ -473,8 +473,8 @@ impl TabRender for FuzzTab {
             .constraints([Constraint::Length(config_height), Constraint::Min(3)])
             .split(area);
 
-        let config_area = chunks[0];
-        let results_area = chunks[1];
+        let config_area = chunks.first().copied().unwrap_or(area);
+        let results_area = chunks.get(1).copied().unwrap_or(area);
 
         let config_block = Block::default()
             .borders(Borders::ALL)
@@ -502,31 +502,53 @@ impl TabRender for FuzzTab {
             .split(config_inner);
 
         if self.inputs.fields.len() > 6 && config_chunks.len() >= 7 {
-            self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
-            self.inputs.fields[1].render(f, config_chunks[1], insert_mode);
-            self.inputs.fields[2].render(f, config_chunks[2], insert_mode);
-            self.inputs.fields[3].render(f, config_chunks[3], insert_mode);
-            self.inputs.fields[4].render(f, config_chunks[4], insert_mode);
-            self.inputs.fields[5].render(f, config_chunks[5], insert_mode);
-            self.inputs.fields[6].render(f, config_chunks[6], insert_mode);
+            if let Some(chunk) = config_chunks.get(0) {
+                self.inputs.fields[0].render(f, *chunk, insert_mode);
+            }
+            if let Some(chunk) = config_chunks.get(1) {
+                self.inputs.fields[1].render(f, *chunk, insert_mode);
+            }
+            if let Some(chunk) = config_chunks.get(2) {
+                self.inputs.fields[2].render(f, *chunk, insert_mode);
+            }
+            if let Some(chunk) = config_chunks.get(3) {
+                self.inputs.fields[3].render(f, *chunk, insert_mode);
+            }
+            if let Some(chunk) = config_chunks.get(4) {
+                self.inputs.fields[4].render(f, *chunk, insert_mode);
+            }
+            if let Some(chunk) = config_chunks.get(5) {
+                self.inputs.fields[5].render(f, *chunk, insert_mode);
+            }
+            if let Some(chunk) = config_chunks.get(6) {
+                self.inputs.fields[6].render(f, *chunk, insert_mode);
+            }
         }
 
         if config_chunks.len() >= 12 {
             let mut payload_sel = self.payload_selector.clone();
             payload_sel.focused = self.focus_area == FuzzFocusArea::PayloadSelector;
-            payload_sel.render(f, config_chunks[7]);
+            if let Some(chunk) = config_chunks.get(7) {
+                payload_sel.render(f, *chunk);
+            }
 
             let mut mode_sel = self.mode_selector.clone();
             mode_sel.focused = self.focus_area == FuzzFocusArea::ModeSelector;
-            mode_sel.render(f, config_chunks[8]);
+            if let Some(chunk) = config_chunks.get(8) {
+                mode_sel.render(f, *chunk);
+            }
 
             let mut target_sel = self.target_selector.clone();
             target_sel.focused = self.focus_area == FuzzFocusArea::TargetSelector;
-            target_sel.render(f, config_chunks[9]);
+            if let Some(chunk) = config_chunks.get(9) {
+                target_sel.render(f, *chunk);
+            }
 
             let mut mutation_cb = self.mutation_checkbox.clone();
             mutation_cb.focused = self.focus_area == FuzzFocusArea::MutationCheckbox;
-            mutation_cb.render(f, config_chunks[10]);
+            if let Some(chunk) = config_chunks.get(10) {
+                mutation_cb.render(f, *chunk);
+            }
         }
 
         let (status_text, status_color) = match &self.state {

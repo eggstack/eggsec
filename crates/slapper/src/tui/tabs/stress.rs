@@ -207,6 +207,8 @@ impl TabState for StressTab {
             field.cursor_pos = 2;
         }
         self.type_selector.select(0);
+        self.type_selector.cancel();
+        self.type_selector.blur();
         self.focus_area = StressFocusArea::Inputs;
     }
 
@@ -262,7 +264,9 @@ impl TabRender for StressTab {
                     tc!(border)
                 }),
             );
-        f.render_widget(input_block, chunks[0]);
+        if let Some(chunk) = chunks.get(0) {
+            f.render_widget(input_block, *chunk);
+        }
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
             if let Some(chunk) = input_chunks.get(i) {
@@ -273,15 +277,21 @@ impl TabRender for StressTab {
         // Type selector
         let mut selector = self.type_selector.clone();
         selector.focused = self.focus_area == StressFocusArea::TypeSelector;
-        selector.render(f, chunks[1]);
+        if let Some(chunk) = chunks.get(1) {
+            selector.render(f, *chunk);
+        }
 
         // Results
         if self.results_view.is_empty() {
             let placeholder =
                 empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, chunks[2]);
+            if let Some(chunk) = chunks.get(2) {
+                f.render_widget(placeholder, *chunk);
+            }
         } else {
-            self.results_view.render(f, chunks[2], None);
+            if let Some(chunk) = chunks.get(2) {
+                self.results_view.render(f, *chunk, None);
+            }
         }
 
         // Progress bar if running

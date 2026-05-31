@@ -389,6 +389,8 @@ impl TabState for LoadTab {
             }
         }
         self.test_type_selector.select(0);
+        self.test_type_selector.blur();
+        self.inputs.blur();
         self.focus_area = LoadFocusArea::Selector;
     }
 
@@ -422,9 +424,9 @@ impl TabRender for LoadTab {
             ])
             .split(area);
 
-        let selector_area = chunks[0];
-        let input_area = chunks[1];
-        let results_area = chunks[2];
+        let selector_area = *chunks.get(0).unwrap_or(&area);
+        let input_area = *chunks.get(1).unwrap_or(&area);
+        let results_area = *chunks.get(2).unwrap_or(&area);
 
         self.test_type_selector.render(f, selector_area);
 
@@ -507,7 +509,7 @@ impl TabRender for LoadTab {
             ])
             .split(area);
 
-        let selector_area = chunks[0];
+        let selector_area = *chunks.get(0).unwrap_or(&area);
 
         if let Some(dropdown) = self.test_type_selector.dropdown_info(selector_area) {
             dropdown.render(f);

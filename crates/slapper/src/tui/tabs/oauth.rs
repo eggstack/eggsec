@@ -214,6 +214,7 @@ impl TabState for OAuthTab {
         if self.inputs.fields.len() > 4 {
             self.inputs.fields[4].value = "15".to_string();
         }
+        self.inputs.blur();
         self.focus_area = OAuthFocusArea::Inputs;
         self.checkbox_focus_index = 0;
         self.redirect_test_checkbox.checked = true;
@@ -299,8 +300,8 @@ impl TabRender for OAuthTab {
         f.render_widget(input_block, input_area);
 
         for (i, field) in self.inputs.fields.iter().enumerate() {
-            if i < input_chunks.len() {
-                field.render(f, input_chunks[i], insert_mode);
+            if let Some(chunk) = input_chunks.get(i) {
+                field.render(f, *chunk, insert_mode);
             }
         }
 
@@ -328,11 +329,13 @@ impl TabRender for OAuthTab {
             .split(options_block.inner(options_area));
 
         f.render_widget(options_block, options_area);
-        if options_chunks.len() >= 4 {
-            self.redirect_test_checkbox.render(f, options_chunks[0]);
-            self.scope_test_checkbox.render(f, options_chunks[1]);
-            self.state_test_checkbox.render(f, options_chunks[2]);
-            self.grant_test_checkbox.render(f, options_chunks[3]);
+        if let (Some(c0), Some(c1), Some(c2), Some(c3)) =
+            (options_chunks.get(0), options_chunks.get(1), options_chunks.get(2), options_chunks.get(3))
+        {
+            self.redirect_test_checkbox.render(f, *c0);
+            self.scope_test_checkbox.render(f, *c1);
+            self.state_test_checkbox.render(f, *c2);
+            self.grant_test_checkbox.render(f, *c3);
         }
 
         // Results

@@ -298,6 +298,10 @@ impl TabState for ScanPortsTab {
             field.value = "2".to_string();
             field.cursor_pos = 1;
         }
+        if let Some(field) = self.inputs.fields.get_mut(0) {
+            field.value = "".to_string();
+            field.cursor_pos = 0;
+        }
         self.focus_area = ScanPortsFocusArea::Inputs;
         self.udp_checkbox.checked = false;
     }

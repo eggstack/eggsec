@@ -241,19 +241,19 @@ impl TabInput for AuthTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.is_running() {
+            self.stop();
+            return;
+        }
+
         if self.focus_area == AuthFocusArea::Results {
             return;
         }
 
-        if self.is_running() {
-            self.stop();
-        } else {
-            if self.is_input_focused() {
-                self.inputs.blur();
-                return;
-            }
-            self.start();
+        if self.is_input_focused() {
+            self.inputs.blur();
         }
+        self.start();
     }
 
     fn handle_escape(&mut self) {

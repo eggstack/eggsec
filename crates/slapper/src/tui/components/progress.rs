@@ -105,7 +105,7 @@ impl ProgressGauge {
         if area.width < 5 || area.height < 3 {
             return;
         }
-        let spinner = SPINNER_FRAMES[self.spinner_frame % SPINNER_FRAMES.len()];
+        let spinner = SPINNER_FRAMES.get(self.spinner_frame % SPINNER_FRAMES.len()).unwrap_or(&"?");
         let label = format!("{} {} - running...", spinner, self.label);
 
         let gauge = Gauge::default()
@@ -126,7 +126,7 @@ impl ProgressGauge {
         if area.width < 5 || area.height < 1 {
             return;
         }
-        let spinner = SPINNER_FRAMES[self.spinner_frame % SPINNER_FRAMES.len()];
+        let spinner = SPINNER_FRAMES.get(self.spinner_frame % SPINNER_FRAMES.len()).unwrap_or(&"?");
         let text = if self.total > 0 && self.current <= self.total {
             format!(
                 "{} {} - {}/{} ({}%)",

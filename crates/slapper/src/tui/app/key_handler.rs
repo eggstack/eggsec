@@ -399,7 +399,6 @@ impl KeyHandler {
     }
 
     fn handle_quick_switch(&self, app: &mut App, key: &crossterm::event::KeyEvent) {
-        let results = app.get_quick_switch_results();
         match (key.modifiers, key.code) {
             (KeyModifiers::NONE, KeyCode::Esc) => {
                 app.close_quick_switch();
@@ -408,6 +407,7 @@ impl KeyHandler {
                 app.close_quick_switch();
             }
             (KeyModifiers::NONE, KeyCode::Enter) => {
+                let results = app.get_quick_switch_results();
                 if !results.is_empty() && app.quick_switch_selected < results.len() {
                     if let Some(tab) = results.get(app.quick_switch_selected) {
                         app.current_tab = **tab;
@@ -416,30 +416,41 @@ impl KeyHandler {
                 }
                 app.close_quick_switch();
             }
-            (KeyModifiers::NONE, KeyCode::Up) if app.quick_switch_selected > 0 => {
-                app.quick_switch_selected -= 1;
+            (KeyModifiers::NONE, KeyCode::Up) => {
+                if app.quick_switch_selected > 0 {
+                    app.quick_switch_selected -= 1;
+                }
             }
-            (KeyModifiers::NONE, KeyCode::Down)
-                if app.quick_switch_selected < results.len().saturating_sub(1) =>
-            {
-                app.quick_switch_selected += 1;
+            (KeyModifiers::NONE, KeyCode::Down) => {
+                let results = app.get_quick_switch_results();
+                if app.quick_switch_selected < results.len().saturating_sub(1) {
+                    app.quick_switch_selected += 1;
+                }
             }
             (KeyModifiers::CONTROL, KeyCode::Char('u')) | (KeyModifiers::NONE, KeyCode::PageUp) => {
+                let results = app.get_quick_switch_results();
                 if app.quick_switch_selected >= 10 {
                     app.quick_switch_selected -= 10;
                 } else {
                     app.quick_switch_selected = 0;
                 }
+                if !results.is_empty() {
+                    app.quick_switch_selected = app.quick_switch_selected.min(results.len() - 1);
+                }
             }
             (KeyModifiers::CONTROL, KeyCode::Char('d'))
             | (KeyModifiers::NONE, KeyCode::PageDown) => {
-                app.quick_switch_selected =
-                    (app.quick_switch_selected + 10).min(results.len().saturating_sub(1));
+                let results = app.get_quick_switch_results();
+                if !results.is_empty() {
+                    app.quick_switch_selected =
+                        (app.quick_switch_selected + 10).min(results.len().saturating_sub(1));
+                }
             }
             (KeyModifiers::NONE, KeyCode::Home) => {
                 app.quick_switch_selected = 0;
             }
             (KeyModifiers::NONE, KeyCode::End) => {
+                let results = app.get_quick_switch_results();
                 app.quick_switch_selected = results.len().saturating_sub(1);
             }
             (KeyModifiers::NONE, KeyCode::Backspace) => {

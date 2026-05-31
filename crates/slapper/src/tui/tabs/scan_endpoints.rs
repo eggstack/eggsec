@@ -260,6 +260,14 @@ impl TabState for ScanEndpointsTab {
             field.value = "10".to_string();
             field.cursor_pos = 2;
         }
+        if let Some(field) = self.inputs.fields.get_mut(0) {
+            field.value = "".to_string();
+            field.cursor_pos = 0;
+        }
+        if let Some(field) = self.inputs.fields.get_mut(3) {
+            field.value = "".to_string();
+            field.cursor_pos = 0;
+        }
         self.focus_area = ScanEndpointsFocusArea::Inputs;
         self.include_404_checkbox.checked = true;
     }
