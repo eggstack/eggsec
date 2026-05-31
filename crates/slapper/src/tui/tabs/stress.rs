@@ -252,7 +252,7 @@ impl TabRender for StressTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
             ])
-            .split(chunks[0]);
+            .split(chunks.get(0).copied().unwrap_or(area));
 
         let input_block = Block::default()
             .title(" Stress Test Configuration ")
@@ -551,6 +551,14 @@ impl TabInput for StressTab {
             }
             _ => true,
         }
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.scroll_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.scroll_down(page_size);
     }
 }
 

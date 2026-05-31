@@ -772,7 +772,7 @@ impl TabInput for ReconTab {
                     true
                 }
             } else {
-                true
+                false
             }
         } else {
             false
@@ -793,7 +793,7 @@ impl TabInput for ReconTab {
                     true
                 }
             } else {
-                true
+                false
             }
         } else {
             false

@@ -701,23 +701,23 @@ impl TabInput for ClusterTab {
             _ => true,
         }
     }
-}
 
-impl ClusterTab {
-    pub fn stop(&mut self) {
+    fn stop(&mut self) {
         if self.state == AppState::Running {
             self.state = AppState::Idle;
         }
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
+    fn page_up(&mut self, page_size: usize) {
         self.results_view.scroll_up(page_size);
     }
 
-    pub fn page_down(&mut self, page_size: usize) {
+    fn page_down(&mut self, page_size: usize) {
         self.results_view.scroll_down(page_size);
     }
+}
 
+impl ClusterTab {
     pub fn scroll_results_page_up(&mut self) {
         self.results_view.scroll_up(1);
     }

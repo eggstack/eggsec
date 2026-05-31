@@ -79,14 +79,6 @@ impl ResumeTab {
         }
         self.results_view.page_down(page_size);
     }
-
-    pub fn handle_top(&mut self) {
-        self.results_view.scroll_to_top();
-    }
-
-    pub fn handle_bottom(&mut self) {
-        self.results_view.scroll_to_bottom();
-    }
 }
 
 impl Default for ResumeTab {
@@ -373,7 +365,7 @@ impl TabInput for ResumeTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.inputs.is_focused()
+        self.focus_area == ResumeFocusArea::Inputs
     }
 
     fn is_at_left_edge(&self) -> bool {

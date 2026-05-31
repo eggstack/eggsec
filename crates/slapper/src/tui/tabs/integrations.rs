@@ -411,8 +411,12 @@ impl TabInput for IntegrationsTab {
             }
             IntegrationsFocusArea::Config => {
                 self.config_inputs.blur();
-                self.issue_inputs.focus(0);
-                IntegrationsFocusArea::Issue
+                if self.current_mode == IntegrationsMode::Configure {
+                    IntegrationsFocusArea::Results
+                } else {
+                    self.issue_inputs.focus(0);
+                    IntegrationsFocusArea::Issue
+                }
             }
             IntegrationsFocusArea::Issue => {
                 self.issue_inputs.blur();
@@ -443,8 +447,13 @@ impl TabInput for IntegrationsTab {
                 IntegrationsFocusArea::Config
             }
             IntegrationsFocusArea::Results => {
-                self.issue_inputs.focus(0);
-                IntegrationsFocusArea::Issue
+                if self.current_mode == IntegrationsMode::Configure {
+                    self.config_inputs.focus(0);
+                    IntegrationsFocusArea::Config
+                } else {
+                    self.issue_inputs.focus(0);
+                    IntegrationsFocusArea::Issue
+                }
             }
         };
     }

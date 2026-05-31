@@ -399,8 +399,12 @@ impl TabInput for StorageTab {
         self.focus_area = match self.focus_area {
             StorageFocusArea::Config => {
                 self.config_inputs.blur();
-                self.mode_selector.focus();
-                StorageFocusArea::Mode
+                if self.current_mode == StorageMode::Connect {
+                    StorageFocusArea::Results
+                } else {
+                    self.mode_selector.focus();
+                    StorageFocusArea::Mode
+                }
             }
             StorageFocusArea::Mode => {
                 self.mode_selector.blur();
@@ -443,13 +447,18 @@ impl TabInput for StorageTab {
             }
             StorageFocusArea::Query => {
                 self.query_inputs.blur();
-                self.mode_selector.focus();
-                StorageFocusArea::Mode
+                if self.current_mode == StorageMode::Connect {
+                    self.config_inputs.focus(0);
+                    StorageFocusArea::Config
+                } else {
+                    self.mode_selector.focus();
+                    StorageFocusArea::Mode
+                }
             }
             StorageFocusArea::Results => {
                 if self.current_mode == StorageMode::Connect {
-                    self.query_inputs.blur();
-                    StorageFocusArea::Query
+                    self.config_inputs.focus(0);
+                    StorageFocusArea::Config
                 } else {
                     self.mode_selector.focus();
                     StorageFocusArea::Mode

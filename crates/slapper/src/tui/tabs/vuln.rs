@@ -43,6 +43,17 @@ pub enum VulnMode {
 }
 
 impl VulnTab {
+    fn first_visible_field(&self) -> usize {
+        match self.current_mode {
+            VulnMode::CvssCalc => 3,
+            VulnMode::ExploitCheck => 0,
+            VulnMode::AssetAssess => 4,
+            VulnMode::Prioritize => 1,
+            VulnMode::Triage => 0,
+            VulnMode::Remediation => 1,
+        }
+    }
+
     pub fn new() -> Self {
         let inputs = InputGroup::new()
             .add(InputField::new("CVE ID / Finding ID"))
@@ -470,7 +481,7 @@ impl TabInput for VulnTab {
         self.focus_area = match self.focus_area {
             VulnFocusArea::Mode => {
                 self.mode_selector.blur();
-                self.inputs.focus(0);
+                self.inputs.focus(self.first_visible_field());
                 VulnFocusArea::Inputs
             }
             VulnFocusArea::Inputs => {
@@ -498,7 +509,7 @@ impl TabInput for VulnTab {
                 VulnFocusArea::Mode
             }
             VulnFocusArea::Results => {
-                self.inputs.focus(0);
+                self.inputs.focus(self.first_visible_field());
                 VulnFocusArea::Inputs
             }
         };

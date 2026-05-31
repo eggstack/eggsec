@@ -268,15 +268,6 @@ impl WafTab {
         self.bypass_view.scroll_down(1);
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.detection_view.page_up(page_size);
-        self.bypass_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        self.detection_view.page_down(page_size);
-        self.bypass_view.page_down(page_size);
-    }
 }
 
 impl Default for WafTab {
@@ -704,5 +695,15 @@ impl TabInput for WafTab {
 
     fn is_input_focused(&self) -> bool {
         self.focus_area == WafFocusArea::Inputs && self.inputs.is_focused()
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.detection_view.page_up(page_size);
+        self.bypass_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.detection_view.page_down(page_size);
+        self.bypass_view.page_down(page_size);
     }
 }

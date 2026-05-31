@@ -191,21 +191,29 @@ where
         }
 
         let mut event_count = 0;
-        while let Some(Some(Ok(event))) = event_stream.next().now_or_never() {
-            event_count += 1;
-            match event {
-                Event::Key(key) => key_handler.handle_key_event(app, &key),
-                Event::Mouse(mouse_event) => handle_mouse_event(mouse_event, app),
-                Event::Paste(text) => {
-                    if app.mode == InputMode::Insert {
-                        app.dispatcher_mut().handle_paste(&text);
-                    } else {
-                        tracing::trace!("Paste event dropped: not in Insert mode");
+        loop {
+            match event_stream.next().now_or_never() {
+                Some(Some(Ok(event))) => {
+                    event_count += 1;
+                    match event {
+                        Event::Key(key) => key_handler.handle_key_event(app, &key),
+                        Event::Mouse(mouse_event) => handle_mouse_event(mouse_event, app),
+                        Event::Paste(text) => {
+                            if app.mode == InputMode::Insert {
+                                app.dispatcher_mut().handle_paste(&text);
+                            } else {
+                                tracing::trace!("Paste event dropped: not in Insert mode");
+                            }
+                        }
+                        Event::FocusGained | Event::FocusLost | Event::Resize(_, _) => {
+                            pending_redraw = true;
+                        }
                     }
                 }
-                Event::FocusGained | Event::FocusLost | Event::Resize(_, _) => {
-                    pending_redraw = true;
+                Some(Some(Err(e))) => {
+                    tracing::warn!("Terminal event error: {:?}", e);
                 }
+                _ => break,
             }
         }
         if event_count == 0 {

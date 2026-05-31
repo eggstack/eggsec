@@ -392,8 +392,12 @@ impl TabInput for WorkflowTab {
         self.focus_area = match self.focus_area {
             WorkflowFocusArea::Mode => {
                 self.mode_selector.blur();
-                self.inputs.focus(0);
-                WorkflowFocusArea::Inputs
+                if self.current_mode == WorkflowMode::ListFindings {
+                    WorkflowFocusArea::Results
+                } else {
+                    self.inputs.focus(0);
+                    WorkflowFocusArea::Inputs
+                }
             }
             WorkflowFocusArea::Inputs => {
                 self.inputs.blur();
@@ -420,8 +424,13 @@ impl TabInput for WorkflowTab {
                 WorkflowFocusArea::Mode
             }
             WorkflowFocusArea::Results => {
-                self.inputs.focus(0);
-                WorkflowFocusArea::Inputs
+                if self.current_mode == WorkflowMode::ListFindings {
+                    self.mode_selector.focus();
+                    WorkflowFocusArea::Mode
+                } else {
+                    self.inputs.focus(0);
+                    WorkflowFocusArea::Inputs
+                }
             }
         };
     }

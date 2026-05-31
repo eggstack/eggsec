@@ -211,6 +211,7 @@ impl SessionManager {
             if let Some(oldest) = sessions.first() {
                 if let Err(e) = fs::remove_file(oldest.path()) {
                     tracing::warn!("Failed to cleanup old session {:?}: {:?}", oldest.path(), e);
+                    break;
                 }
                 sessions.remove(0);
             }

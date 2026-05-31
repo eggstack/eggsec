@@ -218,7 +218,10 @@ impl ScanTab {
         self.state = AppState::Idle;
     }
 
-    pub fn update_progress(&mut self, _completed: u64, _total: u64) {}
+    pub fn update_progress(&mut self, completed: u64, total: u64) {
+        self.progress.current = completed;
+        self.progress.total = total;
+    }
 
     pub fn reset_stages(&mut self) {
         for stage in &mut self.stages {

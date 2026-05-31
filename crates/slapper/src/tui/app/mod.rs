@@ -637,9 +637,8 @@ impl App {
         if self.last_auto_save.elapsed().as_secs() >= interval_secs {
             if let Err(e) = self.session_manager.save_quick(self) {
                 tracing::warn!("Auto-save failed: {:?}", e);
-            } else {
-                self.last_auto_save = std::time::Instant::now();
             }
+            self.last_auto_save = std::time::Instant::now();
         }
     }
 

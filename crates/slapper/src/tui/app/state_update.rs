@@ -42,6 +42,7 @@ impl super::App {
             if is_closed {
                 self.result_rx = None;
                 self.task_tab = None;
+                self.task_handle = None;
             }
         }
 
