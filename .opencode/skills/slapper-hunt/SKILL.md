@@ -32,5 +32,5 @@ let results = engine.run().await?;
 - `mod.rs` - Main engine implementation
 - `patterns.rs` - Vulnerability patterns
 
-## AGENTS.md Override
-See `crates/slapper/src/hunt/AGENTS.override.md`
+## Module Notes
+See `architecture/hunt.md` for architecture documentation.

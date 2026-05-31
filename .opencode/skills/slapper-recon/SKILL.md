@@ -6,7 +6,7 @@ Reconnaissance module workflows and patterns for information gathering.
 
 ### Full Recon Pipeline (`run_full_recon` in `runner.rs`)
 
-The full recon pipeline runs 14 tasks in parallel via `tokio::join!`:
+The full recon pipeline runs 13 tasks in parallel via `tokio::join!`:
 ```
 reverse_dns, geolocation, threat_intel, ssl, whois, subdomain_enum,
 dns_records, tech_detection, js_analysis, wayback_check, cloud_detection,

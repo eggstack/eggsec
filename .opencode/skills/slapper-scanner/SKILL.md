@@ -10,7 +10,7 @@ Port scanning and endpoint discovery module workflows and patterns.
 
 ### Endpoint Discovery (`scanner/endpoints.rs`)
 - `EndpointScanConfig`, `EndpointResult`, `EndpointScanResults`
-- 224 built-in endpoint paths
+- 261 built-in endpoint paths
 
 ### Fingerprinting (`scanner/fingerprint.rs`, `scanner/udp_fingerprint.rs`)
 - `ServiceFingerprint`, `fingerprint_services()`, `fingerprint_udp_services()`

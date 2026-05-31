@@ -31,5 +31,5 @@ let findings = engine.analyze().await?;
 ## Key Files
 - `mod.rs` - Main browser engine
 
-## AGENTS.md Override
-See `crates/slapper/src/browser/AGENTS.override.md`
+## Module Notes
+See `architecture/browser.md` for architecture documentation.

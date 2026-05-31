@@ -6,7 +6,7 @@ Authentication security testing module.
 `crates/slapper/src/auth/`
 
 ## Tab
-Auth tab is one of the 29 TUI tabs - see `slapper-tui/SKILL.md` for TUI patterns.
+Auth tab is one of the 28 TUI tabs - see `slapper-tui/SKILL.md` for TUI patterns.
 
 ## Key Types
 
@@ -41,5 +41,5 @@ let is_locked = detector.detect_lockout(&response).await?;
 - `rate_limit.rs` - Rate limit testing
 - `timing.rs` - Timing attack testing
 
-## AGENTS.md Override
-See `crates/slapper/src/auth/AGENTS.override.md`
+## Module Notes
+See `architecture/auth.md` for architecture documentation.
