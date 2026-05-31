@@ -1040,53 +1040,15 @@ impl McpServer {
         target: &str,
         response: &ToolResponse,
     ) -> serde_json::Value {
-        let findings: Vec<serde_json::Value> = response
+        use crate::tool::protocol::mcp::coding_agent_output::CodingAgentFindingReport;
+
+        let findings: Vec<_> = response
             .findings
             .iter()
-            .map(|f| {
-                let patch_relevance = match f.severity {
-                    crate::tool::finding::ResponseSeverity::Critical
-                    | crate::tool::finding::ResponseSeverity::High => "blocks_merge",
-                    crate::tool::finding::ResponseSeverity::Medium => "should_fix",
-                    crate::tool::finding::ResponseSeverity::Low => "review_manually",
-                    _ => "informational",
-                };
-                let confidence = match f.severity {
-                    crate::tool::finding::ResponseSeverity::Critical
-                    | crate::tool::finding::ResponseSeverity::High => "high",
-                    crate::tool::finding::ResponseSeverity::Medium => "medium",
-                    _ => "low",
-                };
-                let category = format!("{}", f.finding_type);
-                let evidence_arr: Vec<serde_json::Value> = f
-                    .evidence
-                    .as_ref()
-                    .map(|e| {
-                        vec![serde_json::json!({
-                            "type": "raw",
-                            "content": e
-                        })]
-                    })
-                    .unwrap_or_default();
-
-                serde_json::json!({
-                    "id": f.id,
-                    "title": f.title,
-                    "category": category,
-                    "severity": f.severity.as_str(),
-                    "confidence": confidence,
-                    "observed_behavior": f.description,
-                    "evidence": evidence_arr,
-                    "patch_relevance": patch_relevance
-                })
-            })
+            .map(CodingAgentFindingReport::from_finding)
             .collect();
 
-        let mut by_severity: FxHashMap<String, usize> = FxHashMap::default();
-        for f in &response.findings {
-            let sev = f.severity.as_str().to_string();
-            *by_severity.entry(sev).or_insert(0) += 1;
-        }
+        let summary = CodingAgentFindingReport::build_summary(&findings);
 
         let status = if response.is_success() {
             "completed"
@@ -1094,17 +1056,19 @@ impl McpServer {
             "failed"
         };
 
-        serde_json::json!({
-            "schema_version": "1.0",
-            "target": target,
-            "profile": "coding-agent",
-            "run_id": response.request_id,
-            "status": status,
-            "findings": findings,
-            "summary": {
-                "total_findings": response.findings.len(),
-                "by_severity": by_severity
-            }
+        let report = CodingAgentFindingReport {
+            schema_version: "1.0".to_string(),
+            target: target.to_string(),
+            profile: "coding-agent".to_string(),
+            run_id: response.request_id.clone(),
+            status: status.to_string(),
+            findings,
+            summary,
+        };
+
+        serde_json::to_value(&report).unwrap_or_else(|e| {
+            tracing::error!(error = %e, "Failed to serialize CodingAgentFindingReport");
+            serde_json::json!({"error": "serialization_failed"})
         })
     }
 
