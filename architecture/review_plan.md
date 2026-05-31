@@ -1,6 +1,6 @@
 # Architecture Review Plan
 
-**Status:** READY
+**Status:** COMPLETE (Review Phase) — Code fixes pending
 **Created:** 2026-05-31
 **Purpose:** Systematic review of all 34 architecture documents, verification against codebase, bug/ improvement discovery, and stale item pruning.
 
@@ -155,37 +155,36 @@ Each review file MUST use this structure:
 
 ## Execution Phases
 
-### Phase 1: Parallel Document Reviews
+### Phase 1: Parallel Document Reviews — COMPLETE
 
-Launch all 7 subagents concurrently. Each agent:
-- Reads its assigned architecture doc(s)
-- Reads corresponding source module(s)
-- Verifies claims against code
-- Writes `plans/review_<module>.md` files
+7 subagents launched. Each agent read its assigned architecture doc(s), read corresponding source module(s), verified claims against code, and wrote `plans/review_<module>.md` files.
 
-**Timeout:** 300s per agent. If an agent times out, log which docs were incomplete.
+**Result:** 34 review files written, all with meaningful content (28-182 lines each).
 
-### Phase 2: Stale Item Detection
+### Phase 2: Stale Item Detection — COMPLETE
 
-After all 17 review files exist in `plans/`:
+Analysis of 34 architecture docs against codebase:
+- **1 orphaned doc**: `review_plan.md` (meta-document)
+- **9 uncovered modules**: `auth_context`, `generated`, `logging`, `stress`, `utils`, `macros.rs`, `constants.rs`, `types.rs`, `probe.rs`
+- **All statistics match**: Tabs (28), PayloadType (30), WAF (34), NSE libs (169), Output formats (8), CLI commands (36), Modules (39)
+- **No dead references** found
+- **No significant duplicate content**
 
-1. **Orphaned docs**: Architecture docs without a corresponding source module
-2. **Uncovered modules**: Source modules under `crates/slapper/src/` without architecture docs
-3. **Statistical drift**: Compare documented counts against actual codebase metrics:
-   - `grep -r "mod " crates/slapper/src/ | wc -l` for module count
-   - `find crates/slapper/src -name "*.rs" | wc -l` for source file count
-   - `grep -c "Tab " crates/slapper/src/tui/` for tab count
-   - Count `PayloadType` variants, WAF products, NSE libraries, etc.
-4. **Duplicate content**: Flag overlapping information across docs (e.g., MCP content in `ai_agents.md` vs `overview.md`)
-5. **Dead references**: Any `architecture/*.md` referencing files, types, or modules that no longer exist
-6. **Write findings** to `plans/stale_items.md`
+Findings written to `plans/stale_items.md`.
 
-### Phase 3: Consolidation
+### Phase 3: Consolidation — COMPLETE
 
-1. Verify all review files exist: `ls plans/review_*.md | wc -l` should be 34
-2. Read each review file and extract high-priority items
-3. Update `architecture/review_plan.md` with final status
-4. Commit all `plans/review_*.md`, `plans/stale_items.md`, and `architecture/review_plan.md`
+1. All 34 review files verified: `ls plans/review_*.md | wc -l` = 34 ✅
+2. High-priority items extracted to `plans/review_consolidated.md`
+3. `architecture/review_plan.md` updated with final status
+4. Ready for commit
+
+**Consolidated Summary:**
+- 8 high-priority bugs (incorrect SLA calc, missing Discord dispatch, stub DB, dead auth code, feature count math error, wrong FindingLifecycle type, stale lib.rs docstrings, incorrect feature-gate claim)
+- 31 high-priority discrepancies
+- 29 high-priority improvements
+- 17 stale items requiring action
+- Document accuracy: 8 High, 13 Medium, 13 need review
 
 ---
 
@@ -206,7 +205,7 @@ After all 17 review files exist in `plans/`:
 - `tui.md` is the largest doc (1715 lines); its agent should focus on structural claims (tab count, event loop, state management) rather than pixel-level details.
 - `nse_integration.md` spans a separate crate (`slapper-nse/`); agent must check both crates.
 - Feature flags in `Cargo.toml` at root and `crates/slapper/Cargo.toml` must be cross-referenced for `feature_matrix.md`.
-- The previous review_plan.md claimed Phase 1 and Phase 2 were COMPLETE but no `plans/*_review.md` files exist. This is a fresh start.
+- The previous review_plan.md claimed Phase 1 and Phase 2 were COMPLETE but no `plans/*_review.md` files exist. This was a fresh start. All phases now complete with 34 review files, stale_items.md, and review_consolidated.md.
 
 ---
 
