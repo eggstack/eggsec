@@ -9,7 +9,7 @@ Slapper features deep integration with AI models for analysis, payload generatio
 An abstraction layer for interacting with different LLM providers:
 - **Providers**: OpenAI, Azure, Anthropic, OpenAICompatible
 - **Features**: Bearer/Azure auth, circuit breaker, response normalization
-- **Methods**: `chat_completion()`, `analyze_findings()`, `analyze_findings_typed()`, `suggest_payloads()`, `suggest_waf_bypass()`
+- **Methods**: `chat_completion_from_messages()`, `analyze_findings()`, `analyze_findings_typed()`, `suggest_payloads()`, `suggest_waf_bypass()`
 
 ### Adaptive Fuzzing (`adaptive.rs`)
 
@@ -104,13 +104,23 @@ pub enum McpProfile {
 
 pub struct McpProfilePolicy {
     pub profile: McpProfile,
-    pub target_policy: TargetPolicy,
+    pub default_target_policy: TargetPolicy,
+    pub allowed_tool_ids: ToolSelector,
+    pub denied_tool_ids: ToolSelector,
+    pub allowed_categories: ToolSelector,
+    pub denied_categories: ToolSelector,
     pub max_concurrency: usize,
     pub max_timeout_ms: u64,
     pub max_batch_size: usize,
+    pub allow_streaming: bool,
+    pub allow_sessions: bool,
+    pub allow_plan_endpoint: bool,
+    pub require_explicit_scope: bool,
     pub allow_external_network: bool,
     pub allow_stress_testing: bool,
+    pub allow_packet_features: bool,
     pub allow_broad_recon: bool,
+    pub denied_argument_keys: Vec<String>,
 }
 ```
 
@@ -129,30 +139,54 @@ pub struct McpProfilePolicy {
 ```rust
 impl McpProfilePolicy {
     pub fn ops_agent() -> Self {
-        // No restrictions: all tools, no concurrency/timeout caps
+        // No restrictions: all tools, broad concurrency/timeout caps
         Self {
             profile: McpProfile::OpsAgent,
-            target_policy: TargetPolicy::None,
-            max_concurrency: 20,
-            max_timeout_ms: 300_000,
+            default_target_policy: TargetPolicy::AnyWithScopeEngine,
+            allowed_tool_ids: ToolSelector::All,
+            denied_tool_ids: ToolSelector::None,
+            allowed_categories: ToolSelector::All,
+            denied_categories: ToolSelector::None,
+            max_concurrency: 50,
+            max_timeout_ms: 600_000,
             max_batch_size: 100,
+            allow_streaming: true,
+            allow_sessions: true,
+            allow_plan_endpoint: true,
+            require_explicit_scope: false,
             allow_external_network: true,
             allow_stress_testing: true,
+            allow_packet_features: true,
             allow_broad_recon: true,
+            denied_argument_keys: Vec::new(),
         }
     }
 
     pub fn coding_agent() -> Self {
-        // Restricted: localhost/private only, tight caps
+        // Restricted: localhost/private only, narrow tools, tight caps
         Self {
             profile: McpProfile::CodingAgent,
-            target_policy: TargetPolicy::ScopeOrLocalDevOnly,
+            default_target_policy: TargetPolicy::ScopeOrLocalDevOnly,
+            allowed_tool_ids: ToolSelector::Exact(vec![
+                "scan", "scan-ports", "fingerprint", "endpoints", "waf-detect", "search",
+            ]),
+            denied_tool_ids: ToolSelector::None,
+            allowed_categories: ToolSelector::None,
+            denied_categories: ToolSelector::Exact(vec!["stresstesting", "loadtesting"]),
             max_concurrency: 5,
             max_timeout_ms: 60_000,
             max_batch_size: 10,
+            allow_streaming: true,
+            allow_sessions: false,
+            allow_plan_endpoint: false,
+            require_explicit_scope: false,
             allow_external_network: false,
             allow_stress_testing: false,
+            allow_packet_features: false,
             allow_broad_recon: false,
+            denied_argument_keys: vec![
+                "stealth", "proxy_rotation", "spoof_source", "raw_packet",
+            ],
         }
     }
 }
@@ -161,7 +195,7 @@ impl McpProfilePolicy {
 ## Recent Bug Fixes (2026-05-22)
 
 ### AI Module
-1. **waf_bypass.rs:107** - Added `continue` after `failed_attempts >= 3` check to prevent incorrect fallthrough to AI query
+1. **waf_bypass.rs:124-133** - Added `continue` after `failed_attempts >= 3` check to prevent incorrect fallthrough to AI query
 2. **planner.rs:456** - Fixed `ExecutionStage` field reference from `s.target` to `s.name.to_lowercase().contains()`
 3. **cache lock handling** - Race condition prevention during persist (2026-05-22 earlier fix)
 4. **planner cache thresholds** - Lowered from `use_count > 3` to `>= 2` for better hit rate
