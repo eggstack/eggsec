@@ -423,72 +423,74 @@ impl TabRender for LoadTab {
             ])
             .split(area);
 
-        let selector_area = *chunks.get(0).unwrap_or(&area);
-        let input_area = *chunks.get(1).unwrap_or(&area);
-        let results_area = *chunks.get(2).unwrap_or(&area);
+        if let Some(selector_area) = chunks.get(0) {
+            self.test_type_selector.render(f, *selector_area);
 
-        self.test_type_selector.render(f, selector_area);
-
-        if let Some(dropdown) = self.test_type_selector.dropdown_info(selector_area) {
-            dropdown.render(f);
-        }
-
-        let input_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Load Test Configuration ")
-            .border_style(
-                Style::default().fg(if self.focus_area == LoadFocusArea::Inputs {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let input_inner = input_block.inner(input_area);
-        f.render_widget(input_block, input_area);
-
-        let num_fields = self.inputs.fields.len().max(1);
-        let field_height = (input_inner.height / num_fields as u16).max(2);
-        let constraints: Vec<Constraint> = (0..num_fields)
-            .map(|_| Constraint::Length(field_height))
-            .collect();
-
-        let input_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(constraints)
-            .split(input_inner);
-
-        for (i, field) in self.inputs.fields.iter().enumerate() {
-            if let Some(chunk) = input_chunks.get(i) {
-                field.render(f, *chunk, insert_mode);
+            if let Some(dropdown) = self.test_type_selector.dropdown_info(*selector_area) {
+                dropdown.render(f);
             }
         }
 
-        let results_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Results ")
-            .border_style(
-                Style::default().fg(if self.focus_area == LoadFocusArea::Results {
-                    tc!(border_focused)
-                } else {
-                    tc!(border)
-                }),
-            );
-        let results_inner = results_block.inner(results_area);
-        f.render_widget(results_block, results_area);
+        if let Some(input_area) = chunks.get(1) {
+            let input_block = Block::default()
+                .borders(Borders::ALL)
+                .title(" Load Test Configuration ")
+                .border_style(
+                    Style::default().fg(if self.focus_area == LoadFocusArea::Inputs {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    }),
+                );
+            let input_inner = input_block.inner(*input_area);
+            f.render_widget(input_block, *input_area);
 
-        if self.state == AppState::Running {
-            self.progress.render(f, results_inner);
-        } else if let Some(ref err) = self.error {
-            let error_text = Paragraph::new(format!("Error: {}", err.message()))
-                .style(Style::default().fg(tc!(error)));
-            f.render_widget(error_text, results_inner);
-        } else if !self.results_view.is_empty() {
-            self.results_view
-                .render(f, results_inner, None);
-        } else {
-            let placeholder =
-                empty_state_paragraph("Results", "Results will appear here after running");
-            f.render_widget(placeholder, results_inner);
+            let num_fields = self.inputs.fields.len().max(1);
+            let field_height = (input_inner.height / num_fields as u16).max(2);
+            let constraints: Vec<Constraint> = (0..num_fields)
+                .map(|_| Constraint::Length(field_height))
+                .collect();
+
+            let input_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(constraints)
+                .split(input_inner);
+
+            for (i, field) in self.inputs.fields.iter().enumerate() {
+                if let Some(chunk) = input_chunks.get(i) {
+                    field.render(f, *chunk, insert_mode);
+                }
+            }
+        }
+
+        if let Some(results_area) = chunks.get(2) {
+            let results_block = Block::default()
+                .borders(Borders::ALL)
+                .title(" Results ")
+                .border_style(
+                    Style::default().fg(if self.focus_area == LoadFocusArea::Results {
+                        tc!(border_focused)
+                    } else {
+                        tc!(border)
+                    }),
+                );
+            let results_inner = results_block.inner(*results_area);
+            f.render_widget(results_block, *results_area);
+
+            if self.state == AppState::Running {
+                self.progress.render(f, results_inner);
+            } else if let Some(ref err) = self.error {
+                let error_text = Paragraph::new(format!("Error: {}", err.message()))
+                    .style(Style::default().fg(tc!(error)));
+                f.render_widget(error_text, results_inner);
+            } else if !self.results_view.is_empty() {
+                self.results_view
+                    .render(f, results_inner, None);
+            } else {
+                let placeholder =
+                    empty_state_paragraph("Results", "Results will appear here after running");
+                f.render_widget(placeholder, results_inner);
+            }
         }
     }
 
@@ -732,7 +734,7 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else if self.focus_area != LoadFocusArea::Results {
+        } else if self.focus_area != LoadFocusArea::Results && self.inputs.is_focused() {
             self.inputs.move_left()
         } else {
             false
@@ -750,7 +752,7 @@ impl TabInput for LoadTab {
             } else {
                 false
             }
-        } else if self.focus_area != LoadFocusArea::Results {
+        } else if self.focus_area != LoadFocusArea::Results && self.inputs.is_focused() {
             self.inputs.move_right()
         } else {
             false

@@ -65,20 +65,6 @@ impl ResumeTab {
     pub fn scroll_results_down(&mut self) {
         self.results_view.scroll_down(1);
     }
-
-    pub fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.results_view.page_down(page_size);
-    }
 }
 
 impl Default for ResumeTab {
@@ -297,6 +283,7 @@ impl TabInput for ResumeTab {
         if self.is_running() {
             return;
         }
+        self.inputs.blur();
         self.focus_area = ResumeFocusArea::Results;
     }
 
@@ -382,5 +369,19 @@ impl TabInput for ResumeTab {
         } else {
             true
         }
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.results_view.page_down(page_size);
     }
 }

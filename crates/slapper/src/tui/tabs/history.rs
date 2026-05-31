@@ -299,20 +299,6 @@ impl HistoryTab {
     pub fn scroll_details_down(&mut self) {
         self.details_view.scroll_down(1);
     }
-
-    pub fn page_up(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.details_view.page_up(page_size);
-    }
-
-    pub fn page_down(&mut self, page_size: usize) {
-        if self.is_running() {
-            return;
-        }
-        self.details_view.page_down(page_size);
-    }
 }
 
 impl Default for HistoryTab {
@@ -720,5 +706,19 @@ impl TabInput for HistoryTab {
 
     fn is_input_focused(&self) -> bool {
         self.focus_area == HistoryFocusArea::Details
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.details_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
+        self.details_view.page_down(page_size);
     }
 }

@@ -370,6 +370,11 @@ impl Checkbox {
         self
     }
 
+    pub fn reset(&mut self) {
+        self.checked = false;
+        self.focused = false;
+    }
+
     pub fn toggle(&mut self) {
         self.checked = !self.checked;
     }

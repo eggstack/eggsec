@@ -511,6 +511,11 @@ impl TabInput for ClusterTab {
 
     fn handle_top(&mut self) {
         if !self.is_running() {
+            match self.current_view {
+                ClusterView::Worker => self.worker_inputs.blur(),
+                ClusterView::Coordinator => self.coordinator_inputs.blur(),
+                ClusterView::Status => self.status_inputs.blur(),
+            }
             self.focus_area = ClusterFocusArea::ViewSelector;
             self.view_selector.focus();
         }

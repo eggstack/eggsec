@@ -178,17 +178,6 @@ impl TabRender for NseTab {
             ])
             .split(area);
 
-        // Input fields
-        let input_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-            ])
-            .split(chunks[0]);
-
         let input_block = Block::default()
             .title(" NSE Configuration ")
             .borders(Borders::ALL)
@@ -201,9 +190,19 @@ impl TabRender for NseTab {
             );
         f.render_widget(input_block, chunks[0]);
 
+        // Input fields
+        let input_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+            ])
+            .split(input_block.inner(chunks[0]));
+
         for (i, field) in self.inputs.fields.iter().enumerate() {
-            if i < input_chunks.len() {
-                field.render(f, input_chunks[i], insert_mode);
+            if let Some(area) = input_chunks.get(i) {
+                field.render(f, *area, insert_mode);
             }
         }
 
@@ -255,6 +254,7 @@ impl TabInput for NseTab {
                 NseFocusArea::Results
             }
             NseFocusArea::ScriptSelector => {
+                self.script_selector.blur();
                 self.inputs.focus(0);
                 NseFocusArea::Inputs
             }
@@ -338,6 +338,7 @@ impl TabInput for NseTab {
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
+            self.inputs.blur();
             self.focus_area = NseFocusArea::Results;
         }
     }

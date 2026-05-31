@@ -411,6 +411,12 @@ impl TabInput for ReportTab {
                 ReportFocusArea::Results
             }
             ReportFocusArea::Inputs => {
+                let current_inputs = match self.current_view {
+                    ReportView::Convert => &mut self.convert_inputs,
+                    ReportView::Trend => &mut self.trend_inputs,
+                    ReportView::Schedule => &mut self.schedule_inputs,
+                };
+                current_inputs.blur();
                 self.view_selector.focus();
                 ReportFocusArea::ViewSelector
             }
@@ -523,6 +529,15 @@ impl TabInput for ReportTab {
         if self.is_running() {
             return;
         }
+        match self.focus_area {
+            ReportFocusArea::ViewSelector => self.view_selector.blur(),
+            ReportFocusArea::Inputs => match self.current_view {
+                ReportView::Convert => self.convert_inputs.blur(),
+                ReportView::Trend => self.trend_inputs.blur(),
+                ReportView::Schedule => self.schedule_inputs.blur(),
+            },
+            ReportFocusArea::Results => {}
+        }
         self.focus_area = ReportFocusArea::ViewSelector;
         self.view_selector.focus();
     }
@@ -530,6 +545,15 @@ impl TabInput for ReportTab {
     fn handle_bottom(&mut self) {
         if self.is_running() {
             return;
+        }
+        match self.focus_area {
+            ReportFocusArea::ViewSelector => self.view_selector.blur(),
+            ReportFocusArea::Inputs => match self.current_view {
+                ReportView::Convert => self.convert_inputs.blur(),
+                ReportView::Trend => self.trend_inputs.blur(),
+                ReportView::Schedule => self.schedule_inputs.blur(),
+            },
+            ReportFocusArea::Results => {}
         }
         self.focus_area = ReportFocusArea::Results;
     }

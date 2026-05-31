@@ -505,6 +505,7 @@ impl TabInput for VulnTab {
                 VulnFocusArea::Results
             }
             VulnFocusArea::Inputs => {
+                self.inputs.blur();
                 self.mode_selector.focus();
                 VulnFocusArea::Mode
             }
@@ -588,6 +589,8 @@ impl TabInput for VulnTab {
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
+            self.mode_selector.blur();
+            self.inputs.blur();
             self.focus_area = VulnFocusArea::Results;
         }
     }

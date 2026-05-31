@@ -523,6 +523,9 @@ impl TabInput for BrowserTab {
         if self.focus_area == BrowserFocusArea::Inputs {
             self.inputs.move_left()
         } else if self.focus_area == BrowserFocusArea::Options {
+            if self.option_checkboxes.is_empty() {
+                return false;
+            }
             if self.focused_checkbox_index == 0 {
                 false
             } else {
@@ -541,6 +544,9 @@ impl TabInput for BrowserTab {
         if self.focus_area == BrowserFocusArea::Inputs {
             self.inputs.move_right()
         } else if self.focus_area == BrowserFocusArea::Options {
+            if self.option_checkboxes.is_empty() {
+                return false;
+            }
             if self.focused_checkbox_index >= self.option_checkboxes.len().saturating_sub(1) {
                 false
             } else {

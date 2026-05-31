@@ -559,14 +559,14 @@ impl TabInput for WafTab {
             return;
         }
 
-        if self.focus_area == WafFocusArea::ModeRadio && !self.is_running() {
+        if self.focus_area == WafFocusArea::ModeRadio {
             if let Some(sel) = self.mode_radio.selected {
                 self.mode_radio.select((sel + 1) % 2);
             }
             return;
         }
 
-        if self.focus_area == WafFocusArea::Techniques && !self.is_running() {
+        if self.focus_area == WafFocusArea::Techniques {
             if !self.technique_checkboxes.is_empty() {
                 if let Some(cb) = self
                     .technique_checkboxes
@@ -589,6 +589,10 @@ impl TabInput for WafTab {
         if self.is_running() {
             self.stop();
             return;
+        }
+        if self.focus_area == WafFocusArea::Techniques {
+            self.focused_checkbox_index = 0;
+            self.focus_area = WafFocusArea::Inputs;
         }
         self.inputs.blur();
     }

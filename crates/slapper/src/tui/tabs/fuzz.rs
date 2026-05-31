@@ -423,14 +423,14 @@ impl TabState for FuzzTab {
             field.value = "10".to_string();
             field.cursor_pos = 2;
         }
-        self.mutation_checkbox.checked = false;
-        self.graphql_introspection.checked = true;
-        self.graphql_depth_bypass.checked = true;
-        self.graphql_alias_overload.checked = true;
-        self.oauth_redirect_test.checked = true;
-        self.oauth_scope_test.checked = true;
-        self.oauth_state_test.checked = true;
-        self.oauth_grant_test.checked = true;
+        self.mutation_checkbox.reset();
+        self.graphql_introspection.reset();
+        self.graphql_depth_bypass.reset();
+        self.graphql_alias_overload.reset();
+        self.oauth_redirect_test.reset();
+        self.oauth_scope_test.reset();
+        self.oauth_state_test.reset();
+        self.oauth_grant_test.reset();
         self.payload_selector.select(0);
         self.mode_selector.select(0);
         self.target_selector.select(0);
@@ -641,14 +641,20 @@ impl TabRender for FuzzTab {
             .split(config_area);
 
         if config_chunks.len() >= 10 {
-            if let Some(info) = self.payload_selector.dropdown_info(config_chunks[7]) {
-                info.render(f);
+            if let Some(chunk) = config_chunks.get(7) {
+                if let Some(info) = self.payload_selector.dropdown_info(*chunk) {
+                    info.render(f);
+                }
             }
-            if let Some(info) = self.mode_selector.dropdown_info(config_chunks[8]) {
-                info.render(f);
+            if let Some(chunk) = config_chunks.get(8) {
+                if let Some(info) = self.mode_selector.dropdown_info(*chunk) {
+                    info.render(f);
+                }
             }
-            if let Some(info) = self.target_selector.dropdown_info(config_chunks[9]) {
-                info.render(f);
+            if let Some(chunk) = config_chunks.get(9) {
+                if let Some(info) = self.target_selector.dropdown_info(*chunk) {
+                    info.render(f);
+                }
             }
         }
     }
@@ -993,10 +999,16 @@ impl TabInput for FuzzTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_down(page_size);
     }
 }

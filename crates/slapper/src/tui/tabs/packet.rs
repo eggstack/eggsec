@@ -736,6 +736,7 @@ impl TabInput for PacketTab {
         if self.is_running() {
             return;
         }
+        self.inputs.blur();
         self.view_selector.focus();
     }
 

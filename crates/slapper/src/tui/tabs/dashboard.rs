@@ -260,6 +260,10 @@ impl DashboardTab {
         let sum: usize = numbers.iter().sum();
         let count = numbers.len();
 
+        if count == 0 {
+            return 1;
+        }
+
         let base_score = sum / count;
 
         base_score.clamp(1, 100)
@@ -593,17 +597,15 @@ impl TabInput for DashboardTab {
     fn is_input_focused(&self) -> bool {
         false
     }
-}
 
-impl DashboardTab {
-    pub fn page_up(&mut self, count: usize) {
+    fn page_up(&mut self, count: usize) {
         if self.is_running() {
             return;
         }
         self.view.scroll_up(count);
     }
 
-    pub fn page_down(&mut self, count: usize) {
+    fn page_down(&mut self, count: usize) {
         if self.is_running() {
             return;
         }

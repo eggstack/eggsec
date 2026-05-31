@@ -439,6 +439,7 @@ impl TabInput for IntegrationsTab {
                 IntegrationsFocusArea::Results
             }
             IntegrationsFocusArea::Config => {
+                self.config_inputs.blur();
                 self.tracker_selector.focus();
                 IntegrationsFocusArea::Tracker
             }
@@ -553,6 +554,12 @@ impl TabInput for IntegrationsTab {
         if self.is_running() {
             return;
         }
+        match self.focus_area {
+            IntegrationsFocusArea::Tracker => self.tracker_selector.blur(),
+            IntegrationsFocusArea::Config => self.config_inputs.blur(),
+            IntegrationsFocusArea::Issue => self.issue_inputs.blur(),
+            IntegrationsFocusArea::Results => {}
+        }
         self.focus_area = IntegrationsFocusArea::Tracker;
         self.tracker_selector.focus();
     }
@@ -560,6 +567,12 @@ impl TabInput for IntegrationsTab {
     fn handle_bottom(&mut self) {
         if self.is_running() {
             return;
+        }
+        match self.focus_area {
+            IntegrationsFocusArea::Tracker => self.tracker_selector.blur(),
+            IntegrationsFocusArea::Config => self.config_inputs.blur(),
+            IntegrationsFocusArea::Issue => self.issue_inputs.blur(),
+            IntegrationsFocusArea::Results => {}
         }
         self.focus_area = IntegrationsFocusArea::Results;
     }

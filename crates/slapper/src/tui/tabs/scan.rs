@@ -581,6 +581,8 @@ impl TabInput for ScanTab {
 
     fn handle_top(&mut self) {
         if !self.is_running() {
+            self.profile_selector.cancel();
+            self.output_selector.cancel();
             self.focus_area = ScanFocusArea::Inputs;
             self.inputs.focus(0);
         }
@@ -588,6 +590,8 @@ impl TabInput for ScanTab {
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
+            self.profile_selector.cancel();
+            self.output_selector.cancel();
             self.focus_area = ScanFocusArea::Results;
             self.inputs.blur();
         }

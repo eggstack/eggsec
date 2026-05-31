@@ -66,9 +66,11 @@ impl super::App {
             Some(r) => r,
             None => return,
         };
-        if self.handle_feature_result(result).is_some() {
-            tracing::warn!("Unhandled TaskResult variant");
-        }
+        let result = match self.handle_feature_result(result) {
+            Some(r) => r,
+            None => return,
+        };
+        tracing::warn!("Unhandled TaskResult variant: {:?}", result);
     }
 
     fn handle_security_result(&mut self, result: TaskResult) -> Option<TaskResult> {

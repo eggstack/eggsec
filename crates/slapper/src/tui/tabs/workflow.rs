@@ -420,6 +420,7 @@ impl TabInput for WorkflowTab {
                 WorkflowFocusArea::Results
             }
             WorkflowFocusArea::Inputs => {
+                self.inputs.blur();
                 self.mode_selector.focus();
                 WorkflowFocusArea::Mode
             }
@@ -505,6 +506,8 @@ impl TabInput for WorkflowTab {
 
     fn handle_bottom(&mut self) {
         if !self.is_running() {
+            self.mode_selector.blur();
+            self.inputs.blur();
             self.focus_area = WorkflowFocusArea::Results;
         }
     }

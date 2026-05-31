@@ -127,7 +127,7 @@ impl ProgressGauge {
             return;
         }
         let spinner = SPINNER_FRAMES.get(self.spinner_frame % SPINNER_FRAMES.len()).unwrap_or(&"?");
-        let text = if self.total > 0 && self.current <= self.total {
+        let text = if self.total > 0 {
             format!(
                 "{} {} - {}/{} ({}%)",
                 spinner,
