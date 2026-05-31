@@ -631,3 +631,16 @@ This pattern is fragile but intentional because:
 - Adding more patterns is straightforward if needed
 
 When adding new error types, prefer adding to this list rather than creating new error variants.
+
+## Tab Count
+
+The `Tab` enum in `tui/tabs/mod.rs` has exactly **28 variants**. Do not reference "29 tabs" or "31 payload types" — these are stale counts from earlier versions.
+
+## Uniform Look & Feel
+
+A visual consistency plan exists in `plans/tui-uniform-look-and-feel.md`. Key items:
+- Popup content text needs styling (`popup.rs:130`)
+- Notification warnings use wrong color (`ui.rs:579`)
+- 13 tab files need results border standardization
+- 10 tab files need bordered input blocks
+- See the plan for full execution order

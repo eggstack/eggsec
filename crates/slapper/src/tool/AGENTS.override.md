@@ -77,3 +77,10 @@ for tool in &stage.tools {
     tool_results.push(self.process_tool_result(tool, result, duration));
 }
 ```
+
+## MCP Profile System
+
+- `McpProfile` enum (`OpsAgent`, `CodingAgent`) in `tool/protocol/mcp/profile.rs`
+- `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` — 18 fields controlling tool visibility and call restrictions
+- Policy enforcement must happen at **both** discovery and call time — discovery filtering alone is insufficient
+- `TargetPolicy` enum controls which targets each profile can access

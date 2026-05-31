@@ -84,3 +84,11 @@ This ensures new plans with moderate success are also cached.
 cargo test --lib -p slapper ai::
 cargo clippy --lib -p slapper
 ```
+
+## MCP Profile Policy
+
+- `McpProfilePolicy` struct in `tool/protocol/mcp/policy.rs` has **18 fields** — not 7 as some docs claim
+- `TargetPolicy` has 4 variants: `ExplicitScopeOnly`, `LocalhostAndPrivateCidrsOnly`, `ScopeOrLocalDevOnly`, `AnyWithScopeEngine` (no `None` variant)
+- `ops_agent()` defaults: `max_concurrency: 50`, `max_timeout_ms: 600_000`
+- `coding_agent()` is deny-by-default for stress/load/packet/broad-recon tools
+- `chat_completion()` on `AiClient` is **private** — use `chat_completion_from_messages()` instead

@@ -8,7 +8,7 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** contains the consolidated implementation status. All original 51 items and 4 waves are complete.
+**`plans/plan.md`** contains the consolidated implementation plan with active work items organized into parallel waves. Previous 51-item plan (4 waves) is complete. Current plan covers documentation fixes, TUI styling, bug fixes, and Agent/MCP profile productionization.
 
 ## Quick Reference
 
@@ -63,6 +63,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `nse` - Nmap NSE script support
 - `ai-integration` - AI planner, script generation, autonomous agent skills
 - `ws-api` - WebSocket pub/sub
+- `api-schema` - API schema support (marker-only, no additional deps)
 - `full` - All features combined (16 sub-features)
 
 ### Key Types
@@ -78,6 +79,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `SmartWafBypass` - WAF bypass with knowledge base
 - `AiPlanner` - AI-driven execution planning (requires `ai-integration`)
 - `McpProfile` - MCP agent profile (`OpsAgent`, `CodingAgent`) in `tool/protocol/mcp/profile.rs`
+- `McpProfilePolicy` - 18-field policy struct enforcing tool visibility and call restrictions per profile in `tool/protocol/mcp/policy.rs`
 - `TargetPolicy` - Target scope enforcement policy in `tool/protocol/mcp/policy.rs`
 - `ProbeIntent` / `ProbeRisk` - Probe classification in `probe.rs`
 
@@ -113,6 +115,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are blocked via private IP checks in `TargetScope::parse()`. However, scope rule evaluation happens AFTER private IP check - so targets like `10.255.255.255` are rejected even with scope rules like `allow 10.0.0.0/8`.
 - **TUI Settings Tab**: The settings editor applies exposed fields on top of an existing config and preserves non-exposed sections such as `profiles`, `schedule`, `remote`, `ai`, `search`, and `alert_channels`. See `architecture/config.md` for the current save semantics.
 - **MCP Coding Agent**: Default deny posture; stress/load/packet tools are hidden from coding-agent profile
+- **Known Panic**: `agent/alerts/routing.rs:79` has `.expect("Failed to create fallback HTTP client")` that will panic on client creation failure — needs graceful error handling
 
 ### Key Patterns (Lessons Learned)
 

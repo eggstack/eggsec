@@ -57,3 +57,8 @@ cargo test --lib -p slapper pipeline::
 cargo check --lib -p slapper
 cargo clippy --lib -p slapper
 ```
+
+## Additional Notes
+
+- **Defense-lab profiles**: All 5 profiles (`DefenseLab`, `SynvoidLocal`, `WafRegression`, `ProtocolEdge`, `NseSafe`) are fully implemented in `cli/mod.rs:262-266` and `stage.rs:92-107`. Do NOT describe them as "planned".
+- **Concurrent execution**: `run_concurrent()` exists alongside sequential `run()` in `Pipeline`. Uses `futures::future::join_all()` for parallel stage execution.

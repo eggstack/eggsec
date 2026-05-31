@@ -73,3 +73,7 @@ All target commands in `commands/handlers/agent.rs` use consistent portfolio loa
 - Avoid `AgentConfig::default()` for tests that write to memory/portfolio files
 - Verify call sites with `rg` before removing/renaming APIs
 - Use `TaskStatus` enum for task state transitions in tests
+
+## Known Issues
+
+- **Panic in alerts/routing.rs:79**: `.expect("Failed to create fallback HTTP client")` will panic if client creation fails. Convert to graceful error handling with `?` or match. This is the only remaining `expect()` in the agent module that can cause runtime crashes.
