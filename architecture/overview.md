@@ -4,7 +4,7 @@ Slapper is a Rust-native security assessment and defense-validation engine desig
 
 **Quick Facts:**
 - 39 modules in `crates/slapper/src/`
-- 526 source files
+- 741 source files
 - 1324 base tests (1469+ with full features)
 - 30 payload types for fuzzing
 - 28 TUI tabs
@@ -52,7 +52,7 @@ Slapper is a Rust-native security assessment and defense-validation engine desig
                                ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          Output Layer                                       │
-│    output/ (JSON, HTML, CSV, SARIF, JUnit, PDF, Markdown)                 │
+│    output/ (Pretty, JSON, Compact, HTML, CSV, SARIF, JUnit, Markdown)      │
 │    findings/ │ diff/ │ storage/ │ notify/                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -77,7 +77,7 @@ These modules are always compiled and form the foundation of the toolkit.
 
 | Module | Source | Description | Deep Dive |
 |--------|--------|-------------|-----------|
-| `cli/` | `crates/slapper/src/cli/` | Clap-based argument parsing; `Commands` enum with 35+ variants; 16 scan profiles | [cli_commands.md](cli_commands.md) |
+| `cli/` | `crates/slapper/src/cli/` | Clap-based argument parsing; `Commands` enum with 37 variants; 16 scan profiles | [cli_commands.md](cli_commands.md) |
 | `commands/` | `crates/slapper/src/commands/` | Central dispatch via `handle_command()` exhaustive match; 20+ handler modules | [cli_commands.md](cli_commands.md) |
 | `config/` | `crates/slapper/src/config/` | TOML/YAML config loading, `SlapperConfig` struct, scope enforcement with CIDR support, execution policy | [config.md](config.md) |
 | `types.rs` | `crates/slapper/src/types.rs` | Canonical `Severity` enum (Critical/High/Medium/Low/Info) with CVSS conversion; `SensitiveString` zeroized wrapper; `OutputFormat` enum (8 formats) | - |
@@ -96,7 +96,7 @@ Port scanning, service fingerprinting, and endpoint enumeration.
 
 | Module | Source | Description | Deep Dive |
 |--------|--------|-------------|-----------|
-| `scanner/` | `crates/slapper/src/scanner/` | TCP connect/SYN scanning with async connections; 40+ protocol fingerprinting (SSH, SMTP, FTP, MySQL, Redis, Elasticsearch, Kafka, etc.); wordlist-based endpoint discovery (224 built-in paths); ICMP probing; UDP fingerprinting; Nmap-style timing templates (T0-T5); IP spoofing support | [scanner.md](scanner.md) |
+| `scanner/` | `crates/slapper/src/scanner/` | TCP connect/SYN scanning with async connections; 40+ protocol fingerprinting (SSH, SMTP, FTP, MySQL, Redis, Elasticsearch, Kafka, etc.); wordlist-based endpoint discovery (223 built-in paths); ICMP probing; UDP fingerprinting; Nmap-style timing templates (T0-T5); IP spoofing support | [scanner.md](scanner.md) |
 
 ---
 
@@ -173,7 +173,7 @@ Report generation, findings management, and persistence.
 
 | Module | Source | Description | Deep Dive |
 |--------|--------|-------------|-----------|
-| `output/` | `crates/slapper/src/output/` | 8 output formats: JSON, CSV, HTML, Markdown, SARIF, JUnit XML, PDF, Pretty; finding deduplication (Strict/Fuzzy/Disabled); trend analysis across scans; baseline comparison for regression; diff engine for scan comparison; run manifest tracking; report templates (executive, technical, developer, compliance); XXE safety and CSV formula injection protection | [output.md](output.md) |
+| `output/` | `crates/slapper/src/output/` | 8 output formats: Pretty, JSON, Compact, HTML, CSV, SARIF, JUnit XML, Markdown; finding deduplication (Strict/Fuzzy/Disabled); trend analysis across scans; baseline comparison for regression; diff engine for scan comparison; run manifest tracking; report templates (executive, technical, developer, compliance); XXE safety and CSV formula injection protection | [output.md](output.md) |
 | `findings/` | `crates/slapper/src/findings/` | Canonical `Finding` schema with `Confidence` levels, `EvidenceKind` types, `AffectedAsset`, `FindingLocation`, `FindingType`; lifecycle management; finding storage | - |
 | `diff/` | `crates/slapper/src/diff/` | `diff_findings()` for comparing scan results; `DiffResult` with `FindingChange` entries; `DiffSummary` for aggregation | - |
 | `storage/` | `crates/slapper/src/storage/` | SQLx-based persistence (PostgreSQL) for findings, scan history, and configuration; predefined queries | - |
@@ -340,7 +340,7 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies and
 | Document | Modules Covered | Description |
 |----------|-----------------|-------------|
 | [ai_agents.md](ai_agents.md) | `ai/`, `agent/`, `tool/` | AI/LLM integration, agent orchestration, MCP tool exposure, protocol adapters |
-| [cli_commands.md](cli_commands.md) | `cli/`, `commands/` | CLI parsing, command dispatch, handler patterns, 35+ command variants |
+| [cli_commands.md](cli_commands.md) | `cli/`, `commands/` | CLI parsing, command dispatch, handler patterns, 37 command variants |
 | [config.md](config.md) | `config/` | Configuration system, scope enforcement, profiles, TUI settings semantics |
 | [defense_lab.md](defense_lab.md) | `probe.rs`, `pipeline/`, `output/` | Defense-lab mode, probe vocabulary, regression validation, safety model |
 | [distributed.md](distributed.md) | `distributed/` | Worker/coordinator cluster architecture, task queue, PSK auth, TLS |
@@ -459,16 +459,16 @@ See [feature_matrix.md](feature_matrix.md) for detailed feature dependencies and
 |--------|-------|
 | Tests | 1324 base, 1469+ with full features |
 | Clippy warnings | ~33 (pre-existing, none in ai module) |
-| Source files | 526 |
+| Source files | 741 |
 | Payload types | 30 |
 | TUI tabs | 28 (+ conditional feature tabs) |
 | WAF products | 34 |
 | NSE libraries | 169 |
 | Modules | 39 |
 | Protocols fingerprinted | 40+ |
-| CLI commands | 28+ |
+| CLI commands | 37 |
 | Output formats | 8 |
-| Feature flags | 30 |
+| Feature flags | 28 |
 | Scan profiles | 16 |
 | Fuzzer modes | 3 |
 | Proxy types | 5 |

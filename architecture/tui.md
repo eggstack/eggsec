@@ -29,7 +29,7 @@ Manages the overall application state, event loop, and rendering.
 | Scan Ports | `scan_ports.rs` | TCP port scanning |
 | Scan Endpoints | `scan_endpoints.rs` | Sensitive endpoint discovery |
 | Fingerprint | `fingerprint.rs` | Service fingerprinting (AMAP-style) |
-| Fuzz | `fuzz.rs` | Security fuzzing with 31 payload types |
+| Fuzz | `fuzz.rs` | Security fuzzing with 30 payload types |
 | WAF | `waf.rs` | WAF detection and bypass |
 | WAF Stress | `waf_stress.rs` | Comprehensive WAF stress testing |
 | Load | `load.rs` | HTTP load testing |
@@ -1079,7 +1079,7 @@ Key patterns fixed:
 
 ## Session Fixes (2026-06-10)
 
-### TUI Deep Dive Audit - All 29 Tabs
+### TUI Deep Dive Audit - All 28 Tabs
 
 #### Group 1 (recon, scan, scan_ports, scan_endpoints, fingerprint)
 
@@ -1148,7 +1148,7 @@ All 4 tabs passed audit - no bugs found.
 
 ## Session Fixes (2026-06-10)
 
-### TUI Deep Dive Audit - All 29 Tabs + Core + Components
+### TUI Deep Dive Audit - All 28 Tabs + Core + Components
 
 #### Group 1 (recon, scan, scan_ports, scan_endpoints, fingerprint)
 
@@ -1506,7 +1506,7 @@ Comprehensive audit using 7 parallel subagents across all tabs, core modules, an
 
 ## Session Fixes (2026-05-31 - Deep Dive Audit)
 
-### TUI Deep Dive Audit - All 29 Tabs + Core + Components
+### TUI Deep Dive Audit - All 28 Tabs + Core + Components
 
 Comprehensive audit using 7 parallel subagents across all tabs, core modules, and components. Found 61 bugs total (5 HIGH, 28 MEDIUM, 28 LOW).
 
@@ -1585,7 +1585,7 @@ Comprehensive audit using 7 parallel subagents across all tabs, core modules, an
 
 ## Session Fixes (2026-05-31 - Deep Dive Audit)
 
-### TUI Deep Dive Audit - All 29 Tabs + Core + Components
+### TUI Deep Dive Audit - All 28 Tabs + Core + Components
 
 Comprehensive audit using 8 parallel subagents across all tabs, core modules, and components. Found 30 bugs total (3 HIGH, 20 MEDIUM, 7 LOW).
 
@@ -1660,7 +1660,7 @@ Comprehensive audit using 8 parallel subagents across all tabs, core modules, an
 
 ## Session Fixes (2026-05-31 - Deep Dive Audit)
 
-### TUI Deep Dive Audit - All 29 Tabs + Core + Components
+### TUI Deep Dive Audit - All 28 Tabs + Core + Components
 
 Comprehensive audit using 8 parallel subagents across all tabs, core modules, and components. Found 16 bugs total (6 HIGH, 7 MEDIUM, 3 LOW).
 

@@ -81,10 +81,10 @@ Once a WAF is identified, Slapper can apply specialized bypass techniques across
 
 The WAF module includes a set of "benign" and "malicious" probes specifically designed to test WAF sensitivity without necessarily triggering a block:
 - `get_sqli_payloads()` - 19 SQL injection payloads
-- `get_xss_payloads()` - 18 XSS payloads
-- `get_ssrf_payloads()` - 15 SSRF payloads
+- `get_xss_payloads()` - 17 XSS payloads
+- `get_ssrf_payloads()` - 16 SSRF payloads
 - `get_command_injection_payloads()` - 16 cmd injection payloads
-- `get_traversal_payloads()` - 11 path traversal payloads
+- `get_traversal_payloads()` - 10 path traversal payloads
 
 ## Integration
 

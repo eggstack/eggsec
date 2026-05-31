@@ -8,7 +8,7 @@ Comprehensive reference for all Cargo feature flags in the `slapper` crate.
 |--------|-------|
 | Total features | 28 |
 | Features with deps | 18 |
-| Marker-only features | 10 |
+| Marker-only features | 12 |
 | In `full` | 16 |
 
 ## Feature Table
