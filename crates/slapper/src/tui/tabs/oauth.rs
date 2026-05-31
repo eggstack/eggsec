@@ -233,14 +233,6 @@ impl TabState for OAuthTab {
     }
 }
 
-impl OAuthTab {
-    pub fn stop(&mut self) {
-        if self.state == AppState::Running {
-            self.state = AppState::Idle;
-        }
-    }
-}
-
 impl TabRender for OAuthTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         if let Some(ref error) = self.error {
@@ -362,6 +354,12 @@ impl TabRender for OAuthTab {
 }
 
 impl TabInput for OAuthTab {
+    fn stop(&mut self) {
+        if self.state == AppState::Running {
+            self.state = AppState::Idle;
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;

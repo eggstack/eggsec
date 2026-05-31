@@ -576,7 +576,13 @@ impl TabInput for ScanPortsTab {
             self.stop();
             return;
         }
-        self.inputs.blur();
+        match self.focus_area {
+            ScanPortsFocusArea::Inputs => self.inputs.blur(),
+            ScanPortsFocusArea::Options | ScanPortsFocusArea::Results => {
+                self.focus_area = ScanPortsFocusArea::Inputs;
+                self.inputs.focus(0);
+            }
+        }
     }
 
     fn handle_left(&mut self) -> bool {
@@ -622,10 +628,16 @@ impl TabInput for ScanPortsTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_down(page_size);
     }
 }

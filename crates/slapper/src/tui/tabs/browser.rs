@@ -237,7 +237,7 @@ impl TabRender for BrowserTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(10), Constraint::Min(0)])
+            .constraints([Constraint::Length(14), Constraint::Min(0)])
             .split(area);
 
         let input_area = chunks[0];
@@ -266,6 +266,7 @@ impl TabRender for BrowserTab {
                 Constraint::Length(3),
                 Constraint::Length(3),
                 Constraint::Length(3),
+                Constraint::Length(2),
             ])
             .split(config_inner);
 
@@ -275,7 +276,7 @@ impl TabRender for BrowserTab {
             }
         }
 
-        let Some(cb_area) = input_chunks.get(2) else {
+        let Some(cb_area) = input_chunks.get(3) else {
             return;
         };
         let cb_chunks = Layout::default()

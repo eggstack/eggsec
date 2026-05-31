@@ -425,12 +425,19 @@ impl TabState for FuzzTab {
         }
         self.mutation_checkbox.reset();
         self.graphql_introspection.reset();
+        self.graphql_introspection.checked = true;
         self.graphql_depth_bypass.reset();
+        self.graphql_depth_bypass.checked = true;
         self.graphql_alias_overload.reset();
+        self.graphql_alias_overload.checked = true;
         self.oauth_redirect_test.reset();
+        self.oauth_redirect_test.checked = true;
         self.oauth_scope_test.reset();
+        self.oauth_scope_test.checked = true;
         self.oauth_state_test.reset();
+        self.oauth_state_test.checked = true;
         self.oauth_grant_test.reset();
+        self.oauth_grant_test.checked = true;
         self.payload_selector.select(0);
         self.mode_selector.select(0);
         self.target_selector.select(0);

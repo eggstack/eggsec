@@ -329,6 +329,19 @@ impl TabInput for ComplianceTab {
         }
     }
 
+    fn handle_copy(&mut self) -> Option<String> {
+        if self.is_running() {
+            return None;
+        }
+        if self.focus_area == ComplianceFocusArea::Inputs {
+            self.inputs.get_focused_value()
+        } else if self.focus_area == ComplianceFocusArea::Results {
+            Some(self.results_view.get_content())
+        } else {
+            None
+        }
+    }
+
     fn handle_word_forward(&mut self) {
         if !self.is_running() && self.focus_area == ComplianceFocusArea::Inputs {
             self.inputs.move_word_forward();

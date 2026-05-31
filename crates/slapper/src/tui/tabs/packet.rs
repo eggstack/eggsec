@@ -110,10 +110,6 @@ impl PacketTab {
         }
     }
 
-    pub fn stop(&mut self) {
-        self.state = AppState::Idle;
-    }
-
     pub fn run_interfaces(&mut self) {
         self.results_view.clear();
 
@@ -624,6 +620,12 @@ impl TabRender for PacketTab {
 }
 
 impl TabInput for PacketTab {
+    fn stop(&mut self) {
+        if self.state == AppState::Running {
+            self.state = AppState::Idle;
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if !self.is_running() {
             if self.view_selector.is_focused() {

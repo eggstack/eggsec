@@ -129,7 +129,13 @@ impl App {
         let session_manager = SessionManager::new(SessionConfig::default());
 
         let restored_state = if restore_session {
-            session_manager.load_latest_session().ok().flatten()
+            match session_manager.load_latest_session() {
+                Ok(state) => state,
+                Err(e) => {
+                    tracing::warn!("Failed to load previous session: {:?}", e);
+                    None
+                }
+            }
         } else {
             None
         };

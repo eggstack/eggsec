@@ -207,10 +207,6 @@ impl ProxyTab {
         self.state = AppState::Running;
     }
 
-    pub fn stop(&mut self) {
-        self.state = AppState::Idle;
-    }
-
     pub fn load_proxies_from_file(&mut self, path: &str) -> Result<usize, String> {
         let entries = ProxyEntry::load_from_file(path)
             .map_err(|e| format!("Failed to load proxies: {}", e))?;
@@ -501,6 +497,12 @@ impl TabRender for ProxyTab {
 }
 
 impl TabInput for ProxyTab {
+    fn stop(&mut self) {
+        if self.state == AppState::Running {
+            self.state = AppState::Idle;
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if !self.is_running() {
             if self.view_selector.is_focused() {
@@ -651,6 +653,10 @@ impl TabInput for ProxyTab {
     fn handle_escape(&mut self) {
         if self.is_running() {
             self.stop();
+            return;
+        }
+        if self.view_selector.is_open() {
+            self.view_selector.cancel();
             return;
         }
         if self.view_selector.is_focused() {

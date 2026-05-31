@@ -209,6 +209,7 @@ impl TabState for StressTab {
         self.type_selector.select(0);
         self.type_selector.cancel();
         self.type_selector.blur();
+        self.inputs.blur();
         self.focus_area = StressFocusArea::Inputs;
     }
 
@@ -450,6 +451,7 @@ impl TabInput for StressTab {
                 if self.type_selector.is_open() {
                     if self.type_selector.confirm().is_some() {
                         self.type_selector.close();
+                        self.start();
                     } else {
                         tracing::warn!("Failed to confirm stress type selector");
                     }
@@ -557,10 +559,16 @@ impl TabInput for StressTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.scroll_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.scroll_down(page_size);
     }
 }

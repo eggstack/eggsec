@@ -1582,3 +1582,78 @@ Comprehensive audit using 7 parallel subagents across all tabs, core modules, an
 3. Dual-focus state across 10 tabs — handle_top/handle_bottom focused selectors without blurring inputs
 4. `fuzz.rs` reset() leaked state across sessions — 7 checkboxes never reset
 5. `load.rs` left/right arrow keys were no-ops when selector had focus
+
+## Session Fixes (2026-05-31 - Deep Dive Audit)
+
+### TUI Deep Dive Audit - All 29 Tabs + Core + Components
+
+Comprehensive audit using 8 parallel subagents across all tabs, core modules, and components. Found 30 bugs total (3 HIGH, 20 MEDIUM, 7 LOW).
+
+#### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `stress.rs` | 452 | `handle_enter()` has no code path to `self.start()` — stress test can never be started from TUI | Added `self.start()` after `type_selector.close()` in TypeSelector confirm arm |
+| `packet.rs` | 113-115 | `stop()` defined as inherent method, invisible to `dyn TabInput` dispatch — tab permanently stuck as Running | Moved to `impl TabInput` block with `AppState::Running` guard |
+| `graphql.rs` | 202-206 | Same — `stop()` inherent method | Moved to `impl TabInput` block |
+| `oauth.rs` | 237-241 | Same — `stop()` inherent method | Moved to `impl TabInput` block |
+| `proxy.rs` | 210-212 | Same — `stop()` inherent method | Moved to `impl TabInput` block |
+| `browser.rs` | 240,278 | Checkbox area overlaps 3rd input field — renders on top of Timeout input | Added 4th constraint, increased block height from 10 to 14 |
+
+#### MEDIUM Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `recon.rs` | 832-838 | `page_up`/`page_down` missing `is_running()` guard | Added guard |
+| `scan.rs` | 747-753 | Same | Added guard |
+| `scan_ports.rs` | 624-630 | Same | Added guard |
+| `scan_endpoints.rs` | 587-593 | Same | Added guard |
+| `fingerprint.rs` | 509-515 | Same | Added guard |
+| `waf.rs` | 704-712 | Same | Added guard |
+| `waf_stress.rs` | 436-442 | Same | Added guard |
+| `load.rs` | 796-802 | Same | Added guard |
+| `stress.rs` | 559-565 | Same | Added guard |
+| `scan.rs` | 504-506 | `handle_focus_prev` from ProfileSelector does not cancel dropdown | Added `profile_selector.cancel()` |
+| `scan.rs` | 283-284 | `reset()` calls `select()` but not `cancel()` on dropdowns | Changed to `cancel()` |
+| `fuzz.rs` | 427-433 | `reset()` sets 7 checkboxes to unchecked instead of restoring initial checked state | Added `.checked = true` after each `.reset()` |
+| `waf.rs` | 311 | `reset()` missing `inputs.blur()` | Added blur call |
+| `stress.rs` | 211 | `reset()` missing `inputs.blur()` | Added blur call |
+| `graphql.rs` | 342-345 | `handle_focus_prev` Options→Inputs: `inputs.blur()` no-op, user can't type | Changed to `inputs.focus(0)` |
+| `oauth.rs` | 391-394 | Same | Changed to `inputs.focus(0)` |
+| `proxy.rs` | 651-659 | `handle_escape` missing `is_open()` check, dropdown+unfocus in one step | Added `is_open()` check with early return |
+| `storage.rs` | 259 | `reset()` missing `mode_selector.blur()` | Added blur call |
+| `storage.rs` | 458-465 | `handle_focus_prev` Results skips Query in non-Connect mode | Changed to go to Query |
+| `history.rs` | 711-723 | `page_up`/`page_down` always scroll Details, ignoring focus area | Added focus_area dispatch |
+| `hunt.rs` | — | Missing `handle_copy` implementation | Added override |
+| `compliance.rs` | — | Missing `handle_copy` implementation | Added override |
+| `recon.rs` | 575 | `handle_focus_next` Options→Results doesn't reset `focused_checkbox_index` | Added reset |
+| `recon.rs` | 721-727 | `handle_escape` no-op when focus is in Options or Results | Added focus_area match returning to Inputs |
+| `scan_ports.rs` | 574-580 | Same | Added focus_area match |
+| `scan_endpoints.rs` | 503-509 | Same | Added focus_area match |
+
+#### LOW Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `settings/render.rs` | 31-32 | Direct `chunks[0]`/`chunks[1]` indexing without `.get()` | Changed to `.get().copied().unwrap_or(area)` |
+| `app/mod.rs` | 132 | Silent `.ok()` on session load errors | Added `match` with `tracing::warn!` |
+
+#### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 30 |
+| Total bugs fixed | 30 |
+| Files modified | 20 |
+| HIGH priority fixes | 6 |
+| MEDIUM priority fixes | 22 |
+| LOW priority fixes | 2 |
+| Tabs audited | 29 |
+| Tests passing | 215 TUI tests |
+
+**Key systemic bugs fixed**:
+1. `stress.rs` `handle_enter()` had no path to `start()` — users could never start a stress test via keyboard
+2. `stop()` was inherent method on 4 tabs (packet/graphql/oauth/proxy) — invisible to `dyn TabInput` dispatch, tabs permanently stuck as Running
+3. `browser.rs` checkbox area rendered on top of 3rd input field — visual collision
+4. `page_up`/`page_down` lacked `is_running()` guards across 9 tabs — inconsistent with all other navigation handlers
+5. `recon.rs`/`scan_ports.rs`/`scan_endpoints.rs` `handle_escape` was a no-op when focus was in Options/Results — user trapped with no keyboard path back to Inputs

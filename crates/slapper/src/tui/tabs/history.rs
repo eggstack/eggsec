@@ -712,13 +712,24 @@ impl TabInput for HistoryTab {
         if self.is_running() {
             return;
         }
-        self.details_view.page_up(page_size);
+        match self.focus_area {
+            HistoryFocusArea::List => {
+                self.scroll_offset = self.scroll_offset.saturating_sub(page_size);
+            }
+            HistoryFocusArea::Details => self.details_view.page_up(page_size),
+        }
     }
 
     fn page_down(&mut self, page_size: usize) {
         if self.is_running() {
             return;
         }
-        self.details_view.page_down(page_size);
+        match self.focus_area {
+            HistoryFocusArea::List => {
+                let max_offset = self.entries.len().saturating_sub(self.visible_rows);
+                self.scroll_offset = (self.scroll_offset + page_size).min(max_offset);
+            }
+            HistoryFocusArea::Details => self.details_view.page_down(page_size),
+        }
     }
 }

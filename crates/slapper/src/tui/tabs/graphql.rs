@@ -198,14 +198,6 @@ impl TabState for GraphQlTab {
     }
 }
 
-impl GraphQlTab {
-    pub fn stop(&mut self) {
-        if self.state == AppState::Running {
-            self.state = AppState::Idle;
-        }
-    }
-}
-
 impl TabRender for GraphQlTab {
     fn render(&self, f: &mut Frame, area: Rect, insert_mode: bool) {
         if let Some(ref error) = self.error {
@@ -316,6 +308,12 @@ impl TabRender for GraphQlTab {
 }
 
 impl TabInput for GraphQlTab {
+    fn stop(&mut self) {
+        if self.state == AppState::Running {
+            self.state = AppState::Idle;
+        }
+    }
+
     fn handle_focus_next(&mut self) {
         if !self.is_running() {
             self.focus_area = match self.focus_area {

@@ -257,6 +257,7 @@ impl TabState for StorageTab {
             field.clear();
         }
         self.mode_selector.select(0);
+        self.mode_selector.blur();
         self.current_mode = StorageMode::Connect;
         self.focus_area = StorageFocusArea::Config;
     }
@@ -460,8 +461,8 @@ impl TabInput for StorageTab {
                     self.config_inputs.focus(0);
                     StorageFocusArea::Config
                 } else {
-                    self.mode_selector.focus();
-                    StorageFocusArea::Mode
+                    self.query_inputs.focus(0);
+                    StorageFocusArea::Query
                 }
             }
         };

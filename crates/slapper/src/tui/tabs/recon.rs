@@ -723,7 +723,13 @@ impl TabInput for ReconTab {
             self.stop();
             return;
         }
-        self.inputs.blur();
+        match self.focus_area {
+            ReconFocusArea::Inputs => self.inputs.blur(),
+            ReconFocusArea::Options | ReconFocusArea::Results => {
+                self.focus_area = ReconFocusArea::Inputs;
+                self.inputs.focus(0);
+            }
+        }
     }
 
     fn handle_up(&mut self) {
@@ -830,10 +836,16 @@ impl TabInput for ReconTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.results_view.page_down(page_size);
     }
 

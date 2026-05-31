@@ -280,8 +280,8 @@ impl TabState for ScanTab {
             field.value = "report.json".to_string();
             field.cursor_pos = 10;
         }
-        self.profile_selector.select(0);
-        self.output_selector.select(0);
+        self.profile_selector.cancel();
+        self.output_selector.cancel();
         self.focus_area = ScanFocusArea::Inputs;
         self.current_stage_output.clear();
     }
@@ -502,6 +502,7 @@ impl TabInput for ScanTab {
                 ScanFocusArea::Results
             }
             ScanFocusArea::ProfileSelector => {
+                self.profile_selector.cancel();
                 self.inputs.focus(0);
                 ScanFocusArea::Inputs
             }
@@ -745,10 +746,16 @@ impl TabInput for ScanTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.current_stage_output.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.current_stage_output.page_down(page_size);
     }
 }

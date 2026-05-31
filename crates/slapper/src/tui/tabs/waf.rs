@@ -308,6 +308,7 @@ impl TabState for WafTab {
             cb.checked = true;
         }
         self.mode_radio.select(0);
+        self.inputs.blur();
         self.focus_area = WafFocusArea::Inputs;
     }
 
@@ -702,11 +703,17 @@ impl TabInput for WafTab {
     }
 
     fn page_up(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.detection_view.page_up(page_size);
         self.bypass_view.page_up(page_size);
     }
 
     fn page_down(&mut self, page_size: usize) {
+        if self.is_running() {
+            return;
+        }
         self.detection_view.page_down(page_size);
         self.bypass_view.page_down(page_size);
     }
