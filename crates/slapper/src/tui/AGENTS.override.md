@@ -636,11 +636,14 @@ When adding new error types, prefer adding to this list rather than creating new
 
 The `Tab` enum in `tui/tabs/mod.rs` has exactly **28 variants**. Do not reference "29 tabs" or "31 payload types" — these are stale counts from earlier versions.
 
-## Uniform Look & Feel
+## Uniform Look & Feel (Completed)
 
-A visual consistency plan exists in `plans/tui-uniform-look-and-feel.md`. Key items:
-- Popup content text needs styling (`popup.rs:130`)
-- Notification warnings use wrong color (`ui.rs:579`)
-- 13 tab files need results border standardization
-- 10 tab files need bordered input blocks
-- See the plan for full execution order
+All TUI uniform look & feel items have been implemented:
+- Popup content text styling applied at `popup.rs:130`
+- Notification warning color corrected at `ui.rs:579`
+- Results borders standardized (all tabs pass `None`)
+- Bordered input blocks added to all tab files
+- `empty_state_paragraph()` added to all empty-state tabs
+- Scrollbar theme styling applied in `scrollable.rs`
+
+If visual consistency issues are found, verify the actual `.rs` files before creating new fix items.

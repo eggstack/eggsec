@@ -8,7 +8,7 @@ Slapper is a Rust-based security testing toolkit. See `README.md` for features a
 
 ## Implementation Plan
 
-**`plans/plan.md`** contains the consolidated implementation plan with active work items organized into parallel waves. Previous 51-item plan (4 waves) is complete. Current plan covers documentation fixes, TUI styling, bug fixes, and Agent/MCP profile productionization.
+**`plans/plan.md`** contains the consolidated implementation plan with active work items organized into parallel waves. Current plan covers bug fixes, architecture documentation updates, Agent/MCP profile productionization, and output module documentation.
 
 ## Quick Reference
 
@@ -103,12 +103,14 @@ Use these sections as the canonical reference points when updating guidance or s
 |--------|-------|
 | Tests | 1324 base, 1469+ with full features |
 | Clippy | ~33 warnings (pre-existing, none in ai module) |
-| Source files | 522 |
+| Source files | 741 (.rs files in crates/) |
 | Payload types | 30 |
 | Tabs | 28 (+ conditional feature tabs) |
 | WAF products | 34 |
 | NSE libraries | 169 |
 | Modules | 39 |
+| Output formats | 8 (Pretty, Json, Compact, Html, Csv, Sarif, Junit, Markdown) |
+| CLI commands | 37 match arms |
 
 ### Security Notes
 
@@ -133,6 +135,9 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Rate limiter patterns**: Use `tokio::time::sleep()` not spin loops; check if rate limiter is actually used (some are dead code)
 - **Bounds check patterns**: Check for existing `if let Some(idx)` or `if len() > N` guards before claiming missing bounds checks
 - **Wave plan verification**: When verifying plan claims, use subagents to check actual codebase state - plans may contain stale assertions that no longer match reality
+- **Count verification**: Always verify statistical claims (file counts, enum variants, match arms) against actual source. Source file counts can vary by 200+ depending on whether nested crates are included
+- **TUI stale detection**: TUI styling fixes may already be applied in a previous pass - always verify before re-implementing. Check actual `.rs` files, not just plan descriptions
+- **PayloadType location**: `PayloadType` enum is in `fuzzer/payloads/mod.rs`, not `types.rs`. `types.rs` contains `OutputFormat`, `Severity`, etc.
 
 ## Skills Directory
 

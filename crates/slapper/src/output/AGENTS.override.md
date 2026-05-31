@@ -11,7 +11,13 @@ Specialized guidance for the report generation module.
 | `ScanReportData` | `convert.rs` | Intermediate format for format conversions |
 | `FindingSummary` | `agent.rs` | Aggregated finding statistics by severity/confidence/type |
 | `DiffResult` | `diff.rs` | Result of comparing two finding sets |
+| `DiffFinding` | `diff.rs:17` | Individual finding in diff comparison (fields: `id`, `title`, `severity`, `description`, `first_seen`, `last_seen`) |
 | `TrendAnalysis` | `trend.rs` | Historical trend analysis with direction |
+| `TrendAnalyzer` | `trend.rs:147` | Uses `LruCache<String, ScanResult>` with `NonZeroUsize::new(1000)` |
+| `ReportSummary` | `report_summary.rs` | Summary with `risk_narrative: String` field |
+| `CronScheduler` | `schedule.rs:201` | Cron-based scan scheduling with 5/6 field expressions |
+| `ScanQueue` | `schedule.rs:66` | Priority-based scan queue with enqueue/dequeue/cancel |
+| `AttackGraphBuilder` | `attack_graph.rs` | Graph visualization; `to_html()` at line 135 (note: only `from_chains()` is feature-gated with `advanced-hunting`, not `to_html()`) |
 
 ## Performance: Use FxHashMap
 
@@ -80,13 +86,10 @@ let engine = ReportTemplateEngine::new();
 let pcidss = engine.get_compliance_template(ComplianceStandard::PCIDSS);
 ```
 
-## PDF Generation
+## Additional Notes
 
-PDF generation is feature-gated:
-```rust
-#[cfg(feature = "pdf")]
-let pdf_bytes = PdfGenerator::generate_report(findings, &config)?;
-```
+- **`has_regressions()` threshold**: Checks `severity >= Severity::High` (both High AND Critical), not just Critical. Code at `diff.rs:137-141`.
+- **PDF generation**: Feature-gated behind `pdf` feature flag.
 
 ## Severity Counts
 
