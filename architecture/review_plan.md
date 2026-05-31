@@ -1,16 +1,19 @@
 # Architecture Review Plan
 
-**Status:** INCOMPLETE - Review Phase 1 and Phase 2 complete, pruning pending
+**Status:** READY FOR EXECUTION
+**Created:** 2026-05-31
+**Purpose:** Systematic review of all architecture documents, verification against codebase, and stale item pruning.
 
 ## Overview
 
-This plan orchestrates a systematic review of all architecture documents in `architecture/` (excluding `review_plan.md` itself). Each document is assigned to a dedicated subagent that will:
-1. Read and analyze the architecture document
-2. Verify claims against actual implementation in `crates/slapper/src/`
+This plan orchestrates a deep review of all 17 architecture documents in `architecture/` (excluding `review_plan.md`). Each document is assigned to a dedicated subagent that will:
+
+1. Read and analyze the architecture document thoroughly
+2. Verify every claim against actual implementation in `crates/slapper/src/` and `slapper-nse/`
 3. Identify bugs, inconsistencies, and improvement opportunities
 4. Write findings to `plans/<module>_review.md`
 
-After all reviews complete, stale items in `architecture/` will be pruned.
+After all reviews complete, a final pass detects and prunes stale items from `architecture/`.
 
 ## Modules to Review
 
@@ -19,163 +22,128 @@ After all reviews complete, stale items in `architecture/` will be pruned.
 | 1 | `ai_agents.md` | `src/ai/` | `plans/ai_agents_review.md` |
 | 2 | `cli_commands.md` | `src/commands/` | `plans/cli_commands_review.md` |
 | 3 | `config.md` | `src/config/` | `plans/config_review.md` |
-| 4 | `defense_lab.md` | N/A | `plans/defense_lab_review.md` |
+| 4 | `defense_lab.md` | N/A (cross-cutting) | `plans/defense_lab_review.md` |
 | 5 | `distributed.md` | `src/distributed/` | `plans/distributed_review.md` |
-| 6 | `feature_matrix.md` | N/A | `plans/feature_matrix_review.md` |
+| 6 | `feature_matrix.md` | N/A (cross-cutting) | `plans/feature_matrix_review.md` |
 | 7 | `fuzzer.md` | `src/fuzzer/` | `plans/fuzzer_review.md` |
 | 8 | `loadtest.md` | `src/loadtest/` | `plans/loadtest_review.md` |
 | 9 | `networking.md` | `src/packet/` | `plans/networking_review.md` |
 | 10 | `nse_integration.md` | `slapper-nse/` | `plans/nse_integration_review.md` |
 | 11 | `output.md` | `src/output/` | `plans/output_review.md` |
-| 12 | `overview.md` | N/A | `plans/overview_review.md` |
+| 12 | `overview.md` | N/A (cross-cutting) | `plans/overview_review.md` |
 | 13 | `pipeline.md` | `src/pipeline/` | `plans/pipeline_review.md` |
 | 14 | `recon.md` | `src/recon/` | `plans/recon_review.md` |
 | 15 | `scanner.md` | `src/scanner/` | `plans/scanner_review.md` |
 | 16 | `tui.md` | `src/tui/` | `plans/tui_review.md` |
 | 17 | `waf.md` | `src/waf/` | `plans/waf_review.md` |
 
-## Review Process
+## Execution Plan
 
-### Phase 1: Document Review (Parallel Execution)
+### Phase 1: Document Reviews (Parallel Subagents)
 
-Launch 5 subagents concurrently to cover all 17 documents:
+Launch 5 subagents concurrently. Each agent receives a batch of documents to review. Every agent must follow the Review Checklist and output format specified below.
 
-**Agent 1 - AI & Commands:**
-- `ai_agents.md` → `plans/ai_agents_review.md`
-- `cli_commands.md` → `plans/cli_commands_review.md`
+#### Agent 1 - AI & CLI
+- `architecture/ai_agents.md` → `plans/ai_agents_review.md`
+- `architecture/cli_commands.md` → `plans/cli_commands_review.md`
 
-**Agent 2 - Configuration & Infrastructure:**
-- `config.md` → `plans/config_review.md`
-- `output.md` → `plans/output_review.md`
-- `pipeline.md` → `plans/pipeline_review.md`
+#### Agent 2 - Configuration & Core
+- `architecture/config.md` → `plans/config_review.md`
+- `architecture/output.md` → `plans/output_review.md`
+- `architecture/pipeline.md` → `plans/pipeline_review.md`
 
-**Agent 3 - Security Modules:**
-- `fuzzer.md` → `plans/fuzzer_review.md`
-- `scanner.md` → `plans/scanner_review.md`
-- `waf.md` → `plans/waf_review.md`
-- `recon.md` → `plans/recon_review.md`
+#### Agent 3 - Security Modules
+- `architecture/fuzzer.md` → `plans/fuzzer_review.md`
+- `architecture/scanner.md` → `plans/scanner_review.md`
+- `architecture/waf.md` → `plans/waf_review.md`
+- `architecture/recon.md` → `plans/recon_review.md`
 
-**Agent 4 - Network & Protocol:**
-- `networking.md` → `plans/networking_review.md`
-- `loadtest.md` → `plans/loadtest_review.md`
-- `distributed.md` → `plans/distributed_review.md`
+#### Agent 4 - Network & Distributed
+- `architecture/networking.md` → `plans/networking_review.md`
+- `architecture/loadtest.md` → `plans/loadtest_review.md`
+- `architecture/distributed.md` → `plans/distributed_review.md`
 
-**Agent 5 - Special Topics:**
-- `nse_integration.md` → `plans/nse_integration_review.md`
-- `tui.md` → `plans/tui_review.md`
-- `overview.md` → `plans/overview_review.md`
-- `defense_lab.md` → `plans/defense_lab_review.md`
-- `feature_matrix.md` → `plans/feature_matrix_review.md`
+#### Agent 5 - Special Topics & Cross-Cutting
+- `architecture/nse_integration.md` → `plans/nse_integration_review.md`
+- `architecture/tui.md` → `plans/tui_review.md`
+- `architecture/overview.md` → `plans/overview_review.md`
+- `architecture/defense_lab.md` → `plans/defense_lab_review.md`
+- `architecture/feature_matrix.md` → `plans/feature_matrix_review.md`
 
 ### Phase 2: Stale Item Detection
 
-After all reviews complete, detect stale architecture items:
+After all 17 review files exist in `plans/`:
 
-1. **Outdated documents**: Check if any `architecture/*.md` documents reference modules/code that no longer exist
-2. **Orphaned files**: Any architecture doc without a corresponding implementation in `crates/slapper/src/` or `slapper-nse/`
-3. **Inconsistencies**: Compare document timestamps with implementation file timestamps
-4. **Missing coverage**: Ensure all source modules have corresponding architecture docs
+1. **Outdated references**: Check if any `architecture/*.md` documents reference modules, files, or types that no longer exist in the codebase
+2. **Orphaned documents**: Any architecture doc without a corresponding implementation in `crates/slapper/src/` or `slapper-nse/`
+3. **Statistical drift**: Compare documented counts (files, modules, tabs, payloads, etc.) against actual codebase metrics
+4. **Missing coverage**: Ensure all source modules under `crates/slapper/src/` have corresponding architecture docs
+5. **Duplicate content**: Flag overlapping information across documents
+6. **Write findings** to `plans/stale_items.md`
 
-### Review Checklist for Each Document
+### Phase 3: Verification & Commit
 
-Each subagent must verify:
+1. Run `cargo check --lib -p slapper` to verify no structural breakage
+2. Run `cargo test --lib -p slapper` to verify tests pass
+3. Commit all `plans/*_review.md` files and `plans/stale_items.md`
+4. Commit updated `architecture/review_plan.md` with final status
 
-- [ ] File paths and line numbers in doc match actual code
-- [ ] Type definitions (`struct`, `enum`, `trait`) exist and match
-- [ ] Method signatures and return types are accurate
-- [ ] Error handling patterns described are implemented
-- [ ] Configuration/schema details are current
-- [ ] Dependencies and feature flags are accurate
-- [ ] Any "known issues" or limitations still apply
-- [ ] New patterns/optimizations not documented
-- [ ] Deprecated patterns that should be removed from doc
+## Review Checklist
 
-### Output Format for Each Review File
+Each subagent MUST verify the following for every document:
+
+- [ ] **File paths**: All referenced file paths exist in the codebase
+- [ ] **Line numbers**: Cited line numbers match actual code locations
+- [ ] **Type definitions**: All `struct`, `enum`, `trait` names exist and match signatures
+- [ ] **Method signatures**: Documented methods exist with correct parameters and return types
+- [ ] **Error handling**: Described error patterns are actually implemented
+- [ ] **Configuration**: Schema details, defaults, and environment variables are current
+- [ ] **Dependencies**: Referenced crates and feature flags are accurate
+- [ ] **Known issues**: Any "TODO", "known limitation", or "planned" items still apply
+- [ ] **Undocumented changes**: New patterns, optimizations, or APIs not yet in docs
+- [ ] **Deprecated content**: Patterns marked deprecated that should be removed from doc
+- [ ] **Statistics**: Counts of modules, files, tabs, payloads, etc. match reality
+- [ ] **Cross-references**: Links between architecture docs are valid
+
+## Output Format
+
+Each review file MUST use this structure:
 
 ```markdown
 # <Module> Architecture Review
 
-## Document Summary
-- Last reviewed: <date>
-- Accuracy rating: <High/Medium/Low>
+**Document:** architecture/<module>.md
+**Reviewed:** <date>
+**Accuracy:** <High/Medium/Low>
 
 ## Verified Claims
-- [List claims that pass verification]
+- [Claim 1]: Verified at <file:line>
+- [Claim 2]: Verified at <file:line>
 
-## Discrepancies Found
-- [List claims that don't match implementation]
+## Discrepancies
+- [Claim X]: Documented as <X>, but actual implementation is <Y> (<file:line>)
 
-## Bugs Identified
-- [Bugs discovered during review]
+## Bugs Found
+- [Bug 1]: <Description> (<file:line>)
 
 ## Improvement Opportunities
-- [Code improvements suggested]
+- [Improvement 1]: <Description> (priority: high/medium/low)
 
-## Stale Items to Prune
-- [Items to remove from architecture directory]
+## Stale Items
+- [Item 1]: <Why it's stale and recommended action>
 ```
 
-## Stale Item Pruning Process
+## Constraints
 
-1. Collect list of all `architecture/*.md` files
-2. Cross-reference with actual module directories
-3. Flag documents for orphaned modules
-4. Review for duplicate content across documents
-5. Check `plans/` for any stale references
-6. Create `plans/stale_items.md` listing items to prune
-7. Present to user for confirmation before removal
+- **No code changes**: Reviews identify and document only. Do NOT edit source files.
+- **No assumptions**: If a claim cannot be verified, mark it as "UNVERIFIED" with reason.
+- **Line references**: All claims must cite `<file:line>` for traceability.
+- **Scope**: Only review what the document claims. Don't expand scope beyond the doc's topic.
+- **Working directory**: All work stays in `/home/sugarwookie/projects/slapper/`.
 
 ## Notes
 
-- Reviews should NOT propose direct code changes
-- Focus on verification and identification, not implementation
-- Use `cargo check --lib -p slapper` to verify compilation after any structural changes
-- Reference actual source files with line numbers for all claims
-
----
-
-## Review Completion Status (2026-05-30)
-
-### Phase 1: Document Reviews - COMPLETED
-
-| Document | Review File | Status |
-|----------|-------------|--------|
-| ai_agents.md | plans/ai_agents_review.md | ✅ Complete |
-| cli_commands.md | plans/cli_commands_review.md | ✅ Complete |
-| config.md | plans/config_review.md | ✅ Complete |
-| defense_lab.md | plans/defense_lab_review.md | ✅ Complete |
-| distributed.md | plans/distributed_review.md | ✅ Complete |
-| feature_matrix.md | plans/feature_matrix_review.md | ✅ Complete |
-| fuzzer.md | plans/fuzzer_review.md | ✅ Complete |
-| loadtest.md | plans/loadtest_review.md | ✅ Complete |
-| networking.md | plans/networking_review.md | ✅ Complete |
-| nse_integration.md | plans/nse_integration_review.md | ✅ Complete |
-| output.md | plans/output_review.md | ✅ Complete |
-| overview.md | plans/overview_review.md | ✅ Complete |
-| pipeline.md | plans/pipeline_review.md | ✅ Complete |
-| recon.md | plans/recon_review.md | ✅ Complete |
-| scanner.md | plans/scanner_review.md | ✅ Complete |
-| tui.md | plans/tui_review.md | ✅ Complete |
-| waf.md | plans/waf_review.md | ✅ Complete |
-
-### Phase 2: Stale Items Detection - COMPLETED
-
-See `plans/stale_items.md` for identified stale items requiring updates/pruning.
-
-### Key Findings Summary
-
-| Metric | Count |
-|--------|-------|
-| Total Verified Claims | 250+ |
-| Total Discrepancies | 40+ |
-| Total Bugs Found | 2 (1 medium, 1 low) |
-| Total Improvement Opportunities | 30+ |
-
-### Critical Discrepancies Requiring Action
-
-1. **overview.md**: Quick Facts statistics outdated (41→39 modules, 743→526 files, 31→30 payloads)
-2. **defense_lab.md**: Profiles marked as "planned" but fully implemented
-3. **pipeline.md**: Defense-lab profiles marked as "planned" but fully implemented
-4. **feature_matrix.md**: Feature counts incorrect (33→28 total, 18→16 in full)
-5. **tui.md**: Tab count 29 vs actual 28, stale "plugin" reference
-6. **cli_commands.md**: cluster.rs:349 fix not applied (unwrap_or vs unwrap_or_else)
+- Cross-cutting docs (`overview.md`, `feature_matrix.md`, `defense_lab.md`) require checking against ALL modules, not just one
+- The `tui.md` document is the largest; agent should focus on structural claims, not every pixel detail
+- `nse_integration.md` spans a separate crate (`slapper-nse/`); agent must check both crates
+- Feature flags in `Cargo.toml` at root and `crates/slapper/Cargo.toml` must be cross-referenced
