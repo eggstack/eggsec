@@ -18,7 +18,7 @@ High-performance TCP and UDP port scanning.
 
 Finding hidden files and directories on web servers.
 
-- **Wordlist-based Brute Forcing**: Uses extensive wordlists (223 built-in paths) to find common endpoints
+- **Wordlist-based Brute Forcing**: Uses extensive wordlists (261 built-in paths) to find common endpoints
 - **Custom Wordlist Loading**: Load endpoints from file
 - **Custom Payload Support**: Allows for targeted discovery based on specific technologies
 - **Note**: Does NOT implement recursive crawling - flat wordlist scan only
