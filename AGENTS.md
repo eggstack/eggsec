@@ -81,6 +81,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - `McpProfile` - MCP agent profile (`OpsAgent`, `CodingAgent`) in `tool/protocol/mcp/profile.rs`
 - `McpProfilePolicy` - 18-field policy struct enforcing tool visibility and call restrictions per profile in `tool/protocol/mcp/policy.rs`
 - `TargetPolicy` - Target scope enforcement policy in `tool/protocol/mcp/policy.rs`
+- `CodingAgentFindingReport` - Typed output schema for coding-agent findings in `tool/protocol/mcp/coding_agent_output.rs`
 - `ProbeIntent` / `ProbeRisk` - Probe classification in `probe.rs`
 
 ### Important Patterns
@@ -103,7 +104,7 @@ Use these sections as the canonical reference points when updating guidance or s
 |--------|-------|
 | Tests | 1324 base, 1469+ with full features |
 | Clippy | ~33 warnings (pre-existing, none in ai module) |
-| Source files | 741 (.rs files in crates/) |
+| Source files | 742 (.rs files in crates/) |
 | Payload types | 30 |
 | Tabs | 28 (+ conditional feature tabs) |
 | WAF products | 34 |
@@ -117,7 +118,6 @@ Use these sections as the canonical reference points when updating guidance or s
 - **Scope Enforcement**: Direct IP addresses (e.g., `127.0.0.1`) are blocked via private IP checks in `TargetScope::parse()`. However, scope rule evaluation happens AFTER private IP check - so targets like `10.255.255.255` are rejected even with scope rules like `allow 10.0.0.0/8`.
 - **TUI Settings Tab**: The settings editor applies exposed fields on top of an existing config and preserves non-exposed sections such as `profiles`, `schedule`, `remote`, `ai`, `search`, and `alert_channels`. See `architecture/config.md` for the current save semantics.
 - **MCP Coding Agent**: Default deny posture; stress/load/packet tools are hidden from coding-agent profile
-- **Known Panic**: `agent/alerts/routing.rs:79` has `.expect("Failed to create fallback HTTP client")` that will panic on client creation failure — needs graceful error handling
 
 ### Key Patterns (Lessons Learned)
 
