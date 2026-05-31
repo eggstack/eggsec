@@ -42,14 +42,28 @@ Handlebars-based templating with built-in templates:
 
 Visualizes relationships between findings to show potential attack paths.
 
+```rust
+pub struct AttackGraph {
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphEdge>,
+    pub clusters: Vec<GraphCluster>,
+}
+```
+
+`AttackGraphBuilder::from_chains()` converts `AttackChain` values into graph structures and is feature-gated behind `advanced-hunting`. `AttackGraphBuilder::to_html()` is **not** feature-gated — it accepts any `&AttackGraph` and renders an HTML page with D3.js visualization scaffolding, so it can be used with manually constructed graphs without enabling the `advanced-hunting` feature.
+
 ### Trend Analysis (`trend.rs`)
 
-Compares current results with historical data:
+Compares current results with historical data using LRU cache storage:
 
 ```rust
-pub struct TrendAnalyzer { ... }
+pub struct TrendAnalyzer {
+    results: LruCache<String, ScanResult>,  // capacity: 1000 (NonZeroUsize)
+}
 pub enum TrendDirection { Improving, Stable, Worsening }
 ```
+
+`TrendAnalyzer` stores up to 1000 `ScanResult` entries in an `lru::LruCache` keyed by result ID. When the cache is full, the least-recently-used entry is evicted. `get_trend()` sorts results by timestamp and computes sliding-window deltas for critical, high, and medium finding counts across consecutive scans. `ResultComparator` provides lower-level comparison with composite deduplication keys `(title, category, cve)`.
 
 ### Baseline Comparison (`baseline.rs`)
 
@@ -66,9 +80,93 @@ Provides cron-based scan scheduling with queue management:
 Detailed comparison with escalation tracking:
 
 ```rust
+pub struct DiffFinding {
+    pub id: String,
+    pub title: String,
+    pub severity: Severity,
+    pub description: String,
+    pub first_seen: String,
+    pub last_seen: String,
+}
+
+pub struct DiffResult {
+    pub new_findings: Vec<DiffFinding>,
+    pub resolved_findings: Vec<DiffFinding>,
+    pub escalated_findings: Vec<DiffFinding>,
+    pub deescalated_findings: Vec<DiffFinding>,
+    pub unchanged_findings: Vec<DiffFinding>,
+    pub summary: DiffSummary,
+}
+
 pub struct DiffEngine;
 pub fn has_regressions(diff: &DiffResult) -> bool;  // checks >= Severity::High (High AND Critical)
 ```
+
+`DiffFinding` tracks individual findings across scans with `first_seen` and `last_seen` timestamps. Severity escalation/de-escalation is determined by comparing `Severity::as_int()` values between old and new findings.
+
+### Report Summary (`report_summary.rs`)
+
+Aggregated statistics and risk narrative generation from findings:
+
+```rust
+pub struct ReportSummary {
+    pub total_findings: usize,
+    pub by_severity: HashMap<String, usize>,
+    pub by_confidence: HashMap<String, usize>,
+    pub by_type: HashMap<String, usize>,
+    pub top_affected_assets: Vec<AssetCount>,
+    pub risk_narrative: String,
+    pub remediation_summary: Vec<String>,
+}
+
+pub struct AssetCount {
+    pub asset: String,
+    pub count: usize,
+}
+```
+
+`ReportSummary::from_findings()` builds a summary from a slice of `Finding` values. It aggregates counts by severity, confidence, and type; identifies the top 10 most-affected assets; deduplicates remediation suggestions; and generates a `risk_narrative` string.
+
+The risk narrative (`generate_risk_narrative()`) produces a severity-annotated text summary: critical findings trigger a "CRITICAL" prefix, high findings a "HIGH" prefix, and so on. If no findings exist, it returns `"No findings detected."`.
+
+### Scheduling (`schedule.rs`)
+
+Cron-based scan scheduling with priority queuing and rate limiting:
+
+```rust
+pub struct CronScheduler {
+    expressions: Vec<CronExpression>,
+}
+
+pub struct CronExpression {
+    pub second: u8,
+    pub minute: u8,
+    pub hour: u8,
+    pub day_of_month: u8,
+    pub month: u8,
+    pub day_of_week: u8,
+    // internal matchers for each field
+}
+
+pub struct ScanQueue {
+    queue: VecDeque<ScheduledScan>,
+    max_size: usize,
+    running: Option<ScheduledScan>,
+}
+
+pub struct RateLimiter {
+    requests_per_second: u32,
+    burst_size: u32,
+    tokens: u32,
+    last_refill: Instant,
+}
+```
+
+`CronScheduler` parses 5- or 6-field cron expressions (with optional seconds field) and evaluates them against `DateTime<Utc>`. It supports wildcards (`*`), exact values, and step expressions (`*/15`). `next_run()` performs a linear scan up to 7 days ahead.
+
+`ScanQueue` is a priority-based queue (max size 100 by default) that inserts scans in priority order (`Low < Normal < High < Critical`). Only one scan runs at a time via `start_next()`.
+
+`RateLimiter` implements a token bucket algorithm with configurable requests-per-second and burst size (2x rate).
 
 ## Run Manifest (`run_manifest.rs`)
 
@@ -110,7 +208,11 @@ The manifest is integrated into the pipeline output path: `PipelineReport` carri
 | `ScanReportData` | `convert.rs` | Intermediate format for conversions |
 | `SeverityCounts` | `report.rs` | Severity breakdown with risk scoring |
 | `DiffResult` | `diff.rs` | Finding set comparison result |
+| `DiffFinding` | `diff.rs` | Individual finding with first/last seen timestamps |
+| `ReportSummary` | `report_summary.rs` | Aggregated statistics and risk narrative |
 | `TrendAnalysis` | `trend.rs` | Historical trend data |
+| `CronScheduler` | `schedule.rs` | Cron-based scan scheduling |
+| `ScanQueue` | `schedule.rs` | Priority-based scan queue |
 
 ### Error Handling
 
