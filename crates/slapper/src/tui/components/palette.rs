@@ -53,7 +53,7 @@ pub fn draw_command_palette(f: &mut Frame, area: Rect, palette: &mut CommandPale
     // Pagination
     let visible_height = palette.visible_results_height();
     let total = palette.results.len();
-    let scroll_offset = palette.scroll_offset.min(total.saturating_sub(1).max(0));
+    let scroll_offset = palette.scroll_offset.min(total.saturating_sub(visible_height).max(0));
     let start = scroll_offset;
     let end = (start + visible_height).min(total);
     let status_text = if total > 0 {

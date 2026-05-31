@@ -249,6 +249,7 @@ impl TabState for StorageTab {
         self.findings.clear();
         self.results_view.clear();
         self.error = None;
+        self.config_inputs.blur();
         for field in &mut self.config_inputs.fields {
             field.clear();
         }
@@ -258,6 +259,7 @@ impl TabState for StorageTab {
         if let Some(f) = self.config_inputs.fields.get_mut(1) {
             f.value = "5432".to_string();
         }
+        self.query_inputs.blur();
         for field in &mut self.query_inputs.fields {
             field.clear();
         }
@@ -441,6 +443,7 @@ impl TabInput for StorageTab {
                     self.config_inputs.focus(0);
                     StorageFocusArea::Config
                 } else {
+                    self.mode_selector.blur();
                     StorageFocusArea::Results
                 }
             }
@@ -448,10 +451,6 @@ impl TabInput for StorageTab {
                 self.query_inputs.blur();
                 self.mode_selector.focus();
                 StorageFocusArea::Mode
-            }
-            StorageFocusArea::Results => {
-                self.query_inputs.focus(0);
-                StorageFocusArea::Query
             }
             StorageFocusArea::Results => {
                 self.query_inputs.focus(0);
@@ -606,6 +605,7 @@ impl TabInput for StorageTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.config_inputs.blur();

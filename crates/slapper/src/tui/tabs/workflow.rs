@@ -414,7 +414,10 @@ impl TabInput for WorkflowTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            WorkflowFocusArea::Mode => WorkflowFocusArea::Results,
+            WorkflowFocusArea::Mode => {
+                self.mode_selector.blur();
+                WorkflowFocusArea::Results
+            }
             WorkflowFocusArea::Inputs => {
                 self.mode_selector.focus();
                 WorkflowFocusArea::Mode
@@ -503,34 +506,31 @@ impl TabInput for WorkflowTab {
         if self.is_running() {
             self.stop();
             return;
-        } else {
-            match self.focus_area {
-                WorkflowFocusArea::Mode => {
-                    self.mode_selector.handle_enter();
-                    self.current_mode = match self.mode_selector.selected {
-                        0 => WorkflowMode::ListFindings,
-                        1 => WorkflowMode::CreateFinding,
-                        2 => WorkflowMode::AssignFinding,
-                        3 => WorkflowMode::AddComment,
-                        _ => WorkflowMode::ChangeStatus,
-                    };
-                    return;
-                }
-                WorkflowFocusArea::Inputs => {
-                    self.inputs.blur();
-                    return;
-                }
-                WorkflowFocusArea::Results => {
-                    return;
-                }
-            }
-
-            self.start();
         }
+        match self.focus_area {
+            WorkflowFocusArea::Mode => {
+                self.mode_selector.handle_enter();
+                self.current_mode = match self.mode_selector.selected {
+                    0 => WorkflowMode::ListFindings,
+                    1 => WorkflowMode::CreateFinding,
+                    2 => WorkflowMode::AssignFinding,
+                    3 => WorkflowMode::AddComment,
+                    _ => WorkflowMode::ChangeStatus,
+                };
+            }
+            WorkflowFocusArea::Inputs => {
+                self.inputs.blur();
+            }
+            WorkflowFocusArea::Results => {
+                return;
+            }
+        }
+        self.start();
     }
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         self.mode_selector.blur();

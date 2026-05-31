@@ -100,14 +100,14 @@ impl DashboardTab {
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
             Err(e) => {
-                tracing::debug!("Failed to read portfolio snapshot: {}", e);
+                tracing::warn!("Failed to read portfolio snapshot: {}", e);
                 return None;
             }
         };
         match serde_json::from_str(&content) {
             Ok(snap) => Some(snap),
             Err(e) => {
-                tracing::debug!("Failed to parse portfolio snapshot: {}", e);
+                tracing::warn!("Failed to parse portfolio snapshot: {}", e);
                 None
             }
         }

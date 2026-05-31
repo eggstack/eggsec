@@ -418,6 +418,7 @@ impl TabInput for ScanPortsTab {
         }
         match self.focus_area {
             ScanPortsFocusArea::Inputs => {
+                self.inputs.blur();
                 self.focus_area = ScanPortsFocusArea::Results;
             }
             ScanPortsFocusArea::Options => {
@@ -553,6 +554,10 @@ impl TabInput for ScanPortsTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == ScanPortsFocusArea::Results {
+            return;
+        }
+
         if !self.is_running() && self.inputs.is_focused() {
             self.inputs.blur();
             return;
@@ -599,7 +604,7 @@ impl TabInput for ScanPortsTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.inputs.is_focused()
+        self.focus_area == ScanPortsFocusArea::Inputs && self.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {

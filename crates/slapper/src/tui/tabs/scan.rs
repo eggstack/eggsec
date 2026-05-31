@@ -491,7 +491,10 @@ impl TabInput for ScanTab {
             return;
         }
         self.focus_area = match self.focus_area {
-            ScanFocusArea::Inputs => ScanFocusArea::Results,
+            ScanFocusArea::Inputs => {
+                self.inputs.blur();
+                ScanFocusArea::Results
+            }
             ScanFocusArea::ProfileSelector => {
                 self.inputs.focus(0);
                 ScanFocusArea::Inputs
@@ -582,6 +585,10 @@ impl TabInput for ScanTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == ScanFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
             return;

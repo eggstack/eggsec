@@ -102,7 +102,13 @@ impl FingerprintTab {
                     .next()
                     .unwrap_or("-");
                 let banner_display = if banner.len() > 40 {
-                    format!("{}...", &banner[..37])
+                    let truncate_pos = banner
+                        .char_indices()
+                        .take_while(|(i, _)| *i < 37)
+                        .last()
+                        .map(|(i, c)| i + c.len_utf8())
+                        .unwrap_or(37);
+                    format!("{}...", &banner[..truncate_pos])
                 } else {
                     banner.to_string()
                 };
@@ -400,6 +406,10 @@ impl TabInput for FingerprintTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == FingerprintFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
         } else if self.inputs.is_focused() {
@@ -458,7 +468,7 @@ impl TabInput for FingerprintTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.inputs.is_focused()
+        self.focus_area == FingerprintFocusArea::Inputs && self.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {

@@ -201,7 +201,8 @@ pub async fn run_packet_capture(
 
     running.store(false, std::sync::atomic::Ordering::SeqCst);
     match tokio::time::timeout(Duration::from_secs(2), handle).await {
-        Err(_) => {
+        Err(mut handle) => {
+            handle.abort();
             tracing::warn!("Packet capture handle timed out after 2s");
         }
         Ok(Err(e)) => {

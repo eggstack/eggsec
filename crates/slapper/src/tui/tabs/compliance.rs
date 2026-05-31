@@ -143,13 +143,7 @@ impl ComplianceTab {
         self.state = AppState::Idle;
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.page_up(page_size);
-    }
 
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.page_down(page_size);
-    }
 }
 
 impl Default for ComplianceTab {
@@ -407,6 +401,8 @@ impl TabInput for ComplianceTab {
                 return;
             }
         }
+
+        self.start();
     }
 
     fn handle_escape(&mut self) {
@@ -490,5 +486,13 @@ impl TabInput for ComplianceTab {
 
     fn is_input_focused(&self) -> bool {
         self.focus_area == ComplianceFocusArea::Inputs && self.inputs.is_focused()
+    }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
     }
 }

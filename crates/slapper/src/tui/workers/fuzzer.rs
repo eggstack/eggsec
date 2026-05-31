@@ -249,6 +249,7 @@ pub async fn run_waf_stress(
     if let Err(e) = progress_tx.send((1, 1)).await {
         tracing::warn!("Failed to send progress: {}", e);
     }
+    tracing::debug!("WAF stress completed (fuzzer_run_waf_stress returned no results, sending empty WafStress)");
     if let Err(e) = result_tx.send(TaskResult::WafStress(vec![])).await {
         tracing::warn!("Failed to send WAF stress results: {}", e);
     }

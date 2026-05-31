@@ -560,9 +560,9 @@ impl TabInput for LoadTab {
 
     fn handle_char(&mut self, c: char) {
         if !self.is_running() {
-            if self.test_type_selector.is_focused() {
+            if self.focus_area == LoadFocusArea::Selector {
                 self.test_type_selector.handle_char(c);
-            } else {
+            } else if self.focus_area == LoadFocusArea::Inputs {
                 self.inputs.insert(c);
             }
         }
@@ -570,16 +570,16 @@ impl TabInput for LoadTab {
 
     fn handle_backspace(&mut self) {
         if !self.is_running() {
-            if self.test_type_selector.is_focused() {
+            if self.focus_area == LoadFocusArea::Selector {
                 self.test_type_selector.handle_backspace();
-            } else {
+            } else if self.focus_area == LoadFocusArea::Inputs {
                 self.inputs.backspace();
             }
         }
     }
 
     fn handle_paste(&mut self, text: &str) {
-        if !self.is_running() && !self.test_type_selector.is_focused() {
+        if !self.is_running() && self.focus_area == LoadFocusArea::Inputs {
             self.inputs.paste(text);
         }
     }
@@ -628,6 +628,7 @@ impl TabInput for LoadTab {
         if self.is_running() {
             return;
         }
+        self.inputs.blur();
         self.focus_area = LoadFocusArea::Selector;
         self.test_type_selector.focus();
     }
@@ -640,6 +641,10 @@ impl TabInput for LoadTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == LoadFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
             return;

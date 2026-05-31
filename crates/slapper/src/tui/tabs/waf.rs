@@ -550,6 +550,10 @@ impl TabInput for WafTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == WafFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
             return;

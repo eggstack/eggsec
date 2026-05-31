@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::tui::workers::TaskResult;
 
 #[allow(clippy::too_many_arguments)]
@@ -18,6 +20,8 @@ pub async fn run_graphql(
     use crate::tui::tabs::graphql::GraphQlResults;
     use std::time::Instant;
 
+    let op_timeout = Duration::from_secs(300);
+    tokio::time::timeout(op_timeout, async {
     let start = Instant::now();
     if let Err(e) = progress_tx.send((0, 100)).await {
         tracing::warn!("Failed to send progress: {}", e);
@@ -100,9 +104,8 @@ pub async fn run_graphql(
                     };
 
                     test_result.response_snippet = response_text.chars().take(200).collect();
-                    test_result.success = is_graphql_error(&response_text)
-                        || is_graphql_success(&response_text)
-                        || status != 400;
+                    test_result.success = !is_graphql_error(&response_text)
+                        && (is_graphql_success(&response_text) || status == 200);
 
                     match test_result.vulnerability {
                         GraphQLVulnerability::DepthLimitBypass if test_result.success => {
@@ -172,6 +175,9 @@ pub async fn run_graphql(
     }
 
     Ok(())
+    }
+    ).await
+    .unwrap_or_else(|_| Err(anyhow::anyhow!("GraphQL test timed out after 300 seconds")))
 }
 
 fn is_graphql_error(response: &str) -> bool {
@@ -209,6 +215,8 @@ pub async fn run_oauth(
     use crate::fuzzer::payloads::oauth::{OAuthFuzzer, OAuthTestResult};
     use crate::tui::tabs::oauth::OAuthResults;
 
+    let op_timeout = Duration::from_secs(300);
+    tokio::time::timeout(op_timeout, async {
     if let Err(e) = progress_tx.send((0, 100)).await {
         tracing::warn!("Failed to send progress: {}", e);
     }
@@ -317,6 +325,9 @@ pub async fn run_oauth(
     }
 
     Ok(())
+    }
+    ).await
+    .unwrap_or_else(|_| Err(anyhow::anyhow!("OAuth test timed out after 300 seconds")))
 }
 
 #[cfg(feature = "nse")]

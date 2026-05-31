@@ -436,10 +436,12 @@ impl TabInput for StressTab {
                     }
                 } else {
                     self.type_selector.open();
+                    return;
                 }
             }
             StressFocusArea::Results => {}
         }
+        self.start();
     }
 
     fn handle_escape(&mut self) {

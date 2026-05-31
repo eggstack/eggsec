@@ -400,8 +400,20 @@ impl SettingsTab {
 
     fn load_base_config_from_disk(&self) -> Option<SlapperConfig> {
         let config_path = self.config_path.as_deref().unwrap_or("slapper.toml");
-        let content = std::fs::read_to_string(config_path).ok()?;
-        toml::from_str(&content).ok()
+        let content = match std::fs::read_to_string(config_path) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("Failed to read config file {}: {}", config_path, e);
+                return None;
+            }
+        };
+        match toml::from_str(&content) {
+            Ok(config) => Some(config),
+            Err(e) => {
+                tracing::warn!("Failed to parse config file {}: {}", config_path, e);
+                None
+            }
+        }
     }
 
     pub fn to_config(&self) -> SlapperConfig {

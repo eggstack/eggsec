@@ -176,7 +176,13 @@ impl ScanEndpointsTab {
             };
 
             let path_display = if path.len() > 38 {
-                format!("{}...", &path[..35])
+                let truncate_pos = path
+                    .char_indices()
+                    .take_while(|(i, _)| *i < 35)
+                    .last()
+                    .map(|(i, c)| i + c.len_utf8())
+                    .unwrap_or(35);
+                format!("{}...", &path[..truncate_pos])
             } else {
                 path
             };
@@ -373,6 +379,7 @@ impl TabInput for ScanEndpointsTab {
         }
         match self.focus_area {
             ScanEndpointsFocusArea::Inputs => {
+                self.inputs.blur();
                 self.focus_area = ScanEndpointsFocusArea::Results;
             }
             ScanEndpointsFocusArea::Options => {
@@ -471,6 +478,10 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == ScanEndpointsFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
             return;
@@ -551,7 +562,7 @@ impl TabInput for ScanEndpointsTab {
     }
 
     fn is_input_focused(&self) -> bool {
-        self.inputs.is_focused()
+        self.focus_area == ScanEndpointsFocusArea::Inputs && self.inputs.is_focused()
     }
 
     fn is_at_left_edge(&self) -> bool {

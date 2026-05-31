@@ -562,6 +562,7 @@ impl TabInput for ReportTab {
 
     fn handle_escape(&mut self) {
         if self.is_running() {
+            self.stop();
             return;
         }
         if self.view_selector.is_open() {

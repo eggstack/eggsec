@@ -364,6 +364,7 @@ impl TabInput for NseTab {
                 return;
             }
         }
+        self.start();
     }
 
     fn handle_escape(&mut self) {
@@ -454,6 +455,14 @@ impl TabInput for NseTab {
             _ => true,
         }
     }
+
+    fn page_up(&mut self, page_size: usize) {
+        self.results_view.page_up(page_size);
+    }
+
+    fn page_down(&mut self, page_size: usize) {
+        self.results_view.page_down(page_size);
+    }
 }
 
 impl NseTab {
@@ -462,6 +471,8 @@ impl NseTab {
             return;
         }
         if self.state != AppState::Running {
+            self.progress.current = 0;
+            self.progress.total = 0;
             // In a real implementation this would trigger an event/worker
             self.state = AppState::Running;
         }
@@ -473,11 +484,5 @@ impl NseTab {
         }
     }
 
-    pub fn page_up(&mut self, page_size: usize) {
-        self.results_view.page_up(page_size);
-    }
 
-    pub fn page_down(&mut self, page_size: usize) {
-        self.results_view.page_down(page_size);
-    }
 }

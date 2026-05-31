@@ -194,14 +194,32 @@ impl TabInput for ResumeTab {
         if self.is_running() {
             return;
         }
-        self.inputs.focus_next();
+        self.focus_area = match self.focus_area {
+            ResumeFocusArea::Inputs => {
+                self.inputs.blur();
+                ResumeFocusArea::Results
+            }
+            ResumeFocusArea::Results => {
+                self.inputs.focus(0);
+                ResumeFocusArea::Inputs
+            }
+        };
     }
 
     fn handle_focus_prev(&mut self) {
         if self.is_running() {
             return;
         }
-        self.inputs.focus_prev();
+        self.focus_area = match self.focus_area {
+            ResumeFocusArea::Inputs => {
+                self.inputs.blur();
+                ResumeFocusArea::Results
+            }
+            ResumeFocusArea::Results => {
+                self.inputs.focus(0);
+                ResumeFocusArea::Inputs
+            }
+        };
     }
 
     fn handle_char(&mut self, c: char) {
@@ -291,6 +309,10 @@ impl TabInput for ResumeTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == ResumeFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
             return;

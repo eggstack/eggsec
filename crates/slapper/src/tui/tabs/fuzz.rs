@@ -427,13 +427,13 @@ impl TabState for FuzzTab {
             field.cursor_pos = 2;
         }
         self.mutation_checkbox.checked = false;
-        self.graphql_introspection.checked = false;
-        self.graphql_depth_bypass.checked = false;
-        self.graphql_alias_overload.checked = false;
-        self.oauth_redirect_test.checked = false;
-        self.oauth_scope_test.checked = false;
-        self.oauth_state_test.checked = false;
-        self.oauth_grant_test.checked = false;
+        self.graphql_introspection.checked = true;
+        self.graphql_depth_bypass.checked = true;
+        self.graphql_alias_overload.checked = true;
+        self.oauth_redirect_test.checked = true;
+        self.oauth_scope_test.checked = true;
+        self.oauth_state_test.checked = true;
+        self.oauth_grant_test.checked = true;
         self.payload_selector.select(0);
         self.mode_selector.select(0);
         self.target_selector.select(0);
@@ -490,7 +490,7 @@ impl TabRender for FuzzTab {
         f.render_widget(config_block, config_area);
 
         // Dynamic field height based on available config area
-        let num_fields = 8;
+        let num_fields = 12;
         let field_height = (config_inner.height / num_fields).max(2);
         let config_constraints: Vec<Constraint> = (0..num_fields)
             .map(|_| Constraint::Length(field_height))
@@ -501,28 +501,32 @@ impl TabRender for FuzzTab {
             .constraints(config_constraints)
             .split(config_inner);
 
-        if self.inputs.fields.len() > 2 && config_chunks.len() >= 3 {
+        if self.inputs.fields.len() > 6 && config_chunks.len() >= 7 {
             self.inputs.fields[0].render(f, config_chunks[0], insert_mode);
             self.inputs.fields[1].render(f, config_chunks[1], insert_mode);
             self.inputs.fields[2].render(f, config_chunks[2], insert_mode);
+            self.inputs.fields[3].render(f, config_chunks[3], insert_mode);
+            self.inputs.fields[4].render(f, config_chunks[4], insert_mode);
+            self.inputs.fields[5].render(f, config_chunks[5], insert_mode);
+            self.inputs.fields[6].render(f, config_chunks[6], insert_mode);
         }
 
-        if config_chunks.len() >= 7 {
+        if config_chunks.len() >= 12 {
             let mut payload_sel = self.payload_selector.clone();
             payload_sel.focused = self.focus_area == FuzzFocusArea::PayloadSelector;
-            payload_sel.render(f, config_chunks[3]);
+            payload_sel.render(f, config_chunks[7]);
 
             let mut mode_sel = self.mode_selector.clone();
             mode_sel.focused = self.focus_area == FuzzFocusArea::ModeSelector;
-            mode_sel.render(f, config_chunks[4]);
+            mode_sel.render(f, config_chunks[8]);
 
             let mut target_sel = self.target_selector.clone();
             target_sel.focused = self.focus_area == FuzzFocusArea::TargetSelector;
-            target_sel.render(f, config_chunks[5]);
+            target_sel.render(f, config_chunks[9]);
 
             let mut mutation_cb = self.mutation_checkbox.clone();
             mutation_cb.focused = self.focus_area == FuzzFocusArea::MutationCheckbox;
-            mutation_cb.render(f, config_chunks[6]);
+            mutation_cb.render(f, config_chunks[10]);
         }
 
         let (status_text, status_color) = match &self.state {
@@ -537,7 +541,7 @@ impl TabRender for FuzzTab {
         let status = Paragraph::new(status_text)
             .style(Style::default().fg(status_color))
             .block(Block::default().borders(Borders::ALL).title("Status"));
-        if let Some(status_chunk) = config_chunks.get(7) {
+        if let Some(status_chunk) = config_chunks.get(11) {
             f.render_widget(status, *status_chunk);
         }
 
@@ -606,7 +610,7 @@ impl TabRender for FuzzTab {
         };
 
         // Dynamic field height based on available config area
-        let num_fields = 8;
+        let num_fields = 12;
         let field_height = (config_area.height / num_fields).max(2);
         let config_constraints: Vec<Constraint> = (0..num_fields)
             .map(|_| Constraint::Length(field_height))
@@ -617,14 +621,14 @@ impl TabRender for FuzzTab {
             .constraints(config_constraints)
             .split(config_area);
 
-        if config_chunks.len() >= 6 {
-            if let Some(info) = self.payload_selector.dropdown_info(config_chunks[3]) {
+        if config_chunks.len() >= 10 {
+            if let Some(info) = self.payload_selector.dropdown_info(config_chunks[7]) {
                 info.render(f);
             }
-            if let Some(info) = self.mode_selector.dropdown_info(config_chunks[4]) {
+            if let Some(info) = self.mode_selector.dropdown_info(config_chunks[8]) {
                 info.render(f);
             }
-            if let Some(info) = self.target_selector.dropdown_info(config_chunks[5]) {
+            if let Some(info) = self.target_selector.dropdown_info(config_chunks[9]) {
                 info.render(f);
             }
         }
@@ -636,40 +640,70 @@ impl TabInput for FuzzTab {
         if self.is_running() {
             return;
         }
-        self.focus_area = match self.focus_area {
-            FuzzFocusArea::Inputs => {
-                self.inputs.blur();
-                FuzzFocusArea::PayloadSelector
-            }
-            FuzzFocusArea::PayloadSelector => FuzzFocusArea::ModeSelector,
-            FuzzFocusArea::ModeSelector => FuzzFocusArea::TargetSelector,
-            FuzzFocusArea::TargetSelector => FuzzFocusArea::MutationCheckbox,
-            FuzzFocusArea::MutationCheckbox => FuzzFocusArea::Results,
-            FuzzFocusArea::Results => {
+        if self.focus_area == FuzzFocusArea::Inputs {
+            if self.inputs.is_focused() {
+                let at_last = self
+                    .inputs
+                    .focused
+                    .map(|i| i + 1 >= self.inputs.fields.len())
+                    .unwrap_or(true);
+                if at_last {
+                    self.inputs.blur();
+                    self.focus_area = FuzzFocusArea::PayloadSelector;
+                } else {
+                    self.inputs.focus_next();
+                }
+            } else {
                 self.inputs.focus(0);
-                FuzzFocusArea::Inputs
             }
-        };
+        } else {
+            self.focus_area = match self.focus_area {
+                FuzzFocusArea::PayloadSelector => FuzzFocusArea::ModeSelector,
+                FuzzFocusArea::ModeSelector => FuzzFocusArea::TargetSelector,
+                FuzzFocusArea::TargetSelector => FuzzFocusArea::MutationCheckbox,
+                FuzzFocusArea::MutationCheckbox => FuzzFocusArea::Results,
+                FuzzFocusArea::Results => {
+                    self.inputs.focus(0);
+                    FuzzFocusArea::Inputs
+                }
+                _ => self.focus_area,
+            };
+        }
     }
 
     fn handle_focus_prev(&mut self) {
         if self.is_running() {
             return;
         }
-        self.focus_area = match self.focus_area {
-            FuzzFocusArea::Inputs => {
-                self.inputs.blur();
-                FuzzFocusArea::MutationCheckbox
-            }
-            FuzzFocusArea::PayloadSelector => {
+        if self.focus_area == FuzzFocusArea::Inputs {
+            if self.inputs.is_focused() {
+                let at_first = self
+                    .inputs
+                    .focused
+                    .map(|i| i == 0)
+                    .unwrap_or(true);
+                if at_first {
+                    self.inputs.blur();
+                    self.focus_area = FuzzFocusArea::Results;
+                } else {
+                    self.inputs.focus_prev();
+                }
+            } else {
                 self.inputs.focus(0);
-                FuzzFocusArea::Inputs
             }
-            FuzzFocusArea::ModeSelector => FuzzFocusArea::PayloadSelector,
-            FuzzFocusArea::TargetSelector => FuzzFocusArea::ModeSelector,
-            FuzzFocusArea::MutationCheckbox => FuzzFocusArea::TargetSelector,
-            FuzzFocusArea::Results => FuzzFocusArea::MutationCheckbox,
-        };
+        } else {
+            self.focus_area = match self.focus_area {
+                FuzzFocusArea::PayloadSelector => {
+                    self.inputs.focus(self.inputs.fields.len().saturating_sub(1));
+                    FuzzFocusArea::Inputs
+                }
+                FuzzFocusArea::ModeSelector => FuzzFocusArea::PayloadSelector,
+                FuzzFocusArea::TargetSelector => FuzzFocusArea::ModeSelector,
+                FuzzFocusArea::MutationCheckbox => FuzzFocusArea::TargetSelector,
+                FuzzFocusArea::Results => FuzzFocusArea::MutationCheckbox,
+                _ => self.focus_area,
+            };
+        }
     }
 
     fn handle_char(&mut self, c: char) {
@@ -754,6 +788,10 @@ impl TabInput for FuzzTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == FuzzFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
             return;
@@ -947,11 +985,18 @@ mod tests {
     #[test]
     fn test_focus_next_includes_results() {
         let mut tab = create_test_tab();
-        // Start at Inputs
+        // Start at Inputs, focus on first field
         tab.focus_area = FuzzFocusArea::Inputs;
         tab.inputs.focus(0);
 
-        // Move to PayloadSelector
+        // Tab through all input fields (0 through 6)
+        for i in 0..6 {
+            tab.handle_focus_next();
+            assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
+            assert_eq!(tab.inputs.focused, Some(i + 1));
+        }
+
+        // Last input field -> PayloadSelector
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, FuzzFocusArea::PayloadSelector);
 
@@ -967,21 +1012,13 @@ mod tests {
         tab.handle_focus_next();
         assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
 
-        // Move to Results (this was missing before the fix)
+        // Move to Results
         tab.handle_focus_next();
-        assert_eq!(
-            tab.focus_area,
-            FuzzFocusArea::Results,
-            "Focus should cycle to Results from MutationCheckbox"
-        );
+        assert_eq!(tab.focus_area, FuzzFocusArea::Results);
 
         // Move back to Inputs
         tab.handle_focus_next();
-        assert_eq!(
-            tab.focus_area,
-            FuzzFocusArea::Inputs,
-            "Focus should cycle back to Inputs"
-        );
+        assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
     }
 
     #[test]
@@ -993,6 +1030,22 @@ mod tests {
         // Move to MutationCheckbox
         tab.handle_focus_prev();
         assert_eq!(tab.focus_area, FuzzFocusArea::MutationCheckbox);
+
+        // Move to TargetSelector
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, FuzzFocusArea::TargetSelector);
+
+        // Move to ModeSelector
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, FuzzFocusArea::ModeSelector);
+
+        // Move to PayloadSelector
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, FuzzFocusArea::PayloadSelector);
+
+        // Move to Inputs (last field)
+        tab.handle_focus_prev();
+        assert_eq!(tab.focus_area, FuzzFocusArea::Inputs);
     }
 
     #[test]

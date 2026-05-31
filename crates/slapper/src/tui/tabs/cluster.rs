@@ -342,6 +342,12 @@ impl TabInput for ClusterTab {
         self.focus_area = match self.focus_area {
             ClusterFocusArea::ViewSelector => {
                 self.view_selector.blur();
+                let current_inputs = match self.current_view {
+                    ClusterView::Worker => &mut self.worker_inputs,
+                    ClusterView::Coordinator => &mut self.coordinator_inputs,
+                    ClusterView::Status => &mut self.status_inputs,
+                };
+                current_inputs.focus(0);
                 ClusterFocusArea::Inputs
             }
             ClusterFocusArea::Inputs => {
@@ -370,6 +376,12 @@ impl TabInput for ClusterTab {
                 ClusterFocusArea::Results
             }
             ClusterFocusArea::Inputs => {
+                let current_inputs = match self.current_view {
+                    ClusterView::Worker => &mut self.worker_inputs,
+                    ClusterView::Coordinator => &mut self.coordinator_inputs,
+                    ClusterView::Status => &mut self.status_inputs,
+                };
+                current_inputs.blur();
                 self.view_selector.focus();
                 ClusterFocusArea::ViewSelector
             }

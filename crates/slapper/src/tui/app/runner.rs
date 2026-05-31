@@ -80,30 +80,47 @@ pub fn run(config_path: Option<String>) -> Result<()> {
 fn handle_mouse_event(mouse_event: MouseEvent, app: &mut App) {
     let MouseEventKind::Down(button) = mouse_event.kind else {
         if let MouseEventKind::ScrollUp = mouse_event.kind {
-            if !app.is_any_overlay_active() || app.is_command_palette_visible() {
-                if app
-                    .command_palette
-                    .as_ref()
-                    .map(|p| p.visible)
-                    .unwrap_or(false)
-                {
-                    return;
+            if app
+                .command_palette
+                .as_ref()
+                .map(|p| p.visible)
+                .unwrap_or(false)
+            {
+                if let Some(ref mut palette) = app.command_palette {
+                    if palette.selected_index > 0 {
+                        palette.selected_index -= 1;
+                    }
+                    if palette.selected_index < palette.scroll_offset {
+                        palette.scroll_offset = palette.selected_index;
+                    }
+                    app.needs_redraw = true;
                 }
+                return;
+            }
+            if !app.is_any_overlay_active() {
                 app.page_up();
                 app.needs_redraw = true;
             }
             return;
         }
         if let MouseEventKind::ScrollDown = mouse_event.kind {
-            if !app.is_any_overlay_active() || app.is_command_palette_visible() {
-                if app
-                    .command_palette
-                    .as_ref()
-                    .map(|p| p.visible)
-                    .unwrap_or(false)
-                {
-                    return;
+            if app
+                .command_palette
+                .as_ref()
+                .map(|p| p.visible)
+                .unwrap_or(false)
+            {
+                if let Some(ref mut palette) = app.command_palette {
+                    let max_idx = palette.results.len().saturating_sub(1);
+                    if palette.selected_index < max_idx {
+                        palette.selected_index += 1;
+                    }
+                    palette.adjust_scroll_for_selection();
+                    app.needs_redraw = true;
                 }
+                return;
+            }
+            if !app.is_any_overlay_active() {
                 app.page_down();
                 app.needs_redraw = true;
             }

@@ -343,6 +343,10 @@ impl TabInput for WafStressTab {
     }
 
     fn handle_enter(&mut self) {
+        if self.focus_area == WafStressFocusArea::Results {
+            return;
+        }
+
         if self.is_running() {
             self.stop();
             return;
