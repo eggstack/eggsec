@@ -55,13 +55,19 @@ pub enum TrendDirection { Improving, Stable, Worsening }
 
 Detects regressions by comparing current findings against a baseline.
 
+### Scheduling (`schedule.rs`)
+
+Provides cron-based scan scheduling with queue management:
+- `CronScheduler` - Parses cron expressions and manages scheduled scans
+- `ScanQueue` - Priority queue for scan scheduling with status tracking
+
 ### Diff Engine (`diff.rs`)
 
 Detailed comparison with escalation tracking:
 
 ```rust
 pub struct DiffEngine;
-pub fn has_regressions(diff: &DiffResult) -> bool;  // checks Critical escalations
+pub fn has_regressions(diff: &DiffResult) -> bool;  // checks >= Severity::High (High AND Critical)
 ```
 
 ## Run Manifest (`run_manifest.rs`)

@@ -18,6 +18,9 @@ The main configuration struct that holds all tool settings. It is typically load
 - `AiConfig` - AI provider settings
 - `SearchConfig` - SearXNG search integration
 - `AlertChannelsConfig` - Alert routing
+- `ReconConfig` - Reconnaissance settings (`dns_concurrency`, `apis` for API configuration)
+- `RemoteConfig` - Remote worker settings (`psk`, `default_port`, `allowed_workers`)
+- `ExecutionPolicy` - Operation policy controls (scope requirements, risk levels, allowed operations)
 
 ### `Scope` (`scope.rs`)
 
@@ -88,6 +91,17 @@ Slapper looks for config in this order:
 - `Validation` - Validation failures (field out of range, etc.)
 
 Use `?` propagation instead of `unwrap_or_default()` to avoid silent failures in async contexts.
+
+### ScopeError Enum
+
+`ScopeError` enum at `scope.rs:400-422` has 7 variants:
+- `Validation(String)` - General validation error
+- `FileRead(String, String)` - Failed to read scope file
+- `Parse(String, String)` - Failed to parse scope file
+- `InvalidUrl(String, String)` - Invalid URL
+- `InvalidCidr(String, String)` - Invalid CIDR notation
+- `InvalidTarget(String)` - Invalid target
+- `DnsResolution(String, String)` - DNS resolution failed
 
 ## Key Security Fixes (2026-05-22)
 

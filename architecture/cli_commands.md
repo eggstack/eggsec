@@ -51,7 +51,17 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
     load_config(config_path).map_err(|e| anyhow::anyhow!("Configuration validation failed: {}", e))?;
     Ok(())
 }
+
+// Operation policy enforcement (checks scope, risk level, and non-interactive mode)
+ctx.enforce_operation_policy(OperationRisk::High, Some(&args.target))?;
 ```
+
+### `enforce_operation_policy()` Method
+
+`CommandContext::enforce_operation_policy()` at `commands/handlers/mod.rs:101-124` validates that an operation is allowed by the current execution policy:
+1. Checks scope if a target is provided
+2. Validates risk level against `execution_policy` settings
+3. Blocks high-risk operations in non-interactive mode (`--json` flag)
 
 ## Workflow
 
@@ -69,7 +79,7 @@ pub async fn handle_config(_ctx: &CommandContext, args: ConfigArgs) -> Result<()
 1. **`sbom.rs`**: Replaced `unwrap()` with `ok_or_else()` pattern for path conversion (handles invalid Unicode)
 2. **`config.rs`**: Replaced `std::process::exit(1)` with proper error returns via `map_err()`
 3. **`http.rs`**: Added `-o` short form to `load` and `graphql` output flags for consistency
-4. **`handlers/mod.rs:155-169`**: Replaced hardcoded command list in `handle_no_command` with guidance to use `slapper --help`
+4. **`handlers/mod.rs:197-206`**: `handle_no_command` launches TUI in interactive terminal, otherwise prints guidance
 5. **`handlers/cluster.rs:348`**: Replaced `unwrap_or(22)` with `unwrap_or_else(|_| 22)` to avoid panic on invalid parsing
 6. **`handlers/auth_test.rs:10`**: Added missing scope validation `ctx.ensure_scope_url(&args.target)?`
 7. **`cli/scan.rs`**: Added `-o` short flag to `PortScanArgs`, `EndpointScanArgs`, `FingerprintArgs`, `NseArgs`, `ResumeArgs`

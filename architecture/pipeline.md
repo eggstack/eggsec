@@ -41,6 +41,7 @@ A `Stage` represents a single discrete task in the pipeline, such as a port scan
 The `executor.rs` file is responsible for running the pipeline from start to finish.
 
 - **Sequential Execution**: Stages run in linear order (`for stage in &self.stages`).
+- **Concurrent Execution**: `run_concurrent()` method at `executor.rs:259-297` runs stages in parallel using `futures::future::join_all()`.
 - **Result Passing**: Output from one stage (for example open ports and detected HTTP services) is persisted into `PipelineContext` and consumed by later stages.
 - **Failure Recording**: Stage errors are recorded per stage in `StageResult` and surfaced in the report. CLI entrypoints return `ScanFailed` if any stage failed.
 - **Tool Integration**: `PipelineTool` implements `SecurityTool` for AI agent tool registry.
@@ -79,15 +80,17 @@ Session checkpoints are written only when output path is explicitly a session-li
 - `generate_csv()` - CSV report
 - SARIF/JUnit via `output/` module
 
+**Key Field:** `manifest: Option<RunManifest>` at `report.rs:37` - optional run manifest providing structured metadata for regression workflows, populated after pipeline execution completes.
+
 ## CLI Entry Points (`mod.rs`)
 
 - `run_cli(args, config)` - Standard CLI pipeline execution
 - `run_cli_with_callback(args, config, callback)` - Pipeline execution with finding callback (for tool abstraction)
 - `resume_cli(args)` - Resume from session checkpoint
 
-## Planned Defense-Lab Profiles
+## Implemented Defense-Lab Profiles
 
-Five defense-lab profiles are planned but not yet implemented. They will add to the `ScanProfile` enum and `Stage::from_profile()` mapping. See `architecture/defense_lab.md` for full semantics.
+Five defense-lab profiles are implemented in `cli/mod.rs:262-266` and mapped to stages in `pipeline/stage.rs:92-107`. See `architecture/defense_lab.md` for full semantics.
 
 | Profile | Purpose | Key Constraint |
 |---------|---------|----------------|
@@ -96,8 +99,6 @@ Five defense-lab profiles are planned but not yet implemented. They will add to 
 | `waf-regression` | WAF evasion-resistance regression testing | Payload classification focus |
 | `protocol-edge` | Malformed protocol and edge behavior | Requires `packet-inspection` feature |
 | `nse-safe` | Sandboxed NSE scripts (safe/default/version/discovery) | Requires `nse` + `nse-sandbox` features |
-
-TODOs are placed in `cli/mod.rs` (variant definitions), `pipeline/stage.rs` (profile-to-stage mapping and string parsing). These profiles should not be added until the defense-lab runner infrastructure is in place.
 
 ## Benefits
 

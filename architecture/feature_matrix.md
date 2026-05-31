@@ -41,6 +41,7 @@ Comprehensive reference for all Cargo feature flags in the `slapper` crate.
 | `git-secrets` | yes | no | - | `recon/git_secrets.rs` | Stable | `cargo check -p slapper --features git-secrets` |
 | `wireless` | yes | no | - | `wireless/` | Stable | `cargo check -p slapper --features wireless` |
 | `pdf` | yes | yes | - | `output/` | Stable | `cargo check -p slapper --features pdf` |
+| `api-schema` | yes | no | - | `api_schema/` | Stable | `cargo check -p slapper --features api-schema` |
 | `full` | yes | yes | - | (all) | Deprecated | `cargo check -p slapper --features full` |
 
 ## Stability Levels
