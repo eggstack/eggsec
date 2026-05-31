@@ -41,6 +41,18 @@ The Reconnaissance module focuses on passive and active information gathering ab
 - **Email Discovery (`email.rs`)**: Extracting email addresses, phone numbers, and social media from web content.
 - **Email Security (`email_security.rs`)**: Analyzing SPF, DKIM, DMARC, STARTTLS, and BIMI records.
 
+### Standalone Modules (not in public API)
+
+These modules exist in `src/recon/` but are **not** exported via `mod.rs` and are not part of the full recon pipeline. They are available for direct invocation or internal use only.
+
+- **ASN Lookup (`asn.rs`)**: Standalone ASN lookup via ARIN RDAP (`AsnLookup`, `AsnInfo`, `IpRange`).
+- **CVE Engine (`cve_lookup.rs`)**: Dedicated CVE lookup engine with caching (`CveEngine`, `CveEntry`, `CvssSeverity`, `TechnologyMatch`).
+- **DNS Enhanced (`dns_enhanced.rs`)**: Enhanced DNS enumeration with wordlist-based discovery (`DnsEnumerator`, `DnsEnumResult`).
+- **FTP Auth (`ftp_auth.rs`)**: FTP banner grabbing and authentication testing (`FtpAuthResult`, `FtpAuthAttempt`).
+- **SMTP Auth (`smtp_auth.rs`)**: SMTP banner grabbing and authentication testing via LOGIN/PLAIN mechanisms (`SmtpAuthResult`, `SmtpAuthAttempt`).
+- **SSH Auth (`ssh_auth.rs`)**: SSH banner grabbing and limited authentication probing (`SshAuthResult`, `SshAuthAttempt`).
+- **SSL Audit (`ssl_audit.rs`)**: TestSSL-like TLS security auditing with certificate analysis, protocol checking, and cipher suite evaluation (`SslAuditReport`, `SslGrade`, `SslCheck`, `SslFinding`).
+
 ## Recon Runner (`runner.rs`)
 
 The `runner.rs` file orchestrates all these recon tasks, running them in parallel via `tokio::join!` to maximize efficiency.
@@ -57,12 +69,13 @@ email, takeover, cve, secrets
 
 ### Execution Model
 
-**Parallel Execution (14 tasks via `tokio::join!`)**:
+**Parallel Execution (13 tasks via `tokio::join!`)**:
 ```
 reverse_dns, geolocation, threat_intel, ssl, whois, subdomain_enum,
-dns_records, tech_detection, js_analysis, wayback_check, cloud_detection,
+dns_records, tech_detection, js_analysis, wayback_check,
 content_analysis, cors_check, email_discovery
 ```
+Cloud detection runs separately (feature-gated `#[cfg(feature = "cloud")]`).
 
 **Sequential Dependencies**:
 - `takeover` runs after `subdomain_enum` completes

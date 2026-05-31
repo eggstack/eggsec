@@ -38,16 +38,27 @@ Secure and efficient communication between nodes using line-based JSON over TCP 
 | TaskResult struct | queue.rs | 21-27 | Task execution result |
 | TaskQueue | queue.rs | 29-154 | Thread-safe task queue |
 | QueueError | queue.rs | 155-169 | Queue error types |
-| RemoteListener | remote.rs | 27-390 | Coordinator server |
-| RemoteClient | remote.rs | 407-767 | Worker client |
-| CommandExecutor | command.rs | 106-229 | Secure command execution |
-| CommandMessage | command.rs | 30-48 | Protocol messages |
-| Worker | worker.rs | 64-557 | Worker node |
+| RemoteListener | remote.rs | 27-467 | Coordinator server |
+| RemoteClient | remote.rs | 474-941 | Worker client |
+| CommandExecutor | command.rs | 120-243 | Secure command execution |
+| CommandMessage | command.rs | 30-63 | Protocol messages (6 variants) |
+| Worker | worker.rs | 65-708 | Worker node |
 | TlsServer | io.rs | 110-161 | TLS server from PEM |
 | TlsClient | io.rs | 163-225 | TLS client |
 | StreamWrapper | io.rs | 19-108 | Unified stream enum |
 | LineWriter | io.rs | 306-340 | Line I/O wrapper |
-| generate_psk | command.rs | 258-264 | PSK generation |
+| generate_psk | command.rs | 272-277 | PSK generation |
+
+### CommandMessage Variants
+
+| Variant | Fields | Direction | Purpose |
+|---------|--------|-----------|---------|
+| `Execute` | `id`, `command`, `timeout`, `env` | Coordinator → Worker | Execute a slapper command on the worker |
+| `Register` | `id`, `hostname`, `capabilities` | Worker → Coordinator | Worker self-registration on startup |
+| `Heartbeat` | `id`, `status` | Worker → Coordinator | Periodic liveness and status report |
+| `Result` | `id`, `result` | Worker → Coordinator | Task execution result with output/error |
+| `RequestTasks` | `id`, `worker_id`, `max_tasks` | Worker → Coordinator | Worker requests tasks from the queue |
+| `AssignTasks` | `id`, `tasks` | Coordinator → Worker | Coordinator assigns tasks to the worker |
 
 ## Task Lifecycle
 
