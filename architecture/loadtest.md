@@ -64,7 +64,7 @@ The `mod.rs` file provides the `run_cli()` function which serves as the CLI entr
 #### `run_cli()` Function
 
 ```rust
-pub fn run_cli(args: LoadArgs) -> Result<(), TabError>
+pub async fn run_cli(args: LoadArgs, config: &SlapperConfig) -> Result<()>
 ```
 
 Parses CLI arguments, instantiates a runner, executes the load test, and outputs results. Used by the main CLI dispatcher.
