@@ -468,6 +468,10 @@ pub enum ScanFocusArea {
 }
 
 impl TabInput for ScanTab {
+    fn stop(&mut self) {
+        ScanTab::stop(self);
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;
@@ -651,7 +655,23 @@ impl TabInput for ScanTab {
             self.output_selector.cancel();
             return;
         }
-        self.inputs.blur();
+        match self.focus_area {
+            ScanFocusArea::Inputs => self.inputs.blur(),
+            ScanFocusArea::ProfileSelector => {
+                self.profile_selector.cancel();
+                self.focus_area = ScanFocusArea::Inputs;
+                self.inputs.focus(0);
+            }
+            ScanFocusArea::OutputSelector => {
+                self.output_selector.cancel();
+                self.focus_area = ScanFocusArea::Inputs;
+                self.inputs.focus(0);
+            }
+            ScanFocusArea::Results => {
+                self.focus_area = ScanFocusArea::Inputs;
+                self.inputs.focus(0);
+            }
+        }
         self.profile_selector.collapse();
         self.output_selector.collapse();
     }

@@ -1657,3 +1657,59 @@ Comprehensive audit using 8 parallel subagents across all tabs, core modules, an
 3. `browser.rs` checkbox area rendered on top of 3rd input field — visual collision
 4. `page_up`/`page_down` lacked `is_running()` guards across 9 tabs — inconsistent with all other navigation handlers
 5. `recon.rs`/`scan_ports.rs`/`scan_endpoints.rs` `handle_escape` was a no-op when focus was in Options/Results — user trapped with no keyboard path back to Inputs
+
+## Session Fixes (2026-05-31 - Deep Dive Audit)
+
+### TUI Deep Dive Audit - All 29 Tabs + Core + Components
+
+Comprehensive audit using 8 parallel subagents across all tabs, core modules, and components. Found 16 bugs total (6 HIGH, 7 MEDIUM, 3 LOW).
+
+#### HIGH Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scan.rs` | 470 | Missing `stop()` in `impl TabInput` — TUI cannot stop running tasks via trait dispatch | Added `fn stop(&mut self) { ScanTab::stop(self); }` |
+| `scan_ports.rs` | 391 | Missing `stop()` in `impl TabInput` — same | Added `fn stop(&mut self) { ScanPortsTab::stop(self); }` |
+| `scan_endpoints.rs` | 357 | Missing `stop()` in `impl TabInput` — same | Added `fn stop(&mut self) { ScanEndpointsTab::stop(self); }` |
+| `fingerprint.rs` | 302 | Missing `stop()` in `impl TabInput` — same | Added `fn stop(&mut self) { FingerprintTab::stop(self); }` |
+| `resume.rs` | 170 | `stop()` is inherent method, shadows trait default — would break trait dispatch | Added `fn stop(&mut self) { ResumeTab::stop(self); }` in `impl TabInput` |
+| `auth.rs` | 138 | `stop()` is inherent method, shadows trait default — same | Added `fn stop(&mut self) { AuthTab::stop(self); }` in `impl TabInput` |
+
+#### MEDIUM Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `scan.rs` | 641 | `handle_escape()` doesn't transition focus back to Inputs | Added match on focus_area with proper transitions |
+| `fingerprint.rs` | 412 | `handle_escape()` doesn't transition focus back to Inputs | Added match on focus_area with proper transitions |
+| `proxy.rs` | 499 | Missing `page_up`/`page_down` — results view cannot be scrolled | Added page_up/page_down delegating to results_view |
+| `proxy.rs` | 633 | `handle_enter` doesn't verify selector confirmation state | Added `is_open()` check before `confirm()` |
+| `integrations.rs` | 446 | `handle_focus_prev` Issue→Config missing `self.issue_inputs.blur()` | Added blur call before focusing config_inputs |
+| `key_handler.rs` | 69 | Ctrl+V clipboard read failure silently dropped | Added `tracing::debug!` for empty/unavailable clipboard |
+| `selector.rs` | 448 | `self.label.len()` uses byte length, not display width — Unicode miscalculation | Changed to `self.label.chars().count()` |
+
+#### LOW Priority Fixes
+
+| File | Line | Issue | Fix |
+|------|------|-------|-----|
+| `progress.rs` | 67,130 | `current/total` displayed raw when `current > total` — misleading | Clamped display with `self.current.min(self.total)` |
+| `runner.rs` | 54 | Misleading `warn` log for expected config load failure | Changed to `tracing::debug!("No config file found...")` |
+| `history.rs` | 311 | `stop()` inherent shadow (both are no-ops, latent only) | Noted — no functional impact |
+
+#### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 16 |
+| Total bugs fixed | 15 |
+| Files modified | 12 |
+| HIGH priority fixes | 6 |
+| MEDIUM priority fixes | 7 |
+| LOW priority fixes | 2 |
+| Tabs audited | 29 |
+
+**Key systemic bugs fixed**:
+1. `stop()` was missing from `impl TabInput` on 4 scan tabs — TUI could not stop running tasks via trait dispatch
+2. `stop()` was inherent method on resume/auth tabs — would break trait-object dispatch
+3. `handle_escape` didn't transition focus area back to Inputs on scan/fingerprint tabs
+4. `proxy.rs` had no page navigation for results view
+5. Unicode width miscalculation in selector radio rendering

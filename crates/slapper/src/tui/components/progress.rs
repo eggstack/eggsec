@@ -64,9 +64,10 @@ impl ProgressGauge {
             return;
         }
         let percent = self.percent();
+        let display_current = self.current.min(self.total);
         let label = format!(
             "{} - {}/{} ({}%)",
-            self.label, self.current, self.total, percent
+            self.label, display_current, self.total, percent
         );
 
         let gauge = Gauge::default()
@@ -128,11 +129,12 @@ impl ProgressGauge {
         }
         let spinner = SPINNER_FRAMES.get(self.spinner_frame % SPINNER_FRAMES.len()).unwrap_or(&"?");
         let text = if self.total > 0 {
+            let display_current = self.current.min(self.total);
             format!(
                 "{} {} - {}/{} ({}%)",
                 spinner,
                 self.label,
-                self.current,
+                display_current,
                 self.total,
                 self.percent()
             )

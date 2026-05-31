@@ -355,6 +355,10 @@ impl TabRender for ScanEndpointsTab {
 }
 
 impl TabInput for ScanEndpointsTab {
+    fn stop(&mut self) {
+        ScanEndpointsTab::stop(self);
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;

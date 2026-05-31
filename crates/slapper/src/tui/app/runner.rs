@@ -51,7 +51,7 @@ pub fn run(config_path: Option<String>) -> Result<()> {
         app.session_manager.config = crate::tui::session::SessionConfig::default()
             .with_auto_save_interval(config.auto_save_interval_secs);
     } else {
-        tracing::warn!("Failed to load config for TUI settings state; using defaults");
+        tracing::debug!("No config file found for TUI settings; using defaults");
     }
     if let Some(path) = config_path {
         app.settings.set_config_path(path);

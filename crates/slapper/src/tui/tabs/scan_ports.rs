@@ -389,6 +389,10 @@ impl TabRender for ScanPortsTab {
 }
 
 impl TabInput for ScanPortsTab {
+    fn stop(&mut self) {
+        ScanPortsTab::stop(self);
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;

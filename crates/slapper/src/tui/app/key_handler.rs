@@ -70,6 +70,8 @@ impl KeyHandler {
                 if !app.has_active_task() {
                     if let Some(text) = Clipboard::get() {
                         app.dispatcher_mut().handle_paste(&text);
+                    } else {
+                        tracing::debug!("Clipboard read failed or clipboard is empty");
                     }
                 }
             }

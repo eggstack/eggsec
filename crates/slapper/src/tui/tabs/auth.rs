@@ -136,6 +136,10 @@ impl TabRender for AuthTab {
 }
 
 impl TabInput for AuthTab {
+    fn stop(&mut self) {
+        AuthTab::stop(self);
+    }
+
     fn handle_focus_next(&mut self) {
         if !self.is_running() {
             self.focus_area = match self.focus_area {

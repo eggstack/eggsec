@@ -445,7 +445,7 @@ impl RadioGroup {
             Style::default().fg(tc!(border))
         };
 
-        let label_width = self.label.len() + 2;
+        let label_width = self.label.chars().count() + 2;
         let options_per_line = ((area.width as usize).saturating_sub(label_width)) / 12;
 
         let item_style = |i: usize| -> Style {

@@ -300,6 +300,10 @@ impl TabRender for FingerprintTab {
 }
 
 impl TabInput for FingerprintTab {
+    fn stop(&mut self) {
+        FingerprintTab::stop(self);
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;
@@ -414,7 +418,13 @@ impl TabInput for FingerprintTab {
             self.stop();
             return;
         }
-        self.inputs.blur();
+        match self.focus_area {
+            FingerprintFocusArea::Inputs => self.inputs.blur(),
+            FingerprintFocusArea::Results => {
+                self.focus_area = FingerprintFocusArea::Inputs;
+                self.inputs.focus(0);
+            }
+        }
     }
 
     fn handle_top(&mut self) {

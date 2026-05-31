@@ -444,6 +444,7 @@ impl TabInput for IntegrationsTab {
                 IntegrationsFocusArea::Tracker
             }
             IntegrationsFocusArea::Issue => {
+                self.issue_inputs.blur();
                 self.config_inputs.focus(0);
                 IntegrationsFocusArea::Config
             }

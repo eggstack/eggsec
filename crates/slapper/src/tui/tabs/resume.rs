@@ -168,6 +168,10 @@ impl TabRender for ResumeTab {
 }
 
 impl TabInput for ResumeTab {
+    fn stop(&mut self) {
+        ResumeTab::stop(self);
+    }
+
     fn handle_focus_next(&mut self) {
         if self.is_running() {
             return;

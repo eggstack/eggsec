@@ -633,7 +633,11 @@ impl TabInput for ProxyTab {
     fn handle_enter(&mut self) {
         if !self.is_running() {
             if self.view_selector.is_focused() {
-                self.view_selector.handle_enter();
+                if self.view_selector.is_open() {
+                    self.view_selector.confirm();
+                } else {
+                    self.view_selector.handle_enter();
+                }
                 self.current_view = match self.view_selector.selected {
                     0 => ProxyView::List,
                     1 => ProxyView::Add,
@@ -756,6 +760,18 @@ impl TabInput for ProxyTab {
             self.inputs.is_at_right_edge()
         } else {
             true
+        }
+    }
+
+    fn page_up(&mut self, _page_size: usize) {
+        if !self.is_running() {
+            self.results_view.scroll_up(20);
+        }
+    }
+
+    fn page_down(&mut self, _page_size: usize) {
+        if !self.is_running() {
+            self.results_view.scroll_down(20);
         }
     }
 }
