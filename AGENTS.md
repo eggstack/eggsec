@@ -147,24 +147,28 @@ Skills are located in `.opencode/skills/`:
 |-------|---------|
 | `slapper-agent/` | Agent-specific workflows |
 | `slapper-ai/` | AI module workflows |
+| `slapper-architecture-review/` | Architecture document review methodology |
+| `slapper-auth/` | Authentication security testing workflows |
+| `slapper-browser/` | Headless browser security testing |
 | `slapper-cli/` | CLI parsing, command dispatch, handler patterns |
 | `slapper-config/` | Config module workflows |
 | `slapper-distributed/` | Distributed module workflows |
 | `slapper-fuzzer/` | Fuzzer module workflows |
+| `slapper-hunt/` | Vulnerability hunting workflows |
+| `slapper-loadtest/` | Loadtest module workflows |
+| `slapper-nse/` | NSE/Lua module workflows |
 | `slapper-output/` | Output module workflows |
+| `slapper-packet/` | Packet capture/crafting/parsing workflows |
+| `slapper-pipeline/` | Pipeline module workflows |
 | `slapper-proxy/` | Proxy module workflows |
 | `slapper-recon/` | Reconnaissance module workflows |
 | `slapper-scanner/` | Scanner module workflows |
 | `slapper-security/` | Security testing skill workflows |
 | `slapper-stress/` | Stress module workflows |
-| `slapper-nse/` | NSE/Lua module workflows |
-| `slapper-packet/` | Packet capture/crafting/parsing workflows |
-| `slapper-loadtest/` | Loadtest module workflows |
-| `slapper-pipeline/` | Pipeline module workflows |
 | `slapper-tool/` | Tool module workflows |
 | `slapper-tui/` | TUI module workflows |
 | `slapper-waf/` | WAF module workflows |
-| `slapper-wave-implementation/` | Multi-wave plan execution patterns (historical - all complete) |
+| `tui-testing/` | TUI testing guidance and visual regression patterns |
 
 Use the `skill` tool to load relevant skills when tackling tasks in their domain.
 
