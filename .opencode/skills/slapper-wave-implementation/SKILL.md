@@ -1,16 +1,17 @@
 # Wave Implementation Skill
 
-**Status**: HISTORICAL - All waves from plans/plan.md have been completed (2026-05-30)
+**Status**: COMPLETE - All waves from plans/plan.md have been completed (2026-05-31)
 
-This skill documented the multi-wave implementation pattern used for executing large sets of related fixes across multiple modules. Since all items are now complete, this is kept for historical reference.
+This skill documents the multi-wave implementation pattern used for executing large sets of related fixes across multiple modules. All items are now complete.
 
 ## Overview
 
 The "Wave" pattern organized implementation by priority:
-- **Wave 1**: Documentation Foundation (stale items, strategic reframe)
-- **Wave 2**: Plugin Removal (Python/Ruby/Metasploit)
-- **Wave 3**: MCP/Agent Profiles (ops-agent, coding-agent)
-- **Wave 4**: Public Release Polish (CLI audit, feature stability labels)
+- **Wave 0**: Critical Bug Fixes (routing.rs panic, spoof_ip rename, unwrap_or clarity)
+- **Wave 1A-1E**: Architecture Documentation (counts, structure, AI/MCP, recon, stub modules)
+- **Wave 2**: Agent/MCP Profile Productionization (12 phases, mostly pre-existing)
+  - Phase 7: CodingAgentFindingReport typed struct (new)
+- **Wave 3**: Output Module Documentation
 
 All items have been verified and completed. See `plans/plan.md` for details.
 

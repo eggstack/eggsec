@@ -13,6 +13,7 @@ Tool abstraction layer workflows and patterns for security tool integration.
 ### Protocol Implementations
 `tool/protocol/`:
 - `mcp/` - MCP server (`handlers/server.rs`, `handlers/helpers.rs`)
+- `mcp/coding_agent_output.rs` - Typed `CodingAgentFindingReport` struct for coding-agent output
 - `openai/` - OpenAI-compatible chat completions
 - `rest.rs` - REST API (scope validation implemented)
 - `grpc.rs` - gRPC service
