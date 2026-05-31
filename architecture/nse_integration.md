@@ -11,6 +11,7 @@ Slapper includes a Lua interpreter (via `mlua`) that can run a curated set of Nm
 - **Compatibility**: Broad practical compatibility for safe discovery, version, and default-style scripts within Slapper scope and budgets.
 - **Sandbox**: Optionally restricts dangerous Lua operations (e.g., file system access, network connections) for safer execution of untrusted scripts.
 - **NSE Tool**: Provides a high-level API for running NSE scripts against targets discovered by Slapper.
+- **Async Executor**: `async_executor.rs` manages asynchronous execution of NSE scripts with timeout and resource budget controls.
 
 ### Sandbox Configuration
 
@@ -35,9 +36,9 @@ pub struct SandboxConfig {
 
 ### Benefits
 
-- **Instant Capability**: Access to thousands of community-developed security checks from day one.
+- **Community Scripts**: Access to thousands of community-developed security checks.
 - **Lua Scripting**: Simple and familiar scripting language for custom security logic.
-- **Seamless Integration**: NSE results are integrated into Slapper's finding management and reporting system.
+- **Integrated Reporting**: NSE results are integrated into Slapper's finding management and reporting system.
 
 ### NSE Libraries
 
