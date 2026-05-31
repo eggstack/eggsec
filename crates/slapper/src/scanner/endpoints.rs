@@ -391,7 +391,7 @@ where
     };
 
     let spoof_config = SpoofConfig::from_args(
-        args.spoof_ip.clone(),
+        args.source_ip.clone(),
         args.spoof_range.clone(),
         false,
         args.decoy.clone(),
@@ -483,7 +483,7 @@ pub async fn run_cli(args: EndpointScanArgs, config: &SlapperConfig) -> Result<(
     };
 
     let spoof_config = SpoofConfig::from_args(
-        args.spoof_ip.clone(),
+        args.source_ip.clone(),
         args.spoof_range.clone(),
         false,
         args.decoy.clone(),

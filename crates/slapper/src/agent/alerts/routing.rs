@@ -72,12 +72,13 @@ impl AlertRouter {
     }
 
     pub fn new() -> Result<Self> {
-        let client = Self::create_pooled_client().unwrap_or_else(|_| {
-            reqwest::Client::builder()
+        let client = match Self::create_pooled_client() {
+            Ok(c) => c,
+            Err(_) => reqwest::Client::builder()
                 .pool_max_idle_per_host(5)
                 .build()
-                .expect("Failed to create fallback HTTP client")
-        });
+                .context("Failed to create fallback HTTP client")?,
+        };
 
         Ok(Self {
             registry: Arc::new(Mutex::new(ChannelRegistry::new())),

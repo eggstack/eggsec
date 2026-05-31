@@ -186,7 +186,7 @@ impl SecurityTool for ScannerTool {
                     concurrency,
                     timeout: timeout / 1000,
                     json: true,
-                    spoof_ip: None,
+                    source_ip: None,
                     spoof_range: None,
                     decoy: None,
                     decoy_range: None,

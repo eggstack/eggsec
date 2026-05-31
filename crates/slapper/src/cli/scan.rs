@@ -190,9 +190,9 @@ pub struct EndpointScanArgs {
     pub json: bool,
     #[arg(
         long,
-        help = "Spoof source IP via HTTP headers (X-Forwarded-For, X-Real-IP)"
+        help = "Source IP to spoof via HTTP headers (X-Forwarded-For, X-Real-IP)"
     )]
-    pub spoof_ip: Option<String>,
+    pub source_ip: Option<String>,
     #[arg(
         long,
         help = "Spoof IP range for rotation (CIDR notation, e.g., 10.0.0.0/24)"
