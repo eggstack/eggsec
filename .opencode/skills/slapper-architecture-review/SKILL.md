@@ -163,31 +163,22 @@ All `std::collections::HashMap`/`HashSet` instances in the NSE and slapper crate
 - `waf/mod.rs` - Correctly lists 34 WAF products (fixed 2026-05-24) ✅
 - `scanner/` - All bug fixes verified applied ✅
 
-### Review Cycle 2026-06-09 Findings
+### Review Cycle 2026-05-31 Findings
 
-#### Phase 1: Module Reviews (15 modules)
-- All 15 architecture documents reviewed against implementation
-- 227 verified claims, 47 discrepancies, 32 bugs, 72 improvement opportunities
+#### Phase 1: Full Architecture Review (34 documents)
+- All 34 architecture documents reviewed against implementation
+- 7 subagents deployed in parallel, each handling 3-11 documents
+- Findings in `plans/review_*.md` (34 files), consolidated in `plans/review_consolidated.md`
 
-#### Phase 2: Stale Items Detection
-- `overview.md` has 6 stale statistics (module count 41→35, source files 743→511, etc.)
-- `cli_commands.md` Commands variant count "35+" → actual 33
-- Undocumented feature flags: `tool-api`, `insecure-tls`
-- `nse_tool/` documented as directory but is actually `nse_tool.rs` file
+#### Key Patterns Discovered
+- **Type location drift**: Many documented type locations are wrong (e.g., ScanResults at scanner/mod.rs → actual waf/types.rs)
+- **Feature gate gaps**: Multiple docs claim features are "fully implemented" without noting feature gates (websocket, advanced-hunting)
+- **Aspirational claims**: Some documented features don't exist (wireless handshake capture, diff_findings_from_files)
+- **Stub implementations**: storage/postgres.rs is entirely stub — all CRUD methods return empty values
+- **Dead code**: auth/multi_protocol.rs and submodules are unreachable (never declared in mod.rs)
 
-#### Phase 3: Synthesis - Critical Issues
-1. **Distributed module**: Task results never sent to coordinator (result system broken)
-2. **CLI**: Resume command bypasses scope validation (security issue)
-3. **Distributed**: Worker stats/heartbeat report hardcoded zeros
-4. **Loadtest**: Rate limiting causes burst on startup
-
-#### High-Severity Bugs by Module
-| Module | Bug | File |
-|--------|-----|------|
-| Distributed | Task results channel never sent | distributed/ |
-| CLI | Resume bypasses scope | cli/ |
-| Fuzzer | Dead code with invalid FxFxHashMap import | fuzzer/targets/api.rs |
-| NSE | Brace mismatch prevents compilation | slapper-nse/src/libraries/vulns.rs:157-176 |
+#### Output File Convention
+Use `plans/review_<module>.md` (not `plans/<module>_review.md`) for consistency with the full review set.
 
 ### Review Cycle 2026-05-31 (17 documents)
 

@@ -194,6 +194,27 @@ Detailed architecture documentation is in the `architecture/` directory:
 | `architecture/tui.md` | Terminal User Interface (TUI) module, 28 tabs (+ conditional feature tabs), event loop, components |
 | `architecture/defense_lab.md` | Defense-lab mode and regression validation |
 
+### Review Cycle 2026-05-31 (34 documents — Full Architecture Review)
+
+All 34 architecture documents reviewed against codebase. Findings in `plans/review_*.md`, consolidated in `plans/review_consolidated.md`.
+
+**Critical Bugs:**
+- `workflow/mod.rs:36` — SLA violation calc ignores actual SLA logic
+- `notify/mod.rs:199` — Missing Discord dispatch in `notify_findings()`
+- `storage/postgres.rs:19-54` — Stub database returns hardcoded values
+- `auth/mod.rs:6-12` — Dead code: `multi_protocol.rs` unreachable
+- `lib.rs:16-17` — Stale docstrings (22→30 payloads, 26→34 WAF)
+
+**Key Discrepancies:**
+- `proxy/config.rs` — Missing `Tor` ProxyType variant in doc
+- `proxy/rotator.rs` — Missing Weighted/LowestLatency rotation strategies
+- Confidence enum: 5 variants (findings) vs 4 (output/agent.rs) — undocumented divergence
+- WAF_BLOCKED_STATUS_CODES: fuzzer uses 3 codes, WAF uses 4 — inconsistent
+
+**Statistics (All Match):** Tabs 28, PayloadType 30, WAF 34, NSE libs 169, Output 8, CLI 37, Modules 39
+
+**Stale Items:** 9 uncovered modules, 17 stale items — see `plans/stale_items.md`
+
 ## Verification Commands
 
 ```bash
