@@ -36,45 +36,73 @@ cargo clippy --lib -p slapper
 
 ## Wave 4: Critical Bug Fixes (All Parallelizable)
 
-All items in this wave are independent and can be worked on simultaneously.
+All items in this wave are independent and can be worked on simultaneously. Each bug is confirmed against the codebase as of 2026-05-31.
 
 ### 4.1 Workflow SLA Calculation Bug
-- **File:** `crates/slapper/src/workflow/mod.rs:36`
-- **Issue:** `calculate_metrics()` sets `self.sla_violations = self.open_findings` — treats ALL open findings as SLA violations instead of using the actual `calculate_sla()` function in `sla.rs:57-75` which considers severity-based target hours and time elapsed.
-- **Fix:** Replace `self.sla_violations = self.open_findings` with a call to `calculate_sla()` or equivalent logic that checks actual SLA status per finding.
-- **Reference:** `workflow/sla.rs:57-75` has the correct SLA evaluation logic.
+- **File:** `crates/slapper/src/workflow/mod.rs:35-37`
+- **Bug:** `calculate_metrics()` sets `self.sla_violations = self.open_findings` — treats ALL open findings as SLA violations instead of using the actual SLA logic.
+- **Current code:**
+  ```rust
+  pub fn calculate_metrics(&mut self) {
+      self.sla_violations = self.open_findings;
+  }
+  ```
+- **Fix:** Replace with a call to `calculate_sla()` from `workflow/sla.rs:57-75` which correctly checks severity-based `SlaPolicy` targets against time elapsed. The `calculate_sla()` function takes `&[Finding]` and `&[SlaPolicy]` and returns the count of actual violations.
+- **Note:** The existing test at line 50 asserts the wrong behavior (`assert_eq!(report.sla_violations, 5)`) — update the test to match corrected logic.
+- **Reference:** `workflow/sla.rs` has `SlaPolicy` (line 5), `SlaStatus` (line 48), and `calculate_sla()` (line 57).
 
 ### 4.2 Notify Discord Dispatch Bug
-- **File:** `crates/slapper/src/notify/mod.rs:199`
-- **Issue:** `notify_findings()` dispatches to webhooks, Slack, and Teams but **skips Discord**. Other notify methods (`notify_scan_complete()` at lines 118-196, `notify_error()` at lines 261-315) both include Discord dispatch.
-- **Fix:** Add Discord dispatch to `notify_findings()` matching the pattern in the other two methods.
-- **Reference:** Compare with `notify_scan_complete()` for the Discord dispatch pattern.
+- **File:** `crates/slapper/src/notify/mod.rs:199-258`
+- **Bug:** `notify_findings()` dispatches to webhooks (line 209), Slack (lines 226-240), and Teams (lines 243-257) but **skips Discord**. Other notify methods (`notify_scan_complete()` at lines 164-178, `notify_error()` at lines 283-298) both include Discord dispatch via `notifier.notify_discord(discord_url, &payload)`.
+- **Fix:** Add Discord dispatch block to `notify_findings()` matching the pattern in `notify_scan_complete()`:
+  ```rust
+  if let Some(ref discord_url) = self.discord_webhook {
+      if let Err(e) = notifier.notify_discord(discord_url, &payload).await {
+          tracing::warn!("Failed to send Discord notification: {}", e);
+      }
+  }
+  ```
+  Place this after the Teams block (after line 257) and before the final Ok(()).
 
 ### 4.3 Storage Module Stubs
-- **File:** `crates/slapper/src/storage/postgres.rs:19-54`
-- **Issue:** All `Database` methods (`insert_scan`, `get_scan`, `list_scans`, `insert_finding`, `get_findings_for_scan`, `update_finding_status`) are stubs returning hardcoded empty values. No real PostgreSQL connection pool or SQLx usage.
-- **Fix:** Either implement actual database operations or clearly mark the module as experimental/placeholder. If implementing, add SQLx connection pool, real queries, and error handling.
-- **Reference:** `storage/queries.rs` exists but is not integrated. `storage/models.rs` has `StoredScan` and `StoredFinding` types.
+- **File:** `crates/slapper/src/storage/postgres.rs:19-56`
+- **Bug:** All 8 `Database` methods are stubs returning hardcoded empty values (`Ok(())`, `Ok(None)`, `Ok(vec![])`). No actual PostgreSQL connection pool or SQLx usage. The struct has `#[allow(dead_code)]` on line 6.
+- **Fix options:**
+  1. **If implementing:** Add SQLx `PgPool` to the `Database` struct, implement real CRUD queries using `storage/queries.rs` and `storage/models.rs` types (`StoredScan`, `StoredFinding`).
+  2. **If placeholder:** Add `/// WARNING: Stub implementation — not connected to a real database` doc comment to each method and the struct itself. Add a `todo!()` or `unimplemented!()` note in the module doc.
+- **Reference:** `storage/queries.rs` exists with SQL queries. `storage/models.rs` has `StoredScan` (line 6) and `StoredFinding` (line 25).
 
 ### 4.4 Feature Matrix Math Error
-- **File:** `architecture/feature_matrix.md:8-11`
-- **Issue:** Summary table says 18 features-with-deps + 12 marker-only = 30, but total is 28. Correct counts: **15** features-with-deps + **13** marker-only = 28. Verified against `Cargo.toml:213-296`.
-- **Fix:** Update features-with-deps from 18 to 15, marker-only from 12 to 13.
+- **File:** `architecture/feature_matrix.md:7-11`
+- **Bug:** Summary table says 18 features-with-deps + 12 marker-only = 30, but total is listed as 28. The math doesn't add up.
+- **Actual counts from `Cargo.toml:213-296`:**
+  - Features **with dependencies**: 16 (`rest-api`, `ws-api`, `grpc-api`, `stress-testing`, `packet-inspection`, `nse`, `nse-ssh2`, `nse-sandbox`, `ai-integration`, `websocket`, `headless-browser`, `database`, `container`, `sbom`, `pdf`, `full`)
+  - Marker-only features: 12 (`tool-api`, `insecure-tls`, `advanced-hunting`, `compliance`, `external-integrations`, `finding-workflow`, `vuln-management`, `cloud`, `git-secrets`, `wireless`, `api-schema`, `default`)
+  - **Correct math: 16 + 12 = 28**
+- **Fix:** Change "Features with deps" from 18 to **16** in the summary table. Leave marker-only at 12 (correct).
 
 ### 4.5 Findings Architecture Doc Wrong Type
 - **File:** `architecture/findings.md:21`
-- **Issue:** References non-existent `FindingLifecycle` type. Actual types are `FindingStatus` (6 states), `StoredFinding`, `StatusChange`, `ScanRun` in `findings/lifecycle.rs`.
-- **Fix:** Replace `FindingLifecycle` references with correct type names. Document `FindingStatus` variants.
+- **Bug:** References non-existent `FindingLifecycle` type at `findings/lifecycle.rs`.
+- **Actual types in `findings/lifecycle.rs`:**
+  - `FindingStatus` (enum, line 4) — 6 states: `New`, `Confirmed`, `AcceptedRisk`, `FalsePositive`, `Remediated`, `Reopened`
+  - `StoredFinding` (struct, line 29) — persisted finding with lifecycle metadata
+  - `StatusChange` (struct, line 38) — audit trail entry
+  - `ScanRun` (struct, line 72) — scan execution record
+- **Fix:** Replace `FindingLifecycle` with `FindingStatus` in the Key Types table. Update the description to "Finding status transitions (6 states)".
 
 ### 4.6 Lib.rs Stale Docstrings
 - **File:** `crates/slapper/src/lib.rs:16-17`
-- **Issue:** Docstring says "22 payload types" → actual **30** (in `fuzzer/payloads/mod.rs:39-70`). Says "26 products" → actual **34** (in `waf/data/patterns.rs`).
-- **Fix:** Update both counts to match actual values.
+- **Bug:** Docstring says "22 payload types" and "26 products".
+- **Actual counts:** 30 payload types (`fuzzer/payloads/mod.rs:39-70`), 34 WAF products (`constants.rs:77` `SUPPORTED_WAF_COUNT`).
+- **Fix:** Update lines 16-17:
+  ```rust
+  //! - **`fuzzer`** - Security fuzzing engine with 30 payload types
+  //! - **`waf`** - WAF detection (34 products) and bypass techniques
+  ```
 
-### 4.7 Output AttackGraph Feature Gate
-- **File:** `crates/slapper/src/output/mod.rs:51-52`
-- **Issue:** `AttackGraphBuilder::to_html()` documented as usable without `advanced-hunting` feature, but the entire `attack_graph` module is feature-gated.
-- **Fix:** Add feature gate documentation or correct the availability claim.
+### 4.7 ~~Output AttackGraph Feature Gate~~ [REMOVED — Not a Bug]
+- **Note:** The `attack_graph` module IS properly feature-gated at `output/mod.rs:51` with `#[cfg(feature = "advanced-hunting")]`. The re-exports at lines 79-82 are also gated. No action needed.
 
 ---
 
@@ -83,34 +111,36 @@ All items in this wave are independent and can be worked on simultaneously.
 All items are independent doc fixes. Can run in parallel with Wave 4.
 
 ### 5.1 Workflow SlaTracking → SlaPolicy + SlaStatus
-- **File:** `architecture/workflow.md`
+- **File:** `architecture/workflow.md:15`
 - **Actual:** `SlaPolicy` at `workflow/sla.rs:5`, `SlaStatus` at `workflow/sla.rs:48`
-- **Fix:** Replace all `SlaTracking` references with `SlaPolicy` + `SlaStatus`.
+- **Fix:** Replace all `SlaTracking` references with `SlaPolicy` + `SlaStatus` in the Key Types table and throughout the document.
 
 ### 5.2 Storage ScanModel/FindingModel Names
 - **File:** `architecture/storage.md`
 - **Actual:** `StoredScan` at `storage/models.rs:6`, `StoredFinding` at `storage/models.rs:25`
-- **Fix:** Replace `ScanModel`/`FindingModel` with `StoredScan`/`StoredFinding`.
+- **Fix:** Replace `ScanModel`/`FindingModel` with `StoredScan`/`StoredFinding` throughout.
 
 ### 5.3 Error Variant Count
 - **File:** `architecture/error.md`
 - **Actual:** 22 `SlapperError` variants at `error/mod.rs:43-116`
-- **Fix:** Update "19+" to "22".
+- **Fix:** Update "19+" to "22". List all 22 variants: Config, InvalidTarget, Network, RequestFailed, Timeout, RateLimited, ScanFailed, Payload, Output, ScopeViolation, Io, HttpStatus, Http, Parse, Validation, AddressParse, Runtime, Cancelled, Proxy, Recon, LoadTest, Fingerprint.
 
 ### 5.4 Recon FxHashMap Count
 - **File:** `architecture/recon.md`
-- **Actual:** 66+ FxHashMap/FxHashSet usages (per `recon/AGENTS.override.md:57`)
-- **Fix:** Update "55 total collections" to "66+". Update IAM patterns from 12 to 13.
+- **Actual:** ~55 lines containing FxHashMap/FxHashSet across 14 files (not 66+). IAM patterns: 12 entries in `KNOWN_ESCALATION_PATTERNS` at `recon/cloud/iam.rs:29-109` (not 13).
+- **Fix:** Update FxHashMap/FxHashSet count from "66+" to "55". Update IAM patterns from 13 to 12.
 
 ### 5.5 TUI File Counts
 - **File:** `architecture/tui.md`
-- **Actual:** `app/` has 18 files (not 7), `components/` has 12 files (not 7)
-- **Fix:** Update file counts and add missing file names.
+- **Actual:** `app/` has 18 `.rs` files, `components/` has 12 `.rs` files
+- **app/ files:** `mod.rs`, `runner.rs`, `key_handler.rs`, `state_update.rs`, `task_runtime.rs`, `export.rs`, `task_management.rs`, `navigation.rs`, `command.rs`, `help_config.rs`, `bookmarks.rs`, `dispatch.rs`, `tab_error.rs`, `confirmation.rs`, `error.rs`, `notifications.rs`, `input.rs`, `options.rs`
+- **components/ files:** `mod.rs`, `progress.rs`, `selector.rs`, `popup.rs`, `palette.rs`, `scrollable.rs`, `input.rs`, `notifications.rs`, `search_popup.rs`, `empty_state.rs`, `help_bar.rs`, `http_options.rs`
+- **Fix:** Update file counts and list all files.
 
 ### 5.6 ThemeColors Field Count
 - **File:** `architecture/tui.md`
-- **Actual:** 29 fields (not "30+")
-- **Fix:** Update count to 29.
+- **Actual:** 28 fields at `tui/theme.rs:24-51` (not "30+" or 29)
+- **Fix:** Update count to 28.
 
 ### 5.7 Overview Type Location Corrections
 - **File:** `architecture/overview.md`
@@ -125,56 +155,59 @@ All items are independent doc fixes. Can run in parallel with Wave 4.
 ### 5.8 Notify WebhookEvent Variant Name
 - **File:** `architecture/notify.md`
 - **Actual:** Variant is `ScanError` not `Error` at `notify/webhook.rs:46`
-- **Fix:** Correct the variant name.
+- **Fix:** Correct the variant name in the WebhookEvent enum documentation.
 
-### 5.9 Container Feature Gate Claim
+### 5.9 Container Feature Gate Documentation
 - **File:** `architecture/container.md`
-- **Actual:** No `#[cfg(feature = ...)]` on container module — always compiled
-- **Fix:** Remove feature-gating claim or add actual feature gates.
+- **Actual:** The top-level `container` module IS feature-gated behind `#[cfg(feature = "container")]` at `lib.rs:84-88`. The `recon/containers.rs` module is NOT feature-gated at the module level but has extensive internal feature gating.
+- **Fix:** Correct the document to accurately describe the feature gating. Note that the top-level module requires the `container` feature, while recon's container analysis is always compiled but uses internal feature gates.
 
 ### 5.10 Findings FindingStore Description
 - **File:** `architecture/findings.md`
-- **Actual:** `FindingStore` is JSONL-based persistent storage at `findings/store.rs:20-21`, not "in-memory"
-- **Fix:** Correct description to "JSONL-based persistent storage".
+- **Actual:** `FindingStore` is JSONL-based persistent file storage at `findings/store.rs:7-10`, writing to `findings.jsonl` on disk (line 20-21). Not "in-memory".
+- **Fix:** Correct description to "JSONL-based persistent file storage".
 
 ### 5.11 Networking BPF Description
 - **File:** `architecture/networking.md`
-- **Actual:** Filtering at `capture.rs:276-306` is custom TCP/UDP/ICMP/port matching, not true BPF
-- **Fix:** Correct "BPF-style filters" to "custom packet matcher".
+- **Actual:** Filtering at `capture.rs:276-306` is custom TCP/UDP/ICMP/port matching using string comparison, not true BPF (Berkeley Packet Filter).
+- **Fix:** Correct "BPF-style filters" to "custom packet matcher" or "custom protocol/port filter".
 
 ### 5.12 Diff diff_findings_from_files() Claim
 - **File:** `architecture/diff.md`
-- **Actual:** `diff_findings_from_files()` does not exist. Only `load_findings_from_file()` at `diff/mod.rs:103` loads a single file.
-- **Fix:** Remove or correct the claim. Document actual usage pattern.
+- **Actual:** `diff_findings_from_files()` does not exist. Only `load_findings_from_file()` at `diff/mod.rs:103` loads a single file. `diff_findings()` at line 39 takes `&[Finding]` slices.
+- **Fix:** Remove or correct the claim. Document actual usage: load findings with `load_findings_from_file()`, then diff with `diff_findings()`.
 
 ### 5.13 WebSocket Feature Gate Documentation
 - **File:** `architecture/websocket.md`
-- **Actual:** All 4 test methods are feature-gated behind `#[cfg(feature = "websocket")]`
-- **Fix:** Add prominent feature gate requirement.
+- **Actual:** There are 7 test functions in `fuzzer/payloads/websocket.rs:349-411`, and **none** are feature-gated (only `#[cfg(test)]`). The WebSocket public API in `websocket/connection.rs` may have different gating.
+- **Fix:** Correct the test count from 4 to 7 and remove the claim that tests are feature-gated. Verify and document the actual feature gating on the public WebSocket API.
 
 ### 5.14 Supply Chain Scanner Description
 - **File:** `architecture/supply_chain.md`
-- **Actual:** `scanner.rs` is manifest discovery + Dockerfile/GitHub Actions analysis, not "dependency vulnerability scanner". Also feature-gated behind `#[cfg(feature = "sbom")]`.
-- **Fix:** Correct description and note feature gate.
+- **Actual:** `scanner.rs` discovers manifest files (Cargo.toml, package.json, etc.) and analyzes Dockerfiles and GitHub Actions workflows for misconfigurations. It does NOT scan dependencies for known vulnerabilities. Feature-gated behind `#[cfg(feature = "sbom")]` at `supply_chain/scanner.rs:67`.
+- **Fix:** Correct description from "dependency vulnerability scanner" to "manifest discovery and configuration analysis tool". Note the `sbom` feature gate.
 
 ### 5.15 Wireless Handshake Claim
 - **File:** `architecture/wireless.md`
-- **Actual:** Code only does iwlist scan parsing + security type analysis. No WPA/WPA2 handshake capture.
-- **Fix:** Remove or mark "WPA/WPA2 handshake capture" as aspirational/future.
+- **Actual:** Code only does iwlist scan parsing + security type analysis (`wireless/mod.rs:81-209`). No WPA/WPA2 handshake capture code exists. The module docstring at line 4 falsely claims this capability.
+- **Fix:** Remove or mark "WPA/WPA2 handshake capture analysis" as aspirational/future. Correct module description to "iwlist scan parsing and wireless security type analysis".
 
 ---
 
-## Wave 6: Documentation Gaps (Parallelizable Groups)
+## Wave 6: Documentation Gaps (3 Parallel Groups)
 
 Group A (independent, parallelizable):
 
 ### 6.1 Error Module From Impls
 - **File:** `architecture/error.md`
-- **Task:** Document 14 undocumented `From` impls at `error/mod.rs:202-357` and 3 feature-gated `From` impls at `error/mod.rs:275-327`.
+- **Task:** Document 16 non-feature-gated `From` impls at `error/mod.rs:202-357` (not 14) and 3 feature-gated `From` impls at `error/mod.rs:275-327`.
+- **From impls to document:**
+  - Non-gated (16): `toml::de::Error` (202), `serde_json::Error` (208), `url::ParseError` (214), `std::net::AddrParseError` (220), `serde_yaml_neo::Error` (226), `toml::ser::Error` (232), `std::string::FromUtf8Error` (238), `tokio::time::error::Elapsed` (244), `crate::config::ScopeError` (253), `hickory_resolver::net::NetError` (259), `anyhow::Error` (265), `std::num::ParseIntError` (329), `tokio::sync::AcquireError` (335), `quick_xml::Error` (341), `maxminddb::MaxMindDbError` (347), `reqwest::header::InvalidHeaderValue` (353)
+  - Feature-gated (3): `crate::ai::AiError` (276, `ai-integration`), `crate::packet::CaptureError` (316, `packet-inspection`), `crate::packet::TracerouteError` (323, `packet-inspection`/`stress-testing`)
 
 ### 6.2 Recon Module Counts
 - **File:** `architecture/recon.md`
-- **Task:** Update FxHashMap/FxHashSet count, IAM pattern count, document `ReconStep<T>` enum at `recon/runner.rs:18-35`.
+- **Task:** Update FxHashMap/FxHashSet count to 55 (not 66+), IAM pattern count to 12 (not 13). Document `ReconStep<T>` enum at `recon/runner.rs:18-35`.
 
 ### 6.3 Proxy Module Completeness
 - **File:** `architecture/proxy.md`
@@ -188,11 +221,11 @@ Group B (independent, parallelizable):
 
 ### 6.5 TUI Module Completeness
 - **File:** `architecture/tui.md`
-- **Task:** Document all 18 app/ files, all 12 components/ files, `ui.rs`, `auth.rs` tab status, full TabInput interface (25+ methods), OverlayType/PendingAction/InputMode/AppState.
+- **Task:** Document all 18 app/ files, all 12 components/ files, `ui.rs` draw functions, `auth.rs` tab status (exists at `tui/tabs/auth.rs` but not part of `Tab` enum), full TabInput interface (25+ methods), OverlayType/PendingAction/InputMode/AppState enums.
 
 ### 6.6 Pipeline Executor Fields
 - **File:** `architecture/pipeline.md`
-- **Task:** Document `spoof_config`, `config`, `session_path` fields at `executor.rs:38-50`. Document `PipelineReport` missing `checkpoint_error` field at `report.rs:33`.
+- **Task:** Document `spoof_config` (`SpoofConfig`), `config` (`Option<SlapperConfig>`), `session_path` (`Option<String>`) fields at `executor.rs:38-50`. Document `PipelineReport` struct (starts at `report.rs:24`, not 33) including `checkpoint_error: Option<String>` field at line 33. Note `generate_html()` and `generate_csv()` are free functions taking `&PipelineReport`, not methods on the struct.
 
 ### 6.7 Distributed Module Gaps
 - **File:** `architecture/distributed.md`
@@ -204,7 +237,7 @@ Group B (independent, parallelizable):
 
 ### 6.9 Findings Module Completeness
 - **File:** `architecture/findings.md`
-- **Task:** Enumerate all 18 `Finding` struct fields (`findings/mod.rs:252-291`), document `FindingStatus` variants (6 states), note Confidence divergence between modules.
+- **Task:** Enumerate all 19 `Finding` struct fields (`findings/mod.rs:252-291`, not 18): `id`, `fingerprint`, `title`, `description`, `severity`, `confidence`, `finding_type`, `cwe`, `owasp`, `cve`, `affected_asset`, `location`, `evidence`, `reproduction`, `remediation`, `discovered_at`, `source`, `tags`, `metadata`. Document `FindingStatus` variants (6 states). Note Confidence divergence between findings module (5 variants: Confirmed/High/Medium/Low/Informational) and output module (4 variants: Confirmed/Likely/Possible/Unlikely).
 
 Group C (independent, parallelizable):
 
@@ -214,19 +247,19 @@ Group C (independent, parallelizable):
 
 ### 6.11 Container Module Missing Types
 - **File:** `architecture/container.md`
-- **Task:** Document `ImageLayer`, `DockerVulnerability`, `DockerMisconfiguration`, `ClusterInfo`, `K8sFinding`, `EscapeRisk`, `EscapeRiskLevel`, `CisCheck`, `CisCheckStatus`.
+- **Task:** Document `ImageLayer` (`docker.rs:18`), `DockerVulnerability` (`docker.rs:25`), `DockerMisconfiguration` (`docker.rs:34`), `ClusterInfo` (`kubernetes.rs:16`), `K8sFinding` (`kubernetes.rs:23`), `EscapeRisk` (`escape.rs:12`), `EscapeRiskLevel` (`escape.rs:20`), `CisCheck` (`cis.rs:15`), `CisCheckStatus` (`cis.rs:24`).
 
 ### 6.12 Compliance Module report.rs
 - **File:** `architecture/compliance.md`
-- **Task:** Document `ComplianceSummary`, `RiskLevel` types at `compliance/report.rs:1`.
+- **Task:** Document `ComplianceSummary` struct (`compliance/report.rs:5`), `RiskLevel` enum (`compliance/report.rs:13`).
 
 ### 6.13 Vuln Module Gaps
 - **File:** `architecture/vuln.md`
-- **Task:** Document `TriageStatus::New` variant, `RemediationPriority` enum at `remediation.rs:16`, note `VulnAssessment` placeholder status.
+- **Task:** Document `TriageStatus::New` variant (`vuln/triage.rs:14`), `RemediationPriority` enum at `remediation.rs:16`, note `VulnAssessment` placeholder status.
 
 ### 6.14 Hunt Module Feature Gate
 - **File:** `architecture/hunt.md`
-- **Task:** Document `advanced-hunting` feature flag, `HuntConfig` defaults, sub-module check details.
+- **Task:** Document `advanced-hunting` feature flag (marker-only, `Cargo.toml:248`), `HuntConfig` defaults (`hunt/mod.rs:111-132`: all check flags `true`, `concurrency: 10`, `timeout_ms: 30000`), sub-module check details.
 
 ---
 

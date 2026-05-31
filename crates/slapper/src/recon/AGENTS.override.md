@@ -41,7 +41,7 @@ The recon module is organized as follows:
 - `cloud/mod.rs` - Cloud discovery (AWS, GCP, Azure, Firebase, Heroku, GitHub)
 - `cloud/services.rs` - Cloud service enumeration (Lambda, API Gateway, CloudFront)
 - `cloud/metadata.rs` - IMDSv1/v2 testing for AWS/GCP/Azure
-- `cloud/iam.rs` - IAM privilege escalation pattern analysis (13 patterns, not 12)
+- `cloud/iam.rs` - IAM privilege escalation pattern analysis (12 patterns in `KNOWN_ESCALATION_PATTERNS`)
 - `cloud/storage_test.rs` - S3 bucket security tests
 
 ### Email
@@ -54,7 +54,7 @@ The recon module is organized as follows:
 ## Performance Notes
 
 - Use `rustc_hash::FxHashMap`/`FxHashSet` instead of `std::collections::HashMap`/`HashSet`
-- Actual FxHashMap/FxHashSet count is 66+, not the 55 documented in architecture/recon.md
+- Actual FxHashMap/FxHashSet count is ~55 lines across 14 files
 - `CveMapper.cache` uses `FxHashMap` (cve.rs:31)
 - `CveEngine.cve_cache` uses `FxHashMap` (cve_lookup.rs:33)
 - `LOCAL_IP_DATA` in geolocation.rs uses `FxHashMap`

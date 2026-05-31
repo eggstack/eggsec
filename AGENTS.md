@@ -143,7 +143,7 @@ Use these sections as the canonical reference points when updating guidance or s
 - **PayloadType location**: `PayloadType` enum is in `fuzzer/payloads/mod.rs`, not `types.rs`. `types.rs` contains `OutputFormat`, `Severity`, etc.
 - **Fabricated claims**: Always verify module/file existence before documenting dead code. The `auth/multi_protocol/` directory was claimed to exist but doesn't.
 - **Proxy features exist**: `Tor` ProxyType and `Weighted`/`LowestLatency` rotation strategies already exist in code — verify before claiming they're missing.
-- **Feature matrix math**: When verifying feature counts, sum the sub-counts to check for arithmetic errors (e.g., 18+12=30≠28).
+- **Feature matrix math**: When verifying feature counts, sum the sub-counts to check for arithmetic errors (e.g., 18+12=30≠28). Correct counts: 16 features-with-deps + 12 marker-only = 28.
 
 ## Skills Directory
 
@@ -202,21 +202,21 @@ Detailed architecture documentation is in the `architecture/` directory:
 
 ### Review Cycle 2026-05-31 (34 documents — Full Architecture Review)
 
-All 34 architecture documents reviewed against codebase. Findings in `plans/review_*.md`, consolidated in `plans/review_consolidated.md`.
+All 34 architecture documents reviewed against codebase. Findings consolidated in `plans/plan.md` (Wave 4-6).
 
-**Critical Bugs:**
-- `workflow/mod.rs:36` — SLA violation calc ignores actual SLA logic
-- `notify/mod.rs:199` — Missing Discord dispatch in `notify_findings()`
-- `storage/postgres.rs:19-54` — Stub database returns hardcoded values
+**Critical Bugs (in plan Wave 4):**
+- `workflow/mod.rs:35-37` — SLA violation calc ignores actual SLA logic
+- `notify/mod.rs:199-258` — Missing Discord dispatch in `notify_findings()`
+- `storage/postgres.rs:19-56` — Stub database returns hardcoded values
 - `lib.rs:16-17` — Stale docstrings (22→30 payloads, 26→34 WAF)
 
-**Key Discrepancies:**
+**Key Discrepancies (in plan Wave 5):**
 - Confidence enum: 5 variants (findings) vs 4 (output/agent.rs) — undocumented divergence
 - WAF_BLOCKED_STATUS_CODES: fuzzer uses 3 codes, WAF uses 4 — inconsistent
 
 **Statistics (All Match):** Tabs 28, PayloadType 30, WAF 34, NSE libs 169, Output 8, CLI 37, Modules 39
 
-**Stale Items:** 9 uncovered modules — see `plans/stale_items.md`
+**Stale Items:** 9 uncovered modules documented in plan Wave 7
 
 ## Verification Commands
 

@@ -17,7 +17,7 @@ Specialized guidance for the report generation module.
 | `ReportSummary` | `report_summary.rs` | Summary with `risk_narrative: String` field |
 | `CronScheduler` | `schedule.rs:201` | Cron-based scan scheduling with 5/6 field expressions |
 | `ScanQueue` | `schedule.rs:66` | Priority-based scan queue with enqueue/dequeue/cancel |
-| `AttackGraphBuilder` | `attack_graph.rs` | Graph visualization; `to_html()` at line 135 (note: only `from_chains()` is feature-gated with `advanced-hunting`, not `to_html()`) |
+| `AttackGraphBuilder` | `attack_graph.rs` | Graph visualization; entire module feature-gated behind `advanced-hunting` at `output/mod.rs:51` |
 
 ## Performance: Use FxHashMap
 
